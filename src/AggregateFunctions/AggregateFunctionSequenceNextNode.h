@@ -24,6 +24,9 @@
 #include <type_traits>
 #include <bitset>
 
+/// proton: starts.
+#include <Common/MemoryHelpers.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -65,12 +68,6 @@ struct NodeBase
 
     const char * data() const { return reinterpret_cast<const char *>(this) + sizeof(Node); }
 
-    Node * clone(Arena * arena) const
-    {
-        return reinterpret_cast<Node *>(
-            const_cast<char *>(arena->alignedInsert(reinterpret_cast<const char *>(this), sizeof(Node) + size, alignof(Node))));
-    }
-
     void write(WriteBuffer & buf) const
     {
         writeVarUInt(size, buf);
@@ -81,13 +78,47 @@ struct NodeBase
         writeBinary(ulong_bitset, buf);
         writeBinary(can_be_base, buf);
     }
+};
+
+/// It stores String, timestamp, bitset of matched events.
+template <size_t MaxEventsSize>
+struct NodeString : public NodeBase<NodeString<MaxEventsSize>, MaxEventsSize>
+{
+    using Node = NodeString<MaxEventsSize>;
+    using Ptr = Node *;
+
+    static Node * allocate(const IColumn & column, size_t row_num, Arena * arena)
+    {
+        StringRef string = assert_cast<const ColumnString &>(column).getDataAt(row_num);
+        Node * node = reinterpret_cast<Node *>(arena->alignedAlloc(sizeof(Node) + string.size, alignof(Node)));
+        node->size = string.size;
+        memcpy(node->data(), string.data, string.size);
+        return node;
+    }
+
+    void insertInto(IColumn & column) const
+    {
+        assert_cast<ColumnString &>(column).insertData(this->data(), this->size);
+    }
+
+    bool compare(const Node * rhs) const
+    {
+        auto cmp = strncmp(this->data(), rhs->data(), std::min(this->size, rhs->size));
+        return (cmp == 0) ? this->size < rhs->size : cmp < 0;
+    }
+
+    auto clone(Arena * arena) const
+    {
+        return reinterpret_cast<Node *>(
+             const_cast<char *>(arena->alignedInsert(reinterpret_cast<const char *>(this), sizeof(Node) + this->size, alignof(Node))));
+    }
 
     static Node * read(ReadBuffer & buf, Arena * arena)
     {
         UInt64 size;
         readVarUInt(size, buf);
         if unlikely (size > max_node_size_deserialize)
-            throw Exception("Too large node state size", ErrorCodes::TOO_LARGE_ARRAY_SIZE);
+            throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Too large node state size");
 
         Node * node = reinterpret_cast<Node *>(arena->alignedAlloc(sizeof(Node) + size, alignof(Node)));
         node->size = size;
@@ -103,48 +134,88 @@ struct NodeBase
     }
 };
 
-/// It stores String, timestamp, bitset of matched events.
+/// proton: starts.
 template <size_t MaxEventsSize>
-struct NodeString : public NodeBase<NodeString<MaxEventsSize>, MaxEventsSize>
+struct NodeStringWithoutArena : public NodeBase<NodeStringWithoutArena<MaxEventsSize>, MaxEventsSize>
 {
-    using Node = NodeString<MaxEventsSize>;
+    using Node = NodeStringWithoutArena<MaxEventsSize>;
+    class Ptr
+    {
+    public:
+        Ptr(DataUniqPtr ptr_ = {nullptr, &std::free}) : ptr(std::move(ptr_)) {}
 
-    static Node * allocate(const IColumn & column, size_t row_num, Arena * arena)
+        const Node & operator*() const { return *reinterpret_cast<const Node *>(ptr.get()); }
+        const Node * operator->() const { return reinterpret_cast<Node *>(ptr.get()); }
+        Node & operator*() { return *reinterpret_cast<Node *>(ptr.get()); }
+        Node * operator->() { return reinterpret_cast<Node *>(ptr.get()); }
+
+    private:
+        DataUniqPtr ptr;
+    };
+
+    static Ptr allocate(const IColumn & column, size_t row_num)
     {
         StringRef string = assert_cast<const ColumnString &>(column).getDataAt(row_num);
-
-        Node * node = reinterpret_cast<Node *>(arena->alignedAlloc(sizeof(Node) + string.size, alignof(Node)));
+        Ptr node = alignedAllocate(sizeof(Node) + string.size, alignof(Node));
         node->size = string.size;
         memcpy(node->data(), string.data, string.size);
-
         return node;
     }
 
-    void insertInto(IColumn & column)
+    void insertInto(IColumn & column) const
     {
         assert_cast<ColumnString &>(column).insertData(this->data(), this->size);
     }
 
-    bool compare(const Node * rhs) const
+    bool compare(const Ptr & rhs) const
     {
         auto cmp = strncmp(this->data(), rhs->data(), std::min(this->size, rhs->size));
         return (cmp == 0) ? this->size < rhs->size : cmp < 0;
     }
+
+    Ptr clone() const
+    {
+        Ptr node = alignedAllocate(sizeof(Node) + this->size, alignof(Node));
+        memcpy(reinterpret_cast<char *>(&*node), reinterpret_cast<const char *>(this), sizeof(Node) + this->size);
+        return node;
+    }
+
+    static Ptr read(ReadBuffer & buf)
+    {
+        UInt64 size;
+        readVarUInt(size, buf);
+        if unlikely (size > max_node_size_deserialize)
+            throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Too large node state size");
+
+        Ptr node = alignedAllocate(sizeof(Node) + size, alignof(Node));
+        node->size = size;
+        buf.readStrict(node->data(), size);
+
+        readBinary(node->event_time, buf);
+        UInt64 ulong_bitset;
+        readBinary(ulong_bitset, buf);
+        node->events_bitset = ulong_bitset;
+        readBinary(node->can_be_base, buf);
+
+        return node;
+    }
 };
+/// proton: ends.
 
 /// TODO : Support other types than string
-template <typename Node>
+template <typename Node, bool use_arena>
 struct SequenceNextNodeGeneralData
-{
-    using Allocator = MixedAlignedArenaAllocator<alignof(Node *), 4096>;
-    using Array = PODArray<Node *, 32, Allocator>;
+{ 
+    using NodePtr = typename Node::Ptr;
+    using Allocator = MixedAlignedArenaAllocator<alignof(NodePtr), 4096>;
+    using Array = std::conditional_t<use_arena, PODArray<NodePtr, 32, Allocator>, std::vector<NodePtr>>;
 
     Array value;
     bool sorted = false;
 
     struct Comparator final
     {
-        bool operator()(const Node * lhs, const Node * rhs) const
+        bool operator()(const NodePtr & lhs, const NodePtr & rhs) const
         {
             return lhs->event_time == rhs->event_time ? lhs->compare(rhs) : lhs->event_time < rhs->event_time;
         }
@@ -161,13 +232,13 @@ struct SequenceNextNodeGeneralData
 };
 
 /// Implementation of sequenceFirstNode
-template <typename T, typename Node>
+template <typename T, typename Node, bool use_arena>
 class SequenceNextNodeImpl final
-    : public IAggregateFunctionDataHelper<SequenceNextNodeGeneralData<Node>, SequenceNextNodeImpl<T, Node>>
+    : public IAggregateFunctionDataHelper<SequenceNextNodeGeneralData<Node, use_arena>, SequenceNextNodeImpl<T, Node, use_arena>>
 {
-    using Self = SequenceNextNodeImpl<T, Node>;
+    using Self = SequenceNextNodeImpl<T, Node, use_arena>;
 
-    using Data = SequenceNextNodeGeneralData<Node>;
+    using Data = SequenceNextNodeGeneralData<Node, use_arena>;
     static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
     static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
@@ -190,7 +261,7 @@ public:
         SequenceDirection seq_direction_,
         size_t min_required_args_,
         UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : IAggregateFunctionDataHelper<SequenceNextNodeGeneralData<Node>, Self>({data_type_}, parameters_)
+        : IAggregateFunctionDataHelper<Data, Self>({data_type_}, parameters_, data_type_)
         , seq_base_kind(seq_base_kind_)
         , seq_direction(seq_direction_)
         , min_required_args(min_required_args_)
@@ -202,17 +273,9 @@ public:
 
     String getName() const override { return "sequence_next_node"; }
 
-    DataTypePtr getReturnType() const override { return data_type; }
-
     bool haveSameStateRepresentationImpl(const IAggregateFunction & rhs) const override
     {
         return this->getName() == rhs.getName() && this->haveEqualArgumentTypes(rhs);
-    }
-
-    void insert(Data & a, const Node * v, Arena * arena) const
-    {
-        ++a.total_values;
-        a.value.push_back(v->clone(arena), arena);
     }
 
     void create(AggregateDataPtr __restrict place) const override /// NOLINT
@@ -222,7 +285,11 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        Node * node = Node::allocate(*columns[event_column_idx], row_num, arena);
+        typename Node::Ptr node;
+        if constexpr (use_arena)
+            node = Node::allocate(*columns[event_column_idx], row_num, arena);
+        else
+            node = Node::allocate(*columns[event_column_idx], row_num);
 
         const auto timestamp = assert_cast<const ColumnVector<T> *>(columns[0])->getData()[row_num];
 
@@ -240,7 +307,10 @@ public:
 
         node->can_be_base = assert_cast<const ColumnVector<UInt8> *>(columns[base_cond_column_idx])->getData()[row_num];
 
-        data(place).value.push_back(node, arena);
+        if constexpr (use_arena)
+            data(place).value.push_back(node, arena);
+        else
+            data(place).value.emplace_back(std::move(node));
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -251,16 +321,22 @@ public:
         if (data(place).value.size() >= max_elems)
             return;
 
-        auto & a = data(place).value;
+        auto & cur_data = data(place);
+        auto & a = cur_data.value;
         auto & b = data(rhs).value;
         const auto a_size = a.size();
 
         const UInt64 new_elems = std::min(data(rhs).value.size(), static_cast<size_t>(max_elems) - data(place).value.size());
         for (UInt64 i = 0; i < new_elems; ++i)
-            a.push_back(b[i]->clone(arena), arena);
+        {
+            if constexpr (use_arena)
+                a.push_back(b[i]->clone(arena), arena);
+            else
+                a.emplace_back(b[i]->clone());
+        }
 
         /// Either sort whole container or do so partially merging ranges afterwards
-        using Comparator = typename SequenceNextNodeGeneralData<Node>::Comparator;
+        using Comparator = typename Data::Comparator;
 
         if (!data(place).sorted && !data(rhs).sorted)
             std::stable_sort(std::begin(a), std::end(a), Comparator{});
@@ -317,7 +393,8 @@ public:
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
-        readBinary(data(place).sorted, buf);
+        auto & cur_data = data(place);
+        readBinary(cur_data.sorted, buf);
 
         UInt64 size;
         readVarUInt(size, buf);
@@ -326,10 +403,18 @@ public:
             return;
 
         auto & value = data(place).value;
-
-        value.resize(size, arena);
-        for (UInt64 i = 0; i < size; ++i)
-            value[i] = Node::read(buf, arena);
+        if constexpr (use_arena)
+        {
+            value.resize(size, arena);
+            for (UInt64 i = 0; i < size; ++i)
+                value[i] = Node::read(buf, arena);
+        }
+        else
+        {
+            value.resize(size);
+            for (UInt64 i = 0; i < size; ++i)
+                value[i] = Node::read(buf);
+        }
     }
 
     inline std::optional<size_t> getBaseIndex(Data & data) const
@@ -425,7 +510,7 @@ public:
         }
     }
 
-    bool allocatesMemoryInArena() const override { return true; }
+    bool allocatesMemoryInArena() const override { return use_arena; }
 };
 
 }

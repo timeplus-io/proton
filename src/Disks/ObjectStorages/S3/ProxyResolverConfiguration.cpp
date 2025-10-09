@@ -26,7 +26,7 @@ ProxyResolverConfiguration::ProxyResolverConfiguration(const Poco::URI & endpoin
 
 ClientConfigurationPerRequest ProxyResolverConfiguration::getConfiguration(const Aws::Http::HttpRequest &)
 {
-    LOG_DEBUG(&Poco::Logger::get("AWSClient"), "Obtain proxy using resolver: {}", endpoint.toString());
+    LOG_DEBUG(getLogger("AWSClient"), "Obtain proxy using resolver: {}", endpoint.toString());
 
     std::lock_guard lock(cache_mutex);
 
@@ -34,17 +34,16 @@ ClientConfigurationPerRequest ProxyResolverConfiguration::getConfiguration(const
 
     if (cache_ttl.count() && cache_valid && now <= cache_timestamp + cache_ttl && now >= cache_timestamp)
     {
-        LOG_DEBUG(&Poco::Logger::get("AWSClient"), "Use cached proxy: {}://{}:{}", Aws::Http::SchemeMapper::ToString(cached_config.proxy_scheme), cached_config.proxy_host, cached_config.proxy_port);
+        LOG_DEBUG(getLogger("AWSClient"), "Use cached proxy: {}://{}:{}", Aws::Http::SchemeMapper::ToString(cached_config.proxy_scheme), cached_config.proxy_host, cached_config.proxy_port);
         return cached_config;
     }
 
     /// 1 second is enough for now.
     /// TODO: Make timeouts configurable.
-    ConnectionTimeouts timeouts(
-        Poco::Timespan(1000000), /// Connection timeout.
-        Poco::Timespan(1000000), /// Send timeout.
-        Poco::Timespan(1000000)  /// Receive timeout.
-    );
+    auto timeouts = ConnectionTimeouts()
+        .withConnectionTimeout(1)
+        .withSendTimeout(1)
+        .withReceiveTimeout(1);
 
     try
     {
@@ -63,7 +62,7 @@ ClientConfigurationPerRequest ProxyResolverConfiguration::getConfiguration(const
         {
             auto resolved_endpoint = endpoint;
             resolved_endpoint.setHost(resolved_hosts[i].toString());
-            session = makeHTTPSession(endpoint, timeouts, false);
+            session = makeHTTPSession(resolved_endpoint, timeouts);
 
             try
             {
@@ -80,13 +79,13 @@ ClientConfigurationPerRequest ProxyResolverConfiguration::getConfiguration(const
         auto & response_body_stream = session->receiveResponse(response);
 
         if (response.getStatus() != Poco::Net::HTTPResponse::HTTP_OK)
-            throw Exception("Proxy resolver returned not OK status: " + response.getReason(), ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Proxy resolver returned not OK status: {}", response.getReason());
 
         String proxy_host;
         /// Read proxy host as string from response body.
         Poco::StreamCopier::copyToString(response_body_stream, proxy_host);
 
-        LOG_DEBUG(&Poco::Logger::get("AWSClient"), "Use proxy: {}://{}:{}", proxy_scheme, proxy_host, proxy_port);
+        LOG_DEBUG(getLogger("AWSClient"), "Use proxy: {}://{}:{}", proxy_scheme, proxy_host, proxy_port);
 
         cached_config.proxy_scheme = Aws::Http::SchemeMapper::FromString(proxy_scheme.c_str());
         cached_config.proxy_host = proxy_host;

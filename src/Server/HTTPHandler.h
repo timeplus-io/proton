@@ -6,8 +6,7 @@
 #include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
-
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 namespace CurrentMetrics
 {
@@ -61,6 +60,9 @@ private:
         std::shared_ptr<WriteBuffer> out_maybe_delayed_and_compressed;
 
         bool finalized = false;
+        bool canceled = false;
+
+        bool exception_is_written = false;
 
         inline bool hasDelayed() const
         {
@@ -81,6 +83,26 @@ private:
                 out->finalize();
         }
 
+        void cancel()
+        {
+            if (canceled)
+                return;
+            canceled = true;
+
+            if (out_maybe_delayed_and_compressed)
+                out_maybe_delayed_and_compressed->cancel();
+            if (out_maybe_compressed)
+                out_maybe_compressed->cancel();
+            if (out)
+                out->cancel();
+        }
+
+
+        bool isCanceled() const
+        {
+            return canceled;
+        }
+
         inline bool isFinalized() const
         {
             return finalized;
@@ -88,7 +110,7 @@ private:
     };
 
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// It is the name of the server that will be sent in an http-header x-timeplus-server-display-Name.
     String server_display_name;
@@ -141,10 +163,11 @@ private:
     std::string param_name;
     /// proton: starts
     bool snapshot_mode = false;
+    bool is_clickhouse_compatible = false;
     /// proton: ends
 public:
     /// proton: starts
-    explicit DynamicQueryHandler(IServer & server_, const std::string & param_name_ = "query", bool snapshot_mode_ = false);
+    explicit DynamicQueryHandler(IServer & server_, const std::string & param_name_ = "query", bool snapshot_mode_ = false, bool is_clickhouse_compatible_ = false);
     /// proton: ends
 
     std::string getQuery(HTTPServerRequest & request, HTMLForm & params, ContextMutablePtr context) override;

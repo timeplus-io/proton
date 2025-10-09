@@ -48,7 +48,7 @@ SETTINGS index_granularity = 8192;
 
 SELECT 'INSERT INTO main_table_01818';
 INSERT INTO main_table_01818 SELECT 1 as `id`, 'ClickHouse' as `advertiser_id`, * EXCEPT (`id`, `advertiser_id`)
-FROM generateRandom(
+FROM generate_random(
     '`id` uint32,
     `advertiser_id` string,
     `campaign_id` string,
@@ -67,7 +67,7 @@ LIMIT 100;
 
 SELECT 'INSERT INTO tmp_table_01818';
 INSERT INTO tmp_table_01818 SELECT 2 as `id`, 'Database' as `advertiser_id`, * EXCEPT (`id`, `advertiser_id`)
-FROM generateRandom(
+FROM generate_random(
     '`id` uint32,
     `advertiser_id` string,
     `campaign_id` string,
@@ -86,7 +86,7 @@ LIMIT 100;
 
 SELECT 'INSERT INTO tmp_table_01818';
 INSERT INTO tmp_table_01818 SELECT 3 as `id`, 'ClickHouse' as `advertiser_id`, * EXCEPT (`id`, `advertiser_id`)
-FROM generateRandom(
+FROM generate_random(
     '`id` uint32,
     `advertiser_id` string,
     `campaign_id` string,

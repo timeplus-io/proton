@@ -1,0 +1,32 @@
+tags:
+  - validate
+  
+description: extra tests
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: insert into udf_stream (i, i8, f32, s, dt) values 
+        (3, 3, 3.0, 's3', '2020-02-02 20:00:00')
+        (4, 4, 4.0, 's4', '2020-02-02 20:00:00');
+
+  - name: udf-0-2
+    type: stream
+    query: select test_add_five(f32) from udf_stream settings seek_to='earliest';
+    schema:
+    - name: test_add_five(f32)
+      type: float32
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: udf-0-2
+    mode: random
+    expected_result:
+      - [8]
+      - [9]
+      - [6]
+      - [7]

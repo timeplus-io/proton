@@ -119,7 +119,7 @@ def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default
 
             sleep(i+1)
 
-    #print(f"clickhouse_execute_http data = {data}")    
+    #print(f"clickhouse_execute_http data = {data}")
     if res.status != 200:
         raise HTTPError(data.decode(), res.status)
 
@@ -344,6 +344,7 @@ class FailureReason(enum.Enum):
     NO_LONG = "not running long tests"
     REPLICATED_DB = "replicated-database"
     BUILD = "not running for current build"
+    NO_PYTHON = "no python"
 
     # UNKNOWN reasons
     NO_REFERENCE = "no reference file"
@@ -384,8 +385,12 @@ class TestCase:
         Returns reference file name for specified test
         """
 
+        ext_list = ['.reference']
+        if name.endswith(".gen"):
+            ext_list = ['.gen.reference', '.reference']
+
         name = removesuffix(name, ".gen")
-        for ext in ['.reference', '.gen.reference']:
+        for ext in ext_list:
             reference_file = os.path.join(suite_dir, name) + ext
             if os.path.isfile(reference_file):
                 return reference_file
@@ -476,6 +481,9 @@ class TestCase:
 
         elif tags and ('no-replicated-database' in tags) and args.replicated_database:
             return FailureReason.REPLICATED_DB
+        
+        elif tags and ('no-python' in tags) and args.python:
+            return FailureReason.NO_PYTHON
 
         elif tags:
             for build_flag in args.build_flags:
@@ -549,7 +557,7 @@ class TestCase:
         result_is_different = subprocess.call(['diff', '-q', self.reference_file, self.stdout_file], stdout=PIPE)
 
         if result_is_different:
-            diff = Popen(['diff', '-U', str(self.testcase_args.unified), self.reference_file, self.stdout_file], encoding="latin-1", stdout=PIPE, 
+            diff = Popen(['diff', '-U', str(self.testcase_args.unified), self.reference_file, self.stdout_file], encoding="latin-1", stdout=PIPE,
                          universal_newlines=True).communicate()[0]
             description += "\n{}\n".format(diff)
             return TestResult(self.name, TestStatus.FAIL, FailureReason.RESULT_DIFF, total_time, description)
@@ -649,7 +657,7 @@ class TestCase:
             #print(f"run_single_test, need_drop_database, database={database}")
             seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
             try:
-                clickhouse_execute(args, "DROP DATABASE " + database, timeout=seconds_left, settings={
+                clickhouse_execute(args, "DROP DATABASE " + database + " CASCADE", timeout=seconds_left, settings={
                     'log_comment': args.testcase_basename,
                 })
             except socket.timeout:
@@ -1423,6 +1431,8 @@ if __name__ == '__main__':
     group.add_argument('--shard', action='store_true', default=None, dest='shard', help='Run sharding related tests (required to proton-server listen 127.0.0.2 127.0.0.3)')
     group.add_argument('--no-shard', action='store_false', default=None, dest='shard', help='Do not run shard related tests')
 
+    parser.add_argument('--python', action='store_true', dest='python', help='Enable python udf')
+
     args = parser.parse_args()
     # print(f"args = {args}")
     # print(f"=============================================================")
@@ -1487,12 +1497,12 @@ if __name__ == '__main__':
         args.client += f" --port={tcp_port}"
     else:
         args.tcp_port = 9000
-    
+
     user = os.getenv("CLICKHOUSE_USER")
     if user is not None:
         args.user = user
         args.client += f" --user={user}"
-    
+
     password = os.getenv("CLICKHOUSE_PASSWORD")
     if password is not None:
         args.password = password

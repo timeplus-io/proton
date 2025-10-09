@@ -1,0 +1,54 @@
+tags:
+  - changelog(table)
+  - streaming_tailing
+  - subquery/view/materialized_view
+description: subqury from subquery from subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_subquery_4(i int, k1 int, k2 string);
+  - type: wait
+    time: 2
+
+  - name: "1403"
+    type: stream
+    query:
+      with cte1 as (
+        with cte2 as (select i, k1, k2, _tp_delta from changelog(test14_subquery_4, k2))
+        select * from cte2
+      ) select * from cte1;
+    schema:
+      - name: i
+        type: int32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (4, 3, 'a');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 3, 'a');  
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 5, 'b');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 2, 'a');
+
+  - type: check
+    target_name: "1403"
+    expected_result:
+      - [4, 3, a, 1]
+      - [4, 3, a, -1]
+      - [2, 3, a, 1]
+      - [2, 5, b, 1]
+      - [2, 3, a, -1]
+      - [2, 2, a, 1]

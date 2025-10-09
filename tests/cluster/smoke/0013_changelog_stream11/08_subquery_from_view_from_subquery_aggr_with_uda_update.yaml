@@ -1,0 +1,158 @@
+tags:
+- versioned_kv
+- multi_shard
+- subquery
+- subquery/view/materialized_view
+- tail/aggr
+- no_group_by
+- UDA
+description: subquery from view from subquery aggr with UDA, update
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: |
+    CREATE OR REPLACE AGGREGATE FUNCTION test_14_11_sec_large(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+      {
+        initialize: function() { 
+          this.max = -1.0;
+          this.sec = -1.0;
+        },
+
+        process: function(values) {
+          for(let i=0; i<values.length; i++) {
+            if(values[i] > this.max) {
+              this.sec = this.max;
+              this.max = values[i];
+            }
+            if(values[i] < this.max && values[i] > this.sec)
+              this.sec = values[i];
+          }
+        },
+
+        finalize: function() {
+          return this.sec;
+        },
+
+        serialize: function() {
+          let s = {"max": this.max, "sec":this.sec };
+          return JSON.stringify(s);
+        },
+
+        deserialize: function(state_str) {
+          let s = JSON.parse(state_str);
+          this.max = s["max"];
+          this.sec = s["sec"];
+        },
+
+        merge: function(state_str) {
+          let s = JSON.parse(state_str);
+          if (s["sec"] >= this.max) {
+            this.max = s["max"];
+            this.sec = s["sec"];
+          } else if (s["max"] >= this.max) {
+            this.sec = this.max;
+            this.max = s["max"];
+          } else if (s["max"] > this.sec) {
+            this.sec = s["max"];
+          }
+        }
+      }
+    $$;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test14_multishard_11(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv', shards=3;
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view test14_view1_11 as
+          (select i,
+                  k1,
+                  k2
+            from test14_multishard_11
+            where k1 <> 0 );
+- type: wait
+  time: 1
+
+- type: query
+  sql: create view test14_view2_11 as
+          (select test_14_11_sec_large(i) as sec_l
+            from
+              (select i,
+                      k1,
+                      k2
+              from test14_view1_11
+              where k2 <> 'd' ) emit periodic 200ms);
+
+- type: wait
+  time: 2
+
+- name: '1492'
+  type: stream
+  query: select sec_l from test14_view2_11;
+  schema:
+  - name: sec_l
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (1, 1, 'a');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (2, 1, 'a');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (3, 0, 'a');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (4, 1, 'a');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (5, 2, 'e');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (6, 2, 'b');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (7, 2, 'b');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (8, 1, 'b');
+
+- type: check
+  target_name: '1492'
+  expected_result:
+  - [-1]
+  - [1]
+  - [2]
+  - [4]
+  - [5]
+  - [6]
+  - [7]

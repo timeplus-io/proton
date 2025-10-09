@@ -1,0 +1,185 @@
+tags:
+  - multishards
+  - append_only
+  - substream
+  - streaming_aggregation
+  - window_aggregation
+  - hop_window_aggregation
+  - group_by
+  - UDA
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: hop window aggregation group by keys, select with UDA
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: 'drop view if exists test13_view2_1;'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: 'drop view if exists test13_view1_1;'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: 'drop stream if exists test13_subst_1;'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: 'create stream test13_subst_1(i float, k1 int, k2 string, timestamp datetime64(3) default now64(3)) settings shards=3;'
+
+  - type: wait
+    time: 1
+
+  - name: '1309'
+    type: stream
+    query: |
+      select k2,
+             test_13_1_sec_large(i),
+             window_start as s,
+             window_end as e
+      from hop(test13_subst_1, timestamp, 2s, 5s) partition by k2
+      group by k2,
+               window_start,
+               window_end;
+    schema:
+      - name: k2
+        type: string
+      - name: test_13_1_sec_large(i)
+        type: float32
+      - name: s
+        type: datetime64(3)
+      - name: e
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(0, 0, 'a', '2021-11-02 20:00:01');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(1, 1, 'b', '2021-11-02 20:00:02');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(2, 2, 'a', '2021-11-02 20:00:03');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(3, 3, 'b', '2021-11-02 20:00:04');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(4, 4, 'a', '2021-11-02 20:00:05');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(5, 0, 'b', '2021-11-02 20:00:06');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(6, 1, 'a', '2021-11-02 20:00:07');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(7, 2, 'b', '2021-11-02 20:00:08');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(8, 3, 'a', '2021-11-02 20:00:09');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(9, 4, 'b', '2021-11-02 20:00:10');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(10, 0, 'a', '2021-11-02 20:00:11');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(11, 1, 'b', '2021-11-02 20:00:12');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(12, 2, 'a', '2021-11-02 20:00:13');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(13, 3, 'b', '2021-11-02 20:00:14');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: "insert into test13_subst_1(i, k1, k2, timestamp)
+    values(14, 4, 'a', '2021-11-02 20:00:15');"
+
+  - type: check
+    target_name: '1309'
+    expected_result:
+      - [ a, -1, '2021-11-02 19:59:58', '2021-11-02 20:00:03' ]
+      - [ b, -1, '2021-11-02 19:59:58', '2021-11-02 20:00:03' ]
+      - [ a, 0, '2021-11-02 20:00:00', '2021-11-02 20:00:05' ]
+      - [ b, 1, '2021-11-02 20:00:00', '2021-11-02 20:00:05' ]
+      - [ a, 2, '2021-11-02 20:00:02', '2021-11-02 20:00:07' ]
+      - [ b, 3, '2021-11-02 20:00:02', '2021-11-02 20:00:07' ]
+      - [ a, 4, '2021-11-02 20:00:04', '2021-11-02 20:00:09' ]
+      - [ b, 5, '2021-11-02 20:00:04', '2021-11-02 20:00:09' ]
+      - [ a, 6, '2021-11-02 20:00:06', '2021-11-02 20:00:11' ]
+      - [ b, 7, '2021-11-02 20:00:06', '2021-11-02 20:00:11' ]
+      - [ a, 8, '2021-11-02 20:00:08', '2021-11-02 20:00:13' ]
+      - [ b, 9, '2021-11-02 20:00:08', '2021-11-02 20:00:13' ]
+      - [ a, 10, '2021-11-02 20:00:10', '2021-11-02 20:00:15' ]
+

@@ -1,0 +1,118 @@
+tags:
+  - tumble window
+  - functions
+  - func rename
+description: tumble w/funcs:json, to_date, replace_regex, to_time, extract timestamp from json and run tumble on it, and run all func rename.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: '101'
+    query: select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: json_bool
+        type: bool
+      - name: to_date
+        type: date32
+      - name: replace_regex
+        type: string
+      - name: json_float
+        type: float64
+      - name: json_extract_int
+        type: int64
+      - name: json_query
+        type: string
+      - name: json_extract_array_raw
+        type: array(string)
+      - name: json_value
+        type: string
+      - name: window_end
+        type: datetime64(3)
+  - type: wait
+    time: 5
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 60, '{"create_time":"11/02/2021 20:00:01", "1953":"1953-11-02", "float":127.001, "int":100, "bool":true, "array":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:00']
+      - ['dev2', 'ca', 66, '{"create_time":"2021-11-02 20:00:03", "1953":"1953-11-02", "float":127.001,"int":100.03, "bool":true, "array":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 58.3, '{"create_time":"11-02-2021 20:00:02", "1953":"1953-11-02","float":127.001, "int":312,"bool":false, "array":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:03']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 59, '{"create_time":"11.02.2021 20:00:04", "1953":"1953-11-02","float":"127.001", "int":65536.001, "bool":true, "array":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:06']
+      - ['dev1', 'ca', 67, '{"create_time":"2021-11-02 20:00:05", "1953":"1953-11-02","float":127.001, "bool":true, "array":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:07']
+      - ['dev1', 'ca', 77, '{"create_time":"11-02-2021 20:00:06", "1953":"1953-11-02","float":127.001, "bool":false, "array":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:10']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 57.3, '{"create_time":"2021-11-02 20:00:09", "1953":"1953-11-02","float":127.001, "bool":true, "array":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:11']
+      - ['dev2', 'ca', 66, '{"create_time":"2021-11-02 20:00:08", "1953":"1953-11-02","float":127.001, "bool":true, "array":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:14']
+      - ['dev2', 'ca', 76, '{"create_time":"2021-11-02 20:00:07", "1953":"1953-11-02","float":127.001, "bool":false, "array":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:11']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09", "1953":"1953-11-02","float":"127.001", "bool":true, "array":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:13']
+      - ['dev3', 'ca', 67, '{"create_time":"2021-11-02 20:00:01", "1953":"1953-11-02","float":"127.001", "bool":true, "array":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:12']
+      - ['dev3', 'ca', 77, '{"create_time":"2021-11-02 20:00:10", "1953":"1953-11-02","float":"127.001", "bool":true, "array":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:15']
+
+  - type: check
+    target_name: '101'
+    mode: random
+    expected_result:
+      - ['dev2', 66, 'True', '1953-11-02', 'a953-a-02', '127.001', '100', '[1, 1, 4, 0, -1, -4]', ['[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'],'1', '2021-11-02 20:00:05']
+      - ['dev1', 59, 'True', '1953-11-02', 'a953-a-02', '127.001', '65536', '[0, 1, 4, 0, -1, -4]', ['[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'],'0', '2021-11-02 20:00:05']
+      - ['dev1', 60, 'True', '1953-11-02', 'a953-a-02', '127.001', '100', '[20, 1, 4, 0, -1, -4]', ['[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'],'20', '2021-11-02 20:00:05']
+      - ['dev2', 58.3, 'False', '1953-11-02', 'a953-a-02', '127.001', '312', '[22, 1, 4, 0, -1, -4]', ['[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'],'22', '2021-11-02 20:00:05']

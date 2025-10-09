@@ -36,10 +36,26 @@ public:
     void setReadBuffer(ReadBuffer & in_) override;
 
     /// TODO: remove context somehow.
-    void setContext(ContextPtr context_) { context = Context::createCopy(context_); }
+    void setContext(ContextPtr & context_) 
+    { 
+        context = Context::createCopy(context_);
+        /// proton: starts
+        /// For VALUES format, use precise parsing by default unless user explicitly disabled it
+        if (context)
+        {
+            const auto & settings = context->getSettingsRef();
+            /// If user explicitly set precise_float_parsing=1, use it
+            /// If user explicitly set precise_float_parsing=0, respect it  
+            /// If user didn't set it (default=false), use true for VALUES format
+            format_settings.precise_float_parsing = settings.precise_float_parsing.changed ? 
+                settings.precise_float_parsing.value : true;
+        }
+        /// proton: ends
+    }
 
     const BlockMissingValues & getMissingValues() const override { return block_missing_values; }
 
+    size_t getApproxBytesReadForChunk() const override { return approx_bytes_read_for_chunk; }
 private:
     ValuesBlockInputFormat(std::unique_ptr<PeekableReadBuffer> buf_, const Block & header_, const RowInputFormatParams & params_,
                            const FormatSettings & format_settings_);
@@ -74,7 +90,9 @@ private:
     const RowInputFormatParams params;
 
     ContextPtr context;   /// pimpl
-    const FormatSettings format_settings;
+    /// proton: starts
+    mutable FormatSettings format_settings;
+    /// proton: ends
 
     const size_t num_columns;
     size_t total_rows = 0;
@@ -92,6 +110,7 @@ private:
     Serializations serializations;
 
     BlockMissingValues block_missing_values;
+    size_t approx_bytes_read_for_chunk = 0;
 };
 
 class ValuesSchemaReader : public IRowSchemaReader
@@ -105,6 +124,7 @@ private:
     PeekableReadBuffer buf;
     ParserExpression parser;
     bool first_row = true;
+    bool end_of_data = false;
 };
 
 }

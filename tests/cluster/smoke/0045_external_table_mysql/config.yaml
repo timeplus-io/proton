@@ -1,0 +1,6 @@
+name: external_table_mysql
+description: Tests MySQL external table feature.
+tags:
+  - smoke
+  - external_table
+  - mysql

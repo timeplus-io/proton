@@ -7,6 +7,8 @@
 #include <vector>
 #include <memory>
 
+#include <Common/Logger.h>
+
 #include <Poco/DOM/Document.h>
 #include <Poco/DOM/DOMParser.h>
 #include <Poco/DOM/DOMWriter.h>
@@ -16,8 +18,9 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/Util/AbstractConfiguration.h>
-#include <Common/logger_useful.h>
 
+
+namespace Poco { class Logger; }
 
 namespace zkutil
 {
@@ -42,8 +45,6 @@ public:
         bool throw_on_bad_incl = false,
         bool log_to_console = false,
         const Substitutions & substitutions = Substitutions());
-
-    ~ConfigProcessor();
 
     /// Perform config includes and substitutions and return the resulting XML-document.
     ///
@@ -85,7 +86,6 @@ public:
     /// Set path of main config.xml. It will be cut from all configs placed to preprocessed_configs/
     static void setConfigPath(const std::string & config_path);
 
-public:
     using Files = std::vector<std::string>;
 
     static Files getConfigMergeFiles(const std::string & config_path);
@@ -101,7 +101,7 @@ private:
 
     bool throw_on_bad_incl;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     Poco::AutoPtr<Poco::Channel> channel_ptr;
 
     Substitutions substitutions;
@@ -109,7 +109,6 @@ private:
     Poco::AutoPtr<Poco::XML::NamePool> name_pool;
     Poco::XML::DOMParser dom_parser;
 
-private:
     using NodePtr = Poco::AutoPtr<Poco::XML::Node>;
 
     void mergeRecursive(XMLDocumentPtr config, Poco::XML::Node * config_root, const Poco::XML::Node * with_root);

@@ -1,0 +1,16 @@
+name: changelog_stream3
+description: Test Changelog and stream.
+tags:
+- smoke
+setup:
+  scope: case
+  steps:
+  - type: query
+    sql: drop view if exists test14_view2;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists test14_view;
+  - type: wait
+    time: 1

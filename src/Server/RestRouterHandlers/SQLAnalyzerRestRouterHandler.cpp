@@ -20,8 +20,12 @@
 #include <Parsers/Access/ASTGrantQuery.h>
 
 #include <Parsers/ASTShowCreateFormatSchemaQuery.h>
+#include <Parsers/ASTShowCreateFunctionQuery.h>
+#include <Parsers/ASTShowDisksQuery.h>
 #include <Parsers/ASTShowFormatSchemasQuery.h>
+#include <Parsers/ASTShowFunctionsQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
+#include <Parsers/ASTShowStoragePoliciesQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTUseQuery.h>
@@ -46,6 +50,15 @@
 
 #include <Parsers/Streaming/ASTRecoverQuery.h>
 #include <Parsers/Streaming/ASTUnsubscribeQuery.h>
+
+#include <Parsers/ASTCreateAlertQuery.h>
+#include <Parsers/ASTCreateTaskQuery.h>
+#include <Parsers/ASTDropAlertQuery.h>
+#include <Parsers/ASTDropTaskQuery.h>
+#include <Parsers/ASTShowAlertsQuery.h>
+#include <Parsers/ASTShowCreateAlertQuery.h>
+#include <Parsers/ASTShowCreateTaskQuery.h>
+#include <Parsers/ASTShowTasksQuery.h>
 
 
 namespace DB
@@ -157,8 +170,14 @@ String queryType(ASTPtr & ast)
         return "RENAME";
     else if (ast->as<ASTShowTablesQuery>())
         return "SHOW_TABLE";
+    else if (ast->as<ASTShowFunctionsQuery>())
+        return "SHOW_FUNCTIONS";
     else if (ast->as<ASTShowFormatSchemasQuery>())
         return "SHOW_FORMAT_SCHEMAS";
+    else if (ast->as<ASTShowDisksQuery>())
+        return "SHOW_DISKS";
+    else if (ast->as<ASTShowStoragePoliciesQuery>())
+        return "SHOW_STORAGE_POLICIES";
     else if (ast->as<ASTUseQuery>())
         return "USE";
     else if (ast->as<ASTSetQuery>())
@@ -177,6 +196,8 @@ String queryType(ASTPtr & ast)
         return "SHOW_CREATE_DATABASE";
     else if (ast->as<ASTShowCreateDictionaryQuery>())
         return "SHOW_CREATE_DICT";
+    else if (ast->as<ASTShowCreateFunctionQuery>())
+        return "SHOW_CREATE_FUNCTION";
     else if (ast->as<ASTShowCreateFormatSchemaQuery>())
         return "SHOW_CREATE_FORMAT_SCHEMA";
     else if (ast->as<ASTDescribeQuery>())
@@ -225,6 +246,22 @@ String queryType(ASTPtr & ast)
         return "RECOVER";
     else if (ast->as<Streaming::ASTUnsubscribeQuery>())
         return "UNSUBSCRIBE";
+    else if (ast->as<ASTCreateAlertQuery>())
+        return "CREATE_ALERT";
+    else if (ast->as<ASTShowAlertsQuery>())
+        return "SHOW_ALERTS";
+    else if (ast->as<ASTShowCreateAlertQuery>())
+        return "SHOW_CREATE_ALERT";
+    else if (ast->as<ASTDropAlertQuery>())
+        return "DROP_AERLT";
+    else if (ast->as<ASTCreateTaskQuery>())
+        return "CREATE_TASK";
+    else if (ast->as<ASTShowTasksQuery>())
+        return "SHOW_TASKS";
+    else if (ast->as<ASTShowCreateTaskQuery>())
+        return "SHOW_CREATE_TASK";
+    else if (ast->as<ASTDropTaskQuery>())
+        return "DROP_TASK";
     else
         return "UNKNOWN";
 }

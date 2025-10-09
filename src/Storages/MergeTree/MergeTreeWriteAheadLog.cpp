@@ -7,11 +7,14 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/copyData.h>
+#include <Interpreters/Context.h>
+#include <Common/logger_useful.h>
 #include <Poco/JSON/JSON.h>
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Stringifier.h>
 #include <Poco/JSON/Parser.h>
-#include "Storages/MergeTree/DataPartStorageOnDisk.h"
+#include "Common/TransactionID.h"
+#include "Storages/MergeTree/DataPartStorageOnDiskFull.h"
 #include <sys/time.h>
 
 namespace DB
@@ -34,7 +37,7 @@ MergeTreeWriteAheadLog::MergeTreeWriteAheadLog(
     , name(name_)
     , path(storage.getRelativeDataPath() + name_)
     , pool(storage.getContext()->getSchedulePool())
-    , log(&Poco::Logger::get(storage.getLogName() + " (WriteAheadLog)"))
+    , log(getLogger(storage.getLogName() + " (WriteAheadLog)"))
 {
     init();
     sync_task = pool.createTask("MergeTreeWriteAheadLog::sync", [this]
@@ -76,7 +79,7 @@ void MergeTreeWriteAheadLog::init()
 
     /// Small hack: in NativeWriter header is used only in `getHeader` method.
     /// To avoid complex logic of changing it during ALTERs we leave it empty.
-    block_out = std::make_unique<NativeWriter>(*out, Block{}, 0);
+    block_out = std::make_unique<NativeWriter>(*out, 0, Block{});
     min_block_number = std::numeric_limits<Int64>::max();
     max_block_number = -1;
     bytes_at_last_sync = 0;
@@ -174,16 +177,13 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(
             else if (action_type == ActionType::ADD_PART)
             {
                 auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, disk, 0);
-                auto data_part_storage = std::make_shared<DataPartStorageOnDisk>(single_disk_volume, storage.getRelativeDataPath(), part_name);
 
-                part = storage.createPart(
-                    part_name,
-                    MergeTreeDataPartType::InMemory,
-                    MergeTreePartInfo::fromPartName(part_name, storage.format_version),
-                    data_part_storage);
+                part = storage.getDataPartBuilder(part_name, single_disk_volume, part_name)
+                    .withPartType(MergeTreeDataPartType::InMemory)
+                    .withPartStorageType(MergeTreeDataPartStorageType::Full)
+                    .build();
 
                 part->uuid = metadata.part_uuid;
-
                 block = block_in.read();
 
                 if (storage.getActiveContainingPart(part->info, MergeTreeDataPartState::Active, parts_lock))
@@ -191,7 +191,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(
             }
             else
             {
-                throw Exception("Unknown action type: " + toString(static_cast<UInt8>(action_type)), ErrorCodes::CORRUPTED_DATA);
+                throw Exception(ErrorCodes::CORRUPTED_DATA, "Unknown action type: {}", toString(static_cast<UInt8>(action_type)));
             }
         }
         catch (const Exception & e)
@@ -223,11 +223,11 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(
                 block.getNamesAndTypesList(),
                 {},
                 CompressionCodecFactory::instance().get("NONE", {}),
-                NO_TRANSACTION_PTR);
+                Tx::PrehistoricTID);
 
             part->minmax_idx->update(block, storage.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
             part->partition.create(metadata_snapshot, block, 0, context);
-            part->setColumns(block.getNamesAndTypesList(), {});
+            part->setColumns(block.getNamesAndTypesList(), {}, metadata_snapshot->getMetadataVersion());
             if (metadata_snapshot->hasSortingKey())
                 metadata_snapshot->getSortingKey().expression->execute(block);
 
@@ -236,7 +236,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(
             for (const auto & projection : metadata_snapshot->getProjections())
             {
                 auto projection_block = projection.calculate(block, context);
-                auto temp_part = MergeTreeDataWriter::writeInMemoryProjectionPart(storage, log, projection_block, projection, part.get());
+                auto temp_part = MergeTreeDataWriter::writeProjectionPart(storage, log, projection_block, projection, part.get());
                 temp_part.finalize();
                 if (projection_block.rows())
                     part->addProjectionPart(projection.name, std::move(temp_part.part));
@@ -351,8 +351,9 @@ void MergeTreeWriteAheadLog::ActionMetadata::read(ReadBuffer & meta_in)
 {
     readIntBinary(min_compatible_version, meta_in);
     if (min_compatible_version > WAL_VERSION)
-        throw Exception("WAL metadata version " + toString(min_compatible_version)
-                        + " is not compatible with this proton version", ErrorCodes::UNKNOWN_FORMAT_VERSION);
+        throw Exception(ErrorCodes::UNKNOWN_FORMAT_VERSION,
+                        "WAL metadata version {} is not compatible with this proton version",
+                        toString(min_compatible_version));
 
     size_t metadata_size;
     readVarUInt(metadata_size, meta_in);

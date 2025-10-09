@@ -21,7 +21,7 @@ void StorageSystemFormats::fillData(MutableColumns & res_columns, ContextPtr, co
     for (const auto & pair : formats)
     {
         const auto & [format_name, creators] = pair;
-        UInt64 has_input_format(creators.input_creator != nullptr);
+        UInt64 has_input_format(creators.input_creator != nullptr || creators.random_access_input_creator != nullptr);
         UInt64 has_output_format(creators.output_creator != nullptr);
         res_columns[0]->insert(format_name);
         res_columns[1]->insert(has_input_format);

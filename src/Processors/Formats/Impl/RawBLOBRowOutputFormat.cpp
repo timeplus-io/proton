@@ -8,9 +8,8 @@ namespace DB
 
 RawBLOBRowOutputFormat::RawBLOBRowOutputFormat(
     WriteBuffer & out_,
-    const Block & header_,
-    const RowOutputFormatParams & params_)
-    : IRowOutputFormat(header_, out_, params_, ProcessorID::RawBLOBRowOutputFormatID)
+    const Block & header_)
+    : IRowOutputFormat(header_, out_, ProcessorID::RawBLOBRowOutputFormatID)
 {
 }
 
@@ -27,10 +26,9 @@ void registerOutputFormatRawBLOB(FormatFactory & factory)
     factory.registerOutputFormat("RawBLOB", [](
         WriteBuffer & buf,
         const Block & sample,
-        const RowOutputFormatParams & params,
         const FormatSettings &)
     {
-        return std::make_shared<RawBLOBRowOutputFormat>(buf, sample, params);
+        return std::make_shared<RawBLOBRowOutputFormat>(buf, sample);
     });
 }
 

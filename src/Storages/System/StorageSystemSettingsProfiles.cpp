@@ -33,8 +33,8 @@ NamesAndTypesList StorageSystemSettingsProfiles::getNamesAndTypes()
 void StorageSystemSettingsProfiles::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
     context->checkAccess(AccessType::SHOW_SETTINGS_PROFILES);
-    const auto & access_control = context->getAccessControl();
-    std::vector<UUID> ids = access_control.findAll<SettingsProfile>();
+    const auto access_control = context->getAccessControl();
+    std::vector<UUID> ids = access_control->findAll<SettingsProfile>();
 
     size_t column_index = 0;
     auto & column_name = assert_cast<ColumnString &>(*res_columns[column_index++]);
@@ -58,7 +58,7 @@ void StorageSystemSettingsProfiles::fillData(MutableColumns & res_columns, Conte
         column_storage.insertData(storage_name.data(), storage_name.length());
         column_num_elements.push_back(elements.size());
 
-        auto apply_to_ast = apply_to.toASTWithNames(access_control);
+        auto apply_to_ast = apply_to.toASTWithNames(*access_control);
         column_apply_to_all.push_back(apply_to_ast->all);
 
         for (const auto & role_name : apply_to_ast->names)
@@ -72,11 +72,11 @@ void StorageSystemSettingsProfiles::fillData(MutableColumns & res_columns, Conte
 
     for (const auto & id : ids)
     {
-        auto profile = access_control.tryRead<SettingsProfile>(id);
+        auto profile = access_control->tryRead<SettingsProfile>(id);
         if (!profile)
             continue;
 
-        auto storage = access_control.findStorage(id);
+        auto storage = access_control->findStorage(id);
         if (!storage)
             continue;
 

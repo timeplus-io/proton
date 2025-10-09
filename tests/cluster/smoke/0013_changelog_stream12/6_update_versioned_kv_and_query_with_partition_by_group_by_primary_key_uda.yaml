@@ -1,0 +1,101 @@
+tags:
+- versioned_kv
+- multi_shard
+- substream
+- partition_by_primary_key
+- streaming_aggregation
+- global_aggregation
+- group_by
+- primary_key
+- UDA
+- bug
+description: update versioned_kv and query with partition by primary key, group by,
+  primary key and UDA
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: create stream test14_multishard_12(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv', shards=3;
+
+- type: wait
+  time: 2
+
+- name: '14102'
+  type: stream
+  query: select max(i),
+                min(i),
+                avg(i),
+                count(i),
+                k2
+        from test14_multishard_12 partition by k2
+        group by k2 emit periodic 200ms;
+  schema:
+  - name: max(i)
+    type: float32
+  - name: min(i)
+    type: float32
+  - name: avg(i)
+    type: float64
+  - name: count(i)
+    type: uint64
+  - name: k2
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (1, 1, 'a');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (2, 1, 'b');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (3, 1, 'c');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (1, 1, 'b');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (2, 1, 'c');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (3, 1, 'a');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (1, 1, 'c');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (2, 1, 'a');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values (3, 1, 'b');
+
+- type: check
+  target_name: '14102'
+  expected_result:
+  - [1, 1, 1, 1, 'a']
+  - [2, 2, 2, 1, 'b']
+  - [3, 3, 3, 1, 'c']
+  - [1, 1, 1, 1, 'b']
+  - [2, 2, 2, 1, 'c']
+  - [3, 3, 3, 1, 'a']
+  - [1, 1, 1, 1, 'c']
+  - [2, 2, 2, 1, 'a']
+  - [3, 3, 3, 1, 'b']

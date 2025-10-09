@@ -13,7 +13,7 @@ namespace DB
 namespace Kafka
 {
 
-class Connection final: public std::enable_shared_from_this<Connection>
+class Connection final : public std::enable_shared_from_this<Connection>
 {
     friend Consumer::Version Consumer::recreate(Consumer::Version);
 
@@ -44,7 +44,7 @@ public:
     /// Since a producer can be used to produce messages to any number of topics at the same time, this function will always return an existing producer if there is one.
     ProducerPtr getProducer(const std::string & topic);
 
-    int32_t getPartitionCount(const std::string & topic);
+    int32_t getPartitionCount(const std::string & topic, uint64_t timeout_ms = 5000);
 
     std::vector<int64_t> getOffsetsForTimestamps(
         const std::string & topic, const std::vector<PartitionTimestamp> & partition_timestamps, int32_t timeout_ms = 5000);
@@ -77,7 +77,7 @@ private:
     AwsMskIamSinger::Token oauth_token;
 #endif
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 using ConnectionPtr = std::shared_ptr<Connection>;
@@ -106,7 +106,7 @@ private:
     /// otherwise, a new connection will be created.
     std::unordered_map<Conf, std::weak_ptr<Connection>, Conf::Hasher, Conf::EqualTo> connections;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

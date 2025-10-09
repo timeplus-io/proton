@@ -37,7 +37,7 @@ struct Hash
 #elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
         return __crc32cd(static_cast<UInt32>(crc), val);
 #else
-        throw Exception("String hash is not implemented without sse4.2 support", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "String hash is not implemented without sse4.2 support");
 #endif
     }
 
@@ -48,7 +48,7 @@ struct Hash
 #elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
         return __crc32cw(crc, val);
 #else
-        throw Exception("String hash is not implemented without sse4.2 support", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "String hash is not implemented without sse4.2 support");
 #endif
     }
 
@@ -59,7 +59,7 @@ struct Hash
 #elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
         return __crc32ch(crc, val);
 #else
-        throw Exception("String hash is not implemented without sse4.2 support", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "String hash is not implemented without sse4.2 support");
 #endif
     }
 
@@ -70,7 +70,7 @@ struct Hash
 #elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
         return __crc32cb(crc, val);
 #else
-        throw Exception("String hash is not implemented without sse4.2 support", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "String hash is not implemented without sse4.2 support");
 #endif
     }
 

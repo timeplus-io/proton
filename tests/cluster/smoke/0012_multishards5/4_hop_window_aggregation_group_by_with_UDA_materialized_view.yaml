@@ -1,0 +1,176 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_aggregation
+- window_aggregation
+- hop_window_aggregation
+- group_by
+- UDA
+description: hop window aggregation group by with UDA, materialized view
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_5(i float, k1 int, k2 string, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create materialized view test13_view1_5 as
+      select i + k1 as i,
+             k1,
+             k2,
+             timestamp
+      from test13_multishard_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create view test13_view2_5 as
+      select to_float(i - k1) as i,
+             k1,
+             k2,
+             timestamp
+      from test13_view1_5;
+  
+  - type: wait
+    time: 1
+  
+  - name: '1344'
+    type: stream
+    query: |
+      select k2,
+             test_13_5_sec_large(i) as sec_l,
+             window_start as s,
+             window_end as e
+      from hop(test13_view2_5, timestamp, 2s, 5s)
+      group by k2,
+               window_start,
+               window_end;
+    schema:
+      - name: k2
+        type: string
+      - name: sec_l
+        type: float32
+      - name: s
+        type: datetime64(3)
+      - name: e
+        type: datetime64(3)
+        
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(0, 0, 'a', '2021-11-02 20:00:01');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(1, 1, 'b', '2021-11-02 20:00:02');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(2, 2, 'a', '2021-11-02 20:00:03');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(3, 3, 'b', '2021-11-02 20:00:04');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(4, 4, 'a', '2021-11-02 20:00:05');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 0, 'b', '2021-11-02 20:00:06');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(6, 1, 'a', '2021-11-02 20:00:07');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(7, 2, 'b', '2021-11-02 20:00:08');
+
+  - type: check
+    target_name: '1344'
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+    - [a, -1, '2021-11-02 19:59:58', '2021-11-02 20:00:03']
+    - [b, -1, '2021-11-02 19:59:58', '2021-11-02 20:00:03']
+    - [a, 0, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+    - [b, 1, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+    - [a, 2, '2021-11-02 20:00:02', '2021-11-02 20:00:07']
+    - [b, 3, '2021-11-02 20:00:02', '2021-11-02 20:00:07']

@@ -1,0 +1,78 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.changepoints function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (ds date, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getChangepoints(ds date, y float) RETURNS array(tuple(string, float, float, float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+      from prophet import Prophet
+
+      class getChangepoints:
+          def __init__(self):
+              self.changepoints = [()]
+
+          def serialize(self):
+              data = {}
+              data['changepoints'] = self.changepoints
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.changepoints = data['changepoints']
+
+          def merge(self, other):
+              pass
+
+          def process(self, dss, ys):
+              if len(dss) < 2:
+                  return
+              df = pd.DataFrame(zip(dss,ys), columns=['ds', 'y'])
+              m = Prophet(changepoints=['2007-12-12'])
+              m.fit(df)
+              future = m.make_future_dataframe(periods=3)
+              forecast = m.predict(future)
+              forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail()
+              forecast[forecast.columns[0]] = forecast[forecast.columns[0]].astype('string')
+              self.changepoints = [tuple(r) for r in forecast.values.tolist()]
+
+          def finalize(self):
+              return [self.changepoints]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf15-3-1
+    type: stream
+    query: select getChangepoints(ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(tuple(string, float32, float32, float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(ds, y) values
+          ('2007-12-10', 9.590761) ('2007-12-11', 8.519590)
+          ('2007-12-12', 8.183677) ('2007-12-13', 8.072467)
+          ('2007-12-14', 7.893572);
+
+  - type: check
+    target_name: python-udf15-3-1
+    expected_result:
+      - [['2007-12-13', 8.068031081399758, 7.734456329504677, 8.408862144471374], ['2007-12-14', 7.684156077744513, 7.355976963385134, 8.020291932548254], ['2007-12-15', 7.30028107408927, 6.963667197916596, 7.646484573845977], ['2007-12-16', 6.916406070434027, 6.581864771837354, 7.253038792960915], ['2007-12-17', 6.532531066778783, 6.214015873026766, 6.880783042275287]]

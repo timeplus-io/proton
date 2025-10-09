@@ -1,0 +1,27 @@
+p1:
+  host: p1
+  ssh:
+    port: 22
+    user: root
+    public_key: id_rsa
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 8463
+    http_port: 3218
+    tcp_snap_port: 7587
+    http_snap_port: 8123
+    postgres_port: 5432
+    prometheus_port: 9363
+sling:
+  host: sling
+  ssh:
+    port: 22
+    user: root
+    password: 
+    public_key: id_rsa

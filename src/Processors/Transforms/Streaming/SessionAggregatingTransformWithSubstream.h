@@ -9,18 +9,19 @@ namespace Streaming
 class SessionAggregatingTransformWithSubstream final : public WindowAggregatingTransformWithSubstream
 {
 public:
-    SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_);
+    SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_, size_t id);
 
     ~SessionAggregatingTransformWithSubstream() override = default;
 
-    String getName() const override { return "SessionAggregatingTransformWithSubstream"; }
+    String getName() const override;
 
 private:
-    SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id) override;
-    std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx) override;
-    WindowsWithBuckets getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const override;
-    Window getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const override;
-    void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) override;
+    void initSubstreamContext(const SubstreamAggregatedDataPtr & substream_ctx) override;
+    
+    std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamAggregatedDataPtr & substream_ctx) override;
+    WindowsWithBuckets getWindowsWithBuckets(const SubstreamAggregatedDataPtr & substream_ctx) const override;
+    Window getLastFinalizedWindow(const SubstreamAggregatedDataPtr & substream_ctx) const override;
+    void removeBucketsImpl(Int64 watermark, const SubstreamAggregatedDataPtr & substream_ctx) override;
     bool needReassignWindow() const override { return true; }
 
 private:

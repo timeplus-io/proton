@@ -23,7 +23,7 @@ protected:
         /// Make local disk.
         temp_dir = std::make_unique<Poco::TemporaryFile>();
         temp_dir->createDirectories();
-        local_disk = std::make_shared<DiskLocal>("local_disk", getDirectory(), 0);
+        local_disk = std::make_shared<DiskLocal>("local_disk", getDirectory());
     }
 
     void TearDown() override

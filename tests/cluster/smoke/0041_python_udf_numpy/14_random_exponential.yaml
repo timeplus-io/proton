@@ -1,0 +1,54 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_exponential(value int) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_exponential(value):
+          res = []
+          n = 10000
+          for v in value:
+              time_between_calls = np.random.default_rng().exponential(scale=v, size=n)
+              x = ((time_between_calls < 5).sum())/n 
+              y = ((time_between_calls < 4).sum())/n
+              res.append(float(x-y))
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-14-1
+    type: stream
+    query: select test_random_exponential(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (4)(3);
+
+  - type: check
+    target_name: python-udf2-14-1
+    expected_result:
+      - [any_value, 4] # around 0.08
+      - [any_value, 3] # around 0.07

@@ -3,7 +3,10 @@
 #include <Parsers/ParserCreateQuery.h>
 /// proton: starts
 #include <Parsers/ParserDropQuery.h>
+#include <Parsers/ParserSelectQuery.h>
+#include <Parsers/ParserSystemQuery.h>
 #include <Parsers/ParserTablePropertiesQuery.h>
+#include <Parsers/Streaming/ParserEmitQuery.h>
 /// proton: ends
 #include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
@@ -13,6 +16,7 @@
 #include <string_view>
 
 #include <gtest/gtest.h>
+
 
 namespace
 {
@@ -64,36 +68,36 @@ INSTANTIATE_TEST_SUITE_P(ParserOptimizeQuery, ParserTest,
         ::testing::ValuesIn(std::initializer_list<ParserTestCase>
         {
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('a, b')",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('a, b')"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('a, b')",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('a, b')"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]')",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]')"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]')",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]')"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT b",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT b"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT b",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT b"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT (a, b)",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT (a, b)"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT (a, b)",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]') EXCEPT (a, b)"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY a, b, c",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY a, b, c"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY a, b, c",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY a, b, c"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY *",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY *"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY *",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY *"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY * EXCEPT a",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY * EXCEPT a"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY * EXCEPT a",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY * EXCEPT a"
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY * EXCEPT (a, b)",
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY * EXCEPT (a, b)"
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY * EXCEPT (a, b)",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY * EXCEPT (a, b)"
             }
         }
 )));
@@ -104,22 +108,22 @@ INSTANTIATE_TEST_SUITE_P(ParserOptimizeQuery_FAIL, ParserTest,
         ::testing::ValuesIn(std::initializer_list<ParserTestCase>
         {
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY",
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]') APPLY(x)",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]') APPLY(x)",
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY COLUMNS('[a]') REPLACE(y)",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY COLUMNS('[a]') REPLACE(y)",
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY * APPLY(x)",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY * APPLY(x)",
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY * REPLACE(y)",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY * REPLACE(y)",
             },
             {
-                "OPTIMIZE TABLE table_name DEDUPLICATE BY db.a, db.b, db.c",
+                "OPTIMIZE STREAM table_name DEDUPLICATE BY db.a, db.b, db.c",
             }
         }
 )));
@@ -237,7 +241,9 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery, ParserTest,
                                      "CREATE STREAM tests\n(\n  `device` string\n)"
                                  }
                              })));
+/// proton: ends
 
+/// proton: starts. ALTER STREAM test cases
 INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                          ::testing::Combine(
                              ::testing::Values(std::make_shared<ParserAlterQuery>()),
@@ -257,9 +263,27 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                                  {
                                      "ALTER STREAM tests DROP COLUMN id1",
                                      "ALTER STREAM tests\n  DROP COLUMN id1"
+                                 },
+                                 {
+                                     "ALTER STREAM mv MODIFY SETTING logstore_retention_ms=1000, logstore_retention_bytes=1000",
+                                     "ALTER STREAM mv\n  MODIFY SETTING logstore_retention_ms = 1000, logstore_retention_bytes = 1000"
+                                 },
+                                 {
+                                     "ALTER STREAM mv RESET SETTING logstore_retention_ms, logstore_retention_bytes",
+                                     "ALTER STREAM mv\n  RESET SETTING logstore_retention_ms, logstore_retention_bytes"
+                                 },
+                                 {
+                                     "ALTER STREAM mv MODIFY QUERY SETTING checkpoint_interval=60",
+                                     "ALTER STREAM mv\n  MODIFY QUERY SETTING checkpoint_interval = 60"
+                                 },
+                                 {
+                                     "ALTER STREAM mv RESET QUERY SETTING checkpoint_interval",
+                                     "ALTER STREAM mv\n  RESET QUERY SETTING checkpoint_interval"
                                  }
                              })));
+/// proton: ends
 
+/// proton: starts. DROP STREAM test cases
 INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
                          ::testing::Combine(
                              ::testing::Values(std::make_shared<ParserDropQuery>()),
@@ -277,7 +301,110 @@ INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
                                      "TRUNCATE STREAM tests"
                                  }
                              })));
+/// proton: ends
 
+/// proton: starts. `SYSTEM PAUSE/RESUME/ABORT/RECOVER MATERIALIZED VIEW <db.mv> [PERMANENT]` test cases
+INSTANTIATE_TEST_SUITE_P(ParserSystemCommandQueryForMV, ParserTest,
+                         ::testing::Combine(
+                             ::testing::Values(std::make_shared<ParserSystemQuery>()),
+                             ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+                                 {
+                                     "SYSTEM PAUSE MATERIALIZED VIEW mv",
+                                     "SYSTEM PAUSE MATERIALIZED VIEW mv"
+                                 },
+                                 {
+                                     "SYSTEM PAUSE MATERIALIZED VIEW default.mv",
+                                     "SYSTEM PAUSE MATERIALIZED VIEW default.mv"
+                                 },
+                                 {
+                                     "SYSTEM PAUSE MATERIALIZED VIEW default.mv PERMANENT",
+                                     "SYSTEM PAUSE MATERIALIZED VIEW default.mv PERMANENT"
+                                 },
+                                 {
+                                     "SYSTEM UNPAUSE MATERIALIZED VIEW mv",
+                                     "SYSTEM RESUME MATERIALIZED VIEW mv"
+                                 },
+                                 {
+                                     "SYSTEM UNPAUSE MATERIALIZED VIEW default.mv PERMANENT",
+                                     "SYSTEM RESUME MATERIALIZED VIEW default.mv PERMANENT"
+                                 },
+                                 {
+                                     "SYSTEM RESUME MATERIALIZED VIEW mv",
+                                     "SYSTEM RESUME MATERIALIZED VIEW mv"
+                                 },
+                                 {
+                                     "SYSTEM RESUME MATERIALIZED VIEW default.mv PERMANENT",
+                                     "SYSTEM RESUME MATERIALIZED VIEW default.mv PERMANENT"
+                                 },
+                                 {
+                                     "SYSTEM ABORT MATERIALIZED VIEW mv",
+                                     "SYSTEM ABORT MATERIALIZED VIEW mv"
+                                 },
+                                 {
+                                     "SYSTEM ABORT MATERIALIZED VIEW default.mv PERMANENT",
+                                     "SYSTEM ABORT MATERIALIZED VIEW default.mv PERMANENT"
+                                 },
+                                 {
+                                     "SYSTEM RECOVER MATERIALIZED VIEW mv",
+                                     "SYSTEM RECOVER MATERIALIZED VIEW mv"
+                                 },
+                                 {
+                                     "SYSTEM RECOVER MATERIALIZED VIEW default.mv PERMANENT",
+                                     "SYSTEM RECOVER MATERIALIZED VIEW default.mv PERMANENT"
+                                 }
+                             })));
+/// proton: ends
+
+
+/// proton: start
+INSTANTIATE_TEST_SUITE_P(ParserSelectQuery_WithAndWithoutAs, ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserSelectQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {
+                // aliasing column name without AS
+                "SELECT id, name username FROM users",
+                "SELECT\n  id, name AS username\nFROM\n  users"
+            },
+            {
+                // aliasing table name without AS
+                "SELECT * FROM users u",
+                "SELECT\n  *\nFROM\n  users AS u"
+            },
+            {
+                // aliasing subqueries without AS
+                "SELECT * FROM (SELECT id, name FROM users) u",
+                "SELECT\n  *\nFROM\n  (\n    SELECT\n      id, name\n    FROM\n      users\n  ) AS u"
+            },
+            {
+                // combine multiply aliasing without AS
+                "SELECT u.id, u.name uname FROM (SELECT id, name FROM users) u",
+                "SELECT\n  u.id, u.name AS uname\nFROM\n  (\n    SELECT\n      id, name\n    FROM\n      users\n  ) AS u"
+            },
+            {
+                // aliasing without AS in ORDER BY
+                "SELECT id, name uname FROM users ORDER BY uname",
+                "SELECT\n  id, name AS uname\nFROM\n  users\nORDER BY\n  uname ASC"
+            }
+        }
+)));
+
+INSTANTIATE_TEST_SUITE_P(ParserSelectQuery_WithAndWithoutAs_FAIL, ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserSelectQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {
+                // `shuffle` is keyword and cannot be regarded as alias
+                "SELECT id, name FROM users shuffle",
+                nullptr
+            },
+            {
+                // comma at the end of list is not allowed
+                "SELECT id, name username, FROM users",
+                nullptr
+            }
+        }
+)));
 
 INSTANTIATE_TEST_SUITE_P(ParserTablePropertiesQuery, ParserTest,
     ::testing::Combine(
@@ -329,4 +456,35 @@ INSTANTIATE_TEST_SUITE_P(ParserTablePropertiesQuery, ParserTest,
             }
         }
 )));
-/// proton: ends
+
+
+INSTANTIATE_TEST_SUITE_P(
+    ParserEmitQuery,
+    ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserEmitQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {"EMIT CHANGELOG", "CHANGELOG"},
+            {"EMIT STREAM AFTER WINDOW CLOSE", "STREAM AFTER WINDOW CLOSE"},
+            {"EMIT AFTER WINDOW CLOSE WITH DELAY 1s", "AFTER WINDOW CLOSE WITH DELAY 1s"},
+            {"EMIT AFTER WINDOW CLOSE WITH DELAY 1s AND TIMEOUT 5s", "AFTER WINDOW CLOSE WITH DELAY 1s AND TIMEOUT 5s"},
+            {"EMIT AFTER WINDOW CLOSE AND TIMEOUT 5s", "AFTER WINDOW CLOSE AND TIMEOUT 5s"},
+            {"EMIT PERIODIC 1s", "PERIODIC 1s"},
+            {"EMIT STREAM PERIODIC 1s REPEAT", "STREAM PERIODIC 1s REPEAT"},
+            {"EMIT CHANGELOG PERIODIC 1s WITH DELAY 1s", "CHANGELOG PERIODIC 1s WITH DELAY 1s"},
+            {"EMIT DELTA PERIODIC 1s REPEAT WITH DELAY 1s AND TIMEOUT 5s", "DELTA PERIODIC 1s REPEAT WITH DELAY 1s AND TIMEOUT 5s"},
+            {"EMIT ON UPDATE", "ON UPDATE"},
+            {"EMIT CHANGELOG ON UPDATE WITH BATCH 1s", "CHANGELOG ON UPDATE WITH BATCH 1s"},
+            {"EMIT ON UPDATE WITH DELAY 1s", "ON UPDATE WITH DELAY 1s"},
+            {"EMIT ON UPDATE WITH BATCH 1s WITH DELAY 1s AND TIMEOUT 5s", "ON UPDATE WITH BATCH 1s WITH DELAY 1s AND TIMEOUT 5s"},
+            {"EMIT LAST 1h", "LAST 1h"},
+            {"EMIT LAST 1h ON PROCTIME", "LAST 1h ON PROCTIME"},
+            {"EMIT STREAM AFTER WATERMARK WITH DELAY 1s", "STREAM AFTER WINDOW CLOSE WITH DELAY 1s"},
+            {"EMIT PERIODIC 1s ON UPDATE", "ON UPDATE WITH BATCH 1s"},
+            {"EMIT AFTER KEY EXPIRE IDENTIFIED BY _tp_time WITH MAXSPAN 1s AND TIMEOUT 100s",
+             "AFTER KEY EXPIRE IDENTIFIED BY _tp_time WITH MAXSPAN 1s AND TIMEOUT 100s"},
+            {"EMIT PER EVENT WITH DELAY 1s AND TIMEOUT 5s", "PER EVENT WITH DELAY 1s AND TIMEOUT 5s"},
+            {"EMIT TIMEOUT 30s", "TIMEOUT 30s"},
+            {"EMIT STREAM TIMEOUT 30s", "STREAM TIMEOUT 30s"}})));
+/// proton: end
+

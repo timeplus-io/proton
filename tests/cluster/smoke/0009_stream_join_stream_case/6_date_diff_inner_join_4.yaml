@@ -1,0 +1,40 @@
+tags:
+  - stream_join_stream
+description: stream to stream inner join by using date_diff left - right -> [0, range]
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '1007'
+    type: stream
+    query: select s, ss from test10_left_stream inner join test10_right_stream on i=ii
+      and date_diff('second', ts, tts) >= 0 and date_diff('second', ts, tts) <= 10
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10'),
+      (2, 's', '2022-05-23 15:46:10')
+
+  - type: query
+    sql: insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1,
+      's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23
+      15:45:10'),(1, 's5', '2022-05-23 15:45:11'),(2, 's6', '2022-05-23 15:45:59'),(2,
+      's7', '2022-05-23 15:46:00'),(2, 's8', '2022-05-23 15:46:01'),(2, 's9', '2022-05-23
+      15:46:10'),(2, 's10', '2022-05-23 15:46:11')
+
+  - type: check
+    target_name: '1007'
+    expected_result:
+      - [ s, s2 ]
+      - [ s, s3 ]
+      - [ s, s4 ]
+      - [ s, s7 ]
+      - [ s, s8 ]
+      - [ s, s9 ]

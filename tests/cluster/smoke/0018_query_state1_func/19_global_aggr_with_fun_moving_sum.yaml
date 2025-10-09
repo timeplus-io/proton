@@ -1,0 +1,81 @@
+tags:
+  - query_state
+description: global aggregation with function moving_sum state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream1 (id string, location string, value int,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1939'
+    query_id: '1939'
+    type: stream
+    query: subscribe to select moving_sum(value) from test19_state_stream1 emit periodic
+      1s settings checkpoint_interval=1
+    schema:
+      - name: group_array_moving_sum(value)
+        type: array(int64)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, location, value, timestamp) values ('dev1',
+      'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2',
+      'ca', 58, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1939'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, location, value, timestamp) values ('dev4',
+      'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07')
+
+  - type: wait
+    time: 3
+
+  - name: 1939-1
+    query_id: 1939-1
+    type: stream
+    query: recover from '1939'
+    schema:
+      - name: group_array_moving_sum(value)
+        type: array(int64)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id='1939' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1939'
+
+  - type: check
+    target_name: '1939'
+    expected_result:
+      - [ [ 57, 123, 181 ] ]
+
+  - type: check
+    target_name: '1939-1'
+    expected_result:
+      - [ [ 57, 123, 181, 261, 316 ] ]

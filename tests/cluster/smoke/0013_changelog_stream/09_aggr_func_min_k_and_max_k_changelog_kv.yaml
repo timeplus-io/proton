@@ -1,0 +1,72 @@
+tags:
+  - changelog_kv_aggr
+description: aggregation function min_k and max_k changelog_kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_changelog_kv_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_changelog_kv_stream(id int, val string)
+      primary key id settings mode='changelog_kv';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_changelog_kv_stream(id, val) values (1, '1.1'), (2, '2.2'),
+      (3, '3.3');
+  - type: wait
+    time: 2
+
+  - name: "1409"
+    type: stream
+    query:
+      select min_k(val, 3), max_k(val, 3), min_k(val, 2, id), max_k(val, 2, id)
+      from test14_changelog_kv_stream emit periodic 1s;
+    schema:
+      - name: min_k(val, 3)
+        type: array(string)
+      - name: max_k(val, 3)
+        type: array(string)
+      - name: min_k(val, 2, id)
+        type: array(tuple(string, int32))
+      - name: max_k(val, 2, id)
+        type: array(tuple(string, int32))
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (4, '4.4'), (5, '5.5');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val, _tp_delta) values (1, '1.1', -1) (5, '5.5', -1);
+
+  - type: check
+    target_name: "1409"
+    expected_result:
+      - [
+          [1.1, 2.2, 3.3],
+          [3.3, 2.2, 1.1],
+          [[1.1, 1], [2.2, 2]],
+          [[3.3, 3], [2.2, 2]],
+        ]
+      - [
+          [1.1, 2.2, 3.3],
+          [5.5, 4.4, 3.3],
+          [[1.1, 1], [2.2, 2]],
+          [[5.5, 5], [4.4, 4]],
+        ]
+      - [
+          [2.2, 3.3, 4.4],
+          [4.4, 3.3, 2.2],
+          [[2.2, 2], [3.3, 3]],
+          [[4.4, 4], [3.3, 3]],
+        ]

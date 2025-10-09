@@ -1,0 +1,30 @@
+name: dictionary
+description: Tests covering the dictionary feature.
+tags:
+  - smoke
+  - ddl
+  - dictionary
+
+setup:
+  scope: suite
+  steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1,p2,p3]
+    <<end>>
+    shell: |
+       perl -0777 -i -pe "s|networks:\n            - ip: '::1'\n            - ip: 127.0.0.1\n        access_management: 1|networks:\n            - ip: '::/0'\n        access_management: 1|g" /etc/proton-server/users.yaml
+
+  - type: wait
+    time: 2
+
+  - name: dictionary-1
+    type: health_check
+    protocol: tcp
+
+  - type: check
+    target_name: dictionary-1
+    expected_result:
+    - ['true']

@@ -41,7 +41,9 @@ UInt64 MergeTreeMutationEntry::parseFileName(const String & file_name_)
 {
     if (UInt64 maybe_block_number = tryParseFileName(file_name_))
         return maybe_block_number;
-    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot parse mutation version from file name, expected 'mutation_<UInt64>.txt', got '{}'", file_name_);
+    throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "Cannot parse mutation version from file name, expected 'mutation_<UInt64>.txt', got '{}'",
+                    file_name_);
 }
 
 MergeTreeMutationEntry::MergeTreeMutationEntry(MutationCommands commands_, DiskPtr disk_, const String & path_prefix_, UInt64 tmp_number,
@@ -60,7 +62,7 @@ MergeTreeMutationEntry::MergeTreeMutationEntry(MutationCommands commands_, DiskP
         *out << "format version: 1\n"
             << "create time: " << LocalDateTime(create_time) << "\n";
         *out << "commands: ";
-        commands.writeText(*out);
+        commands.writeText(*out, /* with_pure_metadata_commands = */ false);
         *out << "\n";
         if (tid.isPrehistoric())
         {
@@ -72,6 +74,7 @@ MergeTreeMutationEntry::MergeTreeMutationEntry(MutationCommands commands_, DiskP
             TransactionID::write(tid, *out);
             *out << "\n";
         }
+        out->finalize();
         out->sync();
     }
     catch (...)

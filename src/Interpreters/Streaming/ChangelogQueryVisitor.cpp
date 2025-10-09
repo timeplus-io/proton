@@ -2,6 +2,7 @@
 /// #include <Interpreters/RequiredSourceColumnsVisitor.h>
 
 #include <Interpreters/Streaming/RewriteAsSubquery.h>
+#include <Interpreters/getTableExpressions.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -25,25 +26,24 @@ namespace Streaming
 void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &)
 {
     /// For join case, we will fix later
-    const auto & tables = select_query.tables();
-    if (tables == nullptr || tables->children.empty())
+    auto table_expressions = getTableExpressions(select_query);
+    if (table_expressions.empty())
         return;
 
-    assert(tables->children.size() == tables_with_columns.size());
+    assert(table_expressions.size() == tables_with_columns.size());
+
     /// For join, replace the left / right stream with subquery if necessary
     if (tables_with_columns.size() == 2)
     {
         /// Rewrite left input as a changelog subquery if required tracking changes
         if (query_info.left_input_tracking_changes)
-            input_rewritten |= rewriteAsChangelogSubquery(
-                tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
-                /*only_rewrite_subqeury*/ false);
+            input_rewritten
+                |= rewriteAsChangelogSubquery(const_cast<ASTTableExpression &>(*table_expressions[0]), /*only_rewrite_subqeury=*/false);
 
         /// Rewrite right input as a changelog subquery if required tracking changes
         if (query_info.right_input_tracking_changes)
-            input_rewritten |= rewriteAsChangelogSubquery(
-                tables->children[1]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
-                /*only_rewrite_subqeury*/ false);
+            input_rewritten
+                |= rewriteAsChangelogSubquery(const_cast<ASTTableExpression &>(*table_expressions[1]), /*only_rewrite_subqeury=*/false);
 
         /// Only add _tp_delta for subquery, skip top level select query, for exmaple:
         /// select s, ss from vk_1 inner join vk_2 on i=ii
@@ -53,25 +53,25 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
         /// => select s, ss, sss from (select s, ss from vk_1 inner join vk_2 on i=ii) as `--.s` inner join vk_3 on i=iii
         /// => select s, ss, sss from (select s, ss, _tp_delta from (select s, ss, _tp_delta from vk_1) as vk_1 inner join (select s, ss, _tp_delta from vk_2) as vk_2 on i=ii) as `--.s` inner join (select iii, sss, _tp_delta from vk_3) as vk_3 on i=iii
         if (data_stream_semantic_pair.isChangelogOutput())
-            addDeltaColumn(select_query, /*asterisk_include_delta*/ true);
+            addDeltaColumn(select_query, /*asterisk_include_delta=*/true);
     }
     else
     {
         /// Single stream
-        assert(tables->children.size() == 1);
+        assert(tables_with_columns.size() == 1);
 
         /// Rewrite `subquery` as a changelog query if required tracking changes
         /// Only rewrite the subquery emit changelog, since it shall already be converted to changelog in IStorage::read() if storage exists
         if (query_info.left_input_tracking_changes)
-            input_rewritten |= rewriteAsChangelogSubquery(
-                tables->children[0]->as<ASTTablesInSelectQueryElement &>().table_expression->as<ASTTableExpression &>(),
-                /*only_rewrite_subqeury*/ true);
+            input_rewritten
+                |= rewriteAsChangelogSubquery(const_cast<ASTTableExpression &>(*table_expressions[0]), /*only_rewrite_subqeury=*/true);
 
         if (data_stream_semantic_pair.isChangelogOutput())
         {
             /// For changelog/changelog_kv, the `*` include `_tp_delta`
             /// For versioned_kv, the `*` didn't include `_tp_delta`
-            bool asterisk_include_delta = isChangelogDataStream(tables_with_columns.front().output_data_stream_semantic);
+            /// If \input_rewritten is true means the subquery has been rewritten to emit changelog, so the `*` include `_tp_delta`.
+            bool asterisk_include_delta = isChangelogDataStream(tables_with_columns.front().output_data_stream_semantic) || input_rewritten;
             addDeltaColumn(select_query, asterisk_include_delta);
         }
     }

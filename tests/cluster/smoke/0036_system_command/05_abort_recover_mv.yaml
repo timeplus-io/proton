@@ -1,0 +1,126 @@
+tags:
+  - system_command
+
+description: |
+  Tests covering the abort mv and recover mv scenario.
+  Main steps:
+  - create source stream, target stream and mv
+  - insert 1 row of data
+  - insert 1 row of data
+  - system abort materialized view
+  - insert 1 row of data
+  - check no new data from target stream stream query
+  - system recover materialized view
+  - check data recover from last checkpoint before abort
+  - insert 2 rows of data
+  - check mv work after recover
+
+cluster:
+  - p3k1
+
+steps:
+  # create stream & create mv
+  - type: query
+    sql: drop view if exists test36_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test36_source;
+
+  - type: query
+    sql: drop stream if exists test36_target;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test36_source(id int, value string);
+
+  - type: query
+    sql: create stream test36_target(id string, value string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view test36_mv into test36_target as
+      select to_string(id) as id, value from test36_source
+      settings checkpoint_interval=1;
+
+  - type: wait
+    time: 2
+
+  - name: system-command-5-1
+    type: stream
+    query: select id, value from test36_target;
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test36_source(id, value) values (1, 'aaaa');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test36_source(id, value) values (2, 'bbbb');
+
+  - type: check
+    target_name: system-command-5-1
+    expected_result: 
+      - [1, 'aaaa']
+      - [2, 'bbbb']
+
+  # system abort mv
+  - type: query
+    sql: system abort materialized view test36_mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test36_source(id, value) values (3, 'cccc');
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: system-command-5-1
+    expected_result: []
+
+  # system recover mv
+  - type: query
+    sql: system recover materialized view test36_mv;
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: system-command-5-1
+    expected_result:
+      - ['2', 'bbbb']
+      - ['3', 'cccc']
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test36_source(id, value) values (4, 'dddd');
+
+  - type: query
+    sql: insert into test36_source(id, value) values (5, 'eeee');
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: system-command-5-1
+    expected_result:
+      - ['4', 'dddd']
+      - ['5', 'eeee']

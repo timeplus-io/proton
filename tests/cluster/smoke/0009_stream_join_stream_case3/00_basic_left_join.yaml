@@ -1,0 +1,46 @@
+description: Basic Left Join
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: stream
+    name: 3200
+    query_id: '3200'
+    query: |
+      SELECT A.id, A.name, B.value FROM left_Stream A LEFT JOIN right_Stream B ON A.id = B.id settings seek_to = 'earliest';
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: string
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO right_Stream (id, value, department_id, type) VALUES 
+      (1, 'X1', 1, 'A'),
+      (2, 'Y1', 2, 'B'),
+      (3, 'X2', 3, 'A');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO left_Stream (id, name, department_id, manager_id, type) VALUES 
+      (1, 'Alice', 1, NULL, 'A'),
+      (2, 'Bob', 2, NULL, 'B'),
+      (3, 'Charlie', 3, NULL, 'A');
+
+  - type: check
+    target_name: 3200
+    expected_result:
+      - [1, 'Alice', 'X1']
+      - [2, 'Bob', 'Y1']
+      - [3, 'Charlie', 'X2']

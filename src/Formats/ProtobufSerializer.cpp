@@ -79,18 +79,18 @@ namespace
             return convertChar(c1) == convertChar(c2);
         }
 
-        static bool equals(std::string_view s1, const std::string_view & s2)
+        static bool equals(std::string_view s1, std::string_view s2)
         {
             return (s1.length() == s2.length())
                 && std::equal(s1.begin(), s1.end(), s2.begin(), [](char c1, char c2) { return convertChar(c1) == convertChar(c2); });
         }
 
-        static bool less(std::string_view s1, const std::string_view & s2)
+        static bool less(std::string_view s1, std::string_view s2)
         {
             return std::lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end(), [](char c1, char c2) { return convertChar(c1) < convertChar(c2); });
         }
 
-        static bool startsWith(std::string_view s1, const std::string_view & s2)
+        static bool startsWith(std::string_view s1, std::string_view s2)
         {
             return (s1.length() >= s2.length()) && equals(s1.substr(0, s2.length()), s2);
         }
@@ -147,9 +147,29 @@ namespace
     // Should we pack repeated values while storing them.
     bool shouldPackRepeated(const FieldDescriptor & field_descriptor)
     {
-        /// proton: starts
+        if (!field_descriptor.is_repeated())
+            return false;
+        switch (field_descriptor.type())
+        {
+            case FieldTypeId::TYPE_INT32:
+            case FieldTypeId::TYPE_UINT32:
+            case FieldTypeId::TYPE_SINT32:
+            case FieldTypeId::TYPE_INT64:
+            case FieldTypeId::TYPE_UINT64:
+            case FieldTypeId::TYPE_SINT64:
+            case FieldTypeId::TYPE_FIXED32:
+            case FieldTypeId::TYPE_SFIXED32:
+            case FieldTypeId::TYPE_FIXED64:
+            case FieldTypeId::TYPE_SFIXED64:
+            case FieldTypeId::TYPE_FLOAT:
+            case FieldTypeId::TYPE_DOUBLE:
+            case FieldTypeId::TYPE_BOOL:
+            case FieldTypeId::TYPE_ENUM:
+                break;
+            default:
+                return false;
+        }
         return field_descriptor.is_packed();
-        /// proton: ends
     }
 
     WriteBuffer & writeIndent(WriteBuffer & out, size_t size) { return out << String(size * 4, ' '); }
@@ -301,14 +321,13 @@ namespace
                 field_descriptor.type_name());
         }
 
-        [[noreturn]] void cannotConvertValue(std::string_view src_value, const std::string_view & src_type_name, const std::string_view & dest_type_name) const
+        [[noreturn]] void cannotConvertValue(std::string_view src_value, std::string_view src_type_name, std::string_view dest_type_name) const
         {
-            throw Exception(
-                "Could not convert value '" + String{src_value} + "' from type " + String{src_type_name} + " to type "
-                    + String{dest_type_name} + " while " + (reader ? "reading" : "writing") + " field "
-                    + quoteString(field_descriptor.name()) + " " + (reader ? "for inserting into" : "extracted from") + " column "
-                    + quoteString(column_name),
-                ErrorCodes::PROTOBUF_BAD_CAST);
+            throw Exception(ErrorCodes::PROTOBUF_BAD_CAST,
+                            "Could not convert value '{}' from type {} to type {} while {} field {} {} column {}",
+                            String{src_value}, String{src_type_name}, String{dest_type_name},
+                            (reader ? "reading" : "writing"), quoteString(field_descriptor.name()),
+                            (reader ? "for inserting into" : "extracted from"), quoteString(column_name));
         }
 
         const String column_name;
@@ -338,6 +357,7 @@ namespace
             : ProtobufSerializerSingleValue(column_name_, field_descriptor_, reader_or_writer_)
         {
             setFunctions();
+            prepareEnumMapping();
         }
 
         void writeRow(size_t row_num) override
@@ -488,7 +508,7 @@ namespace
                     {
                         UInt64 u64 = readUInt();
                         if (u64 < 2)
-                            return static_cast<NumberType>(u64);
+                            return castNumber<NumberType>(u64);
                         else
                             cannotConvertValue(toString(u64), field_descriptor.type_name(), TypeName<NumberType>);
                     };
@@ -547,12 +567,32 @@ namespace
             return *default_number;
         }
 
+        /// proton: starts
+        /// Refactored the implementation using `protobuf_enum_values` to avoid looking for the value from the field_descriptor.
         void checkProtobufEnumValue(int value) const
         {
-            const auto * enum_value_descriptor = field_descriptor.enum_type()->FindValueByNumber(value);
-            if (!enum_value_descriptor)
+            if (!protobuf_enum_values.contains(value))
                 cannotConvertValue(toString(value), TypeName<NumberType>, field_descriptor.type_name());
         }
+        /// proton: ends
+
+        /// proton: starts
+        void prepareEnumMapping()
+        {
+            if ((field_typeid == google::protobuf::FieldDescriptor::TYPE_ENUM) && (writer != nullptr))
+            {
+                const auto & enum_descriptor = *field_descriptor.enum_type();
+                protobuf_enum_values.reserve(enum_descriptor.value_count());
+
+                for (int i = 0; i != enum_descriptor.value_count(); ++i)
+                {
+                    const auto & enum_value_descriptor = *enum_descriptor.value(i);
+                    protobuf_enum_values.insert(enum_value_descriptor.number());
+                }
+            }
+        }
+        /// proton: ends
+
 
     protected:
         std::function<void(NumberType)> write_function;
@@ -562,6 +602,7 @@ namespace
 
     private:
         std::optional<NumberType> default_number;
+        std::unordered_set<int> protobuf_enum_values; /// proton: added, cache all valid enum values from the Protobuf enum type
     };
 
 
@@ -643,7 +684,7 @@ namespace
                 if (row_num < old_size)
                 {
                     if (row_num != old_size - 1)
-                        throw Exception("Cannot replace a string in the middle of ColumnString", ErrorCodes::LOGICAL_ERROR);
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot replace a string in the middle of ColumnString");
                     column_string.popBack(1);
                 }
                 try
@@ -880,13 +921,16 @@ namespace
 
         void prepareEnumMapping()
         {
-            if ((field_typeid == google::protobuf::FieldDescriptor::TYPE_ENUM) && writer)
+            if (field_typeid == google::protobuf::FieldDescriptor::TYPE_ENUM)
             {
                 const auto & enum_descriptor = *field_descriptor.enum_type();
                 for (int i = 0; i != enum_descriptor.value_count(); ++i)
                 {
                     const auto & enum_value_descriptor = *enum_descriptor.value(i);
-                    string_to_protobuf_enum_value_map.emplace(enum_value_descriptor.name(), enum_value_descriptor.number());
+                    if (writer != nullptr)
+                        string_to_protobuf_enum_value_map.emplace(enum_value_descriptor.name(), enum_value_descriptor.number());
+                    if (reader != nullptr)
+                        protobuf_enum_value_to_string_map.emplace(enum_value_descriptor.number(), enum_value_descriptor.name());
                 }
             }
         }
@@ -899,13 +943,19 @@ namespace
             return it->second;
         }
 
+        /// proton: starts
+        /// Refactored the implementation using `protobuf_enum_value_to_string_map`: instead of reading from the descriptor every time,
+        /// finds the valud from the cache.
+        /// The change is mainly for mitigating issue https://github.com/timeplus-io/proton-enterprise/issues/8976 (we don't have the root cause).
+        /// This change should also improve the performance a bit.
         std::string_view protobufEnumValueToString(int value) const
         {
-            const auto * enum_value_descriptor = field_descriptor.enum_type()->FindValueByNumber(value);
-            if (!enum_value_descriptor)
-                cannotConvertValue(toString(value), field_descriptor.type_name(), "string");
-            return enum_value_descriptor->name();
+            auto it = protobuf_enum_value_to_string_map.find(value);
+            if (it == protobuf_enum_value_to_string_map.end())
+                cannotConvertValue(toString(value), field_descriptor.type_name(), "String");
+            return it->second;
         }
+        /// proton: ends
 
         void protobufEnumValueToStringAppend(int value, PaddedPODArray<UInt8> & str) const
         {
@@ -919,6 +969,7 @@ namespace
         std::function<void(PaddedPODArray<UInt8> &)> read_function;
         std::function<String()> default_function;
         std::unordered_map<std::string_view, int> string_to_protobuf_enum_value_map;
+        std::unordered_map<int, std::string_view> protobuf_enum_value_to_string_map; /// proton: added
         PaddedPODArray<UInt8> text_buffer;
         std::optional<PaddedPODArray<UInt8>> default_string;
     };
@@ -1050,7 +1101,7 @@ namespace
                     protobuf_enum_value_to_enum_data_type_value_map.emplace(protobuf_enum_value, enum_data_type_value);
             };
 
-            auto iless = [](std::string_view s1, const std::string_view & s2) { return ColumnNameWithProtobufFieldNameComparator::less(s1, s2); };
+            auto iless = [](std::string_view s1, std::string_view s2) { return ColumnNameWithProtobufFieldNameComparator::less(s1, s2); };
             boost::container::flat_map<std::string_view, int, decltype(iless)> string_to_protobuf_enum_value_map;
             typename decltype(string_to_protobuf_enum_value_map)::sequence_type string_to_protobuf_enum_value_seq;
             for (int i : collections::range(enum_descriptor.value_count()))
@@ -1091,10 +1142,9 @@ namespace
 
             if (!num_mapped_values && !enum_data_type->getValues().empty() && enum_descriptor.value_count())
             {
-                throw Exception(
-                    "Couldn't find mapping between data type " + enum_data_type->getName() + " and the enum " + quoteString(enum_descriptor.full_name())
-                        + " in the protobuf schema",
-                    ErrorCodes::DATA_TYPE_INCOMPATIBLE_WITH_PROTOBUF_FIELD);
+                throw Exception(ErrorCodes::DATA_TYPE_INCOMPATIBLE_WITH_PROTOBUF_FIELD,
+                    "Couldn't find mapping between data type {} and the enum {} in the protobuf schema",
+                    enum_data_type->getName(), quoteString(enum_descriptor.full_name()));
             }
         }
 
@@ -1118,7 +1168,7 @@ namespace
         void writeInt(Int64 value) { ProtobufSerializerSingleValue::writeInt(value); }
         void writeStr(std::string_view str) { ProtobufSerializerSingleValue::writeStr(str); }
         void readStr(String & str) { ProtobufSerializerSingleValue::readStr(str); }
-        [[noreturn]] void cannotConvertValue(std::string_view src_value, const std::string_view & src_type_name, const std::string_view & dest_type_name) const { ProtobufSerializerSingleValue::cannotConvertValue(src_value, src_type_name, dest_type_name); }
+        [[noreturn]] void cannotConvertValue(std::string_view src_value, std::string_view src_type_name, std::string_view dest_type_name) const { ProtobufSerializerSingleValue::cannotConvertValue(src_value, src_type_name, dest_type_name); }
 
         const std::shared_ptr<const EnumDataType> enum_data_type;
         std::unordered_map<NumberType, int> enum_data_type_value_to_protobuf_enum_value_map;
@@ -1869,7 +1919,7 @@ namespace
         }
 
         const std::shared_ptr<const DataTypeAggregateFunction> aggregate_function_data_type;
-        const AggregateFunctionPtr aggregate_function;
+        AggregateFunctionPtr aggregate_function;
         String text_buffer;
     };
 
@@ -1926,7 +1976,7 @@ namespace
             {
                 size_t new_size = nested_column.size();
                 if (new_size != old_size + 1)
-                    throw Exception("Size of ColumnNullable is unexpected", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Size of ColumnNullable is unexpected");
                 try
                 {
                     null_map.push_back(false);
@@ -2065,7 +2115,7 @@ namespace
             if (row_num < column_lc.size())
             {
                 if (row_num != column_lc.size() - 1)
-                    throw Exception("Cannot replace an element in the middle of ColumnLowCardinality", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot replace an element in the middle of ColumnLowCardinality");
                 column_lc.popBack(1);
             }
 
@@ -2146,7 +2196,7 @@ namespace
             auto & offsets = column_array.getOffsets();
             size_t old_size = offsets.size();
             if (row_num + 1 < old_size)
-                throw Exception("Cannot replace an element in the middle of ColumnArray", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot replace an element in the middle of ColumnArray");
             auto data_column = column_array.getDataPtr();
             size_t old_data_size = data_column->size();
 
@@ -2155,7 +2205,7 @@ namespace
                 element_serializer->readRow(old_data_size);
                 size_t data_size = data_column->size();
                 if (data_size != old_data_size + 1)
-                    throw Exception("Size of ColumnArray is unexpected", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Size of ColumnArray is unexpected");
 
                 if (row_num < old_size)
                     offsets.back() = data_size;
@@ -2644,6 +2694,11 @@ namespace
             writer->endMessage(/*with_length_delimiter = */ true);
         }
 
+        void reset() override
+        {
+            first_call_of_write_row = true;
+        }
+
         void readRow(size_t row_num) override
         {
             if (first_call_of_read_row)
@@ -2770,8 +2825,10 @@ namespace
                     if (!column_array0.hasEqualOffsets(column_array))
                     {
                         throw Exception(ErrorCodes::PROTOBUF_BAD_CAST,
-                                        "Column #{} {} and column #{} {} are supposed to have equal offsets according to the following serialization tree:\n{}",
-                                        0, quoteString(column_names[0]), i, quoteString(column_names[i]), get_root_desc_function(0));
+                                        "Column #{} {} and column #{} {} are supposed "
+                                        "to have equal offsets according to the following serialization tree:\n{}",
+                                        0, quoteString(column_names[0]),
+                                        i, quoteString(column_names[i]), get_root_desc_function(0));
                     }
                 }
             }
@@ -2801,7 +2858,7 @@ namespace
         {
             size_t old_size = offset_columns[0]->size();
             if (row_num + 1 < old_size)
-                throw Exception("Cannot replace an element in the middle of ColumnArray", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot replace an element in the middle of ColumnArray");
 
             size_t old_data_size = data_columns[0]->size();
 
@@ -2810,7 +2867,7 @@ namespace
                 message_serializer->readRow(old_data_size);
                 size_t data_size = data_columns[0]->size();
                 if (data_size != old_data_size + 1)
-                    throw Exception("Unexpected number of elements of ColumnArray has been read", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected number of elements of ColumnArray has been read");
 
                 if (row_num < old_size)
                 {
@@ -2942,7 +2999,7 @@ namespace
             {
                 *root_serializer_ptr = message_serializer.get();
 #if 0
-                LOG_INFO(&Poco::Logger::get("ProtobufSerializer"), "Serialization tree:\n{}", get_root_desc_function(0));
+                LOG_INFO(getLogger("ProtobufSerializer"), "Serialization tree:\n{}", get_root_desc_function(0));
 #endif
                 return message_serializer;
             }
@@ -2951,7 +3008,7 @@ namespace
                 auto envelope_serializer = std::make_unique<ProtobufSerializerEnvelope>(std::move(message_serializer), reader_or_writer);
                 *root_serializer_ptr = envelope_serializer.get();
 #if 0
-                LOG_INFO(&Poco::Logger::get("ProtobufSerializer"), "Serialization tree:\n{}", get_root_desc_function(0));
+                LOG_INFO(getLogger("ProtobufSerializer"), "Serialization tree:\n{}", get_root_desc_function(0));
 #endif
                 return envelope_serializer;
             }
@@ -3173,11 +3230,9 @@ namespace
                 auto it = field_descriptors_in_use.find(&field_descriptor_);
                 if (it != field_descriptors_in_use.end())
                 {
-                    throw Exception(
-                        "Multiple columns (" + backQuote(StringRef{it->second}) + ", "
-                            + backQuote(StringRef{column_name_}) + ") cannot be serialized to a single protobuf field "
-                            + quoteString(field_descriptor_.full_name()),
-                        ErrorCodes::MULTIPLE_COLUMNS_SERIALIZED_TO_SAME_PROTOBUF_FIELD);
+                    throw Exception(ErrorCodes::MULTIPLE_COLUMNS_SERIALIZED_TO_SAME_PROTOBUF_FIELD,
+                        "Multiple columns ({}, {}) cannot be serialized to a single protobuf field {}",
+                        backQuote(StringRef{it->second}), backQuote(StringRef{column_name_}), quoteString(field_descriptor_.full_name()));
                 }
 
                 used_column_indices.insert(used_column_indices.end(), column_indices_.begin(), column_indices_.end());
@@ -3528,23 +3583,22 @@ namespace
                 }
 
                 default:
-                    throw Exception("Unknown data type: " + data_type->getName(), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown data type: {}", data_type->getName());
             }
         }
 
         [[noreturn]] static void throwFieldNotRepeated(const FieldDescriptor & field_descriptor, std::string_view column_name)
         {
             if (!field_descriptor.is_repeated())
-                throw Exception(
-                    "The field " + quoteString(field_descriptor.full_name())
-                        + " must be repeated in the protobuf schema to match the column " + backQuote(StringRef{column_name}),
-                    ErrorCodes::PROTOBUF_FIELD_NOT_REPEATED);
+                throw Exception(ErrorCodes::PROTOBUF_FIELD_NOT_REPEATED,
+                                "The field {} must be repeated in the protobuf schema to match the column {}",
+                                quoteString(field_descriptor.full_name()), backQuote(StringRef{column_name}));
 
-            throw Exception(
-                "The field " + quoteString(field_descriptor.full_name())
-                    + " is repeated but the level of repeatedness is not enough to serialize a multidimensional array from the column "
-                    + backQuote(StringRef{column_name}) + ". It's recommended to make the parent field repeated as well.",
-                ErrorCodes::PROTOBUF_FIELD_NOT_REPEATED);
+            throw Exception(ErrorCodes::PROTOBUF_FIELD_NOT_REPEATED,
+                            "The field {} is repeated but the level of repeatedness is not enough "
+                            "to serialize a multidimensional array from the column {}. "
+                            "It's recommended to make the parent field repeated as well.",
+                            quoteString(field_descriptor.full_name()), backQuote(StringRef{column_name}));
         }
 
         const ProtobufReaderOrWriter reader_or_writer;
@@ -3615,7 +3669,7 @@ namespace
                 {
                     if (skip_unsupported_fields)
                         return std::nullopt;
-                    throw Exception("Empty enum field", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Empty enum field");
                 }
                 int max_abs = std::abs(enum_descriptor->value(0)->number());
                 for (int i = 1; i != enum_descriptor->value_count(); ++i)
@@ -3631,7 +3685,7 @@ namespace
                 {
                     if (skip_unsupported_fields)
                         return std::nullopt;
-                    throw Exception("proton supports only 8-bit and 16-bit enums", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "proton supports only 8-bit and 16-bit enums");
                 }
             }
             case FieldTypeId::TYPE_GROUP: [[fallthrough]];
@@ -3642,7 +3696,7 @@ namespace
                 {
                     if (skip_unsupported_fields)
                         return std::nullopt;
-                    throw Exception("Empty messages are not supported", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Empty messages are not supported");
                 }
                 else if (message_descriptor->field_count() == 1)
                 {
@@ -3680,26 +3734,32 @@ std::unique_ptr<ProtobufSerializer> ProtobufSerializer::create(
     const Strings & column_names,
     const DataTypes & data_types,
     std::vector<size_t> & missing_column_indices,
-    const google::protobuf::Descriptor & message_descriptor,
+    const ProtobufSchemas::DescriptorHolder & descriptor,
     bool with_length_delimiter,
     bool with_envelope,
     bool flatten_google_wrappers,
     ProtobufReader & reader)
 {
-    return ProtobufSerializerBuilder(reader).buildMessageSerializer(column_names, data_types, missing_column_indices, message_descriptor, with_length_delimiter, with_envelope, flatten_google_wrappers);
+    return ProtobufSerializerBuilder(reader).buildMessageSerializer(
+        column_names, data_types, missing_column_indices,
+        *descriptor.message_descriptor,
+        with_length_delimiter, with_envelope, flatten_google_wrappers);
 }
 
 std::unique_ptr<ProtobufSerializer> ProtobufSerializer::create(
     const Strings & column_names,
     const DataTypes & data_types,
-    const google::protobuf::Descriptor & message_descriptor,
+    const ProtobufSchemas::DescriptorHolder & descriptor,
     bool with_length_delimiter,
     bool with_envelope,
     bool defaults_for_nullable_google_wrappers,
     ProtobufWriter & writer)
 {
     std::vector<size_t> missing_column_indices;
-    return ProtobufSerializerBuilder(writer).buildMessageSerializer(column_names, data_types, missing_column_indices, message_descriptor, with_length_delimiter, with_envelope, defaults_for_nullable_google_wrappers);
+    return ProtobufSerializerBuilder(writer).buildMessageSerializer(
+        column_names, data_types, missing_column_indices,
+        *descriptor.message_descriptor,
+        with_length_delimiter, with_envelope, defaults_for_nullable_google_wrappers);
 }
 
 NamesAndTypesList protobufSchemaToCHSchema(const google::protobuf::Descriptor * message_descriptor, bool skip_unsupported_fields)

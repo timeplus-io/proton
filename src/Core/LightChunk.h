@@ -23,6 +23,20 @@ struct LightChunk
             col->assumeMutable()->reserve(rows);
     }
 
+    void insert(Block & block, size_t row)
+    {
+        if (data.empty())
+        {
+            data.reserve(block.columns());
+            for (const auto & col : block)
+                data.push_back(col.type->createColumn());
+        }
+
+        assert(data.size() == block.columns());
+        for (size_t pos = 0; const auto & col : block)
+            data[pos++]->assumeMutable()->insertFrom(*col.column, row);
+    }
+
     /// Inplace concat
     void concat(const LightChunk & other)
     {
@@ -88,11 +102,20 @@ struct LightChunkWithTimestamp
     LightChunkWithTimestamp() = default;
     LightChunkWithTimestamp(Columns && data_) : chunk(std::move(data_)) { }
     LightChunkWithTimestamp(Chunk && chunk_, Int64 min_ts, Int64 max_ts)
-        : chunk(std::move(chunk_)), min_timestamp(min_ts), max_timestamp(max_ts) { }
+        : chunk(std::move(chunk_)), min_timestamp(min_ts), max_timestamp(max_ts)
+    {
+    }
     LightChunkWithTimestamp(const Block & block)
         : chunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp()) { }
 
     void reserve(size_t rows) { chunk.reserve(rows); }
+
+    void insert(Block & block, size_t row)
+    {
+        min_timestamp = std::min(block.minTimestamp(), min_timestamp);
+        max_timestamp = std::max(block.maxTimestamp(), max_timestamp);
+        chunk.insert(block, row);
+    }
 
     /// Inplace concat
     void concat(const LightChunkWithTimestamp & other)

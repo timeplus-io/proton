@@ -4,7 +4,7 @@ SET asterisk_include_reserved_columns=false;
 
 DROP STREAM IF EXISTS null_00557;
 
-create stream null_00557 (x uint8) ENGINE = Null;
+create null stream null_00557 (x uint8);
 DESCRIBE stream null_00557;
 
 ALTER STREAM null_00557 ADD COLUMN y string, MODIFY COLUMN x int64 DEFAULT to_int64(y);

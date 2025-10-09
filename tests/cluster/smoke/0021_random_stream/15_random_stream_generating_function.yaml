@@ -1,0 +1,38 @@
+tags:
+- create random
+- unstable
+- bug
+description: create random stream with default generating function, limit the amount
+  of data produced per window, set interval_time, cannot be diveded by 1000ms, check
+  the the number of data produced per interval is correct;
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id int default rand()%4) engine Random()
+    settings eps=1000, interval_time=80
+- type: wait
+  time: 2
+
+- name: '2224'
+  type: stream
+  query: select count(1) from tumble(test22_create_random, 80ms) group by window_start
+    limit 5 settings max_threads=20
+  schema:
+  - name: count()
+    type: uint64
+
+- type: check
+  target_name: '2224'
+  expected_result:
+  - ['120']
+  - ['80']
+  - ['80']
+  - ['80']
+  - ['80']

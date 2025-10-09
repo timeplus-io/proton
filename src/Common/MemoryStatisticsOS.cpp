@@ -26,7 +26,23 @@ namespace ErrorCodes
     extern const int CANNOT_CLOSE_FILE;
 }
 
-static constexpr auto filename = "/proc/self/statm";
+namespace
+{
+uint64_t extractMemoryValue(ReadBuffer & in)
+{
+    uint64_t value = 0;
+    skipWhitespaceIfAny(in, true);
+
+    readIntText(value, in);
+
+    skipWhitespaceIfAny(in, true);
+    assertString("kB", in);
+
+    return value * 1024;
+}
+}
+
+static constexpr auto filename = "/proc/self/status";
 
 MemoryStatisticsOS::MemoryStatisticsOS()
 {
@@ -80,25 +96,29 @@ MemoryStatisticsOS::Data MemoryStatisticsOS::get() const
 
     ReadBufferFromMemory in(buf, res);
 
-    uint64_t unused;
-    readIntText(data.virt, in);
-    skipWhitespaceIfAny(in);
-    readIntText(data.resident, in);
-    skipWhitespaceIfAny(in);
-    readIntText(data.shared, in);
-    skipWhitespaceIfAny(in);
-    readIntText(data.code, in);
-    skipWhitespaceIfAny(in);
-    readIntText(unused, in);
-    skipWhitespaceIfAny(in);
-    readIntText(data.data_and_stack, in);
+    uint64_t data_size = 0;
+    uint64_t stack_size = 0;
+    while (!in.eof())
+    {
+        String key;
+        readString(key, in);
 
-    size_t page_size = static_cast<size_t>(::getPageSize());
-    data.virt *= page_size;
-    data.resident *= page_size;
-    data.shared *= page_size;
-    data.code *= page_size;
-    data.data_and_stack *= page_size;
+        if (key == "VmSize:")
+            data.virt = extractMemoryValue(in);
+        else if (key == "VmRSS:")
+            data.resident = extractMemoryValue(in);
+        else if (key == "RssShmem:")
+            data.shared = extractMemoryValue(in);
+        else if (key == "VmExe:")
+            data.code = extractMemoryValue(in);
+        else if (key == "VmData:")
+            data_size = extractMemoryValue(in);
+        else if (key == "VmStk:")
+            stack_size = extractMemoryValue(in);
+
+        skipToNextLineOrEOF(in);
+    }
+    data.data_and_stack = data_size + stack_size;
 
     return data;
 }

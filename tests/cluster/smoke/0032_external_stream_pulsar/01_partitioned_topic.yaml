@@ -1,0 +1,133 @@
+tags:
+  - partitioned_topic
+description: test Pulsar partitioned topics
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_01
+
+  - type: pulsar
+    name: create
+    topic: test_01
+    partitions: 3
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_01
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_01
+      (
+        id int, 
+        value string
+      )
+      settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_01'
+
+  - type: pulsar
+    name: produce
+    topic: test_01-partition-0
+    messages:
+      - id: 11
+        value: sometext11
+
+  - type: pulsar
+    name: produce
+    topic: test_01-partition-1
+    messages:
+      - id: 21
+        value: sometext21
+
+  - type: pulsar
+    name: produce
+    topic: test_01-partition-2
+    messages:
+      - id: 31
+        value: sometext31
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-01-01
+    query_id: pulsar-01-01
+    query: select _tp_shard, id, value from ex_pulsar_01 settings shards='1,2', seek_to='latest,earliest'
+    terminate: manual
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: pulsar-01-02
+    query_id: pulsar-01-02
+    query: select _tp_shard, id, value from ex_pulsar_01
+    terminate: manual
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: pulsar
+    name: produce
+    topic: test_01-partition-0
+    messages:
+      - id: 12
+        value: sometext12
+
+  - type: pulsar
+    name: produce
+    topic: test_01-partition-1
+    messages:
+      - id: 22
+        value: sometext22
+
+  - type: pulsar
+    name: produce
+    topic: test_01-partition-2
+    messages:
+      - id: 32
+        value: sometext32
+
+  - type: check
+    target_name: pulsar-01-01
+    mode: random
+    # The result is correct because pulsar steps produce message in a synchronized manner.
+    expected_result:
+      - - 2
+        - "31"
+        - sometext31
+      - - 1
+        - "22"
+        - sometext22
+      - - 2
+        - "32"
+        - sometext32
+
+  - type: check
+    target_name: pulsar-01-02
+    mode: random
+    expected_result:
+      - - 0
+        - "12"
+        - sometext12
+      - - 1
+        - "22"
+        - sometext22
+      - - 2
+        - "32"
+        - sometext32

@@ -65,7 +65,7 @@ template <bool has_limit>
 AggregateFunctionGroupConcat<has_limit>::AggregateFunctionGroupConcat(
     const DataTypePtr & data_type_, const Array & parameters_, UInt64 limit_, const String & delimiter_)
     : IAggregateFunctionDataHelper<GroupConcatData, AggregateFunctionGroupConcat<has_limit>>(
-        {data_type_}, parameters_)
+        {data_type_}, parameters_, createResultType())
     , limit(limit_)
     , delimiter(delimiter_)
     , type(data_type_)

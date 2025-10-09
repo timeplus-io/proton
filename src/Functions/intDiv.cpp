@@ -73,7 +73,7 @@ struct DivideIntegralByConstantImpl
         }
 
         if (unlikely(static_cast<A>(b) == 0))
-            throw Exception("Division by zero", ErrorCodes::ILLEGAL_DIVISION);
+            throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Division by zero");
 
         divideImpl(a_pos, b, c_pos, size);
     }
@@ -126,4 +126,11 @@ REGISTER_FUNCTION(IntDiv)
     factory.registerFunction<FunctionIntDiv>();
 }
 
+struct NameIntDivOrNull { static constexpr auto name = "int_div_or_null"; };
+using FunctionIntDivOrNull = BinaryArithmeticOverloadResolver<DivideIntegralOrNullImpl, NameIntDivOrNull, false>;
+
+REGISTER_FUNCTION(IntDivOrNull)
+{
+    factory.registerFunction<FunctionIntDivOrNull>();
+}
 }

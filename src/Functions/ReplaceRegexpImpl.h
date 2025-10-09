@@ -2,11 +2,8 @@
 
 #include <base/types.h>
 #include <Columns/ColumnString.h>
+#include <Common/re2.h>
 #include <IO/WriteHelpers.h>
-
-#include "config.h"
-#include <re2_st/re2.h>
-
 
 namespace DB
 {
@@ -92,12 +89,12 @@ struct ReplaceRegexpImpl
         size_t haystack_length,
         ColumnString::Chars & res_data,
         ColumnString::Offset & res_offset,
-        const re2_st::RE2 & searcher,
+        const re2::RE2 & searcher,
         int num_captures,
         const Instructions & instructions)
     {
-        re2_st::StringPiece haystack(haystack_data, haystack_length);
-        re2_st::StringPiece matches[max_captures];
+        std::string_view haystack(haystack_data, haystack_length);
+        std::string_view matches[max_captures];
 
         size_t copy_pos = 0;
         size_t match_pos = 0;
@@ -107,7 +104,7 @@ struct ReplaceRegexpImpl
             /// If no more replacements possible for current string
             bool can_finish_current_string = false;
 
-            if (searcher.Match(haystack, match_pos, haystack_length, re2_st::RE2::Anchor::UNANCHORED, matches, num_captures))
+            if (searcher.Match(haystack, match_pos, haystack_length, re2::RE2::Anchor::UNANCHORED, matches, num_captures))
             {
                 const auto & match = matches[0]; /// Complete match (\0)
                 size_t bytes_to_copy = (match.data() - haystack.data()) - copy_pos;
@@ -175,11 +172,11 @@ struct ReplaceRegexpImpl
         size_t size = offsets.size();
         res_offsets.resize(size);
 
-        re2_st::RE2::Options regexp_options;
+        re2::RE2::Options regexp_options;
         /// Don't write error messages to stderr.
         regexp_options.set_log_errors(false);
 
-        re2_st::RE2 searcher(needle, regexp_options);
+        re2::RE2 searcher(needle, regexp_options);
 
         if (!searcher.ok())
             throw Exception(
@@ -216,11 +213,11 @@ struct ReplaceRegexpImpl
         res_data.reserve(data.size());
         res_offsets.resize(size);
 
-        re2_st::RE2::Options regexp_options;
+        re2::RE2::Options regexp_options;
         /// Don't write error messages to stderr.
         regexp_options.set_log_errors(false);
 
-        re2_st::RE2 searcher(needle, regexp_options);
+        re2::RE2 searcher(needle, regexp_options);
 
         if (!searcher.ok())
             throw Exception(

@@ -5,7 +5,6 @@ services:
     pull_policy: always
     container_name: proton-redp
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp/datas:/var/lib/proton
       - ../../proton-redp/log:/var/log/proton-server
     ports:
@@ -37,7 +36,7 @@ services:
 
 
   stream-store:
-    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
+    image: vectorized/redpanda:v21.11.19
     ports:
       - "9092:9092"
       - "29092:29092"

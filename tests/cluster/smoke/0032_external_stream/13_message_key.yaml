@@ -1,0 +1,123 @@
+tags:
+  - multi_shard
+  - message_key
+description: Test partitioning with message key.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test_13_02
+
+  - type: kafka
+    name: delete
+    topic: test_13_02_raw
+
+  - type: kafka
+    name: create
+    topic: test_13_02
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: kafka
+    name: create
+    topic: test_13_02_raw
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test_kafka_13_02
+
+  - type: query
+    sql: drop stream if exists test_kafka_13_02_raw
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test_kafka_13_02
+        (
+          key string,
+          value int32,
+          _tp_message_key string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_13_02', properties='partitioner=murmur2'
+
+  - type: query
+    sql: create external stream test_kafka_13_02_raw
+        (
+          raw string,
+          _tp_message_key string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_13_02_raw', properties='partitioner=murmur2'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_kafka_13_02 (key, value, _tp_message_key) values ('one', 1, 'one')('one', 2, 'one')('one', 3, 'one')('one', 4, 'one')('one', 5, 'one')
+
+  - type: query
+    sql: insert into test_kafka_13_02 (key, value, _tp_message_key) values ('six', 6, 'one')('seven', 7, 'one')('eight', 8, 'one')('nine', 9, 'one')('ten', 10, 'one')
+
+  - type: query
+    sql: insert into test_kafka_13_02_raw (raw, _tp_message_key) values ('one', 'one')('one', 'one')('one', 'one')('one', 'one')('one', 'one')
+
+  - type: query
+    sql: insert into test_kafka_13_02_raw (raw, _tp_message_key) values ('six', 'one')('seven', 'one')('eight', 'one')('nine', 'one')('ten', 'one')
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 33_13_02
+    query: select count(value) as message_count from table(test_kafka_13_02) group by _tp_shard
+    schema:
+      - name: message_count
+        type: uint64
+
+  - type: stream
+    name: 33_13_02_raw
+    query: select count(raw) as message_count from table(test_kafka_13_02_raw) group by _tp_shard
+    schema:
+      - name: message_count
+        type: uint64
+
+  - type: stream
+    name: 33_13_02_raw_2
+    query: select raw, _tp_message_key from table(test_kafka_13_02_raw)
+    schema:
+      - name: raw
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  - type: check
+    target_name: 33_13_02
+    expected_result:
+      - [10]
+
+  - type: check
+    target_name: 33_13_02_raw
+    expected_result:
+      - [10]
+
+  - type: check
+    target_name: 33_13_02_raw_2
+    expected_result:
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['six', 'one']
+      - ['seven', 'one']
+      - ['eight', 'one']
+      - ['nine', 'one']
+      - ['ten', 'one']

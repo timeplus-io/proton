@@ -1,0 +1,124 @@
+tags:
+  - aggregation
+  - join
+  - table(changelog_kv)
+  - versioned_kv
+
+description: aggregation on changelog stream join table(changelog_kv)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_stream1_5(i int, j int, k string) primary
+      key j settings mode='versioned_kv';
+
+  - type: query
+    sql:
+      create stream test14_stream2_5(i2 int, j2 int, k2 string) primary
+      key j2 settings mode='versioned_kv';
+
+  - type: query
+    sql:
+      create stream test14_stream3_5(i3 int, j3 int, k3 string) primary
+      key j3 settings mode='changelog_kv';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream3_5(i3, j3, k3) values(4, 2, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_5(i3, j3, k3) values(4, 7, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_5(i3, j3, k3, _tp_delta) values(5, 2, 'h', -1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_5(i3, j3, k3) values(1, 3, 'a');
+
+  - type: wait
+    time: 5
+
+  - name: "14204"
+    type: stream
+    query:
+      with t as (select * from test14_stream1_5 join test14_stream2_5 on test14_stream1_5.i
+      = test14_stream2_5.i2) select count(1), max(i), min(i), avg(i), k.i3 from t  join
+      table(test14_stream3_5) as k on t.i = k.i3 group by k.i3;
+    schema:
+      - name: count(1)
+        type: uint64
+      - name: max(i)
+        type: int32
+      - name: min(i)
+        type: int32
+      - name: avg(i)
+        type: float64
+      - name: i3
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream2_5(i2, j2, k2) values(1, 3, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream1_5(i, j, k) values(1, 4, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream2_5(i2, j2, k2) values(4, 5, 'f');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream1_5(i, j, k) values(4, 6, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream2_5(i2, j2, k2) values(1, 7, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream1_5(i, j, k) values(1, 8, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream1_5(i, j, k) values(5, 8, 'a');
+
+  - type: check
+    target_name: "14204"
+    mode: random
+    expected_result:
+      - ["1", "1", "1", "1.0", "1"]
+      - ["1", "4", "4", "4.0", "4"]
+      - ["1", "1", "1", "1.0", "1"]
+      - ["1", "4", "4", "4.0", "4"]
+      - ["4", "1", "1", "1.0", "1"]
+      - ["1", "4", "4", "4.0", "4"]
+      - ["2", "1", "1", "1.0", "1"]

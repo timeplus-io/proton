@@ -49,11 +49,16 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!isNativeNumber(arguments.front()))
-            throw Exception{"Argument for function " + getName() + " must be a number", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Argument for function {} must be a number", getName());
 
         /// proton: starts. return bool
         return DataTypeFactory::instance().get("bool");
         /// proton: ends.
+    }
+
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
+        return std::make_shared<DataTypeUInt8>();
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -73,7 +78,7 @@ public:
             || (res = execute<Int64>(in))
             || (res = execute<Float32>(in))
             || (res = execute<Float64>(in))))
-            throw Exception{"Illegal column " + in->getName() + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}", in->getName(), getName());
 
         return res;
     }

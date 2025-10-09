@@ -4,8 +4,9 @@
 
 #if USE_AWS_MSK_IAM
 
-#include <string>
 #include <cstdint>
+#include <memory>
+#include <string>
 
 namespace Aws
 {

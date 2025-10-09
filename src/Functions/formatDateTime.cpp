@@ -9,11 +9,13 @@
 #include <Functions/DateTimeTransforms.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsConversion.h>
 #include <Functions/IFunction.h>
 #include <Functions/castTypeToEither.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/numLiteralChars.h>
+
+#include <Interpreters/Context.h>
+#include <Interpreters/castColumn.h>
 
 #include <IO/WriteHelpers.h>
 
@@ -749,8 +751,9 @@ public:
                     arguments[0].type->getName(), getName());
             if (arguments.size() > 1 && !(isInteger(arguments[0].type) || isDate(arguments[0].type) || isDateTime(arguments[0].type) || isDate32(arguments[0].type) || isDateTime64(arguments[0].type)))
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Illegal type {} of first argument of function {} when arguments size is 2 or 3. Should be a integer or a date with time",
-                    arguments[0].type->getName(), getName());
+                                "Illegal type {} of first argument of function {} when arguments size is 2 or 3. "
+                                "Should be a integer or a date with time",
+                                arguments[0].type->getName(), getName());
         }
         else
         {
@@ -786,17 +789,7 @@ public:
         {
             if (arguments.size() == 1)
             {
-                if (!castType(arguments[0].type.get(), [&](const auto & type)
-                    {
-                        using FromDataType = std::decay_t<decltype(type)>;
-                        res = ConvertImpl<FromDataType, DataTypeDateTime, Name>::execute(arguments, result_type, input_rows_count);
-                        return true;
-                    }))
-                {
-                    throw Exception(ErrorCodes::ILLEGAL_COLUMN,
-                        "Illegal column {} of function {}, must be integer, date, date32, datetime or datetime64 when arguments size is 1.",
-                        arguments[0].column->getName(), getName());
-                }
+                return castColumn(arguments[0], result_type);
             }
             else
             {
@@ -1492,7 +1485,7 @@ public:
                     // Case 2: find closing single quote
                     Int64 count = numLiteralChars(cur_token + 1, end);
                     if (count == -1)
-                        throw Exception("No closing single quote for literal", ErrorCodes::BAD_ARGUMENTS);
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "No closing single quote for literal");
                     else
                     {
                         for (Int64 i = 1; i <= count; i++)
@@ -1696,7 +1689,7 @@ public:
                         break;
                     }
                     case 'Z':
-                        throw Exception("format is not supported for TIMEZONE_OFFSET_ID", ErrorCodes::NOT_IMPLEMENTED);
+                        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "format is not supported for TIMEZONE_OFFSET_ID");
                     default:
                     {
                         if (isalpha(*cur_token))

@@ -14,16 +14,15 @@ ExecuteMode queryExecuteMode(bool is_streaming, bool is_subquery, const Settings
 {
     switch (settings.exec_mode)
     {
-        case ExecuteMode::NORMAL:
+        case ExecuteMode::Normal:
             break;
-        case ExecuteMode::SUBSCRIBE:
-        case ExecuteMode::UNSUBSCRIBE:
-        case ExecuteMode::RECOVER:
+        case ExecuteMode::Subscribe:
+        case ExecuteMode::Recover:
             if (!is_streaming)
             {
                 /// Assume it's a historical subquery in streaming query, we only execute it in normal mode.
                 if (is_subquery)
-                    return ExecuteMode::NORMAL;
+                    return ExecuteMode::Normal;
 
                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "SUBSCRIBE can only work with streaming query");
             }

@@ -1,0 +1,79 @@
+tags:
+  - uda
+
+description: Test covering python uda test on statsforecast function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (unique_id string, ds int, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION anomalyTester(unique_id string, ds int, y float) RETURNS array(float) LANGUAGE PYTHON AS $$
+      import pandas as pd
+      from statsforecast import StatsForecast
+      from statsforecast.models import MSTL
+
+      class anomalyTester:
+          def __init__(self):
+              self.res = []
+              self.sf = StatsForecast(
+                  models=[MSTL(season_length = 12)],
+                  freq=1,
+                  n_jobs=-1,
+              )
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, unique_ids, dss, ys):
+              if len(unique_ids) < 15:
+                  return
+
+              df = pd.DataFrame(zip(unique_ids, dss, ys),
+                  columns=['unique_id', 'ds', 'y'])
+              fcst = self.sf.forecast(df=df, h=15, level=[99], fitted=True)
+              insample_forecasts = self.sf.forecast_fitted_values()
+              anomalies = insample_forecasts[insample_forecasts['y'].between(insample_forecasts['MSTL-lo-99'], insample_forecasts['MSTL-hi-99'])]
+              self.res = anomalies.head()['MSTL'].tolist()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf11-2-1
+    type: stream
+    query: select anomalyTester(unique_id, ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(unique_id, ds, y) values
+          ('H1', 1, 605.0) ('H1', 2, 586.0) ('H1', 3, 586.0)('H1', 4, 559.0) ('H1', 5, 511.0)
+          ('H1', 6, 605.0) ('H1', 7, 586.0) ('H1', 8, 586.0)('H1', 9, 559.0) ('H1', 10, 511.0)
+          ('H1', 11, 605.0) ('H1', 12, 586.0) ('H1', 13, 586.0)('H1', 14, 559.0) ('H1', 15, 511.0);
+
+  - type: check
+    target_name: python-udf11-2-1
+    expected_result:
+      - [[616.6330681285589, 593.6406355883164, 569.9204071802196, 559.1776215190522, 510.6893208118459]]

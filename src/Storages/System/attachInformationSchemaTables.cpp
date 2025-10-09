@@ -4,6 +4,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Common/getResource.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -36,7 +37,7 @@ static void createInformationSchemaView(ContextMutablePtr context, IDatabase & d
             ast_create.setTable(Poco::toUpper(view_name));
 
         StoragePtr view = createTableFromAST(ast_create, database.getDatabaseName(),
-                                             database.getTableDataPath(ast_create), context, true).second;
+                                             database.getTableDataPath(ast_create), context, true, 1).second;
 
         database.createTable(context, ast_create.getTable(), view, ast);
     }

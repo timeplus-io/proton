@@ -567,7 +567,7 @@ DataTypePtr QueryFuzzer::fuzzDataType(DataTypePtr type)
     {
         auto key_type = fuzzDataType(type_map->getKeyType());
         auto value_type = fuzzDataType(type_map->getValueType());
-        if (!DataTypeMap::checkKeyType(key_type))
+        if (!DataTypeMap::isValidKeyType(key_type))
             key_type = type_map->getKeyType();
 
         return std::make_shared<DataTypeMap>(key_type, value_type);
@@ -1081,7 +1081,7 @@ void QueryFuzzer::fuzzMain(ASTPtr & ast)
     std::cout << std::endl;
     WriteBufferFromOStream ast_buf(std::cout, 4096);
     formatAST(*ast, ast_buf, false /*highlight*/);
-    ast_buf.next();
+    ast_buf.finalize();
     std::cout << std::endl << std::endl;
 }
 

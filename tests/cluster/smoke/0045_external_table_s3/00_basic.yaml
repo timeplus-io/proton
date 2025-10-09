@@ -1,0 +1,89 @@
+description: basic cases for s3 external table
+
+steps:
+  # create minio bucket
+  - type: minio
+    name: delete
+    bucket: smoketest-00
+
+  - type: minio
+    name: create
+    bucket: smoketest-00
+
+  # create external stream
+  - type: query
+    sql: drop stream if exists ex_s3_00
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external table ex_s3_00 (
+        key string,
+        value int32
+      )
+      settings
+        type='s3', endpoint='http://minio:9000', bucket='smoketest-00', access_key_id='minioroot', secret_access_key='minioroot',
+        write_to='00_basic/data.json', s3_min_upload_file_size=100, s3_max_upload_idle_seconds=2;
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_s3_00 values ('key No. 1', 10000)('key No. 2', 20000)('key No. 3', 40000)('key No. 4', 40000)('key No. 5', 50000)
+
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: s3-00-01
+    query: select unique(_file) as file_count from ex_s3_00
+    schema:
+      - name: file_count
+        type: uint64
+
+  - type: query
+    sql: drop stream if exists s3_00_source
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream s3_00_source (
+        key string,
+        value int32
+      )
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    query: |
+      insert into ex_s3_00 select key, value from s3_00_source
+
+  - type: query
+    sql: |
+      insert into s3_00_source (key, value) values ('key No. 9', 90000)
+
+  - type: wait
+    time: 4
+
+  - type: stream
+    name: s3-00-02
+    query: select unique(_file) as file_count from ex_s3_00
+    schema:
+      - name: file_count
+        type: uint64
+
+  - type: check
+    target_name: s3-00-01
+    expected_result:
+      - - 1
+
+  - type: check
+    target_name: s3-00-02
+    expected_result:
+      - - 2

@@ -1,0 +1,27 @@
+Expression ((Projection + (Before ORDER BY + )))
+Header: number uint64
+Actions: INPUT :: 0 -> number uint64 : 0
+Positions: 0
+  Sorting (Sorting for ORDER BY)
+  Header: ignore(2) uint8
+          number uint64
+  Sort description: ignore(2) ASC
+    Filter (( + Before ORDER BY))
+    Header: ignore(2) uint8
+            number uint64
+            ignore(2) uint8
+    Filter column: ignore(2)
+    Actions: INPUT :: 0 -> number uint64 : 0
+             COLUMN const(uint8) -> 2 uint8 : 1
+             FUNCTION ignore(2 :: 1) -> ignore(2) uint8 : 2
+    Positions: 2 0
+      Filter (WHERE)
+      Header: number uint64
+              ignore(2) uint8
+      Filter column: ignore(2)
+      Actions: INPUT :: 0 -> number uint64 : 0
+               COLUMN const(uint8) -> 2 uint8 : 1
+               FUNCTION ignore(2 :: 1) -> ignore(2) uint8 : 2
+      Positions: 0 2
+        ReadFromSystemNumbers
+        Header: number uint64

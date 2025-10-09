@@ -1,0 +1,94 @@
+tags:
+  - native_not_support
+description: tumble delay, max(value) tumble 5s and delay 2s group by id, window_start, window_end
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_smoke_no_default_tp_time;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_smoke_no_default_tp_time(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3));
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 101
+    query: select id, max(value), window_start, window_end from tumble(test_smoke_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end limit 6 emit after window close with delay 2s settings seek_to='-6s'
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: stream
+    name: 101-1
+    query: select id, max(value), window_start, window_end from tumble(test_smoke_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end limit 6 emit after watermark with delay 2s settings seek_to='-6s'
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke_no_default_tp_time(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00']
+      - ['dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05']
+      - ['dev3', 'ca', 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02']
+      - ['dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08']
+      - ['dev3', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:09']
+      - ['dev3', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:10']
+      - ['dev2', 'ca', 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:09']
+      - ['dev2', 'ca', 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:07']
+      - ['dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:11']
+      - ['dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:12']
+  
+  - type: check
+    target_name: 101
+    mode: random
+    expected_result:
+      - ['dev1','66', '2020-02-02 20:01:00', '2020-02-02 20:01:05']
+      - ['dev8','67', '2020-02-02 20:01:00', '2020-02-02 20:01:05']
+      - ['dev3','59', '2020-02-02 20:01:00', '2020-02-02 20:01:05']
+      - ['dev8','77', '2020-02-02 20:01:05', '2020-02-02 20:01:10']
+      - ['dev3','57.3', '2020-02-02 20:01:05', '2020-02-02 20:01:10']
+      - ['dev2','80', '2020-02-02 20:01:05', '2020-02-02 20:01:10']
+  
+  - type: check
+    target_name: 101-1
+    mode: random
+    expected_result:
+      - ['dev1','66', '2020-02-02 20:01:00', '2020-02-02 20:01:05']
+      - ['dev8','67', '2020-02-02 20:01:00', '2020-02-02 20:01:05']
+      - ['dev3','59', '2020-02-02 20:01:00', '2020-02-02 20:01:05']
+      - ['dev8','77', '2020-02-02 20:01:05', '2020-02-02 20:01:10']
+      - ['dev3','57.3', '2020-02-02 20:01:05', '2020-02-02 20:01:10']
+      - ['dev2','80', '2020-02-02 20:01:05', '2020-02-02 20:01:10']

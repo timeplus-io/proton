@@ -37,7 +37,8 @@ public:
     void dropTable(
         ContextPtr context,
         const String & table_name,
-        bool no_delay) override;
+        bool sync,
+        const ASTPtr & query) override;
 
     void renameTable(
         ContextPtr context,
@@ -50,7 +51,9 @@ public:
     void alterTable(
         ContextPtr context,
         const StorageID & table_id,
-        const StorageInMemoryMetadata & metadata) override;
+        const StorageInMemoryMetadata & metadata,
+        String alter_command,
+        std::vector<String> alter_command_asts) override;
 
     time_t getObjectMetadataModificationTime(const String & table_name) const override;
 

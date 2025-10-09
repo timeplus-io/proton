@@ -1,0 +1,114 @@
+description: |
+  Test sling data transfer from db to csv file to db with incremental mode
+  Main steps:
+    1.Create source and target stream
+    2.Ingest data
+    3.Migration data from source stream to csv
+    4.Migration data from csv to target stream
+    5.Repeat step 3-4
+    6.Check target stream table query
+
+cluster:
+  - p1s1
+  - p3s1
+
+steps:
+  - type: command
+    node: [sling]
+    shell: rm -rf migration_test/*.csv
+
+  - type: query
+    sql: DROP STREAM IF EXISTS src;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS tgt;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM src
+      (
+        id int64,
+        value float64,
+        name string,
+        ts datetime64(3) DEFAULT now64(3)
+      );
+
+  - type: query
+    sql: |
+      CREATE STREAM tgt
+      (
+        id int64,
+        value float64,
+        name string,
+        ts datetime64(3) DEFAULT now64(3)
+      );
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      INSERT INTO src(id, value, name, ts) VALUES
+      (1, 11.1, 's1', '2025-01-01 20:00:01')
+      (2, 22.2, 's2', '2025-01-02 20:00:02')
+      (3, 33.3, 's3', '2025-01-03 20:00:03');
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn TIMEPLUS --src-stream "src" --tgt-conn LOCAL --tgt-object "migration_test/old.csv" --mode incremental --update-key ts -d
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn LOCAL --src-stream "migration_test/old.csv" --tgt-conn TIMEPLUS --tgt-object "tgt" --mode incremental --update-key ts -d
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO src(id, value, name, ts) VALUES
+      (3, 33.3, 's3', '2025-01-03 20:00:03')
+      (4, 44.4, 's4', '2025-01-03 20:00:03')
+      (4, 44.4, 's4', '2025-01-04 20:00:04');
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn TIMEPLUS --src-stream "src" --tgt-conn LOCAL --tgt-object "migration_test/new.csv" --mode incremental --update-key ts -d
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn LOCAL --src-stream "migration_test/new.csv" --tgt-conn TIMEPLUS --tgt-object "tgt" --mode incremental --update-key ts -d
+
+  - name: sling-1-1
+    type: stream
+    query: SELECT id, value, name, ts FROM table(tgt);
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: float64
+      - name: name
+        type: string
+      - name: ts
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: sling-1-1
+    mode: random
+    expected_result:
+      - [ 1, '11.1', 's1', '2025-01-01 20:00:01' ]
+      - [ 2, '22.2', 's2', '2025-01-02 20:00:02' ]
+      - [ 3, '33.3', 's3', '2025-01-03 20:00:03' ]
+      - [ 4, '44.4', 's4', '2025-01-04 20:00:04' ]

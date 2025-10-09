@@ -1,0 +1,29 @@
+name: python_udf_statsmodels
+description: Tests covering the python udf statsmodels library
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - statsmodels
+arch:
+  - x86_64
+
+setup:
+  scope: suite
+  steps:
+    # statsmodels
+    - type: query
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'statsmodels';
+
+    - type: wait
+      time: 15
+
+    - type: command
+      name: python-udf5-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "statsmodels") | length > 0'
+    
+    - type: check
+      target_name: python-udf5-1
+      expected_result: ['true']

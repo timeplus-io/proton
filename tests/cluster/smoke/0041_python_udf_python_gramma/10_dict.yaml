@@ -1,0 +1,51 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (key string, value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_dict(key string, value int) RETURNS bool LANGUAGE PYTHON AS
+      $$
+      def test_dict(key, value):
+          a = dict(zip(key, value))
+          res = [a.get(k) == v for k, v in zip(key, value)]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-10-1
+    type: stream
+    query: select test_dict(key, value) as res, key, value from udf_stream;
+    schema:
+      - name: res
+        type: bool
+      - name: key
+        type: string
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(key, value) values ('one', 1)('two', 2)('three', 3);
+
+  - type: check
+    target_name: python-udf1-10-1
+    expected_result:
+      - [True, 'one', 1]
+      - [True, 'two', 2]
+      - [True, 'three', 3]

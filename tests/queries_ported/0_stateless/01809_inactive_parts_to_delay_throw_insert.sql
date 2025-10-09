@@ -5,7 +5,7 @@ create stream data_01809 (i int) engine MergeTree order by i settings old_parts_
 insert into data_01809 values (1);
 insert into data_01809 values (2);
 
-optimize table data_01809 final;
+optimize stream data_01809 final;
 
 insert into data_01809 values (3);
 

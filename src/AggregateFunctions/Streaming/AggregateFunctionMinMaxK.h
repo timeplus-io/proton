@@ -216,7 +216,8 @@ protected:
 
 public:
     AggregateFunctionMinMaxKTuple(UInt64 k_, UInt64 max_size_, const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKTupleData<is_min>, AggregateFunctionMinMaxKTuple<is_min>>(arguments, params)
+        : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKTupleData<is_min>, AggregateFunctionMinMaxKTuple<is_min>>(
+              arguments, params, createResultType(arguments))
         , k(k_)
         , max_size(max_size_)
     {
@@ -228,13 +229,13 @@ protected:
 public:
     String getName() const override { return is_min ? "min_k" : "max_k"; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypes & arguments_)
     {
-        if (this->argument_types.size() == 2 && !isTuple(this->argument_types[0]))
-            return std::make_shared<DataTypeArray>(this->argument_types[0]);
+        if (arguments_.size() == 2 && !isTuple(arguments_[0]))
+            return std::make_shared<DataTypeArray>(arguments_[0]);
         else
         {
-            auto arg_types = this->argument_types;
+            auto arg_types = arguments_;
             arg_types.pop_back(); /// remove _tp_delta
             return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(std::move(arg_types)));
         }

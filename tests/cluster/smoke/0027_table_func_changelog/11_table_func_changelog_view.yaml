@@ -1,0 +1,88 @@
+tags:
+- table_func_changelog
+- issue-3018
+description: tail query from table function changelog(view)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists v_compute_income;
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists hourly_cpu_usage;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream hourly_cpu_usage (max_cpu int, rate float);
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into hourly_cpu_usage (max_cpu, rate) values
+  schema:
+  - name: max_cpu
+    type: int32
+  - name: rate
+    type: float32
+  inputs:
+  - [2, 0.24]
+- type: wait
+  time: 2
+
+- type: query
+  sql: create view v_compute_income as SELECT sum(max_cpu*rate) as compute_income, 'aug' as month FROM hourly_cpu_usage WHERE _tp_time > earliest_ts();
+- type: wait
+  time: 2
+
+- name: '2811'
+  type: stream
+  query: SELECT month, compute_income, _tp_delta FROM changelog(v_compute_income, month);
+  schema:
+  - name: month
+    type: string
+  - name: compute_income
+    type: float64
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into hourly_cpu_usage (max_cpu, rate) values
+  schema:
+  - name: max_cpu
+    type: int32
+  - name: rate
+    type: float32
+  inputs:
+  - [4, 0.48]
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into hourly_cpu_usage (max_cpu, rate) values
+  schema:
+  - name: max_cpu
+    type: int32
+  - name: rate
+    type: float32
+  inputs:
+  - [6, 0.72]
+
+- type: check
+  target_name: '2811'
+  expected_result:
+  - [aug, 0.48, 1]
+  - [aug, 0.48, -1]
+  - [aug, 2.4, 1]
+  - [aug, 2.4, -1]
+  - [aug, 6.72, 1]
+
+- type: query
+  sql: drop view if exists v_compute_income
+- type: wait
+  time: 1

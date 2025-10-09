@@ -1,9 +1,5 @@
 #include <Processors/Transforms/Streaming/HopWindowAssignmentTransform.h>
 
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnTuple.h>
-#include <Functions/FunctionHelpers.h>
-
 namespace DB
 {
 namespace Streaming
@@ -19,10 +15,10 @@ void HopWindowAssignmentTransform::assignWindow(Columns & columns) const
 {
     /// Use gcd_interval for streaming hop window aggregation optimization
     /// FIXME: Also support origin logic for historical hop window here
-    ::DB::Streaming::assignWindow(
+    Streaming::assignWindow(
         columns,
         WindowInterval{params.gcd_interval, params.interval_kind},
-        /*time_col_pos*/ 0,
+        timestamp_col_position,
         params.time_col_is_datetime64,
         *params.time_zone);
 }

@@ -56,14 +56,14 @@ avro::ValidSchema KafkaSchemaRegistryForAvro::getSchema(UInt32 id)
     return *schema;
 }
 
-std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::getSchemaForTopic(const String & topic_name, bool force_refresh)
+std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::getSchemaForTopic(const String & topic_name, const String & subject_name, bool force_refresh)
 {
     auto cached_schema_id = topic_schema_cache.get(topic_name);
 
     if (!force_refresh && cached_schema_id)
         return {*cached_schema_id, getSchema(*cached_schema_id)};
 
-    auto schema_and_id = fetchAndCompileSchemaForTopic(topic_name);
+    auto schema_and_id = fetchAndCompileSchemaForSubject(subject_name);
     schema_cache.set(schema_and_id.first, std::make_shared<avro::ValidSchema>(std::move(schema_and_id.second)));
     auto schema_id = schema_and_id.first;
     topic_schema_cache.set(topic_name, std::make_shared<UInt32>(schema_id));
@@ -85,17 +85,17 @@ avro::ValidSchema KafkaSchemaRegistryForAvro::fetchAndCompileSchema(UInt32 id)
     }
 }
 
-std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::fetchAndCompileSchemaForTopic(const String & topic_name)
+std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::fetchAndCompileSchemaForSubject(const String & subject_name)
 {
     try
     {
-        auto schema = registry.fetchLatestSchemaForTopic(topic_name);
+        auto schema = registry.fetchLatestSchemaForSubject(subject_name);
         auto valid_schema = avro::compileJsonSchemaFromString(schema.second);
         return {schema.first, std::move(valid_schema)};
     }
     catch (const avro::Exception & e)
     {
-        throw Exception(ErrorCodes::INCORRECT_DATA, "{}: while fetching schema for topic {}", e.what(), topic_name);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "{}: while fetching schema for subject {}", e.what(), subject_name);
     }
 }
 

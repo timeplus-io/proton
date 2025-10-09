@@ -1,0 +1,16 @@
+source: TIMEPLUS
+target: LOCAL
+
+defaults:
+  mode: full-refresh
+  target_options:
+    format: csv
+    delimiter: "~"
+    header: true
+    file_max_rows: 2
+
+streams:
+  src:
+    object: migration_test/*
+    
+    

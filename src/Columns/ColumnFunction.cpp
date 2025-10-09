@@ -52,8 +52,8 @@ MutableColumnPtr ColumnFunction::cloneResized(size_t size) const
 ColumnPtr ColumnFunction::replicate(const Offsets & offsets) const
 {
     if (elements_size != offsets.size())
-        throw Exception("Size of offsets (" + toString(offsets.size()) + ") doesn't match size of column ("
-                        + toString(elements_size) + ")", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of offsets ({}) doesn't match size of column ({})",
+                        offsets.size(), elements_size);
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
@@ -72,7 +72,11 @@ ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
     return ColumnFunction::create(length, function, capture, is_short_circuit_argument, is_function_compiled);
 }
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 void ColumnFunction::insertFrom(const IColumn & src, size_t n)
+#else
+void ColumnFunction::doInsertFrom(const IColumn & src, size_t n)
+#endif
 {
     const ColumnFunction & src_func = assert_cast<const ColumnFunction &>(src);
 
@@ -89,7 +93,11 @@ void ColumnFunction::insertFrom(const IColumn & src, size_t n)
     ++elements_size;
 }
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 void ColumnFunction::insertRangeFrom(const IColumn & src, size_t start, size_t length)
+#else
+void ColumnFunction::doInsertRangeFrom(const IColumn & src, size_t start, size_t length)
+#endif
 {
     const ColumnFunction & src_func = assert_cast<const ColumnFunction &>(src);
 
@@ -109,8 +117,8 @@ void ColumnFunction::insertRangeFrom(const IColumn & src, size_t start, size_t l
 ColumnPtr ColumnFunction::filter(const Filter & filt, ssize_t result_size_hint) const
 {
     if (elements_size != filt.size())
-        throw Exception("Size of filter (" + toString(filt.size()) + ") doesn't match size of column ("
-                        + toString(elements_size) + ")", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})",
+                        filt.size(), elements_size);
 
     ColumnsWithTypeAndName capture = captured_columns;
     for (auto & column : capture)
@@ -180,8 +188,8 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(IColumn::ColumnIndex num_c
                                                       const IColumn::Selector & selector) const
 {
     if (elements_size != selector.size())
-        throw Exception("Size of selector (" + toString(selector.size()) + ") doesn't match size of column ("
-                        + toString(elements_size) + ")", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of selector ({}) doesn't match size of column ({})",
+                        selector.size(), elements_size);
 
     std::vector<size_t> counts;
     if (captured_columns.empty())
@@ -267,10 +275,9 @@ void ColumnFunction::appendArguments(const ColumnsWithTypeAndName & columns)
     auto wanna_capture = columns.size();
 
     if (were_captured + wanna_capture > args)
-        throw Exception("Cannot capture " + toString(wanna_capture) + " columns because function " + function->getName()
-                        + " has " + toString(args) + " arguments" +
-                        (were_captured ? " and " + toString(were_captured) + " columns have already been captured" : "")
-                        + ".", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot capture {} column(s) because function {} has {} arguments{}.",
+                        wanna_capture, function->getName(), args,
+                        (were_captured ? " and " + toString(were_captured) + " columns have already been captured" : ""));
 
     for (const auto & column : columns)
         appendArgument(column);
@@ -278,15 +285,15 @@ void ColumnFunction::appendArguments(const ColumnsWithTypeAndName & columns)
 
 void ColumnFunction::appendArgument(const ColumnWithTypeAndName & column)
 {
-    const auto & argumnet_types = function->getArgumentTypes();
-
+    const auto & argument_types = function->getArgumentTypes();
     auto index = captured_columns.size();
-    if (!is_short_circuit_argument && !column.type->equals(*argumnet_types[index]))
-        throw Exception("Cannot capture column " + std::to_string(argumnet_types.size()) +
-                        " because it has incompatible type: got " + column.type->getName() +
-                        ", but " + argumnet_types[index]->getName() + " is expected.", ErrorCodes::LOGICAL_ERROR);
+    if (!is_short_circuit_argument && !column.type->equals(*argument_types[index]))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot capture column {} because it has incompatible type: "
+                        "got {}, but {} is expected.", argument_types.size(), column.type->getName(), argument_types[index]->getName());
 
-    captured_columns.push_back(column);
+    auto captured_column = column;
+    captured_column.column = captured_column.column->convertToFullColumnIfSparse();
+    captured_columns.push_back(std::move(captured_column));
 }
 
 DataTypePtr ColumnFunction::getResultType() const
@@ -303,20 +310,33 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
     auto captured = captured_columns.size();
 
     if (args != captured)
-        throw Exception("Cannot call function " + function->getName() + " because is has " + toString(args) +
-                        "arguments but " + toString(captured) + " columns were captured.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot call function {} because is has {} "
+                        "arguments but {} columns were captured.",
+                        function->getName(), toString(args), toString(captured));
 
     ColumnsWithTypeAndName columns = captured_columns;
-    IFunction::ShortCircuitSettings settings;
     /// Arguments of lazy executed function can also be lazy executed.
-    /// But we shouldn't execute arguments if this function is short circuit,
-    /// because it will handle lazy executed arguments by itself.
-    if (is_short_circuit_argument && !function->isShortCircuit(settings, args))
+    if (is_short_circuit_argument)
     {
-        for (auto & col : columns)
+        IFunction::ShortCircuitSettings settings;
+        /// We shouldn't execute all arguments if this function is short circuit,
+        /// because it will handle lazy executed arguments by itself.
+        /// Execute only arguments with disabled lazy execution.
+        if (function->isShortCircuit(settings, args))
         {
-            if (const ColumnFunction * arg = checkAndGetShortCircuitArgument(col.column))
-                col = arg->reduce();
+            for (size_t i : settings.arguments_with_disabled_lazy_execution)
+            {
+                if (const ColumnFunction * arg = checkAndGetShortCircuitArgument(columns[i].column))
+                    columns[i] = arg->reduce();
+            }
+        }
+        else
+        {
+            for (auto & col : columns)
+            {
+                if (const ColumnFunction * arg = checkAndGetShortCircuitArgument(col.column))
+                    col = arg->reduce();
+            }
         }
     }
 
@@ -326,7 +346,14 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
     if (is_function_compiled)
         ProfileEvents::increment(ProfileEvents::CompiledFunctionExecute);
 
-    res.column = function->execute(columns, res.type, elements_size);
+    res.column = function->execute(columns, res.type, elements_size, /* dry_run = */ false);
+    if (res.column->getDataType() != res.type->getColumnType())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Unexpected return type from {}. Expected {}. Got {}",
+            function->getName(),
+            res.type->getColumnType(),
+            res.column->getDataType());
     if (recursively_convert_result_to_full_column_if_low_cardinality)
     {
         res.column = recursiveRemoveLowCardinality(res.column);

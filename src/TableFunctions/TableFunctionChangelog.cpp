@@ -7,8 +7,8 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/IStorage.h>
-#include <Storages/Streaming/StorageMaterializedView.h>
-#include <Storages/Streaming/StorageStream.h>
+#include <Storages/MatView/StorageMaterializedView.h>
+#include <Storages/Stream/StorageStream.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/ProtonCommon.h>
 
@@ -38,7 +38,7 @@ TableFunctionChangelog::TableFunctionChangelog(const String & name_) : TableFunc
 void TableFunctionChangelog::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
     if (func_ast->children.size() != 1)
-        throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     ASTs asts;
 
@@ -66,28 +66,28 @@ void TableFunctionChangelog::parseArguments(const ASTPtr & func_ast, ContextPtr 
     if (!streaming)
         throw Exception(ErrorCodes::UNSUPPORTED, "`changelog` table function doesn't supports historical stream yet");
 
-    if (Streaming::isChangelogKeyedStorage(data_stream_semantic))
+    if (Streaming::isChangelogKVStorage(data_stream_semantic))
         throw Exception(ErrorCodes::UNSUPPORTED, "`changelog` table function doesn't support changelog stream yet");
 
     /// Here we already erased the stream name in the first argument
-    /// For versioned_kv stream, only `drop_late_rows` argument is allowed and it is optional
-    /// For versioned-kv stream, we don't allow end user specify the key columns / version column for now
+    /// For key-value stream, only `drop_late_rows` argument is allowed and it is optional
+    /// For key-value stream, we don't allow end user specify the key columns / version column for now
     /// since it already has these defined at storage layer. Changing to a different primary key columns / version column
     /// seems having no sense for now
-    /// changelog(versioned_kv, [true | false])
-    if (isVersionedKeyedStorage(data_stream_semantic) && node->arguments->children.size() >= 1)
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
+    /// changelog(kv|versioned_kv, [true | false])
+    if (isKeyValueStorage(data_stream_semantic) && node->arguments->children.size() >= 1)
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     if (node->arguments->children.empty())
     {
-        if (!isVersionedKeyedStorage(data_stream_semantic))
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
+        if (!isKeyValueStorage(data_stream_semantic))
+            throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
     }
     else if (node->arguments->children.size() == 1)
     {
         /// For other stream / query, we expect at least 1 primary key column and 1 version column arg if target stream is not versioned-kv
-        if (drop_late_rows && *drop_late_rows && !isVersionedKeyedStorage(data_stream_semantic))
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
+        if (drop_late_rows && *drop_late_rows && !isKeyValueStorage(data_stream_semantic))
+            throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
     }
 
     /// Create table func desc
@@ -104,7 +104,7 @@ std::pair<ASTs, std::optional<bool>> TableFunctionChangelog::checkAndExtractArgu
     /// changelog(stream | subquery, [key_col_1, [key_col2, ..., version_col]], [drop_late_rows])
     const auto & args = node->arguments->children;
     if (args.empty())
-        throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     /// changelog(stream)
     if (args.size() == 1)
@@ -118,7 +118,7 @@ std::pair<ASTs, std::optional<bool>> TableFunctionChangelog::checkAndExtractArgu
     if (auto * lit = args.back()->as<ASTLiteral>(); lit)
     {
         if (lit->value.getType() != Field::Types::Bool)
-            throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+            throw Exception::createRuntime(ErrorCodes::BAD_ARGUMENTS, help_message);
 
         drop_late_rows = lit->value.get<bool>();
         --end_pos;
@@ -128,7 +128,7 @@ std::pair<ASTs, std::optional<bool>> TableFunctionChangelog::checkAndExtractArgu
         /// if (!args[i]->as<ASTFunction>() && !args[i]->as<ASTIdentifier>())
         /// We only support identifier for key columns / version column
         if (!args[i]->as<ASTIdentifier>())
-            throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+            throw Exception::createRuntime(ErrorCodes::BAD_ARGUMENTS, help_message);
 
     return {std::move(args), drop_late_rows};
 }

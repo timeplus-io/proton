@@ -1,0 +1,56 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_clip(value int) RETURNS int LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_clip(value):
+          res = np.clip(value, 2, 8)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-32-1
+    type: stream
+    query: select test_clip(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) select number from numbers(1, 10);
+
+  - type: check
+    target_name: python-udf2-32-1
+    expected_result:
+      - [2, 1]
+      - [2 , 2]
+      - [3, 3]
+      - [4, 4]
+      - [5, 5]
+      - [6, 6]
+      - [7, 7]
+      - [8, 8]
+      - [8, 9]
+      - [8, 10]

@@ -2,6 +2,7 @@
 #include <QueryPipeline/StreamLocalLimits.h>
 
 /// proton: starts
+#include <IO/Progress.h>
 #include <base/ClockUtils.h>
 #include <Common/ProfileEvents.h>
 /// proton: ends
@@ -112,7 +113,11 @@ void ISource::work()
             {
                 has_input = true;
                 if (auto_progress && !read_progress_was_set)
+                {
                     progress(current_chunk.chunk.getNumRows(), current_chunk.chunk.bytes());
+                    if (progress_callback)
+                        progress_callback(Progress(DB::ReadProgress(current_chunk.chunk.getNumRows(), current_chunk.chunk.bytes())));
+                }
             }
         }
         else
@@ -121,9 +126,12 @@ void ISource::work()
         if (isCancelled())
             finished = true;
     }
-    catch (...)
+    catch (const std::exception & ex)
     {
         finished = true;
+        /// proton: starts
+        setLastErrorMessage(ex.what());
+        /// proton: ends
         throw;
     }
 }

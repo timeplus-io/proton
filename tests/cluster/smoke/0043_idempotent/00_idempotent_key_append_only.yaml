@@ -1,0 +1,107 @@
+tags:
+  - restapi
+  - append_only
+  - local-run
+
+description: Test idempotent keys on append-only stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test43_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test43_stream (i int, v string) settings shards=3, sharding_expr='weak_hash32(i)';
+
+  - type: wait
+    time: 2
+
+  - name: idempotent-0-1
+    type: stream
+    query: select count() from test43_stream;
+    schema:
+      - name: count()
+        type: uint64
+
+  - name: idempotent-0-2
+    type: stream
+    query: select count() from test43_stream settings enable_idempotent_processing=true;
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: rest
+    method: POST
+    url: /proton/v1/ingest/streams/test43_stream
+    header:
+      x-timeplus-idempotent-id: 1
+    data:
+      columns:
+        - i
+        - v
+      data:
+        - [1, 't1']
+
+  - type: wait
+    time: 2
+
+  - type: rest
+    method: POST
+    url: /proton/v1/ingest/streams/test43_stream
+    header:
+      x-timeplus-idempotent-id: 1
+    data:
+      columns:
+        - i
+        - v
+      data:
+        - [1, 't1']
+
+  - type: check
+    target_name: idempotent-0-1
+    expected_result:
+      - [1]
+      - [2]
+
+  - type: check
+    target_name: idempotent-0-2
+    expected_result:
+      - [1]
+
+  - type: wait
+    time: 1
+
+  - name: idempotent-0-3
+    type: stream
+    query: select count() from table(test43_stream);
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: idempotent-0-3
+    expected_result:
+      - [1]
+
+  - type: wait
+    time: 1
+
+  - name: idempotent-0-4
+    type: stream
+    query: select count() from test43_stream settings enable_idempotent_processing=true;
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: idempotent-0-4
+    expected_result: []

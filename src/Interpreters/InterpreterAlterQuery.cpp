@@ -8,7 +8,6 @@
 #include <Interpreters/QueryLog.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
-#include <Parsers/ASTIdentifier_fwd.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/MutationCommands.h>
@@ -17,25 +16,28 @@
 
 #include <base/insertAtEnd.h>
 
-#include <algorithm>
-
+/// proton: starts.
+#include <Interpreters/ApplyWithSubqueryVisitor.h>
+#include <Storages/StorageMergeTree.h>
+#include <Storages/Stream/storageUtil.h>
+/// proton: ends.
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int INCORRECT_QUERY;
-    extern const int NOT_IMPLEMENTED;
-    extern const int STREAM_IS_READ_ONLY;
-    extern const int UNKNOWN_STREAM;
+extern const int LOGICAL_ERROR;
+extern const int INCORRECT_QUERY;
+extern const int NOT_IMPLEMENTED;
+extern const int STREAM_IS_READ_ONLY;
+extern const int UNKNOWN_STREAM;
 }
 
-InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) : WithMutableContext(context_), query_ptr(query_ptr_)
+InterpreterAlterQuery::InterpreterAlterQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
+    : WithMutableContext(context_), query_ptr(query_ptr_)
 {
 }
-
 
 BlockIO InterpreterAlterQuery::execute()
 {
@@ -53,7 +55,6 @@ BlockIO InterpreterAlterQuery::execute()
     throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown alter object type");
 }
 
-
 BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
 {
     BlockIO res;
@@ -67,12 +68,21 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     checkStorageSupportsTransactionsIfNeeded(table, getContext());
     if (table->isStaticStorage())
         throw Exception(ErrorCodes::STREAM_IS_READ_ONLY, "Stream is read-only");
+
+    /// proton: starts.
+    if (alter.is_view && !table->isView())
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not a View", table_id.getNameForLogs());
+    /// proton: ends.
+
     auto table_lock = table->lockForShare(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
     AddDefaultDatabaseVisitor visitor(getContext(), table_id.getDatabaseName());
     ASTPtr command_list_ptr = alter.command_list->ptr();
+    /// proton: starts. Expand CTE before filling default database
+    ApplyWithSubqueryVisitor().visit(command_list_ptr);
+    /// proton: ends.
     visitor.visit(command_list_ptr);
 
     AlterCommands alter_commands;
@@ -81,6 +91,11 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     for (const auto & child : alter.command_list->children)
     {
         auto * command_ast = child->as<ASTAlterCommand>();
+
+        /// proton: starts.
+        checkAlterCommandForStreaming(table, command_ast);
+        /// proton: ends.
+
         if (auto alter_command = AlterCommand::parse(command_ast))
         {
             alter_commands.emplace_back(std::move(*alter_command));
@@ -92,24 +107,31 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         else if (auto mut_command = MutationCommand::parse(command_ast))
         {
             if (mut_command->type == MutationCommand::MATERIALIZE_TTL && !metadata_snapshot->hasAnyTTL())
-                throw Exception("Cannot MATERIALIZE TTL as there is no TTL for stream "
-                    + table->getStorageID().getNameForLogs(), ErrorCodes::INCORRECT_QUERY);
+                throw Exception(ErrorCodes::INCORRECT_QUERY, "Cannot MATERIALIZE TTL as there is no TTL set for stream {}",
+                    table->getStorageID().getNameForLogs());
 
             mutation_commands.emplace_back(std::move(*mut_command));
         }
         else
-            throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong parameter type in ALTER query");
     }
 
     if (!mutation_commands.empty())
     {
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
-        MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
+        MutationsInterpreter::Settings settings(false);
+        MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), settings).validate();
         table->mutate(mutation_commands, getContext());
     }
 
     if (!partition_commands.empty())
     {
+        if (!table->as<StorageStream>() && !table->as<StorageMergeTree>())
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "Unsupported {} alter type for storage {}, only support to drop partition for Stream or MergeTree now",
+                partition_commands.front().typeToString(), table->getName());
+
         table->checkAlterPartitionIsPossible(partition_commands, metadata_snapshot, getContext()->getSettingsRef());
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())
@@ -120,7 +142,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     {
         auto alter_lock = table->lockForAlter(getContext()->getSettingsRef().lock_acquire_timeout);
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
-        alter_commands.validate(metadata, getContext());
+        alter_commands.validate(table, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
         table->alter(alter_commands, getContext(), alter_lock);
@@ -143,7 +165,7 @@ BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
         if (auto alter_command = AlterCommand::parse(command_ast))
             alter_commands.emplace_back(std::move(*alter_command));
         else
-            throw Exception("Wrong parameter type in ALTER DATABASE query", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong parameter type in ALTER DATABASE query");
     }
 
     if (!alter_commands.empty())
@@ -169,24 +191,25 @@ BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
 
     return res;
 }
+
 AccessRightsElements InterpreterAlterQuery::getRequiredAccess() const
 {
     AccessRightsElements required_access;
     const auto & alter = query_ptr->as<ASTAlterQuery &>();
     for (const auto & child : alter.command_list->children)
-        insertAtEnd(required_access, getRequiredAccessForCommand(child->as<ASTAlterCommand&>(), alter.getDatabase(), alter.getTable()));
+        insertAtEnd(required_access, getRequiredAccessForCommand(child->as<ASTAlterCommand &>(), alter.getDatabase(), alter.getTable()));
     return required_access;
 }
 
 
-AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const ASTAlterCommand & command, const String & database, const String & table)
+AccessRightsElements
+InterpreterAlterQuery::getRequiredAccessForCommand(const ASTAlterCommand & command, const String & database, const String & table)
 {
     AccessRightsElements required_access;
 
     auto column_name = [&]() -> String { return getIdentifierName(command.column); };
     auto column_name_from_col_decl = [&]() -> std::string_view { return command.col_decl->as<ASTColumnDeclaration &>().name; };
-    auto column_names_from_update_assignments = [&]() -> std::vector<std::string_view>
-    {
+    auto column_names_from_update_assignments = [&]() -> std::vector<std::string_view> {
         std::vector<std::string_view> column_names;
         for (const ASTPtr & assignment_ast : command.update_assignments->children)
             column_names.emplace_back(assignment_ast->as<const ASTAssignment &>().column_name);
@@ -296,7 +319,8 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_MATERIALIZE_TTL, database, table);
             break;
         }
-        case ASTAlterCommand::RESET_SETTING: [[fallthrough]];
+        case ASTAlterCommand::RESET_SETTING:
+            [[fallthrough]];
         case ASTAlterCommand::MODIFY_SETTING:
         {
             required_access.emplace_back(AccessType::ALTER_SETTINGS, database, table);
@@ -318,7 +342,8 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
         {
             switch (command.move_destination_type)
             {
-                case DataDestinationType::DISK: [[fallthrough]];
+                case DataDestinationType::DISK:
+                    [[fallthrough]];
                 case DataDestinationType::VOLUME:
                     required_access.emplace_back(AccessType::ALTER_MOVE_PARTITION, database, table);
                     break;
@@ -346,9 +371,12 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_FETCH_PARTITION, database, table);
             break;
         }
-        case ASTAlterCommand::FREEZE_PARTITION: [[fallthrough]];
-        case ASTAlterCommand::FREEZE_ALL: [[fallthrough]];
-        case ASTAlterCommand::UNFREEZE_PARTITION: [[fallthrough]];
+        case ASTAlterCommand::FREEZE_PARTITION:
+            [[fallthrough]];
+        case ASTAlterCommand::FREEZE_ALL:
+            [[fallthrough]];
+        case ASTAlterCommand::UNFREEZE_PARTITION:
+            [[fallthrough]];
         case ASTAlterCommand::UNFREEZE_ALL:
         {
             required_access.emplace_back(AccessType::ALTER_FREEZE_PARTITION, database, table);
@@ -359,6 +387,14 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_VIEW_MODIFY_QUERY, database, table);
             break;
         }
+        /// proton: starts.
+        case ASTAlterCommand::MODIFY_QUERY_SETTING:
+        case ASTAlterCommand::RESET_QUERY_SETTING:
+        {
+            required_access.emplace_back(AccessType::ALTER_VIEW_MODIFY_QUERY, database, table);
+            break;
+        }
+        /// proton: ends.
         case ASTAlterCommand::RENAME_COLUMN:
         {
             required_access.emplace_back(AccessType::ALTER_RENAME_COLUMN, database, table, column_name());
@@ -369,7 +405,8 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_DATABASE_SETTINGS, database, table);
             break;
         }
-        case ASTAlterCommand::NO_TYPE: break;
+        case ASTAlterCommand::NO_TYPE:
+            break;
         case ASTAlterCommand::MODIFY_COMMENT:
         {
             required_access.emplace_back(AccessType::ALTER_MODIFY_COMMENT, database, table);
@@ -389,7 +426,7 @@ void InterpreterAlterQuery::extendQueryLogElemImpl(QueryLogElement & elem, const
     {
         // Alter queries already have their target table inserted into `elem`.
         if (elem.query_tables.size() != 1)
-            throw Exception("Alter query should have target stream recorded already", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Alter query should have target stream recorded already");
 
         String prefix = *elem.query_tables.begin() + ".";
         for (const auto & child : alter.command_list->children)

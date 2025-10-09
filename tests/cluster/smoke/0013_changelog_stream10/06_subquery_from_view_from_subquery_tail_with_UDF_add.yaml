@@ -1,0 +1,107 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - subquery
+  - subquery/view/materialized_view
+  - tail/aggr
+  - UDF
+description: subquery from view from subquery tail with UDF, add
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+      settings mode='versioned_kv', shards=3;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create view if not exists test14_view2_10 as
+        (select i,
+                k2
+         from
+           (select i,
+                   k2
+            from test14_multishard_10
+            where k1 = 1 )
+         where k2 != 'c' );
+  - type: wait
+    time: 2
+
+  - name: "1478"
+    type: stream
+    query: |
+      select lag(i, 1),
+             k2
+      from test14_view2_10;
+    schema: 
+      - name: lag(i, 1)
+        type: float32
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (1, 1, 'a');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (2, 0, 'b');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (3, 1, 'z');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (4, 0, 'd');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (5, 1, 'c');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (6, 0, 'y');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (7, 1, 'x');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (8, 1, 'c');
+
+  - type: check
+    target_name: "1478"
+    expected_result:
+      - [0, a]
+      - [1, z]
+      - [3, x]

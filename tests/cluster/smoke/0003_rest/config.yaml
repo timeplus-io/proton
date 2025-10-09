@@ -1,0 +1,5 @@
+name: rest
+description: test_rests covering the steam query smoke cases.
+tags:
+  - smoke
+  - restapi

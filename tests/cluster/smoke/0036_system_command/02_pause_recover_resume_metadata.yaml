@@ -1,0 +1,63 @@
+tags:
+  - system_command
+
+description: |
+  Tests covering the pause metadata scenario.
+  Main steps:
+  - system pause stream __tp_meta 0
+  - system recover stream __tp_meta 0
+  - system unpause stream __tp_meta 0
+
+cluster:
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop view if exists test36_mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test36_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: system pause stream __tp_meta 0;
+  - type: wait
+    time: 1
+
+  - name: recover-2-1
+    type: stream
+    query: |
+      CREATE RANDOM STREAM test36_stream
+      (
+        `device` string DEFAULT concat('device', to_string(rand() % 4)),
+        `location` string DEFAULT concat('city', to_string(rand() % 10)),
+        `temperature` float DEFAULT (rand() % 1000) / 10
+      );
+
+  - type: check
+    target_name: recover-2-1
+    expected_result:
+      - ['error_code:2619'] # Code: 2619. DB::Exception: Received from 127.0.0.1:8463. DB::Exception: Failed to create stream 'default.test36_stream'
+
+  - type: query
+    sql: system recover stream __tp_meta 0;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: system unpause stream __tp_meta 0;
+  - type: wait
+    time: 1
+
+  - name: recover-2-2
+    type: query
+    sql: show streams;
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: recover-2-2
+    expected_result: []

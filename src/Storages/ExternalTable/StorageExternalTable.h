@@ -1,59 +1,96 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <QueryPipeline/Pipe.h>
 #include <Storages/ExternalTable/ExternalTableSettings.h>
-#include <Storages/ExternalTable/IExternalTable.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageFactory.h>
+#include <Common/CurrentMetrics.h>
 
 #include <base/shared_ptr_helper.h>
+
+namespace CurrentMetrics
+{
+extern const Metric LocalThread;
+extern const Metric LocalThreadActive;
+}
 
 namespace DB
 {
 
-class StorageExternalTable final : public shared_ptr_helper<StorageExternalTable>, public IStorage, public WithContext
+class StorageExternalTable : public IStorage, public WithContext, public shared_ptr_helper<StorageExternalTable>
 {
     friend struct shared_ptr_helper<StorageExternalTable>;
 
 public:
     String getName() const override { return "ExternalTable"; }
 
+    bool isLocal() const override { return false; }
     bool isRemote() const override { return true; }
     bool isExternalTable() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
+    void startup() override;
 
-    void startup() override { external_table->startup(); }
-    void shutdown() override { external_table->shutdown(); }
-
-    Pipe read(
+    void read(
+        QueryPlan & query_plan,
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
-        ContextPtr context_,
+        ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         size_t num_streams) override;
 
-    SinkToStoragePtr write(
-        const ASTPtr & /*query*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
-        ContextPtr /*context*/) override;
+    SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
 
-    String getType() const { return external_table->getType(); }
+    virtual String getType() const = 0;
+
+    void updateTableSchema(bool retry_in_background);
 
 protected:
     StorageExternalTable(
         const StorageID & table_id,
-        std::unique_ptr<ExternalTableSettings> settings,
-        const String & comment,
-        bool is_attach,
+        const StorageInMemoryMetadata & storage_metadata,
+        std::unique_ptr<ExternalTableSettings> settings_,
+        bool attach,
         ContextPtr context_);
 
-private:
-    void fetchColumnsDescription();
+    std::unique_ptr<ExternalTableSettings> settings;
 
-    IExternalTablePtr external_table;
-    ThreadPool background_jobs {1};
+private:
+    void updateTableSchema();
+    /// Get the table schema from the external system.
+    virtual void getTableSchema(ContextPtr, ColumnsDescription &) { }
+
+    virtual void readImpl(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams);
+
+    Pipe read(
+        const Names & /*column_names*/,
+        const StorageSnapshotPtr & /*storage_snapshot*/,
+        SelectQueryInfo & /*query_info*/,
+        ContextPtr /*context*/,
+        QueryProcessingStage::Enum /*processed_stage*/,
+        size_t /*max_block_size*/,
+        size_t /*num_streams*/) override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method read is not supported by storage {}", getName());
+    }
+
+    virtual SinkToStoragePtr writeImpl(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/)
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method write is not supported by storage {}", getName());
+    }
+
+    const bool attach{false};
+    std::unique_ptr<ThreadPool> background_jobs;
 };
 
 }

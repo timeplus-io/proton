@@ -94,7 +94,7 @@ namespace
             return getGrantQueriesImpl(*user, access_control, attach_mode);
         if (const Role * role = typeid_cast<const Role *>(&entity))
             return getGrantQueriesImpl(*role, access_control, attach_mode);
-        throw Exception(entity.formatTypeWithName() + " is expected to be user or role", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "{} is expected to be user or role", entity.formatTypeWithName());
     }
 
 }
@@ -139,10 +139,10 @@ QueryPipeline InterpreterShowGrantsQuery::executeImpl()
 std::vector<AccessEntityPtr> InterpreterShowGrantsQuery::getEntities() const
 {
     const auto & access = getContext()->getAccess();
-    const auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
 
     const auto & show_query = query_ptr->as<ASTShowGrantsQuery &>();
-    auto ids = RolesOrUsersSet{*show_query.for_roles, access_control, getContext()->getUserID()}.getMatchingIDs(access_control);
+    auto ids = RolesOrUsersSet{*show_query.for_roles, *access_control, getContext()->getUserID()}.getMatchingIDs(*access_control);
 
     CachedAccessChecking show_users(access, AccessType::SHOW_USERS);
     CachedAccessChecking show_roles(access, AccessType::SHOW_ROLES);
@@ -154,7 +154,7 @@ std::vector<AccessEntityPtr> InterpreterShowGrantsQuery::getEntities() const
     std::vector<AccessEntityPtr> entities;
     for (const auto & id : ids)
     {
-        auto entity = access_control.tryRead(id);
+        auto entity = access_control->tryRead(id);
         if (!entity)
             continue;
 
@@ -177,11 +177,11 @@ std::vector<AccessEntityPtr> InterpreterShowGrantsQuery::getEntities() const
 ASTs InterpreterShowGrantsQuery::getGrantQueries() const
 {
     auto entities = getEntities();
-    const auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
 
     ASTs grant_queries;
     for (const auto & entity : entities)
-        insertAtEnd(grant_queries, getGrantQueries(*entity, access_control));
+        insertAtEnd(grant_queries, getGrantQueries(*entity, *access_control));
 
     return grant_queries;
 }

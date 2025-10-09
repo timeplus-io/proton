@@ -6,7 +6,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Dictionaries/DictionaryStructure.h>
-
+#include <Databases/removeWhereConditionPlaceholder.h>
 
 namespace DB
 {
@@ -24,7 +24,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-static constexpr std::string_view CONDITION_PLACEHOLDER_TO_REPLACE_VALUE = "{condition}";
 
 ExternalQueryBuilder::ExternalQueryBuilder(
     const DictionaryStructure & dict_struct_,
@@ -82,10 +81,8 @@ std::string ExternalQueryBuilder::composeLoadAllQuery() const
         writeChar(';', out);
         return out.str();
     }
-    else
-    {
-        return query;
-    }
+
+    return removeWhereConditionPlaceholder(query);
 }
 
 void ExternalQueryBuilder::composeLoadAllQuery(WriteBuffer & out) const
@@ -221,29 +218,27 @@ std::string ExternalQueryBuilder::composeUpdateQuery(const std::string & update_
 
         return out.str();
     }
-    else
+
+    writeString(query, out);
+
+    auto condition_position = query.find(CONDITION_PLACEHOLDER_TO_REPLACE_VALUE);
+    if (condition_position == std::string::npos)
     {
-        writeString(query, out);
+        writeString(" WHERE ", out);
+        composeUpdateCondition(update_field, time_point, out);
+        writeString(";", out);
 
-        auto condition_position = query.find(CONDITION_PLACEHOLDER_TO_REPLACE_VALUE);
-        if (condition_position == std::string::npos)
-        {
-            writeString(" WHERE ", out);
-            composeUpdateCondition(update_field, time_point, out);
-            writeString(";", out);
-
-            return out.str();
-        }
-
-        WriteBufferFromOwnString condition_value_buffer;
-        composeUpdateCondition(update_field, time_point, condition_value_buffer);
-        const auto & condition_value = condition_value_buffer.str();
-
-        auto query_copy = query;
-        query_copy.replace(condition_position, CONDITION_PLACEHOLDER_TO_REPLACE_VALUE.size(), condition_value);
-
-        return query_copy;
+        return out.str();
     }
+
+    WriteBufferFromOwnString condition_value_buffer;
+    composeUpdateCondition(update_field, time_point, condition_value_buffer);
+    const auto & condition_value = condition_value_buffer.str();
+
+    auto query_copy = query;
+    query_copy.replace(condition_position, CONDITION_PLACEHOLDER_TO_REPLACE_VALUE.size(), condition_value);
+
+    return query_copy;
 }
 
 
@@ -306,34 +301,32 @@ std::string ExternalQueryBuilder::composeLoadIdsQuery(const std::vector<UInt64> 
 
         return out.str();
     }
-    else
+
+    writeString(query, out);
+
+    auto condition_position = query.find(CONDITION_PLACEHOLDER_TO_REPLACE_VALUE);
+    if (condition_position == std::string::npos)
     {
-        writeString(query, out);
+        writeString(" WHERE ", out);
+        composeIdsCondition(ids, out);
+        writeString(";", out);
 
-        auto condition_position = query.find(CONDITION_PLACEHOLDER_TO_REPLACE_VALUE);
-        if (condition_position == std::string::npos)
-        {
-            writeString(" WHERE ", out);
-            composeIdsCondition(ids, out);
-            writeString(";", out);
-
-            return out.str();
-        }
-
-        WriteBufferFromOwnString condition_value_buffer;
-        composeIdsCondition(ids, condition_value_buffer);
-        const auto & condition_value = condition_value_buffer.str();
-
-        auto query_copy = query;
-        query_copy.replace(condition_position, CONDITION_PLACEHOLDER_TO_REPLACE_VALUE.size(), condition_value);
-
-        return query_copy;
+        return out.str();
     }
+
+    WriteBufferFromOwnString condition_value_buffer;
+    composeIdsCondition(ids, condition_value_buffer);
+    const auto & condition_value = condition_value_buffer.str();
+
+    auto query_copy = query;
+    query_copy.replace(condition_position, CONDITION_PLACEHOLDER_TO_REPLACE_VALUE.size(), condition_value);
+
+    return query_copy;
 }
 
 
 std::string ExternalQueryBuilder::composeLoadKeysQuery(
-    const Columns & key_columns, const std::vector<size_t> & requested_rows, LoadKeysMethod method, size_t partition_key_prefix) const
+    const Columns & key_columns, const std::vector<size_t> & requested_rows, LoadKeysMethod method, size_t partition_key_prefix, bool clickhouse_final) const
 {
     if (!dict_struct.key)
         throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Composite key required for method");
@@ -378,6 +371,9 @@ std::string ExternalQueryBuilder::composeLoadKeysQuery(
 
         writeQuoted(table, out);
 
+        if (clickhouse_final)
+            writeString(" FINAL ", out);
+
         writeString(" WHERE ", out);
 
         if (!where.empty())
@@ -391,35 +387,42 @@ std::string ExternalQueryBuilder::composeLoadKeysQuery(
                 writeString(" AND ", out);
         }
 
-        composeKeysCondition(key_columns, requested_rows, method, partition_key_prefix, out);
+        /// proton : starts. When requested rows is empty, it may end up with `(key) IN ()` expression
+        /// which is not valid. In this case, we use `1 = 0` predicts to avoid query data back from remote
+        /// server since we are requesting zero rows
+        if (!requested_rows.empty())
+            composeKeysCondition(key_columns, requested_rows, method, partition_key_prefix, out);
+        else
+            writeString("1 = 0", out);
+        /// proton : ends
 
         writeString(";", out);
 
         return out.str();
     }
-    else
+
+    auto condition_position = query.find(CONDITION_PLACEHOLDER_TO_REPLACE_VALUE);
+    if (condition_position == std::string::npos)
     {
+        writeString("SELECT * FROM (", out);
         writeString(query, out);
+        writeString(") AS subquery WHERE ", out);
+        composeKeysCondition(key_columns, requested_rows, method, partition_key_prefix, out);
+        writeString(";", out);
 
-        auto condition_position = query.find(CONDITION_PLACEHOLDER_TO_REPLACE_VALUE);
-        if (condition_position == std::string::npos)
-        {
-            writeString(" WHERE ", out);
-            composeKeysCondition(key_columns, requested_rows, method, partition_key_prefix, out);
-            writeString(";", out);
-
-            return out.str();
-        }
-
-        WriteBufferFromOwnString condition_value_buffer;
-        composeKeysCondition(key_columns, requested_rows, method, partition_key_prefix, condition_value_buffer);
-        const auto & condition_value = condition_value_buffer.str();
-
-        auto query_copy = query;
-        query_copy.replace(condition_position, CONDITION_PLACEHOLDER_TO_REPLACE_VALUE.size(), condition_value);
-
-        return query_copy;
+        return out.str();
     }
+
+    writeString(query, out);
+
+    WriteBufferFromOwnString condition_value_buffer;
+    composeKeysCondition(key_columns, requested_rows, method, partition_key_prefix, condition_value_buffer);
+    const auto & condition_value = condition_value_buffer.str();
+
+    auto query_copy = query;
+    query_copy.replace(condition_position, CONDITION_PLACEHOLDER_TO_REPLACE_VALUE.size(), condition_value);
+
+    return query_copy;
 }
 
 
@@ -513,6 +516,16 @@ void ExternalQueryBuilder::composeUpdateCondition(const std::string & update_fie
 
 void ExternalQueryBuilder::composeIdsCondition(const std::vector<UInt64> & ids, WriteBuffer & out) const
 {
+    /// proton : starts. When requested rows is empty, it may end up with `(key) IN ()` expression
+    /// which is not valid. In this case, we use `1 = 0` predicts to avoid query data back from remote
+    /// server since we are requesting zero rows
+    if (ids.empty())
+    {
+        writeString("1 = 0", out);
+        return;
+    }
+    /// proton: ends
+
     writeQuoted(dict_struct.id->name, out);
     writeString(" IN (", out);
 

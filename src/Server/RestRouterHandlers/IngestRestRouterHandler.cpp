@@ -1,4 +1,4 @@
-#include "IngestRestRouterHandler.h"
+#include <Server/RestRouterHandlers/IngestRestRouterHandler.h>
 
 #include <IO/ConcatReadBuffer.h>
 #include <IO/ReadBufferFromString.h>
@@ -10,8 +10,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_REQUEST_PARAMETER;
-    extern const int INCORRECT_DATA;
+extern const int BAD_REQUEST_PARAMETER;
+extern const int INCORRECT_DATA;
 }
 
 std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) const
@@ -19,26 +19,18 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     const auto & table = getPathParameter("stream", "");
 
     if (table.empty())
-    {
         return {jsonErrorResponse("Stream is empty", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
-    }
 
     if (hasQueryParameter("mode"))
-    {
-        const auto & mode = getQueryParameter("mode");
-        auto ingest_mode = toIngestMode(mode);
-        if (ingest_mode != IngestMode::INVALID)
-            query_context->setIngestMode(ingest_mode);
-        else
-            return {jsonErrorResponse("No support ingest mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
-    }
+        query_context->setIngestMode(ingestMode(getQueryParameter("mode"), IngestMode::Sync));
 
     query_context->setSetting("output_format_parallel_formatting", false);
     query_context->setSetting("date_time_input_format", String{"best_effort"});
-    
+    query_context->setSetting("input_format_json_read_numbers_as_strings", true);
+
     /// Request body can be compressed using algorithm specified in the Content-Encoding header.
-    auto input_maybe_compressed = wrapReadBufferWithCompressionMethod(
-        wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
+    auto input_maybe_compressed
+        = wrapReadBufferWithCompressionMethod(wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
 
     /// Parse JSON into ReadBuffers
     PODArray<char> parse_buf;
@@ -48,11 +40,12 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     {
         LOG_ERROR(
             log,
-            "Ingest to database {}, table {} failed with invalid JSON request, exception = {}",
+            "Ingest to database {}, table {} failed with invalid JSON request: {}, exception = {}",
             database,
             table,
             error,
             ErrorCodes::INCORRECT_DATA);
+
         return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
@@ -62,25 +55,26 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     {
         LOG_ERROR(
             log,
-            "Ingest to database {}, table {} failed with invalid request, exception = {}",
+            "Ingest to database {}, table {} failed with invalid request: {}, exception = {}",
             database,
             table,
             error,
             ErrorCodes::INCORRECT_DATA);
+
         return {jsonErrorResponse(error, ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
-    query = "INSERT into " + database + ".`" + table + "` " + cols + " FORMAT JSONCompactEachRow ";
+    query = fmt::format("INSERT into {}.`{}` {} FORMAT JSONCompactEachRow ", database, table, cols);
 
     auto it = buffers.find("data");
     if (it == buffers.end())
     {
         LOG_ERROR(
             log,
-            "Ingest to database {}, table {} failed with invalid request, exception = {}",
+            "Ingest to database {}, table {} failed with invalid request: missing 'data' field, exception = {}",
             database,
             table,
-            "Invalid Request, missing 'data' field",
             ErrorCodes::INCORRECT_DATA);
+
         return {jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
 
@@ -97,12 +91,6 @@ std::pair<String, Int32> IngestRestRouterHandler::execute(ReadBuffer & input) co
     /// Send back ingest response
     Poco::JSON::Object resp;
     resp.set("request_id", query_context->getCurrentQueryId());
-    const auto & poll_id = query_context->getQueryStatusPollId();
-    if (!poll_id.empty())
-    {
-        resp.set("poll_id", poll_id);
-        resp.set("channel", query_context->getChannel());
-    }
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
 
@@ -113,19 +101,24 @@ inline bool IngestRestRouterHandler::parseColumns(JSONReadBuffers & buffers, Str
 {
     error.clear();
     auto it = buffers.find("columns");
-    String query;
     if (it == buffers.end())
     {
         error = "Invalid Request, 'columns' field is missing";
         return false;
     }
+
     char * begin = it->second->internalBuffer().begin();
     char * end = it->second->internalBuffer().end();
 
+    /// Converting `[[...], [...], ...]` in JSON payload to `(...), (...), ...` which is friendly to
+    /// insert data parser like INSERT INTO ... VALUES (...), (...) , ...`
     while (begin < end && *begin != '[')
         ++begin;
+
     if (*begin == '[')
+    {
         *begin = '(';
+    }
     else
     {
         error = "Invalid Request, 'columns' field is invalid";
@@ -134,8 +127,11 @@ inline bool IngestRestRouterHandler::parseColumns(JSONReadBuffers & buffers, Str
 
     while (end > begin && *end != ']')
         --end;
+
     if (*end == ']')
+    {
         *end = ')';
+    }
     else
     {
         error = "Invalid Request, 'columns' field is invalid";

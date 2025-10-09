@@ -1,0 +1,55 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(array(int)), valueb array(array(int)));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_sub(valuea array(array(int)), valueb array(array(int))) RETURNS array(array(float64)) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_sub(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              df_a = pd.DataFrame(a, columns=['a','c'])
+              df_b = pd.DataFrame(b, columns=['b','c'])
+              df_sub = df_a.sub(df_b, fill_value=0).values.tolist()
+              res.append(df_sub)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-8-1
+    type: stream
+    query: select test_df_sub(valuea, valueb) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(float64))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb) values 
+          ([[1, 2], [3, 4]], [[5, 6], [7, 8]])
+          ([[9, 10], [11, 12]], [[13, 14], [15, 16]]);
+
+  - type: check
+    target_name: python-udf3-8-1
+    expected_result:
+      - [[[1, -5, -4], [3, -7, -4]]]
+      - [[[9, -13, -4], [11, -15, -4]]]

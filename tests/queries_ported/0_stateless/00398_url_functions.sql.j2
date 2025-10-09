@@ -7,7 +7,7 @@ SELECT protocol('http://127.0.0.1:443/') AS Scheme;
 SELECT protocol('//127.0.0.1:443/') AS Scheme;
 
 SELECT '====HOST====';
-{% for suffix in ['', 'rfc'] -%}
+{% for suffix in ['', '_rfc'] -%}
 
 SELECT domain{{ suffix }}('http://paul@www.example.com:80/') AS Host;
 SELECT domain{{ suffix }}('user:password@example.com:8080') AS Host;
@@ -61,7 +61,7 @@ SELECT decode_url_component(path_full('//127.0.0.1/?query=hello%20world+foo%2Bba
 SELECT decode_url_component(path_full('http://127.0.0.1/?query=hello%20world+foo%2Bbar')) AS Path;
 SELECT decode_url_component(materialize(path_full('http://127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
 SELECT decode_url_component(materialize(path_full('//127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
-SELECT decode_url_form_component(materialize(path_ull('//127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
+SELECT decode_url_form_component(materialize(path_full('//127.0.0.1/?query=hello%20world+foo%2Bbar'))) AS Path;
 SELECT path('http://127.0.0.1') AS Path;
 SELECT path('http://127.0.0.1/a/b/c') AS Path;
 SELECT path('http://127.0.0.1:443/a/b/c') AS Path;
@@ -108,7 +108,7 @@ SELECT decode_url_form_component(encode_url_form_component('http://paul@127.0.0.
 
 SELECT '====CUT TO FIRST SIGNIFICANT SUBDOMAIN====';
 
-{% for suffix in ['', 'rfc'] -%}
+{% for suffix in ['', '_rfc'] -%}
 SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com');
 SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com:1234');
 SELECT cut_to_first_significant_subdomain{{ suffix }}('http://www.example.com/a/b/c');
@@ -124,7 +124,7 @@ SELECT cut_to_first_significant_subdomain{{ suffix }}('com');
 
 SELECT '====CUT TO FIRST SIGNIFICANT SUBDOMAIN WITH WWW====';
 
-{% for suffix in ['', 'rfc'] -%}
+{% for suffix in ['', '_rfc'] -%}
 SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://com');
 SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.com');
 SELECT cut_to_first_significant_subdomain_with_www{{ suffix }}('http://www.example.com');

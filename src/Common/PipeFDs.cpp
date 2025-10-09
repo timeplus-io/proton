@@ -25,7 +25,7 @@ void LazyPipeFDs::open()
 {
     for (int & fd : fds_rw)
         if (fd >= 0)
-            throw Exception("Pipe is already opened", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Pipe is already opened");
 
 #ifndef OS_DARWIN
     if (0 != pipe2(fds_rw, O_CLOEXEC))
@@ -97,7 +97,7 @@ void LazyPipeFDs::setNonBlockingReadWrite()
 void LazyPipeFDs::tryIncreaseSize(int desired_size)
 {
 #if defined(OS_LINUX)
-    Poco::Logger * log = &Poco::Logger::get("Pipe");
+    LoggerPtr log = getLogger("Pipe");
 
     /** Increase pipe size to avoid slowdown during fine-grained trace collection.
       */

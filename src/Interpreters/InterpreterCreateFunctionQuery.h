@@ -22,7 +22,10 @@ private:
     ASTPtr query_ptr;
 
     /// proton: starts
-    BlockIO handleUDF(bool throw_if_exists, bool replace_if_exists);
+    BlockIO handleJavaScriptUDF(bool throw_if_exists, bool replace_if_exists);
+    BlockIO handlePythonUDF(bool throw_if_exists, bool replace_if_exists);
+    BlockIO handleRemoteUDF(bool throw_if_exists, bool replace_if_exists);
+    BlockIO handleSQLUDF(bool throw_if_exists, bool replace_if_exists);
     /// proton: ends
 };
 

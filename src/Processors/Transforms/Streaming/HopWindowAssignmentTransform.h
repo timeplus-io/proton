@@ -13,7 +13,7 @@ public:
 
     ~HopWindowAssignmentTransform() override = default;
 
-    String getName() const override { return "StreamingHopWindowAssignmentTransform"; }
+    String getName() const override { return "HopWindowAssignmentTransform"; }
 
 private:
     void assignWindow(Columns & columns) const override;

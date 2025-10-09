@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AggregateFunctionMinMax.h"
+#include <AggregateFunctions/Streaming/AggregateFunctionMinMax.h>
 
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>

@@ -22,6 +22,6 @@ public:
     virtual ~TCPServerConnectionFactory() = default;
 
     /// Same as Poco::Net::TCPServerConnectionFactory except we can pass the TCPServer
-    virtual Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket, TCPServer & tcp_server) = 0;
+    virtual std::shared_ptr<Poco::Net::TCPServerConnection> createConnection(const Poco::Net::StreamSocket & socket, TCPServer & tcp_server) = 0; /// proton : use std::shared_ptr
 };
 }

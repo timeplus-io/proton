@@ -1,0 +1,53 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(float64), valueb array(float64));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_sem(valuea array(float64), valueb array(float64)) RETURNS array(float64) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_sem(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              df = pd.DataFrame(zip(a,b), columns=['a', 'b'])
+              df_sem = df.sem().tolist()
+              res.append(df_sem)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-31-1
+    type: stream
+    query: select test_df_sem(valuea, valueb) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float64)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb) values 
+          ([4, 5, 6], [4, 1, 1]) ([1, 2, 3], [6, 6, 6]);
+
+  - type: check
+    target_name: python-udf3-31-1
+    expected_result:
+      - [[0.5773502691896258, 1.0]]
+      - [[0.5773502691896258, 0.0]]

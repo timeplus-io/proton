@@ -45,31 +45,59 @@ protected:
 class ParserIdentifier : public IParserBase
 {
 public:
-    explicit ParserIdentifier(bool allow_query_parameter_ = false) : allow_query_parameter(allow_query_parameter_) {}
+    explicit ParserIdentifier(bool allow_query_parameter_ = false, Highlight highlight_type_ = Highlight::identifier)
+        : allow_query_parameter(allow_query_parameter_), highlight_type(highlight_type_) {}
 
 protected:
     const char * getName() const override { return "identifier"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
     bool allow_query_parameter;
+    Highlight highlight_type;
+};
+
+
+/** An identifier for tables written as string literal, for example, 'mytable.avro'
+  */
+class ParserTableAsStringLiteralIdentifier : public IParserBase
+{
+public:
+    explicit ParserTableAsStringLiteralIdentifier() = default;
+
+protected:
+    const char * getName() const override { return "string literal table identifier"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+    /// Highlight highlight() const override { return Highlight::identifier; }
 };
 
 
 /** An identifier, possibly containing a dot, for example, x_yz123 or `something special` or Hits.EventTime,
- *  possibly with UUID clause like `db name`.`table name` UUID 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+ *  possibly with UUID clause like `db name`.`table name` UUID 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'.
+ *  There is also special delimiters `.:` and `.^` for JSON type subcolumns. In case of special delimiter
+ *  the next identifier part after it will include special delimiter and be back quoted always: json.a.b.:UInt32 -> ['json', 'a', 'b', ':`UInt32`'].
+ *  It's needed to distinguish identifiers json.a.b.:UInt32 and json.a.b.`:UInt32`.
+ *  There is also a special syntax sugar for reading JSON subcolumns of type Array(JSON): json.a.b[][].c -> json.a.b.:Array(Array(JSON)).c
   */
 class ParserCompoundIdentifier : public IParserBase
 {
 public:
-    explicit ParserCompoundIdentifier(bool table_name_with_optional_uuid_ = false, bool allow_query_parameter_ = false)
-        : table_name_with_optional_uuid(table_name_with_optional_uuid_), allow_query_parameter(allow_query_parameter_)
+    explicit ParserCompoundIdentifier(bool table_name_with_optional_uuid_ = false, bool allow_query_parameter_ = false, Highlight highlight_type_ = Highlight::identifier)
+        : table_name_with_optional_uuid(table_name_with_optional_uuid_), allow_query_parameter(allow_query_parameter_), highlight_type(highlight_type_)
     {
     }
 
 protected:
+    enum class SpecialDelimiter : char
+    {
+        NONE = '\0',
+        JSON_PATH_DYNAMIC_TYPE = ':',
+        JSON_PATH_PREFIX = '^',
+    };
+
     const char * getName() const override { return "compound identifier"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
     bool table_name_with_optional_uuid;
     bool allow_query_parameter;
+    Highlight highlight_type;
 };
 
 /** *, t.*, db.table.*, COLUMNS('<regular expression>') APPLY(...) or EXCEPT(...) or REPLACE(...)
@@ -141,6 +169,23 @@ protected:
     ColumnTransformers allowed_transformers;
 };
 
+/** Qualified columns matcher identifier.COLUMNS(columns_names) or identifier.COLUMNS('<regular expression>')
+  */
+class ParserQualifiedColumnsMatcher : public IParserBase
+{
+public:
+    using ColumnTransformers = ParserColumnsTransformers::ColumnTransformers;
+    explicit ParserQualifiedColumnsMatcher(ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
+        : allowed_transformers(allowed_transformers_)
+    {}
+
+protected:
+    const char * getName() const override { return "qualified COLUMNS matcher"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+
+    ColumnTransformers allowed_transformers;
+};
+
 /// proton: starts. We don't support parametric style aggr function  like quntail(0.9)(x + y) any more
 /** A function, for example, f(x, y + 1, g(z)).
   * Or an aggregate function: sum(x + f(y)), corr(x, y). The syntax is the same as the usual function.
@@ -151,14 +196,21 @@ protected:
 class ParserFunction : public IParserBase
 {
 public:
-    explicit ParserFunction(bool is_table_function_ = false)
-        : is_table_function(is_table_function_)
+    /// proton: starts
+    explicit ParserFunction(bool allow_function_parameters_ = true, bool is_table_function_ = false)
+        : allow_function_parameters(allow_function_parameters_), is_table_function(is_table_function_)
+    /// proton: ends
     {
     }
+
+    /// proton: starts
+    static String functionNameFromCamelToSnake(const String & name);
+    /// proton: ends
 
 protected:
     const char * getName() const override { return "function"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+    bool allow_function_parameters;
     bool is_table_function;
 };
 /// proton: ends.
@@ -329,9 +381,13 @@ protected:
 class ParserAllCollectionsOfLiterals : public IParserBase
 {
 public:
+    explicit ParserAllCollectionsOfLiterals(bool allow_map_ = true) : allow_map(allow_map_) {}
+
 protected:
     const char * getName() const override { return "combination of maps, arrays, tuples"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+
+    bool allow_map;
 };
 
 /** The literal is one of: NULL, UInt64, Int64, Float64, String.
@@ -353,6 +409,9 @@ public:
 
 private:
     static const char * restricted_keywords[];
+    /// proton: starts.
+    static const char * disabled_aliases[];
+    /// proton: ends.
 
     bool allow_alias_without_as_keyword;
 
@@ -428,6 +487,15 @@ class ParserOrderByElement : public IParserBase
 {
 protected:
     const char * getName() const override { return "element of ORDER BY expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+};
+
+/** Element of INTERPOLATE expression
+  */
+class ParserInterpolateElement : public IParserBase
+{
+protected:
+    const char * getName() const override { return "element of INTERPOLATE expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 

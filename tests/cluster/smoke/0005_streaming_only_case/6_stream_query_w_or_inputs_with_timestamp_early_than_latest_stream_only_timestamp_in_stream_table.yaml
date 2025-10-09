@@ -1,0 +1,59 @@
+tags:
+  - tumble window
+description: 'stream query aggregate by max is created and then ingest data w/ timestamp
+  early than latest_stream_only timestamp in stream table, projection based on the
+  inputs should be emitted. '
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '601'
+    type: stream
+    query: |
+      select id, max(value), window_start, window_end
+      from tumble(test6_stream_only, timestamp, interval 5 second)
+      group by id, window_start, window_end
+      emit stream
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:00:00'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:00:03');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev6', 'ca', 66, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:04');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:05');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:30');
+
+  - type: check
+    target_name: '601'
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [ dev2, '58.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ dev6, '66.0', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ dev1, '57.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ dev8, '67', '2020-02-02 20:00:05', '2020-02-02 20:00:10' ]
+

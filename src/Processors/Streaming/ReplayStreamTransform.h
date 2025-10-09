@@ -53,7 +53,7 @@ private:
 
     Int64 last_log_ts = 0;
     Int64 last_unordered_log_ts = 0;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 }
 }

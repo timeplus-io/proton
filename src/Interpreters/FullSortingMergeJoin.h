@@ -4,6 +4,7 @@
 #include <Interpreters/TableJoin.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <Common/logger_useful.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -20,14 +21,30 @@ namespace ErrorCodes
 class FullSortingMergeJoin : public IJoin
 {
 public:
-    explicit FullSortingMergeJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_)
+    explicit FullSortingMergeJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_,
+                                  int null_direction_ = 1)
         : table_join(table_join_)
         , right_sample_block(right_sample_block_)
+        , null_direction(null_direction_)
     {
-        LOG_TRACE(&Poco::Logger::get("FullSortingMergeJoin"), "Will use full sorting merge join");
+        LOG_TRACE(getLogger("FullSortingMergeJoin"), "Will use full sorting merge join");
     }
 
     const TableJoin & getTableJoin() const override { return *table_join; }
+
+    bool isCloneSupported() const override
+    {
+        return true;
+    }
+
+    std::shared_ptr<IJoin> clone(const std::shared_ptr<TableJoin> & table_join_,
+                                 const Block &,
+                                 const Block & right_sample_block_) const override
+    {
+        return std::make_shared<FullSortingMergeJoin>(table_join_, right_sample_block_, null_direction);
+    }
+
+    int getNullDirection() const { return null_direction; }
 
     bool addJoinedBlock(const Block & /* block */, bool /* check_limits */) override
     {
@@ -100,7 +117,7 @@ public:
 
     bool alwaysReturnsEmptySet() const override { return false; }
 
-    std::shared_ptr<NotJoinedBlocks>
+    IBlocksStreamPtr
     getNonJoinedBlocks(const Block & /* left_sample_block */, const Block & /* result_sample_block */, UInt64 /* max_block_size */) const override
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "FullSortingMergeJoin::getNonJoinedBlocks should not be called");
@@ -113,6 +130,7 @@ private:
     std::shared_ptr<TableJoin> table_join;
     Block right_sample_block;
     Block totals;
+    int null_direction;
 };
 
 }

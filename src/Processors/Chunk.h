@@ -3,11 +3,14 @@
 #include <Columns/IColumn.h>
 
 /// proton : starts
+#include <Checkpoint/CheckpointContextFwd.h>
+#include <Cluster/Common/Constants.h>
 #include <Core/Streaming/SubstreamID.h>
 #include <Core/Streaming/Watermark.h>
-#include <Checkpoint/CheckpointContextFwd.h>
+#include <Common/ProtonCommon.h>
 /// proton : ends
 
+#include <list>
 #include <unordered_map>
 
 namespace DB
@@ -25,27 +28,25 @@ private:
     [[nodiscard]] MutablePtr clone() const { return ChunkContext::create(*this); }
 
 public:
-    static constexpr UInt64 WATERMARK_FLAG = 0x1;
-    static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
-    static constexpr UInt64 HISTORICAL_DATA_START_FLAG = 0x4;
-    static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
-    static constexpr UInt64 CONSECUTIVE_DATA_FLAG = 0x10;
-    static constexpr UInt64 AVOID_WATERMARK_FLAG = 0x8000'0000'0000'0000;
-
     /// A pair of Int64, flags represent what they mean
     Streaming::SubstreamID id = Streaming::INVALID_SUBSTREAM_ID;
-    Int64 ts_1 = 0;
+    Int64 any_i64_field_1 = 0; /// reused in : Watermark | AppendTime
+    Int64 any_i64_field_2 = 0; /// reused in : SequenceNumber
     UInt64 flags = 0;
     CheckpointContextPtr ckpt_ctx;
 
-    ALWAYS_INLINE Int64 isHistoricalDataStart() const { return flags & HISTORICAL_DATA_START_FLAG; }
-    ALWAYS_INLINE Int64 isHistoricalDataEnd() const { return flags & HISTORICAL_DATA_END_FLAG; }
+    ALWAYS_INLINE bool isHistoricalDataStart() const { return flags & ProtonConsts::HISTORICAL_DATA_START_FLAG; }
+    ALWAYS_INLINE bool isHistoricalDataEnd() const { return flags & ProtonConsts::HISTORICAL_DATA_END_FLAG; }
+    ALWAYS_INLINE void clearHistoricalDataStartAndEnd()
+    {
+        flags &= ~(ProtonConsts::HISTORICAL_DATA_START_FLAG | ProtonConsts::HISTORICAL_DATA_END_FLAG);
+    }
 
     ALWAYS_INLINE void setMark(UInt64 mark) { flags |= mark; }
 
     ALWAYS_INLINE explicit operator bool () const { return flags != 0 || id != Streaming::INVALID_SUBSTREAM_ID || ckpt_ctx != nullptr; }
 
-    ALWAYS_INLINE bool hasWatermark() const { return flags & WATERMARK_FLAG; }
+    ALWAYS_INLINE bool hasWatermark() const { return flags & ProtonConsts::WATERMARK_FLAG; }
 
     ALWAYS_INLINE bool hasTimeoutWatermark() const { return hasWatermark() && getWatermark() == Streaming::TIMEOUT_WATERMARK; }
 
@@ -53,50 +54,62 @@ public:
 
     ALWAYS_INLINE void setWatermark(Int64 watermark)
     {
-        assert(watermark != Streaming::INVALID_WATERMARK);
-        flags |= WATERMARK_FLAG;
-        ts_1 = watermark;
+        clearAppendTime(); /// We assume append time is not used after watermark is set.
+        chassert(watermark != Streaming::INVALID_WATERMARK);
+        flags |= ProtonConsts::WATERMARK_FLAG;
+        any_i64_field_1 = watermark;
     }
 
     ALWAYS_INLINE Int64 getWatermark() const
     {
         assert(hasWatermark());
 
-        return ts_1;
+        return any_i64_field_1;
     }
 
     ALWAYS_INLINE void clearWatermark()
     {
         if (hasWatermark())
         {
-            flags &= ~WATERMARK_FLAG;
-            ts_1 = Streaming::INVALID_WATERMARK;
+            flags &= ~ProtonConsts::WATERMARK_FLAG;
+            any_i64_field_1 = Streaming::INVALID_WATERMARK;
         }
     }
 
     ALWAYS_INLINE void setConsecutiveDataFlag()
     {
-        flags |= CONSECUTIVE_DATA_FLAG;
+        flags |= ProtonConsts::CONSECUTIVE_DATA_FLAG;
         setAvoidWatermark();
     }
 
-    ALWAYS_INLINE bool isConsecutiveData() const { return flags & CONSECUTIVE_DATA_FLAG; }
+    ALWAYS_INLINE bool isConsecutiveData() const { return flags & ProtonConsts::CONSECUTIVE_DATA_FLAG; }
 
-    ALWAYS_INLINE void setAvoidWatermark() { flags |= AVOID_WATERMARK_FLAG; }
+    ALWAYS_INLINE void setAvoidWatermark() { flags |= ProtonConsts::AVOID_WATERMARK_FLAG; }
 
-    ALWAYS_INLINE bool avoidWatermark() const { return ckpt_ctx || (flags & AVOID_WATERMARK_FLAG); }
+    ALWAYS_INLINE bool avoidWatermark() const { return ckpt_ctx || (flags & ProtonConsts::AVOID_WATERMARK_FLAG); }
 
-    ALWAYS_INLINE bool hasAppendTime() const { return flags & APPEND_TIME_FLAG; }
+    ALWAYS_INLINE bool hasAppendTime() const { return flags & ProtonConsts::APPEND_TIME_FLAG; }
     ALWAYS_INLINE void setAppendTime(Int64 append_time)
     {
         if (append_time > 0)
         {
-            flags |= APPEND_TIME_FLAG;
-            ts_1 = append_time;
+            chassert(!hasWatermark());
+            flags |= ProtonConsts::APPEND_TIME_FLAG;
+            any_i64_field_1 = append_time;
         }
     }
 
-    ALWAYS_INLINE Int64 getAppendTime() const { assert(hasAppendTime()); return ts_1; }
+    ALWAYS_INLINE Int64 getAppendTime() const { chassert(hasAppendTime()); return any_i64_field_1; }
+    ALWAYS_INLINE void clearAppendTime() { flags &= ~ProtonConsts::APPEND_TIME_FLAG; }
+
+    ALWAYS_INLINE bool hasSN() const { return flags & ProtonConsts::SEQUENCE_NUMBER_FLAG; }
+    ALWAYS_INLINE void setSN(Int64 sn)
+    {
+        chassert(sn >= cluster::Constants::LogStartSN);
+        flags |= ProtonConsts::SEQUENCE_NUMBER_FLAG;
+        any_i64_field_2 = sn;
+    }
+    ALWAYS_INLINE Int64 getSN() const { chassert(hasSN()); return any_i64_field_2; }
 
     void setCheckpointContext(CheckpointContextPtr ckpt_ctx_) { ckpt_ctx = std::move(ckpt_ctx_); }
 
@@ -163,7 +176,7 @@ public:
 
     Chunk clone() const;
 
-    void swap(Chunk & other)
+    void swap(Chunk & other) noexcept
     {
         columns.swap(other.columns);
         chunk_info.swap(other.chunk_info);
@@ -252,14 +265,17 @@ public:
         return Streaming::INVALID_SUBSTREAM_ID;
     }
 
-    void trySetSubstreamID(Streaming::SubstreamID id)
+    void clearSubstreamID()
     {
         if (chunk_ctx)
-        {
-            auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
-            mutate_chunk_ctx->setSubstreamID(std::move(id));
-            chunk_ctx = std::move(mutate_chunk_ctx);
-        }
+            setSubstreamID(Streaming::INVALID_SUBSTREAM_ID);
+    }
+
+    void setSubstreamID(Streaming::SubstreamID id)
+    {
+        auto mutate_chunk_ctx = chunk_ctx ? ChunkContext::mutate(chunk_ctx) : ChunkContext::create();
+        mutate_chunk_ctx->setSubstreamID(std::move(id));
+        chunk_ctx = std::move(mutate_chunk_ctx);
     }
 
     Int64 getWatermark() const
@@ -324,8 +340,32 @@ public:
         chunk_ctx = std::move(mutate_chunk_ctx);
     }
 
+    void setSN(Int64 max_sn)
+    {
+        auto mutate_chunk_ctx = chunk_ctx ? ChunkContext::mutate(chunk_ctx) : ChunkContext::create();
+        mutate_chunk_ctx->setSN(max_sn);
+        chunk_ctx = std::move(mutate_chunk_ctx);
+    }
+
+    Int64 getSN() const
+    {
+        chassert(chunk_ctx);
+        return chunk_ctx->getSN();
+    }
+
+    bool hasSN() const { return chunk_ctx && chunk_ctx->hasSN(); }
+
     bool isHistoricalDataStart() const { return chunk_ctx && chunk_ctx->isHistoricalDataStart(); }
     bool isHistoricalDataEnd() const { return chunk_ctx && chunk_ctx->isHistoricalDataEnd(); }
+    void clearHistoricalDataStartAndEnd()
+    {
+        if (chunk_ctx)
+        {
+            auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
+            mutate_chunk_ctx->clearHistoricalDataStartAndEnd();
+            chunk_ctx = std::move(mutate_chunk_ctx);
+        }
+    }
 
     /// Dummy interface to make RefCountBlockList happy
     Int64 minTimestamp() const { return 0; }

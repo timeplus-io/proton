@@ -4,7 +4,8 @@
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
-#include <Storages/Streaming/SeekToInfo.h>
+#include <Storages/SeekToInfo.h>
+#include <Common/Logger.h>
 
 namespace DB
 {
@@ -19,9 +20,9 @@ class Kafka final : public StorageExternalStreamImpl
 public:
     using ConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
 
-    static Poco::Logger * cbLogger()
+    static LoggerPtr cbLogger()
     {
-        static Poco::Logger * logger{&Poco::Logger::get("KafkaExternalStream")};
+        static LoggerPtr logger{getLogger("KafkaExternalStream")};
         return logger;
     }
 
@@ -31,10 +32,10 @@ public:
     static void onLog(const struct rd_kafka_s * rk, int level, const char * fac, const char * buf);
 
     Kafka(
-        IStorage * storage,
+        StorageID storage_id,
+        StorageInMemoryMetadata storage_metadata,
         std::unique_ptr<ExternalStreamSettings> settings_,
-        const ASTs & engine_args_,
-        StorageInMemoryMetadata & storage_metadata,
+        ASTs engine_args_,
         bool attach,
         ExternalStreamCounterPtr external_stream_counter_,
         ContextPtr context);
@@ -43,13 +44,14 @@ public:
     String getName() const override { return "KafkaExternalStream"; }
 
     void startup() override;
-    void shutdown() override;
+    void shutdown(bool dropping) override;
 
     bool supportsAccurateSeekTo() const noexcept override { return true; }
     bool supportsSubcolumns() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
     NamesAndTypesList getVirtuals() const override;
     std::optional<UInt64> totalRows(const Settings &) const override;
+    std::optional<String> preferredColumn() const override;
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
@@ -74,13 +76,13 @@ public:
     bool hasSslCaPem() const { return !settings->ssl_ca_pem.value.empty(); }
 
 private:
+    void validateSettings(bool attach);
+
     DB::Kafka::Conf createConf(KafkaExternalStreamSettings settings_);
     void cacheVirtualColumnNamesAndTypes();
 
-    std::vector<Int64>
-    getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
+    std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<uint64_t> & shards_to_query) const;
 
-    void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
     void validate();
 
     Pipe read(
@@ -92,12 +94,12 @@ private:
         size_t /*max_block_size*/,
         size_t /*num_streams*/) override;
 
+private:
     ASTs engine_args;
     ExternalStreamCounterPtr external_stream_counter;
 
     NamesAndTypesList virtual_column_names_and_types;
 
-    ASTPtr message_key_ast;
     Int32 topic_refresh_interval_ms = 0;
     std::vector<Int32> shards_from_settings;
     fs::path broker_ca_file;

@@ -36,7 +36,6 @@ template <typename Data>
 class AggregateFunctionArgMinMax final : public IAggregateFunctionDataHelper<Data, AggregateFunctionArgMinMax<Data>>
 {
 private:
-    const DataTypePtr & type_res;
     const DataTypePtr & type_val;
     const SerializationPtr serialization_res;
     const SerializationPtr serialization_val;
@@ -45,19 +44,18 @@ private:
     using Base = IAggregateFunctionDataHelper<Data, AggregateFunctionArgMinMax<Data>>;
 
 public:
-    AggregateFunctionArgMinMax(const DataTypePtr & type_res_, const DataTypePtr & type_val_, const Settings * settings)
-        : Base({type_res_, type_val_}, {})
-        , type_res(this->argument_types[0])
+    AggregateFunctionArgMinMax(const DataTypePtr & type_res_, const DataTypePtr & type_val_, UInt64 max_size_)
+        : Base({type_res_, type_val_}, {}, type_res_)
         , type_val(this->argument_types[1])
-        , serialization_res(type_res->getDefaultSerialization())
+        , serialization_res(type_res_->getDefaultSerialization())
         , serialization_val(type_val->getDefaultSerialization())
-        , max_size(settings->retract_max.value)
+        , max_size(max_size_)
     {
-        if (!type_res->isComparable())
+        if (!type_res_->isComparable())
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Illegal type {} of first argument of aggregate function {} because the values of that data type are not comparable",
-                type_res->getName(), getName());
+                type_res_->getName(), getName());
 
         if (!type_val->isComparable())
             throw Exception(
@@ -69,8 +67,6 @@ public:
     void create(AggregateDataPtr place) const override { new (place) Data(static_cast<int64_t>(max_size)); }
 
     String getName() const override { return Data::name(); }
-
-    DataTypePtr getReturnType() const override { return type_res; }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -102,6 +98,29 @@ public:
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         this->data(place).insertResultInto(to);
+    }
+
+    AggregateFunctionPtr getOwnNullAdapter(
+        const AggregateFunctionPtr & /*nested_function*/,
+        const DataTypes & arguments,
+        const Array & /*params*/,
+        const AggregateFunctionProperties & /*properties*/) const override
+    {
+        chassert(arguments.size() == 2);
+
+        /// Nullability of the first argument (arg) does not affect the nullability of the result.
+        if (arguments[0]->isNullable())
+        {
+            if (arguments[1]->isNullable())
+                return std::make_shared<AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<Field, Field, Data::maximum>>>(
+                    arguments[0], arguments[1], max_size);
+            else
+                return std::make_shared<
+                    AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<Field, typename Data::ValType, Data::maximum>>>(
+                    arguments[0], arguments[1], max_size);
+        }
+
+        return nullptr;
     }
 };
 }

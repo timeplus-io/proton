@@ -12,6 +12,9 @@
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <Storages/MergeTree/MergeTreeWriteAheadLog.h>
 
+
+bool LOG_PANIC_ABORT = true;
+
 /*
  * Dump the Write Ahead Log file, outputs:
  * Part 0, Version: 0, Action : ADD_PART, Name: 4_1_1_0, Block:

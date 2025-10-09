@@ -51,4 +51,4 @@ SELECT
 FROM test_01600.base AS base
 LEFT JOIN test_01600.derived1 AS derived1 ON base.id = derived1.id1;
 
-drop database test_01600;
+drop database test_01600 cascade;

@@ -27,6 +27,10 @@ public:
     std::vector<String> default_settings;
     NameToNameMap query_parameters;
 
+    /// proton : starts
+    bool isEmpty() const noexcept { return changes.empty() && default_settings.empty() && query_parameters.empty(); }
+    /// proton : ends
+
     /** Get the text that identifies this element. */
     String getID(char) const override { return "Set"; }
 

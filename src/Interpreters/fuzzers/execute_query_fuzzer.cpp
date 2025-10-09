@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include "Processors/Executors/PullingPipelineExecutor.h"
 
+#include <Functions/registerDatabases.h>
 #include <Functions/registerFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -33,7 +34,7 @@ try
         registerTableFunctions();
         registerStorages();
         registerDictionaries();
-        registerDisks();
+        registerDisks(/* global_skip_access_check= */ true);
         registerFormats();
 
         return true;
@@ -41,6 +42,7 @@ try
 
     static bool initialized = initialize();
     (void) initialized;
+
 
     auto io = DB::executeQuery(input, context, true, QueryProcessingStage::Complete);
 

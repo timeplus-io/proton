@@ -2,6 +2,8 @@
 
 #include <Common/Stopwatch.h>
 
+#include <functional>
+
 namespace DB
 {
 

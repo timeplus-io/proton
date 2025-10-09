@@ -1,0 +1,162 @@
+tags:
+  - distributed
+  - TTL
+
+description: |
+  Tests covering test_ttl
+  Main steps:
+    1. Create stream (append only )
+    2. Insert data into the stream
+    3. execute alter MODIFY TTL (data still existed here)
+    4. manually optimize trigger data prune.
+    5. Verify data after optimize
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop view if exists test_ttl_mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_ttl;
+  - type: wait
+    time: 2
+
+  # Create main stream
+  - type: query
+    sql: |
+      CREATE STREAM  test_ttl (    id uint64,    data string,    created_at DateTime)
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE Materialized View test_ttl_mv AS SELECT * FROM test_ttl;
+  - type: wait
+    time: 2
+
+  # Insert test data
+  - type: query
+    sql: |
+      INSERT INTO test_ttl(id, data, created_at)  SELECT     number as id,    concat('data_', to_string(number)) as data,    to_DateTime(now() - to_Interval_Day(rand() % 100)) as created_at FROM numbers_mt(10485450);
+  - type: wait
+    time: 2
+
+  # read from stream
+  - name: delete-check-1
+    type: stream
+    query: SELECT count() > 1 as has_data FROM table(test_ttl )WHERE created_at + INTERVAL 1 DAY < now();
+    schema:
+      - name: has_data
+        type: bool
+
+  - type: check
+    target_name: delete-check-1
+    expected_result:
+      - [true]
+
+  - type: query
+    sql:  ALTER STREAM  test_ttl MODIFY TTL created_at + INTERVAL 1 DAY;
+  - type: wait
+    time: 1
+
+  - name: delete-check-2
+    type: stream
+    query: SELECT count() > 1 as has_data FROM table(test_ttl) WHERE created_at + INTERVAL 1 DAY < now();
+    schema:
+      - name: has_data
+        type: bool
+
+  - type: check
+    target_name: delete-check-2
+    expected_result:
+      - [true]
+
+  - type: query
+    sql:  optimize stream test_ttl final;
+
+  <<if eq .sanitizer "thread">>
+  - type: wait
+    time: 30
+  <<else>>
+  - type: wait
+    time: 8
+  <<end>>
+
+  - name: delete-check-3
+    type: stream
+    query: SELECT count() > 1 as has_data FROM table(test_ttl) WHERE created_at + INTERVAL 1 DAY < now();
+    schema:
+      - name: has_data
+        type: bool
+
+  - type: check
+    target_name: delete-check-3
+    expected_result:
+      - [false]
+
+  # read from Mat View
+  - name: data-existed-check-1
+    type: stream
+    query: SELECT count() > 1 as has_data FROM table(test_ttl_mv) WHERE created_at + INTERVAL 1 DAY < now();
+    schema:
+      - name: has_data
+        type: bool
+
+  - type: check
+    target_name: data-existed-check-1
+    expected_result:
+      - [true]
+
+  - type: query
+    sql:  ALTER VIEW  test_ttl_mv MODIFY TTL created_at + INTERVAL 1 DAY;
+  - type: wait
+    time: 1
+
+  - name: data-existed-check-2
+    type: stream
+    query: SELECT count() > 1 as has_data FROM table(test_ttl_mv) WHERE created_at + INTERVAL 1 DAY < now();
+    schema:
+      - name: has_data
+        type: bool
+
+  - type: check
+    target_name: data-existed-check-2
+    expected_result:
+      - [true]
+
+  - type: query
+    sql:  optimize stream test_ttl_mv final;
+
+  <<if eq .sanitizer "thread">>
+  - type: wait
+    time: 30
+  <<else>>
+  - type: wait
+    time: 10
+  <<end>>
+
+  - name: data-existed-check-3
+    type: stream
+    query: SELECT count() > 1 as has_data FROM table(test_ttl_mv) WHERE created_at + INTERVAL 1 DAY < now();
+    schema:
+      - name: has_data
+        type: bool
+
+  - type: check
+    target_name: data-existed-check-3
+    expected_result:
+      - [false]
+
+  - type: query
+    sql: drop view if exists test_ttl_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_ttl;

@@ -19,6 +19,17 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+enum class Highlight : uint8_t
+{
+    none = 0,
+    keyword,
+    identifier,
+    function,
+    alias,
+    substitution,
+    number,
+    string,
+};
 
 /** Collects variants, how parser could proceed further at rightmost position.
   */
@@ -68,15 +79,14 @@ public:
         {
             ++depth;
             if (unlikely(max_depth > 0 && depth > max_depth))
-                throw Exception(
-                    "Maximum parse depth (" + std::to_string(max_depth) + ") exceeded. Consider rising max_parser_depth parameter.",
-                    ErrorCodes::TOO_DEEP_RECURSION);
+                throw Exception(ErrorCodes::TOO_DEEP_RECURSION, "Maximum parse depth ({}) exceeded. "
+                    "Consider rising max_parser_depth parameter.", max_depth);
         }
 
         ALWAYS_INLINE void decreaseDepth()
         {
             if (unlikely(depth == 0))
-                throw Exception("Logical error in parser: incorrect calculation of parse depth", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error in parser: incorrect calculation of parse depth");
             --depth;
         }
     };

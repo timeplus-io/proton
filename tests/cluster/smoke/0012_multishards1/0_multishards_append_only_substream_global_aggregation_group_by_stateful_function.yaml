@@ -1,0 +1,120 @@
+tags:
+  - local-run
+  - multishards
+  - append_only
+  - substream
+  - streaming_aggregation
+  - global_aggregation
+  - group_by
+  - stateful_function
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+
+description: multishards append only substream global aggregation group by, stateful
+  function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists test13_view2_1;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists test13_view1_1;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test13_subst_1;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_subst_1(val float, k int) settings shards=3;
+  
+  - type: wait
+    time: 2
+  
+  - name: '1300'
+    type: stream
+    query: |
+      select max(val),
+        min(val),
+        avg(val),
+        count(val),
+        k
+      from test13_subst_1 partition by k
+      group by k;
+    schema:
+      - name: max(val)
+        type: float32
+      - name: min(val)
+        type: float32
+      - name: avg(val)
+        type: float64
+      - name: count(val)
+        type: uint64
+      - name: k
+        type: int32
+    
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test13_subst_1 (val, k) values (1, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test13_subst_1 (val, k) values (2, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_1 (val, k)
+      values (3, 3);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_1 (val, k)
+      values (1, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_1 (val, k)
+      values (2, 3);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_1 (val, k)
+      values (3, 1);
+
+  - type: check
+    target_name: '1300'
+    mode: random
+    expected_result:
+      - [ 1, 1, 1, 1, 1 ]
+      - [ 2, 2, 2, 1, 2 ]
+      - [ 3, 3, 3, 1, 3 ]
+      - [ 2, 1, 1.5, 2, 2 ]
+      - [ 3, 2, 2.5, 2, 3 ]
+      - [ 3, 1, 2, 2, 1 ]

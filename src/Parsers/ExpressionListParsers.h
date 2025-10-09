@@ -116,6 +116,17 @@ private:
     SelectUnionModes union_modes;
 };
 
+
+/** Similar to ParserFunction (and yields ASTFunction), but can also parse identifiers without braces.
+  */
+class ParserExpressionWithOptionalArguments : public IParserBase
+{
+protected:
+    const char * getName() const override { return "expression with optional parameters"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+};
+
+
 /** An expression with an infix binary left-associative operator.
   * For example, a + b - c + d.
   */
@@ -444,6 +455,18 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
+class ParserExpression : public IParserBase
+{
+public:
+    explicit ParserExpression(bool allow_trailing_commas_ = false) : allow_trailing_commas(allow_trailing_commas_) {}
+
+protected:
+    const char * getName() const override { return "lambda expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+
+    bool allow_trailing_commas;
+};
 
 // It's used to parse expressions in table function.
 class ParserTableFunctionExpression : public IParserBase
@@ -456,9 +479,6 @@ protected:
 
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
-
-
-using ParserExpression = ParserLambdaExpression;
 
 
 class ParserExpressionWithOptionalAlias : public IParserBase

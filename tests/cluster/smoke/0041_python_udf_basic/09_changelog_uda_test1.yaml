@@ -1,0 +1,101 @@
+tags:
+  - to_support
+  - uda
+
+description: Test covering changelog uda with changelog input
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (id int, value float64) primary key id settings mode='changelog_kv';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION test_count(value float64) RETURNS int LANGUAGE PYTHON AS $$
+      class test_count:
+          def __init__(self):
+              self.count = 0
+          
+          def serialize(self):
+              pass
+          
+          def deserialize(self, data):
+              pass
+          
+          def merge(self, data):
+              pass
+              
+          def process(self, values, delta=[]):
+              print(f"values: {values}, delta: {delta}")
+              is_changelog = len(delta) > 0
+              for i in range(len(values)):
+                  if is_changelog:
+                      if delta[i] == 1:
+                          self.count += 1
+                      elif delta[i] == -1 and self.count > 0:
+                          self.count -= 1
+                  else:
+                      self.count += 1
+
+          def finalize(self):
+              return self.count
+      $$
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-9
+    type: stream
+    query: select test_count(value) as res from test41_stream;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(id, value, _tp_delta) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: float64
+      - name: _tp_delta
+        type: int8
+    inputs:
+      - [1, 2, 1]
+      - [2, 3, 1]
+      - [3, 4, 1]
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test41_stream(id, value, _tp_delta) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: float64
+      - name: _tp_delta
+        type: int8
+    inputs:
+      - [1, 2, -1]
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: python_udf-9
+    expected_result:
+      - [3]
+      - [2]

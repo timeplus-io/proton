@@ -1,0 +1,74 @@
+tags:
+  - subquery/view/materialized_view
+  - UDF
+description: subquery from materlized view from view,UDF
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_14_4_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        function test_14_4_add_five(value) {
+          for (let i = 0; i < value.length; i++) {
+            value[i] = value[i] + 5;
+          }
+          return value;
+        }
+      $$;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_subquery_4(i int, k1 int, k2 string);
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      create view test14_view1_4 as (
+        select i, k1, k2, _tp_delta from changelog(test14_subquery_4, k2)
+      );
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      create materialized view test14_view2_4 as (
+        select i, k1, k2, _tp_delta from test14_view1_4
+      );
+
+  - name: "1408"
+    type: stream
+    query: select test_14_4_add_five(i), k2, _tp_delta from test14_view2_4;
+    schema:
+      - name: test_14_4_add_five(i)
+        type: float32
+      - name: k2
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (4, 3, 'a');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 3, 'a');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 5, 'b');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 2, 'a');
+
+  - type: check
+    target_name: "1408"
+    expected_result:
+      - [9, a, 1]
+      - [9, a, -1]
+      - [7, a, 1]
+      - [7, b, 1]
+      - [7, a, -1]
+      - [7, a, 1]

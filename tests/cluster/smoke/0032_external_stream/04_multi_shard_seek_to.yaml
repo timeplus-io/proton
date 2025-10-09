@@ -1,0 +1,87 @@
+tags:
+  - multi_shard
+  - no_sharding_rule
+  - seek_to
+description: test external stream multi_shard and seek_to
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 3
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test33_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test33_external
+        (
+          id int, 
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow'
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+      - id: 1
+        value: sometext
+        partition: 0
+  - type: wait
+    time: 3
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+      - id: 2
+        value: sometext2
+        partition: 1
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: 3305
+    query: select * from test33_external settings shards='1', seek_to='earliest'
+    terminate: manual
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 3
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+      - id: 3
+        value: sometext3
+        partition: 1
+
+  - type: check
+    target_name: 3305
+    expected_result:
+      - - "2"
+        - sometext2
+      - - "3"
+        - sometext3

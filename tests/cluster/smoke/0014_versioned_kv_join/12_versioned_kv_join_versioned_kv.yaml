@@ -1,0 +1,207 @@
+tags:
+  - all_primary_keys_join
+description: versioned_kv join versioned_kv with all primary keys join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node: 
+      - p1
+    sql: drop stream if exists test15_vk_left_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: drop stream if exists test15_vk_right_stream
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: create stream test15_vk_left_stream (i1 int, i2 int, s string) primary key (i1, i2) settings mode='versioned_kv'
+  - type: wait
+    time: 1
+  
+  - type: query
+    node: 
+      - p1
+    sql: create stream test15_vk_right_stream (ii1 int, ii2 int, ss string) primary key (ii1, ii2) settings mode='versioned_kv'
+  - type: wait
+    time: 1
+  
+  - name: "1513"
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: select s, ss, _tp_delta from test15_vk_left_stream inner join test15_vk_right_stream on i1 = ii1 and i2 = ii2 emit changelog
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - name: "1513-2"
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: select s, ss from test15_vk_left_stream inner join test15_vk_right_stream on i1 = ii1 and i2 = ii2
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+ 
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_left_stream(i1, i2, s) values (1, 1, 's11')
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 1
+ 
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss11')
+    schema:
+      - name: ii1
+        type: int64
+      - name: ii2
+        type: int64
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: "1513"
+    expected_result:
+      - - s11
+        - ss11
+        - 1
+
+  - type: check
+    target_name: "1513-2"
+    expected_result:
+      - - s11
+        - ss11
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_left_stream(i1, i2, s) values (1, 1, 's112')
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: s
+        type: string 
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_vk_left_stream(i1, i2, s) values (1, 2, 's12')
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss112')
+    schema:
+      - name: ii1
+        type: int64
+      - name: ii2
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+  
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_right_stream(ii1, ii2, ss) values (1, 2, 'ss12')
+    schema:
+      - name: ii1
+        type: int64
+      - name: ii2
+        type: int64
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: "1513"
+    expected_result:
+      - - s11
+        - ss11
+        - -1
+      - - s112
+        - ss11
+        - 1
+      - - s112
+        - ss11
+        - -1
+      - - s112
+        - ss112
+        - 1
+      - - s12
+        - ss12
+        - 1
+
+  - type: check
+    target_name: "1513-2"
+    expected_result:
+      - - s112
+        - ss11
+      - - s112
+        - ss112
+      - - s12
+        - ss12

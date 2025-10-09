@@ -19,7 +19,6 @@ std::map<String, std::map<String, String> > RawstoreTableRestRouterHandler::crea
     },
     {"optional", {
                         {"shards", "int"},
-                        {"replication_factor", "int"},
                         {"order_by_granularity", "string"},
                         {"partition_by_granularity", "string"},
                         {"ttl_expression", "string"}

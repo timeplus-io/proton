@@ -15,6 +15,7 @@ void registerAggregateFunctionCount(AggregateFunctionFactory &);
 void registerAggregateFunctionDeltaSum(AggregateFunctionFactory &);
 void registerAggregateFunctionDeltaSumTimestamp(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupArray(AggregateFunctionFactory &);
+void registerAggregateFunctionGroupArraySorted(AggregateFunctionFactory & factory);
 void registerAggregateFunctionGroupUniqArray(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupArrayInsertAt(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupConcat(AggregateFunctionFactory &);
@@ -39,7 +40,11 @@ void registerAggregateFunctionsMin(AggregateFunctionFactory &);
 void registerAggregateFunctionsMax(AggregateFunctionFactory &);
 void registerAggregateFunctionsAny(AggregateFunctionFactory &);
 void registerAggregateFunctionsStatisticsStable(AggregateFunctionFactory &);
-void registerAggregateFunctionsStatisticsSimple(AggregateFunctionFactory &);
+void registerAggregateFunctionsStatisticsSecondMoment(AggregateFunctionFactory &);
+void registerAggregateFunctionsStatisticsThirdMoment(AggregateFunctionFactory &);
+void registerAggregateFunctionsStatisticsFourthMoment(AggregateFunctionFactory &);
+void registerAggregateFunctionsStatisticsCovar(AggregateFunctionFactory &);
+void registerAggregateFunctionsStatisticsCorr(AggregateFunctionFactory &);
 void registerAggregateFunctionSum(AggregateFunctionFactory &);
 void registerAggregateFunctionSumCount(AggregateFunctionFactory &);
 void registerAggregateFunctionSumMap(AggregateFunctionFactory &);
@@ -76,6 +81,8 @@ void registerAggregateFunctionSparkbar(AggregateFunctionFactory &);
 void registerAggregateFunctionIntervalLengthSum(AggregateFunctionFactory &);
 void registerAggregateFunctionAnalysisOfVariance(AggregateFunctionFactory &);
 void registerAggregateFunctionLargestTriangleThreeBuckets(AggregateFunctionFactory & factory);
+void registerAggregateFunctionDistinctDynamicTypes(AggregateFunctionFactory & factory);
+void registerAggregateFunctionDistinctJSONPathsAndTypes(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -89,7 +96,6 @@ void registerAggregateFunctionCombinatorOrFill(AggregateFunctionCombinatorFactor
 void registerAggregateFunctionCombinatorResample(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorDistinct(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorMap(AggregateFunctionCombinatorFactory & factory);
-void registerAggregateFunctionCombinatorTimeWeighted(AggregateFunctionCombinatorFactory &);
 
 void registerWindowFunctions(AggregateFunctionFactory & factory);
 
@@ -103,6 +109,7 @@ namespace Streaming
 {
 void registerAggregateFunctionCombinatorDistinct(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorDistinctRetract(AggregateFunctionCombinatorFactory &);
+void registerAggregateFunctionCombinatorNullRetract(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCountRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory);
@@ -110,7 +117,7 @@ void registerAggregateFunctionsMaxRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsMinRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionMinMaxKRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsUniqRetract(AggregateFunctionFactory & factory);
-void registerAggregateFunctionGroupUniqArrayRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionGroupArrayRetract(AggregateFunctionFactory & factory);
 
 #if USE_ARG_MIN_MAX_FUNCS
 void registerAggregateFunctionsArgMaxRetract(AggregateFunctionFactory & factory);
@@ -131,6 +138,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionDeltaSum(factory);
         registerAggregateFunctionDeltaSumTimestamp(factory);
         registerAggregateFunctionGroupArray(factory);
+        registerAggregateFunctionGroupArraySorted(factory);
         registerAggregateFunctionGroupUniqArray(factory);
         registerAggregateFunctionGroupArrayInsertAt(factory);
         registerAggregateFunctionGroupConcat(factory);
@@ -155,7 +163,11 @@ void registerAggregateFunctions()
         registerAggregateFunctionsMax(factory);
         registerAggregateFunctionsAny(factory);
         registerAggregateFunctionsStatisticsStable(factory);
-        registerAggregateFunctionsStatisticsSimple(factory);
+        registerAggregateFunctionsStatisticsSecondMoment(factory);
+        registerAggregateFunctionsStatisticsThirdMoment(factory);
+        registerAggregateFunctionsStatisticsFourthMoment(factory);
+        registerAggregateFunctionsStatisticsCovar(factory);
+        registerAggregateFunctionsStatisticsCorr(factory);
         registerAggregateFunctionSum(factory);
         registerAggregateFunctionSumCount(factory);
         registerAggregateFunctionSumMap(factory);
@@ -192,6 +204,8 @@ void registerAggregateFunctions()
         registerAggregateFunctionSparkbar(factory);
         registerAggregateFunctionAnalysisOfVariance(factory);
         registerAggregateFunctionLargestTriangleThreeBuckets(factory);
+        registerAggregateFunctionDistinctDynamicTypes(factory);
+        registerAggregateFunctionDistinctJSONPathsAndTypes(factory);
 
         registerWindowFunctions(factory);
 
@@ -205,7 +219,7 @@ void registerAggregateFunctions()
         Streaming::registerAggregateFunctionsMaxRetract(factory);
         Streaming::registerAggregateFunctionsMinRetract(factory);
         Streaming::registerAggregateFunctionMinMaxKRetract(factory);
-        Streaming::registerAggregateFunctionGroupUniqArrayRetract(factory);
+        Streaming::registerAggregateFunctionGroupArrayRetract(factory);
         Streaming::registerAggregateFunctionsUniqRetract(factory);
 
         #if USE_ARG_MIN_MAX_FUNCS
@@ -229,11 +243,11 @@ void registerAggregateFunctions()
         registerAggregateFunctionCombinatorResample(factory);
         registerAggregateFunctionCombinatorDistinct(factory);
         registerAggregateFunctionCombinatorMap(factory);
-        registerAggregateFunctionCombinatorTimeWeighted(factory);
-
+    
         /// proton: starts.
         Streaming::registerAggregateFunctionCombinatorDistinct(factory);
         Streaming::registerAggregateFunctionCombinatorDistinctRetract(factory);
+        Streaming::registerAggregateFunctionCombinatorNullRetract(factory);
         /// proton: ends.
     }
 }

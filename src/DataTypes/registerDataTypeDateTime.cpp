@@ -22,11 +22,11 @@ enum class ArgumentKind
     Mandatory
 };
 
-String getExceptionMessage(
+PreformattedMessage getExceptionMessage(
     const String & message, size_t argument_index, const char * argument_name,
     const std::string & context_data_type_name, Field::Types::Which field_type)
 {
-    return fmt::format("Parameter #{} '{}' for {}{}, expected {} literal",
+    return PreformattedMessage::create("Parameter #{} '{}' for {}{}, expected {} literal",
         argument_index, argument_name, context_data_type_name, message, field_type);
 }
 
@@ -67,7 +67,7 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, [[maybe_
     const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, !!scale, "timezone", "datetime");
 
     if (!scale && !timezone)
-        throw Exception(getExceptionMessage(" has wrong type: ", 0, "scale", "datetime", Field::Types::Which::UInt64),
+        throw Exception(getExceptionMessage(" has wrong type: ", 0, "scale", "DateTime", Field::Types::Which::UInt64),
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     /// If scale is defined, the data type is DateTime when scale = 0 otherwise the data type is DateTime64
@@ -83,7 +83,8 @@ static DataTypePtr create32(const ASTPtr & arguments, [[maybe_unused]] bool comp
         return std::make_shared<DataTypeDateTime>();
 
     if (arguments->children.size() != 1)
-        throw Exception("The datetime32 data type can optionally have only one argument - time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                        "The datetime32 data type can optionally have only one argument - time zone name");
 
     const auto timezone = getArgument<String, ArgumentKind::Mandatory>(arguments, 0, "timezone", "datetime32");
 
@@ -96,7 +97,8 @@ static DataTypePtr create64(const ASTPtr & arguments, [[maybe_unused]] bool comp
         return std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
 
     if (arguments->children.size() > 2)
-        throw Exception("The datetime64 data type can optionally have two argument - scale and time zone name", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                        "The datetime64 data type can optionally have two argument - scale and time zone name");
 
     const auto scale = getArgument<UInt64, ArgumentKind::Mandatory>(arguments, 0, "scale", "datetime64");
     const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, 1, "timezone", "datetime64");

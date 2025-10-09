@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_binomial(value float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_binomial(value):
+          res = [float(sum(np.random.binomial(9, v, 20000) == 0))/20000. for v in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-12-1
+    type: stream
+    query: select test_random_binomial(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (0.1)(0.2);
+
+  - type: check
+    target_name: python-udf2-12-1
+    expected_result:
+      - [any_value, 0.1] # around 0.38
+      - [any_value, 0.2] # around 0.13

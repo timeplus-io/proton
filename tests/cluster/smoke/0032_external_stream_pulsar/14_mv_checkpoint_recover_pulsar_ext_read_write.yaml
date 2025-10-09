@@ -1,0 +1,126 @@
+tags:
+  - materialized view
+
+description: |
+  Test cover checkpoint recover pulsar external stream read / write
+  Main Steps:
+    1.Create external stream
+    2.Create materialized view from external stream
+    3.Ingest data into external stream from random stream
+    4.Check mv data
+    5.System pause mv
+    6.Ingest data into external stream from random stream
+    7.Check mv no new data
+    8.System resume mv
+    9.Ingest data into external stream from random stream
+    10.Check mv new data from last checkpoint
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_14
+
+  - type: pulsar
+    name: create
+    topic: test_14
+
+  - type: query
+    sql: drop view if exists mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists github_events;
+
+  - type: query
+    sql: drop stream if exists rd;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream github_events
+      (
+        id int,
+        value string
+      )
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='test_14';
+
+  - type: query
+    sql: |
+      create random stream rd(
+        id int default rand() % 100,
+        value string default 'abcd'
+      );
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW mv_github_events AS
+      SELECT
+        id, value, _tp_time
+      FROM
+        github_events
+      SETTINGS
+        seek_to = 'earliest';
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into github_events(id, value) select id, value from rd limit 100000 settings eps=10000;
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-14-1
+    query: select count() from mv_github_events settings seek_to='earliest';
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: pulsar-14-1
+    expected_result:
+      - [100000]
+
+  - type: query
+    sql: system pause materialized view mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into github_events(id, value) select id, value from rd limit 50000 settings eps=10000;
+
+  - type: check
+    target_name: pulsar-14-1
+    expected_result: []
+
+  - type: query
+    sql: system resume materialized view mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pulsar-14-1
+    expected_result:
+      - [150000]
+
+  - type: query
+    sql: insert into github_events(id, value) select id, value from rd limit 10000 settings eps=10000;
+
+  - type: check
+    target_name: pulsar-14-1
+    expected_result:
+      - [160000]

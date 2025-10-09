@@ -1,0 +1,56 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (valuea float, valueb float, size int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_beta(valuea float, valueb float, size int) RETURNS array(float) LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_beta(valuea, valueb, size):
+          res = []
+          for a, b, s in zip(valuea, valueb, size):
+              if a > 0:
+                  temp_beta = np.random.beta(a, b, s).tolist()
+                  res.append(temp_beta)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-11-1
+    type: stream
+    query: select test_random_beta(valuea, valueb, size) as res, valuea, valueb, size from udf_stream;
+    schema:
+      - name: res
+        type: array(float32)
+      - name: valuea
+        type: float32
+      - name: valueb
+        type: float32
+      - name: size
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(valuea, valueb, size) values (1.0, 1.0, 1)(2.0, 2.0, 2);
+
+  - type: check
+    target_name: python-udf2-11-1
+    expected_result:
+      - [[any_value], 1.0, 1.0, 1]
+      - [[any_value, any_value], 2.0, 2.0, 2]

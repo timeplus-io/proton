@@ -1,0 +1,77 @@
+tags:
+  - subquery/view/materialized_view/
+  - no_group_by
+description: subquery from view from view
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_subquery_5(i float, k1 int, k2 string);
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create view if not exists test14_view1_5 as (
+        select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+      );
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create view test14_view2_5 as (select * from test14_view1_5);
+  - type: wait
+    time: 2
+
+  - name: "1421"
+    type: stream
+    query: select lag(i, 2), k2, _tp_delta from test14_view2_5;
+    schema:
+      - name: lag(i, 2)
+        type: float32
+      - name: k2
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+  - type: check
+    target_name: "1421"
+    expected_result:
+      - [0, a, 1]
+      - [0, a, -1]
+      - [4, a, 1]
+      - [4, b, 1]
+      - [2, a, -1]
+      - [5, a, 1]
+      - [2, b, -1]
+      - [2, b, 1]

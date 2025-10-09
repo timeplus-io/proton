@@ -1,0 +1,23 @@
+name: dedup
+description: Tests covering dedup smoke test cases
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists dedup_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream dedup_stream(i int64, s string)
+  - type: wait
+    time: 1
+
+
+teardown:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists dedup_stream

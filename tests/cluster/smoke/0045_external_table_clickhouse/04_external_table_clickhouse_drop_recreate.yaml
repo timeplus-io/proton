@@ -1,0 +1,185 @@
+tags:
+  - udf
+
+description: |
+  Test drop and recreate external table with type Clickhouse
+  Main steps:
+    1.Create table in Clickhouse
+    2.Ingest data into Clickhouse table
+    3.Create external table in Proton with type Clickhouse
+    4.Create JS UDF
+    5.Ingest data into external table
+    6.Query external table
+    7.Query JS UDF from external table
+    8.Drop function, external table, clickhouse table
+    9.Repeat Step 1 - 8
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "DROP TABLE IF EXISTS ch_sink_table;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "CREATE TABLE ch_sink_table (ts Datetime64(3), c Int, j String, event_ts Datetime64(3), inserted_at Datetime64(3) default now64(3)) PRIMARY KEY ts;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "INSERT INTO ch_sink_table (ts, c, j) VALUES ('2024-01-01 00:00:01.000', 1, 'a1');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE sink_ch_ext
+      SETTINGS type = 'clickhouse', address = 'clickhouse:9000', 
+      database = 'default', table = 'ch_sink_table', user = 'chusr', password = 'chpwd'
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_suffix(j string) RETURNS string LANGUAGE JAVASCRIPT AS $$
+        function add_suffix(j) {
+          for(let i=0;i<j.length;i++) {
+            j[i]=j[i]+'x';
+          }
+          return j;
+        }
+      $$;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO sink_ch_ext(ts, c, j) VALUES
+      ('2024-01-02 00:00:02.000', 2, 'b2')
+      ('2024-01-03 00:00:03.000', 3, 'b3');
+
+  - type: wait
+    time: 2
+
+  - name: extch-4-1
+    type: stream
+    query: SELECT ts, c, j FROM sink_ch_ext;
+    schema:
+      - name: ts
+        type: datetime64(3)
+      - name: c
+        type: int32
+      - name: j
+        type: string
+
+  - name: extch-4-2
+    type: stream
+    query: SELECT add_suffix(j) as res FROM sink_ch_ext;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: extch-4-1
+    mode: random
+    expected_result:
+      - ['2024-01-01 00:00:01.000', 1, 'a1']
+      - ['2024-01-02 00:00:02.000', 2, 'b2']
+      - ['2024-01-03 00:00:03.000', 3, 'b3']
+
+  - type: check
+    target_name: extch-4-2
+    mode: random
+    expected_result:
+      - ['a1x']
+      - ['b2x']
+      - ['b3x']
+
+  # drop and recreate
+  - type: query
+    sql: DROP FUNCTION add_suffix;
+
+  - type: query
+    sql: DROP STREAM sink_ch_ext;
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "DROP TABLE IF EXISTS ch_sink_table;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "CREATE TABLE ch_sink_table (ts Datetime64(3), c Int, j String, event_ts Datetime64(3), inserted_at Datetime64(3) default now64(3)) PRIMARY KEY ts;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "INSERT INTO ch_sink_table (ts, c, j) VALUES ('2024-01-04 00:00:04.000', 4, 'a4');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE sink_ch_ext
+      SETTINGS type = 'clickhouse', address = 'clickhouse:9000', 
+      database = 'default', table = 'ch_sink_table', user = 'chusr', password = 'chpwd'
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_suffix(j string) RETURNS string LANGUAGE JAVASCRIPT AS $$
+        function add_suffix(j) {
+          for(let i=0;i<j.length;i++) {
+            j[i]=j[i]+'x';
+          }
+          return j;
+        }
+      $$;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO sink_ch_ext(ts, c, j) VALUES
+      ('2024-01-05 00:00:05.000', 5, 'b5')
+      ('2024-01-06 00:00:06.000', 6, 'b6');
+
+  - type: wait
+    time: 2
+
+  - name: extch-4-3
+    type: stream
+    query: SELECT ts, c, j FROM sink_ch_ext;
+    schema:
+      - name: ts
+        type: datetime64(3)
+      - name: c
+        type: int32
+      - name: j
+        type: string
+
+  - name: extch-4-4
+    type: stream
+    query: SELECT add_suffix(j) as res FROM sink_ch_ext;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: extch-4-3
+    mode: random
+    expected_result:
+      - ['2024-01-04 00:00:04.000', 4, 'a4']
+      - ['2024-01-05 00:00:05.000', 5, 'b5']
+      - ['2024-01-06 00:00:06.000', 6, 'b6']
+
+  - type: check
+    target_name: extch-4-4
+    mode: random
+    expected_result:
+      - ['a4x']
+      - ['b5x']
+      - ['b6x']

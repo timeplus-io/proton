@@ -1,7 +1,5 @@
 #include "TelemetryCollector.h"
-
-
-//#include <filesystem>
+#include <Common/config_version.h>
 
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -14,6 +12,8 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/DateLUT.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+
+#include <filesystem>
 
 namespace fs = std::filesystem;
 
@@ -36,7 +36,7 @@ TelemetryCollector::TelemetryCollector(ContextPtr context_)
     : pool(context_->getSchedulePool())
     , started_on_in_minutes(UTCMinutes::now())
     , queue(TELEMETRY_QUEUE_SIZE)
-    , logger(&Poco::Logger::get("TelemetryCollector"))
+    , logger(getLogger("TelemetryCollector"))
 {
     const auto & config = context_->getConfigRef();
 
@@ -68,7 +68,6 @@ TelemetryCollector::TelemetryCollector(ContextPtr context_)
 TelemetryCollector::~TelemetryCollector()
 {
     shutdown();
-    LOG_INFO(logger, "stopped");
 }
 
 void TelemetryCollector::startup()
@@ -77,8 +76,8 @@ void TelemetryCollector::startup()
     collector_task->activate();
     collector_task->schedule();
 
-    if (!upload_thread.joinable())
-        upload_thread = ThreadFromGlobalPool(&TelemetryCollector::upload, this);
+    if (!upload_thread || !upload_thread->joinable())
+        upload_thread = std::make_unique<ThreadFromGlobalPool>(&TelemetryCollector::upload, this);
 }
 
 void TelemetryCollector::shutdown()
@@ -86,17 +85,18 @@ void TelemetryCollector::shutdown()
     if (is_shutdown.test_and_set())
         return;
 
+    LOG_INFO(logger, "Stopping");
+
     if (collector_task)
-    {
-        LOG_INFO(logger, "Stopped");
         collector_task->deactivate();
+
+    if (upload_thread && upload_thread->joinable())
+    {
+        auto temp_thread = std::move(upload_thread);
+        temp_thread->join();
     }
 
-    if (!upload_thread.joinable())
-        return;
-
-    auto temp_thread = std::move(upload_thread);
-    temp_thread.join();
+    LOG_INFO(logger, "Stopped");
 }
 
 void TelemetryCollector::enable()
@@ -155,7 +155,7 @@ void TelemetryCollector::collect()
         prev_historical_select_query = historical_select_query;
 
         add<TelemetryStatsElementBuilder>([&](auto & builder) {
-            builder.useCPU(getNumberOfPhysicalCPUCores())
+            builder.useCPU(getNumberOfLogicalCPUCores())
                 .useMemoryInGB(getMemoryAmount() / 1024 / 1024 / 1024)
                 .isNewSession(new_session)
                 .startedOn(started_on)
@@ -188,16 +188,14 @@ void TelemetryCollector::upload()
 
     while (!is_shutdown.test())
     {
-        auto q = queue.drain(/*timeout_ms=*/10'000);
+        auto q = queue.drain(/*timeout_ms=*/1'000);
 
         /// drop all telemetry if disabled
         if (!is_enable)
             continue;
 
-        while (!q.empty())
+        for (const auto & element : q)
         {
-            auto element = q.front();
-            q.pop();
             try
             {
                 std::string data = element->toString();

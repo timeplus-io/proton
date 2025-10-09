@@ -1,5 +1,5 @@
 #include <TableFunctions/TableFunctionFile.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 
 #include "registerTableFunctions.h"
 #include <Access/Common/AccessFlags.h>
@@ -27,6 +27,7 @@ StoragePtr TableFunctionFile::getStorage(const String & source,
         columns,
         ConstraintsDescription{},
         String{},
+        global_context->getSettingsRef().rename_files_after_processing,
     };
 
     return StorageFile::create(source, global_context->getUserFilesPath(), args);

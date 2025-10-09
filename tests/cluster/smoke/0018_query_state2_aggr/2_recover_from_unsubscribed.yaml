@@ -1,0 +1,70 @@
+tags:
+  - tail
+description: recover from an unsubscribed query shall fail
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream2
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream2 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1952'
+    query_id: '1952'
+    type: stream
+    query: subscribe to select id, value from test19_state_stream2 settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: float32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test19_state_stream2(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1952'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1952'
+
+  - name: 1952-1
+    query_id: 1952-1
+    type: stream
+    query: recover from '1952'
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: '1952'
+    expected_result:
+      - [ dev1, '57.3' ]
+
+  - type: check
+    target_name: 1952-1
+    expected_result:
+      - [ error_code:674 ]

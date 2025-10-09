@@ -1,0 +1,101 @@
+tags:
+  - multishards
+  - append_only
+  - streaming_tailing
+  - UDF
+description: multishards append only basic test UDF add
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_7;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_7(i float, k1 int, k2 string) settings shards=3;
+
+  - type: wait
+    time: 2
+
+  - name: '1361'
+    type: stream
+    query: |
+      select i,
+             test_13_7_add_five(i),
+             test_13_7_add_five(test_13_7_add_five(i)),
+             test_13_7_add_five(k1),
+             k2
+      from test13_multishard_7;
+    schema:
+      - name: i
+        type: float32
+      - name: test_13_7_add_five(i)
+        type: float32
+      - name: test_13_7_add_five(test_13_7_add_five(i))
+        type: float32
+      - name: test_13_7_add_five(k1)
+        type: float32
+      - name: k2
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (1, 0, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (2, 0, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (3, 0, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (4, 0, 'd');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (5, 0, 'e');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (6, 0, 'f');
+
+  - type: check
+    target_name: '1361'
+    expected_result:
+      - [ 1, 6, 11, 5, a ]
+      - [ 2, 7, 12, 5, b ]
+      - [ 3, 8, 13, 5, c ]
+      - [ 4, 9, 14, 5, d ]
+      - [ 5, 10, 15, 5, e ]
+      - [ 6, 11, 16, 5, f ]

@@ -1,0 +1,22 @@
+tags:
+  - validate
+  
+description: extra tests
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: udf-6-1
+    type: stream
+    query: select ip_lookup('192.168.0.1') as result;
+    schema:
+    - name: result
+      type: string
+
+  - type: check
+    mode: random
+    target_name: udf-6-1
+    expected_result:
+    - [ '{"ip":"192.168.0.1","bogon":true}' ]

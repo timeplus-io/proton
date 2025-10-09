@@ -47,6 +47,10 @@ struct AlterCommand
         MODIFY_DATABASE_SETTING,
         COMMENT_TABLE,
         REMOVE_SAMPLE_BY,
+        /// proton: starts.
+        MODIFY_QUERY_SETTING,
+        RESET_QUERY_SETTING,
+        /// proton: ends.
     };
 
     /// Which property user wants to remove from column
@@ -130,10 +134,10 @@ struct AlterCommand
     /// For ADD and MODIFY
     ASTPtr codec = nullptr;
 
-    /// For MODIFY SETTING
+    /// For MODIFY SETTING or MODIFY QUERY SETTING
     SettingsChanges settings_changes;
 
-    /// For RESET SETTING
+    /// For RESET SETTING or RESET QUERY SETTING
     std::set<String> settings_resets;
 
     /// For MODIFY_QUERY
@@ -171,6 +175,13 @@ struct AlterCommand
     /// return empty optional. Some storages may execute mutations after
     /// metadata changes.
     std::optional<MutationCommand> tryConvertToMutationCommand(StorageInMemoryMetadata & metadata, ContextPtr context) const;
+
+    /// proton: starts.
+    std::string toASTString(const String & table, const String & database) const;
+    std::shared_ptr<ASTAlterCommand> toAST() const;
+    static std::optional<AlterCommand> parse(std::string_view query_string);
+    const char * typeString() const noexcept;
+    /// proton: ends.
 };
 
 class Context;
@@ -186,7 +197,7 @@ public:
     /// Checks that all columns exist and dependencies between them.
     /// This check is lightweight and base only on metadata.
     /// More accurate check have to be performed with storage->checkAlterIsPossible.
-    void validate(const StorageInMemoryMetadata & metadata, ContextPtr context) const;
+    void validate(const StoragePtr & table, ContextPtr context) const;
 
     /// Prepare alter commands. Set ignore flag to some of them and set some
     /// parts to commands from storage's metadata (for example, absent default)
@@ -209,7 +220,13 @@ public:
     /// alter. If alter can be performed as pure metadata update, than result is
     /// empty. If some TTL changes happened than, depending on materialize_ttl
     /// additional mutation command (MATERIALIZE_TTL) will be returned.
-    MutationCommands getMutationCommands(StorageInMemoryMetadata metadata, bool materialize_ttl, ContextPtr context) const;
+    MutationCommands getMutationCommands(StorageInMemoryMetadata metadata, bool materialize_ttl, ContextPtr context, bool with_alters=false) const;
+
+    /// proton : starts
+    std::vector<String> stringCommands() const;
+
+    std::vector<String> astCommands(const StorageID & storage_id) const;
+    /// proton : ends
 };
 
 }

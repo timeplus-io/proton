@@ -9,13 +9,14 @@ MergingSortedAlgorithm::MergingSortedAlgorithm(
     Block header_,
     size_t num_inputs,
     const SortDescription & description_,
-    size_t max_block_size,
+    size_t max_block_size_,
+    size_t max_block_size_bytes_,
     SortingQueueStrategy sorting_queue_strategy_,
     UInt64 limit_,
     WriteBuffer * out_row_sources_buf_,
     bool use_average_block_sizes)
     : header(std::move(header_))
-    , merged_data(header.cloneEmptyColumns(), use_average_block_sizes, max_block_size)
+    , merged_data(use_average_block_sizes, max_block_size_, max_block_size_bytes_)
     , description(description_)
     , limit(limit_)
     , out_row_sources_buf(out_row_sources_buf_)
@@ -34,8 +35,8 @@ MergingSortedAlgorithm::MergingSortedAlgorithm(
     }
 
     queue_variants = SortQueueVariants(sort_description_types, description);
-    /// if (queue_variants.variantSupportJITCompilation())
-    ///    compileSortDescriptionIfNeeded(description, sort_description_types, true /*increase_compile_attempts*/);
+    if (queue_variants.variantSupportJITCompilation())
+       compileSortDescriptionIfNeeded(description, sort_description_types, true /*increase_compile_attempts*/);
 }
 
 void MergingSortedAlgorithm::addInput()
@@ -56,12 +57,12 @@ static void prepareChunk(Chunk & chunk)
 
 void MergingSortedAlgorithm::initialize(Inputs inputs)
 {
+    merged_data.initialize(header, inputs);
     current_inputs = std::move(inputs);
 
     for (size_t source_num = 0; source_num < current_inputs.size(); ++source_num)
     {
         auto & chunk = current_inputs[source_num].chunk;
-
         if (!chunk)
             continue;
 

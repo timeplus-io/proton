@@ -1,0 +1,76 @@
+tags:
+- seek_to
+description: event predicate with cte
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2100'
+  type: stream
+  query: with cte as (select i, s, _tp_time as event_time from test21_limit_by_stream)
+    select i, s from cte where event_time >= '2022-12-01 00:00:01.111'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: with cte as (select i, s, _tp_sn as sn from test21_limit_by_stream) select
+    i, s from cte where sn >= 1
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+
+- name: '2102'
+  type: stream
+  query: with cte as (select i, s, _tp_time as event_time from test21_limit_by_stream)
+    select window_start, count() from tumble(cte, event_time, 2s) where event_time
+    >= '2022-12-01 00:00:01.111' group by window_start
+  schema:
+  - name: window_start
+    type: datetime64(3)
+  - name: count()
+    type: uint64
+
+- name: '2103'
+  type: stream
+  query: with cte as (select i, s, _tp_time, _tp_sn as sn from test21_limit_by_stream)
+    select window_start, count() from tumble(cte, 2s) where sn >= 1 group by window_start
+  schema:
+  - name: window_start
+    type: datetime64(3)
+  - name: count()
+    type: uint64
+
+- type: check
+  target_name: '2100'
+  mode: random
+  expected_result:
+  - [1, s1]
+  - [2, s2]
+  - [3, s3]
+  - [4, s4]
+
+- type: check
+  target_name: '2101'
+  expected_result:
+  - [1, s1]
+  - [2, s2]
+  - [3, s3]
+  - [4, s4]
+
+- type: check
+  target_name: '2102'
+  expected_result:
+  - ['2022-12-01 00:00:00+00:00', 1]
+  - ['2022-12-01 00:00:02+00:00', 2]
+
+- type: check
+  target_name: '2103'
+  expected_result:
+  - ['2022-12-01 00:00:00+00:00', 1]
+  - ['2022-12-01 00:00:02+00:00', 2]

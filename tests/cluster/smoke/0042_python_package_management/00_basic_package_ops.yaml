@@ -1,0 +1,87 @@
+tags:
+  - python_package
+  - basic
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Basic test for Python package management system:
+  Main Steps:
+    2. Install a lightweight package (requests)
+    3. Check task tracking
+    4. Test SYSTEM LIST command
+    5. Quick cleanup
+
+steps:
+
+  # Step 2: Install a lightweight package
+  - type: query
+    sql: SYSTEM INSTALL PYTHON PACKAGE 'requests==2.32.5'
+
+  # Step 4: Wait for installation  
+  - type: wait
+    time: 8
+
+  # Step 5: Check installation status
+  - name: check-install-status
+    type: stream
+    query: SELECT status, error_code, error_message FROM system.python_package_tasks WHERE package_name = 'requests' AND operation = 'install' ORDER BY created_at DESC LIMIT 1
+    schema:
+      - name: status
+        type: string
+      - name: error_code
+        type: int32
+      - name: error_message
+        type: string
+
+  - type: check
+    target_name: check-install-status
+    expected_result:
+      - ["Completed", 0, ""]
+
+
+  # Step 9: Clean up by uninstalling
+  - type: query
+    sql: SYSTEM UNINSTALL PYTHON PACKAGE 'requests'
+
+  # Step 10: Wait for uninstall
+  - type: wait
+    time: 8
+
+  # Step 11: Verify uninstall completed
+  - name: check-uninstall-done
+    type: stream
+    query: SELECT status, error_code, error_message FROM system.python_package_tasks WHERE package_name = 'requests' AND operation = 'uninstall' ORDER BY created_at DESC LIMIT 1
+    schema:
+      - name: status
+        type: string
+      - name: error_code
+        type: int32
+      - name: error_message
+        type: string
+
+  - type: check
+    target_name: check-uninstall-done
+    expected_result:
+      - ["Completed", 0, ""]
+
+  - type: wait
+    time: 1
+
+  - name: check-uninstall-done
+    type: stream
+    query: select state_name, state_string_value from table(system.stream_state_log) where node_id=1 and name='python_package_manager' and dimension='requests' and  state_name like '%successful%'
+    schema:
+      - name: state_name
+        type: low_cardinality(string)
+      - name: state_string_value
+        type: string
+
+  - type: check
+    mode: random
+    target_name: check-uninstall-done
+    expected_result:
+      - ["successful_installs", "2.32.5"]
+      - ["successful_uninstalls", ""]
+

@@ -26,6 +26,10 @@ public:
     // Poco::Logger::parseLevel returns ints
     void setLevel(int level) { priority = static_cast<Poco::Message::Priority>(level); }
 
+    /// proton starts: Get current level
+    int getLevel() const { return static_cast<int>(priority.load()); }
+    /// proton ends.
+
     void open() override
     {
         if (pChannel)

@@ -42,7 +42,7 @@ ExecutablePoolDictionarySource::ExecutablePoolDictionarySource(
     , sample_block(sample_block_)
     , coordinator(std::move(coordinator_))
     , context(context_)
-    , log(&Poco::Logger::get("ExecutablePoolDictionarySource"))
+    , log(getLogger("ExecutablePoolDictionarySource"))
 {
     /// Remove keys from sample_block for implicit_key dictionary because
     /// these columns will not be returned from source
@@ -66,7 +66,7 @@ ExecutablePoolDictionarySource::ExecutablePoolDictionarySource(const ExecutableP
     , sample_block(other.sample_block)
     , coordinator(other.coordinator)
     , context(Context::createCopy(other.context))
-    , log(&Poco::Logger::get("ExecutablePoolDictionarySource"))
+    , log(getLogger("ExecutablePoolDictionarySource"))
 {
 }
 
@@ -189,7 +189,9 @@ void registerDictionarySourceExecutablePool(DictionarySourceFactory & factory)
         /// It's OK for dictionaries created by administrator from xml-file, but
         /// maybe dangerous for dictionaries created from DDL-queries.
         if (created_from_ddl && global_context->getApplicationType() != Context::ApplicationType::LOCAL)
-            throw Exception(ErrorCodes::DICTIONARY_ACCESS_DENIED, "Dictionaries with executable pool dictionary source are not allowed to be created from DDL query");
+            throw Exception(ErrorCodes::DICTIONARY_ACCESS_DENIED,
+                            "Dictionaries with executable pool dictionary source are not allowed "
+                            "to be created from DDL query");
 
         ContextMutablePtr context = copyContextAndApplySettingsFromDictionaryConfig(global_context, config, config_prefix);
 
@@ -197,7 +199,7 @@ void registerDictionarySourceExecutablePool(DictionarySourceFactory & factory)
 
         size_t max_command_execution_time = config.getUInt64(settings_config_prefix + ".max_command_execution_time", 10);
 
-        size_t max_execution_time_seconds = static_cast<size_t>(context->getSettings().max_execution_time.totalSeconds());
+        size_t max_execution_time_seconds = static_cast<size_t>(context->getSettingsRef().max_execution_time.totalSeconds());
         if (max_execution_time_seconds != 0 && max_command_execution_time > max_execution_time_seconds)
             max_command_execution_time = max_execution_time_seconds;
 

@@ -27,10 +27,12 @@ public:
 
     const BlockMissingValues & getMissingValues() const override;
 
+    size_t getApproxBytesReadForChunk() const override { return approx_bytes_read_for_chunk; }
+
 private:
     Chunk generate() override;
 
-    void onCancel() override
+    void onCancel() noexcept override
     {
         is_stopped = 1;
     }
@@ -47,8 +49,8 @@ private:
     int record_batch_total = 0;
     int record_batch_current = 0;
 
-    std::vector<size_t> missing_columns;
     BlockMissingValues block_missing_values;
+    size_t approx_bytes_read_for_chunk = 0;
 
     const FormatSettings format_settings;
 

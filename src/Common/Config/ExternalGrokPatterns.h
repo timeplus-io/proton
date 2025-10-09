@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Core/BackgroundSchedulePool.h>
+#include <Core/BackgroundSchedulePoolTaskHolder.h>
+#include <Common/SharedMutex.h>
 #include <Common/getResource.h>
 #include <Common/logger_useful.h>
 
@@ -10,10 +12,10 @@ namespace DB
 class ExternalGrokPatterns
 {
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     String file_name;
     std::unique_ptr<std::unordered_map<String, String>> patterns;
-    mutable std::shared_mutex patterns_mutex;
+    mutable SharedMutex patterns_mutex;
 
     BackgroundSchedulePool & pool;
     BackgroundSchedulePoolTaskHolder reload_task;
@@ -35,7 +37,7 @@ public:
     std::optional<String> tryGetPattern(const String & pattern_name) const;
 
 private:
-    ExternalGrokPatterns(ContextPtr context_);
+    explicit ExternalGrokPatterns(ContextPtr context_);
     void reloadPatternsFromFile();
     void loadPatternsFromFile();
     void loadPatternsFromStream(std::istream & stream);

@@ -48,11 +48,6 @@ std::pair<String, Int32> DatabaseRestRouterHandler::executeGet(const Poco::JSON:
 
 std::pair<String, Int32> DatabaseRestRouterHandler::executePost(const Poco::JSON::Object::Ptr & payload) const
 {
-    if (isDistributedDDL())
-    {
-        setupDistributedQueryParameters({}, payload);
-    }
-
     const String & database_name = payload->get("name").toString();
     String query = "CREATE DATABASE " + database_name;
 
@@ -61,11 +56,6 @@ std::pair<String, Int32> DatabaseRestRouterHandler::executePost(const Poco::JSON
 
 std::pair<String, Int32> DatabaseRestRouterHandler::executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const
 {
-    if (isDistributedDDL())
-    {
-        setupDistributedQueryParameters({});
-    }
-
     const String & database_name = getPathParameter("database");
     String query = "DROP DATABASE " + database_name;
 

@@ -1,0 +1,27 @@
+name: changelog_stream4
+description: Tests covering the single shard changelog stream query smoke cases.
+tags:
+- smoke
+setup:
+  scope: case
+  steps:
+  - type: query
+    sql: DROP VIEW IF EXISTS test14_view_4;
+
+  - type: query
+    sql: DROP VIEW IF EXISTS test14_view2_4;
+  
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP VIEW IF EXISTS test14_view1_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test14_subquery_4;
+
+  - type: wait
+    time: 1

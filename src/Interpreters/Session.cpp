@@ -1,5 +1,6 @@
 #include <Interpreters/Session.h>
 
+#include <base/isSharedPtrUnique.h>
 #include <Access/AccessControl.h>
 #include <Access/Credentials.h>
 #include <Access/ContextAccess.h>
@@ -27,9 +28,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int SESSION_NOT_FOUND;
-    extern const int SESSION_IS_LOCKED;
+extern const int ACCESS_DENIED;
+extern const int LOGICAL_ERROR;
+extern const int SESSION_NOT_FOUND;
+extern const int SESSION_IS_LOCKED;
 }
 
 
@@ -107,7 +109,7 @@ public:
         if (it == sessions.end())
         {
             if (throw_if_not_found)
-                throw Exception("Session not found.", ErrorCodes::SESSION_NOT_FOUND);
+                throw Exception(ErrorCodes::SESSION_NOT_FOUND, "Session not found.");
 
             /// Create a new session from current context.
             auto context = Context::createCopy(global_context);
@@ -117,6 +119,8 @@ public:
             if (!thread.joinable())
                 thread = ThreadFromGlobalPool{&NamedSessionsStorage::cleanThread, this};
 
+            LOG_TRACE(log, "Create new session with session_id: {}, user_id: {}", key.second, key.first);
+
             return {session, true};
         }
         else
@@ -124,8 +128,10 @@ public:
             /// Use existing session.
             const auto & session = it->second;
 
-            if (!session.unique())
-                throw Exception("Session is locked by a concurrent client.", ErrorCodes::SESSION_IS_LOCKED);
+            LOG_TEST(log, "Reuse session from storage with session_id: {}, user_id: {}", key.second, key.first);
+
+            if (!isSharedPtrUnique(session))
+                throw Exception(ErrorCodes::SESSION_IS_LOCKED, "Session is locked by a concurrent client.");
             return {session, false};
         }
     }
@@ -173,6 +179,10 @@ private:
                 close_times.resize(close_index + 1);
             close_times[close_index].emplace_back(session.key);
         }
+
+        LOG_TEST(log, "Schedule closing session with session_id: {}, user_id: {}",
+                 session.key.second, session.key.first);
+
     }
 
     void cleanThread()
@@ -212,14 +222,19 @@ private:
 
             if (session != sessions.end() && session->second->close_cycle <= current_cycle)
             {
-                if (!session->second.unique())
+                if (!isSharedPtrUnique(session->second))
                 {
+                    LOG_TEST(log, "Delay closing session with session_id: {}, user_id: {}", key.second, key.first);
+
                     /// Skip but move it to close on the next cycle.
                     session->second->timeout = std::chrono::steady_clock::duration{0};
                     scheduleCloseSession(*session->second, lock);
                 }
                 else
+                {
+                    LOG_TRACE(log, "Close session with session_id: {}, user_id: {}", key.second, key.first);
                     sessions.erase(session);
+                }
             }
         }
 
@@ -231,6 +246,8 @@ private:
     std::condition_variable cond;
     ThreadFromGlobalPool thread;
     bool quit = false;
+
+    LoggerPtr log = getLogger("NamedSessionsStorage");
 };
 
 
@@ -247,7 +264,7 @@ void Session::shutdownNamedSessions()
 Session::Session(const ContextPtr & global_context_, ClientInfo::Interface interface_)
     : auth_id(UUIDHelpers::generateV4()),
       global_context(global_context_),
-      log(&Poco::Logger::get(String{magic_enum::enum_name(interface_)} + "-Session"))
+      log(getLogger(String{magic_enum::enum_name(interface_)} + "-Session"))
 {
     prepared_client_info.emplace();
     prepared_client_info->interface = interface_;
@@ -255,11 +272,6 @@ Session::Session(const ContextPtr & global_context_, ClientInfo::Interface inter
 
 Session::~Session()
 {
-    LOG_DEBUG(log, "{} Destroying {}",
-        toString(auth_id),
-        (named_session ? "named session '" + named_session->key.second + "'" : "unnamed session")
-    );
-
     /// Early release a NamedSessionData.
     if (named_session)
         named_session->release();
@@ -273,7 +285,7 @@ Session::~Session()
 
 AuthenticationType Session::getAuthenticationType(const String & user_name) const
 {
-    return global_context->getAccessControl().read<User>(user_name)->auth_data.getType();
+    return global_context->getAccessControl()->read<User>(user_name)->auth_data.getType();
 }
 
 AuthenticationType Session::getAuthenticationTypeOrLogInFailure(const String & user_name) const
@@ -299,7 +311,7 @@ void Session::authenticate(const String & user_name, const String & password, co
 void Session::authenticate(const Credentials & credentials_, const Poco::Net::SocketAddress & address_)
 {
     if (session_context)
-        throw Exception("If there is a session context it must be created after authentication", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "If there is a session context it must be created after authentication");
 
     auto address = address_;
     if ((address == Poco::Net::SocketAddress{}) && (prepared_client_info->interface == ClientInfo::Interface::LOCAL))
@@ -310,7 +322,12 @@ void Session::authenticate(const Credentials & credentials_, const Poco::Net::So
 
     try
     {
-        user_id = global_context->getAccessControl().authenticate(credentials_, address.host());
+        /// proton : starts
+        auto access_control = global_context->getAccessControl();
+        if (access_control == nullptr)
+            throw Exception(ErrorCodes::ACCESS_DENIED, "Access control is not initialized");
+        user_id = access_control->authenticate(credentials_, address.host());
+        /// proton : ends
         LOG_DEBUG(log, "{} Authenticated with global context as user {}",
                 toString(auth_id), toString(*user_id));
     }
@@ -322,6 +339,13 @@ void Session::authenticate(const Credentials & credentials_, const Poco::Net::So
 
     prepared_client_info->current_user = credentials_.getUserName();
     prepared_client_info->current_address = address;
+
+    /// proton : starts
+    if (const auto * basic_cred = typeid_cast<const BasicCredentials *>(&credentials_))
+        prepared_client_info->current_user_password = basic_cred->getPassword();
+    else if (const auto * mysql_cred = typeid_cast<const MySQLNative41Credentials *>(&credentials_))
+        prepared_client_info->current_user_password = mysql_cred->getScrambledPassword();
+    /// proton : ends
 }
 
 void Session::onAuthenticationFailure(const std::optional<String> & user_name, const Poco::Net::SocketAddress & address_, const Exception & e)
@@ -350,11 +374,11 @@ const ClientInfo & Session::getClientInfo() const
 ContextMutablePtr Session::makeSessionContext()
 {
     if (session_context)
-        throw Exception("Session context already exists", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context already exists");
     if (query_context_created)
-        throw Exception("Session context must be created before any query context", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context must be created before any query context");
     if (!user_id)
-        throw Exception("Session context must be created after authentication", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context must be created after authentication");
 
     LOG_DEBUG(log, "{} Creating session context with user_id: {}",
             toString(auth_id), toString(*user_id));
@@ -382,11 +406,11 @@ ContextMutablePtr Session::makeSessionContext()
 ContextMutablePtr Session::makeSessionContext(const String & session_name_, std::chrono::steady_clock::duration timeout_, bool session_check_)
 {
     if (session_context)
-        throw Exception("Session context already exists", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context already exists");
     if (query_context_created)
-        throw Exception("Session context must be created before any query context", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context must be created before any query context");
     if (!user_id)
-        throw Exception("Session context must be created after authentication", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context must be created after authentication");
 
     LOG_DEBUG(log, "{} Creating named session context with name: {}, user_id: {}",
             toString(auth_id), session_name_, toString(*user_id));
@@ -440,8 +464,10 @@ std::shared_ptr<SessionLog> Session::getSessionLog() const
 
 ContextMutablePtr Session::makeQueryContextImpl(const ClientInfo * client_info_to_copy, ClientInfo * client_info_to_move) const
 {
-    if (!user_id && getClientInfo().interface != ClientInfo::Interface::TCP_INTERSERVER)
-        throw Exception("Session context must be created after authentication", ErrorCodes::LOGICAL_ERROR);
+    /// proton: starts. Comment out the check as user authentication is skipped for the bypassed URI
+    /// if (!user_id && getClientInfo().interface != ClientInfo::Interface::TCP_INTERSERVER)
+    ///     throw Exception(ErrorCodes::LOGICAL_ERROR, "Session context must be created after authentication");
+    /// proton: ends
 
     /// We can create a query context either from a session context or from a global context.
     bool from_session_context = static_cast<bool>(session_context);
@@ -452,7 +478,7 @@ ContextMutablePtr Session::makeQueryContextImpl(const ClientInfo * client_info_t
 
     if (auto query_context_user = query_context->getAccess()->tryGetUser())
     {
-        LOG_DEBUG(log, "{} Creating query context from {} context, user_id: {}, parent context user: {}",
+        LOG_TRACE(log, "{} Creating query context from {} context, user_id: {}, parent context user: {}",
                   toString(auth_id),
                   from_session_context ? "session" : "global",
                   toString(*user_id),

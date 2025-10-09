@@ -14,6 +14,7 @@
 #include <Interpreters/castColumn.h>
 #include <Common/quoteString.h>
 #include <Common/Exception.h>
+#include <Core/ColumnsWithTypeAndName.h>
 
 #include <Compression/CompressedWriteBuffer.h>
 #include <Processors/ISource.h>
@@ -62,7 +63,7 @@ StorageJoin::StorageJoin(
     auto metadata_snapshot = getInMemoryMetadataPtr();
     for (const auto & key : key_names)
         if (!metadata_snapshot->getColumns().hasPhysical(key))
-            throw Exception{"Key column (" + key + ") does not exist in stream declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_STREAM};
+            throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM, "Key column ({}) does not exist in stream declaration.", key);
 
     table_join = std::make_shared<TableJoin>(limits, use_nulls, kind, strictness, key_names);
     join = std::make_shared<HashJoin>(table_join, getRightSampleBlock(), overwrite);
@@ -100,7 +101,7 @@ void StorageJoin::checkMutationIsPossible(const MutationCommands & commands, con
 {
     for (const auto & command : commands)
         if (command.type != MutationCommand::DELETE)
-            throw Exception("The engine Join supports only DELETE mutations", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The engine Join supports only DELETE mutations");
 }
 
 void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
@@ -115,14 +116,15 @@ void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
 
     auto backup_buf = disk->writeFile(path + tmp_backup_file_name);
     auto compressed_backup_buf = CompressedWriteBuffer(*backup_buf);
-    auto backup_stream = NativeWriter(compressed_backup_buf, metadata_snapshot->getSampleBlock(), 0);
+    auto backup_stream = NativeWriter(compressed_backup_buf, 0, metadata_snapshot->getSampleBlock());
 
     auto new_data = std::make_shared<HashJoin>(table_join, getRightSampleBlock(), overwrite);
 
-    // New scope controls lifetime of InputStream.
+    // New scope controls lifetime of pipeline.
     {
         auto storage_ptr = DatabaseCatalog::instance().getTable(getStorageID(), context);
-        auto interpreter = std::make_unique<MutationsInterpreter>(storage_ptr, metadata_snapshot, commands, context, true);
+        MutationsInterpreter::Settings settings(true);
+        auto interpreter = std::make_unique<MutationsInterpreter>(storage_ptr, metadata_snapshot, commands, context, settings);
         auto pipeline = QueryPipelineBuilder::getPipeline(interpreter->execute());
         PullingPipelineExecutor executor(pipeline);
 
@@ -160,11 +162,11 @@ void StorageJoin::mutate(const MutationCommands & commands, ContextPtr context)
     }
 }
 
-HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join, ContextPtr context) const
+HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join, ContextPtr context, const Names & required_columns_names) const
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     if (!analyzed_join->sameStrictnessAndKind(strictness, kind))
-        throw Exception("Stream " + getStorageID().getNameForLogs() + " has incompatible type of JOIN.", ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN);
+        throw Exception(ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN, "Table '{}' has incompatible type of JOIN", getStorageID().getNameForLogs());
 
     if ((analyzed_join->forceNullableRight() && !use_nulls) ||
         (!analyzed_join->forceNullableRight() && isLeftOrFull(analyzed_join->kind()) && use_nulls))
@@ -173,14 +175,53 @@ HashJoinPtr StorageJoin::getJoinLocked(std::shared_ptr<TableJoin> analyzed_join,
             "Stream {} needs the same join_use_nulls setting as present in LEFT or FULL JOIN",
             getStorageID().getNameForLogs());
 
-    /// TODO: check key columns
+    const auto & join_on = analyzed_join->getOnlyClause();
+    if (join_on.on_filter_condition_left || join_on.on_filter_condition_right)
+        throw Exception(ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN, "ON section of JOIN with filter conditions is not implemented");
+
+    const auto & key_names_right = join_on.key_names_right;
+    const auto & key_names_left = join_on.key_names_left;
+    if (key_names.size() != key_names_right.size() || key_names.size() != key_names_left.size())
+        throw Exception(ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN,
+                        "Number of keys in JOIN ON section ({}) doesn't match number of keys in Join engine ({})",
+                        key_names_right.size(), key_names.size());
+
+    /* Resort left keys according to right keys order in StorageJoin
+     * We can't change the order of keys in StorageJoin
+     * because the hash table was already built with tuples serialized in the order of key_names.
+     * If we try to use the same hash table with different order of keys,
+     * then calculated hashes and the result of the comparison will be wrong.
+     *
+     * Example:
+     * ```
+     * CREATE TABLE t_right (a UInt32, b UInt32) ENGINE = Join(ALL, INNER, a, b);
+     * SELECT * FROM t_left JOIN t_right ON t_left.y = t_right.b AND t_left.x = t_right.a;
+     * ```
+     * In that case right keys should still be (a, b), need to change the order of the left keys to (x, y).
+     */
+    Names left_key_names_resorted;
+    for (const auto & key_name : key_names)
+    {
+        const auto & renamed_key = analyzed_join->renamedRightColumnNameWithAlias(key_name);
+        /// find position of renamed_key in key_names_right
+        auto it = std::find(key_names_right.begin(), key_names_right.end(), renamed_key);
+        if (it == key_names_right.end())
+            throw Exception(ErrorCodes::INCOMPATIBLE_TYPE_OF_JOIN,
+                            "Key '{}' not found in JOIN ON section. Join engine key{} '{}' have to be used",
+                            key_name, key_names.size() > 1 ? "s" : "", fmt::join(key_names, ", "));
+        const size_t key_position = std::distance(key_names_right.begin(), it);
+        left_key_names_resorted.push_back(key_names_left[key_position]);
+    }
 
     /// Set names qualifiers: table.column -> column
     /// It's required because storage join stores non-qualified names
     /// Qualifies will be added by join implementation (HashJoin)
     analyzed_join->setRightKeys(key_names);
-
-    HashJoinPtr join_clone = std::make_shared<HashJoin>(analyzed_join, getRightSampleBlock());
+    analyzed_join->setLeftKeys(left_key_names_resorted);
+    Block right_sample_block;
+    for (const auto & name : required_columns_names)
+        right_sample_block.insert(getRightSampleBlock().getByName(name));
+    HashJoinPtr join_clone = std::make_shared<HashJoin>(analyzed_join, right_sample_block);
 
     RWLockImpl::LockHolder holder = tryLockTimedWithContext(rwlock, RWLockImpl::Read, context);
     join_clone->setLock(holder);
@@ -267,16 +308,16 @@ void registerStorageJoin(StorageFactory & factory)
                     persistent = setting.value.get<bool>();
                 }
                 else
-                    throw Exception("Unknown setting " + setting.name + " for storage " + args.engine_name, ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown setting {} for storage {}", setting.name, args.engine_name);
             }
         }
 
         DiskPtr disk = args.getContext()->getDisk(disk_name);
 
         if (engine_args.size() < 3)
-            throw Exception(
-                "Storage Join requires at least 3 parameters: Join(ANY|ALL|SEMI|ANTI, LEFT|INNER|RIGHT, keys...).",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                            "Storage Join requires at least 3 parameters: "
+                            "Join(ANY|ALL|SEMI|ANTI, LEFT|INNER|RIGHT, keys...).");
 
         JoinStrictness strictness = JoinStrictness::Unspecified;
         JoinKind kind = JoinKind::Comma;
@@ -301,8 +342,7 @@ void registerStorageJoin(StorageFactory & factory)
         }
 
         if (strictness == JoinStrictness::Unspecified)
-            throw Exception("First parameter of storage Join must be ANY or ALL or SEMI or ANTI (without quotes).",
-                            ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "First parameter of storage Join must be ANY or ALL or SEMI or ANTI (without quotes).");
 
         if (auto opt_kind_id = tryGetIdentifierName(engine_args[1]))
         {
@@ -323,8 +363,7 @@ void registerStorageJoin(StorageFactory & factory)
         }
 
         if (kind == JoinKind::Comma)
-            throw Exception("Second parameter of storage Join must be LEFT or INNER or RIGHT or FULL (without quotes).",
-                            ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Second parameter of storage Join must be LEFT or INNER or RIGHT or FULL (without quotes).");
 
         Names key_names;
         key_names.reserve(engine_args.size() - 2);
@@ -332,7 +371,7 @@ void registerStorageJoin(StorageFactory & factory)
         {
             auto opt_key = tryGetIdentifierName(engine_args[i]);
             if (!opt_key)
-                throw Exception("Parameter №" + toString(i + 1) + " of storage Join don't look like column name.", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter №{} of storage Join don't look like column name.", i + 1);
 
             key_names.push_back(*opt_key);
         }
@@ -425,7 +464,7 @@ protected:
         Chunk chunk;
         if (!joinDispatch(join->kind, join->strictness, join->data->maps.front(),
                 [&](auto kind, auto strictness, auto & map) { chunk = createChunk<kind, strictness>(map); }))
-            throw Exception("Logical error: unknown JOIN strictness", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: unknown JOIN strictness");
         return chunk;
     }
 
@@ -460,8 +499,7 @@ private:
 #undef M
 
             default:
-                throw Exception("Unsupported JOIN keys in StorageJoin. Type: " + toString(static_cast<UInt32>(join->data->type)),
-                                ErrorCodes::UNSUPPORTED_JOIN_KEYS);
+                throw Exception(ErrorCodes::UNSUPPORTED_JOIN_KEYS, "Unsupported JOIN keys of type {} in StorageJoin", join->data->type);
         }
 
         if (!rows_added)
@@ -535,7 +573,7 @@ private:
                     fillAll<Map>(columns, column_indices, it, key_pos, rows_added);
             }
             else
-                throw Exception("This JOIN is not implemented yet", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "This JOIN is not implemented yet");
 
             if (rows_added >= max_block_size)
             {

@@ -1,0 +1,29 @@
+tags:
+- json
+description: json bool field
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 1
+  
+- type: query
+  sql: insert into test_json_bool(b) values (true), (false)
+
+- type: wait
+  time: 2
+
+- name: '1207'
+  type: stream
+  query: select min(b), max(b) from test_json_bool limit 1 settings seek_to='earliest'
+  schema:
+    - name: min(b)
+      type: bool
+    - name: max(b)
+      type: bool
+
+- type: check
+  target_name: '1207'
+  expected_result:
+  - ['False', 'True']

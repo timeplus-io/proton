@@ -1,14 +1,7 @@
 #include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
 
-#include <Checkpoint/CheckpointContext.h>
-#include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Formats/SimpleNativeReader.h>
-#include <Formats/SimpleNativeWriter.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -28,14 +21,20 @@ Block JoinTransformWithAlignment::transformHeader(Block header, const HashJoinPt
 }
 
 JoinTransformWithAlignment::JoinTransformWithAlignment(
-    Block left_input_header, Block right_input_header, Block output_header, HashJoinPtr join_, UInt64 join_max_cached_bytes)
+    Block left_input_header,
+    Block right_input_header,
+    Block output_header,
+    HashJoinPtr join_,
+    size_t transform_id_,
+    UInt64 join_max_cached_bytes)
     : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformWithAlignmentID)
     , join(std::move(join_))
+    , transform_id(transform_id_)
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , left_input{&inputs.front()}
     , right_input{&inputs.back()}
     , last_stats_log_ts(DB::MonotonicSeconds::now())
-    , log(&Poco::Logger::get("StreamingJoinTransformWithAlignment"))
+    , logger(getLogger("StreamingJoinTransformWithAlignment"))
 {
     assert(join);
 
@@ -97,7 +96,7 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
     left_input.last_data_ts = right_input.last_data_ts = DB::MonotonicMilliseconds::now();
 
     LOG_INFO(
-        log,
+        logger,
         "quiesce_threshold_ms={} lag_latency_threshold={} left_alignment_column={}, right_alignment_column={}",
         quiesce_threshold_ms,
         latency_threshold,
@@ -284,8 +283,9 @@ void JoinTransformWithAlignment::work()
         /// 1) Don't need align inputs (left side of join has builtin buffer to align)
         /// 2) Left stream's watermark + latency_threshold less than right stream's watermark
         /// 3) Or right input is in quiesce, we still need to push execute the join probably
+        ///    Additionally, for enrichment join, the left input should wait as long as possible for future right input
         if (!left_input.need_buffer_data_to_align || left_input.watermark + latency_threshold < right_input.watermark
-            || right_input_in_quiesce)
+            || (join->bidirectionalHashJoin() ? right_input_in_quiesce : right_input_in_quiesce && left_input_in_quiesce))
         {
             do
             {
@@ -357,8 +357,9 @@ void JoinTransformWithAlignment::work()
     if (DB::MonotonicSeconds::now() - last_stats_log_ts >= 60)
     {
         LOG_INFO(
-            log,
-            "{}, left_watermark={} right_watermark={} left_input_muted={} right_input_muted={} left_quiesce_joins={} right_quiesce_joins={}",
+            logger,
+            "{}, left_watermark={} right_watermark={} left_input_muted={} right_input_muted={} left_quiesce_joins={} "
+            "right_quiesce_joins={}",
             join->metricsString(),
             left_input.watermark,
             right_input.watermark,
@@ -437,42 +438,17 @@ void JoinTransformWithAlignment::processRightInputData(LightChunk & chunk)
     }
 }
 
-void JoinTransformWithAlignment::checkpoint(CheckpointContextPtr ckpt_ctx)
+void JoinTransformWithAlignment::onCancel() noexcept
 {
-    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        /// Serializing join algorithm state
-        join->serialize(wb, getVersion());
-
-        /// Serializing left_input state
-        left_input.serialize(wb);
-
-        /// Serializing right_input state
-        right_input.serialize(wb);
-    });
+    try
+    {
+        join->cancel();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Error occurs on cancellation.");
+    }
 }
-
-void JoinTransformWithAlignment::recover(CheckpointContextPtr ckpt_ctx)
-{
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
-        /// Deserializing join algorithm state
-        join->deserialize(rb, version_);
-
-        /// Deserializing left_input state
-        left_input.deserialize(rb);
-
-        /// Deserializing right_input state
-        right_input.deserialize(rb);
-    });
-
-    /// Re-init last data ts
-    left_input.last_data_ts = right_input.last_data_ts = DB::MonotonicMilliseconds::now();
-}
-
-void JoinTransformWithAlignment::onCancel()
-{
-    join->cancel();
-}
-
 
 void JoinTransformWithAlignment::InputPortWithData::add(Chunk && chunk)
 {
@@ -511,39 +487,15 @@ void JoinTransformWithAlignment::InputPortWithData::add(Chunk && chunk)
     }
 }
 
-void JoinTransformWithAlignment::InputPortWithData::serialize(WriteBuffer & wb) const
+String JoinTransformWithAlignment::getName() const
 {
-    if (need_buffer_data_to_align)
+    switch (join->type())
     {
-        DB::writeVarUInt(input_chunks.size(), wb);
-        const auto & header = input_port->getHeader();
-        for (const auto & chunk : input_chunks)
-            DB::writeLightChunkWithTimestamp(chunk, header, ProtonRevision::getVersionRevision(), wb);
+        case HashJoinType::Memory:
+            return "StreamingJoinTransformWithAlignment";
+        case HashJoinType::Hybrid:
+            return "HybridStreamingJoinTransformWithAlignment";
     }
-    else
-    {
-        /// Don't buffer input chunks and directly push to hash table, so we can assume no buffered data when received request checkpoint, ,
-        assert(input_chunks.empty());
-    }
-
-    if (watermark_column_position)
-        DB::writeIntBinary(watermark, wb);
-}
-
-void JoinTransformWithAlignment::InputPortWithData::deserialize(ReadBuffer & rb)
-{
-    if (need_buffer_data_to_align)
-    {
-        size_t size;
-        DB::readVarUInt(size, rb);
-        input_chunks.resize(size);
-        const auto & header = input_port->getHeader();
-        for (auto & chunk : input_chunks)
-            chunk = DB::readLightChunkWithTimestamp(header, ProtonRevision::getVersionRevision(), rb);
-    }
-
-    if (watermark_column_position)
-        DB::readIntBinary(watermark, rb);
 }
 }
 }

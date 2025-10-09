@@ -5,7 +5,7 @@ FROM
     SELECT
         'hello' AS msg,
         to_uint64(t) * 1000 AS ms
-    FROM generateRandom('t DateTime')
+    FROM generate_random('t DateTime')
     LIMIT 10
 )
 ORDER BY msg, time;

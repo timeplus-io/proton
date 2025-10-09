@@ -18,7 +18,7 @@ WindowAssignmentTransform::WindowAssignmentTransform(
     , chunk_header(output_header.getColumns(), 0)
     , window_params(std::move(window_params_))
 {
-    assert(window_params);
+    chassert(window_params);
 
     calculateColumns(input_header, output_header);
 }
@@ -29,19 +29,23 @@ void WindowAssignmentTransform::transform(Chunk & chunk)
     {
         auto input_block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 
-        Block transformed_block;
-
-        /// Most of the time, we copied only one column
-        for (auto pos : expr_column_positions)
-            transformed_block.insert(input_block.getByPosition(pos));
-
-        window_params->desc->expr_before_table_function->execute(transformed_block);
-
-        assert(transformed_block);
-
         Columns transformed_columns;
-        for (auto & col_with_type : transformed_block)
-            transformed_columns.emplace_back(std::move(col_with_type.column));
+        {
+            Block transformed_block;
+            transformed_block.reserve(expr_column_positions.size());
+
+            /// Most of the time, we copied only one column
+            for (auto pos : expr_column_positions)
+                transformed_block.insert(input_block.getByPosition(pos));
+
+            window_params->desc->expr_before_table_function->execute(transformed_block);
+
+            chassert(transformed_block);
+
+            transformed_columns.reserve(transformed_block.columns());
+            for (auto & col_with_type : transformed_block)
+                transformed_columns.emplace_back(std::move(col_with_type.column));
+        }
 
         /// Assign window function result columns (such as window_start and window_end)
         /// @params: transformed_columns:
@@ -73,11 +77,16 @@ void WindowAssignmentTransform::calculateColumns(const Block & input_header, con
     expr_column_positions.reserve(window_params->desc->input_columns.size());
 
     /// Calculate the positions of dependent columns in input chunk
+    Block transformed_header;
+    transformed_header.reserve(window_params->desc->input_columns.size());
+
     for (const auto & col_name : window_params->desc->input_columns)
+    {
         expr_column_positions.push_back(input_header.getPositionByName(col_name));
+        transformed_header.insert(input_header.getByName(col_name));
+    }
 
     /// Generate assign window function
-    auto transformed_header = input_header.cloneEmpty();
     window_params->desc->expr_before_table_function->execute(transformed_header);
     transformed_header.insert({window_params->desc->argument_types[0], ProtonConsts::STREAMING_WINDOW_START});
     transformed_header.insert({window_params->desc->argument_types[0], ProtonConsts::STREAMING_WINDOW_END});
@@ -86,11 +95,15 @@ void WindowAssignmentTransform::calculateColumns(const Block & input_header, con
     for (const auto & col_with_type : output_header)
     {
         if (transformed_header.has(col_with_type.name))
-            /// we use negative pos `-1, ... , -n` to indicate transformed columns pos (0, ..., n-1)
+            /// Some of them are transformed new columns
+            /// We use negative pos `-1, ... , -n` to indicate transformed columns pos (0, ..., n-1)
             output_column_positions.push_back(-1 - transformed_header.getPositionByName(col_with_type.name));
         else
+            /// Some of the output columns are copied from input header directly
             output_column_positions.push_back(input_header.getPositionByName(col_with_type.name));
     }
+
+    timestamp_col_position = transformed_header.getPositionByName(window_params->time_col_name);
 }
 
 }

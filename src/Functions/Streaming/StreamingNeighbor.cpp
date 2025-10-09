@@ -22,7 +22,7 @@ namespace ErrorCodes
 
 namespace
 {
-    struct NameToStreamingNeighbor { static constexpr auto * name = "neighbor"; };
+    struct NameToStreamingNeighbor { static constexpr auto * name = "__streaming_neighbor"; };
     struct NameToLag { static constexpr auto * name = "lag"; };
     struct NameToLags { static constexpr auto * name = "lags"; };
 
@@ -76,7 +76,7 @@ namespace
 
         DB::ISerialization::DeserializeBinaryBulkStatePtr state;
 
-        serialization->deserializeBinaryBulkStatePrefix(settings, state);
+        serialization->deserializeBinaryBulkStatePrefix(settings, state, nullptr);
         serialization->deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
         if (column->size() != rows)
             throw DB::Exception(
@@ -300,13 +300,15 @@ namespace
             /// Protection from possible overflow.
             if constexpr (std::is_same_v<Name, NameToLag> || std::is_same_v<Name, NameToLags>)
             {
-                /// lag [1, 1073741824]
-                if (offset_ <= 0 || offset_ > (1 << 30))
+                /// lag [1, 1073741824], lags [0, 1073741824]
+                constexpr Int64 min_offset = std::is_same_v<Name, NameToLags> ? 0 : 1;
+                if (offset_ < min_offset || offset_ > (1 << 30))
                     throw Exception(
                         ErrorCodes::ARGUMENT_OUT_OF_BOUND,
-                        "Invalid offset: {} in function {}, expected [1, {}]",
+                        "Invalid offset: {} in function {}, expected [{}, {}]",
                         offset_,
                         Name::name,
+                        min_offset,
                         1 << 30);
 
                 if (count_ <= 0 || count_ > (1 << 30))
@@ -599,7 +601,10 @@ namespace
             }
 
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
-                std::make_shared<FunctionStreamingNeighbor<Name>>(offset, count, arguments[0].type),
+                /*stateful_func_creator=*/
+                [offset, count, type = arguments[0].type]() {
+                    return std::make_shared<FunctionStreamingNeighbor<Name>>(offset, count, type);
+                },
                 collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
                 return_type);
         }

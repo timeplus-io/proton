@@ -1,0 +1,45 @@
+tags:
+  - topmax
+description: prove top_k not accurate with load_factor less than data range
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test9_top_exact
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test9_top_exact(id int)
+
+  - type: wait
+    time: 1
+
+  - name: '901'
+    type: stream
+    query: select array_join(top_k(id,2,true,2)) as a from test9_top_exact
+    schema:
+      - name: a
+        type: tuple(int32, uint64, uint64)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test9_top_exact(id) select number from numbers(20)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test9_top_exact(id) select number from numbers(20) where number>10
+
+  - type: check
+    target_name: '901'
+    expected_result:
+      - [ [ 16, 2, 1 ] ]
+      - [ [ 17, 2, 1 ] ]
+      - [ [ 16, 3, 1 ] ]
+      - [ [ 17, 3, 1 ] ]

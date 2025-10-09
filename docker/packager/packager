@@ -10,8 +10,8 @@ SCRIPT_PATH = os.path.realpath(__file__)
 
 # proton: starts.
 IMAGE_MAP = {
-    "deb": "ghcr.io/timeplus-io/proton-deb-builder",        # Not used
-    "binary": "ghcr.io/timeplus-io/proton-binary-builder",
+    "deb": "timeplus/proton-deb-builder",
+    "binary": "timeplus/proton-binary-builder",
 }
 # proton: ends.
 
@@ -62,7 +62,7 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
 
     subprocess.check_call(cmd, shell=True)
 
-def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build, enable_proton_local):
+def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build, enable_proton_local, disable_python_udf):
     DARWIN_SUFFIX = "-darwin"
     DARWIN_ARM_SUFFIX = "-darwin-aarch64"
     ARM_SUFFIX = "-aarch64"
@@ -135,12 +135,29 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         result.append("SANITIZER={}".format(sanitizer))
         # proton: starts.
         cmake_flags.append('-DENABLE_JEMALLOC=OFF')
-    elif is_cross_darwin or is_cross_darwin_arm:
-        cmake_flags.append('-DENABLE_JEMALLOC=OFF')
-        cmake_flags.append('-DENABLE_ARG_MIN_MAX_FUNCS=ON')
     else:
         cmake_flags.append('-DENABLE_JEMALLOC=ON')
         cmake_flags.append('-DENABLE_ARG_MIN_MAX_FUNCS=ON')
+
+    if is_cross_arm or is_cross_darwin_arm or disable_python_udf:
+        cmake_flags.append('-DENABLE_PYTHON_UDF=OFF')
+        cmake_flags.append('-DENABLE_PROTON_PYTHON=OFF')
+        logging.info("Disable python-udf for timeplus-enterprise")
+    else:
+        cmake_flags.append('-DENABLE_PYTHON_UDF=ON')
+        cmake_flags.append('-DENABLE_PROTON_PYTHON=ON')
+
+    if is_cross_darwin or is_cross_darwin_arm:
+        cmake_flags.append('-DENABLE_LIBURING=OFF')
+        cmake_flags.append('-DENABLE_PULSAR=OFF')
+    else:
+        cmake_flags.append('-DENABLE_LIBURING=ON')
+        cmake_flags.append('-DENABLE_PULSAR=ON')
+
+    if is_cross_darwin or is_cross_darwin_arm:
+        cmake_flags.append('-DENABLE_EMBEDDED_COMPILER=OFF')
+    else:
+        cmake_flags.append('-DENABLE_EMBEDDED_COMPILER=ON')
         # proton: ends.
     if build_type:
         result.append("BUILD_TYPE={}".format(build_type))
@@ -154,7 +171,6 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         result.append("CCACHE_MAXSIZE=50G")
         # proton: ends.
         # result.append("CCACHE_UMASK=777")
-
 
     if alien_pkgs:
         result.append("ALIEN_PKGS='" + ' '.join(['--' + pkg for pkg in alien_pkgs]) + "'")
@@ -192,9 +208,11 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_PROTON_SERVER=ON')
         cmake_flags.append('-DENABLE_PROTON_CLIENT=ON')
         cmake_flags.append('-DENABLE_PROTON_FORMAT=ON')
-        cmake_flags.append('-DENABLE_PROTON_DWAL_BENCHMARK=ON')
+        cmake_flags.append('-DENABLE_PROTON_KLOG_BENCHMARK=ON')
         cmake_flags.append('-DENABLE_PROTON_INSTALL=ON')
-        cmake_flags.append('-DENABLE_PROTON_METASTORE=ON')
+        cmake_flags.append('-DENABLE_PROTON_KV_SERVICE=ON')
+        cmake_flags.append('-DENABLE_PROTON_NLOG=ON')
+        cmake_flags.append('-DENABLE_PROTON_META=ON')
         cmake_flags.append('-DUSE_DEBUG_HELPERS=ON')
         cmake_flags.append('-DENABLE_LIBRARIES=OFF')
         cmake_flags.append('-DENABLE_KAFKA=ON')
@@ -208,29 +226,34 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_BZIP2=ON')
         cmake_flags.append('-DENABLE_BASE64=ON')
         cmake_flags.append('-DENABLE_PROTOBUF=ON')
-        cmake_flags.append('-DENABLE_URING=ON')
         cmake_flags.append('-DENABLE_UTILS=ON')
         cmake_flags.append('-DENABLE_ALL_FUNCS=ON')
-        cmake_flags.append('-DSTRIP_DEBUG_SYMBOLS_FUNCTIONS=ON')
+        cmake_flags.append('-DOMIT_HEAVY_DEBUG_SYMBOLS=ON')
         cmake_flags.append('-DCMAKE_EXPORT_COMPILE_COMMANDS=ON')
-        cmake_flags.append('-DENABLE_PARQUET=ON')
         cmake_flags.append('-DENABLE_THRIFT=ON')
         cmake_flags.append('-DENABLE_CYRUS_SASL=ON')
         cmake_flags.append('-DENABLE_KRB5=ON')
         cmake_flags.append('-DENABLE_BROTLI=ON')
-        cmake_flags.append('-DENABLE_S3=ON')
         cmake_flags.append('-DENABLE_AVRO=ON')
+        cmake_flags.append('-DENABLE_CURL=ON')
+        cmake_flags.append('-DENABLE_AWS_S3=ON')
         cmake_flags.append('-DENABLE_AWS_MSK_IAM=ON')
+        cmake_flags.append('-DENABLE_MYSQL=ON')
+        cmake_flags.append('-DENABLE_PARQUET=ON')
+        cmake_flags.append('-DENABLE_LIBPQXX=ON')
+        cmake_flags.append('-DUSE_MONGODB=ON')
+        cmake_flags.append('-DENABLE_ULID=ON')
+
 
     # krb5: Disabled in environments other than Linux and native Darwin.
     # Reference: contrib/krb5-cmake/CMakeLists.txt:3
     # URL: https://github.com/timeplus-io/proton/blob/d643e51b14a20278bcaa74f6c6fcf58ea29ae5f1/contrib/krb5-cmake/CMakeLists.txt#L2-L3
-    
+
     # cyrus-sasl dependency: Requires krb5.
     # Implication: `target_link_libraries(_sasl2 PUBLIC ch_contrib::krb5)` is needed.
     # Source File: contrib/cyrus-sasl-cmake/CMakeLists.txt, Lines 78-79
     # URL: https://github.com/timeplus-io/proton/blob/d643e51b14a20278bcaa74f6c6fcf58ea29ae5f1/contrib/cyrus-sasl-cmake/CMakeLists.txt#L78-L79
-    
+
     # Cross-compiling for Darwin: gRPC will not be built.
     # Relevant File: cmake/target.cmake, Line 25
     # URL: https://github.com/timeplus-io/proton/blob/d643e51b14a20278bcaa74f6c6fcf58ea29ae5f1/cmake/target.cmake#L25
@@ -242,25 +265,18 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_TESTS=OFF')
         cmake_flags.append('-DENABLE_UTILS=OFF')
         cmake_flags.append('-DENABLE_EXAMPLES=OFF')
-        cmake_flags.append('-DENABLE_CURL=OFF')
-        cmake_flags.append('-DENABLE_PULSAR=OFF')
-    else:
-        cmake_flags.append('-DENABLE_CURL=ON')
-        cmake_flags.append('-DENABLE_PULSAR=ON')
 
-    if build_type == "release":
+    if build_type == "release" or build_type == 'debug' or build_type == 'relwithdebinfo':
         cmake_flags.append('-DENABLE_TESTS=OFF')
         cmake_flags.append('-DENABLE_THINLTO=ON')
     else:
         cmake_flags.append('-DENABLE_TESTS=ON')
 
     # Use this option to control the proton_local whether need to build
-    if enable_proton_local:
-        logging.info("Enable proton-local")
-        cmake_flags.append('-DENABLE_PROTON_LOCAL=ON')
-    else:   
-        logging.info("Disable proton-local")
-        
+    # issue https://github.com/timeplus-io/proton-enterprise/issues/4781
+    # we intend to disable the proton-local, because this is far from the streaming usage
+    cmake_flags.append('-DENABLE_PROTON_LOCAL=OFF')    
+    logging.info("Disable proton-local for timeplus")
     # proton: ends.
 
     result.append('CMAKE_FLAGS="' + ' '.join(cmake_flags) + '"')
@@ -272,23 +288,26 @@ if __name__ == "__main__":
     # proton: starts.
     parser = argparse.ArgumentParser(description="Proton building script using prebuilt Docker image")
     parser.add_argument("--proton-repo-path", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
-    parser.add_argument("--build-type", choices=("debug", "release", ""), default="")
+    parser.add_argument("--build-type", choices=("debug", "release", "relwithdebinfo", ""), default="")
     parser.add_argument("--proton-build", action="store_true")
     parser.add_argument('--enable-proton-local', action='store_true', default=False)
+    parser.add_argument("--disable-python-udf", action="store_true")
     # proton: ends.
     # 'performance' creates a combined .tgz with server and configs to be used for performance test.
     parser.add_argument("--package-type", choices=['deb', 'binary', 'performance'], required=True)
     parser.add_argument("--output-dir", required=True)
 
     parser.add_argument("--compiler", choices=(
-                                        "clang-16",
-                                        "clang-16-darwin",
-                                        "clang-16-darwin-aarch64",
-                                        "clang-16-aarch64",
-                                        "clang-16-ppc64le",
-                                        "clang-16-freebsd",
+                                        "clang-19",
+                                        "clang-19-darwin",
+                                        "clang-19-darwin-aarch64",
+                                        "clang-19-aarch64",
+                                        "clang-18",
+                                        "clang-18-darwin",
+                                        "clang-18-darwin-aarch64",
+                                        "clang-18-aarch64"
                                     ),
-                                    default="clang-16")
+                                    default="clang-19")
 
     parser.add_argument("--sanitizer", choices=("address", "thread", "memory", "undefined", ""), default="")
     parser.add_argument("--clang-tidy", action="store_true")
@@ -338,7 +357,7 @@ if __name__ == "__main__":
         args.build_type, args.compiler, args.sanitizer, args.package_type, image_type,
         args.cache, args.clang_tidy,
         args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries, args.proton_build,
-        args.enable_proton_local)
+        args.enable_proton_local, args.disable_python_udf)
     # proton: ends.
 
     run_docker_image_with_env(image_name, args.output_dir, env_prepared, ch_root, args.ccache_dir, args.docker_image_version)

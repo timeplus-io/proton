@@ -54,10 +54,18 @@ clickhouse_embed_binaries(
         RESOURCES schemata.sql tables.sql views.sql columns.sql
 )
 
+## proton: starts
+clickhouse_embed_binaries(
+        TARGET system_views
+        RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Cluster/"
+        RESOURCES v_failed_mat_views.sql v_mat_view_lags.sql v_storages.sql
+)
+## proton: ends
+
 list (SORT storages_system_sources) # Reproducible build
 add_library(clickhouse_storages_system ${storages_system_sources})
 
-add_dependencies(clickhouse_storages_system information_schema_metadata)
+add_dependencies(clickhouse_storages_system information_schema_metadata system_views)
 
 target_link_libraries(clickhouse_storages_system PRIVATE
     dbms
@@ -67,4 +75,5 @@ target_link_libraries(clickhouse_storages_system PRIVATE
     clickhouse_parsers
     Poco::JSON
     INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:information_schema_metadata> -Wl,${NO_WHOLE_ARCHIVE}"
+    INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:system_views> -Wl,${NO_WHOLE_ARCHIVE}"
 )

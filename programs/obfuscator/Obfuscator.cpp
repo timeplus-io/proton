@@ -769,7 +769,7 @@ public:
             }
 
             if (!it)
-                throw Exception("Logical error in markov model", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error in markov model");
 
             size_t offset_from_begin_of_string = pos - data;
             size_t determinator_sliding_window_size = params.determinator_sliding_window_size;
@@ -965,7 +965,7 @@ public:
     {
         if (isInteger(data_type))
         {
-            if (isUnsignedInteger(data_type))
+            if (isUInt(data_type))
                 return std::make_unique<UnsignedIntegerModel>(seed);
             else
                 return std::make_unique<SignedIntegerModel>(seed);
@@ -998,7 +998,7 @@ public:
         if (const auto * type = typeid_cast<const DataTypeNullable *>(&data_type))
             return std::make_unique<NullableModel>(get(*type->getNestedType(), seed, markov_model_params));
 
-        throw Exception("Unsupported data type", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported data type");
     }
 };
 
@@ -1051,8 +1051,8 @@ public:
 
 }
 
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wmissing-declarations"
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wmissing-declarations"
 
 int mainObfuscator(int argc, char ** argv)
 try

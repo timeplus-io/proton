@@ -47,6 +47,11 @@ public:
         return std::make_shared<DataTypeInt64>();
     }
 
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
+        return std::make_shared<DataTypeInt64>();
+    }
+
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const auto & src = arguments[0];
@@ -70,7 +75,7 @@ public:
             {
                 Int64 result_value = source_data[i];
                 if (common::mulOverflow(result_value, scale_multiplier, result_value))
-                    throw Exception("decimal overflow in " + getName(), ErrorCodes::DECIMAL_OVERFLOW);
+                    throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "decimal overflow in {}", getName());
 
                 result_data[i] = result_value;
             }

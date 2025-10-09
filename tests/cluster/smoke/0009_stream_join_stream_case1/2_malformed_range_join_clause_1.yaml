@@ -1,0 +1,21 @@
+tags:
+- stream_join_stream
+description: range missing upper bound
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: 1025-1
+  type: stream
+  query: select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and
+    date_diff('second', ts, tts) > -200
+  schema:
+    - name: s
+      type: string
+    - name: ss
+      type: string
+
+- type: check
+  target_name: 1025-1
+  expected_result:
+  - [error_code:62]

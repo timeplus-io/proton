@@ -4,13 +4,12 @@
 
 #if USE_PULSAR
 
-#    include <Base/ByteVector.h>
-#    include <Formats/FormatFactory.h>
+#    include <Cluster/Base/ByteVector.h>
 #    include <Interpreters/Context_fwd.h>
+#    include <Processors/Executors/MessageQueueFormatExecutor.h>
 #    include <Processors/Formats/IOutputFormat.h>
 #    include <Processors/Sinks/SinkToStorage.h>
 #    include <Storages/ExternalStream/ExternalStreamCounter.h>
-#    include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 
 #    include <pulsar/Producer.h>
 
@@ -31,7 +30,7 @@ public:
         UInt64 max_rows_per_message,
         UInt64 max_message_size,
         ExternalStreamCounterPtr external_stream_counter,
-        Poco::Logger * logger,
+        LoggerPtr logger,
         const ContextPtr & context);
 
     ~PulsarSink() override;
@@ -43,23 +42,17 @@ public:
     void onFinish() override;
 
 private:
-    void onWriteBufferNext(char * pos, size_t len, size_t total_len);
-    void tryCarryOverPendingData();
+    void onMessageReady(const String & message, ColumnPtr key_col, ColumnPtr headers_col, size_t row);
     void onSent(pulsar::Result, const pulsar::MessageId &);
-    void waitForAcks(UInt64 timeout_ms = 0) const;
+    void waitForAcks() const;
 
     pulsar::Producer producer;
     std::function<void(pulsar::Result, const pulsar::MessageId &)> send_async_callback;
 
-    WriteBufferFromKafkaSink write_buffer;
-    nlog::ByteVector pending_data;
-    OutputFormatPtr writer;
+    std::optional<size_t> msg_key_pos;
+    std::optional<size_t> msg_headers_pos;
 
-    size_t rows_in_current_message;
-
-    bool generate_message_key{false};
-    size_t key_pos{0};
-    ColumnPtr message_key_column;
+    std::unique_ptr<MessageQueueFormatExecutor> format_executor;
 
     struct State
     {
@@ -74,10 +67,11 @@ private:
 
     State state;
 
+    UInt64 ack_timeout_ms{0};
     std::atomic_flag stopped;
 
     ExternalStreamCounterPtr external_stream_counter;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

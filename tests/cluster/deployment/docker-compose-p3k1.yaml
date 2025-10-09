@@ -1,0 +1,207 @@
+services:
+  probe:
+    image: timeplus/probe:0.1.13
+    container_name: ${CONTAINER_NAME_PREFIX}_p3k1_probe
+    stdin_open: true
+    environment:
+      - PROTON_VERSION=${PROTON_VERSION}
+      - DATA_DIR=../resource/data
+      - RESULT_DIR=../resource/result
+      - DOCKER_PROJECT=${DOCKER_PROJECT}
+    volumes:
+      - ../deployment:/deploy # deployment dir
+      - ../smoke:/smoke # smoke test dir
+      - ../end2end:/e2e # end2end test dir
+      - ../performance:/perf # performance test dir
+      - ../resource:/resource # performance test use: generate data from file and record output file
+      - ../log/p3k1/${CONTAINER_NAME_PREFIX}_log:/log
+      - ${SSH_DIR}/smoke:/root/.ssh:ro  # For SSH use, please prepare .ssh directory with root privillage for local test
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
+    networks:
+      - mynetwork
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p1:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server1
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=${CONTAINER_NAME_PREFIX}_proton-server1
+      - METADATA_NODE_QUORUM="${CONTAINER_NAME_PREFIX}_proton-server1:8464,${CONTAINER_NAME_PREFIX}_proton-server2:8464,${CONTAINER_NAME_PREFIX}_proton-server3:8464"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server1/log:/var/log/proton-server
+      - ./clickhouse/certs:/etc/proton-server/certs:ro
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p2:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server2
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=${CONTAINER_NAME_PREFIX}_proton-server2
+      - METADATA_NODE_QUORUM="${CONTAINER_NAME_PREFIX}_proton-server1:8464,${CONTAINER_NAME_PREFIX}_proton-server2:8464,${CONTAINER_NAME_PREFIX}_proton-server3:8464"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server2/log:/var/log/proton-server
+      - ./clickhouse/certs:/etc/proton-server/certs:ro
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p3:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server3
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=${CONTAINER_NAME_PREFIX}_proton-server3
+      - METADATA_NODE_QUORUM="${CONTAINER_NAME_PREFIX}_proton-server1:8464,${CONTAINER_NAME_PREFIX}_proton-server2:8464,${CONTAINER_NAME_PREFIX}_proton-server3:8464"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server3/log:/var/log/proton-server
+      - ./clickhouse/certs:/etc/proton-server/certs:ro
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  k1:
+    image: timeplus/redpanda-smoke-test:v24.2.12
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://stream-store,OUTSIDE://stream-store:9092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --check=false
+    container_name: ${CONTAINER_NAME_PREFIX}_stream-store
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+    networks:
+      mynetwork:
+        aliases:
+          - stream-store
+    deploy:
+      restart_policy:
+        condition: on-failure
+  pulsar:
+    image: apachepulsar/pulsar:3.3.1
+    command:
+    - sh
+    - -c
+    - bin/apply-config-from-env.py conf/standalone.conf && bin/pulsar standalone
+    environment:
+    - PULSAR_STANDALONE_USE_ZOOKEEPER=1
+    - PULSAR_PREFIX_brokerEntryMetadataInterceptors=org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor
+    - PULSAR_PREFIX_exposingBrokerEntryMetadataToClientEnabled=true
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-02-07T23-21-09Z
+    container_name: ${CONTAINER_NAME_PREFIX}_minio
+    environment:
+    - MINIO_ROOT_USER=minioroot
+    - MINIO_ROOT_PASSWORD=minioroot
+    command: server /data
+    profiles:
+    - minio
+    - external
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    user: 101:101
+    container_name: ${CONTAINER_NAME_PREFIX}_clickhouse
+    hostname: clickhouse
+    environment:
+      CLICKHOUSE_USER: chusr
+      CLICKHOUSE_PASSWORD: chpwd
+    volumes:
+      - ./clickhouse/certs:/etc/clickhouse-server/certs:ro
+      - ./clickhouse/config/ssl.xml:/etc/clickhouse-server/config.d/ssl.xml:ro
+      - ./clickhouse/config/client.xml:/etc/clickhouse-client/config.xml:ro
+    profiles:
+    - clickhouse
+    - source
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  mysql:
+    image: mysql:9.2
+    container_name: ${CONTAINER_NAME_PREFIX}_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: my_database
+      MYSQL_USER: my_user
+      MYSQL_PASSWORD: my_password
+    profiles:
+    - mysql
+    - source
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  splunk:
+    image: splunk/splunk:9.4
+    container_name: ${CONTAINER_NAME_PREFIX}_splunk
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_PASSWORD=chang3d!
+    profiles:
+    - splunk
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  postgres:
+    image: postgres:16.8
+    container_name: ${CONTAINER_NAME_PREFIX:-1}_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    profiles:
+      - postgres
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+networks:
+  mynetwork:
+    driver: bridge

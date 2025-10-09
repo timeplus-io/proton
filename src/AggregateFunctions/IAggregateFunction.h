@@ -6,10 +6,12 @@
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Field.h>
+#include <Core/ValuesWithType.h>
 #include <Interpreters/Context_fwd.h>
 #include <base/types.h>
 #include <Common/Exception.h>
-#include <Common/ThreadPool.h>
+#include <Common/ThreadPool_fwd.h>
+#include <Core/IResolvedFunction.h>
 
 #include "config.h"
 
@@ -54,6 +56,7 @@ using ConstAggregateDataPtr = const char *;
 
 class IAggregateFunction;
 using AggregateFunctionPtr = std::shared_ptr<const IAggregateFunction>;
+
 struct AggregateFunctionProperties;
 
 /** Aggregate functions interface.
@@ -64,17 +67,17 @@ struct AggregateFunctionProperties;
   *  (which can be created in some memory pool),
   *  and IAggregateFunction is the external interface for manipulating them.
   */
-class IAggregateFunction : public std::enable_shared_from_this<IAggregateFunction>
+class IAggregateFunction : public std::enable_shared_from_this<IAggregateFunction>, public IResolvedFunction
 {
 public:
-    IAggregateFunction(const DataTypes & argument_types_, const Array & parameters_)
-        : argument_types(argument_types_), parameters(parameters_) {}
+    IAggregateFunction(const DataTypes & argument_types_, const Array & parameters_, const DataTypePtr & result_type_)
+        : argument_types(argument_types_)
+        , parameters(parameters_)
+        , result_type(result_type_)
+    {}
 
     /// Get main function name.
     virtual String getName() const = 0;
-
-    /// Get the result type.
-    virtual DataTypePtr getReturnType() const = 0;
 
     /// Get the data type of internal state. By default it is AggregateFunction(name(params), argument_types...).
     virtual DataTypePtr getStateType() const;
@@ -98,7 +101,7 @@ public:
     /// Get type which will be used for prediction result in case if function is an ML method.
     virtual DataTypePtr getReturnTypeToPredict() const
     {
-        throw Exception("Prediction is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Prediction is not supported for {}", getName());
     }
 
     virtual bool isVersioned() const { return false; }
@@ -107,7 +110,7 @@ public:
 
     virtual size_t getDefaultVersion() const { return 0; }
 
-    virtual ~IAggregateFunction() = default;
+    ~IAggregateFunction() override = default;
 
     /** Data manipulating functions. */
 
@@ -152,7 +155,9 @@ public:
 
     virtual bool isParallelizeMergePrepareNeeded() const { return false; }
 
-    virtual void parallelizeMergePrepare(AggregateDataPtrs & /*places*/, ThreadPool & /*thread_pool*/) const
+    constexpr static bool parallelizeMergeWithKey() { return false; }
+
+    virtual void parallelizeMergePrepare(AggregateDataPtrs & /*places*/, ThreadPool & /*thread_pool*/, std::atomic<bool> & /*is_cancelled*/) const
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "parallelizeMergePrepare() with thread pool parameter isn't implemented for {} ", getName());
     }
@@ -163,16 +168,20 @@ public:
     /// Tells if merge() with thread pool parameter could be used.
     virtual bool isAbleToParallelizeMerge() const { return false; }
 
+    /// Return true if it is allowed to replace call of `addBatch`
+    /// to `addBatchSinglePlace` for ranges of consecutive equal keys.
+    virtual bool canOptimizeEqualKeysRanges() const { return true; }
+
     /// Should be used only if isAbleToParallelizeMerge() returned true.
     virtual void
-    merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, ThreadPool & /*thread_pool*/, Arena * /*arena*/) const
+    merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, ThreadPool & /*thread_pool*/, std::atomic<bool> & /*is_cancelled*/, Arena * /*arena*/) const
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "merge() with thread pool parameter isn't implemented for {} ", getName());
     }
 
     /// Merges states (on which src places points to) with other states (on which dst places points to) of current aggregation function
     /// then destroy states (on which src places points to).
-    virtual void mergeAndDestroyBatch(AggregateDataPtr * dst_places, AggregateDataPtr * src_places, size_t size, size_t offset, Arena * arena) const = 0;
+    virtual void mergeAndDestroyBatch(AggregateDataPtr * dst_places, AggregateDataPtr * src_places, size_t size, size_t offset, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena * arena) const = 0;
 
     /// proton : starts. for changelog processing, delete existing row from current aggregation result
     virtual void negate(AggregateDataPtr __restrict /*place*/, const IColumn ** /*columns*/, size_t /*row_num*/, Arena * /*arena*/) const
@@ -187,7 +196,7 @@ public:
     }
 
     /// Get the number of emits, 0 means no emit, >1 means it has some aggregate results to emit. So far only used for user defined aggregate function
-    virtual size_t getEmitTimes(AggregateDataPtr __restrict /*place*/) const  { return 0; }
+    virtual size_t getEmitTimes(ConstAggregateDataPtr __restrict /*place*/) const  { return 0; }
 
     /// Usually called after every batch to flush cached data to function. Only meaningful for UDA for now.
     virtual size_t flush(AggregateDataPtr __restrict /*place*/) const { return 0; }
@@ -239,7 +248,7 @@ public:
         size_t /*limit*/,
         ContextPtr /*context*/) const
     {
-        throw Exception("Method predictValues is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method predictValues is not supported for {}", getName());
     }
 
     /** Returns true for aggregate functions of type -State
@@ -266,7 +275,7 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
-        Arena * arena,
+        const std::vector<Arena *> & arenas,
         ssize_t if_argument_pos = -1,
         const IColumn * delta_col = nullptr) const = 0;
 
@@ -277,7 +286,7 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
-        Arena * arena) const = 0;
+        const std::vector<Arena *> & arena) const = 0;
 
     virtual void mergeBatch(
         size_t row_begin,
@@ -285,6 +294,8 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const AggregateDataPtr * rhs,
+        ThreadPool & thread_pool,
+        std::atomic<bool> & is_cancelled,
         Arena * arena) const = 0;
 
     /** The same for single place.
@@ -331,7 +342,7 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         const UInt64 * offsets,
-        Arena * arena) const = 0;
+        const std::vector<Arena *> & arenas) const = 0;
 
     /** The case when the aggregation key is UInt8
       * and pointers to aggregation states are stored in AggregateDataPtr[256] lookup table.
@@ -386,8 +397,9 @@ public:
       */
     virtual AggregateFunctionPtr getNestedFunction() const { return {}; }
 
-    const DataTypes & getArgumentTypes() const { return argument_types; }
-    const Array & getParameters() const { return parameters; }
+    const DataTypePtr & getResultType() const override { return result_type; }
+    const DataTypes & getArgumentTypes() const override { return argument_types; }
+    const Array & getParameters() const override { return parameters; }
 
     // Any aggregate function can be calculated over a window, but there are some
     // window functions such as rank() that require a different interface, e.g.
@@ -416,7 +428,7 @@ public:
     }
 
     /// compileAdd should generate code for updating aggregate function state stored in aggregate_data_ptr
-    virtual void compileAdd(llvm::IRBuilderBase & /*builder*/, llvm::Value * /*aggregate_data_ptr*/, const DataTypes & /*arguments_types*/, const std::vector<llvm::Value *> & /*arguments_values*/) const
+    virtual void compileAdd(llvm::IRBuilderBase & /*builder*/, llvm::Value * /*aggregate_data_ptr*/, const ValuesWithType & /*arguments*/) const
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} is not JIT-compilable", getName());
     }
@@ -438,6 +450,7 @@ public:
 protected:
     DataTypes argument_types;
     Array parameters;
+    DataTypePtr result_type;
 };
 
 
@@ -452,8 +465,8 @@ private:
     }
 
 public:
-    IAggregateFunctionHelper(const DataTypes & argument_types_, const Array & parameters_)
-        : IAggregateFunction(argument_types_, parameters_) {}
+    IAggregateFunctionHelper(const DataTypes & argument_types_, const Array & parameters_, const DataTypePtr & result_type_)
+        : IAggregateFunction(argument_types_, parameters_, result_type_) {}
 
     AddFunc getAddressOfAddFunction() const override { return &addFree; }
 
@@ -474,7 +487,7 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
-        Arena * arena,
+        const std::vector<Arena *> & arenas,
         ssize_t if_argument_pos = -1,
         const IColumn * delta_col = nullptr) const override
     {
@@ -487,7 +500,10 @@ public:
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (places[i])
+                {
+                    auto * arena = arenas.size() == 1 ? arenas[0] : arenas[i - row_begin];
                     derived->add(places[i] + place_offset, columns, i, arena);
+                }
             }
         }
         else if (delta_col != nullptr && if_argument_pos < 0)
@@ -498,6 +514,7 @@ public:
             {
                 if (places[i])
                 {
+                    auto * arena = arenas.size() == 1 ? arenas[0] : arenas[i - row_begin];
                     if (delta_flags[i] >= 0)
                         derived->add(places[i] + place_offset, columns, i, arena);
                     else
@@ -512,7 +529,10 @@ public:
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i] && places[i])
+                {
+                    auto * arena = arenas.size() == 1 ? arenas[0] : arenas[i - row_begin];
                     derived->add(places[i] + place_offset, columns, i, arena);
+                }
             }
         }
         else
@@ -524,6 +544,7 @@ public:
             {
                 if (flags[i] && places[i])
                 {
+                    auto * arena = arenas.size() == 1 ? arenas[0] : arenas[i - row_begin];
                     if (delta_flags[i] >= 0)
                         derived->add(places[i] + place_offset, columns, i, arena);
                     else
@@ -540,15 +561,18 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
-        Arena * arena) const override
+        const std::vector<Arena *> & arenas) const override
     {
         const auto & column_sparse = assert_cast<const ColumnSparse &>(*columns[0]);
         const auto * values = &column_sparse.getValuesColumn();
         auto offset_it = column_sparse.getIterator(row_begin);
 
         for (size_t i = row_begin; i < row_end; ++i, ++offset_it)
+        {
+            auto * arena = arenas.size() == 1 ? arenas[0] : arenas[i - row_begin];
             static_cast<const Derived *>(this)->add(places[offset_it.getCurrentRow()] + place_offset,
                                                     &values, offset_it.getValueIndex(), arena);
+        }
     }
 
     void mergeBatch(
@@ -557,18 +581,31 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const AggregateDataPtr * rhs,
+        ThreadPool & thread_pool,
+        std::atomic<bool> & is_cancelled,
         Arena * arena) const override
     {
         for (size_t i = row_begin; i < row_end; ++i)
+        {
             if (places[i])
-                static_cast<const Derived *>(this)->merge(places[i] + place_offset, rhs[i], arena);
+            {
+                if constexpr (Derived::parallelizeMergeWithKey())
+                    static_cast<const Derived *>(this)->merge(places[i] + place_offset, rhs[i], thread_pool, is_cancelled, arena);
+                else
+                    static_cast<const Derived *>(this)->merge(places[i] + place_offset, rhs[i], arena);
+            }
+        }
     }
 
-    void mergeAndDestroyBatch(AggregateDataPtr * dst_places, AggregateDataPtr * rhs_places, size_t size, size_t offset, Arena * arena) const override
+    void mergeAndDestroyBatch(AggregateDataPtr * dst_places, AggregateDataPtr * rhs_places, size_t size, size_t offset, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena * arena) const override
     {
         for (size_t i = 0; i < size; ++i)
         {
-            static_cast<const Derived *>(this)->merge(dst_places[i] + offset, rhs_places[i] + offset, arena);
+            if constexpr (Derived::parallelizeMergeWithKey())
+                static_cast<const Derived *>(this)->merge(dst_places[i] + offset, rhs_places[i] + offset, thread_pool, is_cancelled, arena);
+            else
+                static_cast<const Derived *>(this)->merge(dst_places[i] + offset, rhs_places[i] + offset, arena);
+
             static_cast<const Derived *>(this)->destroy(rhs_places[i] + offset);
         }
     }
@@ -720,16 +757,20 @@ public:
         size_t place_offset,
         const IColumn ** columns,
         const UInt64 * offsets,
-        Arena * arena)
+        const std::vector<Arena *> & arenas)
         const override
     {
         size_t current_offset = offsets[static_cast<ssize_t>(row_begin) - 1];
         for (size_t i = row_begin; i < row_end; ++i)
         {
+            auto * arena = arenas.size() == 1 ? arenas[0] : arenas[i - row_begin];
+
             size_t next_offset = offsets[i];
             for (size_t j = current_offset; j < next_offset; ++j)
+            {
                 if (places[i])
                     static_cast<const Derived *>(this)->add(places[i] + place_offset, columns, j, arena);
+            }
             current_offset = next_offset;
         }
     }
@@ -811,7 +852,7 @@ public:
                 AggregateDataPtr & place = map[key[i]];
                 if (unlikely(!place))
                     init(place);
-                
+
                 if (delta_flags[i] >= 0)
                     static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
                 else
@@ -896,15 +937,15 @@ public:
     // Derived class can `override` this to flag that DateTime64 is not supported.
     static constexpr bool DateTime64Supported = true;
 
-    IAggregateFunctionDataHelper(const DataTypes & argument_types_, const Array & parameters_)
-        : IAggregateFunctionHelper<Derived>(argument_types_, parameters_)
+    IAggregateFunctionDataHelper(const DataTypes & argument_types_, const Array & parameters_, const DataTypePtr & result_type_)
+        : IAggregateFunctionHelper<Derived>(argument_types_, parameters_, result_type_)
     {
         /// To prevent derived classes changing the destroy() without updating hasTrivialDestructor() to match it
         /// Enforce that either both of them are changed or none are
-        constexpr bool declares_destroy_and_hasTrivialDestructor =
+        constexpr bool declares_destroy_and_has_trivial_destructor =
             std::is_same_v<decltype(&IAggregateFunctionDataHelper::destroy), decltype(&Derived::destroy)> ==
             std::is_same_v<decltype(&IAggregateFunctionDataHelper::hasTrivialDestructor), decltype(&Derived::hasTrivialDestructor)>;
-        static_assert(declares_destroy_and_hasTrivialDestructor,
+        static_assert(declares_destroy_and_has_trivial_destructor,
             "destroy() and hasTrivialDestructor() methods of an aggregate function must be either both overridden or not");
     }
 
@@ -1085,6 +1126,10 @@ struct AggregateFunctionProperties
       * Some may also name this property as "non-commutative".
       */
     bool is_order_dependent = false;
+
+    /// proton: starts.
+    bool use_arena = true;
+    /// proton: ends.
 };
 
 

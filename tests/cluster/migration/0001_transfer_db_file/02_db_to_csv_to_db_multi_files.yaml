@@ -1,0 +1,131 @@
+description: |
+  Test sling data transfer from db to db with multiple files
+  Main Steps:
+    1.Create source stream and target stream
+    2.Ingest data into source stream
+    3.Migration data from source stream to csv1 with config file
+    4.Ingest data into source stream
+    5.Migration data from source stream to csv2 with config file
+    6.Migration data from all csv files to stream with config file
+    7.Check target stream table query
+
+cluster:
+  - p1s1
+  - p3s1
+
+steps:
+  - type: command
+    node: [sling]
+    shell: rm -rf migration_test/*.csv
+
+  - type: query
+    sql: DROP STREAM IF EXISTS src;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS tgt;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM src
+      (id int64, value float64, name string, ts datetime64(3) DEFAULT now64(3));
+
+  - type: query
+    sql: |
+      CREATE STREAM tgt
+      (id int64, value float64, name string, ts datetime64(3) DEFAULT now64(3));
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      INSERT INTO src(id, value, name, ts) VALUES
+      (1, 11.1, 's1', '2025-01-01 20:00:01')
+      (2, 22.2, 's2', '2025-01-02 20:00:02')
+      (3, 33.3, 's3', '2025-01-03 20:00:03');
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [sling]
+    shell: sling run -r ~/.sling/config/0001_02_tofile1.yaml -d
+
+  - type: query
+    sql: |
+      INSERT INTO src(id, value, name, ts) VALUES
+      (4, 44.4, 's4', '2025-01-04 20:00:04')
+      (5, 55.5, 's5', '2025-01-05 20:00:05')
+      (6, 66.6, 's6', '2025-01-06 20:00:06');
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [sling]
+    shell: sling run -r ~/.sling/config/0001_02_tofile2.yaml -d
+
+  - type: wait
+    time: 1
+
+  - name: sling-2-1
+    type: stream
+    query: SELECT id, value, name, ts FROM tgt;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: float64
+      - name: name
+        type: string
+      - name: ts
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [sling]
+    shell: sling run -r ~/.sling/config/0001_02_fromfile.yaml -d
+
+  - type: check
+    target_name: sling-2-1
+    expected_result:
+      - [ 1, '11.1', 's1', '2025-01-01 20:00:01' ]
+      - [ 2, '22.2', 's2', '2025-01-02 20:00:02' ]
+      - [ 3, '33.3', 's3', '2025-01-03 20:00:03' ]
+      - [ 4, '44.4', 's4', '2025-01-04 20:00:04' ]
+      - [ 5, '55.5', 's5', '2025-01-05 20:00:05' ]
+      - [ 6, '66.6', 's6', '2025-01-06 20:00:06' ]
+
+  - type: wait
+    time: 2
+
+  - name: sling-2-2
+    type: stream
+    query: SELECT id, value, name, ts FROM table(tgt) order by id;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: float64
+      - name: name
+        type: string
+      - name: ts
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: sling-2-2
+    expected_result:
+      - [ 1, '11.1', 's1', '2025-01-01 20:00:01' ]
+      - [ 2, '22.2', 's2', '2025-01-02 20:00:02' ]
+      - [ 3, '33.3', 's3', '2025-01-03 20:00:03' ]
+      - [ 4, '44.4', 's4', '2025-01-04 20:00:04' ]
+      - [ 5, '55.5', 's5', '2025-01-05 20:00:05' ]
+      - [ 6, '66.6', 's6', '2025-01-06 20:00:06' ]

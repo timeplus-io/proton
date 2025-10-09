@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Core/ColumnWithTypeAndName.h>
 #include <Columns/ColumnsDateTime.h>
+#include <Core/ColumnWithTypeAndName.h>
 #include <Interpreters/Streaming/SessionInfo.h>
 #include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 #include <Parsers/IAST_fwd.h>
@@ -23,48 +23,59 @@ namespace Streaming
     { \
         switch (interval_kind) \
         { \
-            case IntervalKind::Nanosecond: { \
-                M(IntervalKind::Nanosecond); \
+            case IntervalKind::Kind::Nanosecond: \
+            { \
+                M(IntervalKind::Kind::Nanosecond); \
                 break; \
             } \
-            case IntervalKind::Microsecond: { \
-                M(IntervalKind::Microsecond); \
+            case IntervalKind::Kind::Microsecond: \
+            { \
+                M(IntervalKind::Kind::Microsecond); \
                 break; \
             } \
-            case IntervalKind::Millisecond: { \
-                M(IntervalKind::Millisecond); \
+            case IntervalKind::Kind::Millisecond: \
+            { \
+                M(IntervalKind::Kind::Millisecond); \
                 break; \
             } \
-            case IntervalKind::Second: { \
-                M(IntervalKind::Second); \
+            case IntervalKind::Kind::Second: \
+            { \
+                M(IntervalKind::Kind::Second); \
                 break; \
             } \
-            case IntervalKind::Minute: { \
-                M(IntervalKind::Minute); \
+            case IntervalKind::Kind::Minute: \
+            { \
+                M(IntervalKind::Kind::Minute); \
                 break; \
             } \
-            case IntervalKind::Hour: { \
-                M(IntervalKind::Hour); \
+            case IntervalKind::Kind::Hour: \
+            { \
+                M(IntervalKind::Kind::Hour); \
                 break; \
             } \
-            case IntervalKind::Day: { \
-                M(IntervalKind::Day); \
+            case IntervalKind::Kind::Day: \
+            { \
+                M(IntervalKind::Kind::Day); \
                 break; \
             } \
-            case IntervalKind::Week: { \
-                M(IntervalKind::Week); \
+            case IntervalKind::Kind::Week: \
+            { \
+                M(IntervalKind::Kind::Week); \
                 break; \
             } \
-            case IntervalKind::Month: { \
-                M(IntervalKind::Month); \
+            case IntervalKind::Kind::Month: \
+            { \
+                M(IntervalKind::Kind::Month); \
                 break; \
             } \
-            case IntervalKind::Quarter: { \
-                M(IntervalKind::Quarter); \
+            case IntervalKind::Kind::Quarter: \
+            { \
+                M(IntervalKind::Kind::Quarter); \
                 break; \
             } \
-            case IntervalKind::Year: { \
-                M(IntervalKind::Year); \
+            case IntervalKind::Kind::Year: \
+            { \
+                M(IntervalKind::Kind::Year); \
                 break; \
             } \
         } \
@@ -83,7 +94,8 @@ const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 param
 const String HOP_HELP_MESSAGE = "Function 'hop' requires from 3 to 5 parameters: "
                                 "<name of the table>, [timestamp column], <hop interval size>, <hop window size>, [time zone]";
 const String SESSION_HELP_MESSAGE = "Function 'session' requires at least 2 parameters: "
-                                    "<name of the stream>, [timestamp column], <timeout interval>, [max session time], [session range comparision] | [start_prediction, end_prediction]";
+                                    "<name of the stream>, [timestamp column], <timeout interval>, [max session time], [session range "
+                                    "comparision] | [start_prediction, end_prediction]";
 
 
 bool isTableFunctionTumble(const ASTFunction * ast);
@@ -104,7 +116,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast);
 struct WindowInterval
 {
     Int64 interval = 0;
-    IntervalKind::Kind unit = IntervalKind::Second;
+    IntervalKind::Kind unit = IntervalKind::Kind::Second;
 
     operator bool() const { return interval != 0; }
 };
@@ -129,8 +141,8 @@ WindowType toWindowType(const String & func_name);
 class BaseScaleInterval
 {
 public:
-    static constexpr IntervalKind::Kind SCALE_NANOSECOND = IntervalKind::Nanosecond;
-    static constexpr IntervalKind::Kind SCALE_MONTH = IntervalKind::Month;
+    static constexpr IntervalKind::Kind SCALE_NANOSECOND = IntervalKind::Kind::Nanosecond;
+    static constexpr IntervalKind::Kind SCALE_MONTH = IntervalKind::Kind::Month;
 
     Int64 num_units = 0;
     IntervalKind::Kind scale = SCALE_NANOSECOND;
@@ -144,37 +156,34 @@ public:
         {
             /// FIXME: check overflow ?
             /// Based on SCALE_NANOSECOND
-            case IntervalKind::Nanosecond:
+            case IntervalKind::Kind::Nanosecond:
                 return BaseScaleInterval{num_units, SCALE_NANOSECOND, kind};
-            case IntervalKind::Microsecond:
+            case IntervalKind::Kind::Microsecond:
                 return BaseScaleInterval{num_units * 1'000, SCALE_NANOSECOND, kind};
-            case IntervalKind::Millisecond:
+            case IntervalKind::Kind::Millisecond:
                 return BaseScaleInterval{num_units * 1'000000, SCALE_NANOSECOND, kind};
-            case IntervalKind::Second:
+            case IntervalKind::Kind::Second:
                 return BaseScaleInterval{num_units * 1'000000000, SCALE_NANOSECOND, kind};
-            case IntervalKind::Minute:
+            case IntervalKind::Kind::Minute:
                 return BaseScaleInterval{num_units * 60'000000000, SCALE_NANOSECOND, kind};
-            case IntervalKind::Hour:
+            case IntervalKind::Kind::Hour:
                 return BaseScaleInterval{num_units * 3600'000000000, SCALE_NANOSECOND, kind};
-            case IntervalKind::Day:
+            case IntervalKind::Kind::Day:
                 return BaseScaleInterval{num_units * 86400'000000000, SCALE_NANOSECOND, kind};
-            case IntervalKind::Week:
+            case IntervalKind::Kind::Week:
                 return BaseScaleInterval{num_units * 604800'000000000, SCALE_NANOSECOND, kind};
             /// Based on SCALE_MONTH
-            case IntervalKind::Month:
+            case IntervalKind::Kind::Month:
                 return BaseScaleInterval{num_units, SCALE_MONTH, kind};
-            case IntervalKind::Quarter:
+            case IntervalKind::Kind::Quarter:
                 return BaseScaleInterval{num_units * 3, SCALE_MONTH, kind};
-            case IntervalKind::Year:
+            case IntervalKind::Kind::Year:
                 return BaseScaleInterval{num_units * 12, SCALE_MONTH, kind};
         }
         UNREACHABLE();
     }
 
-    static BaseScaleInterval toBaseScale(const WindowInterval & interval)
-    {
-        return toBaseScale(interval.interval, interval.unit);
-    }
+    static BaseScaleInterval toBaseScale(const WindowInterval & interval) { return toBaseScale(interval.interval, interval.unit); }
 
     Int64 toIntervalKind(IntervalKind::Kind to_kind) const;
 
@@ -220,7 +229,7 @@ ASTPtr makeASTInterval(const WindowInterval & interval);
 
 void convertToSameKindIntervalAST(const BaseScaleInterval & bs1, const BaseScaleInterval & bs2, ASTPtr & ast1, ASTPtr & ast2);
 
-UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind);
+UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind::Kind kind);
 
 /// Window Params
 struct WindowParams;
@@ -231,8 +240,8 @@ struct WindowParams : public TypePromotion<WindowParams>
     TableFunctionDescriptionPtr desc;
 
     String time_col_name;
-    bool time_col_is_datetime64; /// DateTime64 or DateTime
-    UInt32 time_scale;
+    bool time_col_is_datetime64 = false; /// DateTime64 or DateTime
+    UInt32 time_scale = 0;
     const DateLUTImpl * time_zone;
 
     static WindowParamsPtr create(const TableFunctionDescriptionPtr & desc);
@@ -242,16 +251,16 @@ protected:
     virtual ~WindowParams() = default;
 };
 
-/// __tumble(time_expr, win_interval, [timezone])
+/// __tumble(timestamp_expr, win_interval, [timezone])
 struct TumbleWindowParams : WindowParams
 {
     Int64 window_interval = 0;
-    IntervalKind::Kind interval_kind = IntervalKind::Second;
+    IntervalKind::Kind interval_kind = IntervalKind::Kind::Second;
 
     TumbleWindowParams(TableFunctionDescriptionPtr window_desc);
 };
 
-/// __hop(time_expr, hop_interval, win_interval, [timezone])
+/// __hop(timestamp_expr, hop_interval, win_interval, [timezone])
 struct HopWindowParams : WindowParams
 {
     Int64 window_interval = 0;
@@ -259,7 +268,7 @@ struct HopWindowParams : WindowParams
     /// Base interval is the greatest common divisor of window_interval and slide_interval
     /// By splitting a window into multiple base-windows, a base-window can be shared by multiple windows
     Int64 gcd_interval = 0;
-    IntervalKind::Kind interval_kind = IntervalKind::Second;
+    IntervalKind::Kind interval_kind = IntervalKind::Kind::Second;
 
     HopWindowParams(TableFunctionDescriptionPtr window_desc);
 };
@@ -267,11 +276,11 @@ struct HopWindowParams : WindowParams
 /// __session(timestamp_expr, timeout_interval, max_emit_interval, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
 struct SessionWindowParams : WindowParams
 {
-    Int64 session_timeout;
-    Int64 max_session_size;
-    IntervalKind::Kind interval_kind;
-    bool start_with_inclusion;
-    bool end_with_inclusion;
+    Int64 session_timeout = 0;
+    Int64 max_session_size = 0;
+    IntervalKind::Kind interval_kind = IntervalKind::Kind::Second;
+    bool start_with_inclusion = true;
+    bool end_with_inclusion = false;
 
     /// So far, only for session window, we evaluate the watermark and window for the events in Aggregate Transform
     /// For other windows, we assigned the watermark in window assignment step.
@@ -282,8 +291,8 @@ struct SessionWindowParams : WindowParams
 
 struct Window
 {
-    Int64 start;
-    Int64 end;
+    Int64 start = 0;
+    Int64 end = 0;
 
     bool isValid() const { return end > start; }
     operator bool() const { return isValid(); }

@@ -4,12 +4,14 @@ import argparse
 import csv
 import logging
 import os
+import subprocess
 import sys
+from pathlib import Path
 from typing import List, Tuple
 
 from github import Github
 
-from env_helper import CI, TEMP_PATH, REPO_COPY, REPORTS_PATH, GH_PERSONAL_ACCESS_TOKEN, PROTON_VERSION, GITHUB_WORKSPACE
+from env_helper import CI, TEMP_PATH, REPO_COPY, REPORTS_PATH, GH_PERSONAL_ACCESS_TOKEN, PROTON_VERSION, PROTON_REPO, GITHUB_WORKSPACE
 from s3_helper import S3Helper
 from pr_info import PRInfo
 from upload_result_helper import upload_results
@@ -23,21 +25,26 @@ if PROTON_VERSION is None:
     logging.error("PROTON_VERSION is None, could not find proton image")
     sys.exit(1)
 
-IMAGE_NAME = "ghcr.io/timeplus-io/proton:" + PROTON_VERSION
+if PROTON_REPO is None:
+    logging.error("PROTON_REPO is None, could not find proton image")
+    sys.exit(1)
+
+IMAGE_NAME = PROTON_REPO + ":" + PROTON_VERSION
 TIMEOUT = 90 * 60   # 90 minutes 
 # aarch64 with asan running stateless need more time than 60 mins
 # https://github.com/timeplus-io/proton/actions/runs/4726682507/jobs/8387999573#step:6:4081
+DATASET_PATH = Path(REPO_COPY) / "docker/test/functional/datasets"
 
 
 def get_build_image_command():
     return (
-        f"docker build --build-arg FROM_TAG={PROTON_VERSION} -t ghcr.io/timeplus-io/proton-functional-testrunner:{PROTON_VERSION} ."
+        f"docker build --build-arg FROM_TAG={PROTON_VERSION} --build-arg FROM_REPO={PROTON_REPO} -t timeplus/proton-functional-testrunner:{PROTON_VERSION} ."
     )
 
 def get_run_command(check_name, output_path):
     env = []
     if check_name == "stateless":
-        env.append("-e TEST_TYPE='--no-stateful'")
+        env.append("-e TEST_TYPE='--no-stateful --python'")
     elif check_name == "stateful":
         env.append("-e TEST_TYPE='--no-stateless'")
     else:
@@ -57,7 +64,7 @@ def get_run_command(check_name, output_path):
     env_str = " ".join(env)
 
     return (
-        f"docker run --volume {output_path}:/test_output --volume {GITHUB_WORKSPACE}:/proton_src --cap-add=SYS_PTRACE {env_str} ghcr.io/timeplus-io/proton-functional-testrunner:{PROTON_VERSION}"
+        f"docker run --volume {output_path}:/test_output --volume {GITHUB_WORKSPACE}:/proton_src --cap-add=SYS_PTRACE {env_str} timeplus/proton-functional-testrunner:{PROTON_VERSION}"
     )
 
 def process_results(
@@ -113,6 +120,26 @@ def process_results(
 
     return state, description, test_results, additional_files
 
+def prepare_build_image_dataset(path):
+    subprocess.check_call("rm -rf {}/*".format(path), shell=True)
+
+    if CI:
+        s3_helper = S3Helper("https://s3.amazonaws.com")
+        obj = s3_helper.download_test_dataset_from_s3("proton/dataset/tests/functional/", ".xz", path)
+        logging.info(f"S3 Download dataset return: {obj}")
+    else:
+        local_path = Path(path)
+        local_path.mkdir(parents=True, exist_ok=True)
+        subprocess.check_call("curl https://datasets.clickhouse.com/visits/tsv/visits_v1.tsv.xz --output {}/visits_v1.tsv.xz".format(path), shell=True)
+        subprocess.check_call("curl https://datasets.clickhouse.com/hits/tsv/hits_v1.tsv.xz --output {}/hits_v1.tsv.xz".format(path), shell=True)
+
+    visits_path = Path(path) / "visits_v1.tsv.xz"
+    hits_path = Path(path) / "hits_v1.tsv.xz"
+
+    if visits_path.is_file() and hits_path.is_file():
+        logging.info("Download datasets successfully")
+    else:
+        logging.info(f"Download datasets failed, file '{visits_path}' or '{hits_path}' doesn't exist")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -139,6 +166,8 @@ if __name__ == "__main__":
     server_log_path = os.path.join(output_path, "log")
     if not os.path.exists(output_path):
         os.makedirs(output_path)
+
+    prepare_build_image_dataset(DATASET_PATH)
 
     build_log_path = os.path.join(output_path, "build.log")
 
@@ -199,4 +228,3 @@ if __name__ == "__main__":
 
     if state != "success":
         sys.exit(1)
-

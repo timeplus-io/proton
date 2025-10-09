@@ -299,12 +299,16 @@ namespace
         });
     }
 
-    bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
+    bool parseOnCluster(IParserBase::Pos & pos [[maybe_unused]], Expected & expected [[maybe_unused]], String & cluster [[maybe_unused]])
     {
-        return IParserBase::wrapParseImpl(pos, [&]
-        {
-            return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
-        });
+        return false;
+        /// proton: starts
+        /// we don't need to parse ON CLUSTER
+        /// return IParserBase::wrapParseImpl(pos, [&]
+        /// {
+        ///     return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
+        /// });
+        /// proton: ends
     }
 
     bool parseDefaultDatabase(IParserBase::Pos & pos, Expected & expected, std::shared_ptr<ASTDatabaseOrNone> & default_database)

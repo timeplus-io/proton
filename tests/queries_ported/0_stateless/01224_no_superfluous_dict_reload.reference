@@ -1,0 +1,18 @@
+NOT_LOADED
+NOT_LOADED
+CREATE DICTIONARY dict_db_01224.dict
+(
+  `key` uint64 DEFAULT 0,
+  `val` uint64 DEFAULT 10
+)
+PRIMARY KEY key
+SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' STREAM 'dict_data' PASSWORD '[HIDDEN]' DB 'dict_db_01224'))
+LIFETIME(MIN 0 MAX 0)
+LAYOUT(FLAT())
+NOT_LOADED
+NOT_LOADED
+Dictionary	true	CREATE DICTIONARY dict_db_01224.dict\n(\n  `key` uint64 DEFAULT 0,\n  `val` uint64 DEFAULT 10\n)\nPRIMARY KEY key\nSOURCE(TIMEPLUS(HOST \'localhost\' PORT tcp_port() USER \'default\' STREAM \'dict_data\' PASSWORD \'\' DB \'dict_db_01224\'))\nLIFETIME(MIN 0 MAX 0)\nLAYOUT(FLAT())
+NOT_LOADED
+key	uint64
+val	uint64
+NOT_LOADED

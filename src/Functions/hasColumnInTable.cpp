@@ -16,7 +16,7 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_STREAM;
 }
 
 namespace
@@ -65,8 +65,7 @@ public:
 DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
 {
     if (arguments.size() < 3 || arguments.size() > 6)
-        throw Exception{"Invalid number of arguments for function " + getName(),
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Invalid number of arguments for function {}", getName());
 
     static const std::string arg_pos_description[] = {"First", "Second", "Third", "Fourth", "Fifth", "Sixth"};
     for (size_t i = 0; i < arguments.size(); ++i)
@@ -75,8 +74,8 @@ DataTypePtr FunctionHasColumnInTable::getReturnTypeImpl(const ColumnsWithTypeAnd
 
         if (!checkColumnConst<ColumnString>(argument.column.get()))
         {
-            throw Exception(arg_pos_description[i] + " argument for function " + getName() + " must be const String.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "{} argument for function {} must be const String.",
+                            arg_pos_description[i], getName());
         }
     }
 
@@ -111,8 +110,9 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
     String column_name = get_string_from_columns(arguments[arg++]);
 
     if (table_name.empty())
-        throw Exception("Stream name is empty", ErrorCodes::UNKNOWN_STREAM);
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream name is empty");
 
+    auto this_context = getContext();
     bool has_column;
     if (host_name.empty())
     {
@@ -121,31 +121,35 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
         // by the query should be initialized at an earlier stage.
         const StoragePtr & table = DatabaseCatalog::instance().getTable(
             {database_name, table_name},
-            const_pointer_cast<Context>(getContext()));
+            const_pointer_cast<Context>(this_context));
         auto table_metadata = table->getInMemoryMetadataPtr();
         has_column = table_metadata->getColumns().hasPhysical(column_name);
     }
     else
     {
-        std::vector<std::vector<String>> host_names = {{ host_name }};
+        std::vector<std::vector<std::pair<String, cluster::NodeID>>> host_names = {{ {host_name, this_context->getNodeID()} }};
 
         bool treat_local_as_remote = false;
-        bool treat_local_port_as_remote = getContext()->getApplicationType() == Context::ApplicationType::LOCAL;
+        bool treat_local_port_as_remote = this_context->getApplicationType() == Context::ApplicationType::LOCAL;
         auto cluster = std::make_shared<Cluster>(
-            getContext()->getSettings(),
+            getContext()->getSettingsRef(),
             host_names,
             !user_name.empty() ? user_name : "default",
             password,
-            getContext()->getTCPPort(),
+            /*cluster_id=*/"",
+            /*cluster_secret=*/"",
+            this_context->getNodeID(),
+            DBMS_DEFAULT_PORT,
             treat_local_as_remote,
-            treat_local_port_as_remote);
+            treat_local_port_as_remote,
+            getContext()->getTCPPort().port);
 
         // FIXME this (probably) needs a non-constant access to query context,
         // because it might initialized a storage. Ideally, the tables required
         // by the query should be initialized at an earlier stage.
         auto remote_columns = getStructureOfRemoteTable(*cluster,
             {database_name, table_name},
-            const_pointer_cast<Context>(getContext()));
+            const_pointer_cast<Context>(this_context));
 
         has_column = remote_columns.hasPhysical(column_name);
     }

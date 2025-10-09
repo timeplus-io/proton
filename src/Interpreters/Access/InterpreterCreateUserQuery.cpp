@@ -95,31 +95,37 @@ namespace
 BlockIO InterpreterCreateUserQuery::execute()
 {
     const auto & query = query_ptr->as<const ASTCreateUserQuery &>();
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     auto access = getContext()->getAccess();
     access->checkAccess(query.alter ? AccessType::ALTER_USER : AccessType::CREATE_USER);
-    bool no_password_allowed = access_control.isNoPasswordAllowed();
-    bool plaintext_password_allowed = access_control.isPlaintextPasswordAllowed();
+    bool no_password_allowed = access_control->isNoPasswordAllowed();
+    bool plaintext_password_allowed = access_control->isPlaintextPasswordAllowed();
 
     std::optional<RolesOrUsersSet> default_roles_from_query;
     if (query.default_roles)
     {
-        default_roles_from_query = RolesOrUsersSet{*query.default_roles, access_control};
+        default_roles_from_query = RolesOrUsersSet{*query.default_roles, *access_control};
         if (!query.alter && !default_roles_from_query->all)
         {
             for (const UUID & role : default_roles_from_query->getMatchingIDs())
                 access->checkAdminOption(role);
         }
     }
+
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)
-        settings_from_query = SettingsProfileElements{*query.settings, access_control};
+    {
+        settings_from_query = SettingsProfileElements{*query.settings, *access_control};
+
+        if (!query.attach)
+            getContext()->checkSettingsConstraints(*settings_from_query);
+    }
 
     if (query.alter)
     {
         std::optional<RolesOrUsersSet> grantees_from_query;
         if (query.grantees)
-            grantees_from_query = RolesOrUsersSet{*query.grantees, access_control};
+            grantees_from_query = RolesOrUsersSet{*query.grantees, *access_control};
 
         auto update_func = [&](const AccessEntityPtr & entity) -> AccessEntityPtr
         {
@@ -131,11 +137,11 @@ BlockIO InterpreterCreateUserQuery::execute()
         Strings names = query.names->toStrings();
         if (query.if_exists)
         {
-            auto ids = access_control.find<User>(names);
-            access_control.tryUpdate(ids, update_func);
+            auto ids = access_control->find<User>(names);
+            access_control->tryUpdate(ids, update_func);
         }
         else
-            access_control.update(access_control.getIDs<User>(names), update_func);
+            access_control->update(access_control->getIDs<User>(names), update_func);
     }
     else
     {
@@ -149,17 +155,16 @@ BlockIO InterpreterCreateUserQuery::execute()
 
         std::vector<UUID> ids;
         if (query.if_not_exists)
-            ids = access_control.tryInsert(new_users);
+            ids = access_control->tryInsert(new_users);
         else if (query.or_replace)
-            ids = access_control.insertOrReplace(new_users);
+            ids = access_control->insertOrReplace(new_users);
         else
-            ids = access_control.insert(new_users);
+            ids = access_control->insert(new_users);
 
         if (query.grantees)
         {
-            RolesOrUsersSet grantees_from_query = RolesOrUsersSet{*query.grantees, access_control};
-            access_control.update(ids, [&](const AccessEntityPtr & entity) -> AccessEntityPtr
-            {
+            RolesOrUsersSet grantees_from_query = RolesOrUsersSet{*query.grantees, *access_control};
+            access_control->update(ids, [&](const AccessEntityPtr & entity) -> AccessEntityPtr {
                 auto updated_user = typeid_cast<std::shared_ptr<User>>(entity->clone());
                 updated_user->grantees = grantees_from_query;
                 return updated_user;

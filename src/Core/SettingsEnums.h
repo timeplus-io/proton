@@ -4,6 +4,7 @@
 #include <Core/Joins.h>
 #include <QueryPipeline/SizeLimits.h>
 #include <Formats/FormatSettings.h>
+#include <IO/ReadSettings.h>
 
 
 namespace DB
@@ -106,8 +107,23 @@ enum class DefaultDatabaseEngine
 
 DECLARE_SETTING_ENUM(DefaultDatabaseEngine)
 
+enum class DefaultTableEngine : uint8_t
+{
+    None = 0, /// Disable. Need to use ENGINE =
+    Log,
+    StripeLog,
+    MergeTree,
+    ReplacingMergeTree,
+    ReplicatedMergeTree,
+    ReplicatedReplacingMergeTree,
+    SharedMergeTree,
+    SharedReplacingMergeTree,
+    Memory,
+};
 
-enum class MySQLDataTypesSupport
+DECLARE_SETTING_ENUM(DefaultTableEngine)
+
+enum class MySQLDataTypesSupport : uint8_t
 {
     DECIMAL, // convert MySQL's decimal and number to ClickHouse Decimal when applicable
     DATETIME64, // convert MySQL's DATETIME and TIMESTAMP and ClickHouse DateTime64 if precision is > 0 or range is greater that for DateTime.
@@ -167,5 +183,24 @@ DECLARE_SETTING_ENUM(TransactionsWaitCSNMode)
 DECLARE_SETTING_ENUM_WITH_RENAME(EnumComparingMode, FormatSettings::EnumComparingMode)
 
 DECLARE_SETTING_ENUM_WITH_RENAME(EscapingRule, FormatSettings::EscapingRule)
+
+enum class ParallelReplicasCustomKeyFilterType : uint8_t
+{
+    DEFAULT,
+    RANGE,
+};
+
+DECLARE_SETTING_ENUM(ParallelReplicasCustomKeyFilterType)
+
+enum class IcebergCatalogType : uint8_t
+{
+    REST,
+};
+
+DECLARE_SETTING_ENUM(IcebergCatalogType)
+
+DECLARE_SETTING_ENUM(LocalFSReadMethod)
+
+DECLARE_SETTING_ENUM_WITH_RENAME(MsgPackUUIDRepresentation, FormatSettings::MsgPackUUIDRepresentation)
 
 }

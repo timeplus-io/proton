@@ -36,8 +36,24 @@ def test_extra_yaml_mix():
 
     try:
         cluster.start()
-        assert(node.query("select value from system.settings where name = 'max_memory_usage'") == "10000000000\n")
-        assert(node.query("select value from system.settings where name = 'max_block_size'") == "64999\n")
+        assert (
+            node.query(
+                "select value from system.settings where name = 'max_memory_usage'"
+            )
+            == "10000000000\n"
+        )
+        assert (
+            node.query(
+                "select value from system.settings where name = 'max_block_size'"
+            )
+            == "64999\n"
+        )
+        assert (
+            node.query(
+                "select value from system.server_settings where name = 'mark_cache_size'"
+            )
+            == "8956\n"
+        )
 
     finally:
         cluster.shutdown()

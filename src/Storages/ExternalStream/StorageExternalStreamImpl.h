@@ -1,21 +1,25 @@
 #pragma once
 
-#include <Common/logger_useful.h>
 #include <Formats/FormatFactory.h>
-#include <Poco/Util/AbstractConfiguration.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <QueryPipeline/Pipe.h>
-#include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
+#include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/IStorage.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
 /// Base class of StorageExternalStreamImpl
-class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExternalStreamImpl>, public IStorage
+class StorageExternalStreamImpl : public IStorage
 {
 public:
-    StorageExternalStreamImpl(IStorage * storage, ExternalStreamSettingsPtr settings_, const ContextPtr & context);
+    StorageExternalStreamImpl(
+        StorageID storage_id,
+        StorageInMemoryMetadata storage_metadata,
+        ExternalStreamSettingsPtr settings_,
+        const ContextPtr & context);
 
     FormatSettings getFormatSettings(const ContextPtr & context) const;
 
@@ -26,7 +30,11 @@ public:
     bool supportsAccurateSeekTo() const noexcept override { return true; }
     bool supportsStreamingQuery() const override { return true; }
     bool supportsSubcolumns() const override { return true; }
+    bool supportsParallelInsert() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
+    bool prefersLargeBlocks() const override { return false; }
+
+    void startup() override;
 
     virtual std::vector<int64_t> getLastSNs() const { return {}; }
 
@@ -42,31 +50,35 @@ public:
 
     String getLoggerName() const;
 
+    bool isLocal() const override { return settings->local.value; }
+
 protected:
-    void inferDataFormat(const IStorage & storage);
+    void inferDataFormat();
 
     /// Creates a temporary directory for the external stream to store temporary data.
     void createTempDirIfNotExists() const;
     void tryRemoveTempDir() const;
 
+protected:
     ExternalStreamSettingsPtr settings;
     fs::path tmpdir;
 
     String data_format;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
 private:
+    virtual NamesAndTypesList getPhysicalColumns() const;
     void adjustSettingsForDataFormat();
 
-    Pipe read(
+    virtual Pipe read(
         const Names & /*column_names*/,
         const StorageSnapshotPtr & /*storage_snapshot*/,
         SelectQueryInfo & /*query_info*/,
         ContextPtr /*context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t /*max_block_size*/,
-        size_t /*num_streams*/) override = 0;
+        size_t /*num_streams*/) override;
 };
 
 }

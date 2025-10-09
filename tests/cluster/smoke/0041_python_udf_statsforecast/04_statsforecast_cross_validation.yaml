@@ -1,0 +1,87 @@
+tags:
+  - uda
+
+description: Test covering python uda test on statsforecast function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (unique_id string, ds int, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION crossTester(unique_id string, ds int, y float) RETURNS float LANGUAGE PYTHON AS
+      $$
+
+      import pandas as pd
+      from statsforecast.models import AutoETS
+      from utilsforecast.losses import rmse
+
+      class crossTester:
+          def __init__(self):
+              self.res = []
+              self.models = [AutoETS(season_length = 12)]
+              self.sf = StatsForecast(models=self.models, freq=1, n_jobs=1)
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, unique_ids, dss, ys):
+              if len(unique_ids) < 20:
+                  return
+
+              df = pd.DataFrame(zip(unique_ids, dss, ys),
+                  columns=['unique_id', 'ds', 'y'])
+              cv_df = self.sf.cross_validation (
+                  df = df,
+                  h = 12,
+                  step_size = 2,
+                  n_windows = 3
+              )
+              cv_rmse = rmse(cv_df, models=['AutoETS'])
+              self.res = cv_rmse['AutoETS'].item()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf11-4-1
+    type: stream
+    query: select crossTester(unique_id, ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(unique_id, ds, y) values
+          ('H1', 1, 605.0) ('H1', 2, 586.0) ('H1', 3, 586.0)
+          ('H1', 4, 559.0) ('H1', 5, 511.0) ('H1', 6, 605.0)
+          ('H1', 7, 586.0) ('H1', 8, 586.0) ('H1', 9, 559.0)
+          ('H1', 10, 511.0) ('H1', 11, 605.0) ('H1', 12, 586.0)
+          ('H1', 13, 586.0) ('H1', 14, 559.0) ('H1', 15, 511.0)
+          ('H1', 16, 605.0) ('H1', 17, 586.0) ('H1', 18, 586.0)
+          ('H1', 19, 559.0) ('H1', 20, 511.0) ('H1', 21, 605.0)
+          ('H1', 22, 586.0) ('H1', 23, 586.0) ('H1', 24, 559.0);
+
+  - type: check
+    target_name: python-udf11-4-1
+    expected_result:
+      - [33.210962236645074]

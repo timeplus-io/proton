@@ -19,6 +19,11 @@ target_compile_options (_poco_xml_expat
 target_include_directories (_poco_xml_expat PUBLIC "include")
 target_include_directories (_poco_xml_expat PRIVATE "../Foundation/include")
 
+# pyexpat (a python standard library) depends on this library
+if (ENABLE_PYTHON_UDF)
+    target_include_directories (_poco_xml_expat PUBLIC "include/Poco/XML")
+endif()
+
 # Poco::XML
 
 file (GLOB SRCS src/*.cpp)

@@ -1,0 +1,65 @@
+name: auto_truncate
+
+description: |
+  Tests covering the log auto truncate feature.
+  config prerequisites:
+    segment_size: 1048576 # 1MB (default: 2147483648 # 2GB)
+    retention_check_ms: 2000 # Every 2 seconds (default: 300000 # Every 5 minutes)
+    min_size_to_keep: 1048576 (default: 2147483648)
+    logstore_retention_bytes: -1 (default: 0)
+    logstore_retention_ms: -1 (default: 0)
+
+tags:
+  - smoke
+  - auto-truncate
+  - skip # docker restart cause EOF error in probe
+
+setup:
+  scope: suite
+  steps:
+    - type: command
+      node: [p1, p2, p3]
+      shell: |
+        sed -i'' 's/segment_size: 2147483648 # 2GB/segment_size: 1048576 # 1MB/g' /etc/proton-server/config.yaml && sed -i'' 's/retention_check_ms: 300000 # Every 5 minutes/retention_check_ms: 2000 # Every 2 seconds/g' /etc/proton-server/config.yaml && sed -i'' 's/min_size_to_keep: 2147483648/min_size_to_keep: 1048576/g' /etc/proton-server/config.yaml && sed -i'' 's/logstore_retention_bytes: 0 # when this threshold reaches, streaming storage delete old data. -1 means no limit/logstore_retention_bytes: -1/g' /etc/proton-server/config.yaml && sed -i'' 's/logstore_retention_ms: 0 # when this threshold reaches, streaming storage delete old data. -1 means no limit/logstore_retention_ms: -1/g' /etc/proton-server/config.yaml
+  
+    - type: command
+      node: [s1]
+      shell: |
+        docker restart $(docker ps -a --format '{{.Names}}' --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep timeplus)
+
+    - type: wait
+      time: 2
+
+    - name: auto-truncate-1
+      type: health_check
+      protocol: tcp
+
+    - type: check
+      target_name: auto-truncate-1
+      expected_result:
+      - ['true']
+
+teardown:
+  scope: suite
+  steps:
+    - type: command
+      node: [p1, p2, p3]
+      shell: |
+        sed -i'' 's/segment_size: 1048576 # 1MB/segment_size: 2147483648 # 2GB/g' /etc/proton-server/config.yaml && sed -i'' 's/retention_check_ms: 2000 # Every 5 seconds/retention_check_ms: 300000 # Every 5 minutes/g' /etc/proton-server/config.yaml && sed -i'' 's/min_size_to_keep: 1048576/min_size_to_keep: 2147483648/g' /etc/proton-server/config.yaml && sed -i'' 's/logstore_retention_bytes: -1/logstore_retention_bytes: 0 # when this threshold reaches, streaming storage delete old data. -1 means no limit/g' /etc/proton-server/config.yaml && sed -i'' 's/logstore_retention_ms: -1/logstore_retention_ms: 0 # when this threshold reaches, streaming storage delete old data. -1 means no limit/g' /etc/proton-server/config.yaml
+ 
+    - type: command
+      node: [s1]
+      shell: |
+        docker restart $(docker ps -a --format '{{.Names}}' --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep timeplus)
+
+    - type: wait
+      time: 2
+
+    - name: auto-truncate-2
+      type: health_check
+      protocol: tcp
+
+    - type: check
+      target_name: auto-truncate-2
+      expected_result:
+      - ['true']

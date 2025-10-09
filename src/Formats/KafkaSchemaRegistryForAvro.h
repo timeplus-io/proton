@@ -8,6 +8,7 @@
 #    include <Compiler.hh>
 #    include <ValidSchema.hh>
 #    include <Common/CacheBase.h>
+#    include <Formats/FormatSettings.h>
 
 namespace DB
 {
@@ -37,11 +38,11 @@ public:
 
     avro::ValidSchema getSchema(UInt32 id);
     /// Returns the schema ID and schema for a topic.
-    std::pair<UInt32, avro::ValidSchema> getSchemaForTopic(const String & topic_name, bool force_refresh = false);
+    std::pair<UInt32, avro::ValidSchema> getSchemaForTopic(const String & topic_name, const String & subject_name, bool force_refresh = false);
 
 private:
     avro::ValidSchema fetchAndCompileSchema(UInt32 id);
-    std::pair<UInt32, avro::ValidSchema> fetchAndCompileSchemaForTopic(const String & topic_name);
+    std::pair<UInt32, avro::ValidSchema> fetchAndCompileSchemaForSubject(const String & subject_name);
 
     KafkaSchemaRegistry registry;
     CacheBase<UInt32, avro::ValidSchema> schema_cache;

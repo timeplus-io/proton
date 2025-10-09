@@ -1,0 +1,81 @@
+tags:
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: (#1295) substream watermark and garbage collection
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_substream_1
+  - type: wait
+    time: 2
+
+  - type: query
+    name: 9900
+    sql: create stream test_substream_1
+        (
+          i int, 
+          s string
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query_id: '9900'
+    query: select s, count(*), max(i) from tumble(test_substream_1, 2s) partition by s group by window_start, s
+    schema:
+      - name: s
+        type: string
+      - name: count()
+        type: uint64
+      - name: max(i)
+        type: int32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_substream_1(i, s) values
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+    inputs:
+      - [1, 'a']
+      - [2, 'b']
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_substream_1(i, s) values
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+    inputs:
+      - [1, 'a']
+      - [2, 'b']
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_substream_1(i, s) values
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+    inputs:
+      - [1, 'a']
+      - [2, 'b']
+  
+  - type: check
+    target_name: 9900
+    expected_result:
+      - ["a", 1, 1]
+      - ["b", 1, 2]
+      - ["a", 1, 1]
+      - ["b", 1, 2]

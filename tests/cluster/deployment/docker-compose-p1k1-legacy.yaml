@@ -1,0 +1,86 @@
+version: "3.7"
+services:
+  probe:
+    image: timeplus/probe:patch
+    container_name: ${CONTAINER_NAME_PREFIX}_p1k1_probe
+    stdin_open: true
+    environment:
+      - PROTON_VERSION=${PROTON_VERSION}
+      - DATA_DIR=../resource/data
+      - RESULT_DIR=../resource/result
+    volumes:
+      - ../deployment:/deploy # deployment dir
+      - ../smoke:/smoke # smoke test dir
+      - ../end2end:/e2e # end2end test dir
+      - ../performance:/perf # performance test dir
+      - ../resource:/resource # performance test use: generate data from file and record output file
+      - ../log/p1k1/${CONTAINER_NAME_PREFIX}_log:/log
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p1:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - MAX_CONCURRENT_QUERIES=100        # Default: 100
+      - MAX_CONCURRENT_SELECT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_INSERT_QUERIES=100     # Default: 100
+      - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
+      - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
+      - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  k1:
+    image: timeplus/redpanda-smoke-test:v24.2.12
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://stream-store,OUTSIDE://stream-store:9092
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --check=false
+    container_name: ${CONTAINER_NAME_PREFIX}_p1k1_stream-store
+    networks:
+      mynetwork:
+        aliases:
+          - stream-store
+    deploy:
+      restart_policy:
+        condition: on-failure
+  pulsar:
+    image: apachepulsar/pulsar:3.3.1
+    command:
+    - bin/pulsar
+    - standalone
+    environment:
+    - PULSAR_STANDALONE_USE_ZOOKEEPER=1
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+networks:
+  mynetwork:
+    driver: bridge

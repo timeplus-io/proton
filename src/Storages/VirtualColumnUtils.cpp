@@ -20,9 +20,19 @@
 #include <Columns/ColumnsCommon.h>
 #include <Columns/FilterDescription.h>
 
+#include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Processors/Sinks/EmptySink.h>
+#include <Processors/Executors/CompletedPipelineExecutor.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
+
 #include <Storages/VirtualColumnUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
+#include <Functions/IFunction.h>
+#include <Columns/ColumnSet.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/ActionsVisitor.h>
 
 
@@ -80,25 +90,6 @@ ASTPtr buildWhereExpression(const ASTs & functions)
     return makeASTFunction("and", functions);
 }
 
-void buildSets(const ASTPtr & expression, ExpressionAnalyzer & analyzer)
-{
-    const auto * func = expression->as<ASTFunction>();
-    if (func && functionIsInOrGlobalInOperator(func->name))
-    {
-        const IAST & args = *func->arguments;
-        const ASTPtr & arg = args.children.at(1);
-        if (arg->as<ASTSubquery>() || arg->as<ASTTableIdentifier>())
-        {
-            analyzer.tryMakeSetForIndexFromSubquery(arg);
-        }
-    }
-    else
-    {
-        for (const auto & child : expression->children)
-            buildSets(child, analyzer);
-    }
-}
-
 }
 
 namespace VirtualColumnUtils
@@ -132,7 +123,7 @@ void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & va
 bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast)
 {
     if (block.rows() == 0)
-        throw Exception("Cannot prepare filter with empty block", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot prepare filter with empty block");
 
     /// Take the first row of the input block to build a constant block
     auto columns = block.getColumns();
@@ -164,6 +155,7 @@ bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block
         ActionsVisitor::Data visitor_data(
             context, SizeLimits{}, 1, source_columns, std::move(actions), prepared_sets, true, true, true, false,
             { aggregation_keys, grouping_set_keys, GroupByKind::NONE });
+
         ActionsVisitor(visitor_data).visit(node);
         actions = visitor_data.getActions();
         auto expression_actions = std::make_shared<ExpressionActions>(actions);
@@ -184,6 +176,62 @@ bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block
     return unmodified;
 }
 
+static void makeSets(const ExpressionActionsPtr & actions, const ContextPtr & context)
+{
+    for (const auto & node : actions->getNodes())
+    {
+        if (node.type == ActionsDAG::ActionType::COLUMN)
+        {
+            const ColumnSet * column_set = checkAndGetColumnConstData<const ColumnSet>(node.column.get());
+            if (!column_set)
+                column_set = checkAndGetColumn<const ColumnSet>(node.column.get());
+
+            if (column_set)
+            {
+                auto future_set = column_set->getData();
+                if (!future_set->get())
+                {
+                    if (auto * set_from_subquery = typeid_cast<FutureSetFromSubquery *>(future_set.get()))
+                        set_from_subquery->buildSetInplace(context);
+                }
+            }
+        }
+    }
+}
+
+void filterBlockWithDAG(ActionsDAGPtr dag, Block & block, ContextPtr context)
+{
+    auto actions = std::make_shared<ExpressionActions>(dag);
+    makeSets(actions, context);
+    Block block_with_filter = block;
+    actions->execute(block_with_filter);
+
+    /// Filter the block.
+    String filter_column_name = dag->getOutputs().at(0)->result_name;
+    ColumnPtr filter_column = block_with_filter.getByName(filter_column_name).column->convertToFullColumnIfConst();
+
+    ConstantFilterDescription constant_filter(*filter_column);
+
+    if (constant_filter.always_true)
+    {
+        return;
+    }
+
+    if (constant_filter.always_false)
+    {
+        block = block.cloneEmpty();
+        return;
+    }
+
+    FilterDescription filter(*filter_column);
+
+    for (size_t i = 0; i < block.columns(); ++i)
+    {
+        ColumnPtr & column = block.safeGetByPosition(i).column;
+        column = column->filter(*filter.data, -1);
+    }
+}
+
 void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr context, ASTPtr expression_ast)
 {
     if (block.rows() == 0)
@@ -198,8 +246,9 @@ void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr contex
     /// Let's analyze and calculate the prepared expression.
     auto syntax_result = TreeRewriter(context).analyze(expression_ast, block.getNamesAndTypesList());
     ExpressionAnalyzer analyzer(expression_ast, syntax_result, context);
-    buildSets(expression_ast, analyzer);
     ExpressionActionsPtr actions = analyzer.getActions(false /* add alises */, true /* project result */, CompileExpressions::yes);
+
+    makeSets(actions, context);
 
     Block block_with_filter = block;
     actions->execute(block_with_filter);
@@ -228,6 +277,94 @@ void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr contex
         ColumnPtr & column = block.safeGetByPosition(i).column;
         column = column->filter(*filter.data, -1);
     }
+}
+
+static bool canEvaluateSubtree(const ActionsDAG::Node * node, const Block & allowed_inputs)
+{
+    std::stack<const ActionsDAG::Node *> nodes;
+    nodes.push(node);
+    while (!nodes.empty())
+    {
+        const auto * cur = nodes.top();
+        nodes.pop();
+
+        if (cur->type == ActionsDAG::ActionType::INPUT && !allowed_inputs.has(cur->result_name))
+            return false;
+
+        for (const auto * child : cur->children)
+            nodes.push(child);
+    }
+
+    return true;
+}
+
+static const ActionsDAG::Node * splitFilterNodeForAllowedInputs(
+    const ActionsDAG::Node * node,
+    const Block * allowed_inputs,
+    ActionsDAG::Nodes & additional_nodes)
+{
+    if (node->type == ActionsDAG::ActionType::FUNCTION)
+    {
+        if (node->function_base->getName() == "and")
+        {
+            auto & node_copy = additional_nodes.emplace_back(*node);
+            node_copy.children.clear();
+            for (const auto * child : node->children)
+                if (const auto * child_copy = splitFilterNodeForAllowedInputs(child, allowed_inputs, additional_nodes))
+                    node_copy.children.push_back(child_copy);
+
+            if (node_copy.children.empty())
+                return nullptr;
+
+            if (node_copy.children.size() == 1)
+            {
+                const ActionsDAG::Node * res = node_copy.children.front();
+                /// Expression like (not_allowed AND 256) can't be resuced to (and(256)) because AND requires
+                /// at least two arguments; also it can't be reduced to (256) because result type is different.
+                /// TODO: add CAST here
+                if (!res->result_type->equals(*node->result_type))
+                    return nullptr;
+
+                return res;
+            }
+
+            return &node_copy;
+        }
+        else if (node->function_base->getName() == "or")
+        {
+            auto & node_copy = additional_nodes.emplace_back(*node);
+            for (auto & child : node_copy.children)
+                if (child = splitFilterNodeForAllowedInputs(child, allowed_inputs, additional_nodes); !child)
+                    return nullptr;
+
+            return &node_copy;
+        }
+    }
+
+    if (allowed_inputs && !canEvaluateSubtree(node, *allowed_inputs))
+        return nullptr;
+
+    return node;
+}
+
+ActionsDAGPtr splitFilterDagForAllowedInputs(const ActionsDAG::Node * predicate, const Block * allowed_inputs)
+{
+    if (!predicate)
+        return nullptr;
+
+    ActionsDAG::Nodes additional_nodes;
+    const auto * res = splitFilterNodeForAllowedInputs(predicate, allowed_inputs, additional_nodes);
+    if (!res)
+        return nullptr;
+
+    return ActionsDAG::cloneSubDAG({res}, true);
+}
+
+void filterBlockWithPredicate(const ActionsDAG::Node * predicate, Block & block, ContextPtr context)
+{
+    auto dag = splitFilterDagForAllowedInputs(predicate, &block);
+    if (dag)
+        filterBlockWithDAG(dag, block, context);
 }
 
 }

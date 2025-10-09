@@ -1,0 +1,103 @@
+tags:
+  - subquery
+description: tumble avg based on hopping sum subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: '101'
+    query: with transformed_a as (select id, sum(value) as value_s, window_end as s_time from hop(test_smoke1, timestamp, interval 1 second, interval 5 second) group by id, window_end) select id, avg(value_s), window_end from tumble(transformed_a, s_time, interval 3 second) group by id, window_end
+    schema:
+      - name: id
+        type: string
+      - name: avg(value_s)
+        type: float64
+      - name: window_end
+        type: datetime64(3)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev1', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03']
+      - ['dev2', 'ca', 30, '{"create_time":"2021-11-02 20:00:02"}', '2021-11-02 20:00:02']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 68, '{"create_time":"2021-11-02 20:00:04"}', '2021-11-02 20:00:04']
+      - ['dev8', 'ca', 67, '{"create_time":"2021-11-02 20:00:05"}', '2021-11-02 20:00:05']
+      - ['dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:06"}', '2021-11-02 20:00:06']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 58, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev3', 'ca', 66, '{"create_time":"2021-11-02 20:00:08"}', '2021-11-02 20:00:08']
+      - ['dev4', 'ca', 76, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev4', 'ca', 67, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev9', 'ca', 77, '{"create_time":"2021-11-02 20:00:10"}', '2021-11-02 20:00:10']
+
+  - type: check
+    target_name: '101'
+    mode: random
+    expected_result:
+      - ['dev1', 60, '2021-11-02 20:00:03']
+      - ['dev1', 104, '2021-11-02 20:00:06']
+      - ['dev2', 52.666666666666664, '2021-11-02 20:00:06']
+      - ['dev2', 88, '2021-11-02 20:00:09']
+      - ['dev4', 76, '2021-11-02 20:00:09']
+      - ['dev8', 118.33333333333333, '2021-11-02 20:00:09']
+      - ['dev1', 86, '2021-11-02 20:00:09']

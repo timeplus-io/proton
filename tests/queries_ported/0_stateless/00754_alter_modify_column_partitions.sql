@@ -1,3 +1,5 @@
+SET show_uuid=false;
+
 set query_mode='table';
 set asterisk_include_reserved_columns=false;
 

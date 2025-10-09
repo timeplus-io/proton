@@ -1,0 +1,51 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_stats_uniform_ppf(value float64) RETURNS float64 LANGUAGE PYTHON AS
+      $$
+      import scipy.stats as stats
+
+      def test_stats_uniform_ppf(value):
+          lower, upper = 0.6, 5 
+          res = stats.uniform.ppf(value, loc=lower, scale=upper-lower)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-26-1
+    type: stream
+    query: select test_stats_uniform_ppf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float64
+      - name: value
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (0.001)(0.5)(0.999);
+
+  - type: check
+    target_name: python-udf4-26-1
+    expected_result:
+      - [0.6044, 0.001]
+      - [2.8, 0.5]
+      - [4.9956, 0.999]

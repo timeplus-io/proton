@@ -32,7 +32,7 @@ void readData(const ISerialization & serialization, ColumnPtr & column, ReadBuff
 
     ISerialization::DeserializeBinaryBulkStatePtr state;
 
-    serialization.deserializeBinaryBulkStatePrefix(settings, state);
+    serialization.deserializeBinaryBulkStatePrefix(settings, state, nullptr);
     serialization.deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
 
     if (column->size() != rows)

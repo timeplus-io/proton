@@ -1,0 +1,45 @@
+tags:
+  - stream_join_stream
+description: stream to stream inner join only non-joined left rows
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '1017'
+    type: stream
+    query: select s, ss from test10_left_stream inner join test10_right_stream on i=ii
+      and date_diff('minute', ts, tts) between -1 and 1
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')
+
+  - type: query
+    sql: insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:09'),(1,
+      's2', '2022-05-23 15:45:10'),(1, 's3', '2022-05-23 15:45:11'),(1, 's4', '2022-05-23
+      15:45:12'),(1, 's5', '2022-05-23 15:45:13')
+
+  - type: query
+    sql: insert into test10_left_stream(i, s, ts) values (1, 'new', '2022-05-23 15:45:10'),
+      (2, 'new', '2022-05-23 15:46:10')
+
+  - type: check
+    target_name: '1017'
+    expected_result:
+      - [ s, s1 ]
+      - [ s, s2 ]
+      - [ s, s3 ]
+      - [ s, s4 ]
+      - [ s, s5 ]
+      - [ new, s1 ]
+      - [ new, s2 ]
+      - [ new, s3 ]
+      - [ new, s4 ]
+      - [ new, s5 ]

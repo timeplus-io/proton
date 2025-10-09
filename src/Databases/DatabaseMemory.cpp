@@ -1,5 +1,6 @@
 #include <base/scope_guard.h>
 #include <Common/logger_useful.h>
+#include <Databases/DatabaseFactory.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabasesCommon.h>
 #include <Databases/DDLDependencyVisitor.h>
@@ -8,6 +9,10 @@
 #include <Parsers/ASTFunction.h>
 #include <Storages/IStorage.h>
 #include <filesystem>
+
+/// proton: starts.
+#include <Interpreters/MetadataHelper.h>
+/// proton: ends.
 
 namespace fs = std::filesystem;
 
@@ -44,7 +49,8 @@ void DatabaseMemory::createTable(
 void DatabaseMemory::dropTable(
     ContextPtr /*context*/,
     const String & table_name,
-    bool /*no_delay*/)
+    bool /*sync*/,
+    const ASTPtr & /*query*/)
 {
     std::unique_lock lock{mutex};
     auto table = detachTableUnlocked(table_name, lock);
@@ -99,9 +105,7 @@ ASTPtr DatabaseMemory::getCreateTableQueryImpl(const String & table_name, Contex
     if (it == create_queries.end() || !it->second)
     {
         if (throw_on_error)
-            /// proton: starts
             throw Exception(ErrorCodes::UNKNOWN_STREAM, "There is no metadata of stream {} in database {}", table_name, database_name);
-            /// proton: ends
         else
             return {};
     }
@@ -121,18 +125,32 @@ void DatabaseMemory::drop(ContextPtr local_context)
     std::filesystem::remove_all(local_context->getPath() + data_path);
 }
 
-void DatabaseMemory::alterTable(ContextPtr local_context, const StorageID & table_id, const StorageInMemoryMetadata & metadata)
+void DatabaseMemory::alterTable(
+    ContextPtr local_context,
+    const StorageID & table_id,
+    const StorageInMemoryMetadata & metadata,
+    String /*alter_command*/,
+    std::vector<String> /*alter_command_asts*/)
 {
     std::lock_guard lock{mutex};
     auto it = create_queries.find(table_id.table_name);
     if (it == create_queries.end() || !it->second)
-        /// proton: starts
         throw Exception(ErrorCodes::UNKNOWN_STREAM, "Cannot alter: There is no metadata of stream {}", table_id.getNameForLogs());
-        /// proton: ends
 
     applyMetadataChangesToCreateQuery(it->second, metadata);
     TableNamesSet new_dependencies = getDependenciesSetFromCreateQuery(local_context->getGlobalContext(), table_id.getQualifiedName(), it->second);
     DatabaseCatalog::instance().updateLoadingDependencies(table_id, std::move(new_dependencies));
+}
+
+void registerDatabaseMemory(DatabaseFactory & factory)
+{
+    auto create_fn = [](const DatabaseFactory::Arguments & args)
+    {
+        return make_shared<DatabaseMemory>(
+            args.database_name,
+            args.context);
+    };
+    factory.registerDatabase("Memory", create_fn);
 }
 
 }

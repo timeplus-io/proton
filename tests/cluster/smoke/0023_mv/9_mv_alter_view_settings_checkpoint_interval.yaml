@@ -1,0 +1,232 @@
+tags:
+- materialized view
+
+cluster:
+  - p1k1
+
+description: |
+  (#7733) change checkpoint_interval by ALTER VIEW
+  Main steps:
+  1.Create source stream, target stream, join stream
+  2.Create materialized view with settings checkpoint_interval=5
+  3.Create random stream to ingest data
+  4.Verify log time interval is 5 (/var/log/proton-server/proton-server.log)
+  5.Alter view with settings checkpoint_interval=1
+  6.Verify log 'Updated checkpoint interval to 1 in seconds' exists
+  7.Verify log time interval is 1 (/var/log/proton-server/proton-server.log)
+
+steps:
+- type: query
+  sql: drop view if exists mv_with_target_stream
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: drop stream if exists source_mv_stream
+
+- type: query
+  sql: drop stream if exists target_mv_stream
+
+- type: query
+  sql: drop stream if exists device_metrics
+
+- type: query
+  sql: drop stream if exists rand_stream_source
+
+- type: query
+  sql: drop stream if exists rand_stream_join
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    create stream source_mv_stream
+    (
+      ipv4_src_ip int32,
+      ipv4_dst_ip int32,
+      start_time int32,
+      end_time int32,
+      pkt_count int32,
+      byte_count int32,
+      l4_src_port int16,
+      l4_dst_port int16,
+      protocol int8,
+      tcp_flags int8,
+      _tp_message_key string,
+      input_if_id int16,
+      output_if_id int16,
+      event_ts datetime64(3)
+    );
+
+- type: query
+  sql: |
+    create stream target_mv_stream
+    (
+      ipv4_src_ip int32,
+      ipv4_dst_ip int32,
+      start_time int32,
+      end_time int32,
+      pkt_count int32,
+      byte_count int32,
+      l4_src_port int16,
+      l4_dst_port int16,
+      protocol int8,
+      tcp_flags int8,
+      _tp_message_key string,
+      input_if_id int16,
+      output_if_id int16,
+      event_ts datetime64(3)
+    );
+
+- type: query
+  sql: |
+    CREATE STREAM device_metrics
+    (
+      device_id string,
+      timestamp datetime64(3),
+      batch_id uint32,
+      region string,
+      city string
+    )
+    PRIMARY KEY (device_id, timestamp, batch_id)
+    settings mode='versioned_kv';
+
+- type: query
+  sql: |
+    CREATE RANDOM STREAM rand_stream_source
+    (
+      ipv4_src_ip int32 default rand()
+    ) SETTINGS eps=100;
+
+- type: query
+  sql: |
+    CREATE RANDOM STREAM rand_stream_join
+    (
+      device_id string default random_string(4),
+      timestamp datetime(3) default random_in_type('date'),
+      batch_id uint32 default rand(),
+      region string default random_fixed_string(1),
+      city string default random_fixed_string(1)
+    ) SETTINGS eps=1000;
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    CREATE MATERIALIZED VIEW mv_with_target_stream INTO target_mv_stream
+    (
+      ipv4_src_ip int32,
+      ipv4_dst_ip int32,
+      start_time int32,
+      end_time int32,
+      pkt_count int32,
+      byte_count int32,
+      l4_src_port int16,
+      l4_dst_port int16,
+      protocol int8,
+      tcp_flags int8,
+      tags string,
+      input_if_id int16,
+      output_if_id int16,
+      event_ts datetime64(3),
+      _tp_time datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC(DoubleDelta, ZSTD(1)),
+      _tp_sn int64 CODEC(Delta(8), ZSTD(1)),
+      INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,
+      INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32
+    ) AS
+    SELECT
+      ipv4_src_ip, ipv4_dst_ip, start_time, end_time, pkt_count, byte_count, l4_src_port, l4_dst_port, protocol, tcp_flags, _tp_message_key AS tags, input_if_id, output_if_id, event_ts
+    FROM
+      source_mv_stream
+    LEFT JOIN device_metrics ON ipv4_src_ip = batch_id
+    SETTINGS
+      seek_to = 'earliest', checkpoint_interval = 5;
+
+- type: wait
+  time: 1
+
+- type: stream
+  query: insert into device_metrics(device_id, timestamp, batch_id, region, city) select device_id, timestamp, batch_id, region, city from rand_stream_join;
+  schema:
+    - name: device_id
+      type: string
+    - name: timestamp
+      type: datetime64(3)
+    - name: batch_id
+      type: uint32
+    - name: region
+      type: string
+    - name: city
+      type: string
+
+- type: stream
+  query: insert into source_mv_stream(ipv4_src_ip) select ipv4_src_ip from rand_stream_source;
+  schema:
+    - name: ipv4_src_ip
+      type: int32
+
+- type: wait
+  time: 10
+
+- name: mv-9-1
+  type: command
+  node: [p1]
+  shell: |
+    log_file=/var/log/proton-server/proton-server.log
+    log_check=$(grep 'Saved checkpoint' $log_file | grep default.source_mv_stream.0 | wc -l)
+    [ "$log_check" -ge 2 ] || { echo "##log 'Saved checkpoint' less than 2 lines##"; exit 0; }
+
+    mapfile -t lines < <(grep 'Saved checkpoint' $log_file | grep default.source_mv_stream.0 | tail -n 2 | awk '{print $2}')
+    time1="${lines[0]}"
+    time2="${lines[1]}"
+    timestamp1=$(date -d "$time1" +"%s")
+    timestamp2=$(date -d "$time2" +"%s")
+
+    interval=$((timestamp2 - timestamp1))
+    [ "$interval" -ge 4 ] && [ "$interval" -le 6 ] && echo "true" || echo "##checkpoint interval $interval not equal to 5##"
+
+- type: check
+  target_name: mv-9-1
+  expected_result: ["true"]
+
+- type: query
+  sql: |
+    ALTER VIEW mv_with_target_stream MODIFY QUERY SETTING checkpoint_interval=1
+
+- type: wait
+  time: 5
+
+- name: mv-9-2
+  type: command
+  node: [p1]
+  shell: |
+    log_file=/var/log/proton-server/proton-server.log
+    container_log=$(grep CheckpointCoordinator $log_file | grep 'Updated checkpoint interval to 1 in seconds' | wc -l)
+    [ "$container_log" -ge 1 ] && echo "true" || echo "##log 'Updated checkpoint interval to 1 in seconds' not found##"
+
+- type: check
+  target_name: mv-9-2
+  expected_result: ["true"]
+
+- name: mv-9-3
+  type: command
+  node: [p1]
+  shell: |
+    log_file=/var/log/proton-server/proton-server.log
+    log_check=$(grep 'Saved checkpoint' $log_file | grep default.source_mv_stream.0 | wc -l)
+    [ "$log_check" -ge 2 ] || { echo "##log 'Saved checkpoint' less than 2 lines##"; exit 0; }
+
+    mapfile -t lines < <(grep 'Saved checkpoint' $log_file | grep default.source_mv_stream.0 | tail -n 2 | awk '{print $2}')
+    time1="${lines[0]}"
+    time2="${lines[1]}"
+    timestamp1=$(date -d "$time1" +"%s")
+    timestamp2=$(date -d "$time2" +"%s")
+    interval=$((timestamp2 - timestamp1))
+    [ "$interval" -le 2 ] && echo "true" || echo "##checkpoint interval $interval not equal to 1##"
+
+- type: check
+  target_name: mv-9-3
+  expected_result: ["true"]

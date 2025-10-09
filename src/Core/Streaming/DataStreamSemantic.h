@@ -11,6 +11,7 @@ enum class StorageSemantic : uint8_t
     Changelog = 1,
     ChangelogKV = 2,
     VersionedKV = 3,
+    NativeKV = 4,
 };
 
 enum class DataStreamSemantic : uint8_t
@@ -63,12 +64,17 @@ struct DataStreamSemanticEx
     }
 };
 
-inline bool isVersionedKeyedStorage(DataStreamSemanticEx data_stream_semantic)
+inline bool isNativeKVStorage(DataStreamSemanticEx data_stream_semantic)
+{
+    return data_stream_semantic.hasStorageSemantic(StorageSemantic::NativeKV);
+}
+
+inline bool isVersionedKVStorage(DataStreamSemanticEx data_stream_semantic)
 {
     return data_stream_semantic.hasStorageSemantic(StorageSemantic::VersionedKV);
 }
 
-inline bool isChangelogKeyedStorage(DataStreamSemanticEx data_stream_semantic)
+inline bool isChangelogKVStorage(DataStreamSemanticEx data_stream_semantic)
 {
     return data_stream_semantic.hasStorageSemantic(StorageSemantic::ChangelogKV);
 }
@@ -83,9 +89,17 @@ inline bool isAppendStorage(DataStreamSemanticEx data_stream_semantic)
     return data_stream_semantic.hasStorageSemantic(StorageSemantic::Append);
 }
 
+/// Storage with pure key-value semantics
+inline bool isKeyValueStorage(DataStreamSemanticEx data_stream_semantic)
+{
+    return isNativeKVStorage(data_stream_semantic) || isVersionedKVStorage(data_stream_semantic);
+}
+
+/// Storage with pure key-value and changelog kv semantics
 inline bool isKeyedStorage(DataStreamSemanticEx data_stream_semantic)
 {
-    return isVersionedKeyedStorage(data_stream_semantic) || isChangelogKeyedStorage(data_stream_semantic);
+    return isNativeKVStorage(data_stream_semantic) || isVersionedKVStorage(data_stream_semantic)
+        || isChangelogKVStorage(data_stream_semantic);
 }
 
 inline bool isChangelogDataStream(DataStreamSemanticEx data_stream_semantic)

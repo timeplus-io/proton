@@ -1,0 +1,78 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.quantiles function - population quantilesiance
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value int, p float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getQuantileSeries(value int, p float) RETURNS array(float) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getQuantileSeries:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.quantiles = []
+              self.a_history = []
+              self.p_history = []
+
+          def serialize(self):
+              data = {}
+              data['quantiles'] = self.quantiles
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.quantiles = data['quantiles']
+
+          def merge(self, other):
+              self.a_history = other.a_history
+              self.p_history = other.p_history
+
+          def process(self, values, ps):
+              self.a_history += values
+              self.p_history += ps
+              self.quantiles = np.quantile(self.a_history, self.p_history).tolist()
+
+          def finalize(self):
+              return self.quantiles
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-9-1
+    type: stream
+    query: select getQuantileSeries(value, p) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value, p) values (10,1.0) (7,0.7) (4,0.4);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(value, p) values (3,0.3) (2,0.2) (1,0.1);
+
+  - type: check
+    target_name: python-udf2-9-1
+    expected_result:
+      - [[10.0, 8.2, 6.4]]
+      - [[10.0, 5.5, 3.0, 2.5, 2.0, 1.5]]

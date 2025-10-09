@@ -1,0 +1,9 @@
+-- { echoOn }
+select * from data preWhere index_hint(_partition_id = '1');
+1	1
+select count() from data preWhere index_hint(_partition_id = '1');
+1
+select * from data where index_hint(_partition_id = '1');
+1	1
+select count() from data where index_hint(_partition_id = '1');
+1

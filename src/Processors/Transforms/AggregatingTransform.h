@@ -6,6 +6,14 @@
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 #include <Common/scope_guard_safe.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/CurrentThread.h>
+
+namespace CurrentMetrics
+{
+    extern const Metric DestroyAggregatesThreads;
+    extern const Metric DestroyAggregatesThreadsActive;
+}
 
 namespace DB
 {
@@ -27,26 +35,23 @@ struct AggregatingTransformParams
     AggregatorListPtr aggregator_list_ptr;
     Aggregator & aggregator;
     bool final;
-    /// Merge data for aggregate projections.
-    bool only_merge = false;
     bool shuffled; /// When data is shuffled, we don't need do aggregation merge
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool only_merge_, bool shuffled_)
+    AggregatingTransformParams(const Block & header, const Aggregator::Params & params_, bool final_, bool shuffled_)
         : params(params_)
         , aggregator_list_ptr(std::make_shared<AggregatorList>())
-        , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
+        , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), header, params))
         , final(final_)
-        , only_merge(only_merge_)
         , shuffled(shuffled_)
     {
     }
 
-    AggregatingTransformParams(const Aggregator::Params & params_, const AggregatorListPtr & aggregator_list_ptr_, bool final_, bool only_merge_, bool shuffled_)
+    AggregatingTransformParams(
+        const Block & header, const Aggregator::Params & params_, const AggregatorListPtr & aggregator_list_ptr_, bool final_, bool shuffled_)
         : params(params_)
         , aggregator_list_ptr(aggregator_list_ptr_)
-        , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
+        , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), header, params))
         , final(final_)
-        , only_merge(only_merge_)
         , shuffled(shuffled_)
     {
     }
@@ -77,7 +82,10 @@ struct ManyAggregatedData
             // Aggregation states destruction may be very time-consuming.
             // In the case of a query with LIMIT, most states won't be destroyed during conversion to blocks.
             // Without the following code, they would be destroyed in the destructor of AggregatedDataVariants in the current thread (i.e. sequentially).
-            const auto pool = std::make_unique<ThreadPool>(variants.size());
+            const auto pool = std::make_unique<ThreadPool>(
+                CurrentMetrics::DestroyAggregatesThreads,
+                CurrentMetrics::DestroyAggregatesThreadsActive,
+                variants.size());
 
             for (auto && variant : variants)
             {
@@ -93,10 +101,10 @@ struct ManyAggregatedData
                         {
                             SCOPE_EXIT_SAFE(
                                 if (thread_group)
-                                    CurrentThread::detachQueryIfNotDetached();
+                                    CurrentThread::detachFromGroupIfNotDetached();
                             );
                             if (thread_group)
-                                CurrentThread::attachToIfDetached(thread_group);
+                                CurrentThread::attachToGroupIfDetached(thread_group);
 
                             setThreadName("AggregDestruct");
                         });
@@ -142,7 +150,9 @@ public:
         ManyAggregatedDataPtr many_data_,
         size_t current_variant_,
         size_t max_threads_,
-        size_t temporary_data_merge_threads_);
+        size_t temporary_data_merge_threads,
+        bool should_produce_results_in_order_of_bucket_number_ = true,
+        bool skip_merging_ = false);
     ~AggregatingTransform() override;
 
     String getName() const override { return "AggregatingTransform"; }
@@ -158,7 +168,7 @@ private:
     Processors processors;
 
     AggregatingTransformParamsPtr params;
-    Poco::Logger * log = &Poco::Logger::get("AggregatingTransform");
+    LoggerPtr log = getLogger("AggregatingTransform");
 
     ColumnRawPtrs key_columns;
     Aggregator::AggregateColumns aggregate_columns;
@@ -175,6 +185,8 @@ private:
     AggregatedDataVariants & variants;
     size_t max_threads = 1;
     size_t temporary_data_merge_threads = 1;
+    bool should_produce_results_in_order_of_bucket_number = true;
+    bool skip_merging = false; /// If we aggregate partitioned data merging is not needed.
 
     /// TODO: calculate time only for aggregation.
     Stopwatch watch;

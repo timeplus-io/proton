@@ -1,0 +1,84 @@
+tags:
+  - python_udf
+
+description: |
+  Test create alert to write file
+  Main Steps:
+  1.Create stream
+  2.Create python udf to write file
+  3.Create alert select stream call python udf
+  4.Ingest data into stream to trigger alert
+  5.Check file content
+
+steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: rm -rf /var/lib/proton/user_files/*.txt
+
+  - type: query
+    sql: CREATE STREAM monitor(value string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION write_file(value string) RETURNS string LANGUAGE PYTHON AS $$
+      file = "/var/lib/proton/user_files/0047_01_python.txt"
+      def write_file(value):
+          for v in value:
+              with open(file, "a") as f:
+                  f.write(f"{v}")
+          return value
+      $$
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE ALERT test
+      BATCH 10 EVENTS WITH TIMEOUT 5s
+      LIMIT 1 ALERTS PER 15s
+      CALL write_file
+      AS SELECT value FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO monitor(value) values ('s1') ('s2') ('s3');
+
+  - type: wait
+    time: 5
+
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: ls -ltrh /var/lib/proton/user_files
+
+  - name: alert-1-1
+    type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      [ -f /var/lib/proton/user_files/0047_01_python.txt ] && cat /var/lib/proton/user_files/0047_01_python.txt || true
+
+  - type: check
+    target_name: alert-1-1
+    mode: random
+    <<if eq .nodes "1">>
+    expected_result: ["s1s2s3"]
+    <<else>>
+    expected_result: ["", "", "s1s2s3"]
+    <<end>>

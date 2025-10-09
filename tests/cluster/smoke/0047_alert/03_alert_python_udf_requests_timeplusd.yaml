@@ -1,0 +1,116 @@
+tags:
+  - python udf
+
+description: |
+  Test create alert to send requests to proton
+  Main Steps:
+  1.Create 2 stream
+  2.Create python udf to send request ingest data into stream2
+  3.Create alert to select stream1 call python udf 
+  4.Ingest data into stream1 to trigger alert
+  5.Check stream2 data
+  6.Replace python udf to send request ingest data into stream1
+  7.replace alert to select stream1 call python udf
+  8.Ingest data into stream1 to trigger alert
+  9.Check stream1 data
+
+steps:
+  - type: query
+    sql: CREATE STREAM monitor(value string);
+
+  - type: query
+    sql: CREATE STREAM action(id int64, value string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION requests_Proton(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import json
+      import requests
+      def requests_Proton(value):
+          for i in range(len(value)):
+              requests.post("http://p1:8123/proton/v1/ingest/streams/action", data=json.dumps({"columns":["id","value"],"data":[[i,value[i]]]}))
+          return value
+      $$
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE ALERT test
+      BATCH 10 EVENTS WITH TIMEOUT 5s
+      LIMIT 1 ALERTS PER 15s
+      CALL requests_Proton
+      AS SELECT value FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: alert-3-1
+    query: select id, value from action;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO monitor(value) values ('s1') ('s2') ('s3');
+
+  - type: check
+    target_name: alert-3-1
+    expected_result:
+      - [0, 's1']
+      - [1, 's2']
+      - [2, 's3']
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION requests_Proton(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import json
+      import requests
+      def requests_Proton(value):
+          for v in value:
+              requests.post("http://p1:8123/proton/v1/ingest/streams/monitor", data=json.dumps({"columns":["value"],"data":[[v]]}))
+          return value
+      $$
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE or REPLACE ALERT test
+      BATCH 10 EVENTS WITH TIMEOUT 5s
+      LIMIT 1 ALERTS PER 15s
+      CALL requests_Proton
+      AS SELECT value FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: alert-3-2
+    query: select value from monitor;
+    schema:
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO monitor(value) values ('s4');
+
+  - type: check
+    target_name: alert-3-2
+    expected_result:
+      - ['s4']
+      - ['s4']

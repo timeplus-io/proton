@@ -1,38 +1,26 @@
-#include "CheckpointStorageFactory.h"
-#include "LocalFilesystemCheckpoint.h"
+#include <Checkpoint/CheckpointStorageFactory.h>
+#include <Checkpoint/LocalFileSystemCheckpointStorage.h>
 
+#include <Bootstrap/Globals.h>
 #include <Common/Exception.h>
+#include <Common/logger_useful.h>
 
-#include <Poco/Util/AbstractConfiguration.h>
+#include <magic_enum.hpp>
+
 
 namespace DB
 {
-namespace
-{
-const std::string DEFAULT_CKPT_STORAGE_TYPE = "local_file_system";
-const std::string LOCAL_FILE_SYSTEM_CKPT = "local_file_system";
-const std::string DEFAULT_CKPT_DIR = "/var/lib/proton/checkpoint/";
-const uint64_t DEFAULT_CKPT_INTERVAL = 900; /// in seconds
-}
-
 namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
+extern const int INVALID_CONFIG_PARAMETER;
 }
 
-std::unique_ptr<CheckpointStorage> CheckpointStorageFactory::create(const Poco::Util::AbstractConfiguration & config)
+std::unique_ptr<CheckpointStorage> CheckpointStorageFactory::create(CheckpointStorageType type, const CheckpointConfig & config)
 {
-    auto ckpt_storage_type = config.getString("checkpoint.storage_type", DEFAULT_CKPT_STORAGE_TYPE);
-    if (ckpt_storage_type == LOCAL_FILE_SYSTEM_CKPT || ckpt_storage_type.empty())
-    {
-        auto ckpt_path = config.getString("checkpoint.path", DEFAULT_CKPT_DIR);
-        auto ckpt_interval = config.getUInt64("checkpoint.interval", DEFAULT_CKPT_INTERVAL);
-
-        return std::make_unique<LocalFileSystemCheckpoint>(std::move(ckpt_path), ckpt_interval);
-    }
-    else
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown checkpoint storage type '{}'", ckpt_storage_type);
-    }
+    /// Only support LocalFileSystem storage
+    static auto logger = getLogger("CheckpointStorageFactory");
+    LOG_INFO(logger, "Creating checkpoint storage: type={} (forcing LocalFileSystem), path={}", magic_enum::enum_name(type), config.path);
+    return std::make_unique<LocalFileSystemCheckpointStorage>(config.path);
 }
 }

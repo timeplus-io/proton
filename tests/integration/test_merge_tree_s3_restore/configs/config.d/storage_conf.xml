@@ -1,30 +1,39 @@
 <clickhouse>
     <storage_configuration>
         <disks>
-            <s3>
+            <s31>
                 <type>s3</type>
                 <endpoint>http://minio1:9001/root/data/</endpoint>
                 <access_key_id>minio</access_key_id>
                 <secret_access_key>minio123</secret_access_key>
                 <send_metadata>true</send_metadata>
                 <list_object_keys_size>1</list_object_keys_size> <!-- To effectively test restore parallelism -->
-            </s3>
-            <hdd>
-                <type>local</type>
-                <path>/</path>
-            </hdd>
+            </s31>
+            <s32>
+                <type>s3</type>
+                <endpoint>http://minio1:9001/root/data2/</endpoint>
+                <access_key_id>minio</access_key_id>
+                <secret_access_key>minio123</secret_access_key>
+            </s32>
         </disks>
         <policies>
-            <s3>
+            <two_disks>
                 <volumes>
-                    <main>
-                        <disk>s3</disk>
-                    </main>
+                    <default>
+                        <disk>default</disk>
+                    </default>
                     <external>
-                        <disk>hdd</disk>
+                        <disk>s31</disk>
                     </external>
                 </volumes>
-            </s3>
+            </two_disks>
+            <one_disk>
+                <volumes>
+                    <external>
+                        <disk>s32</disk>
+                    </external>
+                </volumes>
+            </one_disk>
         </policies>
     </storage_configuration>
 

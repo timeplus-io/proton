@@ -1,0 +1,1 @@
+CREATE VIEW default.test_table_comment AS(\nSELECT\n  to_string({date_from:string}))\nCOMMENT \'test comment\'

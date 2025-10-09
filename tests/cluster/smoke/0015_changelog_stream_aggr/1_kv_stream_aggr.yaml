@@ -1,0 +1,91 @@
+tags:
+  - changelog_stream_aggr
+description: single shard changelog kv stream aggr query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: drop stream if exists changelog_kv_stream_aggr;
+  - type: wait
+    time: 1
+
+  - type: query
+    node: 
+      - p1
+    sql: create stream changelog_kv_stream_aggr
+        (
+          i int8,
+          s string
+        )
+        primary key s settings mode='changelog_kv';
+  - type: wait
+    time: 4
+
+  - type: stream
+    name: changelog-aggr-1-1
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query_id: "1600"
+    query: select count(), avg(i), sum(i), min(i), max(i), min(s), max(s) from changelog_kv_stream_aggr emit periodic 1s
+    schema:
+      - name: count()
+        type: uint64
+      - name: avg(i)
+        type: float64
+      - name: sum(i)
+        type: int64
+      - name: min(i)
+        type: int8
+      - name: max(i)
+        type: int8
+      - name: min(s)
+        type: string
+      - name: max(s)
+        type: string
+  - type: wait
+    wait: 4
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into changelog_kv_stream_aggr(i, s) values (1, 's1'), (2, 's2'), (3, 's3');
+
+  - type: check
+    target_name: changelog-aggr-1-1
+    expected_result:
+      - ["3", "2", "6", "1", "3", "s1", "s3"]
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (1, 's1', -1);
+
+  - type: check
+    target_name: changelog-aggr-1-1
+    expected_result:
+      - ["2", "2.5", "5", "2", "3", "s2", "s3"]
+
+  - type: query
+    node: 
+      - p1
+    sql: insert into changelog_kv_stream_aggr(i, s, _tp_delta) values (3, 's3', -1);
+
+  - type: check
+    target_name: changelog-aggr-1-1
+    expected_result:
+      - ["1", "2", "2", "2", "2", "s2", "s2"]

@@ -4,7 +4,8 @@
 #include <Common/PODArray_fwd.h>
 #include <Common/Exception.h>
 
-#define MAX_FIXEDSTRING_SIZE 0xFFFFFF
+constexpr size_t MAX_FIXEDSTRING_SIZE = 0xFFFFFF;
+constexpr size_t MAX_FIXEDSTRING_SIZE_WITHOUT_SUSPICIOUS = 256;
 
 
 namespace DB
@@ -32,9 +33,9 @@ public:
     explicit DataTypeFixedString(size_t n_) : n(n_)
     {
         if (n == 0)
-            throw Exception("The fixed_string size must be positive", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "the fixed_string size must be positive");
         if (n > MAX_FIXEDSTRING_SIZE)
-            throw Exception("The fixed_string size is too large", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "the fixed_string size is too large");
     }
 
     std::string doGetName() const override;

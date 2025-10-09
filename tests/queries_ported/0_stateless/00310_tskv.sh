@@ -6,6 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS tskv";
 $CLICKHOUSE_CLIENT --query="create stream tskv (tskv_format string, timestamp datetime('UTC'), timezone string, text string, binary_data string) ";
+sleep 2s
 
 # shellcheck disable=SC2028
 echo -n 'tskv	tskv_format=custom-service-log	timestamp=2013-01-01 00:00:00	timezone=+0400	text=multiline\ntext	binary_data=can contain \0 symbol

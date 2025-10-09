@@ -1,0 +1,85 @@
+tags:
+- udf2
+
+description: SQL - Test REPLACE FUNCTION when function already exists
+
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS test32_stream;
+
+- type: query
+  sql: DROP FUNCTION IF EXISTS test_32_add_five;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE STREAM test32_stream(value int);
+
+- type: query
+  sql: |
+    CREATE FUNCTION test_32_add_five(values int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+    function test_32_add_five(value) {
+      for(let i=0; i<value.length; i++) {
+        value[i] = value[i]+5;
+      } 
+      return value;
+    }
+    $$;
+
+- type: wait
+  time: 2
+
+- name: udf-32-1
+  type: stream
+  query: select test_32_add_five(value) as res from test32_stream;
+  schema:
+  - name: res
+    type: int32
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test32_stream(value) values (1)(2)(3);
+
+- type: check
+  target_name: udf-32-1
+  expected_result:
+  - [6]
+  - [7]
+  - [8]
+
+- type: query
+  sql: |
+    CREATE OR REPLACE FUNCTION test_32_add_five(values int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+    function test_32_add_five(value) {
+      for(let i=0; i<value.length; i++) {
+        value[i] = value[i]+4;
+      } 
+      return value;
+    }
+    $$;
+
+- type: wait
+  time: 2
+
+- name: udf-32-2
+  type: stream
+  query: select test_32_add_five(value) as res from test32_stream;
+  schema:
+  - name: res
+    type: int32
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test32_stream(value) values (1)(2)(3);
+
+- type: check
+  target_name: udf-32-2
+  expected_result:
+  - [5]
+  - [6]
+  - [7]

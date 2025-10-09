@@ -1,0 +1,95 @@
+tags:
+  - to_support
+  - uda
+
+description: Test covering simple python uda test
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value int64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create or replace aggregate function getMax(value int64) returns int64 language python as $$
+      import pickle
+      class getMax:
+          def __init__(self):
+              self.max = 0
+
+          def serialize(self):
+            data = {}
+            data['max'] = self.max
+            return pickle.dumps(data)
+        
+          def deserialize(self, data):
+            data = pickle.loads(data)
+            self.max = data['max']
+
+          def merge(self, other):
+              if (other.max > self.max):
+                  self.max = other.max
+
+          def process(self, values):
+              tmp_max = max(values)
+              if tmp_max > self.max:
+                  self.max = tmp_max
+
+          def finalize(self):
+              return self.max
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-3
+    type: stream
+    query: select getMax(value) as res from test41_stream;
+    schema:
+      - name: res
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values
+    schema:
+      - name: value
+        type: int64
+    inputs:
+      - [1]
+      - [2]
+      - [3]
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test41_stream(value) values
+    schema:
+      - name: value
+        type: int64
+    inputs:
+      - [3]
+      - [5]
+      - [7]
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: python_udf-3
+    expected_result:
+      - [3]
+      - [7]

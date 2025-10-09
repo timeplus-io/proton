@@ -1,0 +1,182 @@
+tags:
+  - Disable some pushdown optimization for table function
+description: (#3064) Covering pushdown optimization for table function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_stream_3064_v
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test_stream_3064_l
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test_stream_3064_r
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_3064_l
+        (
+          i int,
+          k string,
+          val float
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_3064_r
+        (
+          j int,
+          k2 string,
+          status int
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: with cte as (select i, k, val, j, k2, status from test_stream_3064_l as a inner join test_stream_3064_r as b on a.k = b.k2) select * from changelog(cte, i , k) where status = 1
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: val
+        type: float32
+      - name: j
+        type: int32
+      - name: k2
+        type: string
+      - name: status
+        type: int32
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_3064_l(i, k, val) values
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: val
+        type: float32
+    inputs:
+      - [1, 'k', 11.1]
+      - [2, 'k', 33.3]
+      - [1, 'k2', 55.5]
+      - [2, 'k2', 77.7]
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_3064_r(j, k2, status) values
+    schema:
+      - name: j
+        type: int32
+      - name: k2
+        type: string
+      - name: status
+        type: int32
+    inputs:
+      - [1, 'k', 1]
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_3064_r(j, k2, status) values
+    schema:
+      - name: j
+        type: int32
+      - name: k2
+        type: string
+      - name: status
+        type: int32
+    inputs:
+      - [2, 'k2', 1]
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_3064_r(j, k2, status) values
+    schema:
+      - name: j
+        type: int32
+      - name: k2
+        type: string
+      - name: status
+        type: int32
+    inputs:
+      - [1, 'k', 0]
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9901
+    query: with cte as (select * from test_stream_3064_l) select i, k, val from tumble(cte, 2s) where _tp_time > earliest_ts() and window_start > 0
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: val
+        type: float32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists test_stream_3064_v
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create view test_stream_3064_v as select * from test_stream_3064_l
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9902
+    query_id: '9902'
+    query: select i, k, val from tumble(test_stream_3064_v, 2s) where _tp_time > earliest_ts() and window_start > 0
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: val
+        type: float32
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - [1, 'k', 11.1, 1, 'k', 1, 1]
+      - [2, 'k', 33.3, 1, 'k', 1, 1]
+      - [1, 'k2', 55.5, 2, 'k2', 1, 1]
+      - [2, 'k2', 77.7, 2, 'k2', 1, 1]
+      - [1, 'k', 11.1, 1, 'k', 1, -1]
+      - [2, 'k', 33.3, 1, 'k', 1, -1]
+
+  - type: check
+    target_name: 9901
+    expected_result:
+      - [1, "k", 11.1]
+      - [2, "k", 33.3]
+      - [1, "k2", 55.5]
+      - [2, "k2", 77.7]
+
+  - type: check
+    target_name: 9902
+    expected_result:
+      - [1, "k", 11.1]
+      - [2, "k", 33.3]
+      - [1, "k2", 55.5]
+      - [2, "k2", 77.7]

@@ -1,0 +1,95 @@
+name: macos_test
+run-name: macos_test [${{ github.event.inputs.arch }}] [${{ github.event.inputs.tag }}]
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Proton Release tag (eg.v2.5.3)'
+        required: true
+        type: string
+        default: 'latest'
+      repo:
+        description: 'Proton repo in Docker Hub'
+        required: false
+        default: 'timeplus/proton'
+      arch:
+        description: 'Hardware architecture'
+        required: false
+        default: arm
+        type: choice
+        options:
+        - x64
+        - arm
+      os_version:
+        description: 'Operation System Version (option: 15,14)'
+        required: false
+        type: string
+        default: '14'
+
+jobs:
+  smoke_test_on_arm:
+    if: ${{ github.event.inputs.arch == 'arm' }}
+    runs-on: macos-${{ inputs.os_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.7
+  
+      - name: Get MacOS info
+        run: |
+          sw_vers
+          uname -a
+          sysctl -n machdep.cpu.brand_string
+
+      - name: Download Release Assets
+        run: |
+          export PROTON_VERSION=$TAG
+          export PROBE_VERSION=v0.1.13
+          cd $GITHUB_WORKSPACE/tests/cluster/deployment/legacy/
+          echo ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }} >> GH_PERSONAL_ACCESS_TOKEN
+          gh auth login --with-token < GH_PERSONAL_ACCESS_TOKEN
+
+          # download proton binary on macos arm
+          gh release download $PROTON_VERSION --repo github.com/timeplus-io/proton -p '*-Darwin-arm64'
+          mv *-Darwin-arm64 proton
+          chmod +x proton
+          
+          # download probe binary on macos arm
+          gh release download $PROBE_VERSION --repo github.com/timeplus-io/probe -p '*_darwin_arm64.zip'
+          unzip *_darwin_arm64.zip -x README.md
+          PROBE_BINARY=$(basename *_darwin_arm64.zip .zip)
+          mv $PROBE_BINARY probe
+          chmod +x probe
+          ls -ltrh
+
+      - name: Run Tests
+        timeout-minutes: 5
+        run: |
+          export PROTON_VERSION=$TAG
+          cd $GITHUB_WORKSPACE/tests/cluster/deployment/legacy/
+
+          # Start Up Proton
+          nohup ./proton server start --config-file config_node1.yaml > console_proton1.log 2>&1 &
+          nohup ./proton server start --config-file config_node2.yaml > console_proton2.log 2>&1 &
+          nohup ./proton server start --config-file config_node3.yaml > console_proton3.log 2>&1 &
+          ps -ef | grep proton
+
+          # Run Smoke Tests
+          mkdir log
+          ./probe smoke -v $GITHUB_WORKSPACE/tests/cluster/smoke -d $GITHUB_WORKSPACE/tests/cluster/deployment/local -c p3k1 -k 00_tumble_window_max --collect-only
+          sleep 5
+          ./probe smoke -v $GITHUB_WORKSPACE/tests/cluster/smoke -d $GITHUB_WORKSPACE/tests/cluster/deployment/local -c p3k1 -k 00_tumble_window_max -f ./log/probe.log
+
+          # Collect Log
+          cat ./log/probe.log
+          ls -ltrah ./log
+          echo "==============Smoke Testing Result Summary=============="
+          if [ ! -f ./log/.status ]; then
+            echo "test fail with panic or timeout" | tee -a $GITHUB_STEP_SUMMARY
+            exit 1
+          elif grep -q "succeed" ./log/.status; then
+            echo "test succeed" | tee -a $GITHUB_STEP_SUMMARY
+          else
+            echo "test failed: 00_tumble_window_max" | tee -a $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

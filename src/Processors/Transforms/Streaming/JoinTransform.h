@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Streaming/IHashJoin.h>
+#include <Interpreters/Streaming/HashJoin/IHashJoin.h>
 #include <Processors/IProcessor.h>
 #include <Common/serde.h>
 
@@ -26,13 +26,15 @@ public:
         Block right_input_header,
         Block output_header,
         HashJoinPtr join_,
+        size_t transform_id_,
         size_t max_block_size_,
         UInt64 join_max_cached_bytes_);
 
-    String getName() const override { return "StreamingJoinTransform"; }
+    String getName() const override;
     Status prepare() override;
     void work() override;
 
+    bool hasState() const override { return true; }
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
 
@@ -47,7 +49,7 @@ private:
     void joinBidirectionally(Chunks chunks);
     void rangeJoinBidirectionally(Chunks chunks);
 
-    void onCancel() override;
+    void onCancel() noexcept override;
 
 private:
     struct InputPortWithData
@@ -67,12 +69,13 @@ private:
     bool range_bidirectional_hash_join = false;
     bool bidirectional_hash_join = false;
 
+    size_t transform_id;
     [[maybe_unused]] std::shared_ptr<NotJoinedBlocks> non_joined_blocks;
     [[maybe_unused]] size_t max_block_size;
 
     Chunk output_header_chunk;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
     /// When received request checkpoint, it's always empty chunk with checkpoint context
     NO_SERDE std::array<InputPortWithData, 2> input_ports_with_data;

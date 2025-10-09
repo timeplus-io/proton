@@ -1,0 +1,108 @@
+tags:
+  - local-run
+  - versioned_kv_stream
+description: single shard versioned_kv stream creation and query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists test15_versioned_kv_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: create stream test15_versioned_kv_stream (i int64, s string) primary key s settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_versioned_kv_stream(i, s) values (1, 'a')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    node:
+      - p1
+    sql: insert into test15_versioned_kv_stream(i, s) values (2, 'b')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_versioned_kv_stream(i, s) values (2, 'a'), (3, 'b'), (4, 'c')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 3
+
+  - type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    name: '1500'
+    query: select i, s from test15_versioned_kv_stream;
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+    
+  - type: check
+    target_name: "1500"
+    expected_result:
+      - - 2
+        - a
+      - - 3
+        - b
+      - - 4
+        - c
+
+  - type: query
+    node:
+      - p1
+    sql: insert into test15_versioned_kv_stream(i, s) values (5, 'd'), (6, 'c')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1500"
+    expected_result:
+      - - 5
+        - d
+      - - 6
+        - c

@@ -4,6 +4,9 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <atomic>
 
+/// proton: starts.
+#include <IO/VarInt.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -73,6 +76,17 @@ public:
 
         return column;
     }
+
+    /// proton: starts.
+    void serialize(WriteBuffer & wb) const override { writeVarUInt(rows.load(), wb); }
+
+    void deserialize(ReadBuffer & rb) const override
+    {
+        size_t recovered_rows = 0;
+        readVarUInt(recovered_rows, rb);
+        rows.store(recovered_rows);
+    }
+    /// proton: ends.
 };
 
 }

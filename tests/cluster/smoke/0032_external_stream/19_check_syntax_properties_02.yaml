@@ -1,0 +1,98 @@
+description: message.send.max.retries - How many times to retry sending a failing Message.
+             retries - Alias for message.send.max.retries:How many times to retry sending a failing Message.
+             retry.backoff.ms - The backoff time in milliseconds before retrying a protocol request.
+             retry.backoff.max.ms(no such config) - The max backoff time in milliseconds before retrying a protocol request,
+             batch.num.messages - Maximum number of messages batched in one MessageSet.
+             batch.size - Maximum size (in bytes) of all messages batched in one MessageSet, including protocol framing overhead.
+             debug - A comma-separated list of debug contexts to enable. Detailed Producer debugging:broker,topic,msg. Consumer:consumer,cgrp,topic,fetch Type:CSV flags
+             socket.timeout.ms(no such config) - Default timeout for network requests. Producer:ProduceRequests will use the lesser value of socket.timeout.ms and remaining message.timeout.ms for the first message in the batch. Consumer:FetchRequests will use fetch.wait.max.ms + socket.timeout.ms. Admin:Admin requests will use socket.timeout.ms or explicitly set rd_kafka_AdminOptions_set_operation_timeout() value. Type:integer
+             socket.blocking.max.ms (no such config) - DEPRECATED No longer used. Type:integer
+             socket.send.buffer.bytes (no such config)- Broker socket send buffer size. System default is used if 0. Type:integer
+             socket.receive.buffer.bytes(no such config) - Broker socket receive buffer size. System default is used if 0. Type:integer
+             socket.keepalive.enable(no such config) - Enable TCP keep-alives (SO_KEEPALIVE) on broker sockets Type:boolean
+             socket.nagle.disable(no such config) - Disable the Nagle algorithm (TCP_NODELAY) on broker sockets. Type:boolean
+             socket.max.fails(no such config) - Disconnect from broker when this number of send failures (e.g., timed out requests) is reached. Disable with 0. WARNING:It is highly recommended to leave this setting at its default value of 1 to avoid the client and broker to become desynchronized in case of request timeouts. NOTE:The connection is automatically re-established. Type:integer
+             broker.address.ttl(no such config) - How long to cache the broker address resolving results (milliseconds). Type:integer
+             broker.address.family(no such config) - Allowed broker IP address families:any, v4, v6 Type:enum value
+             reconnect.backoff.jitter.ms(no such config) - DEPRECATED No longer used. See reconnect.backoff.ms and reconnect.backoff.max.ms. Type:integer
+             reconnect.backoff.ms(no such config) - The initial time to wait before reconnecting to a broker after the connection has been closed. The time is increased exponentially until reconnect.backoff.max.ms is reached. -25% to +50% jitter is applied to each reconnect backoff. A value of 0 disables the backoff and reconnects immediately. Type:integer
+             reconnect.backoff.max.ms(no such config) -  The maximum time to wait before reconnecting to a broker after the connection has been closed. Type:integer
+
+
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test01
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: create
+    topic: test01
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test00_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test00_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test01', 
+        properties='message.send.max.retries=100;retries= 100;
+        debug= broker;retry.backoff.ms=1000;batch.num.messages=1000000;batch.size=1000'
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: streaming-01-query
+    query: select * from test00_external
+    schema: 
+        - name: id
+          type: int32
+        - name: value
+          type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+
+  - type: check
+    target_name: streaming-01-query
+    expected_result:
+      - [1, 'aaaa']
+      - [2, 'bbbb']

@@ -300,7 +300,7 @@ void optimizeDuplicatesInOrderBy(const ASTSelectQuery * select_query)
         const auto & order_by_elem = elem->as<ASTOrderByElement &>();
 
         if (order_by_elem.with_fill /// Always keep elements WITH FILL as they affects other.
-            || elems_set.emplace(name, order_by_elem.collation ? order_by_elem.collation->getColumnName() : "").second)
+            || elems_set.emplace(name, order_by_elem.getCollation() ? order_by_elem.getCollation()->getColumnName() : "").second)
             unique_elems.emplace_back(elem);
     }
 
@@ -455,7 +455,7 @@ void optimizeMonotonousFunctionsInOrderBy(ASTSelectQuery * select_query, Context
         auto * order_by_element = child->as<ASTOrderByElement>();
 
         if (!order_by_element || order_by_element->children.empty())
-            throw Exception("Bad ORDER BY expression AST", ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE);
+            throw Exception(ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE, "Bad ORDER BY expression AST");
 
         if (order_by_element->with_fill)
             return;
@@ -534,7 +534,7 @@ void optimizeRedundantFunctionsInOrderBy(const ASTSelectQuery * select_query, Co
         auto * order_by_element = child->as<ASTOrderByElement>();
 
         if (!order_by_element || order_by_element->children.empty())
-            throw Exception("Bad ORDER BY expression AST", ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE);
+            throw Exception(ErrorCodes::UNKNOWN_TYPE_OF_AST_NODE, "Bad ORDER BY expression AST");
 
         if (order_by_element->with_fill)
             return;
@@ -785,7 +785,7 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
 
     auto * select_query = query->as<ASTSelectQuery>();
     if (!select_query)
-        throw Exception("Select analyze for not select asts.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Select analyze for not select asts.");
 
     if (settings.optimize_functions_to_subcolumns && result.storage_snapshot && result.storage->supportsSubcolumns())
         optimizeFunctionsToSubcolumns(query, result.storage_snapshot->metadata);

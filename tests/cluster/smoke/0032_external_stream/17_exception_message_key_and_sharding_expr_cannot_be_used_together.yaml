@@ -1,0 +1,26 @@
+tags:
+  - syntax exception
+description: (#6151) exception when sharding_expr set with message key.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 33_15_01
+    query: create external stream test_kafka_15_01
+        (
+           metric string,
+           value int32,
+           _tp_message_key string default metric
+        )
+        settings type = 'kafka', 
+        brokers = 'k1:9092', 
+        topic = 'test_14', 
+        sharding_expr = 'to_int(value)',
+        data_format = 'JSONEachRow',
+        one_message_per_row = 1;
+
+  - type: check
+    target_name: 33_15_01
+    expected_result:
+      - ['error_code:471']

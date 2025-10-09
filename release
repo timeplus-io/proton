@@ -35,6 +35,9 @@ do
         TEST='yes'
         VERSION_POSTFIX+=+test
         shift
+    elif [[ $1 == '--rc' ]]; then
+        RC='yes'
+        shift
     elif [[ $1 == '--check-build-dependencies' ]]; then
         DEBUILD_NODEPS_OPTIONS=""
         shift

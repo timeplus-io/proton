@@ -1,0 +1,30 @@
+tags:
+  - local-run
+  - changelog_stream
+description: single shard changelog stream creation and query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: "1400"
+    type: stream
+    query: select i, _tp_delta from changelog_stream;
+    schema:
+      - name: i
+        type: int32
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into changelog_stream(i) values (1);
+
+  - type: query
+    sql: insert into changelog_stream(i, _tp_delta) values (1, -1);
+
+  - type: check
+    target_name: "1400"
+    expected_result:
+      - [1, 1]
+      - [1, -1]

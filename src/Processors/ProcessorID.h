@@ -93,13 +93,12 @@ enum class ProcessorID : UInt32
     PartitionedStorageURLSinkID = 72,
     DistributedSinkID = 73,
     MergeTreeSinkID = 74,
-    EmbeddedRocksDBSinkID = 75,
     StreamSinkID = 76,
     SetOrJoinSinkID = 77,
     NullSinkToStorageID = 78,
     PartitionedStorageFileSinkID = 79,
     ReplacingWindowColumnTransformID = 80,
-    ShufflingTransformID = 81,
+    SubstreamShufflingTransformID = 81,
     MergeJoinTransformID = 82,
     FilterSortedStreamByRangeID = 83,
     DistinctSortedChunkTransformID = 84,
@@ -116,6 +115,24 @@ enum class ProcessorID : UInt32
     ReplayStreamTransformID = 95,
     LightShufflingTransformID = 96,
     StreamingJoinTransformWithAlignmentID = 97,
+    DelayedJoinedBlocksWorkerTransformID = 100,
+    DelayedJoinedBlocksTransformID = 101,
+    PingPongProcessorID = 102,
+    CreatingSetsOnTheFlyTransformID = 103,
+    FilterBySetOnTheFlyTransformID = 104,
+    ReadFromMergeTreeDependencyTransformID = 105,
+    HybridChangelogConvertTransformID = 106,
+    StreamingConcatProcessorID = 107,
+    HybridDedupTransformID = 108,
+    ExtractColumnsTransformID = 109,
+    SimpleSquashingChunksTransformID = 110,
+    FlattenChunksToMergeTransformID = 111,
+    SelectByIndicesTransformID = 112,
+    VersionsFilterTransformID = 113,
+    HybridVersionsFilterTransformID = 114,
+    BatchingTransformID = 115,
+    ThrottlingTransformID = 116,
+    RowifyTransformID = 117,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,
@@ -133,6 +150,11 @@ enum class ProcessorID : UInt32
     GlobalAggregatingTransformWithSubstreamID = 1'012,
     UserDefinedEmitStrategyAggregatingTransformID = 1'013,
     UserDefinedEmitStrategyAggregatingTransformWithSubstreamID = 1'014,
+    SortingAggregatedForMemoryBoundMergingTransformID = 1'015,
+    GlobalAggregatingTransformWithSessionKeyID = 1'016,
+
+    /// Substream transform
+    ExpressionTransformWithSubstreamID = 2'000,
 
     /// Format Input Processors
     ParallelParsingInputFormatID = 4'000,
@@ -166,6 +188,7 @@ enum class ProcessorID : UInt32
     ORCBlockInputFormatID = 4'028,
     ParquetBlockInputFormatID = 4'029,
     ProtobufListInputFormatID = 4'030,
+    JSONCompactRowInputFormatID = 4'031,
 
     /// Format Output Processors
     NullOutputFormatID = 5'000,
@@ -199,11 +222,11 @@ enum class ProcessorID : UInt32
     ORCBlockOutputFormatID = 5'028,
     ParquetBlockOutputFormatID = 5'029,
     ProtobufListOutputFormatID = 5'030,
+    OpenSearchRowOutputFormatID = 5'100,
 
     /// Source Processors
     NullSourceID = 10'000,
     KafkaSourceID = 10'001,
-    EmbeddedRocksDBSourceID = 10'002,
     FileLogSourceID = 10'003,
     BlockListSourceID = 10'004,
     MergeSorterSourceID = 10'005,
@@ -218,8 +241,7 @@ enum class ProcessorID : UInt32
     StorageURLSourceID = 10'014,
     DirectoryMonitorSourceID = 10'015,
     MergeTreeSequentialSourceID = 10'016,
-    MergeTreeThreadSelectProcessorID = 10'017,
-    MergeTreeSelectProcessorID = 10'018,
+    MergeTreeSourceID = 10'017,
     DelayedPortsProcessorID = 10'019,
     PushingSourceID = 10'020,
     PushingAsyncSourceID = 10'021,
@@ -249,15 +271,31 @@ enum class ProcessorID : UInt32
     GenerateRandomSourceID = 10'045,
     SourceFromQueryPipelineID = 10'046,
     ConvertingAggregatedToChunksSourceShuffledID = 10'047,
-    /// proton: starts
     ClickHouseSourceID = 11'000,
+    NumberSourceID = 11'052,
+    NumberRangeSourceID = 11'053,
     PulsarSourceID = 11'054,
-    /// proton: ends
+    ThrowingExceptionSourceID = 11'055,
+    IcebergSourceID = 11'100,
+    MongoDBSourceID = 11'101,
 
     /// Sink Processors
     EmptySinkID = 20'000,
     NullSinkID = 20'001,
     ExternalTableDataSinkID = 20'002,
+    MessageQueueSinkID = 20'100,
+    IcebergSinkID = 20'200,
+    HTTPSink = 20'201,
+    PartitionedHTTPSink = 20'202,
+    UDFSink = 20'203,
+
+    MySQLSourceID = 30'001,
+    MySQLSinkID = 30'002,
+    PostgresSQLSourceID = 30'003,
+    PostgresSQLSinkID = 30'004,
+    MongoDBSinkID = 30'005,
+
+    CheckPointRecordTransformID = 40'000,
 };
 
 inline ProcessorID toProcessID(UInt32 v)

@@ -43,19 +43,19 @@ const String & getAggregateFunctionCanonicalNameIfAny(const String & name)
 void AggregateFunctionFactory::registerFunction(const String & name, Value creator_with_properties, CaseSensitiveness case_sensitiveness)
 {
     if (creator_with_properties.creator == nullptr)
-        throw Exception("AggregateFunctionFactory: the aggregate function " + name + " has been provided "
-            " a null constructor", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "AggregateFunctionFactory: "
+            "the aggregate function {} has been provided  a null constructor", name);
 
     if (!aggregate_functions.emplace(name, creator_with_properties).second)
-        throw Exception("AggregateFunctionFactory: the aggregate function name '" + name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "AggregateFunctionFactory: the aggregate function name '{}' is not unique",
+            name);
 
     if (case_sensitiveness == CaseInsensitive)
     {
         auto key = Poco::toLower(name);
         if (!case_insensitive_aggregate_functions.emplace(key, creator_with_properties).second)
-            throw Exception("AggregateFunctionFactory: the case insensitive aggregate function name '" + name + "' is not unique",
-                ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "AggregateFunctionFactory: "
+                "the case insensitive aggregate function name '{}' is not unique", name);
         case_insensitive_name_mapping[key] = name;
     }
 }
@@ -76,20 +76,36 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
     const DataTypes & argument_types,
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
+    ContextPtr context,
     bool is_changelog_input) const
 /// proton: ends
 {
     auto types_without_low_cardinality = convertLowCardinalityTypesToNested(argument_types);
+
+    /// proton: starts.
+    /// Since UDA already supports nullable types as input, the null combinator logic is not needed here.
+    auto aggr = UserDefinedFunctionFactory::tryGetAggregateFunction(
+        name, types_without_low_cardinality, parameters, out_properties, context, is_changelog_input);
+    if (aggr)
+        return aggr;
+    /// proton: ends.
 
     /// If one of the types is Nullable, we apply aggregate function combinator "_null".
 
     if (std::any_of(types_without_low_cardinality.begin(), types_without_low_cardinality.end(),
         [](const auto & type) { return type->isNullable(); }))
     {
-        AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("_null");
+        /// proton: starts. use `_null_retract` combinator for our retractable aggregate functions
+        AggregateFunctionCombinatorPtr combinator;
+        if (name.ends_with("_retract"))
+            combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("_null_retract");
+        else
+            combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("_null");
+        /// proton: ends.
+
         if (!combinator)
-            throw Exception("Logical error: cannot find aggregate function combinator to apply a function to Nullable arguments.",
-                ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: cannot find aggregate function combinator "
+                            "to apply a function to Nullable arguments.");
 
         DataTypes nested_types = combinator->transformArguments(types_without_low_cardinality);
         Array nested_parameters = combinator->transformParameters(parameters);
@@ -98,7 +114,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             [](const auto & type) { return type->onlyNull(); });
 
         AggregateFunctionPtr nested_function = getImpl(
-            name, nested_types, nested_parameters, out_properties, has_null_arguments, is_changelog_input);
+            name, nested_types, nested_parameters, out_properties, has_null_arguments, context, is_changelog_input);
 
         // Pure window functions are not real aggregate functions. Applying
         // combinators doesn't make sense for them, they must handle the
@@ -106,13 +122,18 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
         // that are rewritten to AggregateFunctionNothing, in this case
         // nested_function is nullptr.
         if (!nested_function || !nested_function->isOnlyWindowFunction())
+        {
+            /// proton: starts.
+            out_properties.use_arena = context ? context->getSettingsRef().default_hash_table != HashTableType::Hybrid : true;
+            /// proton: ends.
             return combinator->transformAggregateFunction(nested_function, out_properties, types_without_low_cardinality, parameters);
+        }
     }
 
-    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, is_changelog_input);
+    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, context, is_changelog_input);
 
     if (!with_original_arguments)
-        throw Exception("Logical error: AggregateFunctionFactory returned nullptr", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: AggregateFunctionFactory returned nullptr");
     return with_original_arguments;
 }
 
@@ -123,6 +144,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
     bool has_null_arguments,
+    ContextPtr context,
     bool is_changelog_input) const
 /// proton: ends
 {
@@ -158,7 +180,9 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         if (!out_properties.returns_default_when_only_null && has_null_arguments)
             return nullptr;
 
-        const Settings * settings = query_context ? &query_context->getSettingsRef() : nullptr;
+        /// proton: starts. Use passed context first
+        const Settings * settings = context ? &context->getSettingsRef() : (query_context ? &query_context->getSettingsRef() : nullptr);
+        /// proton: ends.
         return found.creator(name, argument_types, parameters, settings);
     }
 
@@ -179,17 +203,6 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
             query_context->addQueryFactoriesInfo(Context::QueryLogFactories::AggregateFunctionCombinator, combinator_name);
 
         String nested_name = name.substr(0, name.size() - combinator_name.size());
-
-        if (combinator_name == "_time_weighted")
-        {
-            if (nested_name == "avg")
-                nested_name = "avg_weighted";
-            else if (nested_name == "median")
-                nested_name = "median_exact_weighted";           
-            else
-                throw Exception(ErrorCodes::ILLEGAL_AGGREGATION, "Unknown aggregate function '{}'", name);
-        }
-
         /// Nested identical combinators (i.e. uniqCombinedIfIf) is not
         /// supported (since they don't work -- silently).
         ///
@@ -208,15 +221,12 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         DataTypes nested_types = combinator->transformArguments(argument_types);
         Array nested_parameters = combinator->transformParameters(parameters);
 
-        AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties);
+        AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties, context, is_changelog_input);
+        /// proton: starts.
+        out_properties.use_arena = context ? context->getSettingsRef().default_hash_table != HashTableType::Hybrid : true;
+        /// proton: ends.
         return combinator->transformAggregateFunction(nested_function, out_properties, argument_types, parameters);
     }
-
-    /// proton: starts. Check user defined aggr function
-    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties, is_changelog_input);
-    if (aggr)
-        return aggr;
-    /// proton: ends
 
     String extra_info;
     if (FunctionFactory::instance().hasNameOrAlias(name))
@@ -236,12 +246,13 @@ AggregateFunctionPtr AggregateFunctionFactory::tryGet(
     const DataTypes & argument_types,
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
+    ContextPtr context,
     bool is_changelog_input) const
 /// proton: ends
 {
     return isAggregateFunctionName(name)
         /// proton: starts
-        ? get(name, argument_types, parameters, out_properties, is_changelog_input)
+        ? get(name, argument_types, parameters, out_properties, context, is_changelog_input)
         /// proton: ends
         : nullptr;
 }

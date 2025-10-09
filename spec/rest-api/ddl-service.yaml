@@ -795,6 +795,10 @@ components:
           type: boolean
         default:
           type: string
+        alias:
+          type: string
+        comment:
+          type: string
         compression_codec:
           type: string
         ttl_expression:

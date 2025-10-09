@@ -1,0 +1,54 @@
+tags:
+  - basic
+  - udf
+
+description: Test covering scalar 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_add_global(value int32) RETURNS int32 LANGUAGE PYTHON AS $$
+      g = 0
+      def test_add_global(value):
+          global g
+          res = []
+          for d in value:
+              g = g + 1
+              res.append(g)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-1
+    type: stream
+    query: select test_add_global(1) as res;
+    schema:
+      - name: res
+        type: int32
+
+  - name: python_udf-2
+    type: stream
+    query: select test_add_global(number) as res from numbers(3);
+    schema:
+      - name: res
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-1
+    expected_result:
+      - [1]
+
+  - type: check
+    target_name: python_udf-2
+    expected_result:
+      - [1]
+      - [2]
+      - [3]

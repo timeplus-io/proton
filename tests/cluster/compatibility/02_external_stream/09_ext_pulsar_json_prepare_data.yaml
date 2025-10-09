@@ -1,0 +1,61 @@
+tags:
+  - prepare
+  - pulsar
+  - json
+
+description: prepare data for pulsar external stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: pulsar_json_topic
+
+  - type: pulsar
+    name: create
+    topic: pulsar_json_topic
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_json
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_json
+      (
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uuid_c uuid,
+        string_c string,
+        float_c float,
+        decimal_c decimal32(3),
+        date_c date,
+        datetime_c datetime('UTC'),
+        enum_c enum('a'=1, 'b'=2, 'z'=26),
+        tuple_c tuple(s string, i int),
+        ipv4_c ipv4,
+        ipv6_c ipv6,
+        map_c map(string, int),
+        array_c array(int)
+      )
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='pulsar_json_topic',
+      data_format='JSONEachRow';
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_json values (
+        1, 2, 3, 4, 5, 6, 7, 8, '928c88b9-f37a-41d5-bef5-9cb3663c2445', '{@string}', 12345.123, 123456.123, '2022-03-24',
+      '2022-03-24 17:17:17', 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1, 2, 3]);

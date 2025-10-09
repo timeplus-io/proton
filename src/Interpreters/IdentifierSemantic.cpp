@@ -56,7 +56,7 @@ std::optional<size_t> tryChooseTable(const ASTIdentifier & identifier, const std
     if ((best_match != ColumnMatch::NoMatch) && same_match)
     {
         if (!allow_ambiguous)
-            throw Exception("Ambiguous column '" + identifier.name() + "'", ErrorCodes::AMBIGUOUS_COLUMN_NAME);
+            throw Exception(ErrorCodes::AMBIGUOUS_COLUMN_NAME, "Ambiguous column '{}'", identifier.name());
         best_match = ColumnMatch::Ambiguous;
         return {};
     }
@@ -342,9 +342,8 @@ IdentifierMembershipCollector::IdentifierMembershipCollector(const ASTSelectQuer
     QueryAliasesNoSubqueriesVisitor(aliases).visit(select.select());
 
     const auto & settings = context->getSettingsRef();
-    tables = getDatabaseAndTablesWithColumns(getTableExpressions(select), context,
-                                             settings.asterisk_include_alias_columns,
-                                             settings.asterisk_include_materialized_columns);
+    tables = getDatabaseAndTablesWithColumns(
+        getTableExpressions(select), context, settings.asterisk_include_alias_columns, settings.asterisk_include_materialized_columns);
 }
 
 std::optional<size_t> IdentifierMembershipCollector::getIdentsMembership(ASTPtr ast) const

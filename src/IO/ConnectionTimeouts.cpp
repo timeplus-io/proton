@@ -1,7 +1,76 @@
 #include <IO/ConnectionTimeouts.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
+
+Poco::Timespan ConnectionTimeouts::saturate(Poco::Timespan timespan, Poco::Timespan limit)
+{
+    if (limit.totalMicroseconds() == 0)
+        return timespan;
+    else
+        return (timespan > limit) ? limit : timespan;
+}
+
+/// Timeouts for the case when we have just single attempt to connect.
+ConnectionTimeouts ConnectionTimeouts::getTCPTimeoutsWithoutFailover(const Settings & settings)
+{
+    return ConnectionTimeouts()
+        .withConnectionTimeout(settings.connect_timeout)
+        .withSendTimeout(settings.send_timeout)
+        .withReceiveTimeout(settings.receive_timeout)
+        .withTCPKeepAliveTimeout(settings.tcp_keep_alive_timeout)
+        .withHandshakeTimeout(settings.handshake_timeout_ms)
+        .withHedgedConnectionTimeout(settings.hedged_connection_timeout_ms)
+        .withReceiveDataTimeout(settings.receive_data_timeout_ms);
+}
+
+/// Timeouts for the case when we will try many addresses in a loop.
+ConnectionTimeouts ConnectionTimeouts::getTCPTimeoutsWithFailover(const Settings & settings)
+{
+    return getTCPTimeoutsWithoutFailover(settings)
+        .withUnsecureConnectionTimeout(settings.connect_timeout_with_failover_ms)
+        .withSecureConnectionTimeout(settings.connect_timeout_with_failover_secure_ms);
+}
+
+ConnectionTimeouts ConnectionTimeouts::getHTTPTimeouts(const Settings & settings, Poco::Timespan http_keep_alive_timeout)
+{
+    return ConnectionTimeouts()
+        .withConnectionTimeout(settings.http_connection_timeout)
+        .withSendTimeout(settings.http_send_timeout)
+        .withReceiveTimeout(settings.http_receive_timeout)
+        .withHTTPKeepAliveTimeout(http_keep_alive_timeout)
+        .withTCPKeepAliveTimeout(settings.tcp_keep_alive_timeout)
+        .withHandshakeTimeout(settings.handshake_timeout_ms);
+}
+
+/// proton: starts
+ConnectionTimeouts ConnectionTimeouts::copyAndUpdateHTTPTimeouts(const Settings & settings) const
+{
+    auto new_timeouts = *this;
+
+    if (settings.http_connection_timeout.changed)
+        new_timeouts.connection_timeout = settings.http_connection_timeout;
+
+    if (settings.http_send_timeout.changed)
+        new_timeouts.send_timeout = settings.http_send_timeout;
+
+    if (settings.http_receive_timeout.changed)
+    {
+        new_timeouts.receive_timeout = settings.http_receive_timeout;
+        new_timeouts.receive_data_timeout = settings.http_receive_timeout;
+    }
+
+    if (settings.tcp_keep_alive_timeout.changed)
+        new_timeouts.tcp_keep_alive_timeout = settings.tcp_keep_alive_timeout;
+
+    if (settings.http_keep_alive_timeout.changed)
+        new_timeouts.http_keep_alive_timeout = settings.http_keep_alive_timeout.value.seconds();
+
+    return new_timeouts;
+}
+/// proton: ends
 
 class SendReceiveTimeoutsForFirstAttempt
 {
@@ -66,7 +135,7 @@ public:
 };
 
 const SendReceiveTimeoutsForFirstAttempt::KnownMethodsArray SendReceiveTimeoutsForFirstAttempt::known_methods =
-    {
+{
         "GET", "POST", "DELETE", "PUT", "HEAD", "PATCH"
 };
 
@@ -77,11 +146,9 @@ ConnectionTimeouts ConnectionTimeouts::getAdaptiveTimeouts(const String & method
 
     auto [send, recv] = SendReceiveTimeoutsForFirstAttempt::getSendReceiveTimeout(method, first_byte);
 
-    auto aggressive = *this;
-    aggressive.send_timeout = saturate(send, send_timeout);
-    aggressive.receive_timeout = saturate(recv, receive_timeout);
-
-    return aggressive;
+    return ConnectionTimeouts(*this)
+        .withSendTimeout(saturate(send, send_timeout))
+        .withReceiveTimeout(saturate(recv, receive_timeout));
 }
 
 }

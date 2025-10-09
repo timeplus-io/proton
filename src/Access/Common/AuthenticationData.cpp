@@ -62,7 +62,7 @@ const AuthenticationTypeInfo & AuthenticationTypeInfo::get(AuthenticationType ty
         case AuthenticationType::MAX:
             break;
     }
-    throw Exception("Unknown authentication type: " + std::to_string(static_cast<int>(type_)), ErrorCodes::LOGICAL_ERROR);
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown authentication type: {}", static_cast<int>(type_));
 }
 
 
@@ -74,9 +74,7 @@ AuthenticationData::Digest AuthenticationData::Util::encodeSHA256(std::string_vi
     ::DB::encodeSHA256(text, hash.data());
     return hash;
 #else
-    throw DB::Exception(
-        "SHA256 passwords support is disabled, because proton was built without SSL library",
-        DB::ErrorCodes::SUPPORT_IS_DISABLED);
+    throw DB::Exception(DB::ErrorCodes::SUPPORT_IS_DISABLED, "SHA256 passwords support is disabled, because proton was built without SSL library");
 #endif
 }
 
@@ -112,19 +110,19 @@ void AuthenticationData::setPassword(const String & password_)
         case AuthenticationType::NO_PASSWORD:
         case AuthenticationType::LDAP:
         case AuthenticationType::KERBEROS:
-            throw Exception("Cannot specify password for authentication type " + toString(type), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot specify password for authentication type {}", toString(type));
 
         case AuthenticationType::MAX:
             break;
     }
-    throw Exception("setPassword(): authentication type " + toString(type) + " not supported", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "setPassword(): authentication type {} not supported", toString(type));
 }
 
 
 String AuthenticationData::getPassword() const
 {
     if (type != AuthenticationType::PLAINTEXT_PASSWORD)
-        throw Exception("Cannot decode the password", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot decode the password");
     return String(password_hash.data(), password_hash.data() + password_hash.size());
 }
 
@@ -150,7 +148,7 @@ void AuthenticationData::setPasswordHashHex(const String & hash)
 String AuthenticationData::getPasswordHashHex() const
 {
     if (type == AuthenticationType::LDAP || type == AuthenticationType::KERBEROS)
-        throw Exception("Cannot get password hex hash for authentication type " + toString(type), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot get password hex hash for authentication type {}", toString(type));
 
     String hex;
     hex.resize(password_hash.size() * 2);
@@ -172,10 +170,9 @@ void AuthenticationData::setPasswordHashBinary(const Digest & hash)
         case AuthenticationType::SHA256_PASSWORD:
         {
             if (hash.size() != 32)
-                throw Exception(
-                    "Password hash for the 'SHA256_PASSWORD' authentication type has length " + std::to_string(hash.size())
-                        + " but must be exactly 32 bytes.",
-                    ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                                "Password hash for the 'SHA256_PASSWORD' authentication type has length {} "
+                                "but must be exactly 32 bytes.", hash.size());
             password_hash = hash;
             return;
         }
@@ -183,10 +180,9 @@ void AuthenticationData::setPasswordHashBinary(const Digest & hash)
         case AuthenticationType::DOUBLE_SHA1_PASSWORD:
         {
             if (hash.size() != 20)
-                throw Exception(
-                    "Password hash for the 'DOUBLE_SHA1_PASSWORD' authentication type has length " + std::to_string(hash.size())
-                        + " but must be exactly 20 bytes.",
-                    ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                                "Password hash for the 'DOUBLE_SHA1_PASSWORD' authentication type has length {} "
+                                "but must be exactly 20 bytes.", hash.size());
             password_hash = hash;
             return;
         }
@@ -194,12 +190,12 @@ void AuthenticationData::setPasswordHashBinary(const Digest & hash)
         case AuthenticationType::NO_PASSWORD:
         case AuthenticationType::LDAP:
         case AuthenticationType::KERBEROS:
-            throw Exception("Cannot specify password binary hash for authentication type " + toString(type), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot specify password binary hash for authentication type {}", toString(type));
 
         case AuthenticationType::MAX:
             break;
     }
-    throw Exception("setPasswordHashBinary(): authentication type " + toString(type) + " not supported", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "setPasswordHashBinary(): authentication type {} not supported", toString(type));
 }
 
 }

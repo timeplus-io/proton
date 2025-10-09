@@ -8,7 +8,7 @@ INSERT INTO sites VALUES (2,[1],[['2018-06-22']]);
 
 SELECT count(), count_array(Users.Dates), count_array_array(Users.Dates) FROM sites;
 SYSTEM START MERGES sites;
-OPTIMIZE TABLE sites FINAL;
+OPTIMIZE STREAM sites FINAL;
 SELECT count(), count_array(Users.Dates), count_array_array(Users.Dates) FROM sites;
 
 DROP STREAM sites;

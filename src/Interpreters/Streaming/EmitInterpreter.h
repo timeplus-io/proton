@@ -38,7 +38,7 @@ public:
     class LastXRule final
     {
     public:
-        LastXRule(const Settings & settings_, Poco::Logger * log_ = nullptr);
+        LastXRule(const Settings & settings_, LoggerPtr log_ = nullptr);
         void operator()(ASTPtr & query);
 
     private:
@@ -57,7 +57,7 @@ public:
 
     private:
         const Settings & settings;
-        Poco::Logger * log;
+        LoggerPtr log;
 
         ASTPtr query;
         ASTPtr emit_query;

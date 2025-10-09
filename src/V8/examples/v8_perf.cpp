@@ -13,7 +13,8 @@
 
 #include <numeric>
 
-Poco::Logger * v8_log = nullptr;
+bool LOG_PANIC_ABORT = true;
+LoggerPtr v8_log = nullptr;
 v8::Isolate * global_isolate = nullptr;
 
 /// https://chromium.googlesource.com/v8/v8.git/+/4.5.56/test/cctest/test-api.cc
@@ -25,7 +26,7 @@ void setupLog()
     Poco::Logger::root().setChannel(console_channel);
     Poco::Logger::root().setLevel("debug");
 
-    v8_log = &Poco::Logger::get("v8_perf");
+    v8_log = getLogger("v8_perf");
 }
 
 void messageHandler(v8::Local<v8::Message> message, v8::Local<v8::Value> data)

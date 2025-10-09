@@ -23,19 +23,25 @@ namespace ErrorCodes
 
 HedgedConnectionsFactory::HedgedConnectionsFactory(
     const ConnectionPoolWithFailoverPtr & pool_,
-    const Settings * settings_,
+    const Settings & settings_,
     const ConnectionTimeouts & timeouts_,
+    UInt64 max_tries_,
+    bool fallback_to_stale_replicas_,
+    UInt64 max_parallel_replicas_,
+    bool skip_unavailable_shards_,
     std::shared_ptr<QualifiedTableName> table_to_check_)
-    : pool(pool_), settings(settings_), timeouts(timeouts_), table_to_check(table_to_check_), log(&Poco::Logger::get("HedgedConnectionsFactory"))
+    : pool(pool_)
+    , timeouts(timeouts_)
+    , table_to_check(table_to_check_)
+    , log(getLogger("HedgedConnectionsFactory"))
+    , max_tries(max_tries_)
+    , fallback_to_stale_replicas(fallback_to_stale_replicas_)
+    , max_parallel_replicas(max_parallel_replicas_)
+    , skip_unavailable_shards(skip_unavailable_shards_)
 {
-    shuffled_pools = pool->getShuffledPools(settings);
-    for (auto shuffled_pool : shuffled_pools)
-        replicas.emplace_back(ConnectionEstablisherAsync(shuffled_pool.pool, &timeouts, settings, log, table_to_check.get()));
-
-    max_tries
-        = (settings ? size_t{settings->connections_with_failover_max_tries} : size_t{DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES});
-
-    fallback_to_stale_replicas = settings && settings->fallback_to_stale_replicas_for_distributed_queries;
+    shuffled_pools = pool->getShuffledPools(settings_, /* use_slowdown_count */ true);
+    for (const auto & shuffled_pool : shuffled_pools)
+        replicas.emplace_back(ConnectionEstablisherAsync(shuffled_pool.pool, &timeouts, settings_, log, table_to_check.get()));
 }
 
 HedgedConnectionsFactory::~HedgedConnectionsFactory()
@@ -55,7 +61,7 @@ HedgedConnectionsFactory::~HedgedConnectionsFactory()
 
 std::vector<Connection *> HedgedConnectionsFactory::getManyConnections(PoolMode pool_mode)
 {
-    size_t min_entries = (settings && settings->skip_unavailable_shards) ? 0 : 1;
+    size_t min_entries = skip_unavailable_shards ? 0 : 1;
 
     size_t max_entries = 1;
     switch (pool_mode)
@@ -73,7 +79,7 @@ std::vector<Connection *> HedgedConnectionsFactory::getManyConnections(PoolMode 
         }
         case PoolMode::GET_MANY:
         {
-            max_entries = settings ? size_t(settings->max_parallel_replicas) : 1;
+            max_entries = std::min(max_parallel_replicas, shuffled_pools.size());
             break;
         }
     }
@@ -110,16 +116,14 @@ std::vector<Connection *> HedgedConnectionsFactory::getManyConnections(PoolMode 
 
             /// Determine the reason of not enough replicas.
             if (!fallback_to_stale_replicas && up_to_date_count < min_entries)
-                throw Exception(
-                    "Could not find enough connections to up-to-date replicas. Got: " + std::to_string(connections.size())
-                    + ", needed: " + std::to_string(min_entries),
-                    DB::ErrorCodes::ALL_REPLICAS_ARE_STALE);
+                throw Exception(DB::ErrorCodes::ALL_REPLICAS_ARE_STALE,
+                    "Could not find enough connections to up-to-date replicas. Got: {}, needed: {}",
+                    connections.size(), min_entries);
             if (usable_count < min_entries)
-                throw NetException(
-                    "All connection tries failed. Log: \n\n" + fail_messages + "\n",
-                    DB::ErrorCodes::ALL_CONNECTION_TRIES_FAILED);
+                throw NetException(DB::ErrorCodes::ALL_CONNECTION_TRIES_FAILED,
+                    "All connection tries failed. usable_count={} min_entries={} Log: \n\n{}\n", usable_count, min_entries, fail_messages);
 
-            throw Exception("Unknown reason of not enough replicas.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown reason of not enough replicas.");
         }
     }
 
@@ -240,7 +244,7 @@ HedgedConnectionsFactory::State HedgedConnectionsFactory::processEpollEvents(boo
             ProfileEvents::increment(ProfileEvents::HedgedRequestsChangeReplica);
         }
         else
-            throw Exception("Unknown event from epoll", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown event from epoll");
 
         /// We reach this point only if we need to start new connection
         /// (Special timeout expired or one of the previous connections failed).
@@ -393,7 +397,7 @@ HedgedConnectionsFactory::State HedgedConnectionsFactory::setBestUsableReplica(C
         indexes.end(),
         [&](size_t lhs, size_t rhs)
         {
-            return replicas[lhs].connection_establisher.getResult().staleness < replicas[rhs].connection_establisher.getResult().staleness;
+            return replicas[lhs].connection_establisher.getResult().delay < replicas[rhs].connection_establisher.getResult().delay;
         });
 
     replicas[indexes[0]].is_ready = true;

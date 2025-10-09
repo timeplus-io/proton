@@ -1,0 +1,24 @@
+name: system_command
+description: |
+  Tests covering the system command feature.
+  - SYSTEM PAUSE MATERIALIZED VIEW `test_mv` [LOCAL];
+  - SYSTEM RESUME MATERIALIZED VIEW `test_mv` [LOCAL];
+  - SYSTEM ABORT MATERIALIZED VIEW `test_mv` [LOCAL];
+  - SYSTEM RECOVER MATERIALIZED VIEW `test_mv` [LOCAL];
+
+tags:
+  - smoke
+
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop view if exists test36_mv;
+  - type: wait
+    time: 1
+
+teardown:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop view if exists test36_mv;

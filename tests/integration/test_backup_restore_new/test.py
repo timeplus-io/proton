@@ -143,6 +143,7 @@ def test_database():
     assert instance.query("SELECT count(), sum(x) FROM test.table") == "100\t4950\n"
 
     instance.query(f"BACKUP DATABASE test TO {backup_name}")
+
     instance.query("DROP DATABASE test")
     instance.query(f"RESTORE DATABASE test FROM {backup_name}")
 

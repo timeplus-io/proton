@@ -2,6 +2,10 @@
 #include <Storages/IStorage.h>
 #include <Storages/DataDestinationType.h>
 #include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ParserAlterQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeString.h>
 #include <Processors/Chunk.h>
@@ -15,6 +19,65 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+}
+
+
+std::optional<PartitionCommand> PartitionCommand::stringToPartitionCommand(std::string_view query_string)
+{
+    ParserAlterQuery parser;
+    ASTPtr ast = parseQuery(parser, query_string.begin(), query_string.end(), 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
+    auto * alter_query = ast->as<ASTAlterQuery>();
+    if (!alter_query || !alter_query->command_list)
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "Failed to parse ALTER query or empty command list");
+
+    for (const auto & command_ast : alter_query->command_list->children)
+    {
+        auto * alter_command = command_ast->as<ASTAlterCommand>();
+        if (!alter_command)
+            continue;
+
+        auto partition_command = PartitionCommand::parse(alter_command);
+        if (partition_command)
+            return partition_command;
+    }
+
+    return std::nullopt;
+}
+
+std::string
+PartitionCommand::partitionCommandToString(const PartitionCommand & command, const String & table_name, const String & database_name)
+{
+    auto alter_query = std::make_shared<ASTAlterQuery>();
+    alter_query->alter_object = ASTAlterQuery::AlterObjectType::STREAM;
+
+    alter_query->table = std::make_shared<ASTIdentifier>(table_name);
+    alter_query->database = std::make_shared<ASTIdentifier>(database_name);
+
+    auto expression_list = std::make_shared<ASTExpressionList>();
+    alter_query->command_list = expression_list.get();
+    alter_query->command_list->children.push_back(generateASTAlterCommand(command));
+
+    return queryToString(alter_query, true);
+}
+
+std::shared_ptr<ASTAlterCommand> PartitionCommand::generateASTAlterCommand(const PartitionCommand & command)
+{
+    auto alter_command = std::make_shared<ASTAlterCommand>();
+
+    switch (command.type)
+    {
+        case PartitionCommand::DROP_PARTITION:
+            alter_command->type = ASTAlterCommand::DROP_PARTITION;
+            alter_command->partition = command.partition;
+            alter_command->detach = command.detach;
+            alter_command->part = command.part;
+            break;
+        default:
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported {} type", magic_enum::enum_name(command.type));
+    }
+
+    return alter_command;
 }
 
 std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * command_ast)
@@ -67,7 +130,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
                 res.move_destination_type = PartitionCommand::MoveDestinationType::SHARD;
                 break;
             case DataDestinationType::DELETE:
-                throw Exception("ALTER with this destination type is not handled. This is a bug.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "ALTER with this destination type is not handled. This is a bug.");
         }
         if (res.move_destination_type != PartitionCommand::MoveDestinationType::TABLE)
             res.move_destination_name = command_ast->move_destination_name;
@@ -163,7 +226,7 @@ std::string PartitionCommand::typeToString() const
     case PartitionCommand::Type::REPLACE_PARTITION:
         return "REPLACE PARTITION";
     default:
-        throw Exception("Uninitialized partition command", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Uninitialized partition command");
     }
 }
 

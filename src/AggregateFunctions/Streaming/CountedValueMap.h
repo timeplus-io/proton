@@ -59,18 +59,23 @@ public:
     using Map = std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, BTreeMap, STDMap>;
     using size_type = typename Map::size_type;
 
-    CountedValueMap() : CountedValueMap(1000) { }
-    explicit CountedValueMap(size_type max_size_, Compare && comp = Compare{})
+    CountedValueMap() : CountedValueMap(std::numeric_limits<size_t>::max()) { }
+    explicit CountedValueMap(size_t max_size_, Compare && comp = Compare{})
         : max_size(max_size_), arena(std::make_unique<CountedValueArena<T>>()), m(std::move(comp))
     {
+        chassert(max_size > 0);
     }
 
     /// This interface is used during deserialization of the map
     /// Assume `v` is not in the map
+    /// If \preallocated is true means the value was already pre allocated in the arena
+    template <bool preallocated = false>
     bool insert(T v, uint32_t count)
     {
-        [[maybe_unused]] auto [_, inserted] = m.emplace(arena->emplace(std::move(v)), count);
-        return inserted;
+        if constexpr (preallocated)
+            return m.emplace(std::move(v), count).second;
+        else
+            return m.emplace(arena->emplace(std::move(v)), count).second;
     }
 
     /// Return the emplaced element iterator, if failed to emplace, return invalid iterator, `m.end()`
@@ -187,7 +192,7 @@ public:
         arena = std::make_unique<CountedValueArena<T>>();
     }
 
-    inline bool atCapacity() const { return max_size > 0 && m.size() == max_size; }
+    inline bool atCapacity() const { return m.size() == max_size; }
 
     size_type capacity() const { return max_size; }
 
@@ -309,9 +314,6 @@ private:
 
     bool eraseExtraElements()
     {
-        if (max_size <= 0)
-            return false;
-
         bool erased = false;
         while (m.size() > max_size)
         {
@@ -345,7 +347,7 @@ private:
     inline bool greater(const T & l, const T & r) const { return m.key_comp()(r, l); }
 
 private:
-    size_type max_size;
+    size_t max_size;
     std::unique_ptr<CountedValueArena<T>> arena;
     Map m;
 };

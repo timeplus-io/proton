@@ -5,7 +5,7 @@ create stream data_01709 (i int) engine MergeTree order by i settings old_parts_
 insert into data_01709 values (1);
 insert into data_01709 values (2);
 
-optimize table data_01709 final;
+optimize stream data_01709 final;
 
 insert into data_01709 values (3); -- { serverError 252; }
 

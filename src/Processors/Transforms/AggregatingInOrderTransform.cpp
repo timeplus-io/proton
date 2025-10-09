@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Core/SortCursor.h>
+#include <Common/logger_useful.h>
 #include <Interpreters/sortBlock.h>
 #include <base/range.h>
 
@@ -12,11 +13,11 @@ namespace DB
 AggregatingInOrderTransform::AggregatingInOrderTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
-    InputOrderInfoPtr group_by_info_,
+    const SortDescription & sort_description_for_merging,
     const SortDescription & group_by_description_,
     size_t max_block_size_, size_t max_block_bytes_)
     : AggregatingInOrderTransform(std::move(header), std::move(params_),
-        group_by_info_, group_by_description_,
+        sort_description_for_merging, group_by_description_,
         max_block_size_, max_block_bytes_,
         std::make_unique<ManyAggregatedData>(1), 0)
 {
@@ -24,7 +25,7 @@ AggregatingInOrderTransform::AggregatingInOrderTransform(
 
 AggregatingInOrderTransform::AggregatingInOrderTransform(
     Block header, AggregatingTransformParamsPtr params_,
-    InputOrderInfoPtr group_by_info_,
+    const SortDescription & sort_description_for_merging,
     const SortDescription & group_by_description_,
     size_t max_block_size_, size_t max_block_bytes_,
     ManyAggregatedDataPtr many_data_, size_t current_variant)
@@ -33,7 +34,6 @@ AggregatingInOrderTransform::AggregatingInOrderTransform(
     , max_block_bytes(max_block_bytes_)
     , params(std::move(params_))
     , aggregates_mask(getAggregatesMask(params->getHeader(), params->params.aggregates))
-    , group_by_info(group_by_info_)
     , sort_description(group_by_description_)
     , aggregate_columns(params->params.aggregates_size)
     , many_data(std::move(many_data_))
@@ -42,13 +42,13 @@ AggregatingInOrderTransform::AggregatingInOrderTransform(
     /// We won't finalize states in order to merge same states (generated due to multi-thread execution) in AggregatingSortedTransform
     res_header = params->getCustomHeader(/* final_= */ false);
 
-    for (size_t i = 0; i < group_by_info->order_key_prefix_descr.size(); ++i)
+    for (size_t i = 0; i < sort_description_for_merging.size(); ++i)
     {
         const auto & column_description = group_by_description_[i];
         group_by_description.emplace_back(column_description, res_header.getPositionByName(column_description.column_name));
     }
 
-    if (group_by_info->order_key_prefix_descr.size() < group_by_description_.size())
+    if (sort_description_for_merging.size() < group_by_description_.size())
     {
         group_by_key = true;
         /// group_by_description may contains duplicates, so we use keys_size from Aggregator::params
@@ -88,7 +88,8 @@ void AggregatingInOrderTransform::consume(Chunk chunk)
     Columns key_columns(params->params.keys_size);
     for (size_t i = 0; i < params->params.keys_size; ++i)
     {
-        materialized_columns.push_back(columns.at(params->params.keys[i])->convertToFullColumnIfConst());
+        const auto pos = inputs.front().getHeader().getPositionByName(params->params.keys[i]);
+        materialized_columns.push_back(chunk.getColumns().at(pos)->convertToFullColumnIfConst());
         key_columns[i] = materialized_columns.back();
         if (group_by_key)
             key_columns_raw[i] = materialized_columns.back().get();
@@ -96,7 +97,11 @@ void AggregatingInOrderTransform::consume(Chunk chunk)
 
     Aggregator::NestedColumnsHolder nested_columns_holder;
     Aggregator::AggregateFunctionInstructions aggregate_function_instructions;
-    params->aggregator.prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_function_instructions, nested_columns_holder);
+    if (!params->params.only_merge)
+    {
+        params->aggregator.prepareAggregateInstructions(
+            columns, aggregate_columns, materialized_columns, aggregate_function_instructions, nested_columns_holder);
+    }
 
     size_t key_end = 0;
     size_t key_begin = 0;
@@ -124,7 +129,7 @@ void AggregatingInOrderTransform::consume(Chunk chunk)
     Int64 current_memory_usage = 0;
 
     Aggregator::AggregateColumnsConstData aggregate_columns_data(params->params.aggregates_size);
-    if (params->only_merge)
+    if (params->params.only_merge)
     {
         for (size_t i = 0, j = 0; i < columns.size(); ++i)
         {
@@ -150,12 +155,12 @@ void AggregatingInOrderTransform::consume(Chunk chunk)
         /// Add data to aggr. state if interval is not empty. Empty when haven't found current key in new block.
         if (key_begin != key_end)
         {
-            if (params->only_merge)
+            if (params->params.only_merge)
             {
                 if (group_by_key)
                     params->aggregator.mergeOnBlockSmall(variants, key_begin, key_end, aggregate_columns_data, key_columns_raw);
                 else
-                    params->aggregator.mergeOnIntervalWithoutKey(variants, key_begin, key_end, aggregate_columns_data);
+                    params->aggregator.mergeOnIntervalWithoutKey(variants, key_begin, key_end, aggregate_columns_data, is_cancelled);
             }
             else
             {
@@ -166,7 +171,7 @@ void AggregatingInOrderTransform::consume(Chunk chunk)
             }
         }
 
-        current_memory_usage = getCurrentMemoryUsage() - initial_memory_usage;
+        current_memory_usage = std::max<Int64>(getCurrentMemoryUsage() - initial_memory_usage, 0);
 
         /// We finalize last key aggregation state if a new key found.
         if (key_end != rows)

@@ -1,0 +1,67 @@
+description: test create query of select_only user 
+
+steps:
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP ROLE if exists select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP USER if exists user_select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP stream if exists test00_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROLE select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create user user_select_only identified with plaintext_password by 'password';
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: GRANT CREATE ON *.* TO user_select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: grant select_only to user_select_only;
+
+  - type: query
+    user: user_select_only
+    password: password
+    sql: create stream test00_stream(i int, s string);
+
+  - type: wait
+    time: 2
+
+  - name: '106'
+    type: stream
+    query: show streams where name = 'test00_stream';
+    schema:
+      - name: name
+        type: string
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: '106'
+    expected_result:
+      - [ 'test00_stream']
+      
+

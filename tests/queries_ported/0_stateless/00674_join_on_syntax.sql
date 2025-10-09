@@ -1,5 +1,5 @@
-SET query_mode = 'table';
 SET joined_subquery_requires_alias = 0;
+SET allow_experimental_analyzer = 1;
 
 drop stream if exists tab1;
 drop stream if exists tab2;
@@ -11,10 +11,11 @@ create stream tab2 (a2 int32, b2 int32) engine = MergeTree order by a2;
 create stream tab3 (a3 int32, b3 int32) engine = MergeTree order by a3;
 create stream tab1_copy (a1 int32, b1 int32) engine = MergeTree order by a1;
 
-insert into tab1 values (1, 2);
-insert into tab2 values (2, 3);
-insert into tab3 values (2, 3);
-insert into tab1_copy values (2, 3);
+insert into tab1(a1, b1) values (1, 2);
+insert into tab2(a2, b2) values (2, 3);
+insert into tab3(a3, b3) values (2, 3);
+insert into tab1_copy(a1, b1) values (2, 3);
+select sleep(1);
 
 
 select 'joind columns from right table';

@@ -5,9 +5,13 @@
 #include <Poco/Logger.h>
 #include <Poco/NullChannel.h>
 #include <Poco/SimpleFileChannel.h>
+#include <Databases/registerDatabases.h>
+#include <Databases/DatabaseFilesystem.h>
 #include <Databases/DatabaseMemory.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -17,20 +21,24 @@
 #include <Access/AccessControl.h>
 #include <Common/Exception.h>
 #include <Common/Macros.h>
+#include <Common/NamedCollections/NamedCollectionsFactory.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ThreadStatus.h>
 #include <Common/TLDListsHolder.h>
 #include <Common/quoteString.h>
 #include <Common/randomSeed.h>
+#include <Common/ThreadPool.h>
 #include <Loggers/Loggers.h>
+#include <Loggers/OwnFormattingChannel.h>
+#include <Loggers/OwnPatternFormatter.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/UseSSL.h>
+#include <IO/Kafka/Connection.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Common/ErrorHandlers.h>
-#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Functions/registerFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -65,6 +73,15 @@ namespace ErrorCodes
     extern const int FILE_ALREADY_EXISTS;
 }
 
+void applySettingsOverridesForLocal(ContextMutablePtr context)
+{
+    Settings settings = context->getSettings();
+
+    settings.allow_introspection_functions = true;
+    settings.storage_file_read_method = LocalFSReadMethod::mmap;
+
+    context->setSettings(settings);
+}
 
 void LocalServer::processError(const String &) const
 {
@@ -149,7 +166,7 @@ bool LocalServer::executeMultiQuery(const String & all_queries_text)
 
                     // Surprisingly, this is a client error. A server error would
                     // have been reported w/o throwing (see onReceiveSeverException()).
-                    client_exception = std::make_unique<Exception>(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
+                    client_exception = std::make_unique<Exception>(getCurrentExceptionMessageAndPattern(print_stack_trace), getCurrentExceptionCode());
                     have_error = true;
                 }
 
@@ -195,6 +212,8 @@ void LocalServer::initialize(Poco::Util::Application & self)
         auto loaded_config = config_processor.loadConfig();
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
     }
+
+    NamedCollectionFactory::instance().loadIfNot();
 
 #if USE_AZURE_BLOB_STORAGE
     /// See the explanation near the same line in Server.cpp
@@ -242,7 +261,7 @@ void LocalServer::tryInitPath()
     {
         // The path is not provided explicitly - use a unique path in the system temporary directory
         // (or in the current dir if temporary don't exist)
-        Poco::Logger * log = &logger();
+        LoggerRawPtr log = &logger();
         std::filesystem::path parent_folder;
         std::filesystem::path default_path;
 
@@ -290,7 +309,7 @@ void LocalServer::tryInitPath()
 
     global_context->setPath(path);
 
-    global_context->setTemporaryStorage(path + "tmp");
+    global_context->setTemporaryStoragePath(path + "tmp/", 0);
     global_context->setFlagsPath(path + "flags");
 
     global_context->setUserFilesPath(""); // user's files are everywhere
@@ -403,9 +422,9 @@ void LocalServer::setupUsers()
 
     ConfigurationPtr users_config;
 
-    auto & access_control = global_context->getAccessControl();
-    access_control.setNoPasswordAllowed(config().getBool("allow_no_password", true));
-    access_control.setPlaintextPasswordAllowed(config().getBool("allow_plaintext_password", true));
+    auto access_control = global_context->getAccessControl();
+    access_control->setNoPasswordAllowed(config().getBool("allow_no_password", true));
+    access_control->setPlaintextPasswordAllowed(config().getBool("allow_plaintext_password", true));
     if (config().has("config-file") || fs::exists("config.xml"))
     {
         String config_path = config().getString("config-file", "");
@@ -434,7 +453,7 @@ void LocalServer::setupUsers()
     if (users_config)
         global_context->setUsersConfig(users_config);
     else
-        throw Exception("Can't load config for users", ErrorCodes::CANNOT_LOAD_CONFIG);
+        throw Exception(ErrorCodes::CANNOT_LOAD_CONFIG, "Can't load config for users");
 }
 
 void LocalServer::connect()
@@ -485,15 +504,23 @@ try
     registerFunctions();
     registerAggregateFunctions();
     registerTableFunctions();
+    registerDatabases();
     registerStorages();
     registerDictionaries();
-    registerDisks();
+    registerDisks(/* global_skip_access_check= */ true);
     registerFormats();
 
     processConfig();
     initTtyBuffer(toProgressOption(config().getString("progress", "default")));
 
     applyCmdSettings(global_context);
+
+    Kafka::ConnectionFactory::instance().setConnectionLimits({
+        .max_alive_consumer_handles = config().getUInt64("external_stream.kafka.max_alive_consumer_handles", 100'000),
+        .consumer_handle_share_soft_cap = config().getUInt64("external_stream.kafka.consumer_handle_share_soft_cap", 10),
+        .max_alive_producer_handles = config().getUInt64("external_stream.kafka.max_alive_producer_handles", 100'000),
+        .producer_handle_share_soft_cap = config().getUInt64("external_stream.kafka.producer_handle_share_soft_cap", 10),
+    });
 
     if (is_interactive)
     {
@@ -561,7 +588,7 @@ void LocalServer::processConfig()
     if (is_interactive && !delayed_interactive)
     {
         if (config().has("query") && config().has("queries-file"))
-            throw Exception("Specify either `query` or `queries-file` option", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Specify either `query` or `queries-file` option");
 
         if (config().has("multiquery"))
             is_multiquery = true;
@@ -614,7 +641,7 @@ void LocalServer::processConfig()
 
     tryInitPath();
 
-    Poco::Logger * log = &logger();
+    LoggerRawPtr log = &logger();
 
     /// Maybe useless
     if (config().has("macros"))
@@ -670,6 +697,12 @@ void LocalServer::processConfig()
     if (mmap_cache_size)
         global_context->setMMappedFileCache(mmap_cache_size);
 
+ /// NOTE: it is important to apply any overrides before
+    /// setDefaultProfiles() calls since it will copy current context (i.e.
+    /// there is separate context for Buffer tables).
+    applySettingsOverridesForLocal(global_context);
+    applyCmdOptions(global_context);
+
     /// Load global settings from default_profile and system_profile.
     global_context->setDefaultProfiles(config());
 
@@ -684,7 +717,6 @@ void LocalServer::processConfig()
     std::string default_database = config().getString("default_database", "_local");
     DatabaseCatalog::instance().attachDatabase(default_database, std::make_shared<DatabaseMemory>(default_database, global_context));
     global_context->setCurrentDatabase(default_database);
-    applyCmdOptions(global_context);
 
     if (config().has("path"))
     {
@@ -702,9 +734,6 @@ void LocalServer::processConfig()
         loadMetadata(global_context);
         startupSystemTables();
         DatabaseCatalog::instance().loadDatabases();
-
-        /// For ClickHouse local if path is not set the loader will be disabled.
-        global_context->getUserDefinedSQLObjectsLoader().loadObjects();
 
         LOG_DEBUG(log, "Loaded metadata.");
     }
@@ -809,7 +838,7 @@ void LocalServer::applyCmdOptions(ContextMutablePtr context)
 }
 
 
-void LocalServer::processOptions(const OptionsDescription &, const CommandLineOptions & options, const std::vector<Arguments> &)
+void LocalServer::processOptions(const OptionsDescription &, const CommandLineOptions & options, const std::vector<Arguments> &, const std::vector<Arguments> &)
 {
     if (options.count("table"))
         config().setString("table-name", options["table"].as<std::string>());
@@ -835,10 +864,19 @@ void LocalServer::processOptions(const OptionsDescription &, const CommandLineOp
         config().setString("send_logs_level", options["send_logs_level"].as<std::string>());
 }
 
+void LocalServer::readArguments(int argc, char ** argv, Arguments & common_arguments, std::vector<Arguments> &, std::vector<Arguments> &)
+{
+    for (int arg_num = 1; arg_num < argc; ++arg_num)
+    {
+        const char * arg = argv[arg_num];
+        common_arguments.emplace_back(arg);
+    }
 }
 
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wmissing-declarations"
+}
+
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wmissing-declarations"
 
 int mainLocal(int argc, char ** argv)
 {

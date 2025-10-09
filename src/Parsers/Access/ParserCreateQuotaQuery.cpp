@@ -71,8 +71,7 @@ namespace
             String all_types_str;
             for (auto kt : collections::range(QuotaKeyType::MAX))
                 all_types_str += String(all_types_str.empty() ? "" : ", ") + "'" + QuotaKeyTypeInfo::get(kt).name + "'";
-            String msg = "Quota cannot be keyed by '" + name + "'. Expected one of the following identifiers: " + all_types_str;
-            throw Exception(msg, ErrorCodes::SYNTAX_ERROR);
+            throw Exception(ErrorCodes::SYNTAX_ERROR, "Quota cannot be keyed by '{}'. Expected one of the following identifiers: {}", name, all_types_str);
         });
     }
 
@@ -231,12 +230,16 @@ namespace
         });
     }
 
-    bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
+    bool parseOnCluster(IParserBase::Pos & pos [[maybe_unused]], Expected & expected [[maybe_unused]], String & cluster [[maybe_unused]])
     {
-        return IParserBase::wrapParseImpl(pos, [&]
-        {
-            return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
-        });
+        return false;
+        /// proton: starts
+        /// we don't need to parse ON CLUSTER
+        /// return IParserBase::wrapParseImpl(pos, [&]
+        /// {
+        ///     return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
+        /// });
+        /// proton: ends
     }
 }
 

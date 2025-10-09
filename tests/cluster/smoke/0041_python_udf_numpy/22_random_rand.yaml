@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (df array(int));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_rand(df array(int)) RETURNS array(int) LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_rand(df):
+          res = [list(np.random.rand(*d).shape) for d in df if len(d) > 0]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-22-1
+    type: stream
+    query: select test_random_rand(df) as res, df from udf_stream;
+    schema:
+      - name: res
+        type: array(int32)
+      - name: df
+        type: array(int32)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(df) values ([1])([2,3]);
+
+  - type: check
+    target_name: python-udf2-22-1
+    expected_result:
+      - [[1], [1]]
+      - [[2, 3], [2, 3]]

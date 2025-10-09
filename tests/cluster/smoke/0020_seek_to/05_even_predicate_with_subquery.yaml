@@ -1,0 +1,35 @@
+tags:
+- seek_to
+- bug
+description: event predicate with subquery
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2100'
+  type: stream
+  query: select t, s from (select * from test21_limit_by_stream) where _tp_time = '2022-12-01 00:00:01.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: select t, s from (select *, _tp_sn from test21_limit_by_stream) where _tp_sn = 3
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- type: check
+  target_name: '2100'
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+
+- type: check
+  target_name: '2101'
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]

@@ -15,7 +15,7 @@ $CLICKHOUSE_CLIENT --allow_deprecated_database_ordinary=1 -q "CREATE DATABASE te
 $CLICKHOUSE_CLIENT -q "CREATE DATABASE test_01192 UUID '00001192-0000-4000-8000-000000000001'"
 
 # 2. check metadata
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE DATABASE test_01192"
+$CLICKHOUSE_CLIENT --show_uuid=1 -q "SHOW CREATE DATABASE test_01192"
 $CLICKHOUSE_CLIENT -q "SELECT engine, splitByChar('/', data_path)[-2], uuid, splitByChar('/', metadata_path)[-2] FROM system.databases WHERE name='test_01192'"
 
 # 3. check RENAME don't wait for INSERT
@@ -29,7 +29,7 @@ $CLICKHOUSE_CLIENT -q "RENAME DATABASE test_01192 TO test_01192_renamed" && echo
 wait
 
 # 4. check metadata after RENAME
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE DATABASE test_01192_renamed"
+$CLICKHOUSE_CLIENT --show_uuid=1 -q "SHOW CREATE DATABASE test_01192_renamed"
 $CLICKHOUSE_CLIENT -q "SELECT engine, splitByChar('/', data_path)[-2], uuid, splitByChar('/', metadata_path)[-2] FROM system.databases WHERE name='test_01192_renamed'"
 $CLICKHOUSE_CLIENT -q "SHOW CREATE DATABASE test_01192_renamed"
 $CLICKHOUSE_CLIENT -q "SELECT count(n), sum(n) FROM test_01192_renamed.mt"
@@ -55,7 +55,7 @@ $CLICKHOUSE_CLIENT -q "SELECT count(n), sum(n) FROM test_01192_atomic.mv" 2>&1| 
 # 7. create dictionary and check it
 $CLICKHOUSE_CLIENT -q "CREATE TABLE test_01192.mt (n UInt64, _part String) ENGINE=Memory" # mock
 $CLICKHOUSE_CLIENT -q "CREATE DICTIONARY test_01192_atomic.dict UUID '00001192-0000-4000-8000-000000000002' (n UInt64, _part String DEFAULT 'no') PRIMARY KEY n LAYOUT(DIRECT()) SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() USER 'default' TABLE 'mt' DB 'test_01192'))"
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE DICTIONARY test_01192_atomic.dict"
+$CLICKHOUSE_CLIENT --show_uuid=1 -q "SHOW CREATE DICTIONARY test_01192_atomic.dict"
 $CLICKHOUSE_CLIENT -q "SELECT database, name, status, origin FROM system.dictionaries WHERE uuid='00001192-0000-4000-8000-000000000002'"
 $CLICKHOUSE_CLIENT -q "SELECT dictGet('test_01192_atomic.dict', '_part', toUInt64(1))"
 

@@ -1,0 +1,67 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_conf(value float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import random
+      from river import conf, datasets, linear_model, preprocessing, stats
+
+      def test_conf(value):
+          dataset = datasets.TrumpApproval()
+          res = []
+          for v in value:
+              model = conf.RegressionJackknife(
+                  (
+                      preprocessing.StandardScaler() |
+                      linear_model.LinearRegression(intercept_lr=.1)
+                  ),
+                  confidence_level=v
+              )
+              validity = stats.Mean()
+              for x, y in dataset:
+                  interval = model.predict_one(x, with_interval=True)
+                  validity.update(y in interval)
+                  model.learn_one(x, y)
+              res.append(round(validity._mean, 2))
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-6-1
+    type: stream
+    query: select test_conf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: float32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(value) values (0.9)(0.8);
+
+  - type: check
+    target_name: python-udf13-6-1
+    expected_result:
+      - [0.93, 0.9]
+      - [0.9, 0.8]

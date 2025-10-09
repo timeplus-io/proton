@@ -1,0 +1,134 @@
+tags:
+- query_state
+- aggr
+description: recover global aggregation query from view with group by from state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists test19_state_view6
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream6
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream6 (id string, location string, value float,
+    timestamp datetime64(3) default now64(3))
+- type: wait
+  time: 1
+
+- type: query
+  sql: create view if not exists test19_state_view6 as select id, count(), sum(value),
+    avg(value), min(value), max(value) from test19_state_stream6 group by id
+- type: wait
+  name: 1
+
+- name: '19155'
+  type: stream
+  query_id: '19155'
+  query: subscribe to select * from test19_state_view6 settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: string
+  - name: count()
+    type: uint64
+  - name: sum(value)
+    type: float64
+  - name: avg(value)
+    type: float64
+  - name: min(value)
+    type: float32
+  - name: max(value)
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream6 (id, location, value, timestamp) values ('dev1',
+    'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'),
+    ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - ['dev1', 'ca', 57.3, '2020-02-02 20:00:00']
+  - ['dev1', 'ca', 66, '2020-02-02 20:00:01']
+  - ['dev2', 'ca', 58.3, '2020-02-02 20:00:02']
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19155'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_state_stream6(id, location, value, timestamp) values ('dev2',
+    'ca', 80, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:02'), ('dev8',
+    'ca', 77, '2020-02-02 20:00:08')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev2, 'ca', 80, '2020-02-02 20:00:02']
+  - [dev8, 'ca', 67, '2020-02-02 20:00:02']
+  - [dev8, 'ca', 77, '2020-02-02 20:00:08']
+- type: wait
+  name: 2
+
+- name: 19155-1
+  type: stream
+  query: recover from '19155'
+  schema:
+  - name: id
+    type: string
+  - name: count()
+    type: uint64
+  - name: sum(value)
+    type: float64
+  - name: avg(value)
+    type: float64
+  - name: min(value)
+    type: float32
+  - name: max(value)
+    type: float32
+- type: wait
+  time: 5
+
+- type: query
+  sql: unsubscribe to '19155'
+
+- type: check
+  target_name: '19155'
+  mode: random
+  expected_result:
+  - [dev1, 2, 123.29999923706055, 61.64999961853027, 57.3, 66]
+  - [dev2, 1, 58.29999923706055, 58.29999923706055, 58.3, 58.3]
+
+- type: check
+  target_name: 19155-1
+  mode: random
+  expected_result:
+  - [dev1, 2, 123.29999923706055, 61.64999961853027, 57.3, 66]
+  - [dev2, 2, 138.29999923706055, 69.14999961853027, 58.3, 80]
+  - [dev8, 2, 144, 72, 67, 77]

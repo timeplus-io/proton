@@ -27,8 +27,8 @@ struct BitWrapperFuncImpl
         // Should be a logical error, but this function is callable from SQL.
         // Need to investigate this.
         if constexpr (!is_integer<A>)
-            throw DB::Exception("It's a bug! Only integer types are supported by __bit_wrapper_func.", ErrorCodes::BAD_ARGUMENTS);
-        return a == 0 ? static_cast<ResultType>(0b10) : static_cast<ResultType >(0b1);
+            throw DB::Exception(ErrorCodes::BAD_ARGUMENTS, "It's a bug! Only integer types are supported by __bit_wrapper_func.");
+        return a == 0 ? static_cast<ResultType>(0b10) : static_cast<ResultType>(0b01);
     }
 
 #if USE_EMBEDDED_COMPILER

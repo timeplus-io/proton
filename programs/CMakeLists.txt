@@ -24,28 +24,19 @@ option (ENABLE_PROTON_FORMAT "Queries pretty-printer and formatter with syntax h
 
 option (ENABLE_PROTON_KLOG_BENCHMARK "Kafka write ahead log benchmark" ${ENABLE_PROTON_ALL})
 
-option (ENABLE_PROTON_KEEPER "proton alternative to ZooKeeper" ${ENABLE_PROTON_ALL})
-
 # https://presentations.clickhouse.com/matemarketing_2020/
 option (ENABLE_PROTON_GIT_IMPORT "A tool to analyze Git repositories" ${ENABLE_PROTON_ALL})
 
 # https://clickhouse.com/docs/en/operations/utilities/clickhouse-compressor/
 option (ENABLE_PROTON_COMPRESSOR "Data compressor and decompressor" ${ENABLE_proton_ALL})
 
-if (NOT ENABLE_NURAFT)
-    # RECONFIGURE_MESSAGE_LEVEL should not be used here,
-    # since ENABLE_NURAFT is set to OFF for FreeBSD and Darwin.
-    message (STATUS "proton-keeper and proton-keeper-converter will not be built (lack of NuRaft)")
-    set(ENABLE_PROTON_KEEPER OFF)
-endif()
-
 # proton: starts.
-option (ENABLE_PROTON_METASTORE "Proton alternative to MetaStore" ${ENABLE_PROTON_ALL})
-if (NOT USE_NURAFT)
-    # RECONFIGURE_MESSAGE_LEVEL should not be used here,
-    # since USE_NURAFT is set to OFF for FreeBSD and Darwin.
-    message (STATUS "proton-metastore will not be built (lack of NuRaft)")
-    set(ENABLE_PROTON_METASTORE OFF)
+option (ENABLE_PROTON_NLOG "A tool to benchmark nlog performance" ${ENABLE_PROTON_ALL})
+option (ENABLE_PROTON_META "A tool to examine meta data" ${ENABLE_PROTON_ALL})
+
+option (ENABLE_PROTON_PYTHON "Python interpreter" ${ENABLE_PROTON_ALL})
+if (NOT ENABLE_PYTHON_UDF)
+    set(ENABLE_PROTON_PYTHON OFF)
 endif()
 # proton: ends.
 
@@ -90,12 +81,6 @@ else()
     message(STATUS "proton install: OFF")
 endif()
 
-if (ENABLE_PROTON_KEEPER)
-    message(STATUS "proton keeper mode: ON")
-else()
-    message(STATUS "proton keeper mode: OFF")
-endif()
-
 if (ENABLE_PROTON_GIT_IMPORT)
     message(STATUS "proton git-import: ON")
 else()
@@ -109,10 +94,22 @@ else()
 endif()
 
 # proton: starts.
-if (ENABLE_PROTON_METASTORE)
-    message(STATUS "proton metastore mode: ON")
+if (ENABLE_PROTON_NLOG)
+    message(STATUS "proton nlog mode: ON")
 else()
-    message(STATUS "proton metastore mode: OFF")
+    message(STATUS "proton nlog mode: OFF")
+endif()
+
+if (ENABLE_PROTON_META)
+    message(STATUS "proton meta mode: ON")
+else()
+    message(STATUS "proton meta mode: OFF")
+endif()
+
+if (ENABLE_PROTON_PYTHON)
+    message(STATUS "proton python mode: ON")
+else()
+    message(STATUS "proton python mode: OFF")
 endif()
 # proton: ends.
 
@@ -136,6 +133,7 @@ macro(proton_program_add_library name)
     set(CLICKHOUSE_${name_uc}_SOURCES ${CLICKHOUSE_${name_uc}_SOURCES} PARENT_SCOPE)
     set(CLICKHOUSE_${name_uc}_LINK ${CLICKHOUSE_${name_uc}_LINK} PARENT_SCOPE)
     set(CLICKHOUSE_${name_uc}_INCLUDE ${CLICKHOUSE_${name_uc}_INCLUDE} PARENT_SCOPE)
+    set(CLICKHOUSE_${name_uc}_DEFINITIONS ${CLICKHOUSE_${name_uc}_DEFINITIONS} PARENT_SCOPE)
 
     add_library(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_SOURCES})
 
@@ -147,6 +145,11 @@ macro(proton_program_add_library name)
     set(_include ${CLICKHOUSE_${name_uc}_INCLUDE}) # can't use ${} in if()
     if (_include)
         target_include_directories(clickhouse-${name}-lib ${CLICKHOUSE_${name_uc}_INCLUDE})
+    endif()
+
+    set(_definitions ${CLICKHOUSE_${name_uc}_DEFINITIONS}) # can't use ${} in if()
+    if (_definitions)
+        target_compile_definitions(clickhouse-${name}-lib PRIVATE ${CLICKHOUSE_${name_uc}_DEFINITIONS})
     endif()
 endmacro()
 
@@ -161,17 +164,23 @@ add_subdirectory (benchmark)
 add_subdirectory (format)
 add_subdirectory (install)
 add_subdirectory (bash-completion)
+# proton: starts
 add_subdirectory (klog)
+# proton: ends
 add_subdirectory (git-import)
 add_subdirectory (compressor)
 
-if (ENABLE_PROTON_KEEPER)
-    add_subdirectory (keeper)
+# proton: starts.
+if (ENABLE_PROTON_NLOG)
+    add_subdirectory (native_log)
 endif()
 
-# proton: starts.
-if (ENABLE_PROTON_METASTORE)
-    add_subdirectory (metastore)
+if (ENABLE_PROTON_META)
+    add_subdirectory (meta)
+endif()
+
+if (ENABLE_PROTON_PYTHON)
+    add_subdirectory (python)
 endif()
 # proton: ends.
 
@@ -179,12 +188,17 @@ endif()
 proton_add_executable (proton main.cpp)
 
 # A library that prevent usage of several functions from libc.
-if (ARCH_AMD64 AND OS_LINUX AND NOT OS_ANDROID)
+if (ARCH_AMD64 AND OS_LINUX AND NOT OS_ANDROID AND NOT ENABLE_PYTHON_UDF)
     set (HARMFUL_LIB harmful)
 endif ()
 
 target_link_libraries (proton PRIVATE clickhouse_common_io string_utils ${HARMFUL_LIB})
 target_include_directories (proton PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+if (NOT APPLE)
+    # Disable symbols.map link options on MacOS since it doesn't support this
+    set_target_properties(proton PROPERTIES LINK_FLAGS  "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
+endif ()
 
 if (ENABLE_PROTON_SERVER)
     proton_target_link_split_lib(proton server)
@@ -201,9 +215,6 @@ endif ()
 if (ENABLE_PROTON_FORMAT)
     proton_target_link_split_lib(proton format)
 endif ()
-if (ENABLE_PROTON_KEEPER)
-    proton_target_link_split_lib(proton keeper)
-endif()
 if (ENABLE_PROTON_GIT_IMPORT)
     proton_target_link_split_lib(proton git-import)
 endif ()
@@ -211,15 +222,25 @@ if (ENABLE_PROTON_COMPRESSOR)
     proton_target_link_split_lib(proton compressor)
 endif ()
 # proton: starts.
-if (ENABLE_PROTON_METASTORE)
-    proton_target_link_split_lib(proton metastore)
+if (ENABLE_PROTON_NLOG)
+    proton_target_link_split_lib(proton nlog)
+endif()
+
+if (ENABLE_PROTON_META)
+    proton_target_link_split_lib(proton meta)
+endif()
+
+if (ENABLE_PROTON_PYTHON)
+    proton_target_link_split_lib(proton python)
 endif()
 # proton: ends.
 if (ENABLE_PROTON_INSTALL)
     proton_target_link_split_lib(proton install)
 endif ()
 if (ENABLE_PROTON_KLOG_BENCHMARK)
+    # proton: starts
     proton_target_link_split_lib(proton klog-benchmark)
+    # proton: ends
 endif ()
 
 set (PROTON_BUNDLE)
@@ -248,11 +269,6 @@ if (ENABLE_PROTON_FORMAT)
     install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-format" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     list(APPEND PROTON_BUNDLE proton-format)
 endif ()
-if (ENABLE_PROTON_KEEPER)
-    add_custom_target (proton-keeper ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-keeper DEPENDS proton)
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-keeper" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-    list(APPEND PROTON_BUNDLE proton-keeper)
-endif ()
 if (ENABLE_PROTON_GIT_IMPORT)
     add_custom_target (proton-git-import ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-git-import DEPENDS proton)
     install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-git-import" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
@@ -264,23 +280,36 @@ if (ENABLE_PROTON_COMPRESSOR)
     list(APPEND PROTON_BUNDLE proton-compressor)
 endif ()
 # proton: starts.
-if (ENABLE_PROTON_METASTORE)
-    add_custom_target (proton-metastore ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-metastore DEPENDS proton)
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-metastore" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
-    list(APPEND PROTON_BUNDLE proton-metastore)
+if (ENABLE_PROTON_NLOG)
+    add_custom_target (proton-nlog ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-nlog DEPENDS proton)
+    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-nlog" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+    list(APPEND PROTON_BUNDLE proton-nlog)
 endif ()
 
+if (ENABLE_PROTON_META)
+    add_custom_target (proton-meta ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-meta DEPENDS proton)
+    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-meta" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+    list(APPEND PROTON_BUNDLE proton-meta)
+endif ()
+
+if (ENABLE_PROTON_PYTHON)
+    add_custom_target (proton-python ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-python DEPENDS proton)
+    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/proton-python" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
+    list(APPEND PROTON_BUNDLE proton-python)
+endif()
 # proton: ends.
 if (ENABLE_PROTON_KLOG_BENCHMARK)
+    # proton: starts
     add_custom_target (proton-klog-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink proton proton-klog-benchmark DEPENDS proton)
     install (FILES ${CMAKE_CURRENT_BINARY_DIR}/proton-klog-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     list(APPEND PROTON_BUNDLE proton-klog-benchmark)
+    # proton: ends
 endif ()
 
 add_custom_target (proton-bundle ALL DEPENDS ${PROTON_BUNDLE})
 
 if (USE_BINARY_HASH)
-    add_custom_command(TARGET clickhouse POST_BUILD COMMAND ./clickhouse hash-binary > hash && ${OBJCOPY_PATH} --add-section .clickhouse.hash=hash clickhouse COMMENT "Adding section '.clickhouse.hash' to clickhouse binary" VERBATIM)
+    add_custom_command(TARGET proton POST_BUILD COMMAND ./proton hash-binary > hash && ${OBJCOPY_PATH} --add-section .proton.hash=hash proton COMMENT "Adding section '.proton.hash' to proton binary" VERBATIM)
 endif()
 
 if (SPLIT_DEBUG_SYMBOLS)

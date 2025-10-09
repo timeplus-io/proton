@@ -1,0 +1,21 @@
+-- generate_uuidv7 --
+uuid
+7
+2
+false
+false
+true
+-- generate_uuidv7_thread_monotonic --
+uuid
+7
+2
+false
+false
+true
+-- generate_uuidv7_non_monotonic --
+uuid
+7
+2
+false
+false
+true

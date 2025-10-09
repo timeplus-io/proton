@@ -1,0 +1,116 @@
+tags:
+  - partitioned_topic
+  - message_key
+description: Test partitioning with message key.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_32_12
+
+  - type: pulsar
+    name: delete
+    topic: test_32_12_raw
+
+  - type: pulsar
+    name: create
+    topic: test_32_12
+    partitions: 3
+
+  - type: pulsar
+    name: create
+    topic: test_32_12_raw
+    partitions: 3
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_12
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_12_raw
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream ex_pulsar_12
+        (
+          key string,
+          value int32,
+          _tp_message_key string
+        )
+        settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_32_12'
+
+  - type: query
+    sql: create external stream ex_pulsar_12_raw
+        (
+          raw string,
+          _tp_message_key string
+        )
+        settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_32_12_raw'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into ex_pulsar_12 (key, value, _tp_message_key) values ('one', 1, 'one')('one', 2, 'one')('one', 3, 'one')('one', 4, 'one')('one', 5, 'one')
+
+  - type: query
+    sql: insert into ex_pulsar_12 (key, value, _tp_message_key) values ('six', 6, 'one')('seven', 7, 'one')('eight', 8, 'one')('nine', 9, 'one')('ten', 10, 'one')
+
+  - type: query
+    sql: insert into ex_pulsar_12_raw (raw, _tp_message_key) values ('one', 'one')('one', 'one')('one', 'one')('one', 'one')('one', 'one')
+
+  - type: query
+    sql: insert into ex_pulsar_12_raw (raw, _tp_message_key) values ('six', 'one')('seven', 'one')('eight', 'one')('nine', 'one')('ten', 'one')
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 32_12
+    query: select count(value) as message_count from table(ex_pulsar_12) group by _tp_shard
+    schema:
+      - name: message_count
+        type: uint64
+
+  - type: stream
+    name: 32_12_raw
+    query: select count(raw) as message_count from table(ex_pulsar_12_raw) group by _tp_shard
+    schema:
+      - name: message_count
+        type: uint64
+
+  - type: stream
+    name: 32_12_raw_2
+    query: select raw, _tp_message_key from table(ex_pulsar_12_raw)
+    schema:
+      - name: raw
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  - type: check
+    target_name: 32_12
+    expected_result:
+      - [10]
+
+  - type: check
+    target_name: 32_12_raw
+    expected_result:
+      - [10]
+
+  - type: check
+    target_name: 32_12_raw_2
+    expected_result:
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['one', 'one']
+      - ['six', 'one']
+      - ['seven', 'one']
+      - ['eight', 'one']
+      - ['nine', 'one']
+      - ['ten', 'one']

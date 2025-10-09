@@ -60,7 +60,7 @@ public:
             throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function {} expects at least one argument", getName());
 
         const auto & id_col = arguments[0];
-        if (!isUnsignedInteger(id_col.type))
+        if (!isUInt(id_col.type))
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "First argument of function {} must be unsigned integer, got {}",
@@ -162,8 +162,8 @@ public:
             return col_res;
         }
         else
-            throw Exception(
-                "Illegal column " + arguments[0].column->getName() + " of first argument of function hashid", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function hashid",
+                arguments[0].column->getName());
     }
 };
 

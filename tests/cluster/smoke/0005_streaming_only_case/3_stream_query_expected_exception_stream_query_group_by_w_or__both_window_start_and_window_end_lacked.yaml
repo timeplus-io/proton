@@ -1,0 +1,42 @@
+tags:
+  - sytax exception
+description: expected exception
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '601'
+    type: stream
+    query: |
+      select id, max(value)
+      from tumble(test6_stream_only, timestamp, interval 5 second)
+      group by id
+      emit stream after window close
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float64
+
+  - name: '601-1'
+    type: stream
+    query: |
+      select id, max(value)
+      from tumble(test6_stream_only, timestamp, interval 5 second)
+      group by id
+      emit stream after watermark
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float64
+
+  - type: check
+    target_name: '601'
+    expected_result:
+      - [ error_code:2002 ]
+   
+  - type: check
+    target_name: '601-1'
+    expected_result:
+      - [ error_code:2002 ]

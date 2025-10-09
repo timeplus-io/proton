@@ -1,0 +1,48 @@
+p1:
+  host: localhost
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 18463
+    http_port: 13218
+    tcp_snap_port: 17587
+    http_snap_port: 18123
+    postgres_port: 15432
+    prometheus_port: 19363
+p2:
+  host: localhost
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 28463
+    http_port: 23218
+    tcp_snap_port: 27587
+    http_snap_port: 28123
+    postgres_port: 25432
+    prometheus_port: 29363
+p3:
+  host: localhost
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 38463
+    http_port: 33218
+    tcp_snap_port: 37587
+    http_snap_port: 38123
+    postgres_port: 35432
+    prometheus_port: 39363

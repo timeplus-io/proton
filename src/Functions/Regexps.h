@@ -39,11 +39,10 @@ namespace ErrorCodes
 namespace Regexps
 {
 
-using Regexp = OptimizedRegularExpressionSingleThreaded;
-using RegexpPtr = std::shared_ptr<Regexp>;
+using RegexpPtr = std::shared_ptr<OptimizedRegularExpression>;
 
 template <bool like, bool no_capture, bool case_insensitive>
-inline Regexp createRegexp(const String & pattern)
+inline OptimizedRegularExpression createRegexp(const String & pattern)
 {
     int flags = OptimizedRegularExpression::RE_DOT_NL;
     if constexpr (no_capture)
@@ -65,7 +64,7 @@ inline Regexp createRegexp(const String & pattern)
 class LocalCacheTable
 {
 public:
-    using RegexpPtr = std::shared_ptr<Regexp>;
+    using RegexpPtr = std::shared_ptr<OptimizedRegularExpression>;
 
     template <bool like, bool no_capture, bool case_insensitive>
     RegexpPtr getOrSet(const String & pattern)
@@ -74,11 +73,11 @@ public:
 
         if (bucket.regexp == nullptr) [[unlikely]]
             /// insert new entry
-            bucket = {pattern, std::make_shared<Regexp>(createRegexp<like, no_capture, case_insensitive>(pattern))};
+            bucket = {pattern, std::make_shared<OptimizedRegularExpression>(createRegexp<like, no_capture, case_insensitive>(pattern))};
         else
             if (pattern != bucket.pattern)
                 /// replace existing entry
-                bucket = {pattern, std::make_shared<Regexp>(createRegexp<like, no_capture, case_insensitive>(pattern))};
+                bucket = {pattern, std::make_shared<OptimizedRegularExpression>(createRegexp<like, no_capture, case_insensitive>(pattern))};
 
         return bucket.regexp;
     }
@@ -240,7 +239,7 @@ inline Regexps constructRegexps(const std::vector<String> & str_patterns, [[mayb
         CompilerErrorPtr error(compile_error);
 
         if (error->expression < 0)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, String(error->message));
+            throw Exception::createRuntime(ErrorCodes::LOGICAL_ERROR, String(error->message));
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Pattern '{}' failed with error '{}'", str_patterns[error->expression], String(error->message));
     }

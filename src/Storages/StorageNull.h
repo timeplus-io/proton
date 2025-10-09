@@ -34,7 +34,13 @@ public:
             std::make_shared<NullSource>(storage_snapshot->getSampleBlockForColumns(column_names)));
     }
 
+    bool parallelizeOutputAfterReading(ContextPtr) const override { return false; }
+
     bool supportsParallelInsert() const override { return true; }
+
+    bool supportsSubcolumns() const override { return true; }
+
+    bool supportsDynamicSubcolumns() const override { return true; }
 
     SinkToStoragePtr write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr) override
     {
@@ -54,7 +60,9 @@ public:
         return {0};
     }
 
-private:
+    /// proton : starts
+    bool isLocal() const override { return false; }
+    /// proton : ends
 
 protected:
     StorageNull(

@@ -1,0 +1,56 @@
+tags:
+  - local-run
+  - subquery/view/materialized_view/
+  - tumble(table)
+  - group_by
+  - primary_key
+  - todo
+  - skip
+
+description: subquery view materialized view with tumble(table), group by and primary key
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: create stream test14_subquery_6(i float, k1 int, k2 string, ts datetime);
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create view test14_view_6 as (with cte as (select i, k1, k2, _tp_delta from changelog(tumble(test14_subquery_6, ts, 5s), k2)) select * from cte);
+  - type: wait
+    time: 1
+
+  - name: "1424"
+    type: stream
+    query: select max(i), min(i), avg(i) from test14_view_6 group by k2;
+    schema:
+      - name: max(i)
+        type: float32
+      - name: min(i)
+        type: float32
+      - name: avg(i)
+        type: float64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_6 (i, k1, k2, ts) values (4, 3, 'a','2020-02-02 20:00:00');
+
+  - type: query
+    sql: insert into test14_subquery_6 (i, k1, k2, ts) values (2, 3, 'a' ,'2020-02-02 20:00:01');
+
+  - type: query
+    sql: insert into test14_subquery_6 (i, k1, k2, ts) values (5, 5, 'b','2020-02-02 20:00:03');
+
+  - type: query
+    sql: insert into test14_subquery_6 (i, k1, k2, ts) values (2, 2, 'a','2020-02-02 20:00:04');
+
+  - type: query
+    sql: insert into test14_subquery_6 (i, k1, k2, ts) values (8, 5, 'b' ,'2020-02-02 20:00:04');
+
+  - type: query
+    sql: drop view if exists test14_view_6;

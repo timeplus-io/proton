@@ -80,10 +80,28 @@ class Client:
 
         return CommandRequest(command, stdin, timeout, ignore_error)
 
-    def query_and_get_error(self, sql, stdin=None, timeout=None, settings=None, user=None, password=None,
-                            database=None):
-        return self.get_query_request(sql, stdin=stdin, timeout=timeout, settings=settings, user=user,
-                                      password=password, database=database).get_error()
+    @stacktraces_on_timeout_decorator
+    def query_and_get_error(
+        self,
+        sql,
+        stdin=None,
+        timeout=None,
+        settings=None,
+        user=None,
+        password=None,
+        database=None,
+        query_id=None,
+    ):
+        return self.get_query_request(
+            sql,
+            stdin=stdin,
+            timeout=timeout,
+            settings=settings,
+            user=user,
+            password=password,
+            database=database,
+            query_id=query_id,
+        ).get_error()
 
     def query_and_get_answer_with_error(self, sql, stdin=None, timeout=None, settings=None, user=None, password=None,
                                         database=None):

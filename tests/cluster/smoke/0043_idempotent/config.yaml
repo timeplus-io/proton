@@ -1,0 +1,4 @@
+name: idempotent
+description: Tests covering the rest api and insert query with idempotent key feature.
+tags:
+  - smoke

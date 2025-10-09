@@ -1,0 +1,50 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_zip(x int, y int) RETURNS array(int) LANGUAGE PYTHON AS
+      $$
+      def test_zip(x, y):
+          res = [list(item) for item in zip(x,y)]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-17-1
+    type: stream
+    query: select test_zip(x, y) as res, x, y from udf_stream;
+    schema:
+      - name: res
+        type: array(int32)
+      - name: x
+        type: int32
+      - name: y
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(x, y) values (1, 2)(3, 4)(5, 6);
+
+  - type: check
+    target_name: python-udf1-17-1
+    expected_result:
+      - [[1, 2], 1, 2]
+      - [[3, 4], 3, 4]
+      - [[5, 6], 5, 6]

@@ -1,3 +1,5 @@
+SET allow_experimental_analyzer = 1;
+
 SELECT to_datetime('2000-01-01 00:00:00', 'Asia/Istanbul') AS x, to_date('2000-01-02') AS y, x > y ? x : y AS z;
 SELECT materialize(to_datetime('2000-01-01 00:00:00', 'Asia/Istanbul')) AS x, to_date('2000-01-02') AS y, x > y ? x : y AS z;
 SELECT to_datetime('2000-01-01 00:00:00', 'Asia/Istanbul') AS x, materialize(to_date('2000-01-02')) AS y, x > y ? x : y AS z;

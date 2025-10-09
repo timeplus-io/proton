@@ -5,10 +5,7 @@
 #include <Common/CurrentThread.h>
 #include <base/types.h>
 
-namespace Poco
-{
-class Logger;
-}
+#include <ranges>
 
 namespace DB
 {
@@ -19,7 +16,8 @@ class Session;
 class RestHTTPRequestHandler final : public HTTPRequestHandler
 {
 public:
-    RestHTTPRequestHandler(IServer & server_, const String & name);
+    RestHTTPRequestHandler(IServer & server_, const String & name, bool is_snapshot_mode_, bool is_clickhouse_compatible_mode_);
+    ~RestHTTPRequestHandler() override;
 
     void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
 
@@ -29,7 +27,11 @@ private:
     /// Those settings are used only to extract a http request's parameters.
     /// See settings http_max_fields, http_max_field_name_size, http_max_field_value_size in HTMLForm.
     const Settings & default_settings;
-    Poco::Logger * log;
+
+    bool is_snapshot_mode = false;
+    bool is_clickhouse_compatible_mode = false;
+
+    LoggerPtr log;
 
     // session is reset at the end of each request/response.
     std::unique_ptr<Session> session;
@@ -61,6 +63,11 @@ private:
         HTMLForm & params,
         HTTPServerResponse & response,
         std::optional<CurrentThread::QueryScope> & query_scope);
+
+    bool isBypassUri(const std::string & uri) const {
+        static const std::array<std::string, 4> bypass_uris = { "/proton/ping", "/proton/info", "/timeplusd/ping", "/timeplusd/info" };
+        return std::ranges::find(bypass_uris, uri) != bypass_uris.end();
+    }
 };
 
 }

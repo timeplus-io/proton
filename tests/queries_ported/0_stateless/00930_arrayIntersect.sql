@@ -15,7 +15,7 @@ select array_sort(array_intersect([1,2], arr)) from array_intersect order by arr
 select array_sort(array_intersect([1,2], [1,2,3,4])) from array_intersect order by arr;
 select array_sort(array_intersect([], [])) from array_intersect order by arr;
 
-optimize table array_intersect;
+optimize stream array_intersect;
 
 select array_sort(array_intersect(arr, [1,2])) from array_intersect order by arr;
 select array_sort(array_intersect(arr, [])) from array_intersect order by arr;

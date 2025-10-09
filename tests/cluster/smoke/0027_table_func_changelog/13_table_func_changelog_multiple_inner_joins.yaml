@@ -1,0 +1,171 @@
+tags:
+- table_func_changelog
+- multiple_inner_joins
+description: changelog_inner_joins_changelog_inner_joins_changelog_inner_joins
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test28_stream1;
+
+- type: query
+  sql: drop stream if exists test28_stream2;
+
+- type: query
+  sql: drop stream if exists test28_stream3;
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create stream test28_stream1 (i int, k1 string);
+
+- type: query
+  sql: create stream test28_stream2 (j int, k2 string);
+
+- type: query
+  sql: create stream test28_stream3 (k int, k3 string);
+
+- type: wait
+  time: 2
+
+- name: '2813'
+  type: stream
+  query: select * from changelog(test28_stream1, k1) as c1 inner join changelog(test28_stream2,
+    k2) as c2 ON c1.i = c2.j inner join changelog(test28_stream3, k3) as c3 ON c1.i
+    = c3.k emit changelog;
+  schema:
+  - name: c1.i
+    type: int32
+  - name: c1.k1
+    type: string
+  - name: c1._tp_time
+    type: datetime64(3)
+  - name: c2.j
+    type: int32
+  - name: c2.k2
+    type: string
+  - name: c2._tp_time
+    type: datetime64(3)
+  - name: c3.k
+    type: int32
+  - name: c3.k3
+    type: string
+  - name: c3._tp_time
+    type: datetime64(3)
+  - name: _tp_delta
+    type: int8
+
+- name: '2813-2'
+  type: stream
+  query: select * from changelog(test28_stream1, k1) as c1 inner join changelog(test28_stream2,
+    k2) as c2 ON c1.i = c2.j inner join changelog(test28_stream3, k3) as c3 ON c1.i
+    = c3.k;
+  schema:
+  - name: c1.i
+    type: int32
+  - name: c1.k1
+    type: string
+  - name: c1._tp_time
+    type: datetime64(3)
+  - name: c2.j
+    type: int32
+  - name: c2.k2
+    type: string
+  - name: c2._tp_time
+    type: datetime64(3)
+  - name: c3.k
+    type: int32
+  - name: c3.k3
+    type: string
+  - name: c3._tp_time
+    type: datetime64(3)
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test28_stream1(i, k1, _tp_time) values
+  schema:
+  - name: i
+    type: int32
+  - name: k1
+    type: string
+  - name: _tp_time
+    type: datetime64(3)
+  inputs:
+  - [1, 'k1', '2023-01-01 00:00:01']
+
+- type: query
+  sql: insert into test28_stream2(j, k2, _tp_time) values
+  schema:
+  - name: j
+    type: int32
+  - name: k2
+    type: string
+  - name: _tp_time
+    type: datetime64(3)
+  inputs:
+  - [1, 'k2', '2023-01-01 00:00:02']
+
+- type: query
+  sql: insert into test28_stream3(k, k3, _tp_time) values
+  schema:
+  - name: k
+    type: int32
+  - name: k3
+    type: string
+  - name: _tp_time
+    type: datetime64(3)
+  inputs:
+  - [1, 'k3', '2023-01-01 00:00:03']
+
+- type: query
+  sql: insert into test28_stream1(i, k1, _tp_time) values
+  schema:
+  - name: i
+    type: int32
+  - name: k1
+    type: string
+  - name: _tp_time
+    type: datetime64(3)
+  inputs:
+  - [2, 'k1', '2023-01-01 00:00:04']
+
+- type: query
+  sql: insert into test28_stream2(j, k2, _tp_time) values
+  schema:
+  - name: j
+    type: int32
+  - name: k2
+    type: string
+  - name: _tp_time
+    type: datetime64(3)
+  inputs:
+  - [2, 'k2', '2023-01-01 00:00:05']
+
+- type: query
+  sql: insert into test28_stream3(k, k3, _tp_time) values 
+  schema:
+  - name: k
+    type: int32
+  - name: k3
+    type: string
+  - name: _tp_time
+    type: datetime64(3)
+  inputs:
+  - [2, 'k3', '2023-01-01 00:00:06']
+
+- type: check
+  target_name: '2813'
+  expected_result:
+  - [1, k1, '2023-01-01 00:00:01+00:00', 1, k2, '2023-01-01 00:00:02+00:00', 1, k3, '2023-01-01 00:00:03+00:00', 1]
+  - [1, k1, '2023-01-01 00:00:01+00:00', 1, k2, '2023-01-01 00:00:02+00:00', 1, k3, '2023-01-01 00:00:03+00:00', -1]
+  - [2, k1, '2023-01-01 00:00:04+00:00', 2, k2, '2023-01-01 00:00:05+00:00', 2, k3, '2023-01-01 00:00:06+00:00', 1]
+
+- type: check
+  target_name: '2813-2'
+  expected_result:
+  - [1, k1, '2023-01-01 00:00:01+00:00', 1, k2, '2023-01-01 00:00:02+00:00', 1, k3, '2023-01-01 00:00:03+00:00']
+  - [2, k1, '2023-01-01 00:00:04+00:00', 2, k2, '2023-01-01 00:00:05+00:00', 2, k3, '2023-01-01 00:00:06+00:00']

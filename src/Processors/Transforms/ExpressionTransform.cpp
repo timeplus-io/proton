@@ -7,6 +7,8 @@
 #include <Functions/IFunction.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+
+#include <ranges>
 /// proton: ends.
 
 namespace DB
@@ -30,8 +32,14 @@ ExpressionTransform::ExpressionTransform(const Block & header_, ExpressionAction
     , expression(std::move(expression_))
     /// proton: starts.
     , stateful_functions(expression->getStatefulFunctions())
-    /// proton ends.
 {
+    if (!stateful_functions.empty())
+    {
+        setDescription(fmt::format(
+            "stateful_funcs={}",
+            fmt::join(stateful_functions | std::views::transform([](const auto & func) { return func->getName(); }), ",")));
+    }
+    /// proton ends.
 }
 
 void ExpressionTransform::transform(Chunk & chunk)
@@ -47,26 +55,20 @@ void ExpressionTransform::transform(Chunk & chunk)
 /// proton: starts.
 void ExpressionTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
-    assert(isStreaming());
-    if (stateful_functions.empty())
-    {
-        ckpt_ctx->coordinator->checkpointed(getVersion(), getLogicID(), ckpt_ctx);
-        return;
-    }
+    chassert(isStreaming());
+    if (!hasState())
+        return IProcessor::checkpoint(std::move(ckpt_ctx));
 
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         writeIntBinary(stateful_functions.size(), wb);
         for (auto & func : stateful_functions)
-        {
-            writeStringBinary(func->getName(), wb);
             func->serialize(wb);
-        }
     });
 }
 
 void ExpressionTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    if (!isStreaming() || stateful_functions.empty())
+    if (!isStreaming() || !hasState())
         return;
 
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
@@ -81,19 +83,7 @@ void ExpressionTransform::recover(CheckpointContextPtr ckpt_ctx)
                 stateful_functions.size());
 
         for (auto & func : stateful_functions)
-        {
-            String func_name;
-            readStringBinary(func_name, rb);
-            if (unlikely(func_name != func->getName()))
-                throw Exception(
-                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                    "Failed to recover expression actions checkpoint. Name of stateful function is not the same, checkpointed={}, "
-                    "current={}",
-                    func_name,
-                    func->getName());
-
             func->deserialize(rb);
-        }
     });
 }
 /// proton: ends.

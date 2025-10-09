@@ -1,0 +1,137 @@
+tags:
+  - cleanup
+
+description: |
+  Tests covering the async delete clean scenario.
+  Main steps:
+  - create 3 streams
+  - insert data into 3 streams
+  - execute cleanup rest api
+  - check no streams exist
+
+cluster:
+  - p3k1
+
+steps:
+  # create table
+  - type: query
+    sql: |
+      create stream test37_stream1 (
+        i int32,
+        i8 int8,
+        f32 float32,
+        json string
+      );
+
+  - type: query
+    sql: |
+      create stream test37_stream2 (
+        s string
+      );
+
+  - type: query
+    sql: |
+      create stream test37_stream3 (
+        dt datetime64(6) default now64(6)
+      );
+
+  - type: wait
+    time: 2
+
+  # insert data
+  - type: query
+    sql: insert into test37_stream1 (i, i8, f32) values (1, 1, 1.1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test37_stream2 (s) values ('dev1')('dev2');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test37_stream3 (dt) values 
+      ('2024-01-01 00:00:01')
+      ('2024-01-01 00:00:02')
+      ('2024-01-01 00:00:03');
+
+  - type: wait
+    time: 1
+
+  # query before clean
+  - name: cleanup-4-1
+    type: stream
+    query: show streams where name in ('test37_stream1', 'test37_stream2', 'test37_stream3');
+    schema:
+      - name: name
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: cleanup-4-1
+    expected_result:
+      - ['test37_stream1']
+      - ['test37_stream2']
+      - ['test37_stream3']
+
+  # cleanup
+  - name: cleanup-4-2
+    node:
+      - p1
+    type: rest
+    query_id: cleanup-4-2
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: delete
+      stream_list:
+        - test37_stream1
+        - test37_stream2
+        - test37_stream3
+      database: default
+      synchronous: false
+      timeout_seconds: 600
+  - type: wait
+    time: 3
+
+  - name: cleanup-4-3
+    type: rest
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=1_cleanup-4-2
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: cleanup-4-3
+    mode: random
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - any_value
+        - any_value
+        - any_value
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-4-2
+
+  # check: query after clean
+  - name: cleanup-4-4
+    type: stream
+    query: show streams where name in ('test37_stream1', 'test37_stream2', 'test37_stream3');
+    schema:
+      - name: name
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: cleanup-4-4
+    expected_result:
+      - []

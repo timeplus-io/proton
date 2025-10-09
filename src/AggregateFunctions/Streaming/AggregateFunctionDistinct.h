@@ -7,6 +7,8 @@
 #include <Common/assert_cast.h>
 #include <Common/serde.h>
 
+#include <absl/container/node_hash_set.h>
+
 namespace DB
 {
 namespace Streaming
@@ -84,7 +86,7 @@ struct AggregateFunctionDistinctSingleNumericData
     using Self = AggregateFunctionDistinctSingleNumericData<T>;
     Set set;
 
-    /// Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Resolve multiple finalization problem for streaming global aggregation query
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<T> extra_data_since_last_finalize;
 
@@ -103,7 +105,7 @@ struct AggregateFunctionDistinctSingleNumericData
 
     void merge(const Self & rhs, Arena *)
     {
-        /// Deduplicate owned extra data based on rhs
+        /// Deduplicate owned extra data based on rhs, also make sure it doesn't exist in rhs extra data
         for (auto it = extra_data_since_last_finalize.begin(); it != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*it) != rhs.set.end())
@@ -161,6 +163,8 @@ struct AggregateFunctionDistinctSingleNumericData
 
         return argument_columns;
     }
+
+    static bool allocatesMemoryInArena() { return false; }
 };
 
 struct AggregateFunctionDistinctGenericData
@@ -169,7 +173,7 @@ struct AggregateFunctionDistinctGenericData
     using Set = HashSetWithSavedHashWithStackMemory<StringRef, StringRefHash, 4>;
     using Self = AggregateFunctionDistinctGenericData;
     Set set;
-    /// Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Resolve multiple finalization problem for streaming global aggregation query
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<StringRef> extra_data_since_last_finalize;
 
@@ -181,7 +185,7 @@ struct AggregateFunctionDistinctGenericData
     {
         Set::LookupResult it;
         bool inserted;
-        /// Deduplicate owned extra data based on rhs
+        /// Deduplicate owned extra data based on rhs, also make sure it doesn't exist in rhs extra data
         for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*next) != rhs.set.end())
@@ -246,6 +250,8 @@ struct AggregateFunctionDistinctGenericData
 
         readBoolText(use_extra_data, buf);
     }
+
+    static bool allocatesMemoryInArena() { return true; }
 };
 
 template <bool is_plain_column>
@@ -319,6 +325,137 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
     }
 };
 
+template <bool is_single_plain_column>
+struct AggregateFunctionDistinctGenericDataWithoutArena
+{
+    /// NOTE: absl::flat_hash_set does not guarantee pointer stability. After rehashing, the addresses of stored strings may change, invalidating any external string_views.
+    using Set = absl::node_hash_set<String>;
+    using SetIter = typename Set::iterator;
+    Set set;
+    /// Resolve multiple finalization problem for streaming global aggregation query
+    /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
+    std::vector<std::string_view> extra_data_since_last_finalize;
+
+    NO_SERDE std::vector<uintptr_t> merged_places;
+
+    void add(const IColumn ** columns, size_t columns_num, size_t row_num, Arena *)
+    {
+        SetIter it;
+        bool inserted;
+        if constexpr (is_single_plain_column)
+        {
+            std::tie(it, inserted) = set.emplace(columns[0]->getDataAt(row_num));
+        }
+        else
+        {
+            WriteBufferFromOwnString buf;
+            for (size_t i = 0; i < columns_num; ++i)
+                columns[i]->serializeValueIntoBuffer(row_num, buf);
+
+            std::tie(it, inserted) = set.emplace(buf.str());
+        }
+
+        if (inserted)
+            extra_data_since_last_finalize.emplace_back(*it);
+    }
+
+    MutableColumns getArguments(const DataTypes & argument_types) const
+    {
+        MutableColumns argument_columns(argument_types.size());
+        for (size_t i = 0; i < argument_types.size(); ++i)
+            argument_columns[i] = argument_types[i]->createColumn();
+
+        if constexpr (is_single_plain_column)
+        {
+            for (const auto & data : extra_data_since_last_finalize)
+                argument_columns[0]->insertData(data.data(), data.size());
+        }
+        else
+        {
+            for (const auto & data : extra_data_since_last_finalize)
+            {
+                const char * begin = data.data();
+                for (auto & column : argument_columns)
+                    begin = column->deserializeAndInsertFromArena(begin);
+            }
+        }
+        return argument_columns;
+    }
+
+    void merge(const AggregateFunctionDistinctGenericDataWithoutArena & rhs, Arena *)
+    {
+        /// Deduplicate owned extra data based on rhs, also make sure it doesn't exist in rhs extra data
+        for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
+        {
+            if (rhs.set.find(*next) != rhs.set.end())
+            {
+                bool is_new_data = std::find(rhs.extra_data_since_last_finalize.begin(), rhs.extra_data_since_last_finalize.end(), *next)
+                    != rhs.extra_data_since_last_finalize.end();
+                if (is_new_data)
+                    ++next;
+                else
+                    next = extra_data_since_last_finalize.erase(next);
+            }
+            else
+            {
+                ++next;
+            }
+        }
+
+        /// Merge and deduplicate rhs' extra data
+        for (const auto & data : rhs.extra_data_since_last_finalize)
+        {
+            auto [it, inserted] = set.emplace(data);
+            if (inserted)
+                extra_data_since_last_finalize.emplace_back(*it);
+        }
+
+        set.insert(rhs.set.begin(), rhs.set.end());
+
+        uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(), merged_place);
+        if (find_place == merged_places.end())
+            merged_places.emplace_back(merged_place);
+    }
+
+    void serialize(WriteBuffer & buf) const
+    {
+        writeVarUInt(set.size(), buf);
+        for (const auto & elem : set)
+            writeStringBinary(elem, buf);
+
+        writeVarUInt(extra_data_since_last_finalize.size(), buf);
+        for (const auto & data : extra_data_since_last_finalize)
+            writeStringBinary(data, buf);
+    }
+
+    void deserialize(ReadBuffer & buf, Arena *)
+    {
+        String tmp_value;
+
+        size_t size;
+        readVarUInt(size, buf);
+        for (size_t i = 0; i < size; ++i)
+        {
+            readStringBinary(tmp_value, buf);
+            set.emplace(std::move(tmp_value));
+        }
+
+        size_t extra_size;
+        readVarUInt(extra_size, buf);
+        extra_data_since_last_finalize.resize(extra_size);
+        for (size_t i = 0; i < extra_size; ++i)
+        {
+            readStringBinary(tmp_value, buf);
+            auto it = set.find(tmp_value);
+            chassert(it != set.end());
+            extra_data_since_last_finalize[i] = *it;
+        }
+    }
+
+    static bool allocatesMemoryInArena() { return false; }
+};
+
 /** Adaptor for aggregate functions.
   * Adding _distinct_streaming suffix to aggregate function for streaming query
 **/
@@ -336,7 +473,7 @@ protected:
 
 public:
     AggregateFunctionDistinct(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_)
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_, nested_func_->getResultType())
         , nested_func(nested_func_)
         , arguments_num(arguments.size())
     {
@@ -434,9 +571,7 @@ public:
 
     String getName() const override { return nested_func->getName() + "_distinct_streaming"; }
 
-    DataTypePtr getReturnType() const override { return nested_func->getReturnType(); }
-
-    bool allocatesMemoryInArena() const override { return true; }
+    bool allocatesMemoryInArena() const override { return Data::allocatesMemoryInArena() || nested_func->allocatesMemoryInArena(); }
 
     bool isState() const override { return nested_func->isState(); }
 

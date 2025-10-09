@@ -1,0 +1,137 @@
+tags:
+  - message_headers
+description: Read/Write message headers.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test_32_33
+
+  - type: kafka
+    name: delete
+    topic: test_32_33_raw
+
+  - type: kafka
+    name: create
+    topic: test_32_33
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: kafka
+    name: create
+    topic: test_32_33_raw
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists smoke_32_33
+
+  - type: query
+    sql: drop stream if exists smoke_32_33_raw
+
+  - type: query
+    sql: drop stream if exists smoke_32_33_raw_for_read
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream smoke_32_33
+        (
+          key string,
+          value int32,
+          _tp_message_headers map(string, string)
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_32_33'
+
+  - type: query
+    sql: create external stream smoke_32_33_raw
+        (
+          raw string,
+          _tp_message_headers map(string, string)
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_32_33_raw'
+
+  - type: query
+    sql: create external stream smoke_32_33_raw_for_read
+        (
+          raw string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_32_33_raw'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into smoke_32_33 (key, value, _tp_message_headers) values ('one', 1, {'test_id': 'smoke_test_32_33', 'idx': '1'})('two', 2, {'test_id': 'smoke_test_32_33', 'idx': '2'})('three', 3, {'test_id': 'smoke_test_32_33', 'idx': '3'})('four', 4, {'test_id': 'smoke_test_32_33', 'idx': '4'})('five', 5, {'test_id': 'smoke_test_32_33', 'idx': '5'})
+
+  - type: query
+    sql: |
+      insert into smoke_32_33_raw (raw, _tp_message_headers) values ('one', {'test_id': 'smoke_test_32_33', 'idx': '1'})('two', {'test_id': 'smoke_test_32_33', 'idx': '2'})('three', {'test_id': 'smoke_test_32_33', 'idx': '3'})('four', {'test_id': 'smoke_test_32_33', 'idx': '4'})('five', {'test_id': 'smoke_test_32_33', 'idx': '5'})
+
+  - type: wait
+    time: 4
+
+  - type: stream
+    name: 32_33
+    query: select key, value, _tp_message_headers from table(smoke_32_33)
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+      - name: _tp_message_headers
+        type: map(string, string)
+
+  - type: stream
+    name: 32_33_raw
+    query: select raw, _tp_message_headers from table(smoke_32_33_raw)
+    schema:
+      - name: raw
+        type: string
+      - name: _tp_message_headers
+        type: map(string, string)
+
+  - type: stream
+    name: 32_33_raw_2
+    query: select raw, _tp_message_headers from table(smoke_32_33_raw_for_read)
+    schema:
+      - name: raw
+        type: string
+      - name: _tp_message_headers
+        type: map(string, string)
+
+  - type: check
+    target_name: 32_33
+    expected_result:
+      - ["one", 1, {"test_id": "smoke_test_32_33", "idx": "1"}]
+      - ["two", 2, {"test_id": "smoke_test_32_33", "idx": "2"}]
+      - ["three", 3, {"test_id": "smoke_test_32_33", "idx": "3"}]
+      - ["four", 4, {"test_id": "smoke_test_32_33", "idx": "4"}]
+      - ["five", 5, {"test_id": "smoke_test_32_33", "idx": "5"}]
+
+  - type: check
+    target_name: 32_33_raw
+    expected_result:
+      - ["one", {"test_id": "smoke_test_32_33", "idx": "1"}]
+      - ["two", {"test_id": "smoke_test_32_33", "idx": "2"}]
+      - ["three", {"test_id": "smoke_test_32_33", "idx": "3"}]
+      - ["four", {"test_id": "smoke_test_32_33", "idx": "4"}]
+      - ["five", {"test_id": "smoke_test_32_33", "idx": "5"}]
+
+  - type: check
+    target_name: 32_33_raw_2
+    expected_result:
+      - ["one", {"test_id": "smoke_test_32_33", "idx": "1"}]
+      - ["two", {"test_id": "smoke_test_32_33", "idx": "2"}]
+      - ["three", {"test_id": "smoke_test_32_33", "idx": "3"}]
+      - ["four", {"test_id": "smoke_test_32_33", "idx": "4"}]
+      - ["five", {"test_id": "smoke_test_32_33", "idx": "5"}]

@@ -1,0 +1,64 @@
+tags:
+  - local-run
+  - data_enrichment_join
+  - inner-join
+description: append-only inner all join versioned-kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test10_append_left_stream
+
+  - type: query
+    sql: drop stream if exists test10_vk_right_stream
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test10_append_left_stream(i int, k string)
+
+  - type: query
+    sql: create stream test10_vk_right_stream(ii int, kk string) primary
+      key kk settings mode='versioned_kv'
+
+  - type: wait
+    time: 2
+
+  - name: '1050'
+    type: stream
+    query: select i, k, ii, kk from test10_append_left_stream inner join test10_vk_right_stream
+      on i == ii
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: ii
+        type: int32
+      - name: kk
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test10_vk_right_stream (ii, kk) values (1, 'kk1') (1, 'kk2')
+
+  - type: query
+    sql: insert into test10_append_left_stream (i, k) values (1, 'k1')
+
+  - type: query
+    sql: insert into test10_vk_right_stream (ii, kk) values (2, 'kk1')
+
+  - type: query
+    sql: insert into test10_append_left_stream (i, k) values (1, 'k1') (2, 'k2')
+  
+  - type: check
+    target_name: '1050'
+    expected_result:
+      - [ 1, k1, 1, kk1 ]
+      - [ 1, k1, 1, kk2 ]
+      - [ 1, k1, 1, kk2 ]
+      - [ 2, k2, 2, kk1 ]

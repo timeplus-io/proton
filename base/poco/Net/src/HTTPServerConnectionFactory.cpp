@@ -34,9 +34,9 @@ HTTPServerConnectionFactory::~HTTPServerConnectionFactory()
 }
 
 
-TCPServerConnection* HTTPServerConnectionFactory::createConnection(const StreamSocket& socket)
+std::shared_ptr<TCPServerConnection> HTTPServerConnectionFactory::createConnection(const StreamSocket& socket)
 {
-	return new HTTPServerConnection(socket, _pParams, _pFactory);
+	return std::make_shared<HTTPServerConnection>(socket, _pParams, _pFactory);
 }
 
 

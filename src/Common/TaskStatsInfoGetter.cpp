@@ -118,7 +118,7 @@ struct NetlinkMessage
             }
 
             if (bytes_sent > request_size)
-                throw Exception("Wrong result of sendto system call: bytes_sent is greater than request size", ErrorCodes::NETLINK_ERROR);
+                throw Exception(ErrorCodes::NETLINK_ERROR, "Wrong result of sendto system call: bytes_sent is greater than request size");
 
             if (bytes_sent == request_size)
                 break;
@@ -133,10 +133,10 @@ struct NetlinkMessage
         ssize_t bytes_received = ::recv(fd, this, sizeof(*this), 0);
 
         if (header.nlmsg_type == NLMSG_ERROR)
-            throw Exception("Can't receive Netlink response: error " + std::to_string(error.error), ErrorCodes::NETLINK_ERROR);
+            throw Exception(ErrorCodes::NETLINK_ERROR, "Can't receive Netlink response: error {}", std::to_string(error.error));
 
         if (!is_nlmsg_ok(&header, bytes_received))
-            throw Exception("Can't receive Netlink response: wrong number of bytes received", ErrorCodes::NETLINK_ERROR);
+            throw Exception(ErrorCodes::NETLINK_ERROR, "Can't receive Netlink response: wrong number of bytes received");
     }
 };
 
@@ -185,7 +185,7 @@ UInt16 getFamilyIdImpl(int fd)
     const NetlinkMessage::Attribute * attr = answer.payload.attribute.next();
 
     if (attr->header.nla_type != CTRL_ATTR_FAMILY_ID)
-        throw Exception("Received wrong attribute as an answer to GET_FAMILY Netlink command", ErrorCodes::NETLINK_ERROR);
+        throw Exception(ErrorCodes::NETLINK_ERROR, "Received wrong attribute as an answer to GET_FAMILY Netlink command");
 
     return unalignedLoad<UInt16>(attr->payload);
 }
@@ -285,14 +285,17 @@ void TaskStatsInfoGetter::getStat(::taskstats & out_stats, pid_t tid) const
         }
     }
 
-    throw Exception("There is no TASKSTATS_TYPE_STATS attribute in the Netlink response", ErrorCodes::NETLINK_ERROR);
+    throw Exception(ErrorCodes::NETLINK_ERROR, "There is no TASKSTATS_TYPE_STATS attribute in the Netlink response");
 }
 
 
 TaskStatsInfoGetter::~TaskStatsInfoGetter()
 {
     if (netlink_socket_fd >= 0)
-        close(netlink_socket_fd);
+    {
+        int err = close(netlink_socket_fd);
+        chassert(!err || errno == EINTR);
+    }
 }
 
 }

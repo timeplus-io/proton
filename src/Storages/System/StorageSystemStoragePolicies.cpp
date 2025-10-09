@@ -31,7 +31,8 @@ StorageSystemStoragePolicies::StorageSystemStoragePolicies(const StorageID & tab
              {"volume_type", std::make_shared<DataTypeString>()},
              {"max_data_part_size", std::make_shared<DataTypeUInt64>()},
              {"move_factor", std::make_shared<DataTypeFloat32>()},
-             {"prefer_not_to_merge", std::make_shared<DataTypeUInt8>()}
+             {"prefer_not_to_merge", std::make_shared<DataTypeUInt8>()},
+             {"used_by", std::make_shared<DataTypeString>()} /// proton: updated. new `used_by` column
     }));
     // TODO: Add string column with custom volume-type-specific options
     setInMemoryMetadata(storage_metadata);
@@ -56,10 +57,12 @@ Pipe StorageSystemStoragePolicies::read(
     MutableColumnPtr col_max_part_size = ColumnUInt64::create();
     MutableColumnPtr col_move_factor = ColumnFloat32::create();
     MutableColumnPtr col_prefer_not_to_merge = ColumnUInt8::create();
+    MutableColumnPtr col_used_by = ColumnString::create();  /// proton: updated
 
     for (const auto & [policy_name, policy_ptr] : context->getPoliciesMap())
     {
         const auto & volumes = policy_ptr->getVolumes();
+        const String used_by = fmt::format("{}", fmt::join(DatabaseCatalog::instance().getStoragesByStoragePolicy(policy_name), ", ")); ///proton: updated
         for (size_t i = 0; i != volumes.size(); ++i)
         {
             col_policy_name->insert(policy_name);
@@ -74,6 +77,7 @@ Pipe StorageSystemStoragePolicies::read(
             col_max_part_size->insert(volumes[i]->max_data_part_size);
             col_move_factor->insert(policy_ptr->getMoveFactor());
             col_prefer_not_to_merge->insert(volumes[i]->areMergesAvoided() ? 1 : 0);
+            col_used_by->insert(used_by); ///proton: updated
         }
     }
 
@@ -86,6 +90,7 @@ Pipe StorageSystemStoragePolicies::read(
     res_columns.emplace_back(std::move(col_max_part_size));
     res_columns.emplace_back(std::move(col_move_factor));
     res_columns.emplace_back(std::move(col_prefer_not_to_merge));
+    res_columns.emplace_back(std::move(col_used_by));   /// proton: updated
 
     UInt64 num_rows = res_columns.at(0)->size();
     Chunk chunk(std::move(res_columns), num_rows);

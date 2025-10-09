@@ -1,0 +1,37 @@
+tags:
+- sytax exception
+- bug
+description: expected exception
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 1
+  
+- name: '601'
+  type: stream
+  query: |
+    SELECT *
+    FROM test6_stream_only
+    WHERE value > 25
+    EMIT STREAM PERIODIC INTERVAL 2 SECOND
+  schema:
+    - name: id
+      type: string
+    - name: location
+      type: string
+    - name: value
+      type: float64
+    - name: json
+      type: string
+    - name: timestamp
+      type: datetime64(3)
+    - name: _tp_time
+      type: datetime64(3)
+
+- type: check
+  target_name: '601'
+  expected_result:
+  - [error_code:62]
+

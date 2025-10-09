@@ -1,0 +1,50 @@
+tags:
+  - versioned_kv_aggr
+  - native_not_support
+  - bug
+description: aggregation function sum and avg versioned_kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test15_versioned_kv_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test15_versioned_kv_stream(id int, val float) primary key id settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test15_versioned_kv_stream(id, val) values (1, 1), (2, 3), (3, 5)
+    schema:
+      - name: id
+        type: int64
+      - name: val
+        type: float64
+  - type: wait
+    time: 1
+
+  - name: "1508"
+    type: stream
+    query: select median(val), quantile(val, 0.5) from test15_versioned_kv_stream emit periodic 1s
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into test15_versioned_kv_stream(id, val) values (1, 2), (2, 4), (3, 6)
+    schema:
+      - name: id
+        type: int64
+      - name: val
+        type: float64
+  
+  - type: check
+    target_name: "1508"
+    expected_result:
+      - - "3.0"
+        - "3.0"
+      - - "4.0"
+        - "4.0"

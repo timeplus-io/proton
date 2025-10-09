@@ -1,0 +1,111 @@
+tags:
+  - window_aggregation
+
+description: |
+   Test window aggregation query
+   Main steps:
+    1. Query tumble window aggregate by max and group by id, window_start, window_end
+    2. Query hot window aggregate by max and group by id, window_start, window_end
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  # create topic
+  - type: pulsar
+    name: delete
+    topic: test_04
+
+  - type: pulsar
+    name: create
+    topic: test_04
+
+  # create external stream
+  - type: query
+    sql: drop stream if exists ex_pulsar_04
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream ex_pulsar_04
+        (
+          id string,
+          value float
+        )
+        settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_04'
+  - type: wait
+    time: 2
+
+  # query and insert
+  - type: stream
+    name: pulsar-04-tumble
+    query: |
+      select id, max(value) from tumble(ex_pulsar_04, 1s) group by id, window_start order by id
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ex_pulsar_04(id, value) values
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: float32
+    inputs:
+      - ['dev1', 11.1]
+      - ['dev1', 22.2]
+      - ['dev2', 33.3]
+      - ['dev3', 44.4]
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ex_pulsar_04(id, value) values
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: float32
+    inputs:
+      - ['dev1', 100.001]
+      - ['dev2', 400.004]
+      - ['dev3', 700.007]
+      - ['dev1', 200.002]
+      - ['dev3', 600.006]
+      - ['dev2', 300.003]
+      - ['dev3', 500.005]
+
+  - type: wait
+    time: 1
+
+  # For triggering an emit
+  - type: query
+    sql: insert into ex_pulsar_04(id, value) values
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: float32
+    inputs:
+      - ['dev1', 0]
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pulsar-04-tumble
+    expected_result:
+      - ['dev1', 22.2]
+      - ['dev2', 33.3]
+      - ['dev3', 44.4]
+      - ['dev1', 200.002]
+      - ['dev2', 400.004]
+      - ['dev3', 700.007]

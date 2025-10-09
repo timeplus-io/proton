@@ -1,0 +1,52 @@
+tags:
+- create random
+- unstable
+description: create random stream with default generating function, limit the amount
+  of data produced per window, eps > the number of threads
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id int default rand()%4) engine Random()
+    settings eps=10
+- type: wait
+  time: 2
+
+- name: '2215'
+  type: stream
+  query: select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random
+    limit 2 emit periodic 1s) offset 1 settings max_threads=12
+  schema:
+  - name: diff
+    type: int64
+- type: wait
+  time: 1
+
+- type: check
+  target_name: '2215'
+  expected_result:
+  - [10]
+
+- type: wait
+  time: 1
+
+- name: '2216'
+  type: stream
+  query: select cnt - lag(cnt, 1) as diff from (select count(1) as cnt from test22_create_random
+    limit 2 emit periodic 2s) offset 1 settings max_threads=12
+  schema:
+  - name: diff
+    type: int64
+- type: wait
+  time: 1
+
+- type: check
+  target_name: '2216'
+  expected_result:
+  - [20]

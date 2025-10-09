@@ -1,11 +1,10 @@
 version: "3.7"
 services:
   proton-server:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: timeplus/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-server
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server/datas:/var/lib/proton
       - ../../proton-server/log:/var/log/proton-server
     ports:
@@ -34,11 +33,10 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-server1:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: timeplus/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-server1
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server1/datas:/var/lib/proton
       - ../../proton-server1/log:/var/log/proton-server
     ports:
@@ -67,11 +65,10 @@ services:
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
 
   proton-server2:
-    image: ghcr.io/timeplus-io/proton:${PROTON_VERSION:-develop}
+    image: timeplus/proton:${PROTON_VERSION:-develop}
     pull_policy: always
     container_name: proton-server2
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server2/datas:/var/lib/proton
       - ../../proton-server2/log:/var/log/proton-server
     ports:

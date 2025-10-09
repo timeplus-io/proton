@@ -13,22 +13,32 @@ namespace ErrorCodes
 extern const int CANNOT_CREATE_DIRECTORY;
 }
 
-StorageExternalStreamImpl::StorageExternalStreamImpl(IStorage * storage, ExternalStreamSettingsPtr settings_, const ContextPtr & context)
-    : IStorage(storage->getStorageID())
+StorageExternalStreamImpl::StorageExternalStreamImpl(
+    StorageID storage_id, StorageInMemoryMetadata storage_metadata, ExternalStreamSettingsPtr settings_, const ContextPtr & context)
+    : IStorage(std::move(storage_id))
     , settings(std::move(settings_))
     , tmpdir(
           fs::path(context->getConfigRef().getString("tmp_path", fs::temp_directory_path())) / "external_streams"
           / toString(getStorageID().uuid))
-    , logger(&Poco::Logger::get(getLoggerName()))
+    , logger(getLogger(getLoggerName()))
 {
     /// Make it easier for people to ingest data from external streams. A lot of times people didn't see data coming
     /// only because the external stream does not have all the fields.
     if (!settings->input_format_skip_unknown_fields.changed)
         settings->input_format_skip_unknown_fields = true;
 
-    inferDataFormat(*storage);
-    adjustSettingsForDataFormat();
+    if (storage_metadata.columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
+    {
+        LOG_INFO(logger, "yeah");
+    }
+    setInMemoryMetadata(storage_metadata);
+}
+
+void StorageExternalStreamImpl::startup()
+{
+    inferDataFormat();
     assert(!data_format.empty());
+    adjustSettingsForDataFormat();
 }
 
 void StorageExternalStreamImpl::createTempDirIfNotExists() const
@@ -61,27 +71,35 @@ String StorageExternalStreamImpl::getLoggerName() const
 
 FormatSettings StorageExternalStreamImpl::getFormatSettings(const ContextPtr & context) const
 {
-    auto ret = settings->getFormatSettings(context);
-    /// This is needed otherwise using an external stream with ProtobufSingle format as the target stream
-    /// of a MV (or in `INSERT ... SELECT ...`), i.e. more than one rows sent to the stream, exception will be thrown.
-    ret.protobuf.allow_multiple_rows_without_delimiter = true;
-    /// In case of kafka schema registry is used, the topic name needs to be passed to the output format to fetch the schema.
-    ret.kafka_schema_registry.topic_name = settings->topic;
-    return ret;
+    return settings->getFormatSettings(context);
 }
 
-void StorageExternalStreamImpl::inferDataFormat(const IStorage & storage)
+NamesAndTypesList StorageExternalStreamImpl::getPhysicalColumns() const
+{
+    auto columns = getInMemoryMetadata().getColumns().getOrdinary();
+    auto virtuals = getVirtuals();
+    for (auto it = columns.begin(); it != columns.end();)
+    {
+        const auto & column = *it;
+        if (virtuals.contains(column.name))
+            it = columns.erase(it);
+        else
+            ++it;
+    }
+    return columns;
+}
+
+void StorageExternalStreamImpl::inferDataFormat()
 {
     data_format = settings->data_format.value;
     if (!data_format.empty())
         return;
 
+    auto column_names_and_types = getPhysicalColumns();
     /// If there is only one column and its type is a string type, use RawBLOB. Use JSONEachRow otherwise.
-    auto column_names_and_types{storage.getInMemoryMetadata().getColumns().getOrdinary()};
     if (column_names_and_types.size() == 1)
     {
-        auto type = column_names_and_types.begin()->type->getTypeId();
-        if (type == TypeIndex::String || type == TypeIndex::FixedString)
+        if (WhichDataType{column_names_and_types.front().type}.isStringOrFixedString())
         {
             data_format = "RawBLOB";
             return;
@@ -131,6 +149,18 @@ void StorageExternalStreamImpl::read(
 
     auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName(), query_info.storage_limits);
     query_plan.addStep(std::move(read_step));
+}
+
+Pipe StorageExternalStreamImpl::read(
+    const Names & /*column_names*/,
+    const StorageSnapshotPtr & /*storage_snapshot*/,
+    SelectQueryInfo & /*query_info*/,
+    ContextPtr /*context*/,
+    QueryProcessingStage::Enum /*processed_stage*/,
+    size_t /*max_block_size*/,
+    size_t /*num_streams*/)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method read is not supported by storage {}", getName());
 }
 
 }

@@ -1,0 +1,65 @@
+description: |
+  Test base select (External Stream -> MV -> Target Stream)
+
+tags:
+  - skip # skip temproraliy
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q0
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q0
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      CREATE EXTERNAL STREAM target(
+      auction int64, 
+      bidder int64, 
+      price int64, 
+      date_time datetime64,
+      extra string) 
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q0', 
+              data_format='JSONEachRow',
+              one_message_per_row=false;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT auction, bidder, price, date_time, extra 
+      FROM bid
+      SETTINGS seek_to = 'earliest';
+
+  - type: wait
+    time: 180
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 40

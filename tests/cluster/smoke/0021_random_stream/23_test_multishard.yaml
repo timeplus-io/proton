@@ -1,0 +1,53 @@
+tags:
+- monotonic test
+description: test multishard
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+
+- type: query
+  sql: drop stream if exists test22_stream
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id int default monotonic(2), value int) engine Random() settings eps=10, shards=10
+
+- type: query
+  sql: create stream test22_stream(shard int)
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test22_stream(shard) select _tp_shard from test22_create_random limit 10
+  schema:
+  - name: _tp_shard
+    type: int8
+- type: wait
+  time: 4
+
+- name: '2231'
+  type: stream
+  query: select shard from table(test22_stream) order by shard
+  schema:
+  - name: shard
+    type: int32
+
+- type: check
+  target_name: '2231'
+  expected_result:
+  - ['0']
+  - ['1']
+  - ['2']
+  - ['3']
+  - ['4']
+  - ['5']
+  - ['6']
+  - ['7']
+  - ['8']
+  - ['9']

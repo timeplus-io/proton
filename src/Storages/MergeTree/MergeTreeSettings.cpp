@@ -1,10 +1,15 @@
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Disks/getOrCreateDiskFromAST.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTFunction.h>
-#include <Common/Exception.h>
+#include <Parsers/FieldFromAST.h>
+#include <Core/Field.h>
 #include <Core/Settings.h>
+#include <Common/Exception.h>
+#include <Common/assert_cast.h>
+#include <Common/logger_useful.h>
 
 
 namespace DB
@@ -37,24 +42,42 @@ void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::U
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::UNKNOWN_SETTING)
-            /// proton: starts
             e.addMessage("in the current engine config");
-            /// proton: ends
         throw;
     }
 }
 
-void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def)
+void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def, ContextPtr context)
 {
     if (storage_def.settings)
     {
         try
         {
-            applyChanges(storage_def.settings->changes);
+            auto changes = storage_def.settings->changes;
+            for (auto & [name, value] : changes)
+            {
+                CustomType custom;
+                if (value.tryGet<CustomType>(custom) && 0 == strcmp(custom.getTypeName(), "AST"))
+                {
+                    auto ast = dynamic_cast<const FieldFromASTImpl &>(custom.getImpl()).ast;
+                    if (ast && isDiskFunction(ast))
+                    {
+                        const auto & ast_function = assert_cast<const ASTFunction &>(*ast);
+                        auto disk_name = getOrCreateDiskFromDiskAST(ast_function, context);
+                        LOG_TRACE(getLogger("MergeTreeSettings"), "Created custom disk {}", disk_name);
+                        value = disk_name;
+                        break;
+                    }
+                }
+            }
+
+            applyChanges(changes);
         }
         catch (Exception & e)
         {
-            if (e.code() == ErrorCodes::UNKNOWN_SETTING)
+            /// proton: starts.
+            if (storage_def.engine && e.code() == ErrorCodes::UNKNOWN_SETTING)
+            /// proton: ends.
                 e.addMessage("for storage " + storage_def.engine->name);
             throw;
         }
@@ -83,7 +106,6 @@ void MergeTreeSettings::sanityCheck(const Settings & query_settings) const
     if (number_of_free_entries_in_pool_to_execute_mutation >
         query_settings.background_pool_size * query_settings.background_merges_mutations_concurrency_ratio)
     {
-        /// proton: starts
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "The value of 'number_of_free_entries_in_pool_to_execute_mutation' setting"
             " ({}) (default values are defined in <merge_tree> section of config.xml"
             " or the value can be specified per stream in SETTINGS section of CREATE STREAM query)"
@@ -92,13 +114,11 @@ void MergeTreeSettings::sanityCheck(const Settings & query_settings) const
             " This indicates incorrect configuration because mutations cannot work with these settings.",
             number_of_free_entries_in_pool_to_execute_mutation,
             query_settings.background_pool_size * query_settings.background_merges_mutations_concurrency_ratio);
-        /// proton: ends
     }
 
     if (number_of_free_entries_in_pool_to_lower_max_size_of_merge >
         query_settings.background_pool_size * query_settings.background_merges_mutations_concurrency_ratio)
     {
-        /// proton: starts
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "The value of 'number_of_free_entries_in_pool_to_lower_max_size_of_merge' setting"
             " ({}) (default values are defined in <merge_tree> section of config.xml"
             " or the value can be specified per stream in SETTINGS section of CREATE STREAM query)"
@@ -107,7 +127,6 @@ void MergeTreeSettings::sanityCheck(const Settings & query_settings) const
             " This indicates incorrect configuration because the maximum size of merge will be always lowered.",
             number_of_free_entries_in_pool_to_lower_max_size_of_merge,
             query_settings.background_pool_size * query_settings.background_merges_mutations_concurrency_ratio);
-        /// proton: ends
     }
 
     // The min_index_granularity_bytes value is 1024 b and index_granularity_bytes is 10 mb by default.
@@ -134,6 +153,30 @@ void MergeTreeSettings::sanityCheck(const Settings & query_settings) const
             "min_bytes_to_rebalance_partition_over_jbod: {} is lower than specified max_bytes_to_merge_at_max_space_in_pool / 150: {}",
             min_bytes_to_rebalance_partition_over_jbod,
             max_bytes_to_merge_at_max_space_in_pool / 1024);
+    }
+
+    if (max_cleanup_delay_period < cleanup_delay_period)
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "The value of max_cleanup_delay_period setting ({}) must be greater than the value of cleanup_delay_period setting ({})",
+            max_cleanup_delay_period, cleanup_delay_period);
+    }
+
+    if (max_merge_selecting_sleep_ms < merge_selecting_sleep_ms)
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "The value of max_merge_selecting_sleep_ms setting ({}) must be greater than the value of merge_selecting_sleep_ms setting ({})",
+            max_merge_selecting_sleep_ms, merge_selecting_sleep_ms);
+    }
+
+    if (merge_selecting_sleep_slowdown_factor < 1.f)
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "The value of merge_selecting_sleep_slowdown_factor setting ({}) cannot be less than 1.0",
+            merge_selecting_sleep_slowdown_factor);
     }
 }
 }

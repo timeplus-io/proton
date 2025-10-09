@@ -1,0 +1,153 @@
+tags:
+  - query_state
+description: multiple times recover global aggregation with group by from a state
+  checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream2
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream2 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1963'
+    query_id: '1963'
+    type: stream
+    query: subscribe to select id, count(*), sum(value), avg(value), min(value), max(value)
+      from test19_state_stream2 group by id emit periodic 1s settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: sum(value)
+        type: float64
+      - name: avg(value)
+        type: float64
+      - name: min(value)
+        type: float32
+      - name: max(value)
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream2(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'),
+      ('dev2', 'ca', 58.3, '2020-02-02 20:00:05')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1963'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream2(id, location, value, timestamp) values ('dev2',
+      'ca', 80, '2020-02-02 20:00:02'), ('dev8', 'ca', 67, '2020-02-02 20:00:02'), ('dev8',
+      'ca', 77, '2020-02-02 20:00:08')
+
+  - type: wait
+    time: 2
+
+  - name: 1963-1
+    query_id: 1963-1
+    type: stream
+    query: recover from '1963'
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: sum(value)
+        type: float64
+      - name: avg(value)
+        type: float64
+      - name: min(value)
+        type: float32
+      - name: max(value)
+        type: float32
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='1963' sync
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test19_state_stream2(id, location, value, timestamp) values ('dev3',
+      'ca', 57.3, '2020-02-02 20:00:07'), ('dev3', 'ca', 66, '2020-02-02 20:00:08'),
+      ('dev4', 'ca', 76, '2020-02-02 20:00:09')
+
+  - type: wait
+    time: 2
+
+  - name: 1963-2
+    query_id: 1963-2
+    type: stream
+    query: recover from '1963'
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: sum(value)
+        type: float64
+      - name: avg(value)
+        type: float64
+      - name: min(value)
+        type: float32
+      - name: max(value)
+        type: float32
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='1963' sync
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: unsubscribe to '1963'
+
+  - type: check
+    target_name: '1963'
+    mode: random
+    expected_result:
+      - [ dev1, '2', '123.3', '61.65', '57.3', '66' ]
+      - [ dev2, '1', '58.3', '58.3', '58.3', '58.3' ]
+
+  - type: check
+    target_name: 1963-1
+    mode: random
+    expected_result:
+      - [ dev1, '2', '123.3', '61.65', '57.3', '66' ]
+      - [ dev2, '2', '138.3', '69.15', '58.3', '80' ]
+      - [ dev8, '2', '144', '72', '67', '77' ]
+
+  - type: check
+    target_name: 1963-2
+    mode: random
+    expected_result:
+      - [ dev1, '2', '123.3', '61.65', '57.3', '66' ]
+      - [ dev2, '2', '138.3', '69.15', '58.3', '80' ]
+      - [ dev8, '2', '144', '72', '67', '77' ]
+      - [ dev3, '2', '123.3', '61.65', '57.3', '66' ]
+      - [ dev4, '1', '76', '76', '76', '76' ]

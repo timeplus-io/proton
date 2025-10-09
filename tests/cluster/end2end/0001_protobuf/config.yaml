@@ -1,0 +1,5 @@
+name: protobuf
+description: Tests covering the external stream e2e cases with protobuf format.
+tags:
+  - e2e
+

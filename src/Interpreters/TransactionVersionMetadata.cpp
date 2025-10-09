@@ -43,7 +43,7 @@ inline static CSN getCSNAndAssert(TIDHash tid_hash, std::atomic<CSN> & csn, cons
 VersionMetadata::VersionMetadata()
 {
     /// It would be better to make it static, but static loggers do not work for some reason (initialization order?)
-    log = &Poco::Logger::get("VersionMetadata");
+    log = getLogger("VersionMetadata");
 }
 
 /// It can be used for introspection purposes only
@@ -243,6 +243,9 @@ bool VersionMetadata::canBeRemoved()
     {
         /// Avoid access to Transaction log if transactions are not involved
 
+        if (creation_csn.load(std::memory_order_relaxed) == Tx::RolledBackCSN)
+            return true;
+
         TIDHash removal_lock = removal_tid_lock.load(std::memory_order_relaxed);
         if (!removal_lock)
             return false;
@@ -380,8 +383,9 @@ void VersionMetadata::read(ReadBuffer & buf)
 
         if (name == CREATION_CSN_STR)
         {
-            chassert(!creation_csn);
-            creation_csn = read_csn();
+            auto new_val = read_csn();
+            chassert(!creation_csn || (creation_csn == new_val && creation_csn == Tx::PrehistoricCSN));
+            creation_csn = new_val;
         }
         else if (name == REMOVAL_TID_STR)
         {

@@ -1,0 +1,129 @@
+tags:
+  - changelog
+  - table(versioned_kv)
+  - inner join
+  - not implemented
+  - skip
+description: changelog inner join table(versioned_kv)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: insert into test14_table_2(ii, jj, kk) values(1, 2, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table_2(ii, jj, kk) values(1, 3, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table_2(ii, jj, kk) values(1, 5, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table_2(ii, jj, kk) values(5, 2, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table_2(ii, jj, kk) values(2, 7, 'h');
+
+  - type: wait
+    time: 3
+
+  - name: "14124"
+    type: stream
+    query:
+      select i, j, k, ii, jj, kk, _tp_delta from test14_stream_2 as a inner join
+      table(test14_table_2) as b on a.j = b.jj;
+    schema:
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+      - name: ii
+        type: int64
+      - name: jj
+        type: int64
+      - name: kk
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream_2(i, j, k) values(1, 2, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream_2(i, j, k) values(1, 3, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream_2(i, j, k) values(5, 2, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream_2(i, j, k) values(1, 7, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream_2(i, j, k, _tp_delta) values(1, 2, 'a', -1);
+
+  - type: check
+    target_name: "14124"
+    expected_result:
+      - - "1"
+        - "2"
+        - a
+        - "5"
+        - "2"
+        - c
+        - "1"
+      - - "1"
+        - "3"
+        - a
+        - "1"
+        - "3"
+        - b
+        - "1"
+      - - "5"
+        - "2"
+        - a
+        - "5"
+        - "2"
+        - c
+        - "1"
+      - - "1"
+        - "7"
+        - a
+        - "2"
+        - "7"
+        - h
+        - "1"
+      - - "1"
+        - "2"
+        - a
+        - "5"
+        - "2"
+        - c
+        - "-1"

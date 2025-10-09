@@ -1,13 +1,9 @@
 #pragma once
 
 #include <Processors/IProcessor.h>
+#include <Common/Logger.h>
 
 #include <queue>
-
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
@@ -84,12 +80,16 @@ private:
     /// @returns true if has request checkpoint handling.
     bool updateAndRequestCheckpoint(InputPortWithStatus & input_with_data, Chunk & chunk);
 
+    void checkAndLogSlowCheckpointAligning();
+
     /// Used in `updateAndAlignWatermark`
     Int64 aligned_watermark = INVALID_WATERMARK;
     /// Used in `updateAndRequestCheckpoint`
     UInt8 num_requested_checkpoint = 0;
+    Stopwatch ckpt_aligning_stopwatch;
+    Int64 last_ckpt_aligning_log_ts = 0;
 
-    Poco::Logger * log;
+    LoggerPtr logger;
 };
 
 /// @brief Resize 1 -> N

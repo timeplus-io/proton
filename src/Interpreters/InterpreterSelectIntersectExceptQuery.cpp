@@ -81,7 +81,10 @@ InterpreterSelectIntersectExceptQuery::InterpreterSelectIntersectExceptQuery(
     nested_interpreters.resize(num_children);
 
     for (size_t i = 0; i < num_children; ++i)
+    {
         nested_interpreters[i] = buildCurrentChildInterpreter(children.at(i));
+        uses_view_source |= nested_interpreters[i]->usesViewSource();
+    }
 
     Blocks headers(num_children);
     for (size_t query_num = 0; query_num < num_children; ++query_num)
@@ -139,6 +142,7 @@ void InterpreterSelectIntersectExceptQuery::buildQueryPlan(QueryPlan & query_pla
     auto step = std::make_unique<IntersectOrExceptStep>(std::move(data_streams), final_operator, max_threads);
     query_plan.unitePlans(std::move(step), std::move(plans));
 
+    addAdditionalPostFilter(query_plan);
     query_plan.addInterpreterContext(context);
 }
 
@@ -220,6 +224,12 @@ Streaming::DataStreamSemanticEx InterpreterSelectIntersectExceptQuery::getDataSt
     return hash_semantic;
 }
 
+void InterpreterSelectIntersectExceptQuery::assertNoNonDeterministicFunctions(const Names & required, std::string_view msg_prefix) const
+{
+    for (const auto & interpreter : nested_interpreters)
+        interpreter->assertNoNonDeterministicFunctions(required, msg_prefix);
+}
+
 std::set<String> InterpreterSelectIntersectExceptQuery::getGroupByColumns() const
 {
     std::set<String> group_by_columns;
@@ -232,6 +242,16 @@ std::set<String> InterpreterSelectIntersectExceptQuery::getGroupByColumns() cons
         group_by_columns.insert(nested_group_by.begin(), nested_group_by.end());
     }
     return group_by_columns;
+}
+
+bool InterpreterSelectIntersectExceptQuery::isConsistentWithoutCheckpoint() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (!interpreter->isConsistentWithoutCheckpoint())
+            return false;
+    }
+    return true;
 }
 /// proton: ends
 

@@ -4,11 +4,8 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Interpreters/Streaming/TimeTransformHelper.h>
-#include <Interpreters/TreeRewriter.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/Streaming/ASTEmitQuery.h>
 #include <Processors/Chunk.h>
+#include <Processors/Transforms/Streaming/HopWindowHelper.h>
 #include <Storages/SelectQueryInfo.h>
 #include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
@@ -27,163 +24,82 @@ extern const int INCORRECT_QUERY;
 
 namespace Streaming
 {
-namespace
+
+String WatermarkStamper::getName() const
 {
-void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkStamperParams & params)
-{
-    if (!emit_query)
-    {
-        return;
-    }
-
-    auto emit = emit_query->as<ASTEmitQuery>();
-    assert(emit);
-
-    if (emit->periodic_interval)
-    {
-        if (emit->delay_interval)
-            throw Exception("Streaming doesn't support having both delay and periodic emit", ErrorCodes::INCORRECT_QUERY);
-
-        if (emit->timeout_interval)
-            throw Exception("Streaming doesn't support having both timeout and periodic emit", ErrorCodes::INCORRECT_QUERY);
-
-        params.periodic_interval = extractInterval(emit->periodic_interval->as<ASTFunction>());
-
-        if (params.window_params)
-            params.mode = emit->on_update ? EmitMode::PeriodicWatermarkOnUpdate : EmitMode::PeriodicWatermark;
-        else
-            params.mode = emit->on_update ? EmitMode::PeriodicOnUpdate : EmitMode::Periodic;
-    }
-    else if (emit->after_watermark)
-    {
-        if (!params.window_params)
-            throw Exception(
-                ErrorCodes::INCORRECT_QUERY, "Watermark emit is only supported in streaming queries with streaming window function");
-
-        params.mode = EmitMode::Watermark;
-    }
-    else if (emit->on_update)
-    {
-        if (params.window_params)
-            params.mode = EmitMode::WatermarkOnUpdate;
-        else
-            params.mode = EmitMode::OnUpdate;
-    }
-    else
-    {
-        params.mode = EmitMode::None;
-    }
-
-    if (emit->timeout_interval)
-        params.timeout_interval = extractInterval(emit->timeout_interval->as<ASTFunction>());
-
-    if (emit->delay_interval)
-        params.delay_interval = extractInterval(emit->delay_interval->as<ASTFunction>());
-
-    params.repeat = emit->repeat;
-}
-}
-
-WatermarkStamperParams::WatermarkStamperParams(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, WindowParamsPtr window_params_)
-    : window_params(std::move(window_params_))
-{
-    const auto * select_query = query->as<ASTSelectQuery>();
-    assert(select_query);
-
-    mergeEmitQuerySettings(select_query->emit(), *this);
-
-    if (syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
-    {
-        /// For streaming non-aggregation query
-        if (mode != EmitMode::Tail && mode != EmitMode::None)
-            throw Exception("Streaming tail mode doesn't support any watermark or periodic emit", ErrorCodes::INCORRECT_QUERY);
-
-        /// Set default emit mode
-        if (mode == EmitMode::None)
-            mode = EmitMode::Tail;
-    }
-    else
-    {
-        /// For streaming aggregation query
-        if (mode == EmitMode::Tail)
-            throw Exception("Streaming aggregation doesn't support tail emit", ErrorCodes::INCORRECT_QUERY);
-
-        /// Set default emit mode
-        if (mode == EmitMode::None)
-        {
-            if (window_params)
-            {
-                mode = EmitMode::Watermark;
-            }
-            else
-            {
-                /// If `PERIODIC INTERVAL ...` is missing in `EMIT STREAM` query
-                mode = EmitMode::Periodic;
-                periodic_interval.interval = ProtonConsts::DEFAULT_PERIODIC_INTERVAL.first;
-                periodic_interval.unit = ProtonConsts::DEFAULT_PERIODIC_INTERVAL.second;
-            }
-        }
-    }
+    return params.mode == EmitMode::Periodic ? "PeriodicWatermark" : "Watermark";
 }
 
 void WatermarkStamper::preProcess(const Block & header)
 {
     switch (params.mode)
     {
-        case EmitMode::Periodic:
-        case EmitMode::PeriodicOnUpdate:
+        case EmitMode::None:
+        case EmitMode::Tail:
+        case EmitMode::AfterKeyExpire:
         {
-            initPeriodicTimer(params.periodic_interval);
-            break;
-        }
-        case EmitMode::PeriodicWatermark:
-        case EmitMode::PeriodicWatermarkOnUpdate:
-        {
-            initPeriodicTimer(params.periodic_interval);
-            [[fallthrough]];
-        }
-        case EmitMode::Watermark:
-        case EmitMode::WatermarkOnUpdate:
-        {
-            assert(params.window_params);
-            if (!header.has(params.window_params->desc->argument_names[0]))
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "The event time columns not found");
-
-            time_col_pos = header.getPositionByName(params.window_params->desc->argument_names[0]);
             break;
         }
         default:
+        {
+            if (params.periodic_interval)
+                initPeriodicTimer(params.periodic_interval);
+
+            if (params.window_params)
+            {
+                if (!header.has(params.window_params->desc->argument_names[0]))
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "The event time columns not found");
+
+                time_col_pos = header.getPositionByName(params.window_params->desc->argument_names[0]);
+            }
             break;
+        }
     }
 
     /// WITH EMIT TIMEOUT
-    if (params.timeout_interval)
+    if (params.mode != EmitMode::AfterKeyExpire && params.timeout_interval)
         initTimeoutTimer(params.timeout_interval);
 }
 
 ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermark(Int64 event_ts) const
 {
-    assert(event_ts != INVALID_WATERMARK);
+    chassert(event_ts != INVALID_WATERMARK);
     if (params.delay_interval)
-    {
-        auto event_ts_bias = addTime(
+        event_ts = addTime(
             event_ts,
             params.delay_interval.unit,
             -1 * params.delay_interval.interval,
             *params.window_params->time_zone,
             params.window_params->time_scale);
 
-        return calculateWatermarkImpl(event_ts_bias);
+    /// For tumble/hop window, by default we allow time skew within the same window
+    chassert(params.window_params);
+    switch (params.window_params->type)
+    {
+        case WindowType::Tumble:
+        {
+            auto & window_params = params.window_params->as<TumbleWindowParams &>();
+            return toStartTime(
+                event_ts, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
+        }
+        case WindowType::Hop:
+        {
+            auto & window_params = params.window_params->as<HopWindowParams &>();
+            auto last_finalized_window = HopWindowHelper::getLastFinalizedWindow(event_ts, window_params);
+            return last_finalized_window.isValid() ? last_finalized_window.end : MIN_WATERMARK;
+        }
+        default:
+        {
+            return event_ts;
+        }
     }
-    else
-        return calculateWatermarkImpl(event_ts);
 }
 
 ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermarkPerRow(Int64 event_ts) const
 {
     assert(event_ts != INVALID_WATERMARK);
     if (params.delay_interval)
-       return addTime(
+        return addTime(
             event_ts,
             params.delay_interval.unit,
             -1 * params.delay_interval.interval,
@@ -195,67 +111,42 @@ ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermarkPerRow(Int64 event_ts) c
 
 void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
 {
-    assert(!chunk.hasRows());
+    chassert(!chunk.hasRows());
 
-    switch (params.mode)
+    if (useEventTime() && max_event_ts != INVALID_WATERMARK)
     {
-        case EmitMode::Periodic:
-        case EmitMode::PeriodicOnUpdate:
+        auto muted_watermark_ts
+            = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts) : calculateWatermark(max_event_ts);
+        if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
         {
-            processPeriodic(chunk, /*use_processing_time*/true);
-            break;
+            watermark_ts = muted_watermark_ts;
+            chunk.setWatermark(watermark_ts);
         }
-        case EmitMode::OnUpdate:
-        {
-            chunk.setWatermark(MonotonicNanoseconds::now());
-            break;
-        }
-        case EmitMode::Watermark:
-        {
-            if (max_event_ts != INVALID_WATERMARK)
-            {
-                auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
-                                                                                        : calculateWatermark(max_event_ts);
-                if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
-                {
-                    watermark_ts = muted_watermark_ts;
-                    chunk.setWatermark(watermark_ts);
-                }
-            }
-            break;
-        }
-        case EmitMode::PeriodicWatermark:
-        case EmitMode::PeriodicWatermarkOnUpdate:
-        {
-            if (max_event_ts != INVALID_WATERMARK)
-            {
-                auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
-                                                                                            : calculateWatermark(max_event_ts);
-                if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
-                    watermark_ts = muted_watermark_ts;
-            }
-            processPeriodic(chunk, /*use_processing_time*/ false);
-            break;
-        }
-        default:
-            break;
     }
+
+    /// Always emit a watermark for emit on update
+    if (params.mode == EmitMode::OnUpdate && !chunk.hasWatermark())
+        chunk.setWatermark(useEventTime() ? watermark_ts : MonotonicNanoseconds::now());
+
+    processPeriodic(chunk);
 }
 
 void WatermarkStamper::processWithMutedWatermark(Chunk & chunk)
 {
     /// NOTE: In order to avoid that when there is only backfill data and no new data, the window aggregation don't emit results after the backfill is completed.
     /// Even mute watermark, we still need collect `max_event_ts` which will be used in "processAfterUnmuted()" to emit a watermark as soon as the backfill is completed
-    if (chunk.hasRows() && time_col_pos >= 0 && params.window_params)
+    if (useEventTime() && chunk.hasRows())
     {
+        chassert(params.window_params);
+        /// FIXME: handle ColumnSparse/ColumnConst
+        auto time_col = chunk.getColumns()[time_col_pos]->convertToFullColumnIfSparse()->convertToFullColumnIfConst();
         if (params.window_params->time_col_is_datetime64)
             max_event_ts = std::max<Int64>(
                 max_event_ts,
-                *std::ranges::max_element(assert_cast<const ColumnDateTime64 &>(*chunk.getColumns()[time_col_pos]).getData()));
+                *std::ranges::max_element(assert_cast<const ColumnDateTime64 &>(*time_col).getData()));
         else
             max_event_ts = std::max<Int64>(
-                max_event_ts,
-                *std::ranges::max_element(assert_cast<const ColumnDateTime &>(*chunk.getColumns()[time_col_pos]).getData()));
+                max_event_ts, *std::ranges::max_element(assert_cast<const ColumnDateTime &>(*time_col).getData()));
     }
 
     processTimeout(chunk);
@@ -264,64 +155,29 @@ void WatermarkStamper::processWithMutedWatermark(Chunk & chunk)
 
 void WatermarkStamper::process(Chunk & chunk)
 {
-    switch (params.mode)
-    {
-        case EmitMode::PeriodicOnUpdate:
-            [[fallthrough]]; /// Emit only keyed and changed states for aggregating
-        case EmitMode::Periodic:
-        {
-            processPeriodic(chunk, /*use_processing_time=*/true);
-            break;
-        }
-        case EmitMode::OnUpdate:
-        {
-            if (chunk.hasRows())
-                chunk.setWatermark(MonotonicNanoseconds::now());
-            break;
-        }
-        case EmitMode::Watermark:
-        {
-            processWatermark(chunk);
-            break;
-        }
-        case EmitMode::PeriodicWatermarkOnUpdate:
-            [[fallthrough]]; /// Emit only keyed and changed states for aggregating
-        case EmitMode::PeriodicWatermark:
-        {
-            processWatermark(chunk);
-            /// Clear watermark and set it in `processPeriodic()`
-            chunk.clearWatermark();
-            processPeriodic(chunk, /*use_processing_time=*/false);
-            break;
-        }
-        case EmitMode::WatermarkOnUpdate:
-        {
-            processWatermark(chunk);
-            /// Always emit the watermark for each batch of events
-            if (chunk.hasRows())
-                chunk.setWatermark(watermark_ts);
-            break;
-        }
-        default:
-            break;
-    }
-
+    processWatermark(chunk);
+    processPeriodic(chunk);
     processTimeout(chunk);
     logLateEvents();
 }
 
-void WatermarkStamper::processPeriodic(Chunk & chunk, bool use_processing_time)
+void WatermarkStamper::processPeriodic(Chunk & chunk)
 {
-    assert(next_periodic_emit_ts);
+    if (next_periodic_emit_ts == 0)
+        return;
 
     /// FIXME: use a Timer.
     auto now = MonotonicNanoseconds::now();
     if (now < next_periodic_emit_ts)
+    {
+        /// If enabled periodic emit, need clear watermark after `processWatermark()`
+        chunk.clearWatermark();
         return;
+    }
 
     next_periodic_emit_ts = now + periodic_interval;
 
-    chunk.setWatermark(use_processing_time ? now : watermark_ts);
+    chunk.setWatermark(useEventTime() ? watermark_ts : now);
 }
 
 void WatermarkStamper::processTimeout(Chunk & chunk)
@@ -346,7 +202,7 @@ void WatermarkStamper::processTimeout(Chunk & chunk)
     next_timeout_emit_ts = now + timeout_interval;
 
     chunk.setWatermark(TIMEOUT_WATERMARK);
-    LOG_DEBUG(log, "Timeout emit time={}, rows={}", now, chunk.getNumRows());
+    LOG_DEBUG(logger, "Timeout emit time={}, rows={}", now, chunk.getNumRows());
 }
 
 void WatermarkStamper::logLateEvents()
@@ -355,7 +211,12 @@ void WatermarkStamper::logLateEvents()
     {
         if (MonotonicSeconds::now() - last_logged_late_events_ts >= LOG_LATE_EVENTS_INTERVAL_SECONDS)
         {
-            LOG_INFO(log, "Found {} late events for data. Last projected watermark={}", late_events, watermark_ts);
+            LOG_WARNING(
+                logger,
+                "Found {} late events for data (total={}). Last projected watermark={}",
+                late_events - last_logged_late_events,
+                late_events,
+                watermark_ts);
             last_logged_late_events_ts = MonotonicSeconds::now();
             last_logged_late_events = late_events;
         }
@@ -365,18 +226,17 @@ void WatermarkStamper::logLateEvents()
 template <typename TimeColumnType, bool apply_watermark_per_row>
 void WatermarkStamper::processWatermarkImpl(Chunk & chunk)
 {
-    if (!chunk.hasRows())
-        return;
-
-    assert(params.window_params);
+    chassert(params.window_params);
 
     Int64 event_ts_watermark = watermark_ts;
 
     /// [Process chunks]
-    /// 1) filter and collect late events by @param watermark_ts
+    /// 1) filter and collect late events by watermark_ts
     /// 2) update max event timestamp
     auto columns = chunk.detachColumns();
-    const auto & time_vec = assert_cast<const TimeColumnType &>(*columns[time_col_pos]).getData();
+    /// FIXME: handle ColumnSparse/ColumnConst
+    auto time_col = columns[time_col_pos]->convertToFullColumnIfSparse()->convertToFullColumnIfConst();
+    const auto & time_vec = assert_cast<const TimeColumnType &>(*time_col).getData();
 
     /// FIXME, use simple FilterTransform to do this ?
     auto rows = time_vec.size();
@@ -424,49 +284,54 @@ void WatermarkStamper::processWatermarkImpl(Chunk & chunk)
 
 void WatermarkStamper::processWatermark(Chunk & chunk)
 {
-    assert(params.window_params);
-    if (params.window_params->type == WindowType::Session)
-    {
-        if (params.window_params->time_col_is_datetime64)
-            processWatermarkImpl<ColumnDateTime64, true>(chunk);
-        else
-            processWatermarkImpl<ColumnDateTime, true>(chunk);
-    }
-    else
-    {
-        if (params.window_params->time_col_is_datetime64)
-            processWatermarkImpl<ColumnDateTime64, false>(chunk);
-        else
-            processWatermarkImpl<ColumnDateTime, false>(chunk);
-    }
-}
+    if (!chunk.hasRows())
+        return;
 
-Int64 WatermarkStamper::calculateWatermarkImpl(Int64 event_ts) const
-{
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "calculateWatermarkImpl() not implemented in {}", getName());
+    if (useEventTime())
+    {
+        chassert(params.window_params);
+        if (params.window_params->type == WindowType::Session)
+        {
+            if (params.window_params->time_col_is_datetime64)
+                processWatermarkImpl<ColumnDateTime64, true>(chunk);
+            else
+                processWatermarkImpl<ColumnDateTime, true>(chunk);
+        }
+        else
+        {
+            if (params.window_params->time_col_is_datetime64)
+                processWatermarkImpl<ColumnDateTime64, false>(chunk);
+            else
+                processWatermarkImpl<ColumnDateTime, false>(chunk);
+        }
+    }
+
+    /// Always emit a watermark for emit on update
+    if (params.mode == EmitMode::OnUpdate && !chunk.hasWatermark())
+        chunk.setWatermark(useEventTime() ? watermark_ts : MonotonicNanoseconds::now());
 }
 
 void WatermarkStamper::initPeriodicTimer(const WindowInterval & interval)
 {
-    if (interval.unit > IntervalKind::Day)
+    if (interval.unit > IntervalKind::Kind::Day)
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "The maximum interval kind of streaming periodic emit policy is day, but got {}",
             magic_enum::enum_name(interval.unit));
 
-    periodic_interval = BaseScaleInterval::toBaseScale(interval).toIntervalKind(IntervalKind::Nanosecond);
+    periodic_interval = BaseScaleInterval::toBaseScale(interval).toIntervalKind(IntervalKind::Kind::Nanosecond);
     next_periodic_emit_ts = MonotonicNanoseconds::now() + periodic_interval;
 }
 
 void WatermarkStamper::initTimeoutTimer(const WindowInterval & interval)
 {
-    if (interval.unit > IntervalKind::Day)
+    if (interval.unit > IntervalKind::Kind::Day)
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "The maximum interval kind of emit timeout is day, but got {}",
             magic_enum::enum_name(interval.unit));
 
-    timeout_interval = BaseScaleInterval::toBaseScale(interval).toIntervalKind(IntervalKind::Nanosecond);
+    timeout_interval = BaseScaleInterval::toBaseScale(interval).toIntervalKind(IntervalKind::Kind::Nanosecond);
     next_timeout_emit_ts = MonotonicNanoseconds::now() + timeout_interval;
 }
 

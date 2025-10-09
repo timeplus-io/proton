@@ -1,0 +1,20 @@
+## json_encode ##
+{"i":10,"f":10.01,"s":"row one"}
+{"i":20,"f":20.02,"s":"row two"}
+{"i":10,"i64":"100","f":10.01,"f64":100.001,"s":"row one","u":"e1440cc0-ffef-4446-9f46-5cca968235e9","t":{"ti":20,"ts":"inside tuple"},"ms":{"key":"value","key2":"value2"},"ai":[30,31,32],"t2":{"ts":"another tuple","tt":{"ti":40,"tb":true}},"ts":"2025-05-07 06:29:43.678","ns":"a"}
+{"i":20,"i64":"200","f":20.02,"f64":200.002,"s":"row two","u":"c9f0af8e-da4e-4288-8906-83f42223c32e","t":{"ti":220,"ts":"inside tuple 2"},"ms":{"key_2":"value_2","key2_2":"value2_2"},"ai":[230,231,232],"t2":{"ts":"another tuple 2","tt":{"ti":240,"tb":false}},"ts":"2025-05-07 07:29:43.456","ns":null}
+{"1":1,"true":true,"\'one\'":"one"}
+{"i":10,"1":1,"f":10.01,"true":true,"s":"row one","\'one\'":"one"}
+{"i":20,"1":1,"f":20.02,"true":true,"s":"row two","\'one\'":"one"}
+string
+[]
+## json_cast ##
+{"f":10.01,"i":10,"s":"row one"}
+{"f":20.02,"i":20,"s":"row two"}
+{"ai":[30,31,32],"f":10.01,"f64":100.001,"i":10,"i64":"100","ms":{"key":"value","key2":"value2"},"ns":"a","s":"row one","t":{"ti":20,"ts":"inside tuple"},"t2":{"ts":"another tuple","tt":{"ti":40,"tb":true}},"ts":"2025-05-07 06:29:43.678","u":"e1440cc0-ffef-4446-9f46-5cca968235e9"}
+{"ai":[230,231,232],"f":20.02,"f64":200.002,"i":20,"i64":"200","ms":{"key_2":"value_2","key2_2":"value2_2"},"ns":null,"s":"row two","t":{"ti":220,"ts":"inside tuple 2"},"t2":{"ts":"another tuple 2","tt":{"ti":240,"tb":false}},"ts":"2025-05-07 07:29:43.456","u":"c9f0af8e-da4e-4288-8906-83f42223c32e"}
+{"\'one\'":"one","1":1,"true":true}
+{"\'one\'":"one","1":1,"f":10.01,"i":10,"s":"row one","true":true}
+{"\'one\'":"one","1":1,"f":20.02,"i":20,"s":"row two","true":true}
+json(ai array(int32), f float32, f64 float64, i int32, i64 int64, ms map(string, string), ns nullable(string), s string, t tuple(ti int32, ts string), t2 tuple(ts string, tt tuple(ti int32, tb bool)), ts datetime64(3, \'UTC\'), u uuid)
+{}

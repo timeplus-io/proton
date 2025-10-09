@@ -11,11 +11,10 @@
 #    include <pulsar/Consumer.h>
 #    include <pulsar/Reader.h>
 
-namespace DB
+namespace DB::ExternalStream
 {
 
-namespace ExternalStream
-{
+class Pulsar;
 
 class PulsarSource final : public Streaming::ISource, public ExternalStreamSource
 {
@@ -28,21 +27,23 @@ public:
     const String & data_format,
     const FormatSettings & format_settings,
     pulsar::Reader && reader_,
+    const std::shared_ptr<Pulsar> & storage_,
     ExternalStreamCounterPtr counter,
-    Poco::Logger * logger_,
+    LoggerPtr logger_,
     const ContextPtr & context_);
 
     ~PulsarSource() override;
 
     String getName() const override { return "PulsarSource"; }
-    String description() const override { return fmt::format("topic={}", getTopic()); }
 
     Chunk generate() override;
 
 protected:
-    void onCancel() override;
+    void onCancel() noexcept override;
 
 private:
+    Strings doFetchData(const Streaming::SequenceRange &) override;
+
     const String & getTopic() const { return reader.getTopic(); }
 
     Chunk generateWithConsumer();
@@ -62,12 +63,17 @@ private:
 
     Int64 generate_timeout_ms{100};
 
+    std::shared_ptr<Pulsar> storage;
     pulsar::Reader reader;
 
     /// Number of messages to skip at the beginning. This is only used during MV auto auto-recovery with best-effort policy.
     Int64 messages_to_skip{0};
     /// The message ID of the latest consumed message.
     std::optional<pulsar::MessageId> latest_consumed_message_id;
+    std::optional<pulsar::MessageId> latest_consumed_batch_begin_message_id;
+
+    bool ignore_format_errors = false;
+    std::optional<Exception> consume_exception;
 
     /// The message ID of the last message the source should read.
     /// Once reach this ID, the source will stop reading more messages.
@@ -76,11 +82,7 @@ private:
     bool is_finished{false};
 
     ExternalStreamCounterPtr external_stream_counter;
-
-    Poco::Logger * logger;
 };
-
-}
 
 }
 

@@ -1,0 +1,71 @@
+tags:
+  - uda
+
+description: Test covering python uda test on pycaret.anomaly function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (d1 int, d2 string, d3 int, d4 float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION anomalyTester(d1 int, d2 string, d3 int, d4 float) RETURNS array(float) LANGUAGE PYTHON AS $$
+      import pandas as pd
+      from pycaret.anomaly import AnomalyExperiment
+
+      class anomalyTester:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, d1s, d2s, d3s, d4s):
+              data = pd.DataFrame(zip(d1s, d2s, d3s, d4s), 
+                                  columns=['d1', 'd2', 'd3', 'd4'])
+              s = AnomalyExperiment()
+              s.setup(data, session_id = 123)
+              model = s.create_model('iforest')
+              s.assign_model(model)
+              predictions = s.predict_model(model, data = data)
+              self.res = predictions['Anomaly_Score'].to_list()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf12-3-1
+    type: stream
+    query: select anomalyTester(d1, d2, d3, d4) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(d1, d2, d3, d4) values
+          (1, 'CH', 237, 1.75) (2, 'CH', 239, 1.75) (3, 'CH', 245, 1.86)
+          (4, 'MM', 227, 0.014492753623188406) (5, 'CH', 228, 1.69);
+
+  - type: check
+    target_name: python-udf12-3-1
+    expected_result:
+      - [[-0.20006107880455348, -0.2400873184488726, -0.14359810044144156, 0.027200240120651364, -0.10880096048260562]]

@@ -37,8 +37,10 @@ namespace ErrorCodes
 namespace S3
 {
 
-Client::RetryStrategy::RetryStrategy(std::shared_ptr<Aws::Client::RetryStrategy> wrapped_strategy_)
-    : wrapped_strategy(std::move(wrapped_strategy_))
+Client::RetryStrategy::RetryStrategy(
+    std::shared_ptr<Aws::Client::RetryStrategy> wrapped_strategy_,
+    std::shared_ptr<Client::RetryContext> context_)
+    : wrapped_strategy(std::move(wrapped_strategy_)), context(std::move(context_))
 {
     if (!wrapped_strategy)
         wrapped_strategy = Aws::Client::InitRetryStrategy();
@@ -47,6 +49,9 @@ Client::RetryStrategy::RetryStrategy(std::shared_ptr<Aws::Client::RetryStrategy>
 /// NOLINTNEXTLINE(google-runtime-int)
 bool Client::RetryStrategy::ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors>& error, long attemptedRetries) const
 {
+    if (context && context->isCancelled())
+        return false;
+
     if (error.GetResponseCode() == Aws::Http::HttpResponseCode::MOVED_PERMANENTLY)
         return false;
 
@@ -104,11 +109,20 @@ std::unique_ptr<Client> Client::create(
     const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> & credentials_provider,
     const PocoHTTPClientConfiguration & client_configuration,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
-    bool use_virtual_addressing)
+    bool use_virtual_addressing,
+    std::shared_ptr<RetryContext> retry_context_)
 {
     verifyClientConfiguration(client_configuration);
+
     return std::unique_ptr<Client>(
-        new Client(max_redirects_, std::move(sse_kms_config_), credentials_provider, client_configuration, sign_payloads, use_virtual_addressing));
+        new Client(
+            max_redirects_,
+            std::move(sse_kms_config_),
+            credentials_provider,
+            client_configuration,
+            sign_payloads,
+            use_virtual_addressing,
+            std::move(retry_context_))); /// proton: added retry_context_
 }
 
 std::unique_ptr<Client> Client::clone() const
@@ -122,7 +136,8 @@ Client::Client(
     const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> & credentials_provider_,
     const PocoHTTPClientConfiguration & client_configuration_,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads_,
-    bool use_virtual_addressing_)
+    bool use_virtual_addressing_,
+    std::shared_ptr<Client::RetryContext> retry_context_)
     : Aws::S3::S3Client(credentials_provider_, client_configuration_, sign_payloads_, use_virtual_addressing_)
     , credentials_provider(credentials_provider_)
     , client_configuration(client_configuration_)
@@ -130,7 +145,8 @@ Client::Client(
     , use_virtual_addressing(use_virtual_addressing_)
     , max_redirects(max_redirects_)
     , sse_kms_config(std::move(sse_kms_config_))
-    , log(&Poco::Logger::get("S3Client"))
+    , retry_context(std::move(retry_context_))
+    , log(getLogger("S3Client"))
 {
     auto * endpoint_provider = dynamic_cast<Aws::S3::Endpoint::S3DefaultEpProviderBase *>(accessEndpointProvider().get());
     endpoint_provider->GetBuiltInParameters().GetParameter("Region").GetString(explicit_region);
@@ -159,7 +175,7 @@ Client::Client(
     , provider_type(other.provider_type)
     , max_redirects(other.max_redirects)
     , sse_kms_config(other.sse_kms_config)
-    , log(&Poco::Logger::get("S3Client"))
+    , log(getLogger("S3Client"))
 {
     cache = std::make_shared<ClientCache>(*other.cache);
     ClientCacheRegistry::instance().registerClient(cache);
@@ -262,6 +278,7 @@ Model::HeadObjectOutcome Client::HeadObject(const HeadObjectRequest & request) c
         {
             request.overrideRegion(region);
             insertRegionOverride(bucket, region);
+            return Aws::S3::S3Client::HeadObject(request); /// proton: added
         }
     }
 
@@ -483,6 +500,14 @@ Client::doRequest(const RequestType & request, RequestFn request_fn) const
         if (!new_uri)
             return result;
 
+        // Check if user didn't mention any region
+        if (auto pos = initial_endpoint.find(".amazonaws.com"); pos != std::string::npos)
+        {
+            auto endpoint_prefix = initial_endpoint.substr(0, pos);
+            if (endpoint_prefix.ends_with("s3") || endpoint_prefix.ends_with("s3tables"))
+                new_uri->addRegionToURI(request.getRegionOverride());
+        }
+
         const auto & current_uri_override = request.getURIOverride();
         /// we already tried with this URI
         if (current_uri_override && current_uri_override->uri == new_uri->uri)
@@ -503,6 +528,25 @@ ProviderType Client::getProviderType() const
     return provider_type;
 }
 
+/// proton: starts
+bool Client::bucketExists(const std::string & bucket) const
+{
+    Aws::S3::Model::HeadBucketRequest req;
+    req.SetBucket(bucket);
+    auto outcome = HeadBucket(req);
+    if (outcome.IsSuccess())
+        return true;
+
+    const auto & error = outcome.GetError();
+    if (error.GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND)
+        return false;
+
+    throw Exception(ErrorCodes::AWS_ERROR, "Failed to call HeadBucket API, code={} error={}",
+                    static_cast<int>(error.GetResponseCode()),
+                    error.GetMessage());
+}
+/// proton: ends
+
 std::string Client::getRegionForBucket(const std::string & bucket, bool force_detect) const
 {
     std::lock_guard lock(cache->region_cache_mutex);
@@ -520,9 +564,8 @@ std::string Client::getRegionForBucket(const std::string & bucket, bool force_de
     auto outcome = HeadBucket(req);
     if (outcome.IsSuccess())
     {
-        /// FIXME
-        // const auto & result = outcome.GetResult();
-        // region = result.GetBucketRegion();
+        const auto & result = outcome.GetResult();
+        region = result.GetBucketRegion();
     }
     else
     {
@@ -645,7 +688,7 @@ void ClientCacheRegistry::clearCacheForAll()
         }
         else
         {
-            LOG_INFO(&Poco::Logger::get("ClientCacheRegistry"), "Deleting leftover S3 client cache");
+            LOG_INFO(getLogger("ClientCacheRegistry"), "Deleting leftover S3 client cache");
             it = client_caches.erase(it);
         }
     }
@@ -721,7 +764,7 @@ std::unique_ptr<S3::Client> ClientFactory::create( // NOLINT
             const auto creds = cp->GetAWSCredentials();
             if (!creds.IsEmpty())
             {
-                LOG_INFO(&Poco::Logger::get("S3Client"), "The {}th provider from the provider chain has been picked", i);
+                LOG_INFO(getLogger("S3Client"), "The {}th provider from the provider chain has been picked", i);
                 provider = cp;
                 break;
             }
@@ -734,18 +777,26 @@ std::unique_ptr<S3::Client> ClientFactory::create( // NOLINT
     }
 
     if (!provider)
-        throw Exception(ErrorCodes::AWS_ERROR, "No AWS credentials available");
+    {
+        LOG_INFO(getLogger("S3Client"), "No AWS credentials available, will use anonymous credentials");
+        provider = std::make_shared<Aws::Auth::AnonymousAWSCredentialsProvider>();
+    }
+
+    auto retry_context = std::make_shared<Client::RetryContext>();
     /// proton: ends
 
-    client_configuration.retryStrategy = std::make_shared<Client::RetryStrategy>(std::move(client_configuration.retryStrategy));
+    client_configuration.retryStrategy = std::make_shared<Client::RetryStrategy>(
+        std::move(client_configuration.retryStrategy),
+        retry_context); /// proton: added retry_context
+
     return Client::create(
         client_configuration.s3_max_redirects,
         std::move(sse_kms_config),
         provider, /// proton: updated -> credentials_provider,
         client_configuration, // Client configuration.
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        is_virtual_hosted_style || client_configuration.endpointOverride.empty() /// Use virtual addressing if endpoint is not specified.
-    );
+        is_virtual_hosted_style || client_configuration.endpointOverride.empty(), /// Use virtual addressing if endpoint is not specified.
+        std::move(retry_context)); /// proton: added retry_context
 }
 
 PocoHTTPClientConfiguration ClientFactory::createClientConfiguration( // NOLINT
@@ -758,6 +809,7 @@ PocoHTTPClientConfiguration ClientFactory::createClientConfiguration( // NOLINT
     const ThrottlerPtr & put_request_throttler)
 {
     auto context = Context::getGlobalContextInstance();
+    chassert(context);
 
     return PocoHTTPClientConfiguration(
         force_region,

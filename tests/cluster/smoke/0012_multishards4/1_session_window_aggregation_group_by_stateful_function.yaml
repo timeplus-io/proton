@@ -1,0 +1,161 @@
+tags:
+- multishards
+- append_only
+- streaming_aggregation
+- window_aggregation
+- session_window_aggregation
+- group_by
+- stateful_function
+- bug
+description: session window aggregation group by, stateful function
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_4(speed int, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+  
+  - type: wait
+    time: 1
+  
+  - name: '1331'
+    type: stream
+    query: |
+      select id,
+             max(speed),
+             min(speed),
+             avg(speed),
+             window_start as s,
+             window_end as e
+      from session(test13_multishard_4, timestamp, 5m, [speed >= 60, speed < 60))
+      group by id,
+               window_start,
+               window_end
+      order by id;
+    schema:
+        - name: id
+          type: int32
+        - name: max(speed)
+          type: int32
+        - name: min(speed)
+          type: int32
+        - name: avg(speed)
+          type: float64
+        - name: s
+          type: datetime64(3)
+        - name: e
+          type: datetime64(3)
+          
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (40, 1, '2021-11-02 20:00:01');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (50, 2, '2021-11-02 20:00:02');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (60, 1, '2021-11-02 20:00:03');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (70, 2, '2021-11-02 20:00:04');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (80, 1, '2021-11-02 20:00:05');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (90, 2, '2021-11-02 20:00:06');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (80, 1, '2021-11-02 20:00:07');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (70, 2, '2021-11-02 20:00:08');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (60, 1, '2021-11-02 20:00:09');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (50, 2, '2021-11-02 20:00:10');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (40, 1, '2021-11-02 20:00:11');
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (40, 1, '2021-11-02 20:00:12');
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(speed, id, timestamp)
+      values (40, 1, '2021-11-02 20:00:13');
+
+  - type: check
+    target_name: '1331'
+    expected_result:
+    - [1, 80, 60, 70, '2021-11-02 20:00:03', '2021-11-02 20:00:10']
+    - [2, 90, 70, 76.66666666666667, '2021-11-02 20:00:03', '2021-11-02 20:00:10']

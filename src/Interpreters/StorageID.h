@@ -6,6 +6,10 @@
 #include <Core/QualifiedTableName.h>
 #include <Common/Exception.h>
 
+/// proton : starts
+#include <Cluster/Common/StreamShard.h>
+/// proton : ends
+
 namespace Poco
 {
 namespace Util
@@ -69,6 +73,8 @@ struct StorageID
         return uuid != UUIDHelpers::Nil;
     }
 
+    bool hasDatabase() const { return !database_name.empty(); }
+
     bool operator<(const StorageID & rhs) const;
     bool operator==(const StorageID & rhs) const;
 
@@ -76,11 +82,9 @@ struct StorageID
     {
         // Can be triggered by user input, e.g. SELECT joinGetOrNull('', 'num', 500)
         if (empty())
-            throw Exception("Both table name and UUID are empty", ErrorCodes::UNKNOWN_STREAM);
+            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Both stram name and UUID are empty");
         if (table_name.empty() && !database_name.empty())
-            /// proton: starts
-            throw Exception("Stream name is empty, but database name is not", ErrorCodes::UNKNOWN_STREAM);
-            /// proton: ends
+            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream name is empty, but database name is not");
     }
 
     /// Avoid implicit construction of empty StorageID. However, it's needed for deferred initialization.
@@ -97,8 +101,29 @@ struct StorageID
     /// Get short, but unique, name.
     String getShortName() const;
 
+    /// proton : starts
+    cluster::StreamShard streamShard(uint32_t shard) const { return cluster::StreamShard{database_name, table_name, uuid, shard}; }
+
+    cluster::Stream stream() const { return cluster::Stream{database_name, table_name, uuid}; }
+    /// proton : ends
+
 private:
     StorageID() = default;
 };
 
+}
+
+namespace fmt
+{
+template <>
+struct formatter<DB::StorageID>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::StorageID & storage_id, FormatContext & ctx) const
+    {
+        return fmt::format_to(ctx.out(), "{}", storage_id.getNameForLogs());
+    }
+};
 }

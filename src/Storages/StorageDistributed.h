@@ -9,7 +9,6 @@
 #include <Common/SimpleIncrement.h>
 #include <Client/ConnectionPool.h>
 #include <Client/ConnectionPoolWithFailover.h>
-#include <Common/logger_useful.h>
 #include <Common/ActionBlocker.h>
 #include <Interpreters/Cluster.h>
 
@@ -52,6 +51,7 @@ public:
     bool supportsFinal() const override { return true; }
     bool supportsPrewhere() const override { return true; }
     bool supportsSubcolumns() const override { return true; }
+    bool supportsDynamicSubcolumnsDeprecated() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
     StoragePolicyPtr getStoragePolicy() const override;
 
@@ -105,8 +105,8 @@ public:
     void alter(const AlterCommands & params, ContextPtr context, AlterLockHolder & table_lock_holder) override;
 
     void startup() override;
-    void shutdown() override;
-    void flush() override;
+    void shutdown(bool dropping) override;
+    void flush(bool dropping) override;
     void drop() override;
 
     bool storesDataOnDisk() const override { return data_volume != nullptr; }
@@ -145,21 +145,8 @@ private:
         const DistributedSettings & distributed_settings_,
         bool attach_,
         ClusterPtr owned_cluster_ = {},
-        ASTPtr remote_table_function_ptr_ = {});
-
-    StorageDistributed(
-        const StorageID & id_,
-        const ColumnsDescription & columns_,
-        const ConstraintsDescription & constraints_,
-        ASTPtr remote_table_function_ptr_,
-        const String & cluster_name_,
-        ContextPtr context_,
-        const ASTPtr & sharding_key_,
-        const String & storage_policy_name_,
-        const String & relative_data_path_,
-        const DistributedSettings & distributed_settings_,
-        bool attach,
-        ClusterPtr owned_cluster_ = {});
+        ASTPtr remote_table_function_ptr_ = {},
+        bool is_remote_function_ = false);
 
     void renameOnDisk(const String & new_path_to_table_data);
 
@@ -214,13 +201,13 @@ private:
     String remote_database;
     String remote_table;
     ASTPtr remote_table_function_ptr;
+    StorageID remote_storage;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Used to implement TableFunctionRemote.
     std::shared_ptr<Cluster> owned_cluster;
 
-    /// Is empty if this storage implements TableFunctionRemote.
     const String cluster_name;
 
     bool has_sharding_key;
@@ -248,7 +235,7 @@ private:
     struct ClusterNodeData
     {
         std::shared_ptr<StorageDistributedDirectoryMonitor> directory_monitor;
-        ConnectionPoolPtr connection_pool;
+        ConnectionPoolWithFailoverPtr connection_pool;
     };
     std::unordered_map<std::string, ClusterNodeData> cluster_nodes_data;
     mutable std::mutex cluster_nodes_mutex;
@@ -256,6 +243,8 @@ private:
     // For random shard index generation
     mutable std::mutex rng_mutex;
     pcg64 rng;
+
+    bool is_remote_function;
 };
 
 }

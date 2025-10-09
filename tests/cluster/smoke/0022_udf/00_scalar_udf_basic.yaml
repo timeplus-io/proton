@@ -1,0 +1,52 @@
+tags:
+- local-run
+- udf
+description: scalar udf with 1 param
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    source: function test_23_add_five(value) { for(let i=0; i<value.length; i++) {
+      value[i] = value[i]+5; } return value;}
+- type: wait
+  time: 5
+
+- name: udf-0
+  type: stream
+  query: select test_23_add_five(f32) from udf_types
+  schema:
+  - name: test_23_add_five(f32)
+    type: float32
+- type: wait
+  time: 2
+
+- type: rest
+  url: /proton/v1/ingest/streams/udf_types
+  method: POST
+  data:
+    columns:
+    - i
+    - i8
+    - f32
+    - s
+    - dt
+    data:
+    - [1, 1, 1.0, s1, '2020-02-02 20:00:00']
+    - [2, 2, 2.0, s2, '2020-02-02 20:00:00']
+
+- type: check
+  target_name: udf-0
+  expected_result:
+  - [6]
+  - [7]

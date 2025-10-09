@@ -1,0 +1,167 @@
+tags:
+- emit on update with batch
+- global aggr
+- window aggr
+description: Emit global/window aggr results on update with batch
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test_35_stream
+
+- type: query
+  sql: create stream test_35_stream(i int)
+- type: wait
+  time: 1
+
+- type: stream
+  name: emit-mode-8-1
+  query: select min(i), max(i), count() from test_35_stream emit on update with batch 1s
+  schema:
+    - name: min(i)
+      type: int32
+    - name: max(i)
+      type: int32
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: stream
+  name: emit-mode-8-2
+  query: select i, count() from test_35_stream group by i emit on update with batch 1s
+  schema:
+    - name: i
+      type: int32
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: stream
+  name: emit-mode-8-3
+  query: select window_start, window_end, min(i), max(i), count() from tumble(test_35_stream, 10s) group by window_start, window_end emit on update with batch 1s
+  schema:
+    - name: window_start
+      type: datetime64(3)
+    - name: window_end
+      type: datetime64(3)
+    - name: min(i)
+      type: int32
+    - name: max(i)
+      type: int32
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: stream
+  name: emit-mode-8-4
+  query: select window_start, window_end, i, count() from tumble(test_35_stream, 10s) group by window_start, window_end, i emit on update with batch 1s
+  schema:
+    - name: window_start
+      type: datetime64(3)
+    - name: window_end
+      type: datetime64(3)
+    - name: i
+      type: int32
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: stream
+  name: emit-mode-8-5
+  query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit on update with batch 1s
+  schema:
+    - name: window_start
+      type: datetime64(3)
+    - name: window_end
+      type: datetime64(3)
+    - name: min(i)
+      type: int32
+    - name: max(i)
+      type: int32
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: stream
+  name: emit-mode-8-6
+  query: select window_start, window_end, min(i), max(i), count() from session(test_35_stream, 5m) group by window_start, window_end emit on update with batch 1s
+  schema:
+    - name: window_start
+      type: datetime64(3)
+    - name: window_end
+      type: datetime64(3)
+    - name: min(i)
+      type: int32
+    - name: max(i)
+      type: int32
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_35_stream(i, _tp_time) values (1, '2024-01-24 10:00:00');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_35_stream(i, _tp_time) values (2, '2024-01-24 10:00:05');
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_35_stream(i, _tp_time) values (3, '2024-01-24 10:00:10');
+
+- type: check
+  target_name: emit-mode-8-1
+  expected_result:
+    - [1, 1, 1]
+    - [1, 2, 2]
+    - [1, 3, 3]
+
+- type: check
+  target_name: emit-mode-8-2
+  expected_result:
+    - [1, 1]
+    - [2, 1]
+    - [3, 1]
+
+- type: check
+  target_name: emit-mode-8-3
+  expected_result:
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1, 1]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 2, 2]
+    - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 3, 1]
+
+- type: check
+  target_name: emit-mode-8-4
+  expected_result:
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 2, 1]
+    - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 1]
+
+- type: check
+  target_name: emit-mode-8-5
+  expected_result:
+    - ['2024-01-24 09:59:40+00:00', '2024-01-24 10:00:10+00:00', 1, 1, 1]
+    - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 1, 1]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 1, 1]
+    - ['2024-01-24 09:59:40+00:00', '2024-01-24 10:00:10+00:00', 1, 2, 2]
+    - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 2, 2]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 2, 2]
+    - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 3, 3]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 3, 3]
+    - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:40+00:00', 3, 3, 1]
+
+- type: check
+  target_name: emit-mode-8-6
+  expected_result:
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:00.001000+00:00', 1, 1, 1]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:05.001000+00:00', 1, 2, 2]
+    - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10.001000+00:00', 1, 3, 3]

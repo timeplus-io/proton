@@ -22,7 +22,7 @@ UInt32 getStreamShardsOfRemoteStream(const Cluster & cluster, const StorageID & 
     /// Request for a table create SQL
     auto query = "SHOW CREATE " + table_id.getFullTableName();
 
-    auto new_context = ClusterProxy::updateSettingsForCluster(cluster, context, context->getSettingsRef());
+    auto new_context = ClusterProxy::updateSettingsForCluster(cluster, context, context->getSettingsRef(), table_id);
 
     Block sample_block{
         {ColumnString::create(), std::make_shared<DataTypeString>(), "statement"},
@@ -35,7 +35,7 @@ UInt32 getStreamShardsOfRemoteStream(const Cluster & cluster, const StorageID & 
     executor.setPoolMode(PoolMode::GET_ONE);
     executor.setMainTable(table_id);
 
-    auto current = executor.read();
+    auto current = executor.readBlock();
 
     ColumnPtr statement = current.getByName("statement").column;
     chassert(statement->size() == 1);
@@ -46,11 +46,23 @@ UInt32 getStreamShardsOfRemoteStream(const Cluster & cluster, const StorageID & 
     auto create_ast = parseQuery(create_parser, create_query_str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
     const auto & create_query_ast = create_ast->as<const ASTCreateQuery &>();
 
-    if (create_query_ast.is_materialized_view)
+    if (create_query_ast.isMaterializedView())
     {
         /// If the MV has a "INTO" stream, then read the shards from that stream.
+        /// Otherwise, read from the `shards` setting on the MV itself.
         if (create_query_ast.to_table_id.empty())
+        {
+            if (create_query_ast.storage_settings == nullptr)
+                return 1;
+
+            for (const auto & change : create_query_ast.storage_settings->changes)
+            {
+                if (change.name == "shards")
+                    return static_cast<UInt32>(change.value.safeGet<UInt64>());
+            }
+
             return 1;
+        }
         else
             return getStreamShardsOfRemoteStream(cluster, create_query_ast.to_table_id, context);
     }
@@ -66,7 +78,7 @@ UInt32 getStreamShardsOfRemoteStream(const Cluster & cluster, const StorageID & 
         return 1;
 
     auto engine_name = create_query_ast.storage->engine->name;
-    if (engine_name == "Stream" || engine_name == "MutableStream")
+    if (engine_name == "Stream")
     {
         auto shards = create_query_ast.storage->engine->arguments->children[0]->as<ASTLiteral &>().value.safeGet<UInt64>();
         return static_cast<UInt32>(shards);

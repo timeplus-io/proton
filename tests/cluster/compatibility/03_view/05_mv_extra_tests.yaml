@@ -1,0 +1,81 @@
+tags:
+  - validate
+  - join
+  
+description: extra tests on mv
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      insert into mv_source_stream(id, location, value, json, timestamp) values
+      ('dev4', 'ca', 83, '{"create_time":"2024-01-01 00:00:04"}', '2024-01-01 00:00:14.004')
+      ('dev5', 'ca', 27, '{"create_time":"2024-01-01 00:00:05"}', '2024-01-01 00:00:15.005')
+      ('dev6', 'ca', 94, '{"create_time":"2024-01-01 00:00:06"}', '2024-01-01 00:00:16.006')
+      ('dev7', 'ca', 67, '{"create_time":"2024-01-01 00:00:07"}', '2024-01-01 00:00:17.007');
+
+  - type: wait
+    time: 2
+
+  - name: view-3-3
+    type: stream
+    query: select * except (_tp_time) from mv settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+      - name: transformed_timestamp
+        type: datetime
+
+  - type: check
+    target_name: view-3-3
+    mode: random
+    expected_result:
+      - ['dev4', 'wall', 83, '{"create_time":"2024-01-01 00:00:04"}', '2024-01-01 00:00:14.004', '2024-01-01 00:00:04']
+      - ['dev5', 'roof', 27, '{"create_time":"2024-01-01 00:00:05"}', '2024-01-01 00:00:15.005', '2024-01-01 00:00:05']
+      - ['dev6', 'window', 94, '{"create_time":"2024-01-01 00:00:06"}', '2024-01-01 00:00:16.006', '2024-01-01 00:00:06']
+      - ['dev7', 'wall', 67, '{"create_time":"2024-01-01 00:00:07"}', '2024-01-01 00:00:17.007', '2024-01-01 00:00:07']
+      - ['dev1', 'roof', 60, '{"create_time":"2024-01-01 00:00:01"}', '2024-01-01 00:00:11.001', '2024-01-01 00:00:01']
+      - ['dev2', 'field', 31, '{"create_time":"2024-01-01 00:00:02"}', '2024-01-01 00:00:12.002', '2024-01-01 00:00:02']
+      - ['dev3', 'window', 58, '{"create_time":"2024-01-01 00:00:03"}', '2024-01-01 00:00:13.003', '2024-01-01 00:00:03']
+      - ['dev8', 'floor', 77, '{"create_time":"2024-01-01 00:00:08"}', '2024-01-01 00:00:18.008', '2024-01-01 00:00:08']
+
+  - name: view-3-4
+    type: stream
+    query: select * except (_tp_time) from mv_target_stream settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+      - name: transformed_timestamp
+        type: datetime
+
+  - type: check
+    target_name: view-3-4
+    mode: random
+    expected_result:
+      - ['dev4', 'wall', 83, '{"create_time":"2024-01-01 00:00:04"}', '2024-01-01 00:00:14.004', '2024-01-01 00:00:04']
+      - ['dev5', 'roof', 27, '{"create_time":"2024-01-01 00:00:05"}', '2024-01-01 00:00:15.005', '2024-01-01 00:00:05']
+      - ['dev6', 'window', 94, '{"create_time":"2024-01-01 00:00:06"}', '2024-01-01 00:00:16.006', '2024-01-01 00:00:06']
+      - ['dev7', 'wall', 67, '{"create_time":"2024-01-01 00:00:07"}', '2024-01-01 00:00:17.007', '2024-01-01 00:00:07']
+      - ['dev1', 'roof', 60, '{"create_time":"2024-01-01 00:00:01"}', '2024-01-01 00:00:11.001', '2024-01-01 00:00:01']
+      - ['dev2', 'field', 31, '{"create_time":"2024-01-01 00:00:02"}', '2024-01-01 00:00:12.002', '2024-01-01 00:00:02']
+      - ['dev3', 'window', 58, '{"create_time":"2024-01-01 00:00:03"}', '2024-01-01 00:00:13.003', '2024-01-01 00:00:03']
+      - ['dev8', 'floor', 77, '{"create_time":"2024-01-01 00:00:08"}', '2024-01-01 00:00:18.008', '2024-01-01 00:00:08']

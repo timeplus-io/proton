@@ -4,6 +4,9 @@ target_link_libraries(
         v8_perf
         PRIVATE
         clickhouse_common_io
+        clickhouse_aggregate_functions
+        clickhouse_functions
+        clickhouse_table_functions
         ch_contrib::v8_base_without_compiler
         ch_contrib::v8_compiler
         ch_contrib::v8_snapshot

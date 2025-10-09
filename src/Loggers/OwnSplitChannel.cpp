@@ -129,6 +129,8 @@ void OwnSplitChannel::logSplit(const Poco::Message & msg)
             elem.source_file = msg.getSourceFile();
 
         elem.source_line = msg.getSourceLine();
+        elem.message_format_string = msg.getFormatString();
+
         std::shared_ptr<TextLog> text_log_locked{};
         {
             std::lock_guard<std::mutex> lock(text_log_mutex);
@@ -161,5 +163,18 @@ void OwnSplitChannel::setLevel(const std::string & name, int level)
             channel->setLevel(level);
      }
 }
+
+/// proton: starts.
+int OwnSplitChannel::getLevel(const std::string & name)
+{
+     auto it = channels.find(name);
+     if (it != channels.end())
+     {
+         if (auto * channel = dynamic_cast<DB::OwnFormattingChannel *>(it->second.first.get()))
+            return channel->getLevel();
+     }
+     return Poco::Message::PRIO_TRACE;
+}
+/// proton: ends.
 
 }

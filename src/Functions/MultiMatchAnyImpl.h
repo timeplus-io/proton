@@ -118,7 +118,7 @@ struct MultiMatchAnyImpl
         hs_error_t err = hs_clone_scratch(regexps->getScratch(), &scratch);
 
         if (err != HS_SUCCESS)
-            throw Exception("Could not clone scratch space for vectorscan", ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+            throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Could not clone scratch space for vectorscan");
 
         MultiRegexps::ScratchPtr smart_scratch(scratch);
 
@@ -142,7 +142,7 @@ struct MultiMatchAnyImpl
             UInt64 length = haystack_offsets[i] - offset - 1;
             /// vectorscan restriction.
             if (length > std::numeric_limits<UInt32>::max())
-                throw Exception("Too long string to search", ErrorCodes::TOO_MANY_BYTES);
+                throw Exception(ErrorCodes::TOO_MANY_BYTES, "Too long string to search");
             /// zero the result, scan, check, update the offset.
             res[i] = 0;
             err = hs_scan(
@@ -154,15 +154,13 @@ struct MultiMatchAnyImpl
                 on_match,
                 &res[i]);
             if (err != HS_SUCCESS && err != HS_SCAN_TERMINATED)
-                throw Exception("Failed to scan with vectorscan", ErrorCodes::HYPERSCAN_CANNOT_SCAN_TEXT);
+                throw Exception(ErrorCodes::HYPERSCAN_CANNOT_SCAN_TEXT, "Failed to scan with vectorscan");
             offset = haystack_offsets[i];
         }
 #else
         /// fallback if vectorscan is not compiled
         if constexpr (WithEditDistance)
-            throw Exception(
-                "Edit distance multi-search is not implemented when vectorscan is off",
-                ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Edit distance multi-search is not implemented when vectorscan is off");
         PaddedPODArray<UInt8> accum(res.size());
         memset(res.data(), 0, res.size() * sizeof(res.front()));
         memset(accum.data(), 0, accum.size());
@@ -243,7 +241,7 @@ struct MultiMatchAnyImpl
             hs_error_t err = hs_clone_scratch(regexps->getScratch(), &scratch);
 
             if (err != HS_SUCCESS)
-                throw Exception("Could not clone scratch space for vectorscan", ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+                throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Could not clone scratch space for vectorscan");
 
             MultiRegexps::ScratchPtr smart_scratch(scratch);
 
@@ -265,7 +263,7 @@ struct MultiMatchAnyImpl
 
             /// vectorscan restriction.
             if (cur_haystack_length > std::numeric_limits<UInt32>::max())
-                throw Exception("Too long string to search", ErrorCodes::TOO_MANY_BYTES);
+                throw Exception(ErrorCodes::TOO_MANY_BYTES, "Too long string to search");
 
             /// zero the result, scan, check, update the offset.
             res[i] = 0;
@@ -278,7 +276,7 @@ struct MultiMatchAnyImpl
                 on_match,
                 &res[i]);
             if (err != HS_SUCCESS && err != HS_SCAN_TERMINATED)
-                throw Exception("Failed to scan with vectorscan", ErrorCodes::HYPERSCAN_CANNOT_SCAN_TEXT);
+                throw Exception(ErrorCodes::HYPERSCAN_CANNOT_SCAN_TEXT, "Failed to scan with vectorscan");
 
             prev_haystack_offset = haystack_offsets[i];
             prev_needles_offset = needles_offsets[i];
@@ -289,9 +287,7 @@ struct MultiMatchAnyImpl
         /// -- the code is copypasted from vectorVector() in MatchImpl.h and quite complex code ... all of it can be removed once vectorscan is
         ///    enabled on all platforms (#38906)
         if constexpr (WithEditDistance)
-            throw Exception(
-                "Edit distance multi-search is not implemented when vectorscan is off",
-                ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Edit distance multi-search is not implemented when vectorscan is off");
 
         (void)edit_distance;
 
@@ -329,7 +325,7 @@ struct MultiMatchAnyImpl
             {
                 String needle(needles[j]);
 
-                const auto & regexp = Regexps::Regexp(Regexps::createRegexp</*like*/ false, /*no_capture*/ true, /*case_insensitive*/ false>(needle));
+                const auto & regexp = OptimizedRegularExpression(Regexps::createRegexp</*like*/ false, /*no_capture*/ true, /*case_insensitive*/ false>(needle));
 
                 String required_substr;
                 bool is_trivial;
@@ -352,7 +348,7 @@ struct MultiMatchAnyImpl
                                 {reinterpret_cast<const char *>(cur_haystack_data), cur_haystack_length},
                                 0,
                                 cur_haystack_length,
-                                re2_st::RE2::UNANCHORED,
+                                re2::RE2::UNANCHORED,
                                 nullptr,
                                 0);
                         if constexpr (FindAny)
@@ -389,7 +385,7 @@ struct MultiMatchAnyImpl
                                     {reinterpret_cast<const char *>(cur_haystack_data), cur_haystack_length},
                                     start_pos,
                                     end_pos,
-                                    re2_st::RE2::UNANCHORED,
+                                    re2::RE2::UNANCHORED,
                                     nullptr,
                                     0);
                             if constexpr (FindAny)

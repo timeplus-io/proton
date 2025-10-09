@@ -1,0 +1,114 @@
+tags:
+  - uda
+
+description: Test covering python uda test on statsforecast function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (unique_id string, ds date, y float);
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION intermittentTester(unique_id string, ds date, y float) RETURNS array(array(float)) LANGUAGE PYTHON AS
+      $$
+
+      import pandas as pd
+      from statsforecast import StatsForecast
+      from statsforecast.models import ADIDA, CrostonClassic, IMAPA, TSB
+      from utilsforecast.evaluation import evaluate
+      from utilsforecast.losses import mae
+
+      class intermittentTester:
+          def __init__(self):
+              self.res = []
+              self.models = [
+                  ADIDA(), 
+                  CrostonClassic(), 
+                  IMAPA(), 
+                  TSB(alpha_d = 0.2, alpha_p = 0.2)
+              ]
+              self.sf = StatsForecast(
+                  models=self.models, 
+                  freq='D', 
+                  n_jobs=-1,
+              )
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, unique_ids, dss, ys):
+              if len(unique_ids) < 24:
+                  return
+
+              dss = pd.to_datetime(dss)
+              df = pd.DataFrame(zip(unique_ids, dss, ys),
+                                columns=['unique_id', 'ds', 'y'])
+              valid_start = df['ds'].unique()[-8]
+              train = df[df['ds'] < valid_start]
+              test = df[df['ds'] >= valid_start]
+
+              forecasts = self.sf.forecast(df=train, h=8)
+              test = test.merge(forecasts, how='left', on=['unique_id', 'ds'])
+              res_eval = evaluate(test, metrics=[mae], agg_fn='mean')
+              res_eval.drop(columns=['metric'], inplace=True)
+              self.res = res_eval.values.tolist()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 3
+
+  - name: python-udf11-7-1
+    type: stream
+    query: select intermittentTester(unique_id, ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(float32))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(unique_id, ds, y) values
+          ('FOODS_1_001_CA_1', '2024-01-01', 3.0) 
+          ('FOODS_1_001_CA_2', '2024-01-02', 0.0)
+          ('FOODS_1_001_CA_3', '2024-01-03', 1.0)
+          ('FOODS_1_001_CA_4', '2024-01-04', 5.0)
+          ('FOODS_1_001_TX_1', '2024-01-05', 4.0)
+          ('FOODS_1_001_TX_2', '2024-01-06', 0.0) 
+          ('FOODS_1_001_TX_3', '2024-01-07', 1.0)
+          ('FOODS_1_001_WI_1', '2024-01-08', 2.0)
+          ('FOODS_1_001_CA_1', '2024-01-09', 3.2) 
+          ('FOODS_1_001_CA_2', '2024-01-10', 0.2)
+          ('FOODS_1_001_CA_3', '2024-01-11', 1.2)
+          ('FOODS_1_001_CA_4', '2024-01-12', 5.2)
+          ('FOODS_1_001_TX_1', '2024-01-13', 4.2)
+          ('FOODS_1_001_TX_2', '2024-01-14', 0.2) 
+          ('FOODS_1_001_TX_3', '2024-01-15', 1.2)
+          ('FOODS_1_001_WI_1', '2024-01-16', 2.2)
+          ('FOODS_1_001_CA_1', '2024-01-17', 3.0) 
+          ('FOODS_1_001_CA_2', '2024-01-18', 0.0)
+          ('FOODS_1_001_CA_3', '2024-01-19', 1.0)
+          ('FOODS_1_001_CA_4', '2024-01-20', 5.0)
+          ('FOODS_1_001_TX_1', '2024-01-21', 4.0)
+          ('FOODS_1_001_TX_2', '2024-01-22', 0.0) 
+          ('FOODS_1_001_TX_3', '2024-01-23', 1.0)
+          ('FOODS_1_001_WI_1', '2024-01-24', 2.0);
+
+  - type: check
+    target_name: python-udf11-7-1
+    expected_result:
+      - [[[0.04, 0.04, 0.03, 0.04]]]

@@ -19,7 +19,6 @@ else ()
     message (FATAL_ERROR "Platform ${CMAKE_SYSTEM_NAME} is not supported")
 endif ()
 
-# porting https://github.com/ClickHouse/ClickHouse/commit/601b61d00ff4e77564a884324c342178c19acc41
 # Since we always use toolchain files to generate hermetic builds, cmake will
 # always think it's a cross-compilation, See
 # https://cmake.org/cmake/help/latest/variable/CMAKE_CROSSCOMPILING.html
@@ -72,5 +71,5 @@ if (CMAKE_CROSSCOMPILING)
     # Don't know why but CXX_STANDARD doesn't work for cross-compilation
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
 
-    message (STATUS "Cross-compiling for target: ${CMAKE_CXX_COMPILE_TARGET}")
+    message (STATUS "Cross-compiling for target: ${CMAKE_CXX_COMPILER_TARGET}")
 endif ()

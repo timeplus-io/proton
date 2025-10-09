@@ -1,0 +1,23 @@
+tags:
+  - prepare
+  - validate
+  - UDA
+
+description: basic tests
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: udf-3-1
+    type: stream
+    query: select test_sec_large(f32) from uda_stream settings seek_to='earliest';
+    schema:
+    - name: test_sec_large(f32)
+      type: float32
+
+  - type: check
+    target_name: udf-3-1
+    expected_result:
+      - [8.0]

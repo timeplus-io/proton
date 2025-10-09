@@ -1,10 +1,12 @@
 #pragma once
 
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
+#include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 
 #include <v8.h>
+
+#include <atomic>
+#include <chrono>
 
 namespace DB
 {
@@ -58,7 +60,7 @@ struct JavaScriptAggrFunctionState
     /// }
     JavaScriptAggrFunctionState(
         const JavaScriptBlueprint & blueprint,
-        const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments,
+        const std::vector<cluster::protocol::UserDefinedFunctionDescriptor::Argument> & arguments,
         const bool is_changelog_input_);
 
     ~JavaScriptAggrFunctionState();
@@ -86,24 +88,25 @@ private:
     static Data & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<Data *>(place); }
     static const Data & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const Data *>(place); }
 
-    const JavaScriptUserDefinedFunctionConfigurationPtr config;
+    const cluster::protocol::UserDefinedFunctionDescriptorPtr udf_desc;
     size_t num_arguments;
     bool is_changelog_input = false;
     size_t max_v8_heap_size_in_bytes;
+    int64_t log_interval_ms;
+    mutable std::atomic<Int64> last_log_time = 0;
     JavaScriptBlueprint blueprint;
-
+    LoggerPtr logger;
 public:
     AggregateFunctionJavaScriptAdapter(
-        JavaScriptUserDefinedFunctionConfigurationPtr config_,
+        cluster::protocol::UserDefinedFunctionDescriptorPtr && udf_desc_,
         const DataTypes & types,
         const Array & params_,
         /// If the input stream is changelog, aggregate function will pass _tp_delta column to JavaScript function
         bool is_changelog_input_,
-        size_t max_v8_heap_size_in_bytes_);
+        size_t max_v8_heap_size_in_bytes_,
+        int64_t log_interval_ms_);
 
     String getName() const override;
-
-    DataTypePtr getReturnType() const override;
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -129,7 +132,7 @@ public:
     void merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, Arena *) const override;
 
     /// Get the number of emits, 0 means no emit, >1 means it has some aggregate results to emit
-    size_t getEmitTimes(AggregateDataPtr __restrict /*place*/) const override;
+    size_t getEmitTimes(ConstAggregateDataPtr __restrict /*place*/) const override;
 
     /// Send the cached rows to User Defined Aggregate function, return the number of emits
     size_t flush(AggregateDataPtr __restrict /*place*/) const override;
@@ -157,5 +160,8 @@ public:
         const IColumn ** columns,
         Arena * arena,
         const IColumn * delta_col = nullptr) const override;
+
+private:
+    bool canLogV8Memory() const;
 };
 }

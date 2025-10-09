@@ -73,6 +73,11 @@ public:
         MODIFY_DATABASE_SETTING,
 
         MODIFY_COMMENT,
+
+        /// proton: starts. support modify/remove mv query settings
+        MODIFY_QUERY_SETTING,
+        RESET_QUERY_SETTING,
+        /// proton: ends.
     };
 
     Type type = NO_TYPE;
@@ -217,14 +222,15 @@ class ASTAlterQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCl
 public:
     enum class AlterObjectType
     {
-        /// proton: starts
         STREAM,
         DATABASE,
         UNKNOWN,
-        /// proton: ends
     };
 
     AlterObjectType alter_object = AlterObjectType::UNKNOWN;
+    /// proton: starts.
+    bool is_view = false;
+    /// proton: ends.
 
     ASTExpressionList * command_list = nullptr;
 
@@ -247,7 +253,7 @@ public:
         return removeOnCluster<ASTAlterQuery>(clone(), new_database);
     }
 
-    virtual QueryKind getQueryKind() const override { return QueryKind::Alter; }
+    QueryKind getQueryKind() const override { return QueryKind::Alter; }
 
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

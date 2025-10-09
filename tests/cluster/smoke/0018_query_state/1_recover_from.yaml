@@ -1,0 +1,82 @@
+tags:
+  - tail
+description: recover tail query from a checkpoint
+cluster:
+  - p1k1
+#  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream(i int, s string)
+
+  - type: wait
+    time: 1
+
+  - name: '1901'
+    query_id: 1901
+    type: stream
+    query: subscribe to select i, s from test19_state_stream settings seek_to='earliest',
+      checkpoint_interval=1
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (1, 's1')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (2, 's2')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1901'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (3, 's3')
+
+  - type: wait
+    time: 2
+
+  - name: 1901-1
+    type: stream
+    query: recover from '1901'
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: unsubscribe to '1901'
+
+  - type: check
+    target_name: '1901'
+    expected_result:
+      - [ 1, s1 ]
+      - [ 2, s2 ]
+
+  - type: check
+    target_name: 1901-1
+    expected_result:
+      - [ 3, s3 ]

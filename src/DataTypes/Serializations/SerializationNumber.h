@@ -1,10 +1,14 @@
 #pragma once
 
-#include <DataTypes/Serializations/SimpleTextSerialization.h>
 #include <Columns/ColumnVector.h>
+#include <Core/Types.h>
+#include <DataTypes/Serializations/SimpleTextSerialization.h>
 
 namespace DB
 {
+
+template <typename T>
+class ColumnVector;
 
 template <typename T>
 class SerializationNumber : public SimpleTextSerialization
@@ -17,9 +21,12 @@ public:
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings, bool whole) const override;
+    bool tryDeserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings, bool whole) const override;
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
+    bool tryDeserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
 
     /** Format is platform-dependent. */
     void serializeBinary(const Field & field, WriteBuffer & ostr, const FormatSettings &) const override;
@@ -30,7 +37,21 @@ public:
     void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
 
     /// proton: starts
-    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    void deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const override;
+
+    void serializeBinaryPrefixTree(const Field & field, String & encoded, const FormatSettings & settings, bool ascending) const override;
+
+    void serializeBinaryPrefixTree(
+        const IColumn & column, size_t row_num, String & encoded, const FormatSettings & settings, bool ascending) const override;
+
+    void deserializeBinaryPrefixTree(
+        IColumn & column, std::string_view & data, const DB::FormatSettings & settings, bool ascending) const override;
+
+    void deserializeBinaryPrefixTreeDiscard(std::string_view & data, const DB::FormatSettings & settings, bool ascending) const override;
+
+private:
+    ColumnVector<T>::ValueType
+    deserializeBinaryPrefixTree(std::string_view & data, const DB::FormatSettings & settings, bool ascending) const;
     /// proton: ends
 };
 

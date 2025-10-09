@@ -38,6 +38,8 @@ struct MovingData
     using Allocator = MixedAlignedArenaAllocator<alignof(T), 4096>;
     using Array = PODArray<T, 32, Allocator>;
 
+    static constexpr bool use_arena = true;
+
     Array value;    /// Prefix sums.
     T sum{};
 
@@ -46,6 +48,8 @@ struct MovingData
         sum += val;
         value.push_back(sum, arena);
     }
+
+    static bool allocatesMemoryInArena() noexcept { return true; }
 };
 
 template <typename T>
@@ -76,6 +80,56 @@ struct MovingAvgData : public MovingData<T>
     }
 };
 
+/// proton : starts. Using std::vector to hold the prefix sums, used for streaming processing
+template <typename T>
+struct MovingDataStd
+{
+    using Accumulator = T;
+
+    using Array = std::vector<T>;
+
+    static constexpr bool use_arena = false;
+
+    Array value;    /// Prefix sums.
+    T sum{};
+
+    void NO_SANITIZE_UNDEFINED add(T val, Arena * /*arena*/)
+    {
+        sum += val;
+        value.push_back(sum);
+    }
+
+    static bool allocatesMemoryInArena() noexcept { return false; }
+};
+
+template <typename T>
+struct MovingSumDataStd : public MovingDataStd<T>
+{
+    static constexpr auto name = "group_array_moving_sum";
+
+    T NO_SANITIZE_UNDEFINED get(size_t idx, UInt64 window_size) const
+    {
+        if (idx < window_size)
+            return this->value[idx];
+        else
+            return this->value[idx] - this->value[idx - window_size];
+    }
+};
+
+template <typename T>
+struct MovingAvgDataStd : public MovingDataStd<T>
+{
+    static constexpr auto name = "group_array_moving_avg";
+
+    T NO_SANITIZE_UNDEFINED get(size_t idx, UInt64 window_size) const
+    {
+        if (idx < window_size)
+            return this->value[idx] / T(window_size);
+        else
+            return (this->value[idx] - this->value[idx - window_size]) / T(window_size);
+    }
+};
+/// proton : end
 
 template <typename T, typename LimitNumElements, typename Data>
 class MovingImpl final
@@ -93,12 +147,15 @@ public:
     using ColumnResult = ColumnVectorOrDecimal<ResultT>;
 
     explicit MovingImpl(const DataTypePtr & data_type_, UInt64 window_size_ = std::numeric_limits<UInt64>::max())
-        : IAggregateFunctionDataHelper<Data, MovingImpl<T, LimitNumElements, Data>>({data_type_}, {})
+        : IAggregateFunctionDataHelper<Data, MovingImpl<T, LimitNumElements, Data>>({data_type_}, {}, createResultType(data_type_))
         , window_size(window_size_) {}
 
     String getName() const override { return Data::name; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(getReturnTypeElement()); }
+    static DataTypePtr createResultType(const DataTypePtr & argument)
+    {
+        return std::make_shared<DataTypeArray>(getReturnTypeElement(argument));
+    }
 
     void NO_SANITIZE_UNDEFINED add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -114,7 +171,12 @@ public:
         size_t cur_size = cur_elems.value.size();
 
         if (rhs_elems.value.size())
-            cur_elems.value.insert(rhs_elems.value.begin(), rhs_elems.value.end(), arena);
+        {
+            if constexpr (Data::use_arena)
+                cur_elems.value.insert(rhs_elems.value.begin(), rhs_elems.value.end(), arena);
+            else
+                cur_elems.value.insert(cur_elems.value.end(), rhs_elems.value.begin(), rhs_elems.value.end());
+        }
 
         for (size_t i = cur_size; i < cur_elems.value.size(); ++i)
         {
@@ -138,12 +200,15 @@ public:
         readVarUInt(size, buf);
 
         if (unlikely(size > AGGREGATE_FUNCTION_MOVING_MAX_ARRAY_SIZE))
-            throw Exception("Too large array size", ErrorCodes::TOO_LARGE_ARRAY_SIZE);
+            throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Too large array size");
 
         if (size > 0)
         {
             auto & value = this->data(place).value;
-            value.resize(size, arena);
+            if constexpr (Data::use_arena)
+                value.resize(size, arena);
+            else
+                value.resize(size);
             buf.readStrict(reinterpret_cast<char *>(value.data()), size * sizeof(value[0]));
             this->data(place).sum = value.back();
         }
@@ -179,18 +244,18 @@ public:
 
     bool allocatesMemoryInArena() const override
     {
-        return true;
+        return Data::allocatesMemoryInArena();
     }
 
 private:
-    auto getReturnTypeElement() const
+    static auto getReturnTypeElement(const DataTypePtr & argument)
     {
         if constexpr (!is_decimal<ResultT>)
             return std::make_shared<DataTypeNumber<ResultT>>();
         else
         {
             using Res = DataTypeDecimal<ResultT>;
-            return std::make_shared<Res>(Res::maxPrecision(), getDecimalScale(*this->argument_types.at(0)));
+            return std::make_shared<Res>(Res::maxPrecision(), getDecimalScale(*argument));
         }
     }
 };

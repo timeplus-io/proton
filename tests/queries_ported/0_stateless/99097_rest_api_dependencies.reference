@@ -1,0 +1,56 @@
+Check count
+4
+4
+Check mv1 dependencies
+{
+  "from": "db_99097.mv1",
+  "from_type": "MaterializedView",
+  "to": "system.stream_state_log",
+  "to_type": "Stream"
+}
+Check mv1 data flows
+{
+  "from": "system.stream_state_log",
+  "from_type": "Stream",
+  "to": "db_99097.mv1",
+  "to_type": "MaterializedView"
+}
+Check task1 dependencies
+4
+4
+4
+Check task1 data flows
+{
+  "from": "db_99097.task1",
+  "from_type": "Task",
+  "to": "db_99097.stream2",
+  "to_type": "Stream"
+}
+{
+  "from": "db_99097.stream1",
+  "from_type": "Stream",
+  "to": "db_99097.task1",
+  "to_type": "Task"
+}
+{
+  "from": "db_99097.stream3",
+  "from_type": "Stream",
+  "to": "db_99097.task1",
+  "to_type": "Task"
+}
+Get mv1 dependencies
+1
+{
+  "from": "system.stream_state_log",
+  "from_type": "Stream",
+  "to": "db_99097.mv1",
+  "to_type": "MaterializedView"
+}
+Get task1 dependencies
+3
+{
+  "from": "db_99097.task1",
+  "from_type": "Task",
+  "to": "db_99097.stream2",
+  "to_type": "Stream"
+}

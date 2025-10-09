@@ -12,16 +12,15 @@ TIMEPLUS_CONNECTION_RETRY = 3
 class ProtonHelper:
     def __init__(self, api_address=None, work_space=None, api_key=None):
         if api_address is None:
-            api_address = os.environ.get("TIMEPLUS_ADDRESS2")
+            api_address = os.environ.get("TIMEPLUS_ADDRESS")
         if work_space is None:
-            work_space = os.environ.get("TIMEPLUS_WORKSPACE2")
+            work_space = os.environ.get("TIMEPLUS_WORKSPACE")
         if api_key is None:
-            api_key = os.environ.get("TIMEPLUS_API_KEY2")
+            api_key = os.environ.get("TIMEPLUS_API_KEY")
 
         if api_address is None or api_key is None:
             logging.error(
-                f"one of TIMEPLUS_API_KEY2,TIMEPLUS_ADDRESS2,TIMEPLUS_WORKSPACE2 is not found in ENV")
-        logging.warning(f"api_key length: {len(api_key)}, api_address length: {len(api_address)}, work_space length: {len(work_space)}")
+                f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")
         self.env = Environment().address(api_address).workspace(work_space).apikey(api_key)
 
     def write(
@@ -66,7 +65,7 @@ def prepare_event(test_results, event_type, **optional_event_msg):
             if "OK" != test_status:
                 test_result_flag = test_result_flag * 0
             detailed_summary.append(current_row)
-        event['test_result'] = "success" if test_result_flag else "failed"
+        event['test_result'] = "seccess" if test_result_flag else "failed"
         if optional_event_msg is not None:
             event.update(optional_event_msg)
         event['payload'] = detailed_summary

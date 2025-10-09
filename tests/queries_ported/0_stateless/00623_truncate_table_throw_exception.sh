@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
-${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS test_truncate;"
+${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS test_truncate CASCADE;"
 
 ${CLICKHOUSE_CLIENT} --query "CREATE DATABASE test_truncate;"
 
@@ -21,4 +21,4 @@ echo "$(${CLICKHOUSE_CLIENT} --query "TRUNCATE TABLE test_truncate.test_view;" -
 ${CLICKHOUSE_CLIENT} --query "SELECT '========After Truncate========';"
 ${CLICKHOUSE_CLIENT} --query "SELECT * FROM test_truncate.test_view settings query_mode='table',asterisk_include_reserved_columns=false;"
 
-${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS test_truncate;"
+${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS test_truncate CASCADE;"

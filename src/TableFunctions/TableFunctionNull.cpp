@@ -3,7 +3,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Storages/checkAndGetLiteralArgument.h>
 #include <Storages/StorageNull.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TableFunctions/TableFunctionNull.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -22,13 +22,14 @@ void TableFunctionNull::parseArguments(const ASTPtr & ast_function, ContextPtr c
     const auto * function = ast_function->as<ASTFunction>();
     if (!function || !function->arguments)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires 'structure'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function '{}' requires 'structure'", getName());
         /// proton: ends
 
     const auto & arguments = function->arguments->children;
-    if (arguments.size() != 1)
+    if (!arguments.empty() && arguments.size() != 1)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires 'structure'.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Function '{}' requires 'structure' argument or empty argument", getName());
         /// proton: ends
 
     structure = checkAndGetLiteralArgument<String>(evaluateConstantExpressionOrIdentifierAsLiteral(arguments[0], context), "structure");

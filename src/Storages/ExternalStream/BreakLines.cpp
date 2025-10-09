@@ -19,7 +19,6 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
     std::vector<std::string_view> lines;
     lines.reserve(100);
 
-
     while (re2::RE2::FindAndConsume(&input, line_breaker, &breaker))
     {
         /// re2 moves input to next starting position beyond the current match automatically
@@ -53,23 +52,25 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
         }
         else
         {
-            /// matched at the very beginning
+            /// Matched at the very beginning
             /// do nothing
             last_breaker = breaker;
         }
     }
 
-    /// update remaining
+    /// Update remaining
     if (!lines.empty())
-    {
         length -= (breaker.data() - data);
-    }
 
-    /// if remaining length is greater than max_line_length
+    /// If remaining length is greater than max_line_length
     /// force the remaining data to a line
     if (length >= max_line_length)
     {
-        lines.emplace_back(breaker.data(), length);
+        if (!lines.empty())
+            lines.emplace_back(breaker.data(), length);
+        else
+            lines.emplace_back(data, length);
+
         length = 0;
     }
 

@@ -1,0 +1,4 @@
+name: changelog_stream_aggr
+description: Tests covering the single shard changelog stream aggr smoke cases
+tags:
+  - smoke

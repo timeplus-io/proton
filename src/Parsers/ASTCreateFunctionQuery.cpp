@@ -7,12 +7,13 @@
 /// proton: starts
 #include <optional>
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/ASTLiteral.h>
 
 #include <cassert>
-#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string.hpp>
+#include <magic_enum.hpp>
 /// proton: ends
 
 
@@ -57,8 +58,8 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName()) << (settings.hilite ? hilite_none : "");
 
     /// proton: starts
-    bool is_javascript_func = isJavaScript();
-    if (is_javascript_func || is_remote)
+    bool is_udf = isUDF();
+    if (is_udf)
     {
         /// arguments
         arguments->formatImpl(settings, state, frame);
@@ -66,6 +67,15 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
         /// return type
         settings.ostr << " RETURNS ";
         return_type->formatImpl(settings, state, frame);
+
+        if (isJavaScript())
+        {
+            settings.ostr << " LANGUAGE JAVASCRIPT";
+        }
+        else if (isPython())
+        {
+            settings.ostr << " LANGUAGE PYTHON";
+        }
     }
     /// proton: ends
 
@@ -81,11 +91,11 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     /// proton: ends
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "");
 
-    /// proton: starts. Do not format the source of JavaScript UDF
-    if (is_javascript_func)
+    /// proton: starts. Do not format the source of UDF
+    if (is_udf)
     {
-        ASTLiteral * js_src = function_core->as<ASTLiteral>();
-        settings.ostr << fmt::format("$$\n{}\n$$", js_src->value.safeGet<String>());
+        ASTLiteral * udf_src = function_core->as<ASTLiteral>();
+        settings.ostr << fmt::format("$$\n{}\n$$", udf_src->value.safeGet<String>());
     }
     else
         function_core->formatImpl(settings, state, frame);
@@ -100,17 +110,35 @@ String ASTCreateFunctionQuery::getFunctionName() const
 }
 
 /// proton: starts
+String ASTCreateFunctionQuery::getSource() const
+{
+    /// source
+    ASTLiteral * js_src = function_core->as<ASTLiteral>();
+    return js_src->value.safeGet<String>();
+}
+
+String ASTCreateFunctionQuery::getReturnType() const
+{
+    WriteBufferFromOwnString return_buf;
+    formatAST(*return_type, return_buf, false);
+    return return_buf.str();
+}
+
+bool ASTCreateFunctionQuery::isAggregation() const
+{
+    return is_aggregation;
+}
+
 Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
 {
     Poco::JSON::Object::Ptr func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     Poco::JSON::Object::Ptr inner_func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     inner_func->set("name", getFunctionName());
-    bool is_remote = isRemote();
-    if (!isJavaScript() && !isRemote())
+    if (isSQL())
     {
-        WriteBufferFromOwnString source_buf;
-        formatAST(*function_core, source_buf, false);
-        inner_func->set("source", source_buf.str());
+        WriteBufferFromOwnString query_buf;
+        formatAST(*this, query_buf, false);
+        inner_func->set("query", query_buf.str());
         inner_func->set("type", "sql");
         func->set("function", inner_func);
         return func;
@@ -133,20 +161,19 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     inner_func->set("arguments", json_args);
 
     /// type
-    auto type = lang;
-    boost::to_lower(type);
-    inner_func->set("type", type);
+    std::string type_name = std::string(magic_enum::enum_name(lang));
+    boost::algorithm::to_lower(type_name);
+    inner_func->set("type", type_name);
+
 
     /// is_aggregation
     inner_func->set("is_aggregation", is_aggregation);
 
     /// return_type
-    WriteBufferFromOwnString return_buf;
-    formatAST(*return_type, return_buf, false);
-    inner_func->set("return_type", return_buf.str());
+    inner_func->set("return_type", getReturnType());
 
     /// remote function
-    if (is_remote)
+    if (isRemote())
     {
         assert(function_core != nullptr && function_core->as<ASTExpressionList>());
         auto keyvalue_list = function_core->as<ASTExpressionList>();
@@ -158,7 +185,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
         for (ASTPtr child : keyvalue_list->children)
         {
             auto pair = child->as<ASTPair>();
-            if (pair != nullptr){
+            if (pair != nullptr)
+            {
                 if (pair->first == "url")
                     url = pair->second->as<ASTLiteral>()->value.safeGet<String>();
                 else if (pair->first == "auth_method")
@@ -170,8 +198,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
                 else if (pair->first == "execution_timeout")
                     execution_timeout = pair->second->as<ASTLiteral>()->value.safeGet<UInt64>();
             }
-        }        
-
+        }
         inner_func->set("url", url.value());
         if (auth_method.has_value())
         {   
@@ -196,10 +223,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
         /// Remote function don't have source, return early.
         return func;
     }
-
     /// source
-    ASTLiteral * js_src = function_core->as<ASTLiteral>();
-    inner_func->set("source", js_src->value.safeGet<String>());
+    inner_func->set("source", getSource());
 
     func->set("function", inner_func);
     return func;

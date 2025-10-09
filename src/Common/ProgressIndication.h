@@ -24,8 +24,7 @@ struct ThreadEventData
     UInt64 memory_usage = 0;
 };
 
-using ThreadIdToTimeMap = std::unordered_map<UInt64, ThreadEventData>;
-using HostToThreadTimesMap = std::unordered_map<String, ThreadIdToTimeMap>;
+using HostToTimesMap = std::unordered_map<String, ThreadEventData>;
 
 class ProgressIndication
 {
@@ -54,15 +53,11 @@ public:
     void setFileProgressCallback(ContextMutablePtr context, WriteBufferFromFileDescriptor & message);
 
     /// How much seconds passed since query execution start.
-    double elapsedSeconds() const { return watch.elapsedSeconds(); }
+    double elapsedSeconds() const { return getElapsedNanoseconds() / 1e9; }
 
-    void addThreadIdToList(String const & host, UInt64 thread_id);
-
-    void updateThreadEventData(HostToThreadTimesMap & new_thread_data);
+    void updateThreadEventData(HostToTimesMap & new_hosts_data);
 
 private:
-    size_t getUsedThreadsCount() const;
-
     double getCPUUsage();
 
     struct MemoryUsage
@@ -72,6 +67,8 @@ private:
     };
 
     MemoryUsage getMemoryUsage() const;
+
+    UInt64 getElapsedNanoseconds() const;
 
     /// This flag controls whether to show the progress bar. We start showing it after
     /// the query has been executing for 0.5 seconds, and is still less than half complete.
@@ -85,13 +82,13 @@ private:
     /// This information is stored here.
     Progress progress;
 
-    /// Track query execution time.
+    /// Track query execution time on client.
     Stopwatch watch;
 
     bool write_progress_on_update = false;
 
     EventRateMeter cpu_usage_meter{static_cast<double>(clock_gettime_ns()), 2'000'000'000 /*ns*/}; // average cpu utilization last 2 second
-    HostToThreadTimesMap thread_data;
+    HostToTimesMap hosts_data;
     /// In case of all of the above:
     /// - clickhouse-local
     /// - input_format_parallel_parsing=true
@@ -99,7 +96,7 @@ private:
     ///
     /// It is possible concurrent access to the following:
     /// - writeProgress() (class properties) (guarded with progress_mutex)
-    /// - thread_data/host_cpu_usage (guarded with profile_events_mutex)
+    /// - hosts_data/cpu_usage_meter (guarded with profile_events_mutex)
     mutable std::mutex profile_events_mutex;
     mutable std::mutex progress_mutex;
 };

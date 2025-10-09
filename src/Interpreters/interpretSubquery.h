@@ -4,7 +4,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 
 /// proton: starts.
-#include <Storages/Streaming/SeekToInfo.h>
+#include <Storages/SeekToInfo.h>
 /// proton: ends.
 
 namespace DB

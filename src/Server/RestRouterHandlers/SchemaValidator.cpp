@@ -38,6 +38,7 @@ bool validateSchema(const std::map<String, std::map<String, String>> & schema, c
                 && ((optional.second == "int" && !payload->get(optional.first).isInteger())
                     || (optional.second == "string" && !payload->get(optional.first).isString())
                     || (optional.second == "bool" && !payload->get(optional.first).isBoolean())
+                    || (optional.second == "array" && !payload->get(optional.first).isArray())
                     || (optional.second == "double" && !payload->get(optional.first).isNumeric())))
             {
                 error_msg = fmt::format("Invalid type of param '{}'", optional.first);

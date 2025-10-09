@@ -36,6 +36,7 @@ public:
     static Block transformHeader(Block header, const ActionsDAG & expression);
 
     /// proton: starts.
+    bool hasState() const override { return !stateful_functions.empty(); }
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
     /// proton: ends.

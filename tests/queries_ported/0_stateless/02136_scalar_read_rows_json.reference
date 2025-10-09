@@ -1,0 +1,48 @@
+#1
+{
+	"meta":
+	[
+		{
+			"name": "count()",
+			"type": "uint64"
+		}
+	],
+
+	"data":
+	[
+		{
+			"count()": "100"
+		}
+	],
+
+	"rows": 1,
+
+	"statistics":
+	{
+		"rows_read": 100,
+		"bytes_read": 800
+	}
+}
+#2
+{
+	"meta":
+	[
+		{
+			"type": "tuple(uint64, uint64)"
+		}
+	],
+
+	"data":
+	[
+		{
+		}
+	],
+
+	"rows": 1,
+
+	"statistics":
+	{
+		"rows_read": 100001,
+		"bytes_read": 800001
+	}
+}

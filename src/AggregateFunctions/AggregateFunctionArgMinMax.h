@@ -42,7 +42,6 @@ template <typename Data>
 class AggregateFunctionArgMinMax final : public IAggregateFunctionDataHelper<Data, AggregateFunctionArgMinMax<Data>>
 {
 private:
-    const DataTypePtr & type_res;
     const DataTypePtr & type_val;
     const SerializationPtr serialization_res;
     const SerializationPtr serialization_val;
@@ -51,25 +50,20 @@ private:
 
 public:
     AggregateFunctionArgMinMax(const DataTypePtr & type_res_, const DataTypePtr & type_val_)
-        : Base({type_res_, type_val_}, {})
-        , type_res(this->argument_types[0])
+        : Base({type_res_, type_val_}, {}, type_res_)
         , type_val(this->argument_types[1])
-        , serialization_res(type_res->getDefaultSerialization())
+        , serialization_res(type_res_->getDefaultSerialization())
         , serialization_val(type_val->getDefaultSerialization())
     {
         if (!type_val->isComparable())
-            throw Exception("Illegal type " + type_val->getName() + " of second argument of aggregate function " + getName()
-                + " because the values of that data type are not comparable", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of second argument of "
+                            "aggregate function {} because the values of that data type are not comparable",
+                            type_val->getName(), getName());
     }
 
     String getName() const override
     {
         return StringRef(Data::ValueData_t::name()) == StringRef("min") ? "arg_min" : "arg_max";
-    }
-
-    DataTypePtr getReturnType() const override
-    {
-        return type_res;
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
@@ -112,8 +106,42 @@ public:
     {
         this->data(place).result.insertResultInto(to);
     }
+
+    /// proton: starts.
+    AggregateFunctionPtr getOwnNullAdapter(
+        const AggregateFunctionPtr & /*nested_function*/,
+        const DataTypes & arguments,
+        const Array & /*params*/,
+        const AggregateFunctionProperties & /*properties*/) const override
+    {
+        chassert(arguments.size() == 2);
+
+        /// Nullability of the first argument (arg) does not affect the nullability of the result.
+        if (arguments[0]->isNullable())
+        {
+            if (arguments[1]->isNullable())
+            {
+                if (Data::ValueData_t::name() == "min")
+                    return std::make_shared<
+                        AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<SingleValueDataGeneric, AggregateFunctionMinData<SingleValueDataGeneric>>>>(
+                        arguments[0], arguments[1]);
+                else
+                    return std::make_shared<
+                        AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<SingleValueDataGeneric, AggregateFunctionMaxData<SingleValueDataGeneric>>>>(
+                        arguments[0], arguments[1]);
+            }
+            else
+            {
+                return std::make_shared<
+                    AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<SingleValueDataGeneric, typename Data::ValueData_t>>>(
+                    arguments[0], arguments[1]);
+            }
+        }
+
+        return nullptr;
+    }
+    /// proton: ends.
 };
 
-#endif
-
 }
+#endif

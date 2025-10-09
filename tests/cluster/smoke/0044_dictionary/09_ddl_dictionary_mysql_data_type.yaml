@@ -1,0 +1,88 @@
+tags:
+  - mysql
+
+description: |
+  Test ddl dictionary with source mysql
+  Main steps:
+  1.Create table in MySQL and ingest data
+  2.Create dictionary in Proton with source MySQL
+  3.Verify dictionary connectivity via dict_get
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "DROP DATABASE IF EXISTS testdb;" mysql
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "CREATE DATABASE testdb;" mysql
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "CREATE TABLE products (int8_c TINYINT, int16_c SMALLINT, int32_c MEDIUMINT, int_c INTEGER, int64_c BIGINT, uint8_c TINYINT UNSIGNED, uint16_c SMALLINT UNSIGNED, uint32_c MEDIUMINT UNSIGNED, uint_c INTEGER UNSIGNED, uint64_c BIGINT UNSIGNED, float32_c FLOAT, float64_c DOUBLE, decimal32_c DECIMAL(9, 3), decimal64_c DECIMAL(18, 3), decimal128_c DECIMAL(38, 3), decimal256_c DECIMAL(65, 3), string_char_c CHAR(255), string_varchar_c VARCHAR(255), string_text_c TEXT, string_json_c JSON, date_c DATE, datetime_c DATETIME, datetime_timestamp_c TIMESTAMP, string_time_c TIME, uint16_year_c YEAR, bool_c BOOLEAN);" testdb
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "INSERT INTO products (int8_c, int16_c, int32_c, int_c, int64_c, uint8_c, uint16_c, uint32_c, uint_c, uint64_c, float32_c, float64_c, decimal32_c, decimal64_c, decimal128_c, decimal256_c, string_char_c, string_varchar_c, string_text_c, string_json_c, date_c, datetime_c, datetime_timestamp_c, string_time_c, uint16_year_c, bool_c) VALUES (127, 32767, 8388607, 2147483647, 9223372036854775807, 255, 65535, 16777215, 4294967295, 18446744073709551615, 3.4028235, 1.7976931348623157, '999999.999', '999999999999999.999', '99999999999999999999999999999999999.999', '99999999999999999999999999999999999999999999999999999999999999.999', '{@char}', '{@varchar}', '{@text}', '{\"name\":\"json\"}', '2024-01-01', '2024-01-01 00:00:00', '2024-01-01 00:00:00', '143:30:00', 2155, false);" testdb
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS mysql_products_flat;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY mysql_products_flat(
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int_c int,
+        int64_c int64,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint_c uint,
+        uint64_c uint64,
+        float32_c float32,
+        float64_c float64,
+        decimal32_c decimal32(3),
+        decimal64_c decimal64(3),
+        decimal128_c decimal128(3),
+        decimal256_c decimal256(3),
+        string_char_c string,
+        string_varchar_c string,
+        string_text_c string,
+        string_json_c string,
+        date_c date,
+        datetime_c datetime,
+        datetime_timestamp_c datetime,
+        string_time_c string,
+        uint16_year_c uint16,
+        bool_c bool
+      )
+      PRIMARY KEY int8_c
+      SOURCE(MYSQL(DB 'testdb' TABLE 'products' HOST 'mysql' PORT 3306 USER 'root' PASSWORD 'rootpassword' BG_RECONNECT true))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: wait
+    time: 1
+
+  - name: dict-9-1
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: stream
+    query: SELECT dict_get('mysql_products_flat', 'bool_c', '127');
+    schema:
+      - name: dict_get('mysql_products_flat', 'bool_c', '127')
+        type: bool
+
+  - type: check
+    target_name: dict-9-1
+    expected_result:
+      - [False]

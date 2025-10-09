@@ -7,6 +7,9 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
+/// proton : starts
+#include <IO/PrefixTreeEncode.h>
+/// proton : ends
 
 namespace DB
 {
@@ -66,9 +69,69 @@ void SerializationDecimalBase<T>::deserializeBinaryBulk(IColumn & column, ReadBu
 
 /// proton: starts
 template <typename T>
-void SerializationDecimalBase<T>::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+void SerializationDecimalBase<T>::deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const
 {
     istr.ignore(sizeof(FieldType) * limit);
+}
+
+template <typename T>
+void SerializationDecimalBase<T>::serializeBinaryPrefixTree(
+    const Field & field, String & encoded, const FormatSettings & /*settings*/, bool ascending) const
+{
+    if constexpr (std::is_same_v<T, DateTime64>)
+    {
+        FieldType x = field.get<DecimalField<T>>();
+        if (ascending)
+            PrefixTreeEncode::encodeVarIntAscending(x, encoded);
+        else
+            PrefixTreeEncode::encodeVarIntDescending(x, encoded);
+    }
+    else
+        throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "Prefix tree serialization is not implemented for Decimal type");
+}
+
+template <typename T>
+void SerializationDecimalBase<T>::serializeBinaryPrefixTree(
+    const IColumn & column, size_t row_num, String & encoded, const FormatSettings & /*settings*/, bool ascending) const
+{
+    if constexpr (std::is_same_v<T, DateTime64>)
+    {
+        if (ascending)
+            PrefixTreeEncode::encodeVarIntAscending(assert_cast<const ColumnType &>(column).getElement(row_num), encoded);
+        else
+            PrefixTreeEncode::encodeVarIntDescending(assert_cast<const ColumnType &>(column).getElement(row_num), encoded);
+    }
+    else
+        throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "Prefix tree serialization is not implemented for Decimal type");
+}
+
+template <typename T>
+void SerializationDecimalBase<T>::deserializeBinaryPrefixTree(
+    IColumn & column, std::string_view & data, const DB::FormatSettings & settings, bool ascending) const
+{
+    assert_cast<ColumnType &>(column).getData().push_back(deserializeBinaryPrefixTree(data, settings, ascending));
+}
+
+template <typename T>
+T SerializationDecimalBase<T>::deserializeBinaryPrefixTree(
+    std::string_view & data, const DB::FormatSettings & /*settings*/, bool ascending) const
+{
+    if constexpr (std::is_same_v<T, DateTime64>)
+    {
+        if (ascending)
+            return FieldType(PrefixTreeEncode::decodeVarIntAscending(data));
+        else
+            return FieldType(PrefixTreeEncode::decodeVarIntDescending(data));
+    }
+    else
+        throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "Prefix tree deserialization is not implemented for Decimal type");
+}
+
+template <typename T>
+void SerializationDecimalBase<T>::deserializeBinaryPrefixTreeDiscard(
+    std::string_view & data, const DB::FormatSettings & settings, bool ascending) const
+{
+    deserializeBinaryPrefixTree(data, settings, ascending);
 }
 /// proton: ends
 

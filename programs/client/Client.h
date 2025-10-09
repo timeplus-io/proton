@@ -25,9 +25,19 @@ protected:
 
     void printHelpMessage(const OptionsDescription & options_description) override;
     void addOptions(OptionsDescription & options_description) override;
-    void processOptions(const OptionsDescription & options_description, const CommandLineOptions & options,
-                        const std::vector<Arguments> & external_tables_arguments) override;
+    void processOptions(
+        const OptionsDescription & options_description,
+        const CommandLineOptions & options,
+        const std::vector<Arguments> & external_tables_arguments,
+        const std::vector<Arguments> & hosts_and_ports_arguments) override;
     void processConfig() override;
+
+    void readArguments(
+        int argc,
+        char ** argv,
+        Arguments & common_arguments,
+        std::vector<Arguments> & external_tables_arguments,
+        std::vector<Arguments> & hosts_and_ports_arguments) override;
 
 private:
     void printChangedSettings() const;

@@ -1,0 +1,77 @@
+description: |
+  Test monitoring new users from tumble(person, date_time, 1s) inner join tumble(auction, date_time, 1s)
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q8
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q8
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+     CREATE EXTERNAL STREAM target(
+      id int64, 
+      name string,
+      window_start datetime64) 
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q8', 
+              data_format='JSONEachRow',
+              one_message_per_row=false;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT
+        P.id, P.name, P.window_start as windowstart
+      FROM
+        (
+          SELECT
+            id, name, window_start, window_end
+          FROM
+            tumble(person, date_time, 1s)
+          GROUP BY
+            id, name, window_start, window_end
+        ) AS P
+      INNER JOIN (
+          SELECT
+            seller, window_start, window_end
+          FROM
+            tumble(auction, date_time, 1s)
+          GROUP BY
+            seller, window_start, window_end
+        ) AS A ON P.id = A.seller
+      SETTINGS
+        seek_to = 'earliest';
+      
+  - type: wait
+    time: 150
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 30

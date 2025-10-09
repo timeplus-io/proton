@@ -1,0 +1,139 @@
+tags:
+- query_state
+- data_enrichment_join
+- inner-join
+description: append-only INNER latest JOIN changelog-kv state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream3;
+- type: query
+  sql: drop stream if exists test19_vk_right_stream3;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream3 (i int, k string);
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_vk_right_stream3 (j int, kk string) primary
+    key (kk) settings mode='versioned_kv';
+- type: wait
+  time: 1
+
+- name: '19355'
+  type: stream
+  query_id: '19355'
+  query: subscribe to select i, k, j, kk from test19_left_stream3 inner latest join
+    test19_vk_right_stream3 on i=j settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test19_vk_right_stream3(j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [1, 'k1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_right_stream3(j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [1, 'k2']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'a']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19355'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_vk_right_stream3(j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [2, 'k2']
+- type: wait
+  time: 1
+
+- name: 19355-1
+  type: stream
+  query: recover from '19355'
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'b']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19355' sync
+
+- type: query
+  sql: unsubscribe to '19355'
+
+- type: check
+  target_name: '19355'
+  expected_result:
+  - [1, a, 1, k2]
+
+- type: check
+  target_name: 19355-1
+  expected_result:
+  - [1, b, 1, k2]

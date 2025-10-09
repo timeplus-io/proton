@@ -17,30 +17,30 @@ namespace DB
 class AvroSchemaSerializer
 {
 public:
+    using SerializeFn = std::function<void(const IColumn & column, size_t row_num, avro::Encoder & encoder)>;
+
     AvroSchemaSerializer(avro::ValidSchema valid_schema, const Block & header, WriteBuffer & out);
     void serializeRow(const Columns & columns, size_t row_num);
     void flush() { encoder->flush(); }
 
 private:
-    using SerializeFn = std::function<void(const IColumn & column, size_t row_num, avro::Encoder & encoder)>;
-
     SerializeFn createSerializeFn(const avro::NodePtr & node, const DataTypePtr & data_type) const;
     SerializeFn createDefaultNullUnionSerializeFn() const;
     SerializeFn createUnionSerializeFn(int index) const;
 
     struct Action
     {
-        enum Type
+        enum class Type : uint8_t
         {
-            Unknown,
+            Unknown = 0,
             Serialize,
             Group,
             Array,
             Nested
         };
-        Type type{Unknown};
+        Type type{Type::Unknown};
 
-        int target_column_idx{0};
+        int target_column_idx{-1};
         /// If union_idx has value, it means it's inside a union field.
         std::optional<int> union_idx;
         SerializeFn serialize_fn;
@@ -59,6 +59,8 @@ private:
             std::vector<size_t> nested_column_indexes_, std::vector<SerializeFn> nested_serializers_, std::optional<int> union_idx_);
 
         void execute(const Columns & columns, size_t row_num, avro::Encoder & enc) const;
+
+        String toString() const;
 
     private:
         void serializeNested(const Columns & columns, size_t row_num, avro::Encoder & encoder) const;
@@ -80,8 +82,7 @@ private:
 class AvroConfluentRowOutputFormat final : public IRowOutputFormat
 {
 public:
-    AvroConfluentRowOutputFormat(
-        WriteBuffer & out_, const Block & header_, const RowOutputFormatParams & params_, const FormatSettings & settings_);
+    AvroConfluentRowOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & settings_);
     ~AvroConfluentRowOutputFormat() override;
 
     String getName() const override { return "AvroConfluentRowOutputFormat"; }
@@ -96,6 +97,8 @@ protected:
     void writeField(const IColumn &, const ISerialization &, size_t) override { }
 
 private:
+    void finalizeImpl() override;
+
     FormatSettings settings;
     UInt32 schema_id{0};
     std::unique_ptr<AvroSchemaSerializer> serializer;
@@ -104,7 +107,8 @@ private:
 class AvroSchemaRowOutputFormat final : public IRowOutputFormat
 {
 public:
-    AvroSchemaRowOutputFormat(WriteBuffer & out_, const Block & header_, const RowOutputFormatParams & params_, const FormatSchemaInfo & schema_info, const FormatSettings & format_settings);
+    AvroSchemaRowOutputFormat(
+        WriteBuffer & out_, const Block & header_, const FormatSchemaInfo & schema_info, const FormatSettings & format_settings);
     ~AvroSchemaRowOutputFormat() override;
 
     String getName() const override { return "AvroSchemaRowOutputFormat"; }
@@ -119,6 +123,8 @@ protected:
     void writeField(const IColumn &, const ISerialization &, size_t) override { }
 
 private:
+    void finalizeImpl() override;
+
     FormatSettings settings;
     std::unique_ptr<AvroSchemaSerializer> serializer;
 };

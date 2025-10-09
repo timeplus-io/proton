@@ -1,0 +1,145 @@
+description: |
+  Test ddl dictionary with source Timeplus with proton user
+  Main steps:
+  1.Create stream and ingest data with proton user
+  2.Create dictionary with source Timeplus
+  3.Verify dictionary connectivity via dict_get
+  4.Drop dictionary
+
+steps:
+  # SOURCE PROTON
+  - type: query
+    user: proton
+    password: 'proton@t+'
+    sql: DROP STREAM IF EXISTS pproducts;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: 'proton@t+'
+    sql: CREATE STREAM pproducts (id uint64, name string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    user: proton
+    password: 'proton@t+'
+    sql: INSERT INTO pproducts (id, name) VALUES (1, 'p111');
+
+  # PROTON
+  - type: query
+    user: proton
+    password: 'proton@t+'
+    sql: DROP DICTIONARY IF EXISTS tp_pproducts_flat;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: 'proton@t+'
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_pproducts_flat(id uint64 DEFAULT 0, name string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, name FROM table(pproducts)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: wait
+    time: 1
+
+  - name: dict-16-1
+    type: stream
+    user: proton
+    password: 'proton@t+'
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SHOW DICTIONARIES WHERE name = 'tp_pproducts_flat';
+    schema:
+      - name: name
+        type: string
+
+  - name: dict-16-2
+    type: stream
+    user: proton
+    password: 'proton@t+'
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_pproducts_flat', 'name', 1);
+    schema:
+      - name: dict_get('tp_pproducts_flat', 'name', 1)
+        type: string
+
+  - type: check
+    target_name: dict-16-1
+    expected_result:
+      - ['tp_pproducts_flat']
+
+  - type: check
+    target_name: dict-16-2
+    expected_result:
+      - ['p111']
+
+  - type: query
+    user: proton
+    password: 'proton@t+'
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: DROP DICTIONARY tp_pproducts_flat;
+
+  - type: wait
+    time: 1
+
+  - name: dict-16-3
+    type: stream
+    user: proton
+    password: 'proton@t+'
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SHOW DICTIONARIES WHERE name = 'tp_pproducts_flat';
+    schema:
+      - name: name
+        type: string
+
+  - type: check
+    target_name: dict-16-3
+    expected_result:
+      - []
+
+  - type: wait
+    time: 1
+
+  - name: dict-16-4
+    type: stream
+    user: proton
+    password: 'proton@t+'
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_pproducts_flat', 'name', 1);
+    schema:
+      - name: dict_get('tp_pproducts_flat', 'name', 1)
+        type: string
+
+  - type: check
+    target_name: dict-16-4
+    expected_result:
+      - ['error_code:36']

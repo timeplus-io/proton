@@ -2,6 +2,7 @@
 
 #include <Columns/ColumnSparse.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/WeakHash.h>
 
 namespace DB

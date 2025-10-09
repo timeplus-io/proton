@@ -1,0 +1,90 @@
+tags:
+- table_func_changelog
+description: tail query from table function changelog(view)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists test28_view;
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test28_left_stream;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test28_left_stream (k string, val float);
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test28_left_stream(k, val) values
+  schema:
+  - name: k
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - ['k1', 11.1]
+  - ['k2', 22.2]
+  - ['k3', 33.3]
+- type: wait
+  time: 2
+
+- type: query
+  sql: create view test28_view as select k, count(), min(val), max(val), sum(val), avg(val) from test28_left_stream where _tp_time > earliest_ts() group by k;
+- type: wait
+  time: 1
+
+- name: '2812'
+  type: stream
+  query: select * from changelog(test28_view, k);
+  schema:
+  - name: k
+    type: string
+  - name: count()
+    type: uint64
+  - name: min(val)
+    type: float32
+  - name: max(val)
+    type: float32
+  - name: sum(val)
+    type: float64
+  - name: avg(val)
+    type: float64
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test28_left_stream(k, val) values
+  schema:
+  - name: k
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - ['k1', 44.4]
+  - ['k2', 55.5]
+  - ['k3', 66.6]
+
+- type: check
+  target_name: '2812'
+  mode: random
+  expected_result:
+  - ['k1', 1, 11.1, 11.1, 11.1, 11.1, 1]
+  - ['k2', 1, 22.2, 22.2, 22.2, 22.2, 1]
+  - ['k3', 1, 33.3, 33.3, 33.3, 33.3, 1]
+  - ['k1', 1, 11.1, 11.1, 11.1, 11.1, -1]
+  - ['k2', 1, 22.2, 22.2, 22.2, 22.2, -1]
+  - ['k3', 1, 33.3, 33.3, 33.3, 33.3, -1]
+  - ['k1', 2, 11.1, 44.4, 55.5, 27.75, 1]
+  - ['k2', 2, 22.2, 55.5, 77.7, 38.85, 1]
+  - ['k3', 2, 33.3, 66.6, 99.9, 49.95, 1]
+
+- type: query
+  sql: drop view if exists test28_view

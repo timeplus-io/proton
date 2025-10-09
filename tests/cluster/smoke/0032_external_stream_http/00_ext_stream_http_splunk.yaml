@@ -1,0 +1,170 @@
+tags:
+  - materialized view
+  - splunk
+  - to_support
+
+description: |
+  Test http external streams source and sink to splunk with materialized view
+  (Step 4, 6, 7 comment due to unsupport now)
+  Main Steps:
+    1.Generate Splunk HTTP HEC token
+    2.Create source HTTP external stream
+    3.Create target HTTP external stream
+    4.Create materialized view from source into target
+    5.Ingest data into source stream
+    6.Check streaming query on target stream and mv
+    7.Check table query on target stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  # Splunk: generate http HEC token
+  - type: command
+    node: [s1]
+    shell: |
+      docker ps -a | grep splunk
+
+  - type: command
+    node: [s1]
+    shell: |
+      docker exec <<.CONTAINER_NAME_PREFIX>>_splunk \
+      curl -k -u admin:chang3d! \
+        -X DELETE \
+        https://splunk:8089/services/data/inputs/http/test-token
+
+  - type: command
+    node: [s1]
+    shell: |
+      docker exec <<.CONTAINER_NAME_PREFIX>>_splunk \
+      curl -k -u admin:chang3d! \
+        https://splunk:8089/services/data/inputs/http \
+        -d name="test-token" \
+        -d token="f807d838-40e4-4ff2-9b3f-8828ebd11384" \
+        -d index="main" \
+        -d sourcetype="_json" \
+        -d disabled=0
+
+  # Proton
+  - type: query
+    sql: drop view if exists http_00_mv
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists http_00_target_ex
+
+  - type: query
+    sql: drop stream if exists http_00_source_ex
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream http_00_source_ex (
+        event string,
+        sourcetype string default '_json'
+      ) settings type='http', 
+                 url='https://splunk:8088/services/collector', 
+                 http_header_Authorization='Splunk f807d838-40e4-4ff2-9b3f-8828ebd11384', 
+                 skip_ssl_cert_check=true;
+
+  - type: query
+    sql: |
+      create external stream http_00_target_ex (
+        event string,
+        sourcetype string default '_json'
+      ) settings type='http', 
+                 url='https://splunk:8088/services/collector', 
+                 http_header_Authorization='Splunk f807d838-40e4-4ff2-9b3f-8828ebd11384', 
+                 skip_ssl_cert_check=true;
+
+  - type: wait
+    time: 2
+
+  # - type: query
+  #   sql: |
+  #     create materialized view http_00_mv into http_00_target_ex
+  #     as select event, sourcetype from http_00_source_ex
+
+  # - type: wait
+  #   time: 2
+
+  # - type: stream
+  #   name: http-00-select_ex
+  #   query: select event, sourcetype from http_00_target_ex
+  #   schema:
+  #     - name: event
+  #       type: string
+  #     - name: sourcetype
+  #       type: string
+
+  # - type: stream
+  #   name: http-00-select_mv
+  #   query: select event, sourcetype from http_00_mv
+  #   schema:
+  #     - name: event
+  #       type: string
+  #     - name: sourcetype
+  #       type: string
+
+  # - type: wait
+  #   time: 2
+
+  - type: query
+    sql: |
+      insert into http_00_source_ex (event) values 
+      ('{"i": 1, "s": "one"}')
+      ('{"i": 2, "s": "two"}')
+      ('{"i": 3, "s": "three"}')
+      ('{"i": 4, "s": "four"}')
+      ('{"i": 5, "s": "five"}')
+      ('{"i": 6, "s": "six"}');
+
+  - type: wait
+    time: 2
+
+  # - type: stream
+  #   name: http-00-select_table
+  #   query: select event, sourcetype from table(http_00_target_ex)
+  #   schema:
+  #     - name: event
+  #       type: string
+  #     - name: sourcetype
+  #       type: string
+
+  # - type: wait
+  #   time: 1
+
+  # - type: check
+  #   target_name: http-00-select_ex
+  #   expected_result:
+  #     - ['{"i": 1, "s": "one"}', '_json']
+  #     - ['{"i": 2, "s": "two"}', '_json']
+  #     - ['{"i": 3, "s": "three"}', '_json']
+  #     - ['{"i": 4, "s": "four"}', '_json']
+  #     - ['{"i": 5, "s": "five"}', '_json']
+  #     - ['{"i": 6, "s": "six"}', '_json']
+
+  # - type: check
+  #   target_name: http-00-select_mv
+  #   expected_result:
+  #     - ['{"i": 1, "s": "one"}', '_json']
+  #     - ['{"i": 2, "s": "two"}', '_json']
+  #     - ['{"i": 3, "s": "three"}', '_json']
+  #     - ['{"i": 4, "s": "four"}', '_json']
+  #     - ['{"i": 5, "s": "five"}', '_json']
+  #     - ['{"i": 6, "s": "six"}', '_json']
+
+  # - type: check
+  #   target_name: http-00-select_table
+  #   expected_result:
+  #     - ['{"i": 1, "s": "one"}', '_json']
+  #     - ['{"i": 2, "s": "two"}', '_json']
+  #     - ['{"i": 3, "s": "three"}', '_json']
+  #     - ['{"i": 4, "s": "four"}', '_json']
+  #     - ['{"i": 5, "s": "five"}', '_json']
+  #     - ['{"i": 6, "s": "six"}', '_json']

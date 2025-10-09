@@ -1,0 +1,61 @@
+tags:
+  - query_state
+description: (#5022) support create stream on local
+cluster:
+  - p3k1
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists test43_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    node: 
+      - p1
+    sql: CREATE STREAM test43_stream
+      (
+      uid uuid, date DateTime('Asia/Kamchatka')
+      ) 
+      ENGINE = MergeTree 
+      ORDER BY date 
+      SETTINGS local = true
+  - type: wait
+    time: 2
+
+  - name: 101
+    type: stream
+    node: 
+      - p1
+    query: show streams where name = 'test43_stream'
+    schema: 
+     - name: name
+       type: string
+
+  - name: 102
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: show streams where name = 'test43_stream'
+    schema: 
+     - name: name
+       type: string
+
+  - type: check
+    target_name: 101
+    expected_result: 
+    - ['test43_stream']
+
+  - type: check
+    target_name: 102
+    expected_result:
+    - []
+
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists test43_stream

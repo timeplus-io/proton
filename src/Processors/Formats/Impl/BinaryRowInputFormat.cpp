@@ -4,6 +4,7 @@
 #include <Formats/FormatFactory.h>
 #include <Formats/registerWithNamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypesBinaryEncoding.h>
 
 namespace DB
 {
@@ -18,10 +19,12 @@ BinaryRowInputFormat::BinaryRowInputFormat(ReadBuffer & in_, Block header, Param
         header,
         in_,
         params_,
+        true,
         with_names_,
         with_types_,
         format_settings_,
         std::make_unique<BinaryFormatReader>(in_, format_settings_),
+        false,
         ProcessorID::BinaryRowInputFormatID)
 {
 }
@@ -51,10 +54,25 @@ std::vector<String> BinaryFormatReader::readNames()
 
 std::vector<String> BinaryFormatReader::readTypes()
 {
-    auto types = readHeaderRow();
-    for (const auto & type_name : types)
-        read_data_types.push_back(DataTypeFactory::instance().get(type_name));
-    return types;
+    read_data_types.reserve(read_columns);
+    Names type_names;
+    if (format_settings.binary.decode_types_in_binary_format)
+    {
+        type_names.reserve(read_columns);
+        for (size_t i = 0; i < read_columns; ++i)
+        {
+            read_data_types.push_back(decodeDataType(*in));
+            type_names.push_back(read_data_types.back()->getName());
+        }
+    }
+    else
+    {
+        type_names = readHeaderRow();
+        for (const auto & type_name : type_names)
+            read_data_types.push_back(DataTypeFactory::instance().get(type_name));
+    }
+
+    return type_names;
 }
 
 bool BinaryFormatReader::readField(IColumn & column, const DataTypePtr & /*type*/, const SerializationPtr & serialization, bool /*is_last_file_column*/, const String & /*column_name*/)
@@ -90,7 +108,8 @@ void BinaryFormatReader::skipTypes()
 void BinaryFormatReader::skipField(size_t file_column)
 {
     if (file_column >= read_data_types.size())
-        throw Exception(ErrorCodes::CANNOT_SKIP_UNKNOWN_FIELD, "Cannot skip unknown field in RowBinaryWithNames format, because it's type is unknown");
+        throw Exception(ErrorCodes::CANNOT_SKIP_UNKNOWN_FIELD,
+                        "Cannot skip unknown field in RowBinaryWithNames format, because it's type is unknown");
     Field field;
     read_data_types[file_column]->getDefaultSerialization()->deserializeBinary(field, *in, format_settings);
 }

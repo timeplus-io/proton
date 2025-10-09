@@ -1,0 +1,79 @@
+tags:
+- local-run
+- materialized view with target stream
+description: create a materialized view with target stream
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists mv_with_target_stream
+- type: query
+  sql: drop stream if exists source_mv_stream
+- type: query
+  sql: drop stream if exists target_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream source_mv_stream (i int) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream target_mv_stream (ii int) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into source_mv_stream(i) values
+  schema:
+  - name: i
+    type: int32
+  inputs:
+  - [1]
+  - [2]
+  - [3]
+- type: wait
+  time: 1
+
+- name: '2401'
+  type: stream
+  query: select ii from table(mv_with_target_stream)
+  schema:
+  - name: ii
+    type: int32
+- type: wait
+  time: 1
+
+- name: '2402'
+  type: stream
+  query: select ii from table(target_mv_stream)
+  schema:
+  - name: ii
+    type: int32
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists mv_with_target_stream
+
+- type: check
+  target_name: '2401'
+  expected_result:
+  - [2]
+  - [3]
+  - [4]
+
+- type: check
+  target_name: '2402'
+  expected_result:
+  - [2]
+  - [3]
+  - [4]

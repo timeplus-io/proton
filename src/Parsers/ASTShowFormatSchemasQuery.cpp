@@ -1,20 +1,23 @@
-#include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <Parsers/ASTShowFormatSchemasQuery.h>
+#include <Common/quoteString.h>
 
 
 namespace DB
 {
-void ASTShowFormatSchemasQuery::formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+ASTPtr ASTShowFormatSchemasQuery::clone() const
 {
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW FORMAT SCHEMAS"
-                  << (settings.hilite ? hilite_none : "");
+    return std::make_shared<ASTShowFormatSchemasQuery>(*this);
+}
+
+void ASTShowFormatSchemasQuery::formatQueryImpl(const FormatSettings & fmt_settings, FormatState &, FormatStateStacked) const
+{
+    fmt_settings.ostr << (fmt_settings.hilite ? hilite_keyword : "") << "SHOW FORMAT SCHEMAS" << (fmt_settings.hilite ? hilite_none : "");
 
     if (!schema_type.empty())
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << " TYPE "
-                      << (settings.hilite ? hilite_none : "");
-        settings.ostr << schema_type;
+        fmt_settings.ostr << (fmt_settings.hilite ? hilite_keyword : "") << " TYPE " << (fmt_settings.hilite ? hilite_none : "");
+        fmt_settings.ostr << schema_type;
     }
 }
 }

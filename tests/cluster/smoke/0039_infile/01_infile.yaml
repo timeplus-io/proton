@@ -1,0 +1,99 @@
+tags:
+  - local-run
+  - infile
+
+description: |
+  Tests covering the basic infile scenario.
+  Main steps:
+    1. create source stream, target stream
+    2. export file from source stream on node p1
+    3. import file to target stream on node p2
+
+cluster:
+  - p3k1
+
+steps:
+  # create source stream & target stream
+  - type: query
+    sql: drop stream if exists test39_source;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test39_target;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test39_source(id int, value string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test39_target(id int, value string)
+  - type: wait
+    time: 2
+
+  # insert data
+  - type: query
+    sql: insert into test39_source(id, value) values (1, 'aaaa')
+  - type: wait
+    time: 1
+
+  # export
+  - name: infile-1-1
+    type: command
+    node:
+      - p1
+    shell: proton client -h 127.0.0.1 -q 'select * from table(test39_source)' -f Native > /test39_source.native
+  - type: wait
+    time: 3
+
+  - name: infile-1-2
+    type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    shell: hostname
+  - type: wait
+    time: 1
+
+  - type: command
+    target_name: infile-1-2
+    param: p2_host_name
+    node:
+      - p1
+    shell: scp -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no /test39_source.native {p2_host_name}:/var/lib/proton/user_files/
+  - type: wait
+    time: 3
+
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    shell: proton client -h 127.0.0.1 -q "insert into test39_target from infile '/var/lib/proton/user_files/test39_source.native' FORMAT Native"
+  - type: wait
+    time: 1
+
+  - name: infile-1-3
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: select id, value from table(test39_target);
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: check
+    target_name: infile-1-3
+    expected_result: 
+     - [1, 'aaaa']

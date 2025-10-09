@@ -1,0 +1,140 @@
+tags:
+  - udf
+  - uda
+
+description: |
+  Test covering asyncio streams
+  Main Steps:
+    1.Create python udf as server to start server
+    2.Create python udf as client to open connection
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_streams_server(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import time
+      import asyncio
+
+      stop_event = asyncio.Event()
+
+      async def handle_echo(reader, writer):
+          data = await reader.read(100)
+          message = data.decode()
+          addr = writer.get_extra_info('peername')
+
+          writer.write(data)
+          await writer.drain()
+
+          writer.close()
+          await writer.wait_closed()
+
+          if message.strip().lower() == "shutdown":
+              stop_event.set()
+
+      async def server():
+          server = await asyncio.start_server(
+              handle_echo, '127.0.0.1', 8888)
+
+          addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
+
+          async with server:
+              await stop_event.wait()
+              server.close()
+              await server.wait_closed()
+
+      def test_async_streams_server(value):
+          results = []
+          for v in value:
+              try:
+                  asyncio.run(server())
+                  results.append(f"server closed...{v}")
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_streams_client(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import time
+      import asyncio
+
+      async def tcp_echo_client(message):
+          reader, writer = await asyncio.open_connection(
+              '127.0.0.1', 8888)
+
+          writer.write(message.encode())
+          data = await reader.read(100)
+          writer.close()
+          await writer.wait_closed()
+
+          return f'Received: {data.decode()!r}'
+
+      def test_async_streams_client(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(tcp_echo_client(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-3-1
+    type: stream
+    node: [p1]
+    query: select test_async_streams_server('test') as res;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - name: python-udf-3-2
+    type: stream
+    node: [p1]
+    query: select test_async_streams_client(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values ('hello0') ('hello1');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test41_stream(value) values ('hello2') ('shutdown');
+
+  - type: check
+    target_name: python-udf-3-2
+    expected_result:
+      - ["Received: 'hello0'", 'hello0']
+      - ["Received: 'hello1'", 'hello1']
+      - ["Received: 'hello2'", 'hello2']
+      - ["Received: 'shutdown'", 'shutdown']

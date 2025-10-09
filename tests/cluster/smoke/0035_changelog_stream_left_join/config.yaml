@@ -1,0 +1,4 @@
+name: changelog_stream_left_join
+description: Tests covering the changelog stream LEFT ALL JOIN changelog stream.
+tags:
+  - smoke

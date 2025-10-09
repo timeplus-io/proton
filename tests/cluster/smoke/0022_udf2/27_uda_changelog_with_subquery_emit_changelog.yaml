@@ -1,0 +1,83 @@
+tags:
+- udf2
+description: SQL - UDA (changelog) with subquery (emit changelog)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS 027_types;
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE STREAM 027_types (`i32` int32, `f32` float);
+
+- name: udf-27-0
+  type: query
+  sql: "CREATE OR REPLACE AGGREGATE FUNCTION test_count_26(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+          {
+            initialize: function() {
+              this.count = 0;
+            },
+            
+            process: function(values, deltas) {
+              let is_changelog = deltas !== undefined;
+              for (let i = 0; i < values.length; i++) {
+                if (is_changelog) {
+                  if (deltas[i] === 1) {
+                    this.count += 1;
+                  } else if (deltas[i] === -1) 
+                    this.count -= 1;
+                } else 
+                    this.count += 1;
+              }
+            },
+            
+            finalize: function() {
+              return this.count;
+            },
+            
+            serialize: function() {
+              let s = {
+              'count': this.count
+              };
+              return JSON.stringify(s);
+            },
+            
+            deserialize: function(state_str) {
+              let s = JSON.parse(state_str);
+              this.count = s['count'];
+            },
+            
+            merge: function(state_str) {
+              let s = JSON.parse(state_str);
+              this.count += s['count'];
+            }
+          }
+        $$;"
+- type: wait
+  time: 2
+
+- name: udf-27-1
+  type: stream
+  query: select test_count_26(f32) from (select f32 from changelog(027_types, i32) where f32 > 2);
+  schema:
+  - name: test_count_26(f32) 
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO 027_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+- type: wait
+  time: 2
+
+- type: query
+  sql: INSERT INTO 027_types (i32, f32) VALUES (1, 0.1);
+
+- type: check
+  target_name: udf-27-1
+  expected_result:
+  - [9.0]
+  - [8.0]

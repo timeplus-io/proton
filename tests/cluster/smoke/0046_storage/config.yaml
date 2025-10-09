@@ -1,0 +1,7 @@
+name: storage
+description: Smoke tests covering the storage volume use cases.
+tags:
+  - smoke
+  - storage
+  - s3
+  - skip # https://github.com/timeplus-io/proton-enterprise/issues/8069

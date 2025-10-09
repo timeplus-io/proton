@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<proton>
+    <openSSL>
+        <client>
+            <caConfig>/etc/clickhouse-server/certs/ca.crt</caConfig>
+            <verificationMode>relaxed</verificationMode>
+            <invalidCertificateHandler>
+                <name>AcceptCertificateHandler</name>
+            </invalidCertificateHandler>
+        </client>
+    </openSSL>
+</proton>

@@ -1,0 +1,72 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.join function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getJoin(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import pickle
+
+      class getJoin:
+          def __init__(self):
+              self.join = ''
+
+          def serialize(self):
+              data = {}
+              data['join'] = self.join
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.join = data['join']
+
+          def merge(self, other):
+              self.join = other.join
+
+          def process(self, values):
+              if self.join != '':
+                  values = [self.join] + values
+              self.join = '-'.join(values)
+
+          def finalize(self):
+              return self.join
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-18-1
+    type: stream
+    query: select getJoin(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values ('one')('two')('three');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(value) values ('a')('b')('c');
+
+  - type: check
+    target_name: python-udf1-18-1
+    expected_result:
+      - ['one-two-three']
+      - ['one-two-three-a-b-c']

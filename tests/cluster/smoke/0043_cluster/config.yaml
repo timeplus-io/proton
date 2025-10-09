@@ -1,0 +1,35 @@
+name: cluster
+description: Tests covering the cluster feature.
+tags:
+  - smoke
+
+setup:
+  scope: suite
+  steps:
+  - type: command
+    node: [s1]
+    shell: getent group docker
+
+  - type: command
+    node: [s1]
+    shell: docker ps
+
+teardown:
+  scope: suite
+  steps:
+  - name: cluster-1
+    type: command
+    node: [s1]
+    shell: docker ps -a --format "{{.Names}}" --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep timeplus | tr '\n' ' '
+
+  - type: wait
+    time: 5
+
+  - name: cluster-2
+    type: health_check
+    protocol: tcp
+
+  - type: check
+    target_name: cluster-2
+    expected_result:
+    - ['true']

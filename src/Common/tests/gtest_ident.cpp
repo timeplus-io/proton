@@ -29,7 +29,7 @@ TEST(indent, stream_name)
 
     /// test DISTINCT  JOIN  WHERE  PARTITION BY  GROUP BY  HAVING ORDER BY  LIMIT  EMIT  SETTINGS
     query = "with it1 as (select * from numbers(10)) select distinct user.id from user join it1 on user.id=it1.number group by user.id having id>0 order by id limit 10 emit last 1s settings query_mode='stream'";
-    expected_ans = "WITH it1 AS\n  (\n    SELECT\n      *\n    FROM\n      numbers(10)\n  )\nSELECT DISTINCT\n  user.id\nFROM\n  user\nINNER JOIN it1 ON user.id = it1.number\nGROUP BY\n  user.id\nHAVING\n  id > 0\nORDER BY\n  id ASC\nLIMIT 10\nEMIT STREAM LAST 1s\nSETTINGS\n  query_mode = 'stream'";
+    expected_ans = "WITH it1 AS\n  (\n    SELECT\n      *\n    FROM\n      numbers(10)\n  )\nSELECT DISTINCT\n  user.id\nFROM\n  user\nINNER JOIN it1 ON user.id = it1.number\nGROUP BY\n  user.id\nHAVING\n  id > 0\nORDER BY\n  id ASC\nLIMIT 10\nEMIT LAST 1s\nSETTINGS\n  query_mode = 'stream'";
     ans = convertQueryToFormat(query,false);
     EXPECT_STREQ(expected_ans.c_str(), ans.c_str());
 
@@ -40,7 +40,7 @@ TEST(indent, stream_name)
     EXPECT_STREQ(expected_ans.c_str(), ans.c_str());
 
     query = "with it1 as (select * from numbers(10)) select distinct user.id from user join it1 on user.id=it1.number group by user.id having id>0 order by id limit 10 emit last 1s settings query_mode='stream'";
-    expected_ans = "WITH it1 AS (SELECT * FROM numbers(10)) SELECT DISTINCT user.id FROM user INNER JOIN it1 ON user.id = it1.number GROUP BY user.id HAVING id > 0 ORDER BY id ASC LIMIT 10 EMIT STREAM LAST 1s SETTINGS query_mode = 'stream'";
+    expected_ans = "WITH it1 AS (SELECT * FROM numbers(10)) SELECT DISTINCT user.id FROM user INNER JOIN it1 ON user.id = it1.number GROUP BY user.id HAVING id > 0 ORDER BY id ASC LIMIT 10 EMIT LAST 1s SETTINGS query_mode = 'stream'";
     ans = convertQueryToFormat(query,true);
     EXPECT_STREQ(expected_ans.c_str(), ans.c_str());
 
@@ -51,12 +51,12 @@ TEST(indent, complex_query)
     /// Covering: WITH  SELECT  DISTINCT  FROM  JOIN  WHERE  PARTITION BY  SHUFFLE BY  GROUP BY  HAVING  ORDER BY  LIMIT  EMIT  SETTINGS UNION
     /// test format 'one_line'=false;
     String query = "with it1 as (select * from numbers(10)), it2 as (select * from it1) select distinct user.id from user join it1 on user.id=it1.number array join it2.number as number where number > 1 or number < 5 partition by user.id group by user.id having id>0 order by id limit 10 emit last 1s settings query_mode='stream' union select * from it2";
-    String expected_ans = """WITH it1 AS\n  (\n    SELECT\n      *\n    FROM\n      numbers(10)\n  ), it2 AS\n  (\n    SELECT\n      *\n    FROM\n      it1\n  )\nSELECT DISTINCT\n  user.id\nFROM\n  user\nINNER JOIN it1 ON user.id = it1.number\nARRAY JOIN it2.number AS number\nWHERE\n  (number > 1) OR (number < 5)\nPARTITION BY\n  user.id\nGROUP BY\n  user.id\nHAVING\n  id > 0\nORDER BY\n  id ASC\nLIMIT 10\nEMIT STREAM LAST 1s\nSETTINGS\n  query_mode = 'stream'\nUNION\nSELECT\n  *\nFROM\n  it2";
+    String expected_ans = """WITH it1 AS\n  (\n    SELECT\n      *\n    FROM\n      numbers(10)\n  ), it2 AS\n  (\n    SELECT\n      *\n    FROM\n      it1\n  )\nSELECT DISTINCT\n  user.id\nFROM\n  user\nINNER JOIN it1 ON user.id = it1.number\nARRAY JOIN it2.number AS number\nWHERE\n  (number > 1) OR (number < 5)\nPARTITION BY\n  user.id\nGROUP BY\n  user.id\nHAVING\n  id > 0\nORDER BY\n  id ASC\nLIMIT 10\nEMIT LAST 1s\nSETTINGS\n  query_mode = 'stream'\nUNION\nSELECT\n  *\nFROM\n  it2";
     String ans = convertQueryToFormat(query,false);
     EXPECT_STREQ(expected_ans.c_str(), ans.c_str());
 
     /// test format 'one_line'=true;
-    expected_ans = "WITH it1 AS (SELECT * FROM numbers(10)), it2 AS (SELECT * FROM it1) SELECT DISTINCT user.id FROM user INNER JOIN it1 ON user.id = it1.number ARRAY JOIN it2.number AS number WHERE (number > 1) OR (number < 5) PARTITION BY user.id GROUP BY user.id HAVING id > 0 ORDER BY id ASC LIMIT 10 EMIT STREAM LAST 1s SETTINGS query_mode = 'stream' UNION SELECT * FROM it2";
+    expected_ans = "WITH it1 AS (SELECT * FROM numbers(10)), it2 AS (SELECT * FROM it1) SELECT DISTINCT user.id FROM user INNER JOIN it1 ON user.id = it1.number ARRAY JOIN it2.number AS number WHERE (number > 1) OR (number < 5) PARTITION BY user.id GROUP BY user.id HAVING id > 0 ORDER BY id ASC LIMIT 10 EMIT LAST 1s SETTINGS query_mode = 'stream' UNION SELECT * FROM it2";
     ans = convertQueryToFormat(query,true);
     EXPECT_STREQ(expected_ans.c_str(), ans.c_str());
 }

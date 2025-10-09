@@ -1,117 +1,313 @@
 name: compatibility_test
+run-name: Compatibility Test [${{ (inputs.source == '' || inputs.source == inputs.target) && format('Upload {0}', inputs.target) || format('{0} -> {1}', inputs.source, inputs.target) }}] [${{ inputs.arch }}]
 
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target proton image Version'
+        description: 'Target tag of proton image'
         required: true
+        type: string
         default: 'latest'
       source:
-        description: 'Source proton image Version'
+        description: 'Source tag of proton image'
         required: false
+        type: string
         default: ''
-jobs:
-  upload_data:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
-      submodules: false
-      timeout: 30
-      command: |
-        export PROTON_VERSION=${{ github.event.inputs.target }}
-
-        cd $GITHUB_WORKSPACE/tests/stream
-        
-        # make virtualenv
-        ln -s /usr/bin/python3 /usr/bin/python
-        apt-get update
-        systemctl stop unattended-upgrades
-        apt install python3-venv -y
-        python -m venv env
-        source env/bin/activate
-
-        pip install --upgrade pip
-
-        # FIXME: remove this line after pyyaml community fixed install bug
-        pip install pyyaml==5.3.1
-
-        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
-        # https://github.com/docker/docker-py/issues/3194
-        pip install docker==6.1.3
-
-        pip install -r helpers/requirements.txt
-
-        bash test_compatibility/prepare_data.sh
-        bash test_compatibility/basic_tests.sh
-
-        cd $GITHUB_WORKSPACE
-        tar -zcvf $PROTON_VERSION.tar.gz data
-        aws s3 cp --no-progress $PROTON_VERSION.tar.gz s3://tp-internal/proton/compatibility/oss/
+      repo:
+        description: 'Repo of proton image'
+        required: false
+        type: choice
+        default: timeplus/proton
+        options:
+          - timeplus/proton
+          - timeplus/proton_testing
+      arch:
+        description: 'Hardware architecture'
+        required: false
+        default: 'x64'
+        type: choice
+        options:
+          - x64
+          - arm
+      threshold:
+        description: 'Threshold for binary size regression test'
+        required: false
+        type: number
+        default: 0.05
+      nodes:
+        description: 'Deploy nodes'
+        required: false
+        type: choice
+        default: "3"
+        options:
+          - "1"
+          - "3"
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+        default: 'latest'
+      source:
+        required: false
+        type: string
+        default: ''
+      repo:
+        required: false
+        type: string
+        default: timeplus/proton
+      arch:
+        required: false
+        type: string
+        default: 'x64'
+      threshold:
+        required: false
+        type: number
+        default: 0.05
+      nodes:
+        required: false
+        type: string
+        default: "3"
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
+        required: true
+      AWS_S3_BUCKET:
+        required: true
+      GH_PERSONAL_ACCESS_TOKEN:
+        required: true
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      TIMEPLUS_ADDRESS:
+        required: false
+      TIMEPLUS_API_KEY:
+        required: false
+      TIMEPLUS_WORKSPACE:
+        required: false
+      TP_DEMO_API_KEY:
+        required: false
+      TP_DEMO_SITE_API_KEY:
+        required: false
 
-  compatibility_test:
-    if: ${{ github.event.inputs.source!='' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
-      ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
-      submodules: false
-      timeout: 30
+jobs:
+  prepare_upload_data:
+    if: ${{ inputs.source == '' || inputs.source == inputs.target }}
+    runs-on: ubuntu-latest
+    outputs:
       command: |
-        export TARGET_VERSION=${{ github.event.inputs.target }}
-        export SOURCE_VERSION=${{ github.event.inputs.source }}
+        export PROTON_VERSION=${{ inputs.target }}
+        export PROTON_REPO=${{ inputs.repo }}
+        export NODES=${{ inputs.nodes }}
+
+        # build test image
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$PROTON_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$PROTON_VERSION
+
+        # install software
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+
+        # run tests
+        cd $GITHUB_WORKSPACE/tests/stream
+        bash test_compatibility/run.sh prepare
+
+        # upload data
+        cd $GITHUB_WORKSPACE
+        aws s3 cp --no-progress ${PROTON_VERSION}.tar.gz s3://tp-internal2/proton-oss/compatibility/enterprise/$ARCH/
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_compatibility_test:
+    if: ${{ inputs.source != '' && inputs.source != inputs.target }}
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        export TARGET_VERSION=${{ inputs.target }}
+        export SOURCE_VERSION=${{ inputs.source }}
         export PROTON_VERSION=$TARGET_VERSION
+        export PROTON_REPO=${{ inputs.repo }}
+        export NODES=${{ inputs.nodes }}
+
+        # build test image
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$PROTON_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$PROTON_VERSION
+
+        # install software
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
 
         # prepare data
         cd $GITHUB_WORKSPACE
-        aws s3 cp --no-progress s3://tp-internal/proton/compatibility/oss/$SOURCE_VERSION.tar.gz .
-        tar -zxvf $SOURCE_VERSION.tar.gz
+        aws s3 cp --no-progress s3://tp-internal2/proton-oss/compatibility/enterprise/$ARCH/${SOURCE_VERSION}.tar.gz .
+        tar -zxvf ${SOURCE_VERSION}.tar.gz
 
+        # run tests
         cd $GITHUB_WORKSPACE/tests/stream
-        
+        bash test_compatibility/run.sh validate
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_binary_size_regression_test:
+    if: |
+      inputs.source == '' || inputs.source == inputs.target ||
+      (github.workflow == 'compatibility_test' && inputs.source != inputs.target)
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
         # make virtualenv
+        cd ${GITHUB_WORKSPACE}/tests/proton_ci
         ln -s /usr/bin/python3 /usr/bin/python
         apt-get update
         systemctl stop unattended-upgrades
-        apt install python3-venv -y
+        apt install python3-venv jq -y
         python -m venv env
         source env/bin/activate
+        pip install -r requirements.txt
 
-        pip install --upgrade pip
-
-        # FIXME: remove this line after pyyaml community fixed install bug
-        pip install pyyaml==5.3.1
-
-        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
-        # https://github.com/docker/docker-py/issues/3194
-        pip install docker==6.1.3
-
-        pip install -r helpers/requirements.txt
-
-        bash test_compatibility/basic_tests.sh
-        bash test_compatibility/extra_tests.sh
+        # run tests
+        if [[ "${{ github.workflow }}" == "compatibility_test" ]]; then
+            flag="--include-darwin"
+        fi
+        python binary_size_check.py --source '${{ inputs.source }}' --target '${{ inputs.target }}' --threshold ${{ inputs.threshold}} $flag
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  upload_data_x64:
+    needs: [prepare_upload_data]
+    if: ${{ inputs.arch == 'x64' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c7i.4xlarge
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 30
+      arch: ${{ vars.X64_ARCH }}
+      upjob: upload_data_x64_${{ inputs.target }}
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_upload_data.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  upload_data_arm:
+    needs: [prepare_upload_data]
+    if: ${{ inputs.arch == 'arm' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6g.4xlarge
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 30
+      arch: ${{ vars.ARM_ARCH }}
+      upjob: upload_data_arm_${{ inputs.target }}
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_upload_data.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  compatibility_test_x64:
+    needs: [prepare_compatibility_test]
+    if: ${{ inputs.arch == 'x64' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c7i.4xlarge
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 30
+      arch: ${{ vars.X64_ARCH }}
+      upjob: compatibility_test_x64_${{ inputs.source }}
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_compatibility_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  compatibility_test_arm:
+    needs: [prepare_compatibility_test]
+    if: ${{ inputs.arch == 'arm' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6g.4xlarge
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 30
+      arch: ${{ vars.ARM_ARCH }}
+      upjob: compatibility_test_arm_${{ inputs.source }}
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_compatibility_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  binary_size_regression_test_x64:
+    needs: [prepare_binary_size_regression_test]
+    if: ${{ inputs.arch == 'x64' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.large
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 15
+      arch: ${{ vars.X64_ARCH }}
+      upjob: binary_size_regression_test_x64_${{ inputs.target }}
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_binary_size_regression_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}

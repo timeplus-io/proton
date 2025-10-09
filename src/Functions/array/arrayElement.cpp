@@ -512,7 +512,7 @@ ColumnPtr FunctionArrayElement::executeNumberConst(
             col_nested->getData(), col_array->getOffsets(), -(static_cast<UInt64>(index.safeGet<Int64>()) + 1), col_res->getData(), builder);
     }
     else
-        throw Exception("Illegal type of array index", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal type of array index");
 
     return col_res;
 }
@@ -574,7 +574,7 @@ FunctionArrayElement::executeStringConst(const ColumnsWithTypeAndName & argument
             col_res->getOffsets(),
             builder);
     else
-        throw Exception("Illegal type of array index", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal type of array index");
 
     return col_res;
 }
@@ -626,7 +626,7 @@ ColumnPtr FunctionArrayElement::executeGenericConst(
         ArrayElementGenericImpl::vectorConst<true>(
             col_nested, col_array->getOffsets(), -(static_cast<UInt64>(index.get<Int64>() + 1)), *col_res, builder);
     else
-        throw Exception("Illegal type of array index", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal type of array index");
 
     return col_res;
 }
@@ -719,8 +719,8 @@ ColumnPtr FunctionArrayElement::executeArgument(
         || (res = executeConst<IndexType>(arguments, result_type, index_data, builder, input_rows_count))
         || (res = executeString<IndexType>(arguments, index_data, builder))
         || (res = executeGeneric<IndexType>(arguments, index_data, builder))))
-        throw Exception("Illegal column " + arguments[0].column->getName()
-                    + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+                    arguments[0].column->getName(), getName());
 
     return res;
 }
@@ -1258,8 +1258,7 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
             || (res = executeArgument<Int16>(arguments, result_type, builder, input_rows_count))
             || (res = executeArgument<Int32>(arguments, result_type, builder, input_rows_count))
             || (res = executeArgument<Int64>(arguments, result_type, builder, input_rows_count))))
-        throw Exception("Second argument for function " + getName() + " must have uint or int type.",
-                        ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Second argument for function {} must have uint or int type.", getName());
     }
     else
     {
@@ -1269,7 +1268,7 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
             builder.initSink(input_rows_count);
 
         if (index == 0u)
-            throw Exception("The array indices are 1-based", ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX);
+            throw Exception(ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX, "array indices are 1-based");
 
         if (!((res = executeNumberConst<UInt8>(arguments, index, builder))
             || (res = executeNumberConst<UInt16>(arguments, index, builder))
@@ -1283,9 +1282,8 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
             || (res = executeNumberConst<Float64>(arguments, index, builder))
             || (res = executeStringConst (arguments, index, builder))
             || (res = executeGenericConst (arguments, index, builder))))
-        throw Exception("Illegal column " + arguments[0].column->getName()
-            + " of first argument of function " + getName(),
-            ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+            arguments[0].column->getName(), getName());
     }
 
     return res;

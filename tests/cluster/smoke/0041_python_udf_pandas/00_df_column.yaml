@@ -1,0 +1,50 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_column(value int) RETURNS int64 LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_column(value):
+          df = pd.DataFrame(data=value, columns=['value'])
+          res = df['value']
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-0-1
+    type: stream
+    query: select test_df_column(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int64
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (1)(2);
+
+  - type: check
+    target_name: python-udf3-0-1
+    expected_result:
+      - [1, 1]
+      - [2, 2]

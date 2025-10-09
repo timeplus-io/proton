@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (rvs1 float64, rvs2 float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getTtestInd(rvs1 float64, rvs2 float64) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy import stats
+
+      class getTtestInd:
+          def __init__(self):
+              self.ttest_ind = 0
+
+          def serialize(self):
+              data = {}
+              data['ttest_ind'] = self.ttest_ind
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.ttest_ind = data['ttest_ind']
+
+          def merge(self, other):
+              pass
+
+          def process(self, rvs1s, rvs2s):
+              res = stats.ttest_ind(rvs1s, rvs2s)
+              self.ttest_ind = res.pvalue
+
+          def finalize(self):
+              return float(self.ttest_ind)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-30-1
+    type: stream
+    query: select getTtestInd(rvs1, rvs2) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(rvs1, rvs2) values 
+          (1.61424402e+01, -8.45720219e+00)
+          (6.79626088e+00, 9.29865813e+00)
+          (-1.16510342e+01, 7.38705428e+00)
+          (7.92685372e+00, 9.28176278e+00);
+
+  - type: check
+    target_name: python-udf4-30-1
+    expected_result:
+      - [0.9552001818697761]

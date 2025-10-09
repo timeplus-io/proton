@@ -35,14 +35,22 @@ void registerInputFormatCSV(FormatFactory & factory);
 void registerOutputFormatCSV(FormatFactory & factory);
 void registerInputFormatTSKV(FormatFactory & factory);
 void registerOutputFormatTSKV(FormatFactory & factory);
+void registerOutputFormatJSON(FormatFactory & factory);
+void registerInputFormatJSON(FormatFactory & factory);
+void registerOutputFormatJSONCompact(FormatFactory & factory);
+void registerInputFormatJSONCompact(FormatFactory & factory);
 void registerInputFormatJSONEachRow(FormatFactory & factory);
 void registerOutputFormatJSONEachRow(FormatFactory & factory);
+void registerInputFormatJSONObjectEachRow(FormatFactory & factory);
+void registerOutputFormatJSONObjectEachRow(FormatFactory & factory);
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory);
 void registerOutputFormatJSONCompactEachRow(FormatFactory & factory);
 void registerInputFormatJSONColumns(FormatFactory & factory);
 void registerOutputFormatJSONColumns(FormatFactory & factory);
 void registerInputFormatJSONCompactColumns(FormatFactory & factory);
 void registerOutputFormatJSONCompactColumns(FormatFactory & factory);
+void registerInputFormatJSONColumnsWithMetadata(FormatFactory & factory);
+void registerOutputFormatJSONColumnsWithMetadata(FormatFactory & factory);
 void registerInputFormatProtobuf(FormatFactory & factory);
 void registerOutputFormatProtobuf(FormatFactory & factory);
 void registerInputFormatProtobufList(FormatFactory & factory);
@@ -63,6 +71,8 @@ void registerInputFormatRawBLOB(FormatFactory & factory);
 void registerOutputFormatRawBLOB(FormatFactory & factory);
 void registerInputFormatCustomSeparated(FormatFactory & factory);
 void registerOutputFormatCustomSeparated(FormatFactory & factory);
+void registerInputFormatCapnProto(FormatFactory & factory);
+void registerOutputFormatCapnProto(FormatFactory & factory);
 
 /// Output only (presentational) formats.
 
@@ -70,17 +80,13 @@ void registerOutputFormatPretty(FormatFactory & factory);
 void registerOutputFormatPrettyCompact(FormatFactory & factory);
 void registerOutputFormatPrettySpace(FormatFactory & factory);
 void registerOutputFormatVertical(FormatFactory & factory);
-void registerOutputFormatJSON(FormatFactory & factory);
-void registerOutputFormatJSONCompact(FormatFactory & factory);
 void registerOutputFormatJSONEachRowWithProgress(FormatFactory & factory);
-void registerOutputFormatJSONColumnsWithMetadata(FormatFactory & factory);
 void registerOutputFormatXML(FormatFactory & factory);
 void registerOutputFormatODBCDriver2(FormatFactory & factory);
 void registerOutputFormatNull(FormatFactory & factory);
 void registerOutputFormatMySQLWire(FormatFactory & factory);
 void registerOutputFormatMarkdown(FormatFactory & factory);
 void registerOutputFormatPostgreSQLWire(FormatFactory & factory);
-void registerOutputFormatCapnProto(FormatFactory & factory);
 
 /// Input only formats.
 
@@ -88,7 +94,7 @@ void registerInputFormatRegexp(FormatFactory & factory);
 void registerInputFormatJSONAsString(FormatFactory & factory);
 void registerInputFormatJSONAsObject(FormatFactory & factory);
 void registerInputFormatLineAsString(FormatFactory & factory);
-void registerInputFormatCapnProto(FormatFactory & factory);
+void registerInputFormatMySQLDump(FormatFactory & factory);
 
 #if USE_HIVE
 void registerInputFormatHiveText(FormatFactory & factory);
@@ -109,10 +115,13 @@ void registerORCSchemaReader(FormatFactory & factory);
 void registerTSVSchemaReader(FormatFactory & factory);
 void registerCSVSchemaReader(FormatFactory & factory);
 void registerJSONCompactEachRowSchemaReader(FormatFactory & factory);
+void registerJSONSchemaReader(FormatFactory & factory);
 void registerJSONEachRowSchemaReader(FormatFactory & factory);
+void registerJSONObjectEachRowSchemaReader(FormatFactory & factory);
 void registerJSONAsStringSchemaReader(FormatFactory & factory);
 void registerJSONColumnsSchemaReader(FormatFactory & factory);
 void registerJSONCompactColumnsSchemaReader(FormatFactory & factory);
+void registerJSONColumnsWithMetadataSchemaReader(FormatFactory & factory);
 void registerNativeSchemaReader(FormatFactory & factory);
 void registerRowBinaryWithNamesAndTypesSchemaReader(FormatFactory & factory);
 void registerAvroSchemaReader(FormatFactory & factory);
@@ -127,8 +136,13 @@ void registerRegexpSchemaReader(FormatFactory & factory);
 void registerTSKVSchemaReader(FormatFactory & factory);
 void registerValuesSchemaReader(FormatFactory & factory);
 void registerTemplateSchemaReader(FormatFactory & factory);
+void registerMySQLSchemaReader(FormatFactory & factory);
 
 void registerFileExtensions(FormatFactory & factory);
+
+/// proton: starts
+void registerOutputFormatOpenSearch(FormatFactory & factory);
+/// proton: ends
 
 void registerFormats()
 {
@@ -159,14 +173,22 @@ void registerFormats()
     registerOutputFormatCSV(factory);
     registerInputFormatTSKV(factory);
     registerOutputFormatTSKV(factory);
+    registerOutputFormatJSON(factory);
+    registerInputFormatJSON(factory);
+    registerOutputFormatJSONCompact(factory);
+    registerInputFormatJSONCompact(factory);
     registerInputFormatJSONEachRow(factory);
     registerOutputFormatJSONEachRow(factory);
+    registerInputFormatJSONObjectEachRow(factory);
+    registerOutputFormatJSONObjectEachRow(factory);
     registerInputFormatJSONCompactEachRow(factory);
     registerOutputFormatJSONCompactEachRow(factory);
     registerInputFormatJSONColumns(factory);
     registerOutputFormatJSONColumns(factory);
     registerInputFormatJSONCompactColumns(factory);
     registerOutputFormatJSONCompactColumns(factory);
+    registerInputFormatJSONColumnsWithMetadata(factory);
+    registerOutputFormatJSONColumnsWithMetadata(factory);
     registerInputFormatProtobuf(factory);
     registerOutputFormatProtobufList(factory);
     registerInputFormatProtobufList(factory);
@@ -193,10 +215,7 @@ void registerFormats()
     registerOutputFormatPrettyCompact(factory);
     registerOutputFormatPrettySpace(factory);
     registerOutputFormatVertical(factory);
-    registerOutputFormatJSON(factory);
-    registerOutputFormatJSONCompact(factory);
     registerOutputFormatJSONEachRowWithProgress(factory);
-    registerOutputFormatJSONColumnsWithMetadata(factory);
     registerOutputFormatXML(factory);
     registerOutputFormatODBCDriver2(factory);
 
@@ -218,6 +237,9 @@ void registerFormats()
 #endif
 
     registerInputFormatCapnProto(factory);
+    /// proton: starts
+    /// registerInputFormatMySQLDump(factory);
+    /// proton: ends
 
     registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(factory);
     registerNonTrivialPrefixAndSuffixCheckerJSONAsString(factory);
@@ -228,11 +250,14 @@ void registerFormats()
     registerORCSchemaReader(factory);
     registerTSVSchemaReader(factory);
     registerCSVSchemaReader(factory);
+    registerJSONSchemaReader(factory);
     registerJSONCompactEachRowSchemaReader(factory);
     registerJSONEachRowSchemaReader(factory);
+    registerJSONObjectEachRowSchemaReader(factory);
     registerJSONAsStringSchemaReader(factory);
     registerJSONColumnsSchemaReader(factory);
     registerJSONCompactColumnsSchemaReader(factory);
+    registerJSONColumnsWithMetadataSchemaReader(factory);
     registerNativeSchemaReader(factory);
     registerRowBinaryWithNamesAndTypesSchemaReader(factory);
     registerAvroSchemaReader(factory);
@@ -247,6 +272,10 @@ void registerFormats()
     registerTSKVSchemaReader(factory);
     registerValuesSchemaReader(factory);
     registerTemplateSchemaReader(factory);
+    /// proton: starts
+    ///registerMySQLSchemaReader(factory);
+    registerOutputFormatOpenSearch(factory);
+    /// proton: ends
 }
 
 }

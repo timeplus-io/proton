@@ -26,7 +26,6 @@
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
 #include <IO/ConnectionTimeouts.h>
-#include <IO/ConnectionTimeoutsContext.h>
 #include <IO/UseSSL.h>
 #include <QueryPipeline/RemoteQueryExecutor.h>
 #include <Interpreters/Context.h>
@@ -35,6 +34,7 @@
 #include <Common/Config/configReadClient.h>
 #include <Common/TerminalSize.h>
 #include <Common/StudentTTest.h>
+#include <Common/CurrentMetrics.h>
 #include <filesystem>
 
 
@@ -43,6 +43,12 @@ namespace fs = std::filesystem;
 /** A tool for evaluating ClickHouse performance.
   * The tool emulates a case with fixed amount of simultaneously executing queries.
   */
+
+namespace CurrentMetrics
+{
+    extern const Metric LocalThread;
+    extern const Metric LocalThreadActive;
+}
 
 namespace DB
 {
@@ -67,13 +73,25 @@ public:
             const String & query_id_, const String & query_to_execute_, bool continue_on_errors_,
             bool reconnect_, bool print_stacktrace_, const Settings & settings_)
         :
-        round_robin(round_robin_), concurrency(concurrency_), delay(delay_), queue(concurrency), randomize(randomize_),
-        cumulative(cumulative_), max_iterations(max_iterations_), max_time(max_time_),
-        json_path(json_path_), confidence(confidence_), query_id(query_id_),
-        query_to_execute(query_to_execute_), continue_on_errors(continue_on_errors_), reconnect(reconnect_),
-        print_stacktrace(print_stacktrace_), settings(settings_),
-        shared_context(Context::createShared()), global_context(Context::createGlobal(shared_context.get())),
-        pool(concurrency)
+        round_robin(round_robin_),
+        concurrency(concurrency_),
+        delay(delay_),
+        queue(concurrency),
+        randomize(randomize_),
+        cumulative(cumulative_),
+        max_iterations(max_iterations_),
+        max_time(max_time_),
+        json_path(json_path_),
+        confidence(confidence_),
+        query_id(query_id_),
+        query_to_execute(query_to_execute_),
+        continue_on_errors(continue_on_errors_),
+        reconnect(reconnect_),
+        print_stacktrace(print_stacktrace_),
+        settings(settings_),
+        shared_context(Context::createShared()),
+        global_context(Context::createGlobal(shared_context.get())),
+        pool(CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, concurrency)
     {
         const auto secure = secure_ ? Protocol::Secure::Enable : Protocol::Secure::Disable;
         size_t connections_cnt = std::max(ports_.size(), hosts_.size());
@@ -242,7 +260,7 @@ private:
             }
 
             if (queries.empty())
-                throw Exception("Empty list of queries.", ErrorCodes::EMPTY_DATA_PASSED);
+                throw Exception(ErrorCodes::EMPTY_DATA_PASSED, "Empty list of queries.");
         }
         else
         {
@@ -436,7 +454,7 @@ private:
         executor.setProgressCallback([&progress](const Progress & value) { progress.incrementPiecewiseAtomically(value); });
 
         ProfileInfo info;
-        while (Block block = executor.read())
+        while (Block block = executor.readBlock())
             info.update(block);
 
         executor.finish();

@@ -22,7 +22,7 @@ ClientConfigurationPerRequest ProxyListConfiguration::getConfiguration(const Aws
     cfg.proxy_host = proxies[index].getHost();
     cfg.proxy_port = proxies[index].getPort();
 
-    LOG_DEBUG(&Poco::Logger::get("AWSClient"), "Use proxy: {}", proxies[index].toString());
+    LOG_DEBUG(getLogger("AWSClient"), "Use proxy: {}", proxies[index].toString());
 
     return cfg;
 }

@@ -1,0 +1,6 @@
+name: pulsar
+description: Tests covering the Pulsar external stream smoke cases.
+tags:
+  - smoke
+  - external_stream
+  - pulsar

@@ -162,7 +162,15 @@ void WriteBufferFromHTTPServerResponse::onProgress(const Progress & progress)
 
 WriteBufferFromHTTPServerResponse::~WriteBufferFromHTTPServerResponse()
 {
-    finalize();
+    try
+    {
+        if (!canceled)
+            finalize();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 void WriteBufferFromHTTPServerResponse::finalizeImpl()

@@ -1,0 +1,13 @@
+name: ddl_column
+description: add test case about ddl column
+tags:
+- smoke
+- ddl-column
+
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop view if exists add_new_column_view
+  - type: wait
+    time: 2

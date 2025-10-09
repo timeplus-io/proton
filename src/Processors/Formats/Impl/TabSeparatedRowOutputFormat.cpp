@@ -12,10 +12,9 @@ TabSeparatedRowOutputFormat::TabSeparatedRowOutputFormat(
     bool with_names_,
     bool with_types_,
     bool is_raw_,
-    const RowOutputFormatParams & params_,
     const FormatSettings & format_settings_,
     ProcessorID pid_)
-    : IRowOutputFormat(header_, out_, params_, pid_), with_names(with_names_), with_types(with_types_), is_raw(is_raw_), format_settings(format_settings_)
+    : IRowOutputFormat(header_, out_, pid_), with_names(with_names_), with_types(with_types_), is_raw(is_raw_), format_settings(format_settings_)
 {
 }
 
@@ -27,11 +26,10 @@ void TabSeparatedRowOutputFormat::writeLine(const std::vector<String> & values)
             writeString(values[i], out);
         else
             writeEscapedString(values[i], out);
-        if (i + 1 == values.size())
-            writeRowEndDelimiter();
-        else
+        if (i + 1 != values.size())
             writeFieldDelimiter();
     }
+    writeRowEndDelimiter();
 }
 
 void TabSeparatedRowOutputFormat::writePrefix()
@@ -39,10 +37,22 @@ void TabSeparatedRowOutputFormat::writePrefix()
     const auto & header = getPort(PortKind::Main).getHeader();
 
     if (with_names)
+    {
         writeLine(header.getNames());
+        writeRowBetweenDelimiter();
+    }
 
     if (with_types)
-        writeLine(header.getDataTypeNames());
+    {
+        /// proton: starts.
+        if (format_settings.is_clickhouse_compatible)
+            writeLine(header.getClickHouseDataTypeNames());
+        else
+            writeLine(header.getDataTypeNames());
+        /// proton: ends.
+
+        writeRowBetweenDelimiter();
+    }
 }
 
 
@@ -61,21 +71,38 @@ void TabSeparatedRowOutputFormat::writeFieldDelimiter()
 }
 
 
-void TabSeparatedRowOutputFormat::writeRowEndDelimiter()
+void TabSeparatedRowOutputFormat::writeRowBetweenDelimiter()
 {
     if (format_settings.tsv.crlf_end_of_line)
         writeChar('\r', out);
     writeChar('\n', out);
 }
 
+void TabSeparatedRowOutputFormat::writeSuffix()
+{
+    /// Output '\n' an the end of data if we had any data.
+    if (haveWrittenData())
+        writeRowBetweenDelimiter();
+}
+
 void TabSeparatedRowOutputFormat::writeBeforeTotals()
 {
-    writeChar('\n', out);
+    writeRowBetweenDelimiter();
 }
 
 void TabSeparatedRowOutputFormat::writeBeforeExtremes()
 {
-    writeChar('\n', out);
+    writeRowBetweenDelimiter();
+}
+
+void TabSeparatedRowOutputFormat::writeAfterTotals()
+{
+    writeRowBetweenDelimiter();
+}
+
+void TabSeparatedRowOutputFormat::writeAfterExtremes()
+{
+    writeRowBetweenDelimiter();
 }
 
 void registerOutputFormatTabSeparated(FormatFactory & factory)
@@ -87,10 +114,9 @@ void registerOutputFormatTabSeparated(FormatFactory & factory)
             factory.registerOutputFormat(format_name, [is_raw, with_names, with_types](
                 WriteBuffer & buf,
                 const Block & sample,
-                const RowOutputFormatParams & params,
                 const FormatSettings & settings)
             {
-                return std::make_shared<TabSeparatedRowOutputFormat>(buf, sample, with_names, with_types, is_raw, params, settings);
+                return std::make_shared<TabSeparatedRowOutputFormat>(buf, sample, with_names, with_types, is_raw, settings);
             });
 
             factory.markOutputFormatSupportsParallelFormatting(format_name);

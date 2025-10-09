@@ -1,0 +1,6 @@
+<proton>
+    <backups>
+        <allowed_disk>default</allowed_disk>
+        <allowed_path>/backups</allowed_path>
+    </backups>
+</proton>

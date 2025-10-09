@@ -1,0 +1,4 @@
+name: emit_changelog
+description: Tests covering the stream query with emit changelog smoke cases.
+tags:
+- smoke

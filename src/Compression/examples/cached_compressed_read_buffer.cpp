@@ -11,6 +11,8 @@
 #include <Common/Stopwatch.h>
 
 
+bool LOG_PANIC_ABORT = true;
+
 int main(int argc, char ** argv)
 {
     using namespace DB;

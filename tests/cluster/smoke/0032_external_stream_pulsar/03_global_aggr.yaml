@@ -1,0 +1,102 @@
+tags:
+  - global_aggregation
+
+description: |
+   Test global aggregation query
+   Main steps:
+    1. Query global aggregation on stream function
+    2. Query global aggregation on table function
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_03
+
+  - type: pulsar
+    name: create
+    topic: test_03
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_03
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_03
+      (
+        id int,
+        value string
+      )
+      settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_03'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into ex_pulsar_03(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-03-01
+    query: select count(*) from ex_pulsar_03
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ex_pulsar_03(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into ex_pulsar_03(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [3, 'cccc']
+      - [4, 'dddd']
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-03-02
+    query: select count(*) from table(ex_pulsar_03)
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: pulsar-03-01
+    expected_result:
+      - [1]
+      - [3]
+
+  - type: check
+    target_name: pulsar-03-02
+    expected_result:
+      - [4]

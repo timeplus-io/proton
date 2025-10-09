@@ -15,10 +15,13 @@
 #include <IO/ReadBufferFromFile.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/PackedHashMap.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypesNumber.h>
 
+
+bool LOG_PANIC_ABORT = true;
 
 /** The test checks the speed of hash tables, simulating their use for aggregation.
   * The first argument specifies the number of elements to be inserted.

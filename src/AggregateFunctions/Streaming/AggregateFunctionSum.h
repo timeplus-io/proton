@@ -4,20 +4,20 @@
 #include <memory>
 #include <type_traits>
 
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
 #include <Columns/ColumnVector.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
 
 #include "config.h"
 
 #if USE_EMBEDDED_COMPILER
-#    include <llvm/IR/IRBuilder.h>
 #    include <DataTypes/Native.h>
+#    include <llvm/IR/IRBuilder.h>
 #endif
 
 namespace DB
@@ -70,7 +70,9 @@ struct AggregateFunctionSumData
 
         const auto * delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData().data();
 
-        if constexpr (std::is_floating_point_v<T> || (is_integer<T> && !is_big_int_v<T>) || (is_decimal<T> && !std::is_same_v<T, Decimal256> && !std::is_same_v<T, Decimal128>))
+        if constexpr (
+            std::is_floating_point_v<T>
+            || (is_integer<T> && !is_big_int_v<T>) || (is_decimal<T> && !std::is_same_v<T, Decimal256> && !std::is_same_v<T, Decimal128>))
         {
             /// Compiler cannot unroll this loop, do it manually.
             /// (at least for floats, most likely due to the lack of -fassociative-math)
@@ -108,8 +110,8 @@ struct AggregateFunctionSumData
     }
 
     template <typename Value, bool add_if_zero>
-    void NO_SANITIZE_UNDEFINED NO_INLINE
-    addManyConditionalInternal(const Value * __restrict ptr, const UInt8 * __restrict condition_map, size_t start, size_t end, const IColumn * delta_col)
+    void NO_SANITIZE_UNDEFINED NO_INLINE addManyConditionalInternal(
+        const Value * __restrict ptr, const UInt8 * __restrict condition_map, size_t start, size_t end, const IColumn * delta_col)
     {
         ptr += start;
         size_t count = end - start;
@@ -185,13 +187,15 @@ struct AggregateFunctionSumData
     }
 
     template <typename Value>
-    void ALWAYS_INLINE addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t start, size_t end, const IColumn * delta_col)
+    void ALWAYS_INLINE
+    addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t start, size_t end, const IColumn * delta_col)
     {
         return addManyConditionalInternal<Value, true>(ptr, null_map, start, end, delta_col);
     }
 
     template <typename Value>
-    void ALWAYS_INLINE addManyConditional(const Value * __restrict ptr, const UInt8 * __restrict cond_map, size_t start, size_t end, const IColumn * delta_col)
+    void ALWAYS_INLINE
+    addManyConditional(const Value * __restrict ptr, const UInt8 * __restrict cond_map, size_t start, size_t end, const IColumn * delta_col)
     {
         return addManyConditionalInternal<Value, false>(ptr, cond_map, start, end, delta_col);
     }
@@ -270,7 +274,8 @@ struct AggregateFunctionSumKahanData
     }
 
     template <typename Value, bool add_if_zero>
-    void NO_INLINE addManyConditionalInternal(const Value * __restrict ptr, const UInt8 * __restrict condition_map, size_t start, size_t end, const IColumn * delta_col)
+    void NO_INLINE addManyConditionalInternal(
+        const Value * __restrict ptr, const UInt8 * __restrict condition_map, size_t start, size_t end, const IColumn * delta_col)
     {
         constexpr size_t unroll_count = 4;
         T partial_sums[unroll_count]{};
@@ -307,13 +312,15 @@ struct AggregateFunctionSumKahanData
     }
 
     template <typename Value>
-    void ALWAYS_INLINE addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t start, size_t end, const IColumn * delta_col)
+    void ALWAYS_INLINE
+    addManyNotNull(const Value * __restrict ptr, const UInt8 * __restrict null_map, size_t start, size_t end, const IColumn * delta_col)
     {
         return addManyConditionalInternal<Value, true>(ptr, null_map, start, end, delta_col);
     }
 
     template <typename Value>
-    void ALWAYS_INLINE addManyConditional(const Value * __restrict ptr, const UInt8 * __restrict cond_map, size_t start, size_t end, const IColumn * delta_col)
+    void ALWAYS_INLINE
+    addManyConditional(const Value * __restrict ptr, const UInt8 * __restrict cond_map, size_t start, size_t end, const IColumn * delta_col)
     {
         return addManyConditionalInternal<Value, false>(ptr, cond_map, start, end, delta_col);
     }
@@ -371,28 +378,28 @@ public:
             return "__sum_with_overflow_retract";
         else if constexpr (Type == AggregateFunctionTypeSumKahan)
             return "__sum_kahan_retract";
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 
     AggregateFunctionSum(const DataTypes & argument_types_)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {}), scale(0)
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {}, createResultType(0))
     {
     }
 
     AggregateFunctionSum(const IDataType & data_type, const DataTypes & argument_types_)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {})
-        , scale(getDecimalScale(data_type))
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(
+              argument_types_, {}, createResultType(getDecimalScale(data_type)))
     {
     }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(UInt32 scale_)
     {
         if constexpr (!is_decimal<T>)
             return std::make_shared<DataTypeNumber<TResult>>();
         else
         {
             using DataType = DataTypeDecimal<TResult>;
-            return std::make_shared<DataType>(DataType::maxPrecision(), scale);
+            return std::make_shared<DataType>(DataType::maxPrecision(), scale_);
         }
     }
 
@@ -419,7 +426,7 @@ public:
     void addBatchSinglePlace(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena *,
         ssize_t if_argument_pos,
@@ -441,7 +448,7 @@ public:
     void addBatchSinglePlaceNotNull(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena *,
@@ -487,7 +494,7 @@ public:
     }
 
 #if 0 /// FIXME JIT
-#if USE_EMBEDDED_COMPILER
+#    if USE_EMBEDDED_COMPILER
 
     bool isCompilable() const override
     {
@@ -499,7 +506,7 @@ public:
         for (const auto & argument_type : this->argument_types)
             can_be_compiled &= canBeNativeType(*argument_type);
 
-        auto return_type = getReturnType();
+        auto return_type = getResultType();
         can_be_compiled &= canBeNativeType(*return_type);
 
         return can_be_compiled;
@@ -509,7 +516,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
         auto * aggregate_sum_ptr = b.CreatePointerCast(aggregate_data_ptr, return_type->getPointerTo());
 
         b.CreateStore(llvm::Constant::getNullValue(return_type), aggregate_sum_ptr);
@@ -523,7 +530,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
 
         auto * sum_value_ptr = b.CreatePointerCast(aggregate_data_ptr, return_type->getPointerTo());
         auto * sum_value = b.CreateLoad(return_type, sum_value_ptr);
@@ -543,7 +550,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
 
         auto * sum_value_dst_ptr = b.CreatePointerCast(aggregate_data_dst_ptr, return_type->getPointerTo());
         auto * sum_value_dst = b.CreateLoad(return_type, sum_value_dst_ptr);
@@ -560,18 +567,16 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
         auto * sum_value_ptr = b.CreatePointerCast(aggregate_data_ptr, return_type->getPointerTo());
 
         return b.CreateLoad(return_type, sum_value_ptr);
     }
 
-#endif
+#    endif
 #endif
 
 private:
-    UInt32 scale;
-
     static constexpr auto & castColumnToResult(IColumn & to)
     {
         if constexpr (is_decimal<T>)

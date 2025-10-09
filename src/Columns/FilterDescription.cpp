@@ -35,8 +35,9 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
             const ColumnNullable * column_nested_nullable = checkAndGetColumn<ColumnNullable>(*column_nested);
             if (!column_nested_nullable || !typeid_cast<const ColumnUInt8 *>(&column_nested_nullable->getNestedColumn()))
             {
-                throw Exception("Illegal type " + column_nested->getName() + " of column for constant filter. Must be bool or nullable(bool).",
-                                ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER,
+                                "Illegal type {} of column for constant filter. Must be bool or nullable(bool).",
+                                column_nested->getName());
             }
         }
 
@@ -66,12 +67,6 @@ FilterDescription::FilterDescription(const IColumn & column_)
         return;
     }
 
-    if (const ColumnUInt8 * concrete_column = typeid_cast<const ColumnUInt8 *>(&column))
-    {
-        data = &concrete_column->getData();
-        return;
-    }
-
     if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(column))
     {
         ColumnPtr nested_column = nullable_column->getNestedColumnPtr();
@@ -83,8 +78,8 @@ FilterDescription::FilterDescription(const IColumn & column_)
         {
             bool_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
             if (!bool_column)
-                throw Exception("Illegal type " + column.getName() + " of column for filter. Must be bool, uint8, nullable(bool) or nullable(uint8).",
-                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER,
+                    "Illegal type {} of column for filter. Must be bool, uint8, nullable(bool) or nullable(uint8).", column.getName());
         }
 
         const NullMap & null_map = nullable_column->getNullMapData();
@@ -100,8 +95,9 @@ FilterDescription::FilterDescription(const IColumn & column_)
         return;
     }
 
-    throw Exception("Illegal type " + column.getName() + " of column for filter. Must be bool, uint8, nullable(bool), nullable(uint8) or const variants of them.",
-        ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER,
+        "Illegal type {} of column for filter. Must be bool, uint8, nullable(bool), nullable(uint8) or const variants of them.",
+        column.getName());
 }
 
 SparseFilterDescription::SparseFilterDescription(const IColumn & column)
@@ -111,7 +107,7 @@ SparseFilterDescription::SparseFilterDescription(const IColumn & column)
         throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER,
             "Illegal type {} of column for sparse filter. Must be Sparse(UInt8)", column.getName());
 
-    filter_indices = &column_sparse->getOffsetsColumn();
+    filter_indices = &assert_cast<const ColumnUInt64 &>(column_sparse->getOffsetsColumn());
 }
 
 }

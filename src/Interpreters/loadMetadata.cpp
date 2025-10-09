@@ -1,6 +1,5 @@
+#include <Common/quoteString.h>
 #include <Common/ThreadPool.h>
-
-#include <Poco/DirectoryIterator.h>
 
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -15,14 +14,29 @@
 
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
-#include <Common/escapeForFileName.h>
 
+#include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <filesystem>
 #include <Common/logger_useful.h>
+#include <Common/CurrentMetrics.h>
+
+#include <filesystem>
+
+/// proton: starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaDB.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Interpreters/executeSelectQuery.h>
+/// proton: ends
+
 
 namespace fs = std::filesystem;
+
+namespace CurrentMetrics
+{
+    extern const Metric StartupSystemTablesThreads;
+    extern const Metric StartupSystemTablesThreadsActive;
+}
 
 namespace DB
 {
@@ -60,7 +74,9 @@ static void loadDatabase(
     ContextMutablePtr context,
     const String & database,
     const String & database_path,
-    bool force_restore_data)
+    bool force_restore_data,
+    bool is_local,
+    std::optional<std::string> query = std::nullopt) /// proton : add is_local and query
 {
     String database_attach_query;
     String database_metadata_file = database_path + ".sql";
@@ -71,17 +87,12 @@ static void loadDatabase(
         ReadBufferFromFile in(database_metadata_file, 1024);
         readStringUntilEOF(database_attach_query, in);
     }
-    else if (fs::exists(fs::path(database_path)))
-    {
-        /// TODO Remove this code (it's required for compatibility with versions older than 20.7)
-        /// Database exists, but .sql file is absent. It's old-style Ordinary database (e.g. system or default)
-        database_attach_query = "ATTACH DATABASE " + backQuoteIfNeed(database) + " ENGINE = Ordinary";
-    }
     else
     {
         /// It's first server run and we need create default and system databases.
         /// .sql file with database engine will be written for CREATE query.
-        database_attach_query = "CREATE DATABASE " + backQuoteIfNeed(database);
+        database_attach_query
+            = query.value_or(fmt::format("CREATE DATABASE {} ENGINE = Atomic SETTINGS local={}", backQuoteIfNeed(database), is_local));
     }
 
     try
@@ -98,7 +109,7 @@ static void loadDatabase(
 
 void loadMetadata(ContextMutablePtr context, const std::vector<String> & builtin_databases)
 {
-    Poco::Logger * log = &Poco::Logger::get("loadMetadata");
+    LoggerPtr log = getLogger("loadMetadata");
 
     String path = context->getPath() + "metadata";
 
@@ -159,7 +170,7 @@ void loadMetadata(ContextMutablePtr context, const std::vector<String> & builtin
 
     /// clickhouse-local creates DatabaseMemory as default database by itself
     /// For clickhouse-server we need create default database
-    /// proton: starts. Add `neutron` etc builtin databases
+    /// proton: starts. Add `neutron` etc builtin databases. All builtin databases are local provisioned
     for (const auto & builtin_db : builtin_databases)
     {
         bool create_default_db_if_not_exists = !builtin_db.empty();
@@ -170,9 +181,55 @@ void loadMetadata(ContextMutablePtr context, const std::vector<String> & builtin
     /// proton: ends
 
     TablesLoader::Databases loaded_databases;
+
+    /// proton: starts. Check databases stored in metaDB. Create the database if it is not found in the directory.
+    auto maybe_databases = Globals::getMetaStore().getMetaDB().listDatabases();
+    if (!maybe_databases.hasError())
+    {
+        for (const auto & database_desc : maybe_databases.result)
+        {
+            /// If we find database in metadata store, it has higher precedence to load
+            databases.erase(database_desc->name);
+            {
+                /// Set query_kind to run create query only on local node.
+                auto run_local_ctx = Context::createCopy(context);
+                run_local_ctx->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+                loadDatabase(
+                    run_local_ctx,
+                    database_desc->name,
+                    std::filesystem::path(path) / escapeForFileName(database_desc->name),
+                    has_force_restore_data_flag,
+                    true,
+                    database_desc->sql_def);
+                loaded_databases.insert({database_desc->name, DatabaseCatalog::instance().getDatabase(database_desc->name)});
+            }
+        }
+    }
+    /// proton: ends
+
     for (const auto & [name, db_path] : databases)
     {
-        loadDatabase(context, name, db_path, has_force_restore_data_flag);
+        /// proton : starts
+        bool is_local = std::find(builtin_databases.begin(), builtin_databases.end(), name) != builtin_databases.end();
+        if (!is_local)
+        {
+            /// Non local databases shall be already loaded from metastore above, but there is a backward compatible issue introduced
+            /// between 2.7.x and 2.8.x for single instance: the database was committed locally on file system in plain text file but
+            /// not in metastore in 2.7, and in 2.8, we did both. When upgrading from 2.7 to 2.8, we like to just attach the database
+            /// without recreating it since recreating it will fail.
+            /// ref https://github.com/timeplus-io/proton-enterprise/issues/9793
+            LOG_INFO(log, "Found non-local database={} to load. Force local", name);
+
+            auto run_local_ctx = Context::createCopy(context);
+            run_local_ctx->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+            loadDatabase(run_local_ctx, name, db_path, has_force_restore_data_flag, /*is_local=*/true);
+        }
+        else
+        {
+            loadDatabase(context, name, db_path, has_force_restore_data_flag, /*is_local=*/true);
+        }
+        /// proton : ends
+
         loaded_databases.insert({name, DatabaseCatalog::instance().getDatabase(name)});
     }
 
@@ -200,7 +257,7 @@ static void loadSystemDatabaseImpl(ContextMutablePtr context, const String & dat
     if (fs::exists(fs::path(path)) || fs::exists(fs::path(metadata_file)))
     {
         /// 'has_force_restore_data_flag' is true, to not fail on loading query_log table, if it is corrupted.
-        loadDatabase(context, database_name, path, true);
+        loadDatabase(context, database_name, path, true, true);
     }
     else
     {
@@ -209,6 +266,11 @@ static void loadSystemDatabaseImpl(ContextMutablePtr context, const String & dat
         database_create_query += database_name;
         database_create_query += " ENGINE=";
         database_create_query += default_engine;
+
+        /// proton : starts. Add `local=1` which indicates it is private local metadata
+        database_create_query += " SETTINGS local=1";
+        /// proton : ends
+
         executeCreateQuery(database_create_query, context, database_name, "<no file>", true);
     }
 }
@@ -216,7 +278,7 @@ static void loadSystemDatabaseImpl(ContextMutablePtr context, const String & dat
 
 void startupSystemTables()
 {
-    ThreadPool pool;
+    ThreadPool pool(CurrentMetrics::StartupSystemTablesThreads, CurrentMetrics::StartupSystemTablesThreadsActive);
     DatabaseCatalog::instance().getSystemDatabase()->startupTables(pool, /* force_restore */ true, /* force_attach */ true);
 }
 

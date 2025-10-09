@@ -1,0 +1,129 @@
+tags:
+  - multi_shard
+  - set_sharding_rule
+description: set sharding rule and test external stream multi_shard. test external stream multi_shard and seek_to, now the test framework doesn't
+      support validate the data read from kafka seek_to result. So we insert data into
+      external stream and read from external stream to validate the result.The data
+      with the same shard_expr result should be divided into the same shard.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 3
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test33_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test33_external
+        (
+          id int, 
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow',
+              sharding_expr='to_int(id)'
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 3306
+    query: select id, value from test33_external settings shards='1'
+    terminate: manual
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test33_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test33_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'aaaa']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test33_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [3, 'aaaa']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test33_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'bbbb']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test33_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test33_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [3, 'bbbb']
+
+  - type: check
+    target_name: 3306
+    expected_result:
+      - - "1"
+        - aaaa
+      - - "1"
+        - bbbb

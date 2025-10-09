@@ -1,0 +1,22 @@
+tags:
+  - prepare
+
+description: prepare data
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop function if exists ip_lookup;
+  - type: wait
+    time: 1
+
+  - name: udf-30-0
+    type: query
+    sql: |
+      CREATE Remote FUNCTION ip_lookup(ip string) RETURNS string 
+      URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/';
+  - type: wait
+    time: 3

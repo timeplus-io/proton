@@ -2,11 +2,9 @@
 
 #include "SchemaValidator.h"
 
-#include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/parseQueryPipe.h>
 
 namespace DB
 {
@@ -33,34 +31,30 @@ std::pair<String, Int32> SQLFormatHandler::executePost(const Poco::JSON::Object:
 
     auto & settings = query_context->getSettingsRef();
 
-    String error_msg;
-    auto res = rewriteQueryPipeAndParse(
-        parser, query.c_str(), query.c_str() + query.size(), error_msg, false, settings.max_query_size, settings.max_parser_depth);
-
-    if (!error_msg.empty())
+    try
     {
-        LOG_WARNING(log, "Query rewrite, query_id={} error_msg={}", query_context->getCurrentQueryId(), error_msg);
+        /// Use standard parseQuery instead of rewriteQueryPipeAndParse for regular SQL formatting
+        auto ast = parseQuery(
+            parser, query.c_str(), query.c_str() + query.size(), "sqlformat", settings.max_query_size, settings.max_parser_depth);
 
-        return {jsonErrorResponse(error_msg, ErrorCodes::INCORRECT_QUERY), HTTPResponse::HTTP_BAD_REQUEST};
+        if (!ast)
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "Failed to parse query: empty AST returned");
+
+        LOG_DEBUG(log, "Query parse successful, query_id={} AST_type={}", query_context->getCurrentQueryId(), ast->getID());
+
+        Poco::JSON::Object resp;
+        resp.set("request_id", query_context->getCurrentQueryId());
+        resp.set("query", serializeAST(*ast, false));
+        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        resp.stringify(resp_str_stream, 0);
+
+        return {resp_str_stream.str(), HTTPResponse::HTTP_OK};
     }
-
-    auto & [rewritten_query, ast] = res;
-
-    /// Fix the select with union query has unspecified union mode
+    catch (const Exception & e)
     {
-        NormalizeSelectWithUnionQueryVisitor::Data data{settings.union_default_mode};
-        NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
+        LOG_WARNING(log, "Query parse failed, query_id={} error_msg={}", query_context->getCurrentQueryId(), e.message());
+        return {jsonErrorResponse(e.message(), ErrorCodes::INCORRECT_QUERY), HTTPResponse::HTTP_BAD_REQUEST};
     }
-
-    LOG_DEBUG(log, "Query rewrite, query_id={} rewritten={}", query_context->getCurrentQueryId(), rewritten_query);
-
-    Poco::JSON::Object resp;
-    resp.set("request_id", query_context->getCurrentQueryId());
-    resp.set("query", serializeAST(*ast, false));
-    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    resp.stringify(resp_str_stream, 0);
-
-    return {resp_str_stream.str(), HTTPResponse::HTTP_OK};
 }
 
 }

@@ -1,0 +1,84 @@
+description: Test covering asyncio run 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (id int, value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_shield(id int, value string) RETURNS string LANGUAGE PYTHON AS $$
+      import asyncio
+
+      async def say_after(delay, what):
+          asyncio.sleep(delay)
+          return f"{what}-{delay}"
+
+      async def say_after_shield(delay, what):
+          task = asyncio.create_task(say_after(delay, what))
+          try:
+              return await asyncio.shield(task)
+          except asyncio.CancelledError:
+              return await task
+
+      async def say_after_cancel(delay, what):
+          task = asyncio.create_task(say_after_shield(delay, what))
+          await asyncio.sleep(1)
+          task.cancel()
+          return await task
+
+      def test_async_shield(id, value):
+          results = []
+          for i, v in zip(id, value):
+              try:
+                  result = asyncio.run(say_after_cancel(i, v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-8-1
+    type: stream
+    query: select test_async_shield(id, value) as res, id, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(id, value) values (0, 'hello0') (1, 'hello1') (2, 'hello2');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test41_stream(id, value) values (-1, 'hello3') (0, ''); # Python < 3.11：asyncio.sleep(-1) no exception
+
+  - type: check
+    target_name: python-udf-8-1
+    expected_result:
+      - ['hello0-0', 0, 'hello0']
+      - ['hello1-1', 1, 'hello1']
+      - ['hello2-2', 2, 'hello2']
+      - ['hello3--1', -1, 'hello3']
+      - ['-0', 0, '']

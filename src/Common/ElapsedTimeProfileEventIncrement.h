@@ -14,23 +14,28 @@ enum Time
     Seconds,
 };
 
-template <Time time>
+template <Time unit>
 struct ProfileEventTimeIncrement
 {
-    explicit ProfileEventTimeIncrement<time>(ProfileEvents::Event event_)
+    explicit ProfileEventTimeIncrement(ProfileEvents::Event event_)
         : event(event_), watch(CLOCK_MONOTONIC) {}
+
+    UInt64 elapsed()
+    {
+        if constexpr (unit == Time::Nanoseconds)
+            return watch.elapsedNanoseconds();
+        else if constexpr (unit == Time::Microseconds)
+            return watch.elapsedMicroseconds();
+        else if constexpr (unit == Time::Milliseconds)
+            return watch.elapsedMilliseconds();
+        else if constexpr (unit == Time::Seconds)
+            return watch.elapsedSeconds();
+    }
 
     ~ProfileEventTimeIncrement()
     {
         watch.stop();
-        if constexpr (time == Time::Nanoseconds)
-            ProfileEvents::increment(event, watch.elapsedNanoseconds());
-        else if constexpr (time == Time::Microseconds)
-            ProfileEvents::increment(event, watch.elapsedMicroseconds());
-        else if constexpr (time == Time::Milliseconds)
-            ProfileEvents::increment(event, watch.elapsedMilliseconds());
-        else if constexpr (time == Time::Seconds)
-            ProfileEvents::increment(event, watch.elapsedSeconds());
+        ProfileEvents::increment(event, elapsed());
     }
 
     ProfileEvents::Event event;

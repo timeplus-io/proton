@@ -1,0 +1,28 @@
+name: changelogstream_join_table5
+description: Tests covering the changelog stream join tables.
+tags:
+- smoke
+
+setup:
+  scope: case
+  steps:
+    - type: query
+      sql: drop view if exists test14_view_5;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test14_stream1_5;
+
+    - type: query
+      sql: drop stream if exists test14_stream2_5;
+
+    - type: query
+      sql: drop stream if exists test14_table2_5;
+
+    - type: query
+      sql: drop stream if exists test14_stream3_5;
+
+    - type: wait
+      time: 1

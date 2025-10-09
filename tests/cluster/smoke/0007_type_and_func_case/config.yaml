@@ -1,0 +1,4 @@
+name: type_and_func
+description: Tests covering the steam query smoke cases.
+tags:
+- smoke

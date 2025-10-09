@@ -32,9 +32,9 @@ static bool checkIntervalParser(const String & alias_str, const String & interva
     Expected alias_expected, interval_expected;
 
     if (!alias_parser.parse(alias_pos, alias_ast, alias_expected))
-        throw DB::Exception("Failed to parse interval alias string.", ErrorCodes::SYNTAX_ERROR);
+        throw DB::Exception(ErrorCodes::SYNTAX_ERROR, "Failed to parse interval alias string.");
     if (!interval_parser.parse(interval_pos, interval_ast, interval_expected))
-        throw DB::Exception("Failed to parse interval string.", ErrorCodes::SYNTAX_ERROR);
+        throw DB::Exception(ErrorCodes::SYNTAX_ERROR, "Failed to parse interval string.");
 
     return alias_ast->getTreeHash() == interval_ast->getTreeHash();
 }
@@ -87,21 +87,21 @@ TEST(IntervalAliasTest, IntervalAliasInEmit)
 {
     EXPECT_TRUE(checkASTTree(
         /* origin query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay +1s and last +1s and periodic +1s",
+        "SELECT device, avg(temperature) FROM default.devices group by device emit periodic +1s with delay +1s",
         /* check query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay interval +1 second and periodic interval +1 second and last interval +1 second"));
+        "SELECT device, avg(temperature) FROM default.devices group by device emit periodic interval +1 second with delay interval +1 second"));
 
     EXPECT_TRUE(checkASTTree(
         /* origin query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay -1s and last -1s and periodic +1s",
+        "SELECT device, avg(temperature) FROM default.devices group by device emit periodic 1s with delay -1s",
         /* check query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay interval -1 second and periodic interval 1 second and last interval -1 second"));
+        "SELECT device, avg(temperature) FROM default.devices group by device emit periodic interval 1 second with delay interval -1 second"));
 
     EXPECT_TRUE(checkASTTree(
         /* origin query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay +1s and last +1s and periodic +1s",
+        "SELECT device, avg(temperature) FROM default.devices group by device emit periodic +1s with delay +1s and timeout +1s",
         /* check query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay interval +1 second and periodic interval 1 second and last interval 1 second"));
+        "SELECT device, avg(temperature) FROM default.devices group by device emit periodic interval 1 second with delay interval +1 second and timeout interval 1 second"));
 }
 
 TEST(IntervalAliasTest, IntervalAliasInTumbleFunc)

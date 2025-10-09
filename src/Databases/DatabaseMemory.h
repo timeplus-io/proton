@@ -32,7 +32,8 @@ public:
     void dropTable(
         ContextPtr context,
         const String & table_name,
-        bool no_delay) override;
+        bool sync,
+        const ASTPtr & query) override;
 
     ASTPtr getCreateTableQueryImpl(const String & name, ContextPtr context, bool throw_on_error) const override;
     ASTPtr getCreateDatabaseQuery() const override;
@@ -48,7 +49,12 @@ public:
 
     void drop(ContextPtr context) override;
 
-    void alterTable(ContextPtr local_context, const StorageID & table_id, const StorageInMemoryMetadata & metadata) override;
+    void alterTable(
+        ContextPtr local_context,
+        const StorageID & table_id,
+        const StorageInMemoryMetadata & metadata,
+        String alter_command,
+        std::vector<String> alter_command_asts) override;
 
 private:
     String data_path;

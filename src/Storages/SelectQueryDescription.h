@@ -2,6 +2,7 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
+#include <Common/SettingsChanges.h>
 
 namespace DB
 {
@@ -13,6 +14,8 @@ struct SelectQueryDescription
     std::vector<StorageID> select_table_ids; /// proton : supports mv union
     /// Select query itself (ASTSelectWithUnionQuery)
     ASTPtr inner_query;
+    /// Query settings changes
+    SettingsChanges settings_changes;
 
     /// Parse description from select query for materialized view. Also
     /// validates query.

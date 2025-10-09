@@ -21,7 +21,6 @@
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CheckingCompressedReadBuffer.h>
 #include <IO/ConnectionTimeouts.h>
-#include <IO/ConnectionTimeoutsContext.h>
 #include <IO/Operators.h>
 #include <Disks/IDisk.h>
 #include <boost/algorithm/string/find_iterator.hpp>
@@ -69,7 +68,7 @@ namespace
     constexpr const std::chrono::minutes decrease_error_count_period{5};
 
     template <typename PoolFactory>
-    ConnectionPoolPtrs createPoolsForAddresses(const std::string & name, PoolFactory && factory, const Cluster::ShardsInfo & shards_info, Poco::Logger * log)
+    ConnectionPoolPtrs createPoolsForAddresses(const std::string & name, PoolFactory && factory, const Cluster::ShardsInfo & shards_info, LoggerPtr log)
     {
         ConnectionPoolPtrs pools;
 
@@ -122,11 +121,10 @@ namespace
     {
         if (expected != calculated)
         {
-            String message = "Checksum of extra info doesn't match: corrupted data."
-                " Reference: " + getHexUIntLowercase(expected.first) + getHexUIntLowercase(expected.second)
-                + ". Actual: " + getHexUIntLowercase(calculated.first) + getHexUIntLowercase(calculated.second)
-                + ".";
-            throw Exception(message, ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            throw Exception(ErrorCodes::CHECKSUM_DOESNT_MATCH,
+                            "Checksum of extra info doesn't match: corrupted data. Reference: {}{}. Actual: {}{}.",
+                            getHexUIntLowercase(expected.first), getHexUIntLowercase(expected.second),
+                            getHexUIntLowercase(calculated.first), getHexUIntLowercase(calculated.second));
         }
     }
 
@@ -140,12 +138,17 @@ namespace
         size_t rows = 0;
         size_t bytes = 0;
 
+        UInt32 shard_num = 0;
+        std::string cluster;
+        std::string distributed_table;
+        std::string remote_table;
+
         /// dumpStructure() of the header -- obsolete
         std::string block_header_string;
         Block block_header;
     };
 
-    DistributedHeader readDistributedHeader(ReadBufferFromFile & in, Poco::Logger * log)
+    DistributedHeader readDistributedHeader(ReadBufferFromFile & in, LoggerPtr log)
     {
         DistributedHeader distributed_header;
 
@@ -192,6 +195,14 @@ namespace
                 distributed_header.block_header = header_block_in.read();
                 if (!distributed_header.block_header)
                     throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "Cannot read header from the {} batch", in.getFileName());
+            }
+
+            if (header_buf.hasPendingData())
+            {
+                readVarUInt(distributed_header.shard_num, header_buf);
+                readStringBinary(distributed_header.cluster, header_buf);
+                readStringBinary(distributed_header.distributed_table, header_buf);
+                readStringBinary(distributed_header.remote_table, header_buf);
             }
 
             /// Add handling new data here, for example:
@@ -287,7 +298,7 @@ namespace
         RemoteInserter & remote,
         bool compression_expected,
         ReadBufferFromFile & in,
-        Poco::Logger * log)
+        LoggerPtr log)
     {
         if (!remote.getHeader())
         {
@@ -297,7 +308,7 @@ namespace
         }
 
         /// This is old format, that does not have header for the block in the file header,
-        /// applying ConvertingBlockInputStream in this case is not a big overhead.
+        /// applying ConvertingTransform in this case is not a big overhead.
         ///
         /// Anyway we can get header only from the first block, which contain all rows anyway.
         if (!distributed_header.block_header)
@@ -343,7 +354,7 @@ StorageDistributedDirectoryMonitor::StorageDistributedDirectoryMonitor(
     StorageDistributed & storage_,
     const DiskPtr & disk_,
     const std::string & relative_path_,
-    ConnectionPoolPtr pool_,
+    ConnectionPoolWithFailoverPtr pool_,
     ActionBlocker & monitor_blocker_,
     BackgroundSchedulePool & bg_pool)
     : storage(storage_)
@@ -360,7 +371,7 @@ StorageDistributedDirectoryMonitor::StorageDistributedDirectoryMonitor(
     , default_sleep_time(storage.getDistributedSettingsRef().monitor_sleep_time_ms.totalMilliseconds())
     , sleep_time(default_sleep_time)
     , max_sleep_time(storage.getDistributedSettingsRef().monitor_max_sleep_time_ms.totalMilliseconds())
-    , log(&Poco::Logger::get(getLoggerName()))
+    , log(getLogger(getLoggerName()))
     , monitor_blocker(monitor_blocker_)
     , metric_pending_files(CurrentMetrics::DistributedFilesToInsert, 0)
     , metric_broken_files(CurrentMetrics::BrokenDistributedFilesToInsert, 0)
@@ -475,7 +486,7 @@ void StorageDistributedDirectoryMonitor::run()
 }
 
 
-ConnectionPoolPtr StorageDistributedDirectoryMonitor::createPool(const std::string & name, const StorageDistributed & storage)
+ConnectionPoolWithFailoverPtr StorageDistributedDirectoryMonitor::createPool(const std::string & name, const StorageDistributed & storage)
 {
     const auto pool_factory = [&storage, &name] (const Cluster::Address & address) -> ConnectionPoolPtr
     {
@@ -541,8 +552,8 @@ ConnectionPoolPtr StorageDistributedDirectoryMonitor::createPool(const std::stri
 
     auto pools = createPoolsForAddresses(name, pool_factory, storage.getCluster()->getShardsInfo(), storage.log);
 
-    const auto settings = storage.getContext()->getSettings();
-    return pools.size() == 1 ? pools.front() : std::make_shared<ConnectionPoolWithFailover>(pools,
+    const auto & settings = storage.getContext()->getSettingsRef();
+    return std::make_shared<ConnectionPoolWithFailover>(std::move(pools),
         settings.load_balancing,
         settings.distributed_replica_error_half_life.totalSeconds(),
         settings.distributed_replica_error_cap);
@@ -602,6 +613,8 @@ bool StorageDistributedDirectoryMonitor::processFiles(const std::map<UInt64, std
 
 void StorageDistributedDirectoryMonitor::processFile(const std::string & file_path)
 {
+    OpenTelemetry::TracingContextHolderPtr thread_trace_context;
+
     Stopwatch watch;
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(storage.getContext()->getSettingsRef());
 
@@ -616,7 +629,21 @@ void StorageDistributedDirectoryMonitor::processFile(const std::string & file_pa
             formatReadableQuantity(distributed_header.rows),
             formatReadableSizeWithBinarySuffix(distributed_header.bytes));
 
-        auto connection = pool->get(timeouts, &distributed_header.insert_settings);
+        thread_trace_context = std::make_unique<OpenTelemetry::TracingContextHolder>(__PRETTY_FUNCTION__,
+            distributed_header.client_info.client_trace_context,
+            this->storage.getContext()->getOpenTelemetrySpanLog());
+
+        thread_trace_context = std::make_unique<OpenTelemetry::TracingContextHolder>(__PRETTY_FUNCTION__,
+            distributed_header.client_info.client_trace_context,
+            this->storage.getContext()->getOpenTelemetrySpanLog());
+        thread_trace_context->root_span.addAttribute("proton.shard_num", distributed_header.shard_num);
+        thread_trace_context->root_span.addAttribute("proton.cluster", distributed_header.cluster);
+        thread_trace_context->root_span.addAttribute("proton.distributed", distributed_header.distributed_table);
+        thread_trace_context->root_span.addAttribute("proton.remote", distributed_header.remote_table);
+        thread_trace_context->root_span.addAttribute("proton.rows", distributed_header.rows);
+        thread_trace_context->root_span.addAttribute("proton.bytes", distributed_header.bytes);
+        auto result = pool->getManyChecked(timeouts, distributed_header.insert_settings, PoolMode::GET_ONE, storage.remote_storage.getQualifiedName());
+        auto connection = std::move(result.front().entry);
         RemoteInserter remote{*connection, timeouts,
             distributed_header.insert_query,
             distributed_header.insert_settings,
@@ -627,8 +654,18 @@ void StorageDistributedDirectoryMonitor::processFile(const std::string & file_pa
     }
     catch (Exception & e)
     {
+        if (thread_trace_context)
+            thread_trace_context->root_span.addAttribute(std::current_exception());
+
         e.addMessage(fmt::format("While sending {}", file_path));
         maybeMarkAsBroken(file_path, e);
+        throw;
+    }
+    catch (...)
+    {
+        if (thread_trace_context)
+            thread_trace_context->root_span.addAttribute(std::current_exception());
+
         throw;
     }
 
@@ -741,7 +778,9 @@ struct StorageDistributedDirectoryMonitor::Batch
             fs::rename(tmp_file, parent.current_batch_file_path);
         }
         auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(parent.storage.getContext()->getSettingsRef());
-        auto connection = parent.pool->get(timeouts);
+        auto result = parent.pool->getManyChecked(
+            timeouts, parent.storage.getContext()->getSettingsRef(), PoolMode::GET_ONE, parent.storage.remote_storage.getQualifiedName());
+        auto connection = std::move(result.front().entry);
 
         bool batch_broken = false;
         bool batch_marked_as_broken = false;
@@ -842,6 +881,10 @@ private:
             ReadBufferFromFile in(file_path->second);
             const auto & distributed_header = readDistributedHeader(in, parent.log);
 
+            OpenTelemetry::TracingContextHolder thread_trace_context(__PRETTY_FUNCTION__,
+                distributed_header.client_info.client_trace_context,
+                parent.storage.getContext()->getOpenTelemetrySpanLog());
+
             if (!remote)
             {
                 remote = std::make_unique<RemoteInserter>(connection, timeouts,
@@ -876,6 +919,11 @@ private:
                 ReadBufferFromFile in(file_path->second);
                 const auto & distributed_header = readDistributedHeader(in, parent.log);
 
+                // this function is called in a separated thread, so we set up the trace context from the file
+                OpenTelemetry::TracingContextHolder thread_trace_context(__PRETTY_FUNCTION__,
+                    distributed_header.client_info.client_trace_context,
+                    parent.storage.getContext()->getOpenTelemetrySpanLog());
+
                 RemoteInserter remote(connection, timeouts,
                     distributed_header.insert_query,
                     distributed_header.insert_settings,
@@ -908,7 +956,7 @@ public:
         std::unique_ptr<CompressedReadBuffer> decompressing_in;
         std::unique_ptr<NativeReader> block_in;
 
-        Poco::Logger * log = nullptr;
+        LoggerPtr log = nullptr;
 
         Block first_block;
 
@@ -917,7 +965,7 @@ public:
             in = std::make_unique<ReadBufferFromFile>(file_name);
             decompressing_in = std::make_unique<CompressedReadBuffer>(*in);
             block_in = std::make_unique<NativeReader>(*decompressing_in, DBMS_TCP_PROTOCOL_VERSION);
-            log = &Poco::Logger::get("DirectoryMonitorSource");
+            log = getLogger("DirectoryMonitorSource");
 
             readDistributedHeader(*in, log);
 

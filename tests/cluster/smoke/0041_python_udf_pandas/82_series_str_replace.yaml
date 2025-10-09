@@ -1,0 +1,53 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value array(string));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_str_replace(value array(string)) RETURNS array(string) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_str_replace(value):
+          res = []
+          for v in value:
+              s = pd.Series(v)
+              str_replace = s.str.replace('_','').tolist()
+              res.append(str_replace)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-82-1
+    type: stream
+    query: select test_str_replace(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(string)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          (['cow_', 'duck_', 'do_ve']) (['_cow_', 'duck_', 'do_v_e']);
+
+  - type: check
+    target_name: python-udf3-82-1
+    expected_result:
+      - [['cow', 'duck', 'dove']]
+      - [['cow', 'duck', 'dove']]

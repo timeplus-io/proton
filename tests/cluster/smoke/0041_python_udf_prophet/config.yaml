@@ -1,0 +1,30 @@
+name: python_udf_prophet
+description: Tests covering the python_udf prophet library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - prophet
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/7259
+
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "prophet"}'
+
+    - type: command
+      name: python-udf15-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "prophet") | length > 0'
+    
+    - type: check
+      target_name: python-udf15-1
+      expected_result: ['true']

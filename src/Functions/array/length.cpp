@@ -41,7 +41,7 @@ struct LengthImpl
 
     [[noreturn]] static void uuid(const ColumnUUID::Container &, size_t &, PaddedPODArray<UInt64> &)
     {
-        throw Exception("Cannot apply function length to uuid argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Cannot apply function length to uuid argument");
     }
 
     [[noreturn]] static void ipv6(const ColumnIPv6::Container &, size_t &, PaddedPODArray<UInt64> &)
@@ -98,7 +98,7 @@ It is ok to have ASCII NUL bytes in strings, and they will be counted as well.
                 {"unicode", "SELECT 'ёлка' AS str1, length(str1), length_utf8(str1), normalize_utf8_nfkd(str1) AS str2, length(str2), length_utf8(str2)", ""},
                 {"nul", R"(SELECT 'abc\0\0\0' AS str, length(str))", ""},
                 },
-            .categories{"String", "Array"}
+            .category{"Arrays"}
         },
         FunctionFactory::CaseInsensitive);
 }

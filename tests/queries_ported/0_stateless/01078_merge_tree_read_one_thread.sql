@@ -13,7 +13,7 @@ insert into t select 3, 0 from numbers(100);
 select sleep(1) format Null; -- sleep a bit to wait possible merges after insert
 
 set max_threads = 1;
-optimize table t final;
+optimize stream t final;
 
 select sum(a) from t where a in (0, 3) and b = 0;
 

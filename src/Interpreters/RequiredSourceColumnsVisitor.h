@@ -32,6 +32,7 @@ private:
     static void visit(const ASTTableExpression & node, const ASTPtr &, Data & data);
     static void visit(const ASTArrayJoin & node, const ASTPtr &, Data & data);
     static void visit(const ASTSelectQuery & select, const ASTPtr &, Data & data);
+    static void visit(const ASTEmitQuery & node, const ASTPtr &, Data & data);
 };
 
 /// Extracts all the information about columns and tables from ASTSelectQuery block into Data object.

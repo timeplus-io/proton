@@ -8,8 +8,19 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Common/JSONBuilder.h>
 
+
+namespace CurrentMetrics
+{
+    extern const Metric TemporaryFilesForSort;
+}
+
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
 
 static ITransformingStep::Traits getTraits(size_t limit)
 {
@@ -19,6 +30,7 @@ static ITransformingStep::Traits getTraits(size_t limit)
             .returns_single_stream = true,
             .preserves_number_of_streams = false,
             .preserves_sorting = false,
+            .preserves_substream = true, /// only partial sorting
         },
         {
             .preserves_number_of_rows = limit == 0,
@@ -36,7 +48,7 @@ SortingStep::SortingStep(
     size_t max_bytes_before_remerge_,
     double remerge_lowered_memory_bytes_ratio_,
     size_t max_bytes_before_external_sort_,
-    VolumePtr tmp_volume_,
+    TemporaryDataOnDiskScopePtr tmp_data_,
     size_t min_free_disk_space_)
     : ITransformingStep(input_stream, input_stream.header, getTraits(limit_))
     , result_description(std::move(description_))
@@ -46,9 +58,12 @@ SortingStep::SortingStep(
     , max_bytes_before_remerge(max_bytes_before_remerge_)
     , remerge_lowered_memory_bytes_ratio(remerge_lowered_memory_bytes_ratio_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_)
-    , tmp_volume(tmp_volume_)
+    , tmp_data(tmp_data_)
     , min_free_disk_space(min_free_disk_space_)
 {
+    if (max_bytes_before_external_sort && tmp_data == nullptr)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Temporary data storage for external sorting is not provided");
+
     /// TODO: check input_stream is partially sorted by the same description.
     output_stream->sort_description = result_description;
     output_stream->sort_scope = DataStream::SortScope::Global;
@@ -65,21 +80,33 @@ void SortingStep::updateLimit(size_t limit_)
 
 void SortingStep::mergeSorting(QueryPipelineBuilder & pipeline, const SortDescription & result_sort_desc, UInt64 limit_)
 {
-    pipeline.addSimpleTransform([&](const Block & header, QueryPipelineBuilder::StreamType stream_type) mutable -> ProcessorPtr {
-        if (stream_type == QueryPipelineBuilder::StreamType::Totals)
-            return nullptr;
+    bool increase_sort_description_compile_attempts = true;
 
-        return std::make_shared<MergeSortingTransform>(
-            header,
-            result_sort_desc,
-            max_block_size,
-            limit_,
-            max_bytes_before_remerge / pipeline.getNumStreams(),
-            remerge_lowered_memory_bytes_ratio,
-            max_bytes_before_external_sort,
-            tmp_volume,
-            min_free_disk_space);
-    });
+    pipeline.addSimpleTransform(
+        [&, increase_sort_description_compile_attempts](
+            const Block & header, QueryPipelineBuilder::StreamType stream_type) mutable -> ProcessorPtr {
+            if (stream_type == QueryPipelineBuilder::StreamType::Totals)
+                return nullptr;
+
+            // For multiple FinishSortingTransform we need to count identical comparators only once per QueryPlan.
+            // To property support min_count_to_compile_sort_description.
+            bool increase_sort_description_compile_attempts_current = increase_sort_description_compile_attempts;
+
+            if (increase_sort_description_compile_attempts)
+                increase_sort_description_compile_attempts = false;
+
+            return std::make_shared<MergeSortingTransform>(
+                header,
+                result_sort_desc,
+                max_block_size,
+                limit_,
+                increase_sort_description_compile_attempts_current,
+                max_bytes_before_remerge / pipeline.getNumStreams(),
+                remerge_lowered_memory_bytes_ratio,
+                max_bytes_before_external_sort,
+                std::make_unique<TemporaryDataOnDisk>(tmp_data, CurrentMetrics::TemporaryFilesForSort),
+                min_free_disk_space);
+        });
 }
 
 void SortingStep::fullSort(QueryPipelineBuilder & pipeline, const SortDescription & result_sort_desc, const UInt64 limit_)
@@ -160,6 +187,13 @@ void SortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
     if (limit)
         map.add("Limit", limit);
+}
+
+void SortingStep::updateOutputStream()
+{
+    output_stream = createOutputStream(input_streams.front(), input_streams.front().header, getDataStreamTraits());
+    output_stream->sort_description = result_description;
+    output_stream->sort_scope = DataStream::SortScope::Global;
 }
 }
 }

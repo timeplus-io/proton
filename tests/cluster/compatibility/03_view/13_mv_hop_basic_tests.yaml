@@ -1,0 +1,57 @@
+tags:
+  - prepare
+  - validate
+  - hopping window
+
+description: basic tests on mv hop window aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: view-12-1
+    type: stream
+    query: select * except (_tp_time) from hop_mv settings seek_to='earliest';
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-12-1
+    mode: random
+    expected_result:
+      - ['0', 'dev1', '60', '2024-01-01 19:59:57', '2024-01-01 20:00:02']
+      - ['1', 'dev2', '58', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+      - ['1', 'dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+
+  - name: view-12-2
+    type: stream
+    query: select * except (_tp_time) from hop_target_stream settings seek_to='earliest';
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-12-2
+    mode: random
+    expected_result:
+      - ['0', 'dev1', '60', '2024-01-01 19:59:57', '2024-01-01 20:00:02']
+      - ['1', 'dev2', '58', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+      - ['1', 'dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:05']

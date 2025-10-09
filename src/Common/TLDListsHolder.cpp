@@ -55,7 +55,7 @@ void TLDListsHolder::parseConfig(const std::string & top_level_domains_path, con
     Poco::Util::AbstractConfiguration::Keys config_keys;
     config.keys("top_level_domains_lists", config_keys);
 
-    Poco::Logger * log = &Poco::Logger::get("TLDListsHolder");
+    LoggerPtr log = getLogger("TLDListsHolder");
 
     for (const auto & key : config_keys)
     {
@@ -100,7 +100,7 @@ size_t TLDListsHolder::parseAndAddTldList(const std::string & name, const std::s
             tld_list_tmp.emplace(line, TLDType::TLD_REGULAR);
     }
     if (!in.eof())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Not all list had been read", name);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Not all list had been read: {}", name);
 
     TLDList tld_list(tld_list_tmp.size());
     for (const auto & [host, type] : tld_list_tmp)

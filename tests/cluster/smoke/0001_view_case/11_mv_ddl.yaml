@@ -1,0 +1,83 @@
+tags:
+  - view
+description: ddl for materialized view(remove codec and index)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists 100053_mv;
+
+  - type: query
+    sql: drop view if exists 100053_mv_without_target;
+
+
+  - type: query
+    sql: drop stream if exists 100053_src;
+
+  - type: query
+    sql: drop stream if exists 100053_tar;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream 100053_src(id int)
+
+  - type: query
+    sql: create stream 100053_tar(id int)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create materialized view 100053_mv into 100053_tar as select id from 100053_src;
+
+  - type: query
+    sql: create materialized view 100053_mv_without_target as select id from 100053_src;
+
+  - type: stream
+    query: show create 100053_mv;
+    name: show-create-mv
+    schema:
+      - name: statement
+        type: string
+
+  - type: stream
+    query: show create 100053_mv_without_target;
+    name: show-create-mv-without-target
+    schema:
+      - name: statement
+        type: string
+
+  - type: check
+    target_name: show-create-mv
+    expected_result:
+    -
+      - |-
+        CREATE MATERIALIZED VIEW default.`100053_mv` INTO default.`100053_tar`
+        (
+          `id` int32,
+          `_tp_time` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+          `_tp_sn` int64
+        ) AS
+        SELECT
+          id
+        FROM
+          default.`100053_src`
+
+  - type: check
+    target_name: show-create-mv-without-target
+    expected_result:
+    -
+      - |-
+        CREATE MATERIALIZED VIEW default.`100053_mv_without_target`
+        (
+          `id` int32,
+          `_tp_time` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC'),
+          `_tp_sn` int64
+        ) AS
+        SELECT
+          id
+        FROM
+          default.`100053_src`

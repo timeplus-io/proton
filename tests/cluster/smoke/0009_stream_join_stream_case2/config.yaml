@@ -1,0 +1,4 @@
+name: stream_join_stream2
+description: Tests covering the stream query smoke cases.
+tags:
+  - smoke

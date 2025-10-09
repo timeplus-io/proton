@@ -9,6 +9,18 @@
 
 #include <set>
 
+/// proton: starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/Requests/ListDisksRequest.h>
+#include <Cluster/Requests/ListDisksResponse.h>
+#include <Disks/getDiskConfigurationFromAST.h>
+#include <Disks/getOrCreateDiskFromAST.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/parseQuery.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -17,6 +29,8 @@ namespace ErrorCodes
     extern const int EXCESSIVE_ELEMENT_IN_CONFIG;
     extern const int UNKNOWN_DISK;
     extern const int LOGICAL_ERROR;
+    extern const int CANNOT_LOAD_CONFIG;
+    extern const int CANNOT_DELETE_DISK; /// proton: udpated
 }
 
 
@@ -35,11 +49,16 @@ void DiskSelector::initialize(const Poco::Util::AbstractConfiguration & config, 
     auto & factory = DiskFactory::instance();
 
     constexpr auto default_disk_name = "default";
+
+    /// proton: starts. load disks from MetaStore
     bool has_default_disk = false;
+    has_default_disk = loadDisksFromMetaStore(context);
+    /// proton: ends
+
     for (const auto & disk_name : keys)
     {
         if (!std::all_of(disk_name.begin(), disk_name.end(), isWordCharASCII))
-            throw Exception("Disk name can contain only alphanumeric and '_' (" + disk_name + ")", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
+            throw Exception(ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG, "Disk name can contain only alphanumeric and '_' ({})", disk_name);
 
         if (disk_name == default_disk_name)
             has_default_disk = true;
@@ -53,7 +72,7 @@ void DiskSelector::initialize(const Poco::Util::AbstractConfiguration & config, 
         disks.emplace(
             default_disk_name,
             std::make_shared<DiskLocal>(
-                default_disk_name, context->getPath(), 0, context, config.getUInt("local_disk_check_period_ms", 0)));
+                default_disk_name, context->getPath(), 0, context, config, config_prefix));
     }
 
     is_initialized = true;
@@ -73,12 +92,12 @@ DiskSelectorPtr DiskSelector::updateFromConfig(
     std::shared_ptr<DiskSelector> result = std::make_shared<DiskSelector>(*this);
 
     constexpr auto default_disk_name = "default";
-    DisksMap old_disks_minus_new_disks (result->getDisksMap());
+    DisksMap old_disks_minus_new_disks(result->getDisksMap());
 
     for (const auto & disk_name : keys)
     {
         if (!std::all_of(disk_name.begin(), disk_name.end(), isWordCharASCII))
-            throw Exception("Disk name can contain only alphanumeric and '_' (" + disk_name + ")", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
+            throw Exception(ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG, "Disk name can contain only alphanumeric and '_' ({})", disk_name);
 
         auto disk_config_prefix = config_prefix + "." + disk_name;
         if (!result->getDisksMap().contains(disk_name))
@@ -105,31 +124,48 @@ DiskSelectorPtr DiskSelector::updateFromConfig(
         else
             writeString("Disks ", warning);
 
-        int index = 0;
-        for (const auto & [name, _] : old_disks_minus_new_disks)
+        int num_disks_removed_from_config = 0;
+        for (const auto & [name, disk] : old_disks_minus_new_disks)
         {
-            if (index++ > 0)
+            /// Custom disks are not present in config.
+            if (disk->isCustomDisk())
+                continue;
+
+            if (num_disks_removed_from_config++ > 0)
                 writeString(", ", warning);
+
             writeBackQuotedString(name, warning);
         }
 
-        writeString(" disappeared from configuration, this change will be applied after restart of proton", warning);
-        LOG_WARNING(&Poco::Logger::get("DiskSelector"), fmt::runtime(warning.str()));
+        if (num_disks_removed_from_config > 0)
+        {
+            LOG_WARNING(
+                getLogger("DiskSelector"),
+                "{} disappeared from configuration, this change will be applied after restart of ClickHouse",
+                warning.str());
+        }
     }
 
     return result;
 }
 
 
-DiskPtr DiskSelector::get(const String & name) const
+DiskPtr DiskSelector::tryGet(const String & name) const
 {
     assertInitialized();
     auto it = disks.find(name);
     if (it == disks.end())
-        throw Exception("Unknown disk " + name, ErrorCodes::UNKNOWN_DISK);
+        return nullptr;
     return it->second;
 }
 
+DiskPtr DiskSelector::get(const String & name) const
+{
+    auto disk = tryGet(name);
+    if (!disk)
+        throw Exception(ErrorCodes::UNKNOWN_DISK, "Unknown disk {}", name);
+    return disk;
+}
 
 const DisksMap & DiskSelector::getDisksMap() const
 {
@@ -141,7 +177,9 @@ const DisksMap & DiskSelector::getDisksMap() const
 void DiskSelector::addToDiskMap(const String & name, DiskPtr disk)
 {
     assertInitialized();
-    disks.emplace(name, disk);
+    auto [_, inserted] = disks.emplace(name, disk);
+    if (!inserted)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Disk with name `{}` is already in disks map", name);
 }
 
 
@@ -151,5 +189,77 @@ void DiskSelector::shutdown()
     for (auto & e : disks)
         e.second->shutdown();
 }
+
+/// proton: starts
+bool DiskSelector::loadDisksFromMetaStore(ContextPtr context)
+{
+    auto & factory = DiskFactory::instance();
+    constexpr auto default_disk_name = "default";
+    bool has_default_disk = false;
+
+    /// proton: starts
+    /// Single-instance mode: create request with required parameters
+    auto req = std::make_shared<cluster::ListDisksRequest>(
+        "",      // disk_name (empty for listing all)
+        0,       // initiator (single-instance: always 0)
+        false,   // consistent_read
+        30000,   // timeout_ms
+        1        // request_version
+    );
+    auto & metastore = Globals::getMetaStore();
+    auto resp = metastore.listDisks(req);
+    /// proton: ends
+    if (resp->hasError())
+    {
+        LOG_ERROR(getLogger("DiskSelector"), "Failed to get disks from MetaStore, reason={}", resp->data().err.string());
+        throw Exception(resp->data().err.error_code, "Failed to get disks from MetaStore, reason={}", resp->data().err.error_message);
+    }
+
+    for (const auto & disk_desc : resp->data().disks)
+    {
+        if (!std::all_of(disk_desc->name.begin(), disk_desc->name.end(), isWordCharASCII))
+            throw Exception(
+                ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG, "Disk name can contain only alphanumeric and '_' ({})", disk_desc->name);
+
+        if (disk_desc->name == default_disk_name)
+            has_default_disk = true;
+
+        ASTPtr disk_func;
+        ParserFunction disk_func_p;
+        disk_func = parseQuery(disk_func_p, disk_desc->config, 0, 0);
+
+        /// Parse config to disk function (AST)
+        if (!disk_func || disk_func->as<ASTFunction>()->name != "disk")
+            throw Exception(
+                ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG, "disk {} with invalid config: [{}]", disk_desc->name, disk_desc->config);
+
+        const auto & ast_function = assert_cast<const ASTFunction &>(*disk_func);
+        const auto * function_args_expr = assert_cast<const ASTExpressionList *>(ast_function.arguments.get());
+        const auto & function_args = function_args_expr->children;
+        auto disk_config = getDiskConfigurationFromAST(disk_desc->name, function_args, context);
+        disks.emplace(disk_desc->name, factory.create(disk_desc->name, *disk_config, disk_desc->name, context, disks));
+    }
+
+    return has_default_disk;
+}
+
+bool DiskSelector::isBusy(const DB::String & name) const
+{
+    return (DatabaseCatalog::instance().getStoragesByDisk(name).size() > 0);
+}
+
+void DiskSelector::removeFromDiskMap(const DB::String & name)
+{
+    assertInitialized();
+    auto it = disks.find(name);
+    if (it == disks.end())
+        throw Exception(ErrorCodes::UNKNOWN_DISK, "Unknown disk {}", name);
+
+    if (isBusy(name))
+        throw Exception(ErrorCodes::CANNOT_DELETE_DISK, "disk {} is used by other streams, cannot be removed", name);
+    it->second->shutdown();
+    disks.erase(it);
+}
+/// proton: ends
 
 }

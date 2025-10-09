@@ -2,4 +2,8 @@ proton_add_executable (comma_separated_streams comma_separated_streams.cpp)
 target_link_libraries (comma_separated_streams PRIVATE dbms)
 
 proton_add_executable (chunk_splitter_perf chunk_splitter_perf.cpp)
-target_link_libraries (chunk_splitter_perf PRIVATE dbms)
+target_link_libraries (chunk_splitter_perf PRIVATE
+    dbms
+    clickhouse_aggregate_functions
+    clickhouse_functions
+    clickhouse_table_functions)

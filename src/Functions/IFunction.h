@@ -2,8 +2,13 @@
 
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Core/Field.h>
+#include <Core/IResolvedFunction.h>
 #include <Core/Names.h>
+#include <Core/ValuesWithType.h>
 #include <DataTypes/IDataType.h>
+#include <Functions/FunctionHelpers.h>
+#include <Common/Exception.h>
 
 #include "config.h"
 
@@ -129,28 +134,32 @@ private:
 
 using ExecutableFunctionPtr = std::shared_ptr<IExecutableFunction>;
 
-using Values = std::vector<llvm::Value *>;
-
 /** Function with known arguments and return type (when the specific overload was chosen).
   * It is also the point where all function-specific properties are known.
   */
-class IFunctionBase
+class IFunctionBase : public IResolvedFunction
 {
 public:
 
-    virtual ~IFunctionBase() = default;
+    ~IFunctionBase() override = default;
 
     virtual ColumnPtr execute( /// NOLINT
-        const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, bool dry_run = false) const
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & result_type,
+        size_t input_rows_count,
+        bool dry_run = false) const
     {
+        checkFunctionArgumentSizes(arguments, input_rows_count);
         return prepare(arguments)->execute(arguments, result_type, input_rows_count, dry_run);
     }
 
     /// Get the main function name.
     virtual String getName() const = 0;
 
-    virtual const DataTypes & getArgumentTypes() const = 0;
-    virtual const DataTypePtr & getResultType() const = 0;
+    const Array & getParameters() const final
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "IFunctionBase doesn't support getParameters method");
+    }
 
     /// Do preparations and return executable.
     /// sample_columns should contain data types of arguments and values of constants, if relevant.
@@ -168,9 +177,9 @@ public:
       *       templates with default arguments is impossible and including LLVM in such a generic header
       *       as this one is a major pain.
       */
-    virtual llvm::Value * compile(llvm::IRBuilderBase & /*builder*/, Values /*values*/) const
+    virtual llvm::Value * compile(llvm::IRBuilderBase & /*builder*/, const ValuesWithType & /*arguments*/) const
     {
-        throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} is not JIT-compilable", getName());
     }
 
 #endif
@@ -240,9 +249,11 @@ public:
 
     struct ShortCircuitSettings
     {
-        /// Should we enable lazy execution for the first argument of short-circuit function?
-        /// Example: if(cond, then, else), we don't need to execute cond lazily.
-        bool enable_lazy_execution_for_first_argument;
+        /// Should we enable lazy execution for the nth argument of short-circuit function?
+        /// Example 1st argument: if(cond, then, else), we don't need to execute cond lazily.
+        /// Example other arguments: 1st, 2nd, 3rd argument of dictGetOrDefault should always be calculated.
+        std::unordered_set<size_t> arguments_with_disabled_lazy_execution;
+
         /// Should we enable lazy execution for functions, that are common descendants of
         /// different short-circuit function arguments?
         /// Example 1: if (cond, expr1(..., expr, ...), expr2(..., expr, ...)), we don't need
@@ -288,17 +299,17 @@ public:
       */
     virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
     {
-        throw Exception("Function " + getName() + " has no information about its monotonicity", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Function {} has no information about its monotonicity", getName());
     }
 
 };
 
-using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
+using FunctionBasePtr = std::shared_ptr<const IFunctionBase>;
 
 
 /** Creates IFunctionBase from argument types list (chooses one function overload).
   */
-class IFunctionOverloadResolver
+class IFunctionOverloadResolver : public std::enable_shared_from_this<IFunctionOverloadResolver>
 {
 public:
     virtual ~IFunctionOverloadResolver() = default;
@@ -320,6 +331,7 @@ public:
     virtual bool isDeterministic() const { return true; }
     virtual bool isDeterministicInScopeOfQuery() const { return true; }
     virtual bool isInjective(const ColumnsWithTypeAndName &) const { return false; }
+    virtual bool isShortCircuit(IFunctionBase::ShortCircuitSettings & /*settings*/, size_t /*number_of_arguments*/) const { return false; }
 
     /// Override and return true if function needs to depend on the state of the data.
     virtual bool isStateful() const { return false; }
@@ -333,7 +345,7 @@ public:
     /// This function will replace it with DataTypeFunction containing actual types.
     virtual void getLambdaArgumentTypesImpl(DataTypes & arguments [[maybe_unused]]) const
     {
-        throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function {} can't have lambda-expressions as arguments", getName());
     }
 
     /// Returns indexes of arguments, that must be ColumnConst
@@ -343,16 +355,20 @@ public:
     /// (for functions like isNull(x))
     virtual ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t number_of_arguments [[maybe_unused]]) const { return {}; }
 
+    /// Returns type that should be used as the result type in default implementation for Dynamic.
+    /// Function should implement this method if its result type doesn't depend on the arguments types.
+    virtual DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const { return nullptr; }
+
 protected:
 
     virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & /* arguments */, const DataTypePtr & /* result_type */) const
     {
-        throw Exception("buildImpl is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "buildImpl is not implemented for {}", getName());
     }
 
     virtual DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const
     {
-        throw Exception("getReturnType is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "getReturnType is not implemented for {}", getName());
     }
 
     /// This function will be called in default implementation. You can overload it or the previous one.
@@ -396,6 +412,17 @@ protected:
 
     /// If it isn't, will convert all ColumnLowCardinality arguments to full columns.
     virtual bool canBeExecutedOnLowCardinalityDictionary() const { return true; }
+
+    /** If useDefaultImplementationForDynamic() is true, then special FunctionBaseDynamicAdaptor will be used
+     *  if function arguments has Dynamic column. This adaptor will build and execute this function for all
+     *  internal types inside Dynamic column separately and construct result based on results for these types.
+     *  If getReturnTypeForDefaultImplementationForDynamic() returns T, then result of such function
+     *  will be Nullable(T), otherwise the result will be Dynamic.
+     *
+     *  We cannot use default implementation for Dynamic if function doesn't use default implementation for NULLs,
+     *  because Dynamic column can contain NULLs and we should know how to process them.
+      */
+    virtual bool useDefaultImplementationForDynamic() const { return useDefaultImplementationForNulls(); }
 
 private:
 
@@ -474,6 +501,9 @@ public:
     /// If it isn't, will convert all ColumnLowCardinality arguments to full columns.
     virtual bool canBeExecutedOnLowCardinalityDictionary() const { return true; }
 
+    virtual bool useDefaultImplementationForDynamic() const { return useDefaultImplementationForNulls(); }
+    virtual DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const { return nullptr; }
+
     /** True if function can be called on default arguments (include Nullable's) and won't throw.
       * Counterexample: modulo(0, 0)
       */
@@ -496,7 +526,7 @@ public:
     using Monotonicity = IFunctionBase::Monotonicity;
     virtual Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const
     {
-        throw Exception("Function " + getName() + " has no information about its monotonicity", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Function {} has no information about its monotonicity", getName());
     }
 
     /// For non-variadic functions, return number of arguments; otherwise return zero (that should be ignored).
@@ -504,7 +534,7 @@ public:
 
     virtual DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const
     {
-        throw Exception("getReturnType is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "getReturnType is not implemented for {}", getName());
     }
 
     /// Get the result type by argument type. If the function does not apply to these arguments, throw an exception.
@@ -521,7 +551,7 @@ public:
 
     virtual void getLambdaArgumentTypes(DataTypes & /*arguments*/) const
     {
-        throw Exception("Function " + getName() + " can't have lambda-expressions as arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function {} can't have lambda-expressions as arguments", getName());
     }
 
     virtual ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t /*number_of_arguments*/) const { return {}; }
@@ -529,9 +559,9 @@ public:
 
 #if USE_EMBEDDED_COMPILER
 
-    bool isCompilable(const DataTypes & arguments) const;
+    bool isCompilable(const DataTypes & arguments, const DataTypePtr & result_type) const;
 
-    llvm::Value * compile(llvm::IRBuilderBase &, const DataTypes & arguments, Values values) const;
+    llvm::Value * compile(llvm::IRBuilderBase & builder, const ValuesWithType & arguments, const DataTypePtr & result_type) const;
 
 #endif
 
@@ -539,11 +569,11 @@ protected:
 
 #if USE_EMBEDDED_COMPILER
 
-    virtual bool isCompilableImpl(const DataTypes &) const { return false; }
+    virtual bool isCompilableImpl(const DataTypes & /*arguments*/, const DataTypePtr & /*result_type*/) const { return false; }
 
-    virtual llvm::Value * compileImpl(llvm::IRBuilderBase &, const DataTypes &, Values) const
+    virtual llvm::Value * compileImpl(llvm::IRBuilderBase & /*builder*/, const ValuesWithType & /*arguments*/, const DataTypePtr & /*result_type*/) const
     {
-        throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} is not JIT-compilable", getName());
     }
 
 #endif

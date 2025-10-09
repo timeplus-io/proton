@@ -74,11 +74,13 @@ public:
 
     bool supportsSubcolumns() const override { return true; }
 
-    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
+    bool supportsDynamicSubcolumns() const override { return true; }
+
+    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context/*, bool async_insert*/) override;
 
     void startup() override;
     /// Flush all buffers into the subordinate table and stop background thread.
-    void flush() override;
+    void flush(bool dropping) override;
     bool optimize(
         const ASTPtr & query,
         const StorageMetadataPtr & metadata_snapshot,
@@ -141,7 +143,7 @@ private:
     Writes lifetime_writes;
     Writes total_writes;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void flushAllBuffers(bool check_thresholds = true);
     bool flushBuffer(Buffer & buffer, bool check_thresholds, bool locked = false);

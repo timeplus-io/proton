@@ -2,7 +2,6 @@
 
 #include <memory>
 
-#include <Common/logger_useful.h>
 #include <base/BorrowedObjectPool.h>
 
 #include <Common/ShellCommand.h>
@@ -12,11 +11,12 @@
 #include <Processors/ISimpleTransform.h>
 #include <Processors/ISource.h>
 #include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/IOutputFormat.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
 
 /// proton: starts
-#include <NativeLog/Base/Concurrent/BlockingQueue.h>
+#include <Cluster/Base/Concurrent/BlockingQueue.h>
 /// proton: ends
 
 
@@ -73,7 +73,7 @@ public:
     }
 
     std::unique_ptr<ShellCommand> process;
-    nlog::BlockingQueue<Block> input_block_queue{1024};
+    cluster::BlockingQueue<Block> input_block_queue{1024};
     OutputFormatPtr out_format;
     InputFormatPtr in_format;
     std::shared_ptr<TimeoutWriteBufferFromFileDescriptor> write_buffer;

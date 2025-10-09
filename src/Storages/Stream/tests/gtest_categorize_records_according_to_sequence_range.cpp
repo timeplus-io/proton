@@ -1,0 +1,68 @@
+#include <gtest/gtest.h>
+
+#include <Cluster/SchemaRecord/SchemaRecord.h>
+#include <Storages/MergeTree/SequenceInfo.h>
+#include <Storages/Stream/StreamCallbackData.h>
+
+
+TEST(CategorizeRecords, SequenceRanges)
+{
+    /// Build Sequence Ranges
+    /// [2, 3]; [4, 9] committed; [10, 13]; [14, 18] committed; [19, 23] parts : 0, 1, 3 committed
+    /// [24, 37] committed; [38, 43] parts : 0, 2, 4 committed; [44, 47] committed; [48, 49] new records
+    DB::SequenceRanges sequence_ranges;
+    sequence_ranges.emplace_back(Int64(2), Int64(3));
+    sequence_ranges.emplace_back(Int64(10), Int64(13));
+    sequence_ranges.emplace_back(19, 23, 2, 4);
+    sequence_ranges.emplace_back(38, 43, 1, 5);
+    sequence_ranges.emplace_back(38, 43, 3, 5);
+
+    /// Build records
+    cluster::SchemaRecordPtrs records;
+
+    for (Int64 i = 2; i < 50; ++i)
+    {
+        records.push_back(std::make_shared<cluster::SchemaRecord>(i));
+    }
+
+    auto range_buckets = DB::StreamCallbackData::categorizeRecordsAccordingToSequenceRanges(records, sequence_ranges, 47);
+    EXPECT_EQ(range_buckets.size(), 5);
+    EXPECT_EQ(range_buckets[0].first.size(), 2);
+    EXPECT_EQ(range_buckets[0].first[0]->getSN(), 2);
+    EXPECT_EQ(range_buckets[0].first[1]->getSN(), 3);
+    EXPECT_EQ(range_buckets[0].second.size(), 1);
+    EXPECT_EQ(range_buckets[0].second[0], (DB::SequenceRange{Int64(2), Int64(3)}));
+
+    EXPECT_EQ(range_buckets[1].first.size(), 4);
+    EXPECT_EQ(range_buckets[1].first[0]->getSN(), 10);
+    EXPECT_EQ(range_buckets[1].first[1]->getSN(), 11);
+    EXPECT_EQ(range_buckets[1].first[2]->getSN(), 12);
+    EXPECT_EQ(range_buckets[1].first[3]->getSN(), 13);
+    EXPECT_EQ(range_buckets[1].second.size(), 1);
+    EXPECT_EQ(range_buckets[1].second[0], (DB::SequenceRange{Int64(10), Int64(13)}));
+
+    EXPECT_EQ(range_buckets[2].first.size(), 5);
+    EXPECT_EQ(range_buckets[2].first[0]->getSN(), 19);
+    EXPECT_EQ(range_buckets[2].first[1]->getSN(), 20);
+    EXPECT_EQ(range_buckets[2].first[2]->getSN(), 21);
+    EXPECT_EQ(range_buckets[2].first[3]->getSN(), 22);
+    EXPECT_EQ(range_buckets[2].first[4]->getSN(), 23);
+    EXPECT_EQ(range_buckets[2].second.size(), 1);
+    EXPECT_EQ(range_buckets[2].second[0], (DB::SequenceRange{19, 23, 2, 4}));
+
+    EXPECT_EQ(range_buckets[3].first.size(), 6);
+    EXPECT_EQ(range_buckets[3].first[0]->getSN(), 38);
+    EXPECT_EQ(range_buckets[3].first[1]->getSN(), 39);
+    EXPECT_EQ(range_buckets[3].first[2]->getSN(), 40);
+    EXPECT_EQ(range_buckets[3].first[3]->getSN(), 41);
+    EXPECT_EQ(range_buckets[3].first[4]->getSN(), 42);
+    EXPECT_EQ(range_buckets[3].first[5]->getSN(), 43);
+    EXPECT_EQ(range_buckets[3].second.size(), 2);
+    EXPECT_EQ(range_buckets[3].second[0], (DB::SequenceRange{38, 43, 1, 5}));
+    EXPECT_EQ(range_buckets[3].second[1], (DB::SequenceRange{38, 43, 3, 5}));
+
+    EXPECT_EQ(range_buckets[4].first.size(), 2);
+    EXPECT_EQ(range_buckets[4].first[0]->getSN(), 48);
+    EXPECT_EQ(range_buckets[4].first[1]->getSN(), 49);
+    EXPECT_TRUE(range_buckets[4].second.empty());
+}

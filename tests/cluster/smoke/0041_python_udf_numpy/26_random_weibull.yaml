@@ -1,0 +1,53 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (shape float, size int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_weibull(shape float, size int) RETURNS array(float) LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_weibull(shape, size):
+          res = []
+          for i in range(len(shape)):
+              s = np.random.weibull(shape[i], size[i]).tolist()
+              res.append(s)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-26-1
+    type: stream
+    query: select test_random_weibull(shape, size) as res, shape, size from udf_stream;
+    schema:
+      - name: res
+        type: array(float32)
+      - name: shape
+        type: float32
+      - name: size
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(shape, size) values (5, 3)(1, 2);
+
+  - type: check
+    target_name: python-udf2-26-1
+    expected_result:
+      - [[any_value, any_value, any_value], 5, 3]
+      - [[any_value, any_value], 1, 2]

@@ -2,7 +2,7 @@ set(ENABLE_AWS_S3_DEFAULT OFF)
 set(ENABLE_AWS_MSK_IAM_DEFAULT OFF) # proton: added
 
 if(ENABLE_LIBRARIES AND (OS_LINUX OR OS_DARWIN) AND TARGET OpenSSL::Crypto)
-    set(ENABLE_AWS_S3_DEFAULT OFF) # proton: added https://github.com/timeplus-io/proton/issues/918
+    set(ENABLE_AWS_S3_DEFAULT ON)
     set(ENABLE_AWS_MSK_IAM_DEFAULT ON) # proton: added
 endif()
 
@@ -27,6 +27,7 @@ include("${proton_SOURCE_DIR}/contrib/aws-cmake/AwsFeatureTests.cmake")
 include("${proton_SOURCE_DIR}/contrib/aws-cmake/AwsThreadAffinity.cmake")
 include("${proton_SOURCE_DIR}/contrib/aws-cmake/AwsThreadName.cmake")
 include("${proton_SOURCE_DIR}/contrib/aws-cmake/AwsSIMD.cmake")
+include("${proton_SOURCE_DIR}/contrib/aws-crt-cpp/cmake/AwsGetVersion.cmake")
 
 
 # Gather sources and options.
@@ -36,6 +37,8 @@ set(AWS_PRIVATE_INCLUDES)
 set(AWS_PUBLIC_COMPILE_DEFS)
 set(AWS_PRIVATE_COMPILE_DEFS)
 set(AWS_PRIVATE_LIBS)
+
+list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DINTEL_NO_ITTNOTIFY_API")
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     list(APPEND AWS_PRIVATE_COMPILE_DEFS "-DDEBUG_BUILD")
@@ -54,8 +57,8 @@ endif()
 
 # Directories.
 SET(AWS_SDK_DIR "${proton_SOURCE_DIR}/contrib/aws")
-SET(AWS_SDK_CORE_DIR "${AWS_SDK_DIR}/aws-cpp-sdk-core")
-SET(AWS_SDK_S3_DIR "${AWS_SDK_DIR}/aws-cpp-sdk-s3")
+SET(AWS_SDK_CORE_DIR "${AWS_SDK_DIR}/src/aws-cpp-sdk-core")
+SET(AWS_SDK_S3_DIR "${AWS_SDK_DIR}/generated/src/aws-cpp-sdk-s3")
 
 SET(AWS_AUTH_DIR "${proton_SOURCE_DIR}/contrib/aws-c-auth")
 SET(AWS_CAL_DIR "${proton_SOURCE_DIR}/contrib/aws-c-cal")
@@ -87,11 +90,17 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/external/cjson/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/external/tinyxml2/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/http/crt/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/http/standard/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/internal/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/monitoring/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/net/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/net/linux-shared/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/platform/linux-shared/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/smithy/tracing/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/base64/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/utils/component-registry/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/factory/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
@@ -117,9 +126,8 @@ OPTION(USE_AWS_MEMORY_MANAGEMENT "Aws memory management" OFF)
 configure_file("${AWS_SDK_CORE_DIR}/include/aws/core/SDKConfig.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/aws/core/SDKConfig.h" @ONLY)
 
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MAJOR=1")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_MINOR=10")
-list(APPEND AWS_PUBLIC_COMPILE_DEFS "-DAWS_SDK_VERSION_PATCH=36")
+aws_get_version(AWS_CRT_CPP_VERSION_MAJOR AWS_CRT_CPP_VERSION_MINOR AWS_CRT_CPP_VERSION_PATCH FULL_VERSION GIT_HASH)
+configure_file("${AWS_CRT_DIR}/include/aws/crt/Config.h.in" "${AWS_CRT_DIR}/include/aws/crt/Config.h" @ONLY)
 
 list(APPEND AWS_SOURCES ${AWS_SDK_CORE_SRC} ${AWS_SDK_CORE_NET_SRC} ${AWS_SDK_CORE_PLATFORM_SRC})
 
@@ -178,6 +186,7 @@ file(GLOB AWS_COMMON_SRC
     "${AWS_COMMON_DIR}/source/*.c"
     "${AWS_COMMON_DIR}/source/external/*.c"
     "${AWS_COMMON_DIR}/source/posix/*.c"
+    "${AWS_COMMON_DIR}/source/linux/*.c"
 )
 
 file(GLOB AWS_COMMON_ARCH_SRC
@@ -340,7 +349,6 @@ list(APPEND AWS_SOURCES ${AWS_COMPRESSION_SRC})
 list(APPEND AWS_PRIVATE_INCLUDES "${AWS_COMPRESSION_DIR}/include/")
 
 
-# aws-c-s3
 file(GLOB AWS_S3_SRC
     "${AWS_S3_DIR}/source/*.c"
 )

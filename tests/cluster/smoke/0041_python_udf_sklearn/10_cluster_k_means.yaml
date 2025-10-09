@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getKMeans(x int, y int) RETURNS float LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      from sklearn.cluster import k_means
+
+      class getKMeans:
+          def __init__(self):
+              self.k_means = 0
+
+          def serialize(self):
+              data = {}
+              data['k_means'] = self.k_means
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.k_means = data['k_means']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              X = np.stack((xs, ys), axis=1)
+              if len(X) > 1:
+                  centroid, label, inertia = k_means(
+                      X, n_clusters=2, n_init="auto", random_state=0
+                  )
+                  self.k_means = inertia
+
+          def finalize(self):
+              return self.k_means
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf6-10-1
+    type: stream
+    query: select getKMeans(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float32
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into uda_stream(x, y) values (1, 2)(1, 4)(1, 0)(10, 2)(10, 4)(10, 0);
+
+  - type: check
+    target_name: python-udf6-10-1
+    expected_result:
+      - [16.0]

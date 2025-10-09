@@ -1,3 +1,6 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
 drop stream if exists  data_order_by_proj_comp;
 create stream data_order_by_proj_comp (t uint64, projection tSort (select * order by t)) ENGINE MergeTree() order by t;
 

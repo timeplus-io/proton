@@ -1,0 +1,54 @@
+tags:
+  - prepare
+  - validate
+  - session window
+
+description: basic tests on mv session window aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: view-15-1
+    type: stream
+    query: select * except (_tp_time) from session_mv settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-15-1
+    mode: random
+    expected_result:
+      - ['dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:02']
+      - ['dev2', '58', '2024-01-01 20:00:03', '2024-01-01 20:00:05']
+
+  - name: view-15-2
+    type: stream
+    query: select * except (_tp_time) from session_target_stream settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-15-2
+    mode: random
+    expected_result:
+      - ['dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:02']
+      - ['dev2', '58', '2024-01-01 20:00:03', '2024-01-01 20:00:05']
+
+  - type: wait
+    time: 1

@@ -1,0 +1,287 @@
+tags:
+  - multiple_inner_joins
+description: versioned_kv multiple_inner_joins versioned_kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node: 
+      - p1
+    sql: drop stream if exists test15_stream1;
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: drop stream if exists test15_stream2;
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: drop stream if exists test15_stream3;
+  - type: wait
+    time: 1
+
+  - type: query
+    node: 
+      - p1
+    sql: create stream test15_stream1 (i int64, k1 int64, k2 string) primary key (k1, k2) settings mode='versioned_kv';
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: create stream test15_stream2 (j int64, kk1 int64, kk2 string) primary key (kk1, kk2) settings mode='versioned_kv';
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: create stream test15_stream3 (k int64, kkk1 int64, kkk2 string) primary key (kkk1, kkk2) settings mode='versioned_kv';
+  - type: wait
+    time: 1
+
+  - name: "1519"
+    type: stream
+    node: 
+      - p1
+    query: select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, c.k, c.kkk1, c.kkk2, _tp_delta from test15_stream1 as a inner all join test15_stream2 as b on a.k1 = b.kk1 and a.k2 = b.kk2 inner all join test15_stream3 as c on b.kk1 = c.kkk1 and a.kk2 = c.kkk2 emit changelog;
+    schema:  
+      - name: a.i
+        type: int64
+      - name: a.k1
+        type: int64
+      - name: a.k2
+        type: string
+      - name: b.j
+        type: int64
+      - name: b.kk1
+        type: int64
+      - name: b.kk2
+        type: string
+      - name: c.k
+        type: int64
+      - name: c.kkk1
+        type: int64
+      - name: c.kkk2
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - name: "1519-2"
+    type: stream
+    node: 
+      - p1
+    query: select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, c.k, c.kkk1, c.kkk2 from test15_stream1 as a inner all join test15_stream2 as b on a.k1 = b.kk1 and a.k2 = b.kk2 inner all join test15_stream3 as c on b.kk1 = c.kkk1 and a.kk2 = c.kkk2;
+    schema:  
+      - name: a.i
+        type: int64
+      - name: a.k1
+        type: int64
+      - name: a.k2
+        type: string
+      - name: b.j
+        type: int64
+      - name: b.kk1
+        type: int64
+      - name: b.kk2
+        type: string
+      - name: c.k
+        type: int64
+      - name: c.kkk1
+        type: int64
+      - name: c.kkk2
+        type: string
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: "insert into test15_stream3(k, kkk1, kkk2) values (3, 1, 'k'); "
+    schema:
+      - name: k
+        type: int64
+      - name: kkk1
+        type: int64
+      - name: kkk2
+        type: string
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: "insert into test15_stream2(j, kk1, kk2) values (2, 1, 'k'); "
+    schema:
+      - name: j
+        type: int64
+      - name: kk1
+        type: int64
+      - name: kk2
+        type: string
+  - type: wait
+    time: 1
+  
+  - type: query
+    node: 
+      - p1
+    sql: "insert into test15_stream1(i, k1, k2) values (1, 1, 'k'); "
+    schema:
+      - name: i
+        type: int64
+      - name: k1
+        type: int64
+      - name: k2
+        type: string
+
+  - type: check
+    target_name: "1519"
+    expected_result:
+      - - 1
+        - 1
+        - k
+        - 2
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+        - 1
+
+  - type: check
+    target_name: "1519-2"
+    expected_result:
+      - - 1
+        - 1
+        - k
+        - 2
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: "insert into test15_stream2(j, kk1, kk2) values (4, 1, 'k'); "
+    schema:
+      - name: j
+        type: int64
+      - name: kk1
+        type: int64
+      - name: kk2
+        type: string
+
+  - type: check
+    target_name: "1519"
+    expected_result:
+      - - 1
+        - 1
+        - k
+        - 2
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+        - -1
+      - - 1
+        - 1
+        - k
+        - 4
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+        - 1
+
+  - type: check
+    target_name: "1519-2"
+    expected_result:
+      - - 1
+        - 1
+        - k
+        - 4
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+
+  - type: query
+    sql: "insert into test15_stream1(i, k1, k2) values (5, 1, 'k'); "
+    schema:
+      - name: i
+        type: int64
+      - name: k1
+        type: int64
+      - name: k2
+        type: string
+
+  - type: check
+    target_name: "1519"
+    expected_result:
+      - - 1
+        - 1
+        - k
+        - 4
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+        - -1
+      - - 5
+        - 1
+        - k
+        - 4
+        - 1
+        - k
+        - 3
+        - 1
+        - k
+        - 1
+
+  - type: check
+    target_name: "1519-2"
+    expected_result:
+      - - 5
+        - 1
+        - k
+        - 4
+        - 1
+        - k
+        - 3
+        - 1
+        - k

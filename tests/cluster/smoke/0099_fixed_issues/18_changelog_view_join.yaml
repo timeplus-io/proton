@@ -1,0 +1,99 @@
+tags:
+  - changelog
+description: (#221) Covering query changelog function over a view with changelog join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_v_stream_18
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_left_stream_18
+
+  - type: query
+    sql: drop stream if exists test_right_stream_18
+
+  - type: query
+    sql: create stream test_left_stream_18
+        (
+          `storage_income` int64,
+          `month` string
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_right_stream_18
+        (
+          `compute_income` float64,
+          `month` string
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: CREATE VIEW test_v_stream_18 AS (WITH left AS (SELECT * FROM changelog(test_left_stream_18, month)), right AS (SELECT * FROM changelog(test_right_stream_18, month)) SELECT right.compute_income AS compute_income, left.storage_income AS storage_income, month FROM left INNER JOIN right ON left.month = right.month)
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: 9900
+    query: select * from changelog(test_v_stream_18)
+    schema:
+      - name: compute_income
+        type: float64
+      - name: storage_income
+        type: int64
+      - name: month
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_left_stream_18(storage_income, month) values
+    schema:
+      - name: storage_income
+        type: int64
+      - name: month
+        type: string
+    inputs:
+      - [100, 'Aug']
+      - [200, 'Oct']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_right_stream_18(compute_income, month) values
+    schema:
+      - name: compute_income
+        type: float64
+      - name: month
+        type: string
+    inputs:
+      - [1, 'Aug']
+      - [2, 'Oct']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_right_stream_18(compute_income, month) values
+    schema:
+      - name: compute_income
+        type: float64
+      - name: month
+        type: string
+    inputs:
+      - [100, 'Aug']
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - [1, 100, "Aug", 1]
+      - [2, 200, "Oct", 1]
+      - [1, 100, "Aug", -1]
+      - [100, 100, "Aug", 1]

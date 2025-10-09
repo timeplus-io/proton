@@ -1,0 +1,235 @@
+tags:
+  - udf
+
+description: Test covering asyncio Lock, Event, Condition and Semaphore 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_lock(value int) RETURNS array(int) LANGUAGE PYTHON AS $$
+      import asyncio
+
+      counter = 0
+
+      async def increment(i):
+          global counter
+
+          lock = asyncio.Lock()
+          async with lock:
+              await asyncio.sleep(0.1)
+              counter += 1
+              return counter
+
+      async def multi_increment(value):
+          tasks = [increment(i) for i in range(value)]
+          return await asyncio.gather(*tasks)
+
+      def test_async_lock(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(multi_increment(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_event(value int) RETURNS int LANGUAGE PYTHON AS $$
+      import asyncio
+
+      async def waiter(event, value):
+          await event.wait()
+          return value
+
+      async def waiter_event(value):
+          event = asyncio.Event()
+          waiter_task = asyncio.create_task(waiter(event, value))
+          await asyncio.sleep(1)
+          event.set()
+          res = await waiter_task
+          return res
+
+      def test_async_event(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(waiter_event(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_condition(value int) RETURNS array(string) LANGUAGE PYTHON AS $$
+      import asyncio
+
+      async def consumer(condition, value):
+          async with condition:
+              await condition.wait()
+              return f'Consumer received: {value}'
+
+      async def producer(condition, value):
+          await asyncio.sleep(0.5)
+          async with condition:
+              condition.notify()
+              return f'Producer notify: {value}'
+
+      async def run(value):
+          condition = asyncio.Condition()
+          res = await asyncio.gather(
+                  consumer(condition, value), 
+                  producer(condition, value))
+          return res
+
+      def test_async_condition(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(run(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_semaphore(value int) RETURNS int LANGUAGE PYTHON AS $$
+      import time
+      import asyncio
+
+      async def worker(semaphore, n):
+          async with semaphore:
+              await asyncio.sleep(1)
+          return n
+
+      async def run(value):
+          semaphore = asyncio.Semaphore(3)
+
+          start = time.time()
+          tasks = [worker(semaphore, n) for n in list(range(1, value+1))]
+          res = await asyncio.gather(*tasks)
+          end = time.time()
+          duration = end - start
+          return int(duration)
+
+      def test_async_semaphore(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(run(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-4-1
+    type: stream
+    query: select test_async_lock(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: array(int32)
+      - name: value
+        type: int32
+
+  - name: python-udf-4-2
+    type: stream
+    query: select test_async_event(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: int32
+
+  - name: python-udf-4-3
+    type: stream
+    query: select test_async_condition(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: array(string)
+      - name: value
+        type: int32
+
+  - name: python-udf-4-4
+    type: stream
+    query: select test_async_semaphore(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values (0)(1)(2);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test41_stream(value) values (3)(4)(-1);
+
+  - type: check
+    target_name: python-udf-4-1
+    expected_result:
+      - [[], 0]
+      - [[1], 1]
+      - [[2,3], 2]
+      - [[4,5,6], 3]
+      - [[7,8,9,10], 4]
+      - [[], -1]
+
+  - type: check
+    target_name: python-udf-4-2
+    expected_result:
+      - [0, 0]
+      - [1, 1]
+      - [2, 2]
+      - [3, 3]
+      - [4, 4]
+      - [-1, -1]
+
+  - type: check
+    target_name: python-udf-4-3
+    expected_result:
+      - [['Consumer received: 0','Producer notify: 0'], 0]
+      - [['Consumer received: 1','Producer notify: 1'], 1]
+      - [['Consumer received: 2','Producer notify: 2'], 2]
+      - [['Consumer received: 3','Producer notify: 3'], 3]
+      - [['Consumer received: 4','Producer notify: 4'], 4]
+      - [['Consumer received: -1','Producer notify: -1'], -1]
+
+  - type: check
+    target_name: python-udf-4-4
+    expected_result:
+      - [0, 0]
+      - [1, 1]
+      - [1, 2]
+      - [1, 3]
+      - [2, 4]
+      - [0, -1]

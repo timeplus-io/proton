@@ -43,8 +43,8 @@ public:
         Poco::Net::HTTPResponse::HTTPStatus http_status_,
         const std::string & reason,
         const std::string & body
-        )
-        : Exception(makeExceptionMessage(uri, http_status_, reason, body), code)
+    )
+        : Exception(makeExceptionMessage(code, uri, http_status_, reason, body))
         , http_status(http_status_)
     {}
 
@@ -56,7 +56,8 @@ public:
 private:
     Poco::Net::HTTPResponse::HTTPStatus http_status{};
 
-    static std::string makeExceptionMessage(
+    static Exception makeExceptionMessage(
+        int code,
         const std::string & uri,
         Poco::Net::HTTPResponse::HTTPStatus http_status,
         const std::string & reason,
@@ -69,14 +70,37 @@ private:
 using PooledHTTPSessionPtr = SingleEndpointHTTPSessionPool::Entry;
 using HTTPSessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
 
+/// If a session have this tag attached, it will be reused without calling `reset()` on it.
+/// All pooled sessions don't have this tag attached after being taken from a pool.
+/// If the request and the response were fully written/read, the client code should add this tag
+/// explicitly by calling `markSessionForReuse()`.
+struct HTTPSessionReuseTag
+{
+};
+
+void markSessionForReuse(Poco::Net::HTTPSession & session);
+void markSessionForReuse(HTTPSessionPtr session);
+void markSessionForReuse(PooledHTTPSessionPtr session);
+
+
 void setResponseDefaultHeaders(HTTPServerResponse & response, size_t keep_alive_timeout);
 
 /// Create session object to perform requests and set required parameters.
-HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, bool resolve_host = true);
+HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts);
 
 /// As previous method creates session, but tooks it from pool, without and with proxy uri.
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool wait_on_pool_size_limit = true);
+
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const Poco::URI & proxy_uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool wait_on_pool_size_limit = true);
 
 /// proton: starts
 PooledHTTPSessionPtr makePooledHTTPSession(
@@ -86,8 +110,7 @@ PooledHTTPSessionPtr makePooledHTTPSession(
     const String & ca_location,
     Poco::Net::Context::VerificationMode verification_mode,
     const ConnectionTimeouts & timeouts,
-    size_t per_endpoint_pool_size,
-    bool resolve_host = true);
+    size_t per_endpoint_pool_size);
 
 PooledHTTPSessionPtr makePooledHTTPSession(
     const Poco::URI & uri,
@@ -98,7 +121,7 @@ PooledHTTPSessionPtr makePooledHTTPSession(
     Poco::Net::Context::VerificationMode verification_mode,
     const ConnectionTimeouts & timeouts,
     size_t per_endpoint_pool_size,
-    bool resolve_host = true);
+    bool wait_on_pool_size_limit = true);
 /// proton: ends
 
 bool isRedirect(Poco::Net::HTTPResponse::HTTPStatus status);

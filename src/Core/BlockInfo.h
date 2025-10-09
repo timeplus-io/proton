@@ -6,7 +6,10 @@
 #include <vector>
 
 /// proton: starts.
+#include <Cluster/Common/Constants.h>
 #include <Core/Streaming/Watermark.h>
+#include <base/defines.h>
+#include <Common/ProtonCommon.h>
 /// proton: ends.
 
 namespace DB
@@ -35,52 +38,144 @@ struct BlockInfo
     M(bool, is_overflows, false, 1) \
     M(Int32, bucket_num, -1, 2)
 
+    /// Internal information are only used in cluster
+
+    /** any_field_1:
+    * Here we try to reuse existing data members for different purposes since they work at different stage, it shall be fine
+    * - \watermark (Main): used to indicate the watermark of the block. It's used in the streaming scenario for now.
+    * - \max_ts: Only used in internal cached joined block
+    * - \append_time: Only used in source stage before watermark is set
+    */
+    union AnyField1
+    {
+        Int64 watermark;
+        Int64 max_ts;
+        Int64 append_time;
+        bool operator==(const AnyField1 & rhs) const { return watermark == rhs.watermark; }
+    };
+
+    /** any_field_2:
+    * Here we try to reuse existing data members for different purposes since they work at different stage, it shall be fine
+    * - \sn (Main): used to identify current processed progress. It's used in remote fetch columns scenario for now.
+    * - \min_ts: Only used in internal cached joined block
+    */
+    union AnyField2
+    {
+        Int64 sn;
+        Int64 min_ts;
+        bool retract;
+        bool operator==(const AnyField2 & rhs) const { return sn == rhs.sn; }
+    };
+
+#define APPLY_FOR_BLOCK_INFO_FIELDS_INTERNAL(M) \
+    M(UInt64, flags, 0, 100) \
+    M(AnyField1, any_field_1, AnyField1{}, 101) \
+    M(AnyField2, any_field_2, AnyField2{}, 102)
+
 #define DECLARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) TYPE NAME = DEFAULT;
 
     APPLY_FOR_BLOCK_INFO_FIELDS(DECLARE_FIELD)
 
+private:
+    APPLY_FOR_BLOCK_INFO_FIELDS_INTERNAL(DECLARE_FIELD)
+
 #undef DECLARE_FIELD
 
+public:
     bool hasBucketNum() const { return bucket_num >= 0; }
     bool hasOverflows() const { return is_overflows; }
 
     /// proton: starts
     Int32 bucketNum() const { return bucket_num; }
 
-    /// watermark = INVALID_WATERMARK => no watermark setup
-    /// watermark != INVALID_WATERMARK => timestamp watermark
-    Int64 watermark = Streaming::INVALID_WATERMARK;
-    Int64 watermark_lower_bound = Streaming::INVALID_WATERMARK;
+    ALWAYS_INLINE bool hasFlags() const noexcept { return flags != 0; }
 
-    /// any_field is reused for different non-conflicting / non-overlapped purposes / scenarios
-    /// 1. act as append_time
-    Int64 any_field = 0;
+    ALWAYS_INLINE bool hasWatermark() const noexcept { return flags & ProtonConsts::WATERMARK_FLAG; }
+    ALWAYS_INLINE void setWatermark(Int64 watermark)
+    {
+        chassert(watermark != Streaming::INVALID_WATERMARK);
+        flags |= ProtonConsts::WATERMARK_FLAG;
+        any_field_1.watermark = watermark;
+    }
+    ALWAYS_INLINE Int64 watermark() const
+    {
+        chassert(hasWatermark());
+        return any_field_1.watermark;
+    }
 
-    /// Here we try to reuse existing data members for different purposes
-    /// since they work at different stage, it shall be fine
-    /// We shall fix it.
+    ALWAYS_INLINE bool hasMaxTimestamp() const noexcept { return flags & ProtonConsts::MAX_TIMESTAMP_FLAG; }
+    ALWAYS_INLINE void setMaxTimestamp(Int64 max_ts)
+    {
+        flags |= ProtonConsts::MAX_TIMESTAMP_FLAG;
+        any_field_1.max_ts = max_ts;
+    }
+    ALWAYS_INLINE Int64 maxTimestamp() const
+    {
+        chassert(hasMinTimestamp());
+        return any_field_1.max_ts;
+    }
 
-    void setAppendTime(Int64 append_time) { any_field = append_time; }
+    ALWAYS_INLINE bool hasMinTimestamp() const noexcept { return flags & ProtonConsts::MIN_TIMESTAMP_FLAG; }
+    ALWAYS_INLINE void setMinTimestamp(Int64 min_ts)
+    {
+        flags |= ProtonConsts::MIN_TIMESTAMP_FLAG;
+        any_field_2.min_ts = min_ts;
+    }
+    ALWAYS_INLINE Int64 minTimestamp() const
+    {
+        chassert(hasMinTimestamp());
+        return any_field_2.min_ts;
+    }
 
-    Int64 appendTime() const { return any_field; }
+    ALWAYS_INLINE bool hasAppendTime() const noexcept { return flags & ProtonConsts::APPEND_TIME_FLAG; }
+    ALWAYS_INLINE void setAppendTime(Int64 append_time)
+    {
+        flags |= ProtonConsts::APPEND_TIME_FLAG;
+        any_field_1.append_time = append_time;
+    }
+    ALWAYS_INLINE Int64 appendTime() const
+    {
+        chassert(hasAppendTime());
+        return any_field_1.append_time;
+    }
 
-    bool hasWatermark() const { return watermark != Streaming::INVALID_WATERMARK || watermark_lower_bound != Streaming::INVALID_WATERMARK; }
+    ALWAYS_INLINE bool hasSN() const noexcept { return flags & ProtonConsts::SEQUENCE_NUMBER_FLAG; }
+    ALWAYS_INLINE void setSN(Int64 sn)
+    {
+        chassert(sn >= cluster::Constants::LogStartSN);
+        flags |= ProtonConsts::SEQUENCE_NUMBER_FLAG;
+        any_field_2.sn = sn;
+    }
+    ALWAYS_INLINE Int64 getSN() const
+    {
+        chassert(hasSN());
+        return any_field_2.sn;
+    }
+
+    ALWAYS_INLINE void setRetract() noexcept { flags |= ProtonConsts::RETRACT_FLAG; }
+    ALWAYS_INLINE bool isRetract() const noexcept { return flags & ProtonConsts::RETRACT_FLAG; }
     /// proton: ends
 
     /// Write the values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.
-    void write(WriteBuffer & out) const;
+    void write(WriteBuffer & out, bool additional_internal_fields = false) const;
 
     /// Read the values in binary form.
     void read(ReadBuffer & in);
+
+    inline bool operator==(const BlockInfo & rhs) const
+    {
+        return
+    #define COMPARE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) NAME == rhs.NAME &&
+
+            APPLY_FOR_BLOCK_INFO_FIELDS(COMPARE_FIELD)
+            APPLY_FOR_BLOCK_INFO_FIELDS_INTERNAL(COMPARE_FIELD)
+
+    #undef COMPARE_FIELD
+                true;
+    }
 };
 
-inline bool operator==(const BlockInfo & lhs, const BlockInfo & rhs)
-{
-    return lhs.is_overflows == rhs.is_overflows && lhs.bucket_num == rhs.bucket_num && lhs.watermark == rhs.watermark
-        && lhs.watermark_lower_bound == rhs.watermark_lower_bound && lhs.any_field == rhs.any_field;
-}
-
-/// Block extension to support delayed defaults. AddingDefaultsBlockInputStream uses it to replace missing values with column defaults.
+/// Block extension to support delayed defaults. AddingDefaultsTransform uses it to replace missing values with column defaults.
 class BlockMissingValues
 {
 public:

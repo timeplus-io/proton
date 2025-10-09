@@ -1,10 +1,12 @@
 #pragma once
 
-#include <base/types.h>
-#include <cstring>
 #include <algorithm>
+#include <array>
+#include <bit>
+#include <cstring>
 #include <utility>
 #include <base/range.h>
+#include <base/types.h>
 #include <Common/hex.h>
 #include <Common/StringUtils/StringUtils.h>
 

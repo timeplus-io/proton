@@ -40,7 +40,7 @@ public:
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                 "Number of arguments for function {} doesn't match: passed {}, should be 1",
                 getName(),
-                toString(arguments.size()));
+                arguments.size());
 
         WhichDataType argument_type(arguments[0].type);
         if (!argument_type.isDate() && !argument_type.isDateTime() && !argument_type.isDateTime64())
@@ -49,6 +49,11 @@ public:
                 "Illegal type of argument of function {}, should be date, datetime or datetime64",
                 getName());
 
+        return std::make_shared<DataTypeString>();
+    }
+
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
         return std::make_shared<DataTypeString>();
     }
 

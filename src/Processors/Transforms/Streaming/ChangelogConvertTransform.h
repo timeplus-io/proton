@@ -2,8 +2,8 @@
 
 #include <Processors/IProcessor.h>
 
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/RowRefs.h>
 #include <Common/HashMapsTemplate.h>
-#include <Interpreters/Streaming/RowRefs.h>
 
 namespace Poco
 {
@@ -52,7 +52,12 @@ namespace Streaming
 class ChangelogConvertTransform final : public IProcessor
 {
 public:
-    ChangelogConvertTransform(const Block & input_header, const Block & output_header, std::vector<std::string> key_column_names, const std::string & version_column_name);
+    ChangelogConvertTransform(
+        const Block & input_header,
+        const Block & output_header,
+        std::vector<std::string> key_column_names,
+        const std::string & version_column_name,
+        bool backfill_key_unique_);
 
     ~ChangelogConvertTransform() override = default;
 
@@ -61,6 +66,7 @@ public:
     Status prepare() override;
     void work() override;
 
+    bool hasState() const override { return true; }
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
 
@@ -72,11 +78,17 @@ private:
     template <typename KeyGetter, typename Map>
     void retractAndIndex(size_t rows, const ColumnRawPtrs & key_columns, Map & map);
 
+    bool backfillingNewKeys() const noexcept { return backfill_key_unique && backfill_started && !backfill_done; }
+
 private:
     std::vector<size_t> output_column_positions;
     std::vector<size_t> key_column_positions;
     std::optional<size_t> version_column_position;
     std::vector<size_t> key_sizes;
+
+    const bool backfill_key_unique = false;
+    bool backfill_started = false;
+    bool backfill_done = false;
 
     Chunk output_chunk_header;
 
@@ -90,11 +102,12 @@ private:
     ChunkList output_chunks;
 
     /// Index blocks by key columns
-    SERDE HashMapsTemplate<std::unique_ptr<RowRefWithRefCount<LightChunk>>> index;
+    SERDE HashMapsTemplate<RowRefWithRefCount<LightChunk>, /*skip_dtor_on_destroy=*/true> index;
     Arena pool;
 
+    static constexpr Int64 log_metrics_interval_ms = 30'000;
     int64_t last_log_ts = 0;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 }
 }

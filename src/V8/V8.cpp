@@ -1,5 +1,6 @@
 #include <Interpreters/Context.h>
 #include <V8/V8.h>
+#include <base/getMemoryAmount.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -50,7 +51,7 @@ void fatalErrorHandler(const char * location, const char * message)
 }
 }
 
-V8::V8(const ContextPtr & global_context) : log(&Poco::Logger::get("V8"))
+V8::V8(const ContextPtr & global_context) : log(getLogger("V8"))
 {
 }
 
@@ -88,6 +89,14 @@ v8::Isolate * V8::createIsolate()
 
     if (v8_max_heap_bytes > 0)
         isolate_params.constraints.set_max_old_generation_size_in_bytes(v8_max_heap_bytes);
+    else
+    {
+        size_t max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+        size_t max_old_gen_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+
+        isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
+        isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
+    }
 
     auto * isolate = v8::Isolate::New(isolate_params);
     assert(isolate);

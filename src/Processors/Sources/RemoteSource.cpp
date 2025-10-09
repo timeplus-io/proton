@@ -4,14 +4,28 @@
 #include <QueryPipeline/StreamLocalLimits.h>
 #include <Processors/Transforms/convertToChunk.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <Common/Exception.h>
+
+/// proton: starts.
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
+/// proton: ends.
 
 namespace DB
 {
 
-RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_, std::optional<bool> is_streaming_)
-    : ISource(executor->getHeader(), false, ProcessorID::RemoteSourceID)
-    , add_aggregation_info(add_aggregation_info_), query_executor(std::move(executor))
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
+RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_, UUID uuid_, bool is_streaming_)
+    : Streaming::ISource(executor->getHeader(), false, getLogger("RemoteSource"), ProcessorID::RemoteSourceID)
+    , empty_chunk({executor->getHeader().getColumns(), 0}) /// proton: added
+    , add_aggregation_info(add_aggregation_info_)
+    , query_executor(std::move(executor))
     , async_read(async_read_)
+    , uuid(uuid_)
 {
     /// Add AggregatedChunkInfo if we expect DataTypeAggregateFunction as a result.
     const auto & sample = getPort().getHeader();
@@ -20,12 +34,25 @@ RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation
             add_aggregation_info = true;
 
     /// proton: starts
-    if (is_streaming_)
-        setStreaming(is_streaming_.value());
+    setStreaming(is_streaming_);
+
+    timeout_ms = is_streaming_ ? query_executor->getContext()->getSettingsRef().record_consume_timeout_ms.value : 0;
     /// proton: ends
 }
 
 RemoteSource::~RemoteSource() = default;
+
+void RemoteSource::connectToScheduler(InputPort & input_port)
+{
+    outputs.emplace_back(Block{}, this);
+    dependency_port = &outputs.back();
+    connect(*dependency_port, input_port);
+}
+
+UUID RemoteSource::getParallelReplicasGroupUUID()
+{
+    return uuid;
+}
 
 void RemoteSource::setStorageLimits(const std::shared_ptr<const StorageLimitsList> & storage_limits_)
 {
@@ -55,12 +82,25 @@ ISource::Status RemoteSource::prepare()
     if (status == Status::Finished)
     {
         query_executor->finish(&read_context);
+        if (dependency_port)
+            dependency_port->finish();
         is_async_state = false;
+
+        return status;
     }
+
+    if (status == Status::PortFull)
+    {
+        /// Also push empty chunk to dependency to signal that we read data from remote source
+        /// or answered to the incoming request from parallel replica
+        if (dependency_port && !dependency_port->isFinished() && dependency_port->canPush())
+            dependency_port->push(Chunk());
+    }
+
     return status;
 }
 
-std::optional<Chunk> RemoteSource::tryGenerate()
+Chunk RemoteSource::generate()
 {
     /// onCancel() will do the cancel if the query was sent.
     if (was_query_canceled)
@@ -73,6 +113,8 @@ std::optional<Chunk> RemoteSource::tryGenerate()
         {
             if (value.total_rows_to_read)
                 addTotalRowsApprox(value.total_rows_to_read);
+            if (value.total_bytes_to_read)
+                addTotalBytes(value.total_bytes_to_read);
             progress(value.read_rows, value.read_bytes);
         });
 
@@ -92,20 +134,30 @@ std::optional<Chunk> RemoteSource::tryGenerate()
 
     if (async_read)
     {
-        auto res = query_executor->read(read_context);
-        if (std::holds_alternative<int>(res))
+        auto res = query_executor->read(read_context, timeout_ms);
+
+        if (res.getType() == RemoteQueryExecutor::ReadResult::Type::Nothing)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Got an empty packet from the RemoteQueryExecutor. This is a bug");
+
+        if (res.getType() == RemoteQueryExecutor::ReadResult::Type::FileDescriptor)
         {
-            fd = std::get<int>(res);
+            fd = res.getFileDescriptor();
             is_async_state = true;
-            return Chunk();
+            return empty_chunk.clone(); /// proton: updated (required by Streaming::ISource)
+        }
+
+        if (res.getType() == RemoteQueryExecutor::ReadResult::Type::ParallelReplicasToken)
+        {
+            is_async_state = false;
+            return empty_chunk.clone(); /// proton: updated (required by Streaming::ISource)
         }
 
         is_async_state = false;
 
-        block = std::get<Block>(std::move(res));
+        block = res.getBlock();
     }
     else
-        block = query_executor->read();
+        block = query_executor->readBlock(timeout_ms);
 
     if (!block)
     {
@@ -127,16 +179,31 @@ std::optional<Chunk> RemoteSource::tryGenerate()
     /// proton: starts
     if (block.hasWatermark())
         chunk.setWatermark(block.watermark());
+
+    if (block.hasSN()) /// Only exists in remote fetch columns scenario
+    {
+        if (isStreaming())
+            setLastProcessedSN(block.getSN());
+        else
+            /// In non-streaming scenarios, the Sequence Number (SN) indicate the maximum sequence number
+            /// of historical data for backfill reads, which is used in Streaming::ConcatProcessor to reset start sn of streaming source.
+            chunk.setSN(block.getSN());
+    }
     /// proton: ends
 
     return chunk;
 }
 
-void RemoteSource::onCancel()
+void RemoteSource::onCancel() noexcept
 {
-    was_query_canceled = true;
-    query_executor->cancel(&read_context);
-    // is_async_state = false;
+    try
+    {
+        query_executor->cancel();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(getLogger("RemoteSource"), "Error occurs on cancellation.");
+    }
 }
 
 void RemoteSource::onUpdatePorts()
@@ -149,6 +216,38 @@ void RemoteSource::onUpdatePorts()
     }
 }
 
+/// proton: starts.
+Chunk RemoteSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+{
+    /// Prepare checkpoint barrier chunk
+    auto result = Chunk{getPort().getHeader().getColumns(), 0};
+    result.setCheckpointContext(ckpt_ctx_);
+
+    ckpt_ctx_->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) {
+        writeIntBinary(lastProcessedSN(), wb);
+    });
+
+    LOG_INFO(logger, "Saved checkpoint sn={}", lastProcessedSN());
+    return result;
+}
+
+void RemoteSource::doRecover(CheckpointContextPtr ckpt_ctx_)
+{
+    ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
+        Int64 recovered_last_sn = 0;
+        readIntBinary(recovered_last_sn, rb);
+        setLastCheckpointSN(recovered_last_sn);
+    });
+
+    LOG_INFO(logger, "Recovered last_sn={}", lastCheckpointSN());
+}
+
+void RemoteSource::doResetStartSN(Int64 sn)
+{
+    if (sn >= cluster::Constants::LogStartSN)
+        query_executor->seekTo(sn);
+}
+/// proton: ends.
 
 RemoteTotalsSource::RemoteTotalsSource(RemoteQueryExecutorPtr executor)
     : ISource(executor->getHeader(), true, ProcessorID::RemoteTotalsSourceID)
@@ -192,9 +291,9 @@ Chunk RemoteExtremesSource::generate()
 
 Pipe createRemoteSourcePipe(
     RemoteQueryExecutorPtr query_executor,
-    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read)
+    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read, UUID uuid, bool is_streaming)
 {
-    Pipe pipe(std::make_shared<RemoteSource>(query_executor, add_aggregation_info, async_read));
+    Pipe pipe(std::make_shared<RemoteSource>(query_executor, add_aggregation_info, async_read, uuid/* proton: starts */, is_streaming/* proton: ends */));
 
     if (add_totals)
         pipe.addTotalsSource(std::make_shared<RemoteTotalsSource>(query_executor));

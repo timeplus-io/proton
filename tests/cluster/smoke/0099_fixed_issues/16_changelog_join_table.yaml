@@ -1,0 +1,150 @@
+tags:
+  - Changelog join table
+description: (#106) Covering changelog global aggr processing over join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists left_test_stream_106_vk
+  
+  - type: query
+    sql: drop stream if exists right_test_stream_106_vk
+
+  - type: query
+    sql: create stream left_test_stream_106_vk
+        (
+          id int,
+          val float
+        )
+        primary key id settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream right_test_stream_106_vk
+        (
+          id int,
+          val float
+        )
+        primary key id settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: select id, count(*), sum(val), sum(b.val) from left_test_stream_106_vk as a join right_test_stream_106_vk as b on a.id = b.id group by id emit periodic 1ms
+    schema:
+      - name: id
+        type: int32
+      - name: count(*)
+        type: uint64
+      - name: sum(val)
+        type: float64
+      - name: sum(b.val)
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into right_test_stream_106_vk(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: float32
+    inputs:
+      - [1, 1.1]
+      - [2, 2.2]
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into left_test_stream_106_vk(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: float32
+    inputs:
+      - [1, 1.1]
+      - [2, 2.2]
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into right_test_stream_106_vk(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: float32
+    inputs:
+      - [1, 11.1]
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into left_test_stream_106_vk(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: float32
+    inputs:
+      - [1, 11.1]
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: 9901
+    query: select id, count() as cnt, sum(val), sum(b.val) from left_test_stream_106_vk as a join table(right_test_stream_106_vk) as b on a.id = b.id group by id emit periodic 1ms
+    schema:
+      - name: id
+        type: int32
+      - name: cnt
+        type: uint64
+      - name: sum(val)
+        type: float64
+      - name: sum(b.val)
+        type: float64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9902
+    query: select id, count() as cnt, sum(val), sum(b.val) from table(left_test_stream_106_vk) as a join table(right_test_stream_106_vk) as b on a.id = b.id group by id emit periodic 1ms
+    schema:
+      - name: id
+        type: int32
+      - name: cnt
+        type: uint64
+      - name: sum(val)
+        type: float64
+      - name: sum(b.val)
+        type: float64
+
+  - type: check
+    target_name: 9900
+    mode: random
+    expected_result:
+      - [1, 1, 1.1, 1.1]
+      - [2, 1, 2.2, 2.2]
+      - [1, 1, 1.1, 11.1]
+      - [2, 1, 2.2, 2.2]
+      - [1, 1, 11.1, 11.1]
+      - [2, 1, 2.2, 2.2]
+
+  - type: check
+    target_name: 9901
+    mode: random
+    expected_result:
+      - [1, 1, 11.1, 11.1]
+      - [2, 1, 2.2, 2.2]
+
+  - type: check
+    target_name: 9902
+    mode: random
+    expected_result:
+      - [1, 1, 11.1, 11.1]
+      - [2, 1, 2.2, 2.2]

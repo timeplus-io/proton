@@ -1,0 +1,114 @@
+description: coordinator.query.interval.ms - How often to query for the current client group coordinator. If the currently assigned coordinator is down the configured query interval will be divided by ten to more quickly recover in case of coordinator reassignment. Type:integer
+             max.poll.interval.ms - Maximum allowed time between calls to consume messages (e.g., rd_kafka_consumer_poll()) for high-level consumers. If this interval is exceeded the consumer is considered failed and the group will rebalance in order to reassign the partitions to another consumer group member. Warning:Offset commits may be not possible at this point. Note:It is recommended to set enable.auto.offset.store=false for long-time processing applications and then explicitly store offsets (using offsets_store()) after message processing, to make sure offsets are not auto-committed prior to processing has finished. The interval is checked two times per second. See KIP-62 for more information. Type:integer
+             auto.commit.interval.ms (no such config)- The frequency in milliseconds that the consumer offsets are committed (written) to offset storage. (0 = disable). This setting is used by the high-level consumer. Type:integer
+             queued.min.messages- Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue. Type:integer
+             queued.max.messages.kbytes - Maximum number of kilobytes of queued pre-fetched messages in the local consumer queue. If using the high-level consumer this setting applies to the single consumer queue, regardless of the number of partitions. When using the legacy simple consumer or when separate partition queues are used this setting applies per partition. This value may be overshot by fetch.message.max.bytes. This property has higher priority than queued.min.messages. Type:integer
+             fetch.wait.max.ms - Maximum time the broker may wait to fill the Fetch response with fetch.min.bytes of messages. Type:integer
+             fetch.message.max.bytes - Initial maximum number of bytes per topic+partition to request when fetching messages from the broker. If the client encounters a message larger than this value it will gradually try to increase it until the entire message can be fetched. Type:integer
+             max.partition.fetch.bytes - Alias for fetch.message.max.bytes:Initial maximum number of bytes per topic+partition to request when fetching messages from the broker. If the client encounters a message larger than this value it will gradually try to increase it until the entire message can be fetched. Type:integer
+             fetch.max.bytes- Maximum amount of data the broker shall return for a Fetch request. Messages are fetched in batches by the consumer and if the first message batch in the first non-empty partition of the Fetch request is larger than this value, then the message batch will still be returned to ensure the consumer can make progress. The maximum message batch size accepted by the broker is defined via message.max.bytes (broker config) or max.message.bytes (broker topic config). fetch.max.bytes is automatically adjusted upwards to be at least message.max.bytes (consumer config). Type:integer
+             fetch.min.bytes - Minimum number of bytes the broker responds with. If fetch.wait.max.ms expires the accumulated data will be sent to the client regardless of this setting. Type:integer
+             fetch.error.backoff.ms - How long to postpone the next fetch request for a topic+partition in case of a fetch error. Type:integer
+             offset.store.method(no such config) - DEPRECATED Offset commit store method:'file' - DEPRECATED:local file store (offset.store.path, et.al), 'broker' - broker commit store (requires Apache Kafka 0.8.2 or later on the broker). Type:enum value
+             isolation.level - Controls how to read messages written transactionally:read_committed - only return transactional messages which have been committed. read_uncommitted - return all messages, even transactional messages which have been aborted. Type:enum value
+             check.crcs - Verify CRC32 of consumed messages, ensuring no on-the-wire or on-disk corruption to the messages occurred. This check comes at slightly increased CPU usage. Type:boolean
+             allow.auto.create.topics - Allow automatic topic creation on the broker when subscribing to or assigning non-existent topics. The broker must also be configured with auto.create.topics.enable=true for this configuraiton to take effect. Note:The default value (false) is different from the Java consumer (true). Requires broker version >= 0.11.0.0, for older broker versions only the broker configuration applies. Type:boolean
+             client.rack - A rack identifier for this client. This can be any string value which indicates where this client is physically located. It corresponds with the broker config broker.rack. Type:string
+             transactional.id - Enables the transactional producer. The transactional.id is used to identify the same transactional producer instance across process restarts. It allows the producer to guarantee that transactions corresponding to earlier instances of the same producer have been finalized prior to starting any new transactions, and that any zombie instances are fenced off. If no transactional.id is provided, then the producer is limited to idempotent delivery (if enable.idempotence is set). Requires broker version >= 0.11.0. Type:string
+             transaction.timeout.ms (no such config)- The maximum amount of time in milliseconds that the transaction coordinator will wait for a transaction status update from the producer before proactively aborting the ongoing transaction. If this value is larger than the transaction.max.timeout.ms setting in the broker, the init_transactions() call will fail with ERR_INVALID_TRANSACTION_TIMEOUT. The transaction timeout automatically adjusts message.timeout.ms and socket.timeout.ms, unless explicitly configured in which case they must not exceed the transaction timeout (socket.timeout.ms must be at least 100ms lower than transaction.timeout.ms). This is also the default timeout value if no timeout (-1) is supplied to the transactional API methods. Type:integer
+             enable.gapless.guarantee - EXPERIMENTAL:subject to change or removal. When set to true, any error that could result in a gap in the produced message series when a batch of messages fails, will raise a fatal error (ERR__GAPLESS_GUARANTEE) and stop the producer. Messages failing due to message.timeout.ms are not covered by this guarantee. Requires enable.idempotence=true. Type:boolean
+             queue.buffering.max.messages - Maximum number of messages allowed on the producer queue. This queue is shared by all topics and partitions. Type:integer
+             queue.buffering.max.kbytes - Maximum total message size sum allowed on the producer queue. This queue is shared by all topics and partitions. This property has higher priority than queue.buffering.max.messages. Type:integer
+             queue.buffering.max.ms - Delay in milliseconds to wait for messages in the producer queue to accumulate before constructing message batches (MessageSets) to transmit to brokers. A higher value allows larger and more effective (less overhead, improved compression) batches of messages to accumulate at the expense of increased message delivery latency. Type:float
+             linger.ms - Alias for queue.buffering.max.ms:Delay in milliseconds to wait for messages in the producer queue to accumulate before constructing message batches (MessageSets) to transmit to brokers. A higher value allows larger and more effective (less overhead, improved compression) batches of messages to accumulate at the expense of increased message delivery latency. Type:float
+             queue.buffering.backpressure.threshold - The threshold of outstanding not yet transmitted broker requests needed to backpressure the producer's message accumulator. If the number of not yet transmitted requests equals or exceeds this number, produce request creation that would have otherwise been triggered (for example, in accordance with linger.ms) will be delayed. A lower number yields larger and more effective batches. A higher value can improve latency when using compression on slow machines. Type:integer
+             compression.codec - compression codec to use for compressing message sets. This is the default value for all topics, may be overridden by the topic configuration property compression.codec. Type:enum value 
+             compression.type - Alias for compression.codec:compression codec to use for compressing message sets. This is the default value for all topics, may be overridden by the topic configuration property compression.codec. Type:enum value
+             batch.num.messages - Maximum number of messages batched in one MessageSet. The total MessageSet size is also limited by batch.size and message.max.bytes. Type:integer
+             batch.size - Maximum size (in bytes) of all messages batched in one MessageSet, including protocol framing overhead. This limit is applied after the first message has been added to the batch, regardless of the first message's size, this is to ensure that messages that exceed batch.size are produced. The total MessageSet size is also limited by batch.num.messages and message.max.bytes. Type:integer
+             delivery.report.only.error - Only provide delivery reports for failed messages. Type:boolean
+             sticky.partitioning.linger.ms - Delay in milliseconds to wait to assign new sticky partitions for each topic. By default, set to double the time of linger.ms. To disable sticky behavior, set to 0. This behavior affects messages with the key NULL in all cases, and messages with key lengths of zero when the consistent_random partitioner is in use. These messages would otherwise be assigned randomly. A higher value allows for more effective batching of these messages. Type:integer
+             
+
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test01
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: create
+    topic: test01
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test00_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test00_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test01', 
+        properties='coordinator.query.interval.ms=1000;fetch.wait.max.ms=1000;
+        max.poll.interval.ms=1000;session.timeout.ms=500;queued.min.messages=1000;enable.gapless.guarantee=true;
+        queued.max.messages.kbytes=1000;fetch.message.max.bytes=1000;max.partition.fetch.bytes=10000;
+        fetch.max.bytes=10000;message.max.bytes=1000;fetch.min.bytes=100;fetch.error.backoff.ms=1000;
+        isolation.level=read_committed;check.crcs=true;allow.auto.create.topics=true;transaction.timeout.ms=1000;queue.buffering.max.ms= 1000;
+        linger.ms= 100; queue.buffering.backpressure.threshold=1; compression.codec= gzip;compression.type=lz4;
+        batch.num.messages=1000;batch.size=1000;delivery.report.only.error=true;sticky.partitioning.linger.ms=10000'
+  
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: streaming-04-query
+    query: select * from test00_external
+    schema: 
+        - name: id
+          type: int32
+        - name: value
+          type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+
+  - type: check
+    target_name: streaming-04-query
+    expected_result:
+      - [1, 'aaaa']
+      - [2, 'bbbb']

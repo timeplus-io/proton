@@ -5,7 +5,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Processors/Transforms/buildPushingToViewsChain.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <IO/ConnectionTimeoutsContext.h>
+#include <IO/ConnectionTimeouts.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/QueryLog.h>
@@ -26,6 +26,7 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Storages/StorageDistributed.h>
+#include <Storages/Stream/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/checkStackSize.h>
 
@@ -103,12 +104,22 @@ Block InterpreterInsertQuery::getSampleBlock(
         if (no_destination)
             return metadata_snapshot->getSampleBlockWithVirtuals(table->getVirtuals());
         else
-            return metadata_snapshot->getSampleBlockNonMaterialized();
+        {
+            /// proton: starts
+            /// for `insert into target select * from table(src)`, if the target is a streaming storage,
+            /// we intend to skip the tp_sn column in the sample block
+            if (isStreamingStorage(table, getContext()))
+                return metadata_snapshot->getSampleBlockNonMaterialized(/*skip_tp_sn=*/true);
+            else
+                return metadata_snapshot->getSampleBlockNonMaterialized();
+            /// proton: ends
+        }
     }
 
     /// Form the block based on the column names from the query
-    Names names;
     const auto columns_ast = processColumnTransformers(getContext()->getCurrentDatabase(), table, metadata_snapshot, query.columns);
+    Names names;
+    names.reserve(columns_ast->children.size());
     for (const auto & identifier : columns_ast->children)
     {
         std::string current_name = identifier->getColumnName();
@@ -116,6 +127,25 @@ Block InterpreterInsertQuery::getSampleBlock(
     }
 
     return getSampleBlock(names, table, metadata_snapshot);
+}
+
+std::optional<Names> InterpreterInsertQuery::getInsertColumnNames() const
+{
+    auto const * insert_query = query_ptr->as<ASTInsertQuery>();
+    if (!insert_query || !insert_query->columns)
+        return std::nullopt;
+
+    auto table = DatabaseCatalog::instance().getTable(getDatabaseTable(), getContext());
+    const auto columns_ast = processColumnTransformers(getContext()->getCurrentDatabase(), table, table->getInMemoryMetadataPtr(), insert_query->columns);
+    Names names;
+    names.reserve(columns_ast->children.size());
+    for (const auto & identifier : columns_ast->children)
+    {
+        std::string current_name = identifier->getColumnName();
+        names.emplace_back(std::move(current_name));
+    }
+
+    return names;
 }
 
 Block InterpreterInsertQuery::getSampleBlock(
@@ -131,14 +161,14 @@ Block InterpreterInsertQuery::getSampleBlock(
         /// The table does not have a column with that name
         if (!table_sample.has(current_name))
             /// proton: starts
-            throw Exception("No such column " + current_name + " in stream " + table->getStorageID().getNameForLogs(),
-                ErrorCodes::NO_SUCH_COLUMN_IN_STREAM);
+            throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_STREAM, "No such column {} in stream {}",
+                            current_name, table->getStorageID().getNameForLogs());
             /// proton: ends
 
         if (!allow_materialized && !table_sample_non_materialized.has(current_name))
-            throw Exception("Cannot insert column " + current_name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert column {}, because it is MATERIALIZED column.", current_name);
         if (res.has(current_name))
-            throw Exception("Column " + current_name + " specified more than once", ErrorCodes::DUPLICATE_COLUMN);
+            throw Exception(ErrorCodes::DUPLICATE_COLUMN, "Column {} specified more than once", current_name);
 
         res.insert(ColumnWithTypeAndName(table_sample.getByName(current_name).type, current_name));
     }
@@ -188,31 +218,34 @@ Chain InterpreterInsertQuery::buildChain(
     const StoragePtr & table,
     const StorageMetadataPtr & metadata_snapshot,
     const Names & columns,
-    ThreadStatus * thread_status,
+    ThreadStatusesHolderPtr thread_status_holder,
     std::atomic_uint64_t * elapsed_counter_ms,
     bool is_streaming)
 {
     auto sample = getSampleBlock(columns, table, metadata_snapshot);
-    return buildChainImpl(table, metadata_snapshot, sample , thread_status, elapsed_counter_ms, is_streaming);
+    return buildChainImpl(table, metadata_snapshot, sample, thread_status_holder, elapsed_counter_ms, is_streaming);
 }
 
 Chain InterpreterInsertQuery::buildChainImpl(
     const StoragePtr & table,
     const StorageMetadataPtr & metadata_snapshot,
     const Block & query_sample_block,
-    ThreadStatus * thread_status,
+    ThreadStatusesHolderPtr thread_status_holder,
     std::atomic_uint64_t * elapsed_counter_ms,
     bool is_streaming)
 {
+    ThreadStatus * thread_status = current_thread;
+
+    if (!thread_status_holder)
+        thread_status = nullptr;
+
     auto context_ptr = getContext();
     const Settings & settings = context_ptr->getSettingsRef();
-    if (table->getName() == "Stream" && settings.enable_light_ingest)
-        return buildChainLightImpl(table, metadata_snapshot, query_sample_block, thread_status, elapsed_counter_ms, is_streaming);
+    if (table->supportsLightIngest(settings))
+        return buildChainLightImpl(table, metadata_snapshot, query_sample_block, thread_status_holder, elapsed_counter_ms, is_streaming);
 
     /// The only case is system tables inserts. System tables are still merge tree
     /// we don't support in-memory table
-    assert(table->getName() != "Stream");
-
     const ASTInsertQuery * query = nullptr;
     if (query_ptr)
         query = query_ptr->as<ASTInsertQuery>();
@@ -270,6 +303,9 @@ Chain InterpreterInsertQuery::buildChainImpl(
 
     auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status, getContext()->getQuota());
     counting->setProcessListElement(context_ptr->getProcessListElement());
+    /// proton: starts.
+    counting->setProgressCallback(context_ptr->getWriteProgressCallback());
+    /// proton: ends.
     out.addSource(std::move(counting));
 
     return out;
@@ -283,18 +319,23 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     const StoragePtr & table,
     const StorageMetadataPtr & metadata_snapshot,
     const Block & query_sample_block,
-    ThreadStatus * thread_status,
+    ThreadStatusesHolderPtr thread_status_holder,
     std::atomic_uint64_t * elapsed_counter_ms,
     bool is_streaming)
 {
+    ThreadStatus * thread_status = current_thread;
+
+    if (!thread_status_holder)
+        thread_status = nullptr;
+
     auto context_ptr = getContext();
     const ASTInsertQuery * query = nullptr;
     if (query_ptr)
         query = query_ptr->as<ASTInsertQuery>();
 
-    assert(table->getName() == "Stream");
-
     const Settings & settings = context_ptr->getSettingsRef();
+    assert(table->supportsLightIngest(settings));
+
     bool null_as_default = query && query->select && settings.insert_null_as_default;
 
     /// We create a pipeline of several streams, into which we will write data.
@@ -337,7 +378,7 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
             if (column.default_desc.kind == ColumnDefaultKind::Alias)
                 continue;
             if (column.default_desc.kind == ColumnDefaultKind::Materialized && !allow_materialized)
-                throw Exception("Cannot insert column " + column.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert column {}, because it is MATERIALIZED column.", column.name);
             col = header.findByName(column.name);
             assert(col);
             sorted_required_columns.emplace(pos, NameAndTypePair(col->name, col->type));
@@ -391,9 +432,10 @@ Chain InterpreterInsertQuery::buildChainLightImpl(
     /// proton: we simply disable squash for distributed merge tree since wal client has buffering already
     /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
     /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-    /// auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status);
-    /// counting->setProcessListElement(context_ptr->getProcessListElement());
-    /// out.addSource(std::move(counting));
+    auto counting = std::make_shared<CountingTransform>(out.getInputHeader(), thread_status, getContext()->getQuota());
+    counting->setProcessListElement(context_ptr->getProcessListElement());
+    counting->setProgressCallback(context_ptr->getWriteProgressCallback());
+    out.addSource(std::move(counting));
 
     return out;
 }
@@ -471,7 +513,7 @@ BlockIO InterpreterInsertQuery::execute()
 
                 auto new_context = Context::createCopy(context);
                 new_context->setSettings(new_settings);
-                new_context->setInsertionTable(getContext()->getInsertionTable());
+                new_context->setInsertionTable(getContext()->getInsertionTable(), getContext()->getInsertionTableColumnNames());
 
                 InterpreterSelectWithUnionQuery interpreter_select{
                     query.select, new_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
@@ -504,9 +546,13 @@ BlockIO InterpreterInsertQuery::execute()
                     for (size_t col_idx = 0; col_idx < query_columns.size(); ++col_idx)
                     {
                         /// Change query sample block columns to Nullable to allow inserting nullable columns, where NULL values will be substituted with
-                        /// default column values (in AddingDefaultBlockOutputStream), so all values will be cast correctly.
-                        if (input_columns[col_idx].type->isNullable() && !query_columns[col_idx].type->isNullable() && output_columns.hasDefault(query_columns[col_idx].name))
-                            query_sample_block.setColumn(col_idx, ColumnWithTypeAndName(makeNullable(query_columns[col_idx].column), makeNullable(query_columns[col_idx].type), query_columns[col_idx].name));
+                        /// default column values (in AddingDefaultsTransform), so all values will be cast correctly.
+                        if (isNullableOrLowCardinalityNullable(input_columns[col_idx].type)
+                            && !isNullableOrLowCardinalityNullable(query_columns[col_idx].type)
+                            && !isVariant(query_columns[col_idx].type)
+                            && !isDynamic(query_columns[col_idx].type)
+                            && output_columns.has(query_columns[col_idx].name))
+                            query_sample_block.setColumn(col_idx, ColumnWithTypeAndName(makeNullableOrLowCardinalityNullable(query_columns[col_idx].column), makeNullableOrLowCardinalityNullable(query_columns[col_idx].type), query_columns[col_idx].name));
                     }
                 }
             }
@@ -519,7 +565,8 @@ BlockIO InterpreterInsertQuery::execute()
 
         for (size_t i = 0; i < out_streams_size; ++i)
         {
-            auto out = buildChainImpl(table, metadata_snapshot, query_sample_block, nullptr, nullptr, pipeline.isStreaming());
+            auto out = buildChainImpl(
+                table, metadata_snapshot, query_sample_block, {}, nullptr, table->supportsStreamingQuery() || pipeline.isStreaming());
             out_chains.emplace_back(std::move(out));
         }
     }
@@ -577,7 +624,7 @@ BlockIO InterpreterInsertQuery::execute()
         {
             for (const auto & column : metadata_snapshot->getColumns())
                 if (column.default_desc.kind == ColumnDefaultKind::Materialized && header.has(column.name))
-                    throw Exception("Cannot insert column " + column.name + ", because it is MATERIALIZED column.", ErrorCodes::ILLEGAL_COLUMN);
+                    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert column {}, because it is MATERIALIZED column.", column.name);
         }
 
         res.pipeline = QueryPipelineBuilder::getPipeline(std::move(pipeline));

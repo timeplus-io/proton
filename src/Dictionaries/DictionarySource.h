@@ -1,8 +1,7 @@
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <memory>
-
-#include <base/shared_ptr_helper.h>
 #include <Columns/IColumn.h>
 #include <Core/Names.h>
 #include <Core/Block.h>
@@ -15,17 +14,13 @@ namespace DB
 
 class DictionarySource;
 
-class DictionarySourceCoordinator final : public shared_ptr_helper<DictionarySourceCoordinator>, public std::enable_shared_from_this<DictionarySourceCoordinator>
+class DictionarySourceCoordinator final : public std::enable_shared_from_this<DictionarySourceCoordinator>
+                                        , private boost::noncopyable
 {
-    friend struct shared_ptr_helper<DictionarySourceCoordinator>;
-
 public:
-
-    using ReadColumnsFunc = std::function<Columns (const Strings &, const DataTypes &, const Columns &, const DataTypes &, const Columns &)>;
+    using ReadColumnsFunc = std::function<Columns (const ColumnsWithTypeAndName &, const std::vector<size_t> &, const Strings &, const DataTypes &, const Columns &)>;
 
     Pipe read(size_t num_streams);
-
-private:
 
     explicit DictionarySourceCoordinator(
         std::shared_ptr<const IDictionary> dictionary_,
@@ -36,13 +31,13 @@ private:
         , key_columns_with_type(std::move(key_columns_with_type_))
         , max_block_size(max_block_size_)
         , read_columns_func([this](
+            const ColumnsWithTypeAndName & key_columns,
+            const std::vector<size_t> & key_index_map,
             const Strings & attribute_names,
             const DataTypes & result_types,
-            const Columns & key_columns,
-            const DataTypes & key_types,
             const Columns & default_values_columns)
         {
-            return dictionary->getColumns(attribute_names, result_types, key_columns, key_types, default_values_columns);
+            return dictionary->getColumns(key_columns, key_index_map, attribute_names, result_types, default_values_columns);
         })
     {
         initialize(column_names);
@@ -59,13 +54,13 @@ private:
         , data_columns_with_type(std::move(data_columns_with_type_))
         , max_block_size(max_block_size_)
         , read_columns_func([this](
+            const ColumnsWithTypeAndName & key_columns,
+            const std::vector<size_t> & key_index_map,
             const Strings & attribute_names,
             const DataTypes & result_types,
-            const Columns & key_columns,
-            const DataTypes & key_types,
             const Columns & default_values_columns)
         {
-            return dictionary->getColumns(attribute_names, result_types, key_columns, key_types, default_values_columns);
+            return dictionary->getColumns(key_columns, key_index_map, attribute_names, result_types, default_values_columns);
         })
     {
         initialize(column_names);
@@ -86,6 +81,8 @@ private:
     {
         initialize(column_names);
     }
+
+private:
 
     friend class DictionarySource;
 

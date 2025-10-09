@@ -1,3 +1,6 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
 drop stream if exists projection_without_key;
 
 create stream projection_without_key (key uint32, PROJECTION x (SELECT sum(key) group by key % 3)) engine MergeTree order by key;

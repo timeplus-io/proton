@@ -5,7 +5,9 @@ CREATE STREAM defaults
 	s string
 )ENGINE = Memory();
 
-ALTER STREAM defaults ADD COLUMN m int8; -- { serverError 48 }
-ALTER STREAM defaults DROP COLUMN n; -- { serverError 48 }
+ALTER STREAM defaults ADD COLUMN m int8;
+ALTER STREAM defaults DROP COLUMN n;
+
+DESC STREAM defaults;
 
 DROP STREAM defaults;

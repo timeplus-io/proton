@@ -1,0 +1,56 @@
+tags:
+  - subquery
+  - cluster_table_bug
+description: tumble count based on tail join table subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: '101'
+    query: with joined_stream as (select a.id, b.type, a.value, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp from test_smoke1 as a join table(test_smoke1_d) as b on a.id = b.id where b.type = 'roof' or b.type = 'field' or b.type = 'wall') select id, count(*), window_start, window_end from tumble(joined_stream,transformed_timestamp, 5s) group by id, window_start, window_end
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime
+      - name: window_end
+        type: datetime
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev1', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03']
+      - ['dev2', 'ca', 30, '{"create_time":"2021-11-02 20:00:02"}', '2021-11-02 20:00:02']
+      - ['dev2', 'ca', 68, '{"create_time":"2021-11-02 20:00:04"}', '2021-11-02 20:00:04']
+      - ['dev8', 'ca', 67, '{"create_time":"2021-11-02 20:00:05"}', '2021-11-02 20:00:05']
+      - ['dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:06"}', '2021-11-02 20:00:06']
+      - ['dev3', 'ca', 58, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev3', 'ca', 66, '{"create_time":"2021-11-02 20:00:08"}', '2021-11-02 20:00:08']
+      - ['dev4', 'ca', 76, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+      - ['dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev4', 'ca', 67, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+      - ['dev9', 'ca', 77, '{"create_time":"2021-11-02 20:00:10"}', '2021-11-02 20:00:10']
+
+  - type: check
+    target_name: '101'
+    mode: random
+    expected_result:
+      - ['dev1', 2, '2021-11-02 20:00:00', '2021-11-02 20:00:05']
+      - ['dev2', 2, '2021-11-02 20:00:00', '2021-11-02 20:00:05']

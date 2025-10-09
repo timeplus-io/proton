@@ -3,17 +3,16 @@
 
 #include <base/unaligned.h>
 #include <base/types.h>
+#include <base/defines.h>
 
-#include "CompressedWriteBuffer.h"
+#include <IO/WriteHelpers.h>
+
 #include <Compression/CompressionFactory.h>
+#include <Compression/CompressedWriteBuffer.h>
 
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-}
 
 static constexpr auto CHECKSUM_SIZE{sizeof(CityHash_v1_0_2::uint128)};
 
@@ -31,19 +30,38 @@ void CompressedWriteBuffer::nextImpl()
     CityHash_v1_0_2::uint128 checksum = CityHash_v1_0_2::CityHash128(compressed_buffer.data(), compressed_size);
     out.write(reinterpret_cast<const char *>(&checksum), CHECKSUM_SIZE);
     out.write(compressed_buffer.data(), compressed_size);
+
+    /// Increase buffer size for next data if adaptive buffer size is used and nextImpl was called because of end of buffer.
+    if (!available() && use_adaptive_buffer_size && memory.size() < adaptive_buffer_max_size)
+    {
+        memory.resize(std::min(memory.size() * 2, adaptive_buffer_max_size));
+        BufferBase::set(memory.data(), memory.size(), 0);
+    }
+}
+
+void CompressedWriteBuffer::finalizeImpl()
+{
+    /// Don't try to resize buffer in nextImpl.
+    use_adaptive_buffer_size = false;
+    next();
+}
+
+CompressedWriteBuffer::CompressedWriteBuffer(
+    WriteBuffer & out_, CompressionCodecPtr codec_, size_t buf_size, bool use_adaptive_buffer_size_, size_t adaptive_buffer_initial_size)
+    : BufferWithOwnMemory<WriteBuffer>(use_adaptive_buffer_size_ ? adaptive_buffer_initial_size : buf_size)
+    , out(out_)
+    , codec(std::move(codec_))
+    , use_adaptive_buffer_size(use_adaptive_buffer_size_)
+    , adaptive_buffer_max_size(buf_size)
+{
+    if (!codec)
+        codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
 
 CompressedWriteBuffer::~CompressedWriteBuffer()
 {
-    finalize();
-}
-
-CompressedWriteBuffer::CompressedWriteBuffer(
-    WriteBuffer & out_,
-    CompressionCodecPtr codec_,
-    size_t buf_size)
-    : BufferWithOwnMemory<WriteBuffer>(buf_size), out(out_), codec(std::move(codec_))
-{
+    if (!canceled)
+        finalize();
 }
 
 }

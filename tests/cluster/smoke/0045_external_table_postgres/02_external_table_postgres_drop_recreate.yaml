@@ -1,0 +1,178 @@
+tags:
+  - udf
+
+description: |
+  Test drop and recreate postgres external table
+  Main Steps:
+    1.Create table in postgres
+    2.Create external table with type postgres
+    3.Create JS UDF
+    4.Ingest data into external table
+    5.Check external table
+    6.Check JS UDF from external table
+    7.Drop function, external table, mysql table
+    8.Repeat Step 1-7
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "DROP TABLE IF EXISTS products;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "CREATE TABLE products (product_id varchar NOT NULL, price float8, PRIMARY KEY (product_id));"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "INSERT INTO products (product_id, price) VALUES ('1', '10.99'), ('2', '19.99'), ('3', '29.99');"
+
+  - type: query
+    sql: DROP FUNCTION IF EXISTS add_five;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS pg_ext;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE pg_ext
+      SETTINGS type='postgresql', address='postgres:5432', user='postgres', password='postgres', database='postgres', table='products';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five(price float64) RETURNS float64 LANGUAGE JAVASCRIPT AS $$
+        function add_five(price) {
+          for(let i=0;i<price.length;i++) {
+            price[i]=price[i]+5;
+          }
+          return price;
+        }
+      $$;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO pg_ext(product_id, price) VALUES ('4', 39.99);
+
+  - type: wait
+    time: 1
+
+  - name: pg-2-1
+    type: stream
+    query: SELECT product_id, price FROM pg_ext;
+    schema:
+      - name: product_id
+        type: string
+      - name: price
+        type: nullable(float64)
+
+  - name: pg-2-2
+    type: stream
+    query: SELECT add_five(price) as res FROM pg_ext;
+    schema:
+      - name: res
+        type: nullable(float64)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pg-2-1
+    expected_result:
+      - ['1', 10.99]
+      - ['2', 19.99]
+      - ['3', 29.99]
+      - ['4', 39.99]
+
+  - type: check
+    target_name: pg-2-2
+    expected_result:
+      - [15.99]
+      - [24.99]
+      - [34.99]
+      - [44.99]
+
+  # drop and recreate
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "DROP TABLE IF EXISTS products;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "CREATE TABLE products (product_id varchar NOT NULL, price float8, PRIMARY KEY (product_id));"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "INSERT INTO products (product_id, price) VALUES ('1', '10.99'), ('2', '19.99'), ('3', '29.99');"
+
+  - type: query
+    sql: DROP FUNCTION IF EXISTS add_five;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS pg_ext;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE pg_ext
+      SETTINGS type='postgresql', address='postgres:5432', user='postgres', password='postgres', database='postgres', table='products';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five(price float64) RETURNS float64 LANGUAGE JAVASCRIPT AS $$
+        function add_five(price) {
+          for(let i=0;i<price.length;i++) {
+            price[i]=price[i]+5;
+          }
+          return price;
+        }
+      $$;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO pg_ext(product_id, price) VALUES ('5', 49.99);
+
+  - type: wait
+    time: 1
+
+  - name: pg-2-1
+    type: stream
+    query: SELECT product_id, price FROM pg_ext;
+    schema:
+      - name: product_id
+        type: string
+      - name: price
+        type: nullable(float64)
+
+  - name: pg-2-2
+    type: stream
+    query: SELECT add_five(price) as res FROM pg_ext;
+    schema:
+      - name: res
+        type: nullable(float64)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pg-2-1
+    expected_result:
+      - ['1', 10.99]
+      - ['2', 19.99]
+      - ['3', 29.99]
+      - ['5', 49.99]
+
+  - type: check
+    target_name: pg-2-2
+    expected_result:
+      - [15.99]
+      - [24.99]
+      - [34.99]
+      - [54.99]

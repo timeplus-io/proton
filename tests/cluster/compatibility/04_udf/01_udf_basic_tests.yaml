@@ -1,0 +1,25 @@
+tags:
+  - prepare
+  - validate
+
+description: basic tests
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: udf-0-1
+    type: stream
+    query: select test_add_five(f32) from udf_stream settings seek_to='earliest';
+    schema:
+    - name: test_add_five(f32)
+      type: float32
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: udf-0-1
+    expected_result:
+      - [6]
+      - [7]

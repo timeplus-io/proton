@@ -1,0 +1,64 @@
+tags:
+  - bool
+description: create a view with subquery and have tumble window
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists bool_v1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_bool1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_bool1(id, value, bool_f,time)values(1, -1000, true, '2020-01-02
+      00:00:01')(1, -1000,true, '2020-01-03 09:01:02')(1, -1000, false, '2020-01-05
+      09:01:03')(1, 3100, false, '2020-01-18 09:01:04')(1, 100,true, '2020-03-09 09:01:05')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: create view bool_v1 as with transformed as (select id, value,
+      bool_f, time from t_bool1) select window_start, window_end, id, bool_f, count(bool_f)
+      from tumble(transformed, time, 1s)  group by id, bool_f, window_start, window_end  settings
+      seek_to='earliest'
+
+  - type: wait
+    time: 1
+
+  - name: '801'
+    type: stream
+    query: select id, bool_f, count() from bool_v1 group by id, bool_f
+    schema:
+      - name: id
+        type: int32
+      - name: bool_f
+        type: bool
+      - name: count()
+        type: uint64
+      
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists bool_v1
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ '1', 'False', 2 ]
+      - [ '1', 'True', 2 ]

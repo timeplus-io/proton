@@ -72,18 +72,18 @@ public:
     }
 
     void startup() override { }
-    void shutdown() override
+    void shutdown(bool dropping) override
     {
         std::lock_guard lock{nested_mutex};
         if (nested)
-            nested->shutdown();
+            nested->shutdown(dropping);
     }
 
-    void flush() override
+    void flush(bool dropping) override
     {
         std::lock_guard lock{nested_mutex};
         if (nested)
-            nested->flush();
+            nested->flush(dropping);
     }
 
     void drop() override
@@ -140,7 +140,7 @@ public:
         auto actual_structure = storage->getInMemoryMetadataPtr()->getSampleBlock();
         if (!blocksHaveEqualStructure(actual_structure, cached_structure) && add_conversion)
         {
-            throw Exception("Source storage and table function have different structure", ErrorCodes::INCOMPATIBLE_COLUMNS);
+            throw Exception(ErrorCodes::INCOMPATIBLE_COLUMNS, "Source storage and table function have different structure");
         }
         return storage->write(query, metadata_snapshot, context);
     }

@@ -1,0 +1,67 @@
+tags:
+  - json
+  - probe_bug
+  - skip
+description: json object column
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_json_obj
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_json_obj (json json, timestamp datetime64(3)
+      default now64(3))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_json_obj (json, timestamp) values('{"data":{"id":"dev1", "value":100,
+      "create_time":"2021-11-02 20:00:01"}, "tag":"building"}' ,'2021-11-02 20:00:01')
+
+  - type: wait
+    time: 3
+
+  - name: '1203'
+    type: stream
+    query: select json.data.id, json.data.value, json.tag from test_json_obj limit 1
+      settings seek_to='earliest'
+    schema:
+      - name: json.data.id
+        type: string
+      - name: json.data.value
+        type: int8
+      - name: json.tag
+        type: string
+
+  - type: wait
+    time: 2
+
+  - name: '1204'
+    type: stream
+    query: select json.data.id, json.data.value, json.tag from table(test_json_obj)
+    schema:
+      - name: json.data.id
+        type: string
+      - name: json.data.value
+        type: int8
+      - name: json.tag
+        type: string
+
+  - type: check
+    target_name: '1203'
+    expected_result:
+      - [ dev1, 100, building ]
+    
+  - type: check
+    target_name: '1204'
+    expected_result:
+      - [ dev1, 100, building ]

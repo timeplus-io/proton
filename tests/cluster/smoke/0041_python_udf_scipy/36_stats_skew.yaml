@@ -1,0 +1,66 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getSkew(value int) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy.stats import skew
+
+      class getSkew:
+          def __init__(self):
+              self.skew = 0.0
+
+          def serialize(self):
+              data = {}
+              data['skew'] = self.skew
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.skew = data['skew']
+
+          def merge(self, other):
+              pass
+
+          def process(self, values):
+              self.skew = skew(values)
+
+          def finalize(self):
+              return float(self.skew)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-36-1
+    type: stream
+    query: select getSkew(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          (2)(8)(0)(4)(1)(9)(9)(0);
+
+  - type: check
+    target_name: python-udf4-36-1
+    expected_result:
+      - [0.2650554122698573]

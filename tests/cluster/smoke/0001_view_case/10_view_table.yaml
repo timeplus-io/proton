@@ -1,0 +1,77 @@
+tags:
+  - view
+description: table function shall work with simple view (no aggreagtion), error_code:60
+  on kafka mode
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists view_stream
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream view_stream(i int)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into view_stream(i) values (1),(2),(3)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create or replace view test_v_table as (select i + 1, to_string(i) from view_stream)
+
+  - type: wait
+    time: 2
+
+  - name: '1100'
+    type: stream
+    query: select * from table(test_v_table)
+    schema:
+      - name: plus(i, 1)
+        type: int64
+      - name: to_string(i)
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create or replace view test_v_table as (select count() from view_stream)
+
+  - type: wait
+    time: 2
+
+  - name: '1101'
+    type: stream
+    query: select * from table(test_v_table)
+    schema:
+      - name: expr
+        type: int32
+      - name: expr1
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view test_v_table
+
+  - type: check
+    target_name: '1100'
+    expected_result:
+      - [ 2, '1' ]
+      - [ 3, '2' ]
+      - [ 4, '3' ]
+
+  - type: check
+    target_name: '1101'
+    expected_result:
+      - ['error_code:36']
+      

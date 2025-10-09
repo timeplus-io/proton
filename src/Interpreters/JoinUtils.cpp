@@ -14,6 +14,11 @@
 
 #include <IO/WriteHelpers.h>
 
+#include <Common/HashTable/Hash.h>
+#include <Common/WeakHash.h>
+
+#include <base/FnTraits.h>
+
 namespace DB
 {
 
@@ -127,7 +132,7 @@ bool isNullable(const DataTypePtr & type)
 /// Note: LowCardinality(T) transformed to LowCardinality(Nullable(T))
 DataTypePtr convertTypeToNullable(const DataTypePtr & type)
 {
-    if (isNullable(type))
+    if (isNullableOrLowCardinalityNullable(type))
         return type;
 
     if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
@@ -155,16 +160,14 @@ static ColumnPtr tryConvertColumnToNullable(ColumnPtr col)
 
     if (col->lowCardinality())
     {
-        auto mut_col = IColumn::mutate(std::move(col));
-        ColumnLowCardinality * col_lc = assert_cast<ColumnLowCardinality *>(mut_col.get());
-        if (col_lc->nestedIsNullable())
+        const ColumnLowCardinality & col_lc = assert_cast<const ColumnLowCardinality &>(*col);
+        if (col_lc.nestedIsNullable())
         {
-            return mut_col;
+            return col;
         }
-        else if (col_lc->nestedCanBeInsideNullable())
+        else if (col_lc.nestedCanBeInsideNullable())
         {
-            col_lc->nestedToNullable();
-            return mut_col;
+            return col_lc.cloneNullable();
         }
     }
     else if (const ColumnConst * col_const = checkAndGetColumn<ColumnConst>(*col))
@@ -227,11 +230,7 @@ void removeColumnNullability(ColumnWithTypeAndName & column)
 
         if (column.column && column.column->lowCardinality())
         {
-            auto mut_col = IColumn::mutate(std::move(column.column));
-            ColumnLowCardinality * col_as_lc = typeid_cast<ColumnLowCardinality *>(mut_col.get());
-            if (col_as_lc && col_as_lc->nestedIsNullable())
-                col_as_lc->nestedRemoveNullable();
-            column.column = std::move(mut_col);
+            column.column = assert_cast<const ColumnLowCardinality *>(column.column.get())->cloneWithDefaultOnNull();
         }
     }
     else
@@ -314,22 +313,6 @@ ColumnRawPtrs materializeColumnsInplace(Block & block, const Names & names)
         auto & column = block.getByName(column_name).column;
         column = recursiveRemoveLowCardinality(recursiveRemoveSparse(column->convertToFullColumnIfConst()));
         ptrs.push_back(column.get());
-    }
-
-    return ptrs;
-}
-
-ColumnRawPtrMap materializeColumnsInplaceMap(Block & block, const Names & names)
-{
-    ColumnRawPtrMap ptrs;
-    ptrs.reserve(names.size());
-
-    for (const auto & column_name : names)
-    {
-        auto & column = block.getByName(column_name);
-        column.column = recursiveRemoveLowCardinality(column.column->convertToFullColumnIfConst());
-        column.type = recursiveRemoveLowCardinality(column.type);
-        ptrs[column_name] = column.column.get();
     }
 
     return ptrs;
@@ -524,24 +507,24 @@ bool typesEqualUpToNullability(DataTypePtr left_type, DataTypePtr right_type)
 JoinMask getColumnAsMask(const Block & block, const String & column_name)
 {
     if (column_name.empty())
-        return JoinMask(true);
+        return JoinMask(true, block.rows());
 
     const auto & src_col = block.getByName(column_name);
 
     DataTypePtr col_type = recursiveRemoveLowCardinality(src_col.type);
     if (isNothing(col_type))
-        return JoinMask(false);
+        return JoinMask(false, block.rows());
 
     if (const auto * const_cond = checkAndGetColumn<ColumnConst>(*src_col.column))
     {
-        return JoinMask(const_cond->getBool(0));
+        return JoinMask(const_cond->getBool(0), block.rows());
     }
 
     ColumnPtr join_condition_col = recursiveRemoveLowCardinality(src_col.column->convertToFullColumnIfConst());
     if (const auto * nullable_col = typeid_cast<const ColumnNullable *>(join_condition_col.get()))
     {
         if (isNothing(assert_cast<const DataTypeNullable &>(*col_type).getNestedType()))
-            return JoinMask(false);
+            return JoinMask(false, block.rows());
 
         /// Return nested column with NULL set to false
         const auto & nest_col = assert_cast<const ColumnUInt8 &>(nullable_col->getNestedColumn());
@@ -571,6 +554,110 @@ void splitAdditionalColumns(const Names & key_names, const Block & sample_block,
             block_others.erase(column_name);
         }
     }
+}
+
+template <Fn<size_t(size_t)> Sharder>
+static IColumn::Selector hashToSelector(const WeakHash32 & hash, Sharder sharder)
+{
+    const auto & hashes = hash.getData();
+    size_t num_rows = hashes.size();
+
+    IColumn::Selector selector(num_rows);
+    for (size_t i = 0; i < num_rows; ++i)
+        selector[i] = sharder(intHashCRC32(hashes[i]));
+    return selector;
+}
+
+template <Fn<size_t(size_t)> Sharder>
+static Blocks scatterBlockByHashImpl(const Strings & key_columns_names, const Block & block, size_t num_shards, Sharder sharder)
+{
+    size_t num_rows = block.rows();
+    size_t num_cols = block.columns();
+
+    /// Use non-standard initial value so as not to degrade hash map performance inside shard that uses the same CRC32 algorithm.
+    WeakHash32 hash(num_rows);
+    for (const auto & key_name : key_columns_names)
+    {
+        ColumnPtr key_col = materializeColumn(block, key_name);
+        key_col->updateWeakHash32(hash);
+    }
+    auto selector = hashToSelector(hash, sharder);
+
+    Blocks result;
+    result.reserve(num_shards);
+    for (size_t i = 0; i < num_shards; ++i)
+    {
+        result.emplace_back(block.cloneEmpty());
+    }
+
+    for (size_t i = 0; i < num_cols; ++i)
+    {
+        auto dispatched_columns = block.getByPosition(i).column->scatter(num_shards, selector);
+        assert(result.size() == dispatched_columns.size());
+        for (size_t block_index = 0; block_index < num_shards; ++block_index)
+        {
+            result[block_index].getByPosition(i).column = std::move(dispatched_columns[block_index]);
+        }
+    }
+    return result;
+}
+
+static Blocks scatterBlockByHashPow2(const Strings & key_columns_names, const Block & block, size_t num_shards)
+{
+    size_t mask = num_shards - 1;
+    return scatterBlockByHashImpl(key_columns_names, block, num_shards, [mask](size_t hash) { return hash & mask; });
+}
+
+static Blocks scatterBlockByHashGeneric(const Strings & key_columns_names, const Block & block, size_t num_shards)
+{
+    return scatterBlockByHashImpl(key_columns_names, block, num_shards, [num_shards](size_t hash) { return hash % num_shards; });
+}
+
+Blocks scatterBlockByHash(const Strings & key_columns_names, const Block & block, size_t num_shards)
+{
+    if (num_shards == 0)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Number of shards must be positive");
+    if (likely(isPowerOf2(num_shards)))
+        return scatterBlockByHashPow2(key_columns_names, block, num_shards);
+    return scatterBlockByHashGeneric(key_columns_names, block, num_shards);
+}
+
+template<typename T>
+static Blocks scatterBlockByHashForList(const Strings & key_columns_names, const T & blocks, size_t num_shards)
+{
+    std::vector<Blocks> scattered_blocks(num_shards);
+    for (const auto & block : blocks)
+    {
+        if (block.rows() == 0)
+            continue;
+        auto scattered = scatterBlockByHash(key_columns_names, block, num_shards);
+        for (size_t i = 0; i < num_shards; ++i)
+            scattered_blocks[i].emplace_back(std::move(scattered[i]));
+    }
+
+    Blocks result;
+    result.reserve(num_shards);
+    for (size_t i = 0; i < num_shards; ++i)
+    {
+        result.emplace_back(concatenateBlocks(scattered_blocks[i]));
+    }
+    return result;
+}
+
+Blocks scatterBlockByHash(const Strings & key_columns_names, const Blocks & blocks, size_t num_shards)
+{
+    return scatterBlockByHashForList(key_columns_names, blocks, num_shards);
+}
+
+Blocks scatterBlockByHash(const Strings & key_columns_names, const BlocksList & blocks, size_t num_shards)
+{
+    return scatterBlockByHashForList(key_columns_names, blocks, num_shards);
+}
+
+bool hasNonJoinedBlocks(const TableJoin & table_join)
+{
+    return table_join.strictness() != JoinStrictness::Asof && table_join.strictness() != JoinStrictness::Semi
+        && isRightOrFull(table_join.kind());
 }
 
 ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter, bool inverse_filter)
@@ -604,7 +691,7 @@ ColumnPtr filterWithBlanks(ColumnPtr src_column, const IColumn::Filter & filter,
 }
 
 
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable)
+void correctNullabilityInplace(ColumnWithTypeAndName & column, bool nullable)
 {
     if (nullable)
     {
@@ -619,11 +706,9 @@ ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool n
 
         JoinCommon::removeColumnNullability(column);
     }
-
-    return std::move(column);
 }
 
-ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool nullable, const ColumnUInt8 & negative_null_map)
+void correctNullabilityInplace(ColumnWithTypeAndName & column, bool nullable, const IColumn::Filter & negative_null_map)
 {
     if (nullable)
     {
@@ -637,8 +722,6 @@ ColumnWithTypeAndName correctNullability(ColumnWithTypeAndName && column, bool n
     }
     else
         JoinCommon::removeColumnNullability(column);
-
-    return std::move(column);
 }
 }
 
@@ -772,7 +855,7 @@ void NotJoinedBlocks::copySameKeys(Block & block) const
     }
 }
 
-Block NotJoinedBlocks::read()
+Block NotJoinedBlocks::nextImpl()
 {
     Block result_block = result_sample_block.cloneEmpty();
     {

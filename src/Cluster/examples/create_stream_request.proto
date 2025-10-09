@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+message ShardReplica {
+    uint32 shard = 1;
+    uint32 replica = 2;
+}
+
+message ShardReplicaList {
+    repeated ShardReplica replicas = 1;
+}
+
+message Placements {
+    /// Assuming NodeID is 64-bit unsigned integer
+    map<uint64, ShardReplicaList> node_shard_replicas = 1;
+}
+
+enum CompressionMethodByte {
+    PLACEHOLDER = 0; /// The first enum value must be zero in proto3
+    NONE = 2;
+    LZ4 = 130;
+    ZSTD = 144;
+    Multiple = 145;
+    Delta = 146;
+    T64 = 147;
+    DoubleDelta = 148;
+    Gorilla = 149;
+    AES_128_GCM_SIV = 150;
+    AES_256_GCM_SIV = 151;
+}
+
+message Stream {
+    string ns = 1;
+    string name = 2;
+    int64 id = 3;
+}
+
+message StreamDescriptor {
+    uint32 version = 1;
+    Stream stream = 2;
+    uint32 shards = 3;
+    uint32 replicas = 4;
+    bool compacted = 5;
+    bool inmemory = 6;
+    CompressionMethodByte codec = 7;
+    uint32 flush_ms = 8;
+    uint32 flush_messages = 9;
+    uint64 retention_ms = 10;
+    uint64 retention_bytes = 11;
+    int64 create_timestamp_ms = 12;
+    int64 last_modify_timestamp_ms = 13;
+    string sql_def = 14;
+    Placements placements = 15;
+}
+
+message CreateStreamRequestData {
+    string sql_ddl = 1;
+    StreamDescriptor desc = 2;
+}
+
+///   "uint16" is not defined.
+message CreateStreamRequest {
+    uint32 data_version = 1;
+    CreateStreamRequestData request_data = 2;
+}

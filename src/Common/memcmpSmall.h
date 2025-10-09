@@ -502,9 +502,7 @@ inline bool memoryIsZeroSmallAllowOverflow15(const void * data, size_t size)
 #elif defined(__aarch64__) && defined(__ARM_NEON)
 
 #    include <arm_neon.h>
-#    ifdef HAS_RESERVED_IDENTIFIER
-#        pragma clang diagnostic ignored "-Wreserved-identifier"
-#    endif
+#      pragma clang diagnostic ignored "-Wreserved-identifier"
 
 inline uint64_t getNibbleMask(uint8x16_t res)
 {
@@ -705,7 +703,7 @@ inline bool memoryIsZeroSmallAllowOverflow15(const void * data, size_t size)
 
 #else
 
-#include <cstring>
+#    include <cstring>
 
 template <typename Char>
 inline int memcmpSmallAllowOverflow15(const Char * a, size_t a_size, const Char * b, size_t b_size)

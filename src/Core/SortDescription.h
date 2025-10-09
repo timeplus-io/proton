@@ -1,13 +1,16 @@
 #pragma once
 
-#include <vector>
-#include <memory>
-#include <cstddef>
-#include <string>
+
 #include <Core/Field.h>
 #include <Core/SettingsEnums.h>
 #include <Common/IntervalKind.h>
+#include <DataTypes/IDataType.h>
 #include <Columns/Collator.h>
+
+#include <cstddef>
+#include <string>
+#include <memory>
+#include <vector>
 
 namespace DB
 {
@@ -26,12 +29,17 @@ struct FillColumnDescription
     /// All missed values in range [FROM, TO) will be filled
     /// Range [FROM, TO) respects sorting direction
     Field fill_from;        /// Fill value >= FILL_FROM
+    DataTypePtr fill_from_type;
     Field fill_to;          /// Fill value + STEP < FILL_TO
+    DataTypePtr fill_to_type;
     Field fill_step;        /// Default = +1 or -1 according to direction
     std::optional<IntervalKind> step_kind;
+    Field fill_staleness;   /// Default = Null - should not be considered
+    std::optional<IntervalKind> staleness_kind;
 
-    using StepFunction = std::function<void(Field &)>;
+    using StepFunction = std::function<void(Field &, Int32 jumps_count)>;
     StepFunction step_func;
+    StepFunction staleness_step_func;
 };
 
 /// Description of the sorting rule by one column.
@@ -44,6 +52,8 @@ struct SortColumnDescription
     std::shared_ptr<Collator> collator; /// Collator for locale-specific comparison of strings
     bool with_fill;
     FillColumnDescription fill_description;
+
+    SortColumnDescription() = default;
 
     explicit SortColumnDescription(
         std::string column_name_,
@@ -103,22 +113,30 @@ struct SortColumnDescriptionWithColumnIndex
     bool operator!=(const SortColumnDescriptionWithColumnIndex & other) const { return !(*this == other); }
 };
 
+class CompiledSortDescriptionFunctionHolder;
+
 /// Description of the sorting rule for several columns.
 using SortDescriptionWithPositions = std::vector<SortColumnDescriptionWithColumnIndex>;
 
 class SortDescription : public std::vector<SortColumnDescription>
 {
 public:
-    /// Can be safely casted into JITSortDescriptionFunc
-#if 0
+    /// Can be safely cast into JITSortDescriptionFunc
     void * compiled_sort_description = nullptr;
     std::shared_ptr<CompiledSortDescriptionFunctionHolder> compiled_sort_description_holder;
     size_t min_count_to_compile_sort_description = 3;
     bool compile_sort_description = false;
-#endif
 
     bool hasPrefix(const SortDescription & prefix) const;
 };
+
+/// Returns a copy of lhs containing only the prefix of columns matching rhs's columns.
+SortDescription commonPrefix(const SortDescription & lhs, const SortDescription & rhs);
+
+/** Compile sort description for header_types.
+  * Description is compiled only if compilation attempts to compile identical description is more than min_count_to_compile_sort_description.
+  */
+void compileSortDescriptionIfNeeded(SortDescription & description, const DataTypes & sort_description_types, bool increase_compile_attempts);
 
 /// Outputs user-readable description into `out`.
 void dumpSortDescription(const SortDescription & description, WriteBuffer & out);

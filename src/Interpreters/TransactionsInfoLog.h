@@ -52,7 +52,7 @@ class TransactionsInfoLog : public SystemLog<TransactionsInfoLogElement>
 };
 
 
-void tryWriteEventToSystemLog(Poco::Logger * log, TransactionsInfoLogElement::Type type,
+void tryWriteEventToSystemLog(LoggerPtr log, TransactionsInfoLogElement::Type type,
                               const TransactionID & tid, const TransactionInfoContext & context);
 
 }

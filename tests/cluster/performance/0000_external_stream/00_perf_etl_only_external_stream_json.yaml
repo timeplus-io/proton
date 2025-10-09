@@ -1,0 +1,250 @@
+tags:
+  - materialized view
+
+description: |
+  Test External Stream -> MV -> Target Stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      CREATE STREAM ipfix_mstream
+      (
+        `ipv4_src_ip` int32,
+        `ipv4_dst_ip` int32,
+        `start_time` int32,
+        `end_time` int32,
+        `pkt_count` int32,
+        `byte_count` int32,
+        `l4_src_port` int16,
+        `l4_dst_port` int16,
+        `protocol` int8,
+        `tcp_flags` int8,
+        `tags` string,
+        `input_if_id` int16,
+        `output_if_id` int16
+      )
+      SETTINGS shards = 4
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM INIPFlow_ext (
+        ipv4_src_ip int32,
+        ipv4_dst_ip int32,
+        ipv4_next_hop int64,
+        input_if_id int16,
+        output_if_id int16,
+        pkt_count int32,
+        byte_count int32,
+        start_time int32,  
+        end_time int32,    
+        l4_src_port int16,
+        l4_dst_port int16,
+        tcp_flags int8,
+        protocol int8,
+        tos int8,
+        src_as int16,
+        dst_as int16,
+        ipv4_src_mask int8,
+        ipv4_dst_mask int8,
+        sample_rate int8,
+        ipv6_src_ip int64,
+        ipv6_dst_ip int64,
+        ipv6_next_hop int64,
+        src_vlan int8,
+        dst_vlan int8,
+        dst_as_path_1 int16,
+        dst_as_path_2 int16,
+        dst_as_path_3 int16,
+        dst_as_path_4 int16,
+        src_lon_lat string,
+        dst_lon_lat string,
+        dst_city int8,
+        dst_country int8,
+        dst_region int8,
+        dst_continent int8,
+        src_city int8,
+        src_country int8,
+        src_region int8,
+        src_continent int8,
+        mpls_label_1 int8,
+        mpls_label_2 int8,
+        mpls_label_3 int8,
+        mpls_label_4 int8,
+        mpls_label_5 int8,
+        mpls_label_6 int8,
+        mpls_exp_val int8,
+        tags string,
+        device_ip int16,
+        icmp_type int8,
+        bps int32,
+        pps int32,
+        service int8,
+        ipv4_bgp_next_hop int16,
+        ipv6_bgp_next_hop int64,
+        community_as_1 int16,
+        community_value_1 int16,
+        community_as_2 int16,
+        community_value_2 int16,
+        community_as_3 int16,
+        community_value_3 int16,
+        community_as_4 int16,
+        community_value_4 int16,
+        extended_community_type int8,
+        extended_community_subtype int8,
+        extended_community_admin int16,
+        extended_community_assign_num int16,
+        route_distinguisher int32,
+        _tp_message_key string
+      ) SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format = 'JSONEachRow'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW IF NOT EXISTS INIPFlowmsstream_mv INTO ipfix_mstream AS
+      SELECT
+        ipv4_src_ip, ipv4_dst_ip, start_time, end_time, pkt_count, byte_count, l4_src_port, l4_dst_port, protocol, tcp_flags, _tp_message_key as tags, input_if_id, output_if_id
+      FROM
+        INIPFlow_ext
+      SETTINGS
+        max_insert_threads = 4
+
+  - type: wait
+    time: 2
+
+  - type: generator
+    name: gen
+    batch_size: 2000 # 1000
+    buffer_size: 5000 # 2000
+    concurrency: 10
+    interval_ms: 175
+    dataset: perf_0000.bin
+    format: native
+    primary_key: ipv4_src_ip
+    schema:
+      - name: ipv4_src_ip
+        type: int32
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 4294967295
+      - name: ipv4_dst_ip
+        type: int32
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 4294967295
+      - name: start_time
+        type: int32
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 86400
+      - name: end_time
+        type: int32
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 86400
+      - name: pkt_count
+        type: int32
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 100000
+      - name: byte_count
+        type: int32
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 23
+      - name: l4_src_port
+        type: int16
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 65535
+      - name: l4_dst_port
+        type: int16
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 65535
+      - name: protocol
+        type: int8
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 255
+      - name: tcp_flags
+        type: int8
+        rule:
+          type: random_int
+          params:
+            min: 0
+            max: 255
+      - name: tags
+        type: string
+        rule:
+          type: random_string
+          params:
+            min: 5
+            max: 15
+      - name: input_if_id
+        type: int16
+        rule:
+          type: random_int
+          params:
+            min: -32768
+            max: 32768
+      - name: output_if_id
+        type: int16
+        rule:
+          type: random_int
+          params:
+            min: -127
+            max: 128
+
+  - type: json_format
+    name: format
+    source: gen
+    concurrency: 30
+    buffer_size: 2000
+
+  - type: kafka_dataloader
+    source: format
+    sink: test
+    concurrency: 30
+
+  - type: wait
+    time: 45
+
+  - name: ext-0-1
+    type: stream
+    query: select count() from table(ipfix_mstream)
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 6

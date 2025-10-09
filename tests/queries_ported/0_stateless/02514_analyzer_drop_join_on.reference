@@ -1,0 +1,119 @@
+-- { echoOn }
+
+EXPLAIN PLAN header = 1
+SELECT count() FROM a JOIN b ON b.b1 = a.a1 JOIN c ON c.c1 = b.b1 JOIN d ON d.d1 = c.c1 GROUP BY a.a2
+;
+Expression ((Projection + Before ORDER BY))
+Header: count() uint64
+  Aggregating
+  Header: a2 string
+          count() uint64
+    Expression (Before GROUP BY)
+    Header: a2 string
+            c1 uint64
+      Join (JOIN FillRightFirst)
+      Header: a2 string
+              c1 uint64
+        Expression ((Before JOIN + (Projection + Before ORDER BY)))
+        Header: a2 string
+                c1 uint64
+          Join (JOIN FillRightFirst)
+          Header: a2 string
+                  b1 uint64
+                  c1 uint64
+            Expression ((Before JOIN + (Projection + Before ORDER BY)))
+            Header: a2 string
+                    b1 uint64
+              Join (JOIN FillRightFirst)
+              Header: a1 uint64
+                      a2 string
+                      b1 uint64
+                Expression (Before JOIN)
+                Header: a1 uint64
+                        a2 string
+                  ReadFromStorage (Memory)
+                  Header: a1 uint64
+                          a2 string
+                Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+                Header: b1 uint64
+                  ReadFromStorage (Memory)
+                  Header: b1 uint64
+            Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+            Header: c1 uint64
+              ReadFromStorage (Memory)
+              Header: c1 uint64
+        Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+        Header: d1 uint64
+          ReadFromStorage (Memory)
+          Header: d1 uint64
+EXPLAIN PLAN header = 1
+SELECT a.a2, d.d2 FROM a JOIN b USING (k) JOIN c USING (k) JOIN d USING (k)
+; -- {serverError 48 }
+EXPLAIN PLAN header = 1
+SELECT b.bx FROM a
+JOIN (SELECT b1, b2 || 'x'  AS bx FROM b ) AS b ON b.b1 = a.a1
+JOIN c ON c.c1 = b.b1
+JOIN (SELECT number AS d1 from numbers(10)) AS d ON d.d1 = c.c1
+WHERE c.c2 != '' ORDER BY a.a2
+;
+Expression (Projection)
+Header: b.bx string
+  Sorting (Sorting for ORDER BY)
+  Header: a2 string
+          bx string
+    Expression ((Before ORDER BY + ))
+    Header: a2 string
+            bx string
+      Join (JOIN FillRightFirst)
+      Header: a2 string
+              bx string
+              c1 uint64
+              c2 string
+        Expression
+        Header: a2 string
+                bx string
+                c1 uint64
+                c2 string
+          Join (JOIN FillRightFirst)
+          Header: a2 string
+                  b1 uint64
+                  bx string
+                  c2 string
+                  c1 uint64
+            Expression ((Before JOIN + (Projection + Before ORDER BY)))
+            Header: a2 string
+                    b1 uint64
+                    bx string
+              Join (JOIN FillRightFirst)
+              Header: a1 uint64
+                      a2 string
+                      bx string
+                      b1 uint64
+                Expression (Before JOIN)
+                Header: a1 uint64
+                        a2 string
+                  ReadFromStorage (Memory)
+                  Header: a1 uint64
+                          a2 string
+                Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+                Header: b1 uint64
+                        bx string
+                  ReadFromStorage (Memory)
+                  Header: b1 uint64
+                          b2 string
+            Filter
+            Header: c1 uint64
+                    c2 string
+              Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+              Header: c1 uint64
+                      c2 string
+                Filter (WHERE)
+                Header: c1 uint64
+                        c2 string
+                  ReadFromStorage (Memory)
+                  Header: c1 uint64
+                          c2 string
+        Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+        Header: d1 uint64
+          ReadFromSystemNumbers
+          Header: number uint64

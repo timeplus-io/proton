@@ -1,0 +1,176 @@
+tags:
+- udf
+
+description: |
+  Test drop and recreate s3 external table
+  Main Steps:
+    1.Create minio bucket
+    2.Create s3 external table
+    3.Create JS UDF
+    4.Ingest data into external table
+    5.Check external table data
+    6.Check JS UDF data
+    7.Drop function, external table, minio bucket
+    8.Repeat Step 1-7
+
+steps:
+  - type: minio
+    name: delete
+    bucket: smoketest-02
+
+  - type: minio
+    name: create
+    bucket: smoketest-02
+
+  - type: query
+    sql: drop stream if exists ex_s3_02
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external table ex_s3_02 (
+        key string,
+        value int32
+      )
+      settings
+        type='s3', endpoint='http://minio:9000', bucket='smoketest-02', access_key_id='minioroot', secret_access_key='minioroot',
+        write_to='02_drop_recreate/data.json', s3_min_upload_file_size=100, s3_max_upload_idle_seconds=2;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five(value int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+        function add_five(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+5;
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_s3_02 values 
+      ('key No. 1', 10000)('key No. 2', 20000)('key No. 3', 40000);
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: s3-02-01
+    query: select key, value, _file from ex_s3_02;
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+      - name: _file
+        type: low_cardinality(string)
+
+  - type: stream
+    name: s3-02-02
+    query: select add_five(value) as res from ex_s3_02;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: s3-02-01
+    expected_result:
+      - ['key No. 1', 10000, any_value]
+      - ['key No. 2', 20000, any_value]
+      - ['key No. 3', 40000, any_value]
+
+  - type: check
+    target_name: s3-02-02
+    expected_result:
+      - [10005]
+      - [20005]
+      - [40005]
+
+  # drop and recreate
+  - type: minio
+    name: delete
+    bucket: smoketest-02
+
+  - type: minio
+    name: create
+    bucket: smoketest-02
+
+  - type: query
+    sql: drop stream if exists ex_s3_02
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external table ex_s3_02 (
+        key string,
+        value int32
+      )
+      settings
+        type='s3', endpoint='http://minio:9000', bucket='smoketest-02', access_key_id='minioroot', secret_access_key='minioroot',
+        write_to='02_drop_recreate/data.json', s3_min_upload_file_size=100, s3_max_upload_idle_seconds=2;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five(value int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+        function add_five(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+5;
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_s3_02 values 
+      ('key No. 4', 40000)('key No. 5', 50000);
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: s3-02-01
+    query: select key, value, _file from ex_s3_02;
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+      - name: _file
+        type: low_cardinality(string)
+
+  - type: stream
+    name: s3-02-02
+    query: select add_five(value) as res from ex_s3_02;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: s3-02-01
+    expected_result:
+      - ['key No. 4', 40000, any_value]
+      - ['key No. 5', 50000, any_value]
+
+  - type: check
+    target_name: s3-02-02
+    expected_result:
+      - [40005]
+      - [50005]

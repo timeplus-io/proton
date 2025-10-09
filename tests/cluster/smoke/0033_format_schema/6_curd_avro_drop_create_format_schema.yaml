@@ -1,0 +1,241 @@
+tags:
+- avro
+- bug # https://github.com/timeplus-io/proton-enterprise/issues/8475
+
+description: |
+  Test drop and re-create avro format schema, cover drop w/wo type specified
+  Steps:
+    1.create format schema
+    2.check create success with "show format schemas"
+    3.drop format schema with "drop format schema type protobuf"
+    4.check drop success with "show format schemas"
+    5.create format schema
+    6.check recreate success with "show format schemas"
+    7.check recreate content with "show create format schema"
+    8.drop format schema "drop format schema"
+    9.repeat step 4-8
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_format_schema_06;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE FORMAT SCHEMA test_format_schema_06 AS
+    $$
+    {
+      "namespace": "example.avro",
+      "type": "record",
+      "name": "User",
+      "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "favorite_number",  "type": ["int", "null"]},
+        {"name": "favorite_color", "type": ["string", "null"]}
+      ]
+    }
+    $$
+    TYPE Avro;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-6-1
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: wait
+  time: 1
+
+# drop with type specified
+- type: query
+  sql: DROP FORMAT SCHEMA test_format_schema_06 TYPE Avro;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-6-2
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE FORMAT SCHEMA test_format_schema_06 AS
+    $$
+    {
+      "namespace": "example.avro",
+      "type": "record",
+      "name": "User",
+      "fields": [
+        {"name": "name1", "type": "string"},
+        {"name": "favorite_number",  "type": ["string", "null"]}
+      ]
+    }
+    $$
+    TYPE Avro;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-6-3
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: stream
+  name: fmt-6-4
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_06;
+  schema:
+    - name: statement
+      type: string
+
+- type: wait
+  time: 1
+
+- type: check
+  target_name: fmt-6-1
+  expected_result:
+    - [ 'test_format_schema_06', 'Avro' ]
+
+- type: check
+  target_name: fmt-6-2
+  expected_result:
+    - []
+
+- type: check
+  target_name: fmt-6-3
+  expected_result:
+    - [ 'test_format_schema_06', 'Avro' ]
+
+- type: check
+  target_name: fmt-6-4
+  expected_result:
+     -
+      - |-
+        CREATE FORMAT SCHEMA test_format_schema_06 AS
+        $$
+        {
+          "namespace": "example.avro",
+          "type": "record",
+          "name": "User",
+          "fields": [
+            {"name": "name1", "type": "string"},
+            {"name": "favorite_number",  "type": ["string", "null"]}
+          ]
+        }
+        $$
+        TYPE Avro
+
+# drop without type specified
+- type: query
+  sql: DROP FORMAT SCHEMA test_format_schema_06;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-6-5
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE FORMAT SCHEMA test_format_schema_06 AS
+    $$
+    {
+      "namespace": "example.avro",
+      "type": "record",
+      "name": "User",
+      "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "favorite_number",  "type": ["int", "null"]},
+        {"name": "favorite_color", "type": ["string", "null"]}
+      ]
+    }
+    $$
+    TYPE Avro;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-6-6
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: stream
+  name: fmt-6-7
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_06;
+  schema:
+    - name: statement
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_format_schema_06;
+
+- type: check
+  target_name: fmt-6-5
+  expected_result:
+    - []
+
+- type: check
+  target_name: fmt-6-6
+  expected_result:
+    - [ 'test_format_schema_06', 'Avro' ]
+
+- type: check
+  target_name: fmt-6-7
+  expected_result:
+     -
+      - |-
+        CREATE FORMAT SCHEMA test_format_schema_06 AS
+        $$
+        {
+          "namespace": "example.avro",
+          "type": "record",
+          "name": "User",
+          "fields": [
+            {"name": "name", "type": "string"},
+            {"name": "favorite_number",  "type": ["int", "null"]},
+            {"name": "favorite_color", "type": ["string", "null"]}
+          ]
+        }
+        $$
+        TYPE Avro

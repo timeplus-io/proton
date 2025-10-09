@@ -100,7 +100,7 @@
         },
         {
             "id": 10,
-            "tags": ["ddl"],
+            "tags": ["ddl", "bug"],
             "name": "stream rename",
             "description": "create a table test_ingest, ingest and rename and ingest to new name",
             "steps":[

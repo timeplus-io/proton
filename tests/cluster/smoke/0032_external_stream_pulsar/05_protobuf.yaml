@@ -1,0 +1,78 @@
+tags:
+- protobuf
+
+description: Test Pulsar external stream with ProtobufSingle format with local schema.
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_05
+
+  - type: pulsar
+    name: create
+    topic: test_05
+
+  - type: query
+    sql: DROP FORMAT SCHEMA IF EXISTS pulsar_test_05;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA pulsar_test_05 AS
+        $$
+        syntax = "proto3";
+        message SearchRequest { 
+          string query = 1;
+          int32 page_number = 2;
+          int32 results_per_page = 3;
+        }
+        $$
+        TYPE Protobuf
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS ex_pulsar_05
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream ex_pulsar_05
+        (
+          query string,
+          page_number int32,
+          results_per_page int32
+        )
+        settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_05',
+        data_format = 'ProtobufSingle', format_schema = 'pulsar_test_05:SearchRequest'
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-05
+    query: SELECT * FROM ex_pulsar_05
+    schema:
+      - name: query
+        type: string
+      - name: page_number
+        type: int32
+      - name: results_per_page
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ex_pulsar_05(query, page_number, results_per_page) values ('one', 1, 10)('two', 2, 20)('three', 3, 30)('four', 4, 40)
+
+  - type: check
+    target_name: pulsar-05
+    expected_result:
+      - ['one', 1, 10]
+      - ['two', 2, 20]
+      - ['three', 3, 30]
+      - ['four', 4, 40]

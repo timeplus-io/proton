@@ -1,0 +1,33 @@
+tags:
+- udf
+description: scalar udf with exception
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five_e
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    source: function test_23_add_five_e(value) { throw new Error('udf exception');}
+- type: wait
+  time: 5
+
+- name: udf-16
+  type: stream
+  query: select test_23_add_five_e(3.0) as res
+  schema:
+  - name: res
+    type: float32
+
+- type: check
+  target_name: udf-16
+  expected_result:
+  - ["error_code:2533"]

@@ -1,0 +1,62 @@
+tags:
+  - backfill
+  - virtual_column
+description: (#370) Covering backfill from historical with virtual columns test
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists fixed_test_stream_99
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream fixed_test_stream_99
+        (
+          id int,
+          value int
+        )
+        settings shards=3, sharding_expr='weak_hash32(id)'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into fixed_test_stream_99(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: int32
+    inputs:
+      - [1, 2]
+
+  - type: stream
+    name: 9920
+    query: select id, _tp_shard from fixed_test_stream_99 where _tp_time > earliest_ts() settings enable_backfill_from_historical_store=true
+    schema:
+      - name: id
+        type: int32
+      - name: _tp_shard
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into fixed_test_stream_99(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: int32
+    inputs:
+      - [2, 2]
+      - [3, 3]
+
+  - type: check
+    target_name: 9920
+    mode: random
+    expected_result:
+      - [1, 0]
+      - [2, 0]
+      - [3, 2]

@@ -7,6 +7,9 @@
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNested.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Parsers/queryToString.h>
@@ -62,7 +65,11 @@ StorageSystemPartsColumns::StorageSystemPartsColumns(const StorageID & table_id_
         {"serialization_kind",                         std::make_shared<DataTypeString>()},
         {"subcolumns.names",                           std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"subcolumns.types",                           std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
-        {"subcolumns.serializations",                  std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}
+        {"subcolumns.serializations",                  std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        {"subcolumns.bytes_on_disk",                   std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
+        {"subcolumns.data_compressed_bytes",           std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
+        {"subcolumns.data_uncompressed_bytes",         std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
+        {"subcolumns.marks_bytes",                     std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
     }
     )
 {
@@ -79,7 +86,8 @@ void StorageSystemPartsColumns::processNextStorage(
     };
 
     std::unordered_map<String, ColumnInfo> columns_info;
-    for (const auto & column : info.storage->getInMemoryMetadataPtr()->getColumns())
+    auto metadata_snapshot = info.storage->getInMemoryMetadataPtr();
+    for (const auto & column : metadata_snapshot->getColumns())
     {
         ColumnInfo column_info;
         if (column.default_desc.expression)
@@ -118,11 +126,8 @@ void StorageSystemPartsColumns::processNextStorage(
             ++column_position;
             size_t src_index = 0, res_index = 0;
             if (columns_mask[src_index++])
-            {
-                WriteBufferFromOwnString out;
-                part->partition.serializeText(*info.data, out, format_settings);
-                columns[res_index++]->insert(out.str());
-            }
+                columns[res_index++]->insert(part->partition.serializeToString(part->getMetadataSnapshot()));
+
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(part->name);
             if (columns_mask[src_index++])
@@ -185,7 +190,16 @@ void StorageSystemPartsColumns::processNextStorage(
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(part->getDataPartStorage().getDiskName());
             if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->getDataPartStorage().getFullPath());
+            {
+                /// The full path changes at clean up thread, so do not read it if parts can be deleted, avoid the race.
+                if (part->isStoredOnDisk()
+                    && part_state != State::Deleting && part_state != State::DeleteOnDestroy && part_state != State::Temporary)
+                {
+                    columns[res_index++]->insert(part->getDataPartStorage().getFullPath());
+                }
+                else
+                    columns[res_index++]->insertDefault();
+            }
 
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(column.name);
@@ -226,13 +240,46 @@ void StorageSystemPartsColumns::processNextStorage(
 
             Array subcolumn_names;
             Array subcolumn_types;
-            Array subcolumn_sers;
+            Array subcolumn_serializations;
+            Array subcolumn_bytes_on_disk;
+            Array subcolumn_data_compressed_bytes;
+            Array subcolumn_data_uncompressed_bytes;
+            Array subcolumn_marks_bytes;
 
-            IDataType::forEachSubcolumn([&](const auto &, const auto & name, const auto & data)
+            IDataType::forEachSubcolumn([&](const auto & subpath, const auto & name, const auto & data)
             {
+                /// We count only final subcolumns, which are represented by files on disk
+                /// and skip intermediate subcolumns of types Tuple and Nested.
+                if (isTuple(data.type) || isNested(data.type))
+                    return;
+
                 subcolumn_names.push_back(name);
                 subcolumn_types.push_back(data.type->getName());
-                subcolumn_sers.push_back(ISerialization::kindToString(data.serialization->getKind()));
+                subcolumn_serializations.push_back(ISerialization::kindToString(data.serialization->getKind()));
+
+                ColumnSize size;
+                NameAndTypePair subcolumn(column.name, name, column.type, data.type);
+
+                auto stream_name = IMergeTreeDataPart::getStreamNameForColumn(subcolumn, subpath, part->checksums);
+                if (stream_name)
+                {
+                    auto bin_checksum = part->checksums.files.find(*stream_name + ".bin");
+                    if (bin_checksum != part->checksums.files.end())
+                    {
+                        size.data_compressed += bin_checksum->second.file_size;
+                        size.data_uncompressed += bin_checksum->second.uncompressed_size;
+                    }
+
+                    auto mrk_checksum = part->checksums.files.find(*stream_name + part->index_granularity_info.mark_type.getFileExtension());
+                    if (mrk_checksum != part->checksums.files.end())
+                        size.marks += mrk_checksum->second.file_size;
+                }
+
+                subcolumn_bytes_on_disk.push_back(size.data_compressed + size.marks);
+                subcolumn_data_compressed_bytes.push_back(size.data_compressed);
+                subcolumn_data_uncompressed_bytes.push_back(size.data_uncompressed);
+                subcolumn_marks_bytes.push_back(size.marks);
+
             }, ISerialization::SubstreamData(serialization).withType(column.type));
 
             if (columns_mask[src_index++])
@@ -240,7 +287,15 @@ void StorageSystemPartsColumns::processNextStorage(
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(subcolumn_types);
             if (columns_mask[src_index++])
-                columns[res_index++]->insert(subcolumn_sers);
+                columns[res_index++]->insert(subcolumn_serializations);
+            if (columns_mask[src_index++])
+                columns[res_index++]->insert(subcolumn_bytes_on_disk);
+            if (columns_mask[src_index++])
+                columns[res_index++]->insert(subcolumn_data_compressed_bytes);
+            if (columns_mask[src_index++])
+                columns[res_index++]->insert(subcolumn_data_uncompressed_bytes);
+            if (columns_mask[src_index++])
+                columns[res_index++]->insert(subcolumn_marks_bytes);
 
             if (has_state_column)
                 columns[res_index++]->insert(part->stateString());

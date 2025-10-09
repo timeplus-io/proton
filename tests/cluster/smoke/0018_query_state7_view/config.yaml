@@ -1,0 +1,48 @@
+name: query_state7
+description: Tests covering query state checkpointing smoke test cases
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: drop view if exists test19_state_view7
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: drop view if exists test19_state_mv7
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: drop stream if exists test19_state_stream7
+  - type: query
+    sql: drop stream if exists view_join
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream view_join (id string, type string)
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into view_join(id, type) values
+    schema:
+    - name: id
+      type: string
+    - name: type
+      type: string
+    inputs:
+    - [dev1, 'roof']
+    - [dev2, 'field']
+    - [dev3, 'window']
+    - [dev4, 'wall']
+    - [dev5, 'roof']
+    - [dev6, 'window']
+    - [dev7, 'wall']
+    - [dev8, 'floor']

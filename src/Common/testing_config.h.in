@@ -1,0 +1,3 @@
+#pragma once
+
+#cmakedefine01 USE_TESTING_HARNESS

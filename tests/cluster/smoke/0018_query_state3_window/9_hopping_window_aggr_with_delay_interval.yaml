@@ -1,0 +1,150 @@
+tags:
+  - query_state
+description: hopping window aggregation with delay interval state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream3
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream3 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1973'
+    query_id: '1973'
+    type: stream
+    query: subscribe to select emit_version(), id, count(*), window_start, window_end
+      from hop(test19_state_stream3, timestamp, interval 3 second, interval 5 second)
+      group by id, window_start, window_end emit stream after window close with delay interval
+      2 second settings checkpoint_interval=1
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - name: '19731'
+    query_id: '19731'
+    type: stream
+    query: subscribe to select emit_version(), id, count(*), window_start, window_end
+      from hop(test19_state_stream3, timestamp, interval 3 second, interval 5 second)
+      group by id, window_start, window_end emit stream after watermark with delay interval
+      2 second settings checkpoint_interval=1
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 51, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 52, '2020-02-02 20:00:02')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 53, '2020-02-02 20:00:05')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 54, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 55, '2020-02-02 20:00:08')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 67, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 55, '2020-02-02 20:00:06')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 67, '2020-02-02 20:00:11')
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id = '1973'
+
+  - type: query
+    sql: kill query where query_id = '19731'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1973'
+
+  - type: query
+    sql: unsubscribe to '19731'
+
+  - type: check
+    target_name: '1973'
+    mode: random
+    expected_result:
+      - [ '0', dev1, '1', '2020-02-02 19:59:57', '2020-02-02 20:00:02' ]
+      - [ '1', dev1, '2', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '1', dev2, '1', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '2', dev1, '2', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]
+      - [ '2', dev2, '1', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]
+
+  - type: check
+    target_name: '19731'
+    mode: random
+    expected_result:
+      - [ '0', dev1, '1', '2020-02-02 19:59:57', '2020-02-02 20:00:02' ]
+      - [ '1', dev1, '2', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '1', dev2, '1', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '2', dev1, '2', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]
+      - [ '2', dev2, '1', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]

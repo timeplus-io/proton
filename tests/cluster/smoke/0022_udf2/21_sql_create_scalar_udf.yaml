@@ -1,0 +1,66 @@
+tags:
+- local-run
+- udf2
+description: SQL - scalar UDF
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: DROP FUNCTION IF EXISTS test_add_five_5;
+- type: wait
+  time: 1
+
+- name: udf-21-0
+  type: query
+  sql: "CREATE OR REPLACE FUNCTION test_add_five_5(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+          function test_add_five_5(value) {
+            for(let i=0;i<value.length;i++) {
+              value[i]=value[i]+5;
+            }
+            return value;
+          }
+        $$;"
+- type: wait
+  time: 2
+
+- name: udf-21-1
+  type: stream
+  query: DESCRIBE (SELECT test_add_five_5(1) AS a);
+  schema:
+  - name: name
+    type: string
+  - name: type
+    type: string
+  - name: default_type
+    type: string
+  - name: default_expression
+    type: string
+  - name: comment
+    type: string
+  - name: codec_expression
+    type: string
+  - name: ttl_expression
+    type: string
+- type: wait
+  time: 1
+
+- name: udf-21-2
+  type: query
+  sql: DROP FUNCTION test_add_five_5;
+- type: wait
+  time: 2
+
+- name: udf-21-3
+  type: stream
+  query: SELECT test_add_five_5(1)
+
+- type: check
+  target_name: udf-21-1
+  expected_result:
+  - ['a', 'float32', '', '', '', '', '']
+
+- type: check
+  target_name: udf-21-3
+  expected_result:
+  - ["error_code:46"]

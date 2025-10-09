@@ -1,0 +1,162 @@
+tags:
+  - materialized view
+  - kafka
+  - external_stream
+  - restapi
+
+description: |
+  Tests covering the logstore_retention_bytes scenario.
+  Main steps:
+  - modify logstore_retention_bytes setting in ddl with ALTER
+  - insert data for 1 min
+  - check native log dirctory and verify retention
+  - check container log contains "default.test3807_target1.0: Found {} segments to delete, applied_sn={} retention_ms={} retention_size={} min_size_to_keep={} reason=retention_size_breached"
+
+cluster:
+  - p1k1
+
+steps:
+  # create topic
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  # create stream & mv
+  - type: query
+    sql: drop view if exists test3807_mv;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test3807_rd;
+
+  - type: query
+    sql: drop stream if exists test3807_target1;
+
+  - type: query
+    sql: drop stream if exists test3807_external;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create random stream test3807_rd (
+        id string default to_string(rand() % 100),
+        value string default 'abcd'
+      );
+
+  - type: query
+    sql: create stream test3807_target1 (id int64, value string);
+
+  - type: wait
+    time: 2
+
+
+  - type: command
+    node: [p1]
+    shell: |
+      curl -X PATCH http://localhost:3218/proton/v1/ddl/streams/test3807_target1 \
+        -H "Content-Type: application/json" \
+        -d '{"logstore_retention_bytes": 2097152}'
+  - type: wait
+    time: 1
+
+
+  - name: verify-curl-patch
+    type: command
+    node: [p1]
+    shell: curl -s -X GET http://localhost:8123/proton/v1/ddl/streams/default/test3807_target1 | jq -r '.data[0].logstore_retention_bytes'
+
+  - type: check
+    target_name: verify-curl-patch
+    expected_result: ["2097152"]
+
+
+  - type: query
+    sql: |
+      create external stream test3807_external (id int64, value string)
+      settings type='kafka',
+               brokers='stream-store:9092',
+               topic='test',
+               data_format='JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create materialized view test3807_mv into test3807_target1 as select to_int64(id), value from test3807_external;
+  - type: wait
+    time: 1
+
+  - type: wait
+    time: 8 # wait some time for nativelog created
+
+  - name: auto-truncate-7-1
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test3807_target1';")
+
+      # verify mv first-line native log exists
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+      [ -f "$first_record" ] && echo "true" || echo "After creating mv, there should be one native log, but none was found. ($first_record)"
+
+  - type: check
+    target_name: auto-truncate-7-1
+    expected_result: ["true"]
+
+  - type: wait
+    time: 1
+
+  # insert data
+  - type: stream
+    query: |
+      insert into test38_external select id, value
+      from test38_rd settings eps=50000;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: string
+  
+  - type: wait
+    time: 15 # wait some time for auto truncate take effect
+
+  # check
+  - name: auto-truncate-7-2
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test3807_target1';")
+
+      # verify mv first-line native log removed after auto truncate
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+
+      [ ! -e "$first_record" ] && echo "true" || { echo "After inserting data, the first native log should have been removed, but it was not. ($first_record)"; ls -ltrh /var/lib/proton/nativelog/default/${uuid}.0; }
+
+  - type: check
+    target_name: auto-truncate-7-2
+    expected_result: ["true"]
+
+  - name: auto-truncate-7-3
+    type: command
+    node: [p1]
+    shell: |
+      log=/var/log/proton-server/proton-server.log
+      [ $(grep "test3807_target1" $log | grep -o "reason=retention_size_breached" | wc -l) -ge 1 ] && echo "true" || echo "expect log reason=retention_size_breached not found"
+
+  - type: check
+    target_name: auto-truncate-7-3
+    expected_result: ["true"]

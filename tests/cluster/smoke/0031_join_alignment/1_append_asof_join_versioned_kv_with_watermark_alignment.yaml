@@ -1,0 +1,217 @@
+tags:
+- join watermark alignment
+- asof join
+- query state
+description: streaming append (left) asof join versioned_kv with watermark alignment
+cluster:
+- p1k1
+# - p3k1 # subscribe to no support for cluster
+steps:
+- type: query
+  sql: drop stream if exists test_32_stream
+
+- type: query
+  sql: drop stream if exists test_32_stream_vk
+
+- type: query
+  sql: create stream test_32_stream
+      (
+        i int,
+        v string
+      )
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test_32_stream_vk
+      (
+        i int,
+        v string
+      ) primary key i settings shards=3
+- type: wait
+  time: 1
+
+- name: 3202
+  type: stream
+  query_id: '3202'
+  query: subscribe to with r1 as (select i as id, v, _tp_time from test_32_stream), r2 as (select i as id, v, _tp_time from test_32_stream_vk)
+            select r1.v, r2.v from r1 asof join r2 on r1.id = r2.id and r1._tp_time > r2._tp_time and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- name: 3203
+  type: stream
+  query_id: '3203'
+  query: subscribe to with r1 as (select i as id, v, _tp_time from test_32_stream), r2 as (select i as id, v, _tp_time from test_32_stream_vk)
+            select r1.v, r2.v from r1 left asof join r2 on r1.id = r2.id and r1._tp_time > r2._tp_time and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 't1', '2023-01-01 00:00:04']
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_32_stream_vk(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 't2', '2023-01-01 00:00:06']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tt1', '2023-01-01 00:00:05']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'ttt1', '2023-01-01 00:00:08']
+
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '3202'
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '3203'
+- type: wait
+  time: 3
+
+- name: 3202-1
+  type: stream
+  query: recover from '3202'
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- name: 3203-1
+  type: stream
+  query: recover from '3203'
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_32_stream_vk(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tt2', '2023-01-01 00:00:07']
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tttt1', '2023-01-01 00:00:09']
+
+- type: query
+  sql: insert into test_32_stream_vk(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'ttt2', '2023-01-01 00:00:10']
+
+- type: wait
+  time: 5
+
+- type: query
+  sql: unsubscribe to '3202'
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '3203'
+
+- type: check
+  target_name: 3202
+  expected_result: 
+    - []
+
+- type: check
+  target_name: 3202-1
+  expected_result:
+    - ["ttt1", "tt2"]
+    - ["tttt1", "tt2"]
+
+- type: check
+  target_name: 3203
+  expected_result:
+    - ["t1", ""]
+    - ["tt1", ""]
+
+- type: check
+  target_name: 3203-1
+  expected_result:
+    - ["ttt1", "tt2"]
+    - ["tttt1", "tt2"]

@@ -1,0 +1,77 @@
+tags:
+  - prepare
+  - pulsar
+  - protobuf
+  - format_schema
+
+description: prepare data for pulsar external stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: pulsar_proto_topic
+
+  - type: pulsar
+    name: create
+    topic: pulsar_proto_topic
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_proto
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop format schema if exists pproto_schema;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA pproto_schema AS
+      $$
+        syntax = "proto3";
+        message Sch1 {
+          int32 int32_c = 1;
+          int64 int64_c = 2;
+          uint32 uint32_c = 3;
+          uint64 uint64_c = 4;
+          bool bool_c = 5;
+          string string_c = 6;
+          map<string, int32> map_c = 7;
+          enum EnumType {a = 0; b = 1; z = 26;}
+          EnumType enum_c = 8;
+          repeated int32 array_c = 9;
+        }
+      $$
+      TYPE Protobuf;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_proto
+      (
+        int32_c int32,
+        int64_c int64,
+        uint32_c uint32,
+        uint64_c uint64,
+        bool_c bool,
+        string_c string,
+        map_c map(string, int),
+        enum_c enum('a'=0, 'b'=1, 'z'=26),
+        array_c array(int)
+      )
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='pulsar_proto_topic',
+      data_format = 'Protobuf', format_schema = 'pproto_schema:Sch1';
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_proto values 
+      (-2147483647, -9223372036854775807, 4294967295, 18446744073709551615,  true, 'aaaa', {'key1': 111}, 'a', [1, 2, 3]);

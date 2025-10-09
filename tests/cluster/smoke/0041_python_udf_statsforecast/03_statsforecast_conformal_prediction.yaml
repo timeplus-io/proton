@@ -1,0 +1,82 @@
+tags:
+  - uda
+
+description: Test covering python uda test on statsforecast function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (unique_id string, ds int, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION conformalTester(unique_id string, ds int, y float) RETURNS array(int) LANGUAGE PYTHON AS $$
+      import pandas as pd
+      from statsforecast import StatsForecast
+      from statsforecast.models import SeasonalExponentialSmoothing, ADIDA, ARIMA
+      from statsforecast.utils import ConformalIntervals
+
+      class conformalTester:
+          def __init__(self):
+              self.res = []
+              self.intervals = ConformalIntervals(h=7, n_windows=2)
+              self.models = [
+                  SeasonalExponentialSmoothing(season_length=7, alpha=0.1, prediction_intervals=self.intervals),
+                  ADIDA(prediction_intervals=self.intervals),
+                  ARIMA(order=(7,0,7), prediction_intervals=self.intervals),
+              ]
+              self.sf = StatsForecast(models=self.models, freq=1, n_jobs=-1)
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, unique_ids, dss, ys):
+              if len(unique_ids) < 15:
+                  return
+
+              df = pd.DataFrame(zip(unique_ids, dss, ys),
+                  columns=['unique_id', 'ds', 'y'])
+              forecasts = self.sf.forecast(df=df, h=7, level=[80])
+              self.res = [round(f) for f in forecasts.head()['ARIMA-lo-80'].tolist()]
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf11-3-1
+    type: stream
+    query: select conformalTester(unique_id, ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(int32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(unique_id, ds, y) values
+          ('H1', 1, 605.0) ('H1', 2, 586.0) ('H1', 3, 586.0)
+          ('H1', 4, 559.0) ('H1', 5, 511.0) ('H1', 6, 605.0)
+          ('H1', 7, 586.0) ('H1', 8, 586.0) ('H1', 9, 559.0)
+          ('H1', 10, 511.0) ('H1', 11, 605.0) ('H1', 12, 586.0)
+          ('H1', 13, 586.0)('H1', 14, 559.0) ('H1', 15, 511.0);
+
+  - type: check
+    target_name: python-udf11-3-1
+    expected_result:
+      - [[591, 572, 553, 493, 510]] # Local and CI environments cause results to vary in accuracy, so round up

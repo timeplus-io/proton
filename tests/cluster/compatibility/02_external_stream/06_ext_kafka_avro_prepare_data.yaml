@@ -1,0 +1,108 @@
+tags:
+  - prepare
+  - kafka
+  - avro
+  - format_schema
+
+description: prepare data for kafka external stream with avro format
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: kafka_avro_topic
+
+  - type: kafka
+    name: create
+    topic: kafka_avro_topic
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: query
+    sql: drop stream if exists ex_kafka_avro;
+
+  - type: query
+    sql: drop format schema if exists kavro_schema;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA kavro_schema AS '
+      {
+        "type": "record",
+        "name": "Person",
+        "fields": [
+            {"name": "int8_c", "type": "int"},
+            {"name": "int16_c", "type": "int"},
+            {"name": "int32_c", "type": "int"},
+            {"name": "int64_c", "type": "long"},
+            {"name": "uint8_c", "type": "int"},
+            {"name": "uint16_c", "type": "int"},
+            {"name": "uint32_c", "type": "int"},
+            {"name": "uint64_c", "type": "long"},
+            {"name": "float32_c", "type": "float"},
+            {"name": "float64_c", "type": "double"},
+            {"name": "string_c", "type": "string"},
+            {"name": "fixed_c", "type": {"type": "fixed", "name": "FixedType", "size": 32}},
+            {"name": "enum_c", "type": {"type": "enum", "name": "EnumType", "symbols": ["a", "b", "z"]}},
+            {"name": "array_c", "type": {"type": "array", "items": "int"}},
+            {"name": "map_c", "type": {"type": "map", "values": "int"}},
+            {"name": "tuple_c", "type": {"name": "Record", "type": "record",
+                    "fields": [{"name": "s", "type": "string"}, {"name": "i", "type": "int"}]}},
+            {"name": "array_tuple_c", "type": {"type": "array", 
+                    "items": {"name": "ArrayRecord", "type": "record",
+                    "fields": [{"name": "s", "type": "string"}, {"name": "i", "type": "int"}]}}},
+            {"name": "null_c", "type": ["null", "int"]},
+            {"name": "date_c", "type": {"type": "int", "logicalType": "date"}},
+            {"name": "datetime3_c", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+            {"name": "datetime6_c", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+            {"name": "uuid_c", "type": {"type": "string", "logicalType": "uuid"}}
+        ]
+      }
+      ' TYPE Avro;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_kafka_avro(
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        float32_c float32,
+        float64_c float64,
+        string_c string,
+        fixed_c fixed_string(32),
+        enum_c enum('a'=1, 'b'=2, 'z'=26),
+        array_c array(int32),
+        map_c map(string, int32),
+        tuple_c tuple(s string, i int),
+        array_tuple_c array(tuple(s string, i int)),
+        null_c nullable(int32),
+        date_c date,
+        datetime3_c datetime64(3),
+        datetime6_c datetime64(6),
+        uuid_c uuid
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'kafka_avro_topic',
+      data_format = 'Avro',
+      format_schema = 'kavro_schema';
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_kafka_avro (int8_c, int16_c, int32_c, int64_c, uint8_c, uint16_c, uint32_c, uint64_c, float32_c, float64_c, string_c, fixed_c, enum_c, array_c, map_c, tuple_c, array_tuple_c.s, array_tuple_c.i, null_c, date_c, datetime3_c, datetime6_c, uuid_c) values 
+      (-128, -32768, -2147483648, -9223372036854775808, 0, 0, 0, 0, -3.14, -2.718281828459, 'aaaa', '{@string}', 'a', [1, 2, 3], {'key1': 111}, ('a', 0), ['aa'], [0], null, '2024-01-01', '2024-01-01 00:00:01.000', '2024-01-01 00:00:01.000000', '928c88b9-f37a-41d5-bef5-9cb3663c2445')

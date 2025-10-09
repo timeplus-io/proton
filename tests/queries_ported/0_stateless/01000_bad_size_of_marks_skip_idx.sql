@@ -20,7 +20,7 @@ INSERT INTO bad_skip_idx SELECT number, concat('x', to_string(number)) FROM numb
 
 ALTER STREAM bad_skip_idx ADD INDEX idx value TYPE bloom_filter(0.01) GRANULARITY 4;
 
-OPTIMIZE TABLE bad_skip_idx FINAL;
+OPTIMIZE STREAM bad_skip_idx FINAL;
 
 SELECT count(*) from bad_skip_idx WHERE value = 'xxxxxxxxxx1015'; -- check no exception
 

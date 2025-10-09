@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering python uda test on pycaret.clustering function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (d1 int, d2 float, d3 string);
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION clusterTester(d1 int, d2 float, d3 string) RETURNS array(string) LANGUAGE PYTHON AS $$
+      import pandas as pd
+      from pycaret.clustering import ClusteringExperiment
+
+      class clusterTester:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, d1s, d2s, d3s):
+              if len(d1s) < 4:
+                  return
+              data=pd.DataFrame(zip(d1s, d2s, d3s),columns=['d1','d2','d3'])
+              s = ClusteringExperiment()
+              s.setup(data, normalize = True)
+              model = s.create_model('kmeans')
+              s.assign_model(model)
+              predictions = s.predict_model(model, data = data)
+              self.res = predictions['Cluster'].drop_duplicates().sort_values().tolist()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 4
+
+  - name: python-udf12-2-1
+    type: stream
+    query: select clusterTester(d1, d2, d3) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(string)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into uda_stream(d1, d2, d3) values
+          (1, 1.75, 'CH') (2, 1.75, 'CH') (3, 1.86, 'CH')
+          (4, 1.69, 'MM') (5, 1.69, 'CH');
+
+  - type: check
+    target_name: python-udf12-2-1
+    expected_result:
+      - [['Cluster 0', 'Cluster 1', 'Cluster 2', 'Cluster 3']]

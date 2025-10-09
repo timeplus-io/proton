@@ -1,0 +1,101 @@
+description: compression.codec - Compression codec to use for compressing message sets. inherit = inherit global compression.codec configuration.
+             compression.type - Alias for compression.codec:compression codec to use for compressing message sets.
+             compression.level - Compression level parameter for algorithm selected by configuration property compression.codec.
+             topic.metadata.refresh.interval.ms	 - Period of time in milliseconds at which topic and broker metadata is refreshed in order to proactively discover any new brokers, topics, partitions or partition leader changes.
+             statistics.interval.ms - librdkafka statistics emit interval. The application also needs to register a stats callback using rd_kafka_conf_set_stats_cb(). The granularity is 1000ms. A value of 0 disables statistics. Type:integer
+             log_level(no such config) - Logging level (syslog(3) levels) Type:integer
+             log.thread.name(no such config) - Print internal thread name in log messages (useful for debugging librdkafka internals) Type:boolean
+             log.connection.close(no such config) - Log broker disconnects. It might be useful to turn this off when interacting with 0.9 brokers with an aggressive connection.max.idle.ms value. Type:boolean
+             api.version.request.timeout.ms(no such config) - Timeout for broker API version requests. Type:integer
+             api.version.fallback.ms(no such config) - Dictates how long the broker.version.fallback fallback is used in the case the ApiVersionRequest fails. NOTE:The ApiVersionRequest is only issued when a new connection to the broker is made (such as after an upgrade). Type:integer
+             broker.version.fallback(no such config)- Older broker versions (before 0.10.0) provide no way for a client to query for supported protocol features (ApiVersionRequest, see api.version.request) making it impossible for the client to know what features it may use. As a workaround a user may set this property to the expected broker version and the client will automatically adjust its feature set accordingly if the ApiVersionRequest fails (or is disabled). The fallback broker version will be used for api.version.fallback.ms. Valid values are:0.9.0, 0.8.2, 0.8.1, 0.8.0. Any other value >= 0.10, such as 0.10.2.1, enables ApiVersionRequests. Type:string
+             enable.ssl.certificate.verification - Enable OpenSSL's builtin broker (server) certificate verification. This verification can be extended by the application by implementing a certificate_verify_cb. Type:boolean
+             ssl.endpoint.identification.algorithm - Endpoint identification algorithm to validate broker hostname using broker certificate. https - Server (broker) hostname verification as specified in RFC2818. none - No endpoint verification. OpenSSL >= 1.0.2 required. Type:enum value
+             ssl.certificate.verify_cb - Callback to verify the broker certificate chain. Type:see dedicated API
+             sasl.kerberos.service.name(no such config) - Kerberos principal name that Kafka runs as, not including /hostname@REALM Type:string
+             sasl.kerberos.principal(no such config) - This client's Kerberos principal name. (Not supported on Windows, will use the logon user's principal). Type:string
+             sasl.kerberos.min.time.before.relogin (no such config)- Minimum time in milliseconds between key refresh attempts. Disable automatic key refresh by setting this property to 0. Type:integer
+             enable.sasl.oauthbearer.unsecure.jwt (no such config)- Enable the builtin unsecure JWT OAUTHBEARER token handler if no oauthbearer_refresh_cb has been set. This builtin handler should only be used for development or testing, and not in production. Type:boolean
+             session.timeout.ms(no such config) - Client group session and failure detection timeout. The consumer sends periodic heartbeats (heartbeat.interval.ms) to indicate its liveness to the broker. If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance. The allowed range is configured with the broker configuration properties group.min.session.timeout.ms and group.max.session.timeout.ms. Also see max.poll.interval.ms. Type:integer
+             heartbeat.interval.ms (no such config)- Group session keepalive heartbeat interval. Type:integer
+             group.protocol.type (no such config) - Group protocol type. NOTE:Currently, the only supported group protocol type is consumer. Type:string
+
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test01
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: create
+    topic: test01
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test00_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test00_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test01', 
+        properties='enable.idempotence=true;enable.ssl.certificate.verification=true;compression.codec=gzip;
+        compression.type= gzip;compression.level= 0;
+        statistics.interval.ms= 1000;ssl.endpoint.identification.algorithm= https;
+        topic.metadata.refresh.interval.ms=1000'
+        
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: streaming-02-query
+    query: select * from test00_external
+    schema: 
+        - name: id
+          type: int32
+        - name: value
+          type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+
+  - type: check
+    target_name: streaming-02-query
+    expected_result:
+      - [1, 'aaaa']
+      - [2, 'bbbb']

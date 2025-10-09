@@ -31,7 +31,7 @@ int64_t lastModifiedTimeMS(const String & file_name)
 namespace DB
 {
 ExternalGrokPatterns::ExternalGrokPatterns(ContextPtr context_)
-    : log(&Poco::Logger::get("ExternalGrokPatterns")), pool(context_->getSchedulePool())
+    : log(getLogger("ExternalGrokPatterns")), pool(context_->getSchedulePool())
 {
     const auto & config = context_->getConfigRef();
     if (config.has("grok_patterns_file"))
@@ -52,8 +52,10 @@ ExternalGrokPatterns::~ExternalGrokPatterns()
 
 void ExternalGrokPatterns::shutdown()
 {
-    if (!is_shutdown.test_and_set())
-        reload_task->deactivate();
+    if (is_shutdown.test_and_set())
+        return;
+
+    reload_task->deactivate();
 }
 
 std::optional<String> ExternalGrokPatterns::tryGetPattern(const String & pattern_name) const

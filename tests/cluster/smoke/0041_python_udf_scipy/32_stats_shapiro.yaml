@@ -1,0 +1,67 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getShapiro(value int) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy import stats
+
+      class getShapiro:
+          def __init__(self):
+              self.statistic = 0
+
+          def serialize(self):
+              data = {}
+              data['statistic'] = self.statistic
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.statistic = data['statistic']
+
+          def merge(self, other):
+              pass
+
+          def process(self, values):
+              res = stats.shapiro(values).statistic
+              self.statistic = res
+
+          def finalize(self):
+              return float(self.statistic)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-32-1
+    type: stream
+    query: select getShapiro(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          (148)(154)(158)(160)(161)(162)(166)(170)(182)(195)(236);
+
+  - type: check
+    target_name: python-udf4-32-1
+    expected_result:
+      - [0.7888146948631716]

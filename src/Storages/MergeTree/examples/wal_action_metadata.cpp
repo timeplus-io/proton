@@ -3,6 +3,9 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/MergeTree/MergeTreeWriteAheadLog.h>
 
+
+bool LOG_PANIC_ABORT = true;
+
 namespace DB
 {
 namespace ErrorCodes

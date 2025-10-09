@@ -1,0 +1,43 @@
+SELECT
+  test_order_by.timestamp, test_order_by.key
+FROM
+  test_order_by
+ORDER BY
+  timestamp ASC
+LIMIT 10
+Expression (Projection)
+  Limit (preliminary LIMIT (without OFFSET))
+    Sorting (Sorting for ORDER BY)
+      Expression (Before ORDER BY)
+        ReadFromMergeTree (default.test_order_by)
+SELECT
+  test_order_by.timestamp, test_order_by.key
+FROM
+  test_order_by
+ORDER BY
+  to_date(timestamp) ASC
+LIMIT 10
+Expression (Projection)
+  Limit (preliminary LIMIT (without OFFSET))
+    Sorting
+      Expression (Before ORDER BY)
+        ReadFromMergeTree (default.test_order_by)
+SELECT
+  test_order_by.timestamp, test_order_by.key
+FROM
+  test_order_by
+ORDER BY
+  to_date(timestamp) ASC, timestamp ASC
+LIMIT 10
+Expression (Projection)
+  Limit (preliminary LIMIT (without OFFSET))
+    Sorting
+      Expression (Before ORDER BY)
+        ReadFromMergeTree (default.test_order_by)
+SELECT
+  test_order_by.timestamp, test_order_by.key
+FROM
+  test_order_by
+ORDER BY
+  timestamp ASC
+LIMIT 10

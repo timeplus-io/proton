@@ -12,7 +12,7 @@
 #include <TableFunctions/ITableFunction.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TableFunctions/TableFunctionGenerateRandom.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 
 #include "registerTableFunctions.h"
 
@@ -33,24 +33,25 @@ void TableFunctionGenerateRandom::parseArguments(const ASTPtr & ast_function, Co
 
     if (args_func.size() != 1)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' must have arguments.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Function '{}' must have arguments.", getName());
         /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
 
     if (args.empty())
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires at least one argument: "
-                        " structure, [random_seed, max_string_length, max_array_length].",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        /// proton: ends
+        throw Exception(
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Function '{}' requires at least one argument: structure, [random_seed, max_string_length, max_array_length].",
+            getName());
+    /// proton: ends
 
     if (args.size() > 4)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires at most four arguments: "
-                        " structure, [random_seed, max_string_length, max_array_length].",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        /// proton: ends
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                        "Function '{}' requires at most four arguments: "
+                        " structure, [random_seed, max_string_length, max_array_length].", getName());
+    /// proton: ends
 
     // All the arguments must be literals.
     for (const auto & arg : args)
@@ -58,10 +59,9 @@ void TableFunctionGenerateRandom::parseArguments(const ASTPtr & ast_function, Co
         if (!arg->as<const ASTLiteral>())
         {
             /// proton: starts
-            throw Exception(fmt::format(
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
                 "All arguments of function '{}' must be literals. "
-                "Got '{}' instead", getName(), arg->formatForErrorMessage()),
-                ErrorCodes::BAD_ARGUMENTS);
+                "Got '{}' instead", getName(), arg->formatForErrorMessage());
             /// proton: ends
         }
     }

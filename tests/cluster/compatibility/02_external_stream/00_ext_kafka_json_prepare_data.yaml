@@ -1,0 +1,65 @@
+tags:
+  - prepare
+  - kafka
+  - json
+
+description: prepare data for kafka external stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: kafka_json_topic
+
+  - type: kafka
+    name: create
+    topic: kafka_json_topic
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: query
+    sql: drop stream if exists ex_kafka_json;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_kafka_json
+      (
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uuid_c uuid,
+        string_c string,
+        float_c float,
+        decimal_c decimal32(3),
+        date_c date,
+        datetime_c datetime,
+        enum_c enum('a'=1, 'b'=2, 'z'=26),
+        tuple_c tuple(s string, i int),
+        ipv4_c ipv4,
+        ipv6_c ipv6,
+        map_c map(string, int),
+        array_c array(int)
+      )
+      settings type='kafka', brokers='k1:9092', topic='kafka_json_topic', data_format='JSONEachRow';
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_kafka_json (int8_c, int16_c, int32_c, int64_c, uint8_c, uint16_c, uint32_c, uint64_c, uuid_c, string_c, 
+        float_c, decimal_c, date_c, datetime_c, enum_c, tuple_c, ipv4_c, ipv6_c, map_c, array_c) 
+      values (
+        1, 2, 3, 4, 5, 6, 7, 8, '928c88b9-f37a-41d5-bef5-9cb3663c2445', '{@string}', 12345.123, 123456.123, '2022-03-24',
+      '2022-03-24 17:17:17', 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1, 2, 3]); 

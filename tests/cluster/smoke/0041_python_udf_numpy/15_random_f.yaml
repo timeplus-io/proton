@@ -1,0 +1,54 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (dfnum float, dfden float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_f(dfnum float, dfden float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_f(dfnum, dfden):
+          res = []
+          for i in range(len(dfnum)):
+              if dfnum[i] > 0:
+                  s = np.random.f(dfnum[i], dfden[i], 1000)
+                  res.append(float(np.sort(s)[-10]))
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-15-1
+    type: stream
+    query: select test_random_f(dfnum, dfden) as res, dfnum, dfden from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: dfnum
+        type: float32
+      - name: dfden
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(dfnum, dfden) values (1.0, 48.0)(2.0, 47.0);
+
+  - type: check
+    target_name: python-udf2-15-1
+    expected_result:
+      - [any_value, 1.0, 48.0] # around 7.7
+      - [any_value, 2.0, 47.0] # around 4.8

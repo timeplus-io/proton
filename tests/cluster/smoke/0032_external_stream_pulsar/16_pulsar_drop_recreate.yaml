@@ -1,0 +1,176 @@
+tags:
+  - udf
+description: |
+  Test drop and recreate Pulsar external stream
+  Main Steps:
+    1.Create pulsar topic
+    2.Create pulsar type external stream
+    3.Create JS UDF
+    4.Ingest data into external stream and pulsar
+    5.Check external stream and JS UDF
+    6.Drop function, external stream, pulsar topic
+    7.Repeat Step 1-6
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_16
+
+  - type: pulsar
+    name: create
+    topic: test_16
+    partitions: 3
+
+  - type: query
+    sql: drop function if exists add_suffix;
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_16;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_16 (id int32, value string)
+      settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_16';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_suffix(value string) RETURNS string LANGUAGE JAVASCRIPT AS $$
+        function add_suffix(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+'x';
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-16-1
+    query: select id, value from ex_pulsar_16;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: pulsar-16-2
+    query: select add_suffix(value) as res from ex_pulsar_16;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: pulsar
+    name: produce
+    topic: test_16-partition-0
+    messages:
+      - id: 1
+        value: sometext1
+
+  - type: query
+    sql: insert into ex_pulsar_16(id, value) values (2, 'sometext2');
+
+  - type: check
+    target_name: pulsar-16-1
+    mode: random
+    expected_result:
+      - [1, 'sometext1']
+      - [2, 'sometext2']
+
+  - type: check
+    target_name: pulsar-16-2
+    mode: random
+    expected_result:
+      - ['sometext1x']
+      - ['sometext2x']
+
+  # drop and recreate
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_16
+
+  - type: pulsar
+    name: create
+    topic: test_16
+    partitions: 3
+
+  - type: query
+    sql: drop function add_suffix;
+
+  - type: query
+    sql: drop stream ex_pulsar_16;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_16 (id int32, value string)
+      settings type = 'pulsar', service_url = 'pulsar://pulsar:6650', topic = 'test_16';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_suffix(value string) RETURNS string LANGUAGE JAVASCRIPT AS $$
+        function add_suffix(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+'x';
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-16-3
+    query: select id, value from ex_pulsar_16;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: pulsar-16-4
+    query: select add_suffix(value) as res from ex_pulsar_16;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: pulsar
+    name: produce
+    topic: test_16-partition-0
+    messages:
+      - id: 3
+        value: sometext3
+
+  - type: query
+    sql: insert into ex_pulsar_16(id, value) values (4, 'sometext4');
+
+  - type: check
+    target_name: pulsar-16-3
+    mode: random
+    expected_result:
+      - [3, 'sometext3']
+      - [4, 'sometext4']
+
+  - type: check
+    target_name: pulsar-16-4
+    mode: random
+    expected_result:
+      - ['sometext3x']
+      - ['sometext4x']

@@ -26,7 +26,9 @@ public:
 
     DataSourceDescription getDataSourceDescription() const override
     {
-        return DataSourceDescription{DataSourceType::RAM, "", false, false};
+        DataSourceDescription res;
+        res.type = DataSourceType::RAM;
+        return res;
     }
 
     DiskPtr tryGetDiskIfExists() const override { return nullptr; }

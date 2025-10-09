@@ -1,0 +1,4 @@
+name: changelog_stream14
+description: Tests covering group_array etc functions on changelog
+tags:
+- smoke

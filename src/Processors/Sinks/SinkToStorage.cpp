@@ -1,8 +1,19 @@
-#include <Processors/Sinks/SinkToStorage.h>
 #include <DataTypes/NestedUtils.h>
+#include <IO/Progress.h>
+#include <Processors/Sinks/SinkToStorage.h>
 
 namespace DB
 {
+
+/// proton: starts
+namespace ErrorCodes
+{
+extern const int NOT_A_LEADER;
+extern const int STREAM_PAUSED;
+extern const int TOO_LARGE_RECORD;
+extern const int UNKNOWN_STREAM;
+}
+/// proton: ends
 
 SinkToStorage::SinkToStorage(const Block & header, ProcessorID pid_) : ExceptionKeepingTransform(header, header, false, pid_) {}
 
@@ -16,6 +27,11 @@ void SinkToStorage::onConsume(Chunk chunk)
     Nested::validateArraySizes(getHeader().cloneWithColumns(chunk.getColumns()));
 
     consume(chunk.clone());
+
+    /// Process progress if consumption succeeded
+    if (progress_callback)
+        progress_callback(Progress(WriteProgress(chunk.getNumRows(), chunk.bytes())));
+
     if (!lastBlockIsDuplicate())
         cur_chunk = std::move(chunk);
 }
@@ -27,5 +43,19 @@ SinkToStorage::GenerateResult SinkToStorage::onGenerate()
     res.is_done = true;
     return res;
 }
+
+/// proton: starts
+bool SinkToStorage::isErrorRetryable(int error_code)
+{
+    static std::unordered_set non_retryable_errors = {
+        ErrorCodes::UNKNOWN_STREAM,
+        ErrorCodes::STREAM_PAUSED,
+        ErrorCodes::TOO_LARGE_RECORD,
+        ErrorCodes::NOT_A_LEADER,
+    };
+
+    return !non_retryable_errors.contains(error_code);
+}
+/// proton: ends
 
 }

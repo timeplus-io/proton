@@ -18,7 +18,11 @@ include (../cmake/version.cmake)
 message (STATUS "Will build ${VERSION_FULL} revision ${VERSION_REVISION} ${VERSION_OFFICIAL}")
 include (configure_config.cmake)
 configure_file (Common/config.h.in ${CONFIG_INCLUDE_PATH}/config.h)
-configure_file (Common/config_version.h.in ${CONFIG_INCLUDE_PATH}/config_version.h)
+configure_file (Common/config_version.cpp.in ${CONFIG_INCLUDE_PATH}/config_version.cpp)
+
+# proton: starts
+configure_file (Common/testing_config.h.in ${CONFIG_INCLUDE_PATH}/testing_config.h)
+# proton: ends
 
 if (USE_DEBUG_HELPERS)
     get_target_property(MAGIC_ENUM_INCLUDE_DIR ch_contrib::magic_enum INTERFACE_INCLUDE_DIRECTORIES)
@@ -40,6 +44,8 @@ else()
     add_definitions(-DENABLE_MULTITARGET_CODE=0)
 endif()
 
+set(dbms_headers)
+set(dbms_sources)
 
 add_subdirectory (Access)
 add_subdirectory (Backups)
@@ -54,36 +60,31 @@ add_subdirectory (Storages)
 add_subdirectory (Parsers)
 add_subdirectory (IO)
 add_subdirectory (Functions)
+add_subdirectory (Planner)
 add_subdirectory (Interpreters)
 add_subdirectory (AggregateFunctions)
-add_subdirectory (Client)
 add_subdirectory (TableFunctions)
 add_subdirectory (Processors)
 add_subdirectory (Compression)
 add_subdirectory (Server)
-add_subdirectory (Coordination)
 add_subdirectory (Daemon)
 add_subdirectory (Loggers)
 
-
-set(dbms_headers)
-set(dbms_sources)
-
 add_headers_and_sources(clickhouse_common_io Common)
 add_headers_and_sources(clickhouse_common_io Common/HashTable)
-add_headers_and_sources(clickhouse_common_io Common/Streaming/Substream)
+add_headers_and_sources(clickhouse_common_io Common/Rocks)
 add_headers_and_sources(clickhouse_common_io IO)
+add_headers_and_sources(clickhouse_common_io IO/Resource)
 add_headers_and_sources(clickhouse_common_io IO/S3)
+add_headers_and_sources(clickhouse_common_io IO/AzureBlobStorage)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 
 add_headers_and_sources(dbms Disks/IO)
 add_headers_and_sources(dbms Disks/ObjectStorages)
 if (USE_LIBPQXX)
     add_headers_and_sources(dbms Core/PostgreSQL)
-endif()
-
-if (TARGET ch_contrib::rocksdb)
-    add_headers_and_sources(dbms Storages/RocksDB)
+    add_headers_and_sources(dbms Databases/PostgreSQL)
+    add_headers_and_sources(dbms Storages/PostgreSQL)
 endif()
 
 if (TARGET ch_contrib::aws_sdk) # proton: added
@@ -95,50 +96,20 @@ endif()
 
 if (TARGET ch_contrib::azure_sdk)
     add_headers_and_sources(dbms Disks/ObjectStorages/AzureBlobStorage)
+    add_headers_and_sources(dbms IO/AzureBlobStorage)
 endif()
 
+add_headers_and_sources(dbms Databases/ApacheIceberg)
+
 add_headers_and_sources(dbms Disks/ObjectStorages/Cached)
+add_headers_and_sources(dbms Disks/ObjectStorages/Local)
 add_headers_and_sources(dbms Disks/ObjectStorages/Web)
 
 add_headers_and_sources(dbms Storages/Cache)
 
-# proton: start
-#if (OS_LINUX)
-#    add_headers_and_sources(dbms Storages/FileLog)
-#else()
-#    message(STATUS "StorageFileLog is only supported on Linux")
-#endif ()
-# proton: ends
+add_headers_and_sources(dbms Common/NamedCollections)
 
-list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
-
-list (APPEND dbms_sources Functions/IFunction.cpp Functions/FunctionFactory.cpp Functions/FunctionHelpers.cpp Functions/extractTimeZoneFromFunctionArguments.cpp Functions/FunctionsLogical.cpp Functions/indexHint.cpp)
-list (APPEND dbms_headers Functions/IFunction.h Functions/FunctionFactory.h Functions/FunctionHelpers.h Functions/extractTimeZoneFromFunctionArguments.h Functions/FunctionsLogical.h Functions/indexHint.h)
-
-list (APPEND dbms_sources
-    AggregateFunctions/IAggregateFunction.cpp
-    AggregateFunctions/AggregateFunctionJavaScriptAdapter.cpp
-    AggregateFunctions/AggregateFunctionFactory.cpp
-    AggregateFunctions/AggregateFunctionCombinatorFactory.cpp
-    AggregateFunctions/AggregateFunctionState.cpp
-    AggregateFunctions/AggregateFunctionCount.cpp
-    AggregateFunctions/parseAggregateFunctionParameters.cpp)
-
-list (APPEND dbms_headers
-    AggregateFunctions/IAggregateFunction.h
-    AggregateFunctions/AggregateFunctionJavaScriptAdapter.h
-    AggregateFunctions/IAggregateFunctionCombinator.h
-    AggregateFunctions/AggregateFunctionFactory.h
-    AggregateFunctions/AggregateFunctionCombinatorFactory.h
-    AggregateFunctions/AggregateFunctionState.h
-    AggregateFunctions/AggregateFunctionCount.cpp
-    AggregateFunctions/FactoryHelpers.h
-    AggregateFunctions/parseAggregateFunctionParameters.h)
-
-list (APPEND dbms_sources TableFunctions/ITableFunction.cpp TableFunctions/TableFunctionFactory.cpp)
-list (APPEND dbms_headers TableFunctions/ITableFunction.h   TableFunctions/TableFunctionFactory.h)
-list (APPEND dbms_sources Dictionaries/DictionaryFactory.cpp Dictionaries/DictionarySourceFactory.cpp Dictionaries/DictionaryStructure.cpp  Dictionaries/getDictionaryConfigurationFromAST.cpp)
-list (APPEND dbms_headers Dictionaries/DictionaryFactory.h   Dictionaries/DictionarySourceFactory.h   Dictionaries/DictionaryStructure.h Dictionaries/getDictionaryConfigurationFromAST.h)
+list(APPEND clickhouse_common_io_sources ${CONFIG_INCLUDE_PATH}/config_version.cpp)
 
 if (NOT ENABLE_SSL)
     list (REMOVE_ITEM clickhouse_common_io_sources Common/OpenSSLHelpers.cpp)
@@ -165,13 +136,10 @@ add_subdirectory(Common/ZooKeeper)
 add_subdirectory(Common/Config)
 
 # proton: starts
-set(ENABLE_NATIVE_LOG ON)
-
-if (ENABLE_NATIVE_LOG)
-    add_subdirectory (NativeLog)
-endif()
+add_subdirectory(Cluster)
 
 add_subdirectory(Checkpoint)
+
 # proton: ends
 
 set (all_modules)
@@ -189,7 +157,9 @@ add_object_library(clickhouse_querypipeline QueryPipeline)
 add_object_library(clickhouse_datatypes DataTypes)
 add_object_library(clickhouse_datatypes_serializations DataTypes/Serializations)
 add_object_library(clickhouse_databases Databases)
+add_object_library(clickhouse_databases_mysql Databases/MySQL)
 add_object_library(clickhouse_disks Disks)
+add_object_library(clickhouse_planner Planner)
 add_object_library(clickhouse_interpreters Interpreters)
 add_object_library(clickhouse_interpreters_cache Interpreters/Cache)
 add_object_library(clickhouse_interpreters_access Interpreters/Access)
@@ -197,6 +167,7 @@ add_object_library(clickhouse_interpreters_clusterproxy Interpreters/ClusterProx
 add_object_library(clickhouse_interpreters_jit Interpreters/JIT)
 add_object_library(clickhouse_columns Columns)
 add_object_library(clickhouse_storages Storages)
+add_object_library(clickhouse_storages_mysql Storages/MySQL)
 add_object_library(clickhouse_storages_distributed Storages/Distributed)
 add_object_library(clickhouse_storages_mergetree Storages/MergeTree)
 add_object_library(clickhouse_storages_liveview Storages/LiveView)
@@ -208,8 +179,9 @@ add_object_library(clickhouse_server_http Server/HTTP)
 add_object_library(clickhouse_formats Formats)
 add_object_library(clickhouse_processors Processors)
 # proton : starts
+add_object_library(clickhouse_storages_mysql Storages/Iceberg)
 add_object_library(clickhouse_processors_streaming Processors/Streaming)
-
+add_object_library(clickhouse_task Task)
 add_object_library(clickhouse_formats_avro Formats/Avro)
 # proton : ends
 add_object_library(clickhouse_processors_executors Processors/Executors)
@@ -220,11 +192,23 @@ add_object_library(clickhouse_processors_transforms Processors/Transforms)
 # proton: starts
 add_object_library(clickhouse_server_rest_handlers Server/RestRouterHandlers)
 add_object_library(clickhouse_interpreters_streaming Interpreters/Streaming)
+add_object_library(clickhouse_interpreters_aggregator_streaming Interpreters/Streaming/Aggregator)
+add_object_library(clickhouse_interpreters_aggregator_streaming Interpreters/Streaming/Aggregator/HybridAggregator)
+add_object_library(clickhouse_interpreters_aggregator_streaming Interpreters/Streaming/Aggregator/MemoryAggregator)
+add_object_library(clickhouse_interpreters_hash_join_streaming Interpreters/Streaming/HashJoin)
+add_object_library(clickhouse_interpreters_hash_join_streaming Interpreters/Streaming/HashJoin/MemoryHashJoin)
+add_object_library(clickhouse_interpreters_hash_join_streaming Interpreters/Streaming/HashJoin/HybridHashJoin)
+add_object_library(clickhouse_interpreters_apply Interpreters/Apply)
+add_object_library(clickhouse_interpreters_historical_storage_snapshot Interpreters/StorageSnapshot)
 add_object_library(clickhouse_processors_transforms_streaming Processors/Transforms/Streaming)
-add_object_library(clickhouse_storages_streaming Storages/Streaming)
+add_object_library(clickhouse_storages_mv Storages/MatView)
+add_object_library(clickhouse_storages_stream Storages/Stream)
+add_object_library(clickhouse_storages_random Storages/Random)
+add_object_library(clickhouse_storages_proxy Storages/Proxy)
+add_object_library(clickhouse_storages_proxy Storages/Alert)
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
 add_object_library(clickhouse_functions_streaming Functions/Streaming)
-add_object_library(clickhouse_interpreters_streaming AggregateFunctions/Streaming)
+add_object_library(clickhouse_aggregate_functions_streaming AggregateFunctions/Streaming)
 # proton: ends
 
 add_object_library(clickhouse_processors_sources Processors/Sources)
@@ -236,21 +220,12 @@ add_object_library(clickhouse_processors_queryplan Processors/QueryPlan)
 add_object_library(clickhouse_processors_queryplan_optimizations Processors/QueryPlan/Optimizations)
 add_object_library(clickhouse_user_defined_functions Functions/UserDefined)
 
-if (TARGET ch_contrib::nuraft)
-    add_object_library(clickhouse_coordination Coordination)
-endif()
-
 # proton: starts
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
 add_object_library(clickhouse_distributed_metadata_service DistributedMetadata)
+add_object_library(clickhouse_bootstrap Bootstrap)
 
 # lib external_stream (deps on) -> klog -> nlog -> clickhouse_common_io
-if (TARGET ch_contrib::rdkafka)
-    add_subdirectory(KafkaLog)
-else()
-    message(FATAL "rdkafka is not enabled which is required")
-endif()
-
 add_subdirectory(ClickHouse)
 add_object_library(clickhouse_clickhouse ClickHouse)
 
@@ -268,11 +243,7 @@ if (TARGET ch_contrib::jemalloc)
     target_link_libraries (dbms PRIVATE ch_contrib::jemalloc)
 endif()
 
-if (ENABLE_NATIVE_LOG)
-    target_link_libraries (dbms PUBLIC nlog)
-endif()
-
-target_link_libraries (dbms PRIVATE klog)
+target_link_libraries (dbms PUBLIC cluster)
 target_link_libraries (dbms PRIVATE external_stream)
 target_link_libraries (dbms PRIVATE external_table)
 target_link_libraries (dbms PRIVATE checkpoint)
@@ -310,9 +281,7 @@ set_source_files_properties(
         Common/SymbolIndex.cpp
         PROPERTIES COMPILE_FLAGS "-O2 ${WITHOUT_COVERAGE}")
 
-if (TARGET ch_contrib::muduo_net)
-    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::muduo_net)
-endif ()
+target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::rocksdb)
 
 target_link_libraries (clickhouse_common_io
         PRIVATE
@@ -334,14 +303,12 @@ set_source_files_properties(
         Columns/ColumnString.cpp
         PROPERTIES COMPILE_FLAGS "${X86_INTRINSICS_FLAGS}")
 
-target_link_libraries(clickhouse_common_io PUBLIC ch_contrib::re2_st)
-target_link_libraries(clickhouse_common_io PUBLIC ch_contrib::re2)
-
 target_link_libraries(clickhouse_common_io
         PUBLIC
             boost::program_options
             boost::system
             ch_contrib::cityhash
+            ch_contrib::re2
             ch_contrib::zlib
             pcg_random
             Poco::Foundation
@@ -357,9 +324,12 @@ dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
 # That way we we can redirect malloc/free functions avoiding circular dependencies
 dbms_target_link_libraries(PUBLIC ch_contrib::roaring)
 
+# proton: starts
+# rdkafka needed for external Kafka streams (not internal storage)
 if (TARGET ch_contrib::rdkafka)
     dbms_target_link_libraries(PRIVATE ch_contrib::rdkafka)
 endif()
+# proton: ends
 
 if (TARGET ch_contrib::sasl2)
     dbms_target_link_libraries(PRIVATE ch_contrib::sasl2)
@@ -369,26 +339,6 @@ if (TARGET ch_contrib::krb5)
     dbms_target_link_libraries(PRIVATE ch_contrib::krb5)
 endif()
 
-if (TARGET ch_contrib::nuraft)
-    dbms_target_link_libraries(PUBLIC ch_contrib::nuraft)
-endif()
-
-# proton: starts
-if (TARGET ch_contrib::muduo_base)
-    dbms_target_link_libraries(PUBLIC ch_contrib::muduo_base)
-endif()
-
-if (TARGET ch_contrib::muduo_net)
-    dbms_target_link_libraries(PUBLIC ch_contrib::muduo_net)
-endif()
-
-#if (TARGET ch_contrib::muduo_http)
-#    dbms_target_link_libraries(PRIVATE ch_contrib::muduo_http)
-#endif()
-#
-#if (TARGET ch_contrib::muduo_inspect)
-#    dbms_target_link_libraries(PRIVATE ch_contrib::muduo_inspect)
-#endif()
 if (TARGET ch_contrib::v8_libbase)
     add_subdirectory(V8)
     dbms_target_link_libraries(PUBLIC V8)
@@ -398,7 +348,6 @@ endif()
 if (TARGET ch_contrib::pulsar)
     dbms_target_link_libraries(PUBLIC ch_contrib::pulsar)
 endif()
-
 
 # proton: ends
 
@@ -417,6 +366,20 @@ dbms_target_link_libraries (
         boost::system
         clickhouse_common_io
 )
+
+if (TARGET ch_contrib::mongocxx)
+    dbms_target_link_libraries(
+        PUBLIC
+            ch_contrib::libbson
+            ch_contrib::libmongoc
+            ch_contrib::bsoncxx
+            ch_contrib::mongocxx
+    )
+endif ()
+
+if (TARGET ch::mysqlxx)
+    dbms_target_link_libraries (PUBLIC ch::mysqlxx)
+endif()
 
 dbms_target_link_libraries (
     PUBLIC
@@ -474,11 +437,14 @@ if (TARGET clickhouse_grpc_protos)
     dbms_target_link_libraries (PUBLIC clickhouse_grpc_protos)
 endif()
 
-if (TARGET ch_contrib::aws_sdk) # proton: updated
+# proton: starts
+if (TARGET ch_contrib::aws_sdk)
     target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::aws_sdk)
 endif()
+# proton: ends
 
 if (TARGET ch_contrib::azure_sdk)
+    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::azure_sdk)
     dbms_target_link_libraries (PRIVATE ch_contrib::azure_sdk)
 endif()
 
@@ -533,6 +499,10 @@ if (ENABLE_NLP)
     dbms_target_link_libraries (PUBLIC ch_contrib::nlp_data)
 endif()
 
+if (TARGET ch_contrib::ulid)
+    dbms_target_link_libraries (PUBLIC ch_contrib::ulid)
+endif()
+
 if (TARGET ch_contrib::bzip2)
     target_link_libraries (clickhouse_common_io PRIVATE ch_contrib::bzip2)
 endif()
@@ -543,6 +513,31 @@ endif()
 
 if (TARGET ch_contrib::rapidjson)
     dbms_target_link_libraries(PRIVATE ch_contrib::rapidjson)
+endif()
+
+if (TARGET ch_contrib::python)
+    message(STATUS "Python enabled")
+    add_subdirectory(CPython)
+
+    target_link_libraries(clickhouse_common_io PUBLIC ch_contrib::python)
+    # target_link_libraries(dbms PRIVATE
+    # -Wl,--whole-archive
+    # ch_contrib::python
+    # -Wl,--no-whole-archive
+    # -Wl,--export-dynamic
+    # )
+    dbms_target_link_libraries(PUBLIC cpython_util)
+    # if (ENABLE_NUMPY)
+    #     find_library(LIBNUMPY libnumpy.so PATHS ${proton_SOURCE_DIR}/contrib/numpy-cmake/numpy/build/numpy/_core)
+    #     if (LIBNUMPY)
+    #         message(STATUS "numpy found ${LIBNUMPY}")
+    #         dbms_target_link_libraries(PUBLIC ${LIBNUMPY})
+    #     else()
+    #         message(FATAL_ERROR "numpy not found")
+    #     endif()
+    # else()
+    #     message(STATUS "numpy disabled")
+    # endif()
 endif()
 
 dbms_target_link_libraries(PUBLIC ch_contrib::consistent_hashing)
@@ -567,15 +562,19 @@ if (ENABLE_TESTS)
 
     target_link_libraries(unit_tests_dbms PRIVATE
         ch_contrib::gtest_all
+        ch_contrib::avrocpp
+        ch_contrib::gmock_all
         clickhouse_functions
         clickhouse_table_functions
         clickhouse_aggregate_functions
         clickhouse_parsers
         clickhouse_storages_system
         dbms
+        daemon
         clickhouse_common_config
         clickhouse_common_zookeeper
-        string_utils)
+        string_utils
+        loggers)
 
     if (TARGET ch_contrib::simdjson)
         target_link_libraries(unit_tests_dbms PRIVATE ch_contrib::simdjson)

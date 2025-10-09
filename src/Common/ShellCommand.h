@@ -3,6 +3,7 @@
 #include <memory>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
+#include <unordered_map>
 
 
 namespace DB
@@ -45,11 +46,11 @@ public:
 
     struct Config
     {
-        Config(const std::string & command_)
+        Config(const std::string & command_) /// NOLINT
             : command(command_)
         {}
 
-        Config(const char * command_)
+        Config(const char * command_) /// NOLINT
             : command(command_)
         {}
 
@@ -96,7 +97,7 @@ private:
 
     bool tryWaitProcessWithTimeout(size_t timeout_in_seconds);
 
-    static Poco::Logger * getLogger();
+    static LoggerPtr getLogger();
 
     /// Print command name and the list of arguments to log. NOTE: No escaping of arguments is performed.
     static void logCommand(const char * filename, char * const argv[]);

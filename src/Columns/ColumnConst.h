@@ -20,10 +20,10 @@ namespace ErrorCodes
 /** ColumnConst contains another column with single element,
   *  but looks like a column with arbitrary amount of same elements.
   */
-class ColumnConst final : public COWHelper<IColumn, ColumnConst>
+class ColumnConst final : public COWHelper<IColumnHelper<ColumnConst>, ColumnConst>
 {
 private:
-    friend class COWHelper<IColumn, ColumnConst>;
+    friend class COWHelper<IColumnHelper<ColumnConst>, ColumnConst>;
 
     WrappedPtr data;
     size_t s;
@@ -32,6 +32,8 @@ private:
     ColumnConst(const ColumnConst & src) = default;
 
 public:
+    bool isConst() const override { return true; }
+
     ColumnPtr convertToFullColumn() const;
 
     ColumnPtr convertToFullColumnIfConst() const override
@@ -121,7 +123,11 @@ public:
         return data->isNullAt(0);
     }
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertRangeFrom(const IColumn &, size_t /*start*/, size_t length) override
+#else
+    void doInsertRangeFrom(const IColumn &, size_t /*start*/, size_t length) override
+#endif
     {
         s += length;
     }
@@ -131,15 +137,34 @@ public:
         ++s;
     }
 
+    bool tryInsert(const Field & field) override
+    {
+        auto tmp = data->cloneEmpty();
+        if (!tmp->tryInsert(field))
+            return false;
+        ++s;
+        return true;
+    }
+
     void insertData(const char *, size_t) override
     {
         ++s;
     }
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertFrom(const IColumn &, size_t) override
+#else
+    void doInsertFrom(const IColumn &, size_t) override
+#endif
     {
         ++s;
     }
+
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
+    void insertManyFrom(const IColumn & /*src*/, size_t /* position */, size_t length) override { s += length; }
+#else
+    void doInsertManyFrom(const IColumn & /*src*/, size_t /* position */, size_t length) override { s += length; }
+#endif
 
     void insertDefault() override
     {
@@ -154,6 +179,18 @@ public:
     StringRef serializeValueIntoArena(size_t, Arena & arena, char const *& begin) const override
     {
         return data->serializeValueIntoArena(0, arena, begin);
+    }
+
+    /// proton: starts.
+    void serializeValueIntoBuffer(size_t, WriteBuffer & wb) const override
+    {
+        data->serializeValueIntoBuffer(0, wb);
+    }
+    /// proton: ends.
+
+    char * serializeValueIntoMemory(size_t, char * memory) const override
+    {
+        return data->serializeValueIntoMemory(0, memory);
     }
 
     const char * deserializeAndInsertFromArena(const char * pos) override
@@ -212,9 +249,23 @@ public:
     {
         return data->allocatedMetadataBytes();
     }
+    
+    bool equal(size_t, size_t, const IColumn & rhs, int nan_direction_hint) const override
+    {
+        return data->equal(0, 0, *assert_cast<const ColumnConst &>(rhs).data, nan_direction_hint);
+    }
+
+    bool equal(size_t, const Field & rhs, int nan_direction_hint) const override
+    {
+        return data->equal(0, rhs, nan_direction_hint);
+    }
     /// proton : ends
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     int compareAt(size_t, size_t, const IColumn & rhs, int nan_direction_hint) const override
+#else
+    int doCompareAt(size_t, size_t, const IColumn & rhs, int nan_direction_hint) const override
+#endif
     {
         return data->compareAt(0, 0, *assert_cast<const ColumnConst &>(rhs).data, nan_direction_hint);
     }
@@ -229,7 +280,7 @@ public:
 
     void gather(ColumnGathererStream &) override
     {
-        throw Exception("Cannot gather into constant column " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot gather into constant column {}", getName());
     }
 
     void getExtremes(Field & min, Field & max) const override
@@ -248,6 +299,17 @@ public:
         data->forEachSubcolumnRecursively(callback);
     }
 
+    void forEachMutableSubcolumn(MutableColumnCallback callback) override
+    {
+        callback(data);
+    }
+
+    void forEachMutableSubcolumnRecursively(RecursiveMutableColumnCallback callback) override
+    {
+        callback(*data);
+        data->forEachMutableSubcolumnRecursively(callback);
+    }
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (const auto * rhs_concrete = typeid_cast<const ColumnConst *>(&rhs))
@@ -258,6 +320,11 @@ public:
     double getRatioOfDefaultRows(double) const override
     {
         return data->isDefaultAt(0) ? 1.0 : 0.0;
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return data->isDefaultAt(0) ? s : 0;
     }
 
     void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
@@ -292,6 +359,13 @@ public:
     T getValue() const { return static_cast<T>(getField().safeGet<T>()); }
 
     bool isCollationSupported() const override { return data->isCollationSupported(); }
+
+    bool hasDynamicStructure() const override { return data->hasDynamicStructure(); }
 };
+
+ColumnConst::Ptr createColumnConst(const ColumnPtr & column, Field value);
+ColumnConst::Ptr createColumnConst(const ColumnPtr & column, size_t const_value_index);
+ColumnConst::Ptr createColumnConstWithDefaultValue(const ColumnPtr  &column);
+
 
 }

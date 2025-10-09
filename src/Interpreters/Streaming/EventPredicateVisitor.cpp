@@ -1,10 +1,11 @@
-#include "EventPredicateVisitor.h"
+#include <Interpreters/Streaming/EventPredicateVisitor.h>
 
+#include <Cluster/Common/Constants.h>
+#include <Cluster/SchemaRecord/SchemaRecord.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/Streaming/SubstituteStreamingFunction.h>
 #include <Interpreters/evaluateConstantExpression.h>
-#include <NativeLog/Record/Record.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -75,13 +76,13 @@ Int64 parseSeekToSequenceNumber(const Field & value, DataTypePtr type)
     if (isNativeInteger(type))
     {
         Int64 sn = value.get<Int64>();
-        if (sn >= 0)
+        if (sn >= cluster::Constants::LogStartSN)
             return sn;
     }
 
     throw Exception(
         ErrorCodes::UNEXPECTED_EXPRESSION,
-        "The event sequence id predicate requrie a constant number or expression greater than or equal to 0");
+        "The event sequence number predicate requrie a constant number or expression greater than or equal to {}", cluster::Constants::LogStartSN);
 }
 
 Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
@@ -89,13 +90,12 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
     try
     {
         /// NOTE: If exists substituted `__streaming_now()`, which will process dynamic timestamp and return non-const column,
-        /// So temporarily substitute back `__streaming_now()` as `now()` to evaluate constant timestamp.
+        /// So substitute back `__streaming_now()` as `now()` to evaluate constant timestamp.
         /// For example: `select * from table where _tp_time > __streaming_now() - 1d`
-        auto expr_ast = ast->clone();
         SubstituteFunctionsVisitor::Data data{{{"__streaming_now", "now"}, {"__streaming_now64", "now64"}}};
-        SubstituteFunctionsVisitor(data).visit(expr_ast);
+        SubstituteFunctionsVisitor(data).visit(ast);
 
-        auto [value, type] = evaluateConstantExpression(expr_ast, context);
+        auto [value, type] = evaluateConstantExpression(ast, context);
         if (seek_by == SeekBy::EventTime)
             return parseSeekToTimestamp(value, type);
         else
@@ -112,7 +112,7 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
         else
             throw Exception(
                 ErrorCodes::UNEXPECTED_EXPRESSION,
-                "The event sequence id predicate expression must be constant sequence id expression. But got '{}'",
+                "The event sequence number predicate expression must be constant sequence number expression. But got '{}'",
                 ast->formatForErrorMessage());
     }
 }
@@ -129,7 +129,8 @@ SeekToInfoPtr tryParseAndCheckSeekToEarliestInfo(const ASTFunction & predicate_f
         {
             /// Only support `_tp_time > earliest_timestamp()` or `_tp_time >= earliest_ts()`
             if (predicate_func.name == "greater" || predicate_func.name == "greater_or_equals")
-                return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+                return std::make_shared<SeekToInfo>(
+                    "earliest", std::vector<Int64>{cluster::Constants::EarliestSN}, SeekToType::SEQUENCE_NUMBER);
             else
                 throw Exception(
                     ErrorCodes::UNEXPECTED_EXPRESSION, "Invalid event time predicate '{}'", predicate_func.formatForErrorMessage());
@@ -142,7 +143,8 @@ SeekToInfoPtr tryParseAndCheckSeekToEarliestInfo(const ASTFunction & predicate_f
         {
             /// Only support `earliest_timestamp() < _tp_time` or `earliest_ts() <= _tp_time`
             if (predicate_func.name == "less" || predicate_func.name == "less_or_equals")
-                return std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER);
+                return std::make_shared<SeekToInfo>(
+                    "earliest", std::vector<Int64>{cluster::Constants::EarliestSN}, SeekToType::SEQUENCE_NUMBER);
             else
                 throw Exception(
                     ErrorCodes::UNEXPECTED_EXPRESSION, "Invalid event time predicate '{}'", predicate_func.formatForErrorMessage());
@@ -175,7 +177,7 @@ std::pair<size_t, SeekBy> EventPredicateMatcher::Data::parseSeekBy(ASTPtr ast) c
     return {stream_pos.value(), seek_by};
 }
 
-std::tuple<size_t, SeekBy, Int64, bool> EventPredicateMatcher::Data::parseEventPredicate(ASTPtr left_arg_ast, ASTPtr right_arg_ast) const
+std::tuple<size_t, SeekBy, Int64, bool> EventPredicateMatcher::Data::parseEventPredicate(ASTPtr & left_arg_ast, ASTPtr & right_arg_ast) const
 {
     auto [left_stream_pos, left_seek_by] = parseSeekBy(left_arg_ast);
     auto [right_stream_pos, right_seek_by] = parseSeekBy(right_arg_ast);
@@ -238,7 +240,8 @@ std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(co
         else
             /// Case-2: ` _tp_time <= ...`
             return {
-                stream_pos, std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER)};
+                stream_pos,
+                std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{cluster::Constants::EarliestSN}, SeekToType::SEQUENCE_NUMBER)};
     }
     else
     {
@@ -253,7 +256,8 @@ std::pair<size_t, SeekToInfoPtr> EventPredicateMatcher::Data::parseSeekToInfo(co
         else
             /// Case-4: ` ... >= _tp_time`
             return {
-                stream_pos, std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{nlog::EARLIEST_SN}, SeekToType::SEQUENCE_NUMBER)};
+                stream_pos,
+                std::make_shared<SeekToInfo>("earliest", std::vector<Int64>{cluster::Constants::EarliestSN}, SeekToType::SEQUENCE_NUMBER)};
     }
 }
 

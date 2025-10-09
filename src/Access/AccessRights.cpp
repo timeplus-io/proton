@@ -397,7 +397,7 @@ public:
             optimizeTree();
     }
 
-    void logTree(Poco::Logger * log, const String & title) const
+    void logTree(LoggerPtr log, const String & title) const
     {
         LOG_TRACE(log, "Tree({}): level={}, name={}, flags={}, min_flags={}, max_flags={}, num_children={}",
             title, level, node_name ? *node_name : "NULL", flags.toString(),
@@ -785,7 +785,7 @@ template <bool with_grant_option>
 void AccessRights::grantImpl(const AccessRightsElement & element)
 {
     if (element.is_partial_revoke)
-        throw Exception("A partial revoke should be revoked, not granted", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "A partial revoke should be revoked, not granted");
     if constexpr (with_grant_option)
     {
         grantImplHelper<true>(element);
@@ -1082,7 +1082,7 @@ AccessRights AccessRights::getFullAccess()
 
 void AccessRights::logTree() const
 {
-    auto * log = &Poco::Logger::get("AccessRights");
+    auto log = getLogger("AccessRights");
     if (root)
     {
         root->logTree(log, "");

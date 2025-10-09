@@ -48,6 +48,13 @@ enum class WeekDayMode
     WeekStartsSunday1 = 3
 };
 
+/// proton: starts.
+namespace cctz
+{
+    class time_zone;
+}
+/// proton: ends.
+
 /** Lookup table to conversion of time to date, and to month / year / day of week / day of month and so on.
   * First time was implemented for OLAPServer, that needed to do billions of such transformations.
   */
@@ -57,10 +64,18 @@ private:
     friend class DateLUT;
     explicit DateLUTImpl(const std::string & time_zone);
 
+    /// proton: starts.
+    explicit DateLUTImpl(int64_t offset);
+    /// proton: ends.
+
     DateLUTImpl(const DateLUTImpl &) = delete; /// NOLINT
     DateLUTImpl & operator=(const DateLUTImpl &) = delete; /// NOLINT
     DateLUTImpl(const DateLUTImpl &&) = delete; /// NOLINT
     DateLUTImpl & operator=(const DateLUTImpl &&) = delete; /// NOLINT
+
+    /// proton: starts.
+    void init(const cctz::time_zone & cctz_time_zone);
+    /// proton: ends.
 
     // Normalized and bound-checked index of element in lut,
     // has to be a separate type to support overloading
@@ -253,7 +268,7 @@ private:
 
     static inline LUTIndex toLUTIndex(ExtendedDayNum d)
     {
-        return normalizeLUTIndex(static_cast<Int64>(d + daynum_offset_epoch));
+        return normalizeLUTIndex(static_cast<Int64>(d + daynum_offset_epoch)); /// NOLINT
     }
 
     inline LUTIndex toLUTIndex(Time t) const

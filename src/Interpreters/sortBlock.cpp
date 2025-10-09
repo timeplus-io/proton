@@ -103,10 +103,8 @@ ColumnsWithSortDescriptions getColumnsWithSortDescription(const Block & block, c
         if (isCollationRequired(sort_column_description))
         {
             if (!column->isCollationSupported())
-                throw Exception(
-                    "Collations could be specified only for string, low_cardinality(string), nullable(string) or for array or tuple, "
-                    "containing them.",
-                    ErrorCodes::BAD_COLLATION);
+                throw Exception(ErrorCodes::BAD_COLLATION, "Collations could be specified only for string, low_cardinality(string), "
+                                "nullable(string), or for array or tuple, containing them.");
         }
 
         result.emplace_back(ColumnWithSortDescription{column, sort_column_description, isColumnConst(*column)});
@@ -165,7 +163,7 @@ void getBlockSortPermutationImpl(const Block & block, const SortDescription & de
 
         for (const auto & column_with_sort_description : columns_with_sort_descriptions)
         {
-            while (!ranges.empty() && limit && limit <= ranges.back().first)
+            while (!ranges.empty() && limit && limit <= ranges.back().from)
                 ranges.pop_back();
 
             if (ranges.empty())

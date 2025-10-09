@@ -6,7 +6,7 @@ namespace DB
 {
 
 /// CREATE|ATTACH MATERIALIZED VIEW [IF NOT EXISTS] [db.]name [UUID 'uuid'] [INTO [db.]name] [view_properties] AS SELECT ...
-class ParserCreateMaterializedViewQuery : public IParserBase
+class ParserCreateMaterializedViewQuery final : public IParserBase
 {
 protected:
     const char * getName() const override { return "CREATE MATERIALIZED VIEW query"; }

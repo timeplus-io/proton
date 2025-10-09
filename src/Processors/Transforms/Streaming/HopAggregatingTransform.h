@@ -9,7 +9,7 @@ namespace Streaming
 class HopAggregatingTransform final : public WindowAggregatingTransform
 {
 public:
-    HopAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
+    HopAggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const std::string & id);
 
     /// For Parallel aggregating.
     HopAggregatingTransform(
@@ -17,12 +17,11 @@ public:
         AggregatingTransformParamsPtr params_,
         ManyAggregatedDataPtr many_data_,
         size_t current_variant_,
-        size_t max_threads_,
-        size_t temporary_data_merge_threads_);
+        size_t max_threads_);
 
     ~HopAggregatingTransform() override = default;
 
-    String getName() const override { return "HopAggregatingTransform"; }
+    String getName() const override;
 
 private:
     WindowsWithBuckets getLocalWindowsWithBucketsImpl() const override;

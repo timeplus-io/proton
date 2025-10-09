@@ -119,7 +119,7 @@ protected:
     void onFinish() override;
     UInt64 elapsed_ns = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

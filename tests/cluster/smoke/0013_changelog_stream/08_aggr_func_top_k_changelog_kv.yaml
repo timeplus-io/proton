@@ -1,0 +1,50 @@
+tags:
+  - changelog_kv_aggr
+  - native_not_support
+  - bug
+  - skip
+description: aggregation function top_k changelog_kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_changelog_kv_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_changelog_kv_stream(id int, val float) primary
+      key id settings mode='changelog_kv';
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (1, 1.1), (1, 2.2), (3, 3.3);
+  - type: wait
+    time: 1
+
+  - name: "1408"
+    type: stream
+    query: select top_k(id, 2) from test14_changelog_kv_stream emit periodic 1s;
+    schema:
+      - name: top_k(id, 2)
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (4, 4.4), (4, 5.5);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, _tp_delta) values (1, -1);
+
+  - type: check
+    target_name: "1408"
+    expected_result:
+      - [(1, 2), (3, 1)]
+      - [(1, 2), (4, 2)]
+      - [(4, 2), (3, 1)]

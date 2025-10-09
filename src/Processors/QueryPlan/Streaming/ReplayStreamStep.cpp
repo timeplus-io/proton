@@ -18,6 +18,7 @@ static ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = true,
+            .preserves_substream = false,
         },
         {
             .preserves_number_of_rows = false,
@@ -39,7 +40,7 @@ void ReplayStreamStep::transformPipeline(QueryPipelineBuilder & pipeline, const 
 {
     /// FIXME: `StorageStream::getLastSNs()` result is invalid for multiple shards in cluster
     if (unlikely(pipeline.getNumStreams() != shards_last_sns.size()))
-        throw Exception("Input Stream is not equal to the shard's num", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Input Stream is not equal to the shard's num");
 
     size_t index = 0;
     pipeline.addSimpleTransform([&](const Block & header) {

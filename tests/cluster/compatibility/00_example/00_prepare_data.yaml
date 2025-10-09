@@ -1,0 +1,50 @@
+tags:
+  - prepare
+
+description: prepare data
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: example_topic
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: create
+    topic: example_topic
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists example
+
+  - type: query
+    sql: drop stream if exists example_external
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream example(x int);
+
+  - type: query
+    sql: create external stream example_external (x int) settings type='kafka', brokers='k1:9092',topic='example_topic', data_format='JSONEachRow';
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into example (x) values (1)(2)(3);
+
+  - type: query
+    sql: insert into example_external (x) values (2)(4)(6);

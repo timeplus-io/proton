@@ -1,0 +1,104 @@
+tags:
+  - aggregation
+
+description: aggregation on versioned_kv stream join table(versioned_kv)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_stream;
+
+  - type: query
+    sql: drop stream if exists test14_table_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_stream(i int, j int, k string) primary key
+      j settings mode='versioned_kv';
+
+  - type: query
+    sql:
+      create stream test14_table_5(ii int, jj int, kk string) primary
+      key jj settings mode='versioned_kv';
+
+  - type: wait
+    time: 2
+ 
+  - type: query
+    sql: insert into test14_table_5(ii, jj, kk) values(1, 2, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table_5(ii, jj, kk) values(2, 7, 'h');
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into test14_table_5(ii, jj, kk) values(4, 2, 'a');
+
+  - type: wait
+    time: 5
+  
+  - name: "14203"
+    type: stream
+    query:
+      select count(1), a.i from test14_stream as a inner join table(test14_table_5)
+      as b on a.i = b.ii group by a.i;
+    schema:
+      - name: count(1)
+        type: uint64
+      - name: i
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream(i, j, k) values(1, 2, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream(i, j, k) values(4, 2, 'a');
+  
+  - type: check
+    target_name: "14203"
+    expected_result:
+      - ["1", "4"]
+
+  - type: query
+    sql: insert into test14_stream(i, j, k) values(2, 3, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream(i, j, k) values(4, 7, 'a');
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into test14_stream(i, j, k) values(2, 6, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream(i, j, k) values(1, 7, 'a');
+
+  - type: check
+    target_name: "14203"
+    mode: random
+    expected_result:
+      - ["1", "4"]
+      - ["1", "2"]  
+      - ["2", "4"]
+      - ["2", "2"]

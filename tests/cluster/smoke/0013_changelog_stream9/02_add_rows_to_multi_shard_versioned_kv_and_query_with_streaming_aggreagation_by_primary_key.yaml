@@ -1,0 +1,77 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - streaming_aggreagation
+  - global_aggregation
+  - group_by
+  - primary_key
+  - stateful_function
+description:
+  add rows to multi_shard versioned_kv and query with streaming aggreagation
+  by primary key
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      create stream if not exists test14_multishard_9(i float, k1 int, k2 string) primary key k2
+      settings mode='versioned_kv', shards=3;
+  - type: wait
+    time: 2
+
+  - name: "1462"
+    type: stream
+    query: |
+      select max(i),
+             min(i),
+             avg(i),
+             count(i),
+             k2
+      from test14_multishard_9
+      group by k2
+      order by k2 emit periodic 200ms;
+    schema: 
+      - name: max(i)
+        type: float32
+      - name: min(i)
+        type: float32
+      - name: avg(i)
+        type: float64
+      - name: count(i)
+        type: uint64
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (2, 1, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (3, 3, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (5, 5, 'c');
+
+  - type: check
+    target_name: "1462"
+    expected_result:
+      - [2, 2, 2, 1, a]
+      - [2, 2, 2, 1, a]
+      - [3, 3, 3, 1, b]
+      - [2, 2, 2, 1, a]
+      - [3, 3, 3, 1, b]
+      - [5, 5, 5, 1, c]

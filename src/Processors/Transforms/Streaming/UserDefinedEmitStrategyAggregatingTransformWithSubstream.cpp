@@ -1,9 +1,5 @@
-#include "UserDefinedEmitStrategyAggregatingTransformWithSubstream.h"
-
+#include <Processors/Transforms/Streaming/UserDefinedEmitStrategyAggregatingTransformWithSubstream.h>
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
-#include <Processors/Transforms/convertToChunk.h>
-
-#include <algorithm>
 
 namespace DB
 {
@@ -11,28 +7,29 @@ namespace Streaming
 {
 
 UserDefinedEmitStrategyAggregatingTransformWithSubstream::UserDefinedEmitStrategyAggregatingTransformWithSubstream(
-    Block header, AggregatingTransformParamsPtr params_)
+    Block header, AggregatingTransformParamsPtr params_, size_t id)
     : AggregatingTransformWithSubstream(
-        std::move(header),
-        std::move(params_),
-        "UserDefinedEmitStrategyAggregatingTransformWithSubstream",
-        ProcessorID::UserDefinedEmitStrategyAggregatingTransformWithSubstreamID)
+          std::move(header),
+          std::move(params_),
+          id,
+          "UserDefinedEmitStrategyAggregatingTransformWithSubstream",
+          ProcessorID::UserDefinedEmitStrategyAggregatingTransformWithSubstreamID)
 {
-    assert(params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED);
+    assert(params->params->group_by == IAggregatorParams::GroupBy::UserDefined);
 }
 
-void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
+void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(
+    const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
     /// We don't need care other data variants, just finalize what we have
     assert(substream_ctx);
 
-    auto & variants = substream_ctx->variants;
-    if (variants.empty())
+    if (substream_ctx->variants->empty())
         return;
 
-    auto chunks = AggregatingHelper::convertToChunks(variants, *params);
+    auto chunks = AggregatingHelper::convertToChunks(*substream_ctx->variants, *params);
 
-    if (params->emit_version && params->final)
+    if (params->emit_version)
         emitVersion(chunks, substream_ctx);
 
     if (chunks.empty()) [[unlikely]]
@@ -42,5 +39,18 @@ void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const Su
     chunks.back().setChunkContext(chunk_ctx);
     setAggregatedResult(chunks);
 }
+
+String UserDefinedEmitStrategyAggregatingTransformWithSubstream::getName() const
+{
+    switch (params->aggregatorType())
+    {
+        case AggregatorType::Memory:
+            return "UserDefinedEmitStrategyAggregatingTransformWithSubstream";
+        case AggregatorType::Hybrid:
+            return "HybridUserDefinedEmitStrategyAggregatingTransformWithSubstream";
+    }
 }
+
+}
+
 }

@@ -1,0 +1,40 @@
+tags:
+  - func
+  - process-text
+description: process text with function substr
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists substr_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream substr_stream (id int, location string)
+
+  - type: wait
+    time: 1
+
+  - name: '800'
+    type: stream
+    query: select id, substr(location, 1, 2) from substr_stream
+    schema:
+      - name: id
+        type: int32
+      - name: substring(location, 1, 2)
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into substr_stream(id, location) values (1, 'abcd'), (2, 'efg')
+
+  - type: check
+    target_name: '800'
+    expected_result:
+      - [ '1', ab ]
+      - [ '2', ef ]

@@ -1,0 +1,173 @@
+tags:
+  - materialized view
+  - kafka
+  - external_stream
+
+description: |
+  Tests covering the scenario that logstore_retention_bytes and logstore_retention_ms 
+  still take effect after nodes restart.
+  Main steps:
+  - create external stream
+  - create target stream settings 
+      logstore_retention_bytes=2097152 (2MB)
+      logstore_retention_ms=3000 (3s)
+  - create mv
+  - docker restart nodes
+  - insert data into external stream from random stream
+  - verify target stream native log truncated
+  - verify container log contains "reason=retention_"
+
+cluster:
+  - p1k1
+
+steps:
+  # create topic
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  # create stream & mv
+  - type: query
+    sql: drop view if exists test38_mv;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test38_rd;
+
+  - type: query
+    sql: drop stream if exists test38_target3;
+
+  - type: query
+    sql: drop stream if exists test38_external;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create random stream test38_rd (
+        id string default to_string(rand() % 100),
+        value string default 'abcd'
+      );
+
+  - type: query
+    sql: |
+      create stream test38_target3 (id int64, value string)
+      settings logstore_retention_bytes = 2097152, logstore_retention_ms = 3000;
+
+  - type: query
+    sql: |
+      create external stream test38_external (id int64, value string)
+      settings type='kafka',
+               brokers='stream-store:9092',
+               topic='test',
+               data_format='JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view test38_mv into test38_target3 as 
+      select to_int64(id), value from test38_external;
+
+  - type: wait
+    time: 8 # wait some time for nativelog created
+
+  - name: auto-truncate-3-1
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test38_target3';")
+
+      # verify mv first-line native log exists
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+      [ -f "$first_record" ] && echo "true" || echo "After creating mv, there should be one native log, but none was found. ($first_record)"
+
+  - type: check
+    target_name: auto-truncate-3-1
+    expected_result: ["true"]
+
+  - type: command
+    node: [s1]
+    shell: |
+      docker restart $(docker ps -a --format '{{.Names}}' --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep timeplus)
+
+  - type: wait
+    time: 10
+
+  - name: auto-truncate-3-0
+    type: health_check
+    protocol: tcp
+
+  - type: check
+    target_name: auto-truncate-3-0
+    expected_result:
+    - ['true']
+
+  - name: auto-truncate-3-2
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test38_target3';")
+
+      # verify mv first-line native log exists
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+      [ -f "$first_record" ] && echo "true" || echo "After creating mv, there should be one native log, but none was found. ($first_record)"
+
+  - type: check
+    target_name: auto-truncate-3-2
+    expected_result: ["true"]
+
+  # insert data
+  - type: stream
+    query: |
+      insert into test38_external select id, value
+      from test38_rd settings eps=50000;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: string
+  
+  - type: wait
+    time: 15 # wait some time for auto truncate take effect
+
+  # check
+  - name: auto-truncate-3-3
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test38_target3';")
+
+      # verify mv first-line native log removed after auto truncate
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+
+      [ ! -e "$first_record" ] && echo "true" || { echo "After inserting data, the first native log should have been removed, but it was not. ($first_record)"; ls -ltrh /var/lib/proton/nativelog/default/${uuid}.0; }
+
+  - type: check
+    target_name: auto-truncate-3-3
+    expected_result: ["true"]
+
+  - name: auto-truncate-3-4
+    type: command
+    node: [p1]
+    shell: |
+      log=/var/log/proton-server/proton-server.log
+      [ $(grep "test38_target3" $log | grep -o "reason=retention_" | wc -l) -ge 1 ] && echo "true" || echo "expect log reason=retention_size_breached or reason=retention_time_breached not found"
+
+  - type: check
+    target_name: auto-truncate-3-4
+    expected_result: ["true"]

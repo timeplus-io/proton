@@ -1,0 +1,72 @@
+description: |
+  Test multi_if((HOUR(date_time) >= 8) AND (HOUR(date_time) <= 18), 'dayTime', (HOUR(date_time) <= 6) OR (HOUR(date_time) >= 20)
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q14
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q14
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      CREATE EXTERNAL STREAM target(
+      auction int64,
+      bidder int64,
+      price float64,
+      bidTimeType string,
+      date_time datetime64,
+      extra string) 
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q14', 
+              data_format='JSONEachRow',
+              one_message_per_row=false;
+  - type: wait
+    time: 150
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT
+        auction, 
+        bidder, 
+        0.908 * price AS price, 
+        multi_if((HOUR(date_time) >= 8) AND (HOUR(date_time) <= 18), 'dayTime', (HOUR(date_time) <= 6) OR (HOUR(date_time) >= 20), 'nightTime', 'otherTime') AS bidTimeType, 
+        date_time, 
+        extra
+      FROM
+        bid
+      WHERE
+        ((0.908 * price) > 1000000) AND ((0.908 * price) < 50000000)
+      SETTINGS
+        seek_to = 'earliest';
+      
+  - type: wait
+    time: 150
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 30

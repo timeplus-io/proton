@@ -1,0 +1,183 @@
+tags:
+  - external_stream
+  - materialized view
+  - hopping window
+ # - skip
+description: |
+  Test External Stream with builtin data types -> MV with nested select query and hopping window -> Target Stream
+  Steps:
+    1. create kafka topic
+    2. create external stream with data format Protobuf and created format schema
+    3. create a materialized view with target stream with nested select query and hopping window
+    4. query target stream
+    5. produce kafka message with protobuf format
+    6. check query result
+  
+  Block by issue: https://github.com/timeplus-io/proton-enterprise/issues/4350
+  Fix version > 2.1.5, skip now
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  # kafka topic: drop and create
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 1
+
+  # stream & mv: drop and create
+  - type: query
+    sql: DROP VIEW IF EXISTS test_mv
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_target_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP FORMAT SCHEMA IF EXISTS schema_name4
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA schema_name4 AS
+      $$
+        syntax = "proto3";
+        message Sch4 {
+          int64  id = 1;
+          float  value = 2;
+          string dates = 3;
+        }
+      $$
+      TYPE Protobuf
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_external_stream
+      (
+        id int64, 
+        value float,
+        dates string
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'test',
+          data_format = 'Protobuf',
+          format_schema = 'schema_name4:Sch4'
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM test_target_stream
+      (
+        id string,
+        max float,
+        start datetime,
+        end datetime
+      )
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test_mv INTO test_target_stream AS
+      WITH transformed AS
+        (
+          SELECT
+            to_string(id) AS id, value, to_datetime(dates) AS dates
+          FROM
+            test_external_stream
+        )
+      SELECT
+        id, max(value) AS max, window_start AS start, window_end AS end
+      FROM
+        hop(transformed, dates, INTERVAL 2 SECOND, INTERVAL 5 SECOND)
+      GROUP BY
+        id, start, end
+  - type: wait
+    time: 2
+
+  - name: external-stream-4-0
+    type: stream
+    query: select id, max, start, end from test_target_stream
+    schema:
+    - name: id
+      type: string
+    - name: max
+      type: float32
+    - name: start
+      type: datetime
+    - name: end
+      type: datetime
+  - type: wait
+    time: 1
+
+  # kafka message: format protobuf and produce kafka message
+  - type: protobuf_format
+    name: format
+    proto: |
+      syntax = "proto3";
+      message Sch4 {
+        int64 id = 1;
+        float value = 2;
+        string dates = 3;
+      }
+    class: Sch4
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: float
+      - name: dates
+        type: string
+    inputs:
+      - [1, 11.1, '2020-02-02 20:00:00']
+      - [2, 22.1, '2020-02-02 20:00:01']
+      - [2, 22.2, '2020-02-02 20:00:02']
+      - [3, 33.1, '2020-02-02 20:00:05']
+      - [3, 33.2, '2020-02-02 20:00:04']
+      - [3, 33.3, '2020-02-02 20:00:03']
+    buffer_size: 2 # >=2
+  - type: wait
+    time: 1
+
+  - type: kafka_dataloader
+    source: format
+    sink: test
+    concurrency: 1
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: external-stream-4-0
+    expected_result:
+    - [1, 11.1, '2020-02-02 19:59:56', '2020-02-02 20:00:01']
+    - [2, 22.2, '2020-02-02 19:59:58', '2020-02-02 20:00:03']
+    - [1, 11.1, '2020-02-02 19:59:58', '2020-02-02 20:00:03']
+    - [3, 33.3, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+    - [2, 22.2, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+    - [1, 11.1, '2020-02-02 20:00:00', '2020-02-02 20:00:05']

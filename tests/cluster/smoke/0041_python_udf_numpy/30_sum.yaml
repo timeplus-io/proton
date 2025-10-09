@@ -1,0 +1,71 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getSum(value int) RETURNS int LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getSum:
+          def __init__(self):
+              self.sum = 0
+
+          def serialize(self):
+              data = {}
+              data['sum'] = self.sum
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.sum = data['sum']
+
+          def merge(self, other):
+              self.sum = other.sum
+
+          def process(self, values):
+              self.sum += np.sum(values)
+
+          def finalize(self):
+              return int(self.sum)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-30-1
+    type: stream
+    query: select getSum(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values (3)(5)(7);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(value) values (1)(2)(3);
+
+  - type: check
+    target_name: python-udf2-30-1
+    expected_result:
+      - [15]
+      - [21]

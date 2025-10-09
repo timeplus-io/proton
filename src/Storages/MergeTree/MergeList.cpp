@@ -46,6 +46,8 @@ MemoryTrackerThreadSwitcher::~MemoryTrackerThreadSwitcher()
     current_thread->setQueryId(prev_query_id);
 }
 
+const MergeTreePartInfo MergeListElement::FAKE_RESULT_PART_FOR_PROJECTION = {"all", 0, 0, 0};
+
 MergeListElement::MergeListElement(
     const StorageID & table_id_,
     FutureMergedMutatedPartPtr future_part,
@@ -62,12 +64,16 @@ MergeListElement::MergeListElement(
     , merge_type{future_part->merge_type}
     , merge_algorithm{MergeAlgorithm::Undecided}
 {
+    /// FIXME why do we need a merge list element for projection parts at all?
+    bool is_fake_projection_part = future_part->part_info == FAKE_RESULT_PART_FOR_PROJECTION;
+
     for (const auto & source_part : future_part->parts)
     {
         source_part_names.emplace_back(source_part->name);
         source_part_paths.emplace_back(source_part->getDataPartStorage().getFullPath());
 
         total_size_bytes_compressed += source_part->getBytesOnDisk();
+        total_size_bytes_uncompressed += source_part->getTotalColumnsSize().data_uncompressed;
         total_size_marks += source_part->getMarksCount();
         total_rows_count += source_part->index_granularity.getTotalRows();
     }
@@ -75,7 +81,10 @@ MergeListElement::MergeListElement(
     if (!future_part->parts.empty())
     {
         source_data_version = future_part->parts[0]->info.getDataVersion();
-        is_mutation = (result_part_info.getDataVersion() != source_data_version);
+        is_mutation = (result_part_info.level == future_part->parts[0]->info.level) && !is_fake_projection_part;
+
+        const auto & part = future_part->parts[0];
+        partition = part->partition.serializeToString(part->getMetadataSnapshot());
     }
 
     memory_tracker.setDescription("Mutate/Merge");
@@ -115,11 +124,13 @@ MergeInfo MergeListElement::getInfo() const
     res.result_part_name = result_part_name;
     res.result_part_path = result_part_path;
     res.partition_id = partition_id;
+    res.partition = partition;
     res.is_mutation = is_mutation;
     res.elapsed = watch.elapsedSeconds();
     res.progress = progress.load(std::memory_order_relaxed);
     res.num_parts = num_parts;
     res.total_size_bytes_compressed = total_size_bytes_compressed;
+    res.total_size_bytes_uncompressed = total_size_bytes_uncompressed;
     res.total_size_marks = total_size_marks;
     res.total_rows_count = total_rows_count;
     res.bytes_read_uncompressed = bytes_read_uncompressed.load(std::memory_order_relaxed);
@@ -143,8 +154,11 @@ MergeInfo MergeListElement::getInfo() const
 
 MergeListElement::~MergeListElement()
 {
-    CurrentThread::getMemoryTracker()->adjustWithUntrackedMemory(untracked_memory);
-    untracked_memory = 0;
+    if (untracked_memory != 0)
+    {
+        CurrentThread::getMemoryTracker()->adjustWithUntrackedMemory(untracked_memory);
+        untracked_memory = 0;
+    }
 }
 
 

@@ -1,0 +1,181 @@
+tags:
+- materialized view
+description: altering materialied view retention policy
+cluster:
+- p1k1
+# - p3k1 # only pass when query execute on the same node (need to fix)
+steps:
+- type: query
+  sql: drop view if exists mv_with_inner_stream
+
+- type: query
+  sql: drop view if exists mv_with_target_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists source_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists target_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream source_mv_stream (i int) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream target_mv_stream (ii int, s string) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view mv_with_inner_stream as select _tp_time, i + 1 as ii from source_mv_stream
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view mv_with_target_stream into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream
+- type: wait
+  time: 2
+
+- name: '2400'
+  type: stream
+  query: alter stream mv_with_inner_stream modify setting logstore_retention_bytes=1000000
+  # node: 
+  #   - p1
+
+- name: '2401'
+  type: stream
+  query: alter stream mv_with_target_stream modify setting logstore_retention_bytes=1000000
+
+- name: '2402'
+  type: stream
+  query: alter stream mv_with_inner_stream modify ttl now()-1d
+  # node: 
+  #   - p1
+
+- name: '2403'
+  type: stream
+  query: alter stream mv_with_target_stream modify ttl now()-1d
+
+- type: wait
+  time: 3
+
+- name: '2404'
+  type: stream
+  query: alter stream mv_with_inner_stream remove ttl
+  # node: 
+  #   - p1
+
+- name: '2405'
+  type: stream
+  query: alter stream mv_with_target_stream remove ttl
+
+- type: wait
+  time: 3
+
+- name: '2406'
+  type: stream
+  query: alter stream mv_with_inner_stream modify query setting checkpoint_interval=600
+
+- name: '2407'
+  type: stream
+  query: alter stream mv_with_target_stream modify query setting checkpoint_interval=600
+
+- type: wait
+  time: 3
+
+- name: '2408'
+  type: stream
+  query: alter stream mv_with_inner_stream reset query setting checkpoint_interval
+
+- name: '2409'
+  type: stream
+  query: alter stream mv_with_target_stream reset query setting checkpoint_interval
+
+- type: wait
+  time: 3
+
+- name: '2410'
+  type: stream
+  # ExceptionCase: reset duplicate settings
+  query: alter stream mv_with_target_stream reset query setting checkpoint_interval,checkpoint_interval
+
+- name: '2411'
+  type: stream
+  # ExceptionCase: modify storage setting with a query setting (UNKNOWN_SETTING)
+  query: alter stream mv_with_inner_stream modify setting checkpoint_interval=10
+
+- type: wait
+  time: 3
+
+- type: query
+  sql: drop view if exists mv_with_inner_stream
+
+- type: query
+  sql: drop view if exists mv_with_target_stream
+
+- type: check
+  target_name: '2400'
+  expected_result: 
+  - []
+
+- type: check
+  target_name: '2401'
+  expected_result:
+  - ["error_code:48"]
+
+- type: check
+  target_name: '2402'
+  expected_result: 
+  - []
+
+- type: check
+  target_name: '2403'
+  expected_result:
+  - ["error_code:48"]
+
+- type: check
+  target_name: '2404'
+  expected_result: 
+  - []
+
+- type: check
+  target_name: '2405'
+  expected_result:
+  - ["error_code:36"]
+
+- type: check
+  target_name: '2406'
+  expected_result: 
+  - []
+
+- type: check
+  target_name: '2407'
+  expected_result:
+  - []
+
+- type: check
+  target_name: '2408'
+  expected_result: 
+  - []
+
+- type: check
+  target_name: '2409'
+  expected_result:
+  - []
+
+- type: check
+  target_name: '2410'
+  expected_result:
+  - ["error_code:36"]
+
+- type: check
+  target_name: '2411'
+  expected_result:
+  - ["error_code:48"]

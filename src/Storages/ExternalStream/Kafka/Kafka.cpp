@@ -1,3 +1,4 @@
+#include <Cluster/Common/Constants.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -26,6 +27,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 
+#include <filesystem>
 #include <optional>
 #include <ranges>
 
@@ -101,7 +103,6 @@ bool isUnsupportedTopicConfig(const String & name)
 {
     static std::set<String> topic_configs{
         /// producer
-        "partitioner",
         "partitioner_cb",
         "msg_order_cmp",
         "produce.offset.report",
@@ -150,7 +151,7 @@ DB::Kafka::Conf createConfFromSettings(const KafkaExternalStreamSettings & setti
     for (const auto & part : parts)
     {
         /// skip empty part, this happens when there are redundant / trailing ';'
-        if (unlikely(std::all_of(part.begin(), part.end(), [](char ch) { return isspace(static_cast<unsigned char>(ch)); })))
+        if (unlikely(std::ranges::all_of(part, [](char ch) { return isspace(static_cast<unsigned char>(ch)); })))
             continue;
 
         auto equal_pos = part.find('=');
@@ -171,7 +172,7 @@ DB::Kafka::Conf createConfFromSettings(const KafkaExternalStreamSettings & setti
         conf.set(key, value);
     }
 
-    /// 3. Handle the speicific settings have higher priority
+    /// 3. Handle the specific settings have higher priority
     conf.setBrokers(settings.brokers.value);
 
     conf.set("security.protocol", settings.security_protocol.value);
@@ -212,17 +213,66 @@ void validateMessageKeyColumnType(const DataTypePtr & type)
         TypeIndex::Float64,
         TypeIndex::String,
         TypeIndex::FixedString,
-        TypeIndex::Nullable,
     };
-    if (std::none_of(
-            supported_types.begin(), supported_types.end(), [type](auto supported_type) { return supported_type == type->getTypeId(); }))
-        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "`_tp_message_key` column does not support type {}", type->getName());
+
+    if (type->isNullable())
+    {
+        validateMessageKeyColumnType(static_cast<const DataTypeNullable &>(*type).getNestedType());
+    }
+    else
+    {
+        if (std::ranges::none_of(supported_types, [type](auto supported_type) { return supported_type == type->getTypeId(); }))
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "`_tp_message_key` column does not support type {}", type->getName());
+    }
+}
+
+void validateMessageHeadersColumnType(const DataTypePtr & type)
+{
+    if (!WhichDataType{type}.isMap())
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "`_tp_message_headers` column must have type of map(string, string)");
+
+    const auto & map_type = dynamic_cast<const DataTypeMap &>(*type);
+    if (!WhichDataType{map_type.getKeyType()}.isStringOrFixedString() || !WhichDataType{map_type.getValueType()}.isStringOrFixedString())
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "`_tp_message_headers` column must have type of map(string, string)");
 }
 
 }
 
 namespace ExternalStream
 {
+
+void Kafka::validateSettings(bool attach)
+{
+    chassert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
+
+    if (settings->topic.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
+
+    if (!settings->message_key.value.empty())
+    {
+        if (attach)
+            LOG_ERROR(logger, "Setting `message_key` is deprecated, it won't be used");
+        else
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE, "Setting `message_key` is deprecated, define the _tp_message_key column instead");
+    }
+
+    const auto & columns = getInMemoryMetadataPtr()->getColumns();
+    if (columns.has(ProtonConsts::RESERVED_EVENT_TIME) || columns.has(ProtonConsts::RESERVED_MESSAGE_KEY)
+        || columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
+    {
+        if (settings->isChanged("one_message_per_row") && !settings->one_message_per_row)
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE,
+                "`one_message_per_row` cannot be set to `false` when the `{}` / `{}` / `{}` column is defined",
+                ProtonConsts::RESERVED_EVENT_TIME,
+                ProtonConsts::RESERVED_MESSAGE_KEY,
+                ProtonConsts::RESERVED_MESSAGE_HEADERS);
+
+        settings->set("one_message_per_row", true);
+    }
+}
+
 
 DB::Kafka::Conf Kafka::createConf(KafkaExternalStreamSettings settings_)
 {
@@ -238,62 +288,37 @@ DB::Kafka::Conf Kafka::createConf(KafkaExternalStreamSettings settings_)
 }
 
 Kafka::Kafka(
-    IStorage * storage,
+    StorageID storage_id,
+    StorageInMemoryMetadata storage_metadata_,
     std::unique_ptr<ExternalStreamSettings> settings_,
-    const ASTs & engine_args_,
-    StorageInMemoryMetadata & storage_metadata,
+    ASTs engine_args_,
     bool attach,
     ExternalStreamCounterPtr external_stream_counter_,
     ContextPtr context)
-    : StorageExternalStreamImpl(storage, std::move(settings_), context)
-    , engine_args(engine_args_)
-    , external_stream_counter(external_stream_counter_)
+    : StorageExternalStreamImpl(std::move(storage_id), storage_metadata_, std::move(settings_), context)
+    , engine_args(std::move(engine_args_))
+    , external_stream_counter(std::move(external_stream_counter_))
     , poll_timeout_ms(settings->poll_waittime_ms.value)
 {
-    assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
     assert(external_stream_counter);
 
-    if (settings->topic.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
+    validateSettings(attach);
 
-    if (storage_metadata.getColumns().has(ProtonConsts::RESERVED_MESSAGE_KEY))
+    const auto & columns = getInMemoryMetadataPtr()->getColumns();
+
+    if (columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
     {
-        validateMessageKeyColumnType(
-            storage_metadata.getColumns().getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
-
-        if (!settings->message_key.value.empty())
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE,
-                "`message_key` cannot be set when the `{}` column is defined",
-                ProtonConsts::RESERVED_MESSAGE_KEY);
+        validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
 
         if (hasCustomShardingExpr())
             throw Exception(
                 ErrorCodes::INVALID_SETTING_VALUE,
                 "`sharding_expr` cannot be set when the `{}` column is defined",
                 ProtonConsts::RESERVED_MESSAGE_KEY);
-
-        if (settings->isChanged("one_message_per_row") && !settings->one_message_per_row)
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE,
-                "`one_message_per_row` cannot be set to `false` when the `{}` column is defined",
-                ProtonConsts::RESERVED_MESSAGE_KEY);
-
-        settings->set("one_message_per_row", true);
     }
 
-    if (!settings->message_key.value.empty())
-    {
-        validateMessageKey(settings->message_key.value, storage, context);
-
-        if (hasCustomShardingExpr())
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "`sharding_expr` and `message_key` cannot be used together");
-
-        /// When message_key is set, each row should be sent as one message, it doesn't make any sense otherwise.
-        if (settings->isChanged("one_message_per_row") && !settings->one_message_per_row)
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "`one_message_per_row` cannot be set to `false` when `message_key` is set");
-        settings->set("one_message_per_row", true);
-    }
+    if (columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
+        validateMessageHeadersColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_HEADERS).type);
 
     cacheVirtualColumnNamesAndTypes();
 
@@ -322,10 +347,11 @@ Kafka::Kafka(
 
 void Kafka::startup()
 {
+    StorageExternalStreamImpl::startup();
     LOG_INFO(logger, "Starting Kafka External Stream");
 }
 
-void Kafka::shutdown()
+void Kafka::shutdown(bool /*dropping*/)
 {
     LOG_INFO(logger, "Shutting down Kafka External Stream");
 
@@ -352,6 +378,11 @@ NamesAndTypesList Kafka::getVirtuals() const
     return virtual_column_names_and_types;
 }
 
+std::optional<String> Kafka::preferredColumn() const
+{
+    return ProtonConsts::RESERVED_EVENT_SEQUENCE_ID;
+}
+
 void Kafka::cacheVirtualColumnNamesAndTypes()
 {
     virtual_column_names_and_types.push_back(
@@ -369,7 +400,7 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
         NameAndTypePair(ProtonConsts::RESERVED_MESSAGE_HEADERS, std::make_shared<DataTypeMap>(header_types)));
 }
 
-std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
+std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<uint64_t> & shards_to_query) const
 {
     assert(seek_to_info);
     seek_to_info->replicateForShards(static_cast<uint32_t>(shards_to_query.size()));
@@ -391,41 +422,10 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
     }
 }
 
-void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, const ContextPtr & context)
-{
-    const auto & key = message_key_.c_str();
-    Tokens tokens(key, key + message_key_.size(), 0);
-    IParser::Pos pos(tokens, 0);
-    Expected expected;
-    ParserExpression p_id;
-    if (!p_id.parse(pos, message_key_ast, expected))
-        throw Exception(
-            ErrorCodes::INVALID_SETTING_VALUE,
-            "message_key was not a valid expression, parse failed at {}, expected {}",
-            expected.max_parsed_pos,
-            fmt::join(expected.variants, ", "));
-
-    if (!pos->isEnd())
-        throw Exception(
-            ErrorCodes::INVALID_SETTING_VALUE,
-            "message_key must be a single expression, got extra characters: {}",
-            expected.max_parsed_pos);
-
-    auto syntax_result = TreeRewriter(context).analyze(message_key_ast, storage->getInMemoryMetadata().getColumns().getAllPhysical());
-    auto analyzer = ExpressionAnalyzer(message_key_ast, syntax_result, context).getActions(true);
-    const auto & block = analyzer->getSampleBlock();
-    if (block.columns() != 1)
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key expression must return exactly one column");
-
-    auto type_id = block.getByPosition(0).type->getTypeId();
-    if (type_id != TypeIndex::String && type_id != TypeIndex::FixedString)
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must have type of string");
-}
-
 /// Validate the topic still exists, specified partitions are still valid etc
 void Kafka::validate()
 {
-    if (client->getPartitionCount(topicName()) < 1)
+    if (client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds()) < 1)
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Topic has no partitions, topic={}", topicName());
 }
 
@@ -435,13 +435,14 @@ std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
     if (!settings->one_message_per_row.value)
         return {};
 
-    auto shards_to_query = getShardsToQuery(settings_ref.shards.value, client->getPartitionCount(topicName()));
+    auto shards_to_query = parseQueryShards(
+        settings_ref.shards.value, client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds()));
     LOG_INFO(logger, "Counting number of messages topic={} partitions=[{}]", topicName(), fmt::join(shards_to_query, ","));
 
     UInt64 rows = 0;
     for (auto shard : shards_to_query)
     {
-        auto marks = client->getConsumer(topicName())->queryWatermarkOffsets(shard);
+        auto marks = client->getConsumer(topicName())->queryWatermarkOffsets(static_cast<Int32>(shard));
         LOG_INFO(logger, "Watermark offsets topic={} partition={} low={} high={}", topicName(), shard, marks.low, marks.high);
         rows += marks.high - marks.low;
     }
@@ -450,7 +451,7 @@ std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
 
 std::vector<int64_t> Kafka::getLastSNs() const
 {
-    auto partitions = client->getPartitionCount(topicName());
+    auto partitions = client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds());
 
     std::vector<int64_t> result;
     result.reserve(partitions);
@@ -478,10 +479,11 @@ Pipe Kafka::read(
 
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
-    auto shards_to_query = getShardsToQuery(context->getSettingsRef().shards.value, consumer->getPartitionCount());
-    assert(!shards_to_query.empty());
+    auto shards_to_query = parseQueryShards(
+        context->getSettingsRef().shards.value, consumer->getPartitionCount(settings->connection_timeout_ms.value.totalMilliseconds()));
+    chassert(!shards_to_query.empty());
 
-    auto streaming = query_info.syntax_analyzer_result->streaming;
+    auto streaming = query_info.isStreaming();
 
     LOG_INFO(
         logger,
@@ -520,7 +522,7 @@ Pipe Kafka::read(
             std::optional<Int64> high_watermark = std::nullopt;
             if (!streaming)
             {
-                auto marks = consumer->queryWatermarkOffsets(shard);
+                auto marks = consumer->queryWatermarkOffsets(static_cast<Int32>(shard));
                 LOG_INFO(logger, "Watermarks topic={} partition={} low={} high={}", topicName(), shard, marks.low, marks.high);
                 high_watermark = marks.high;
 
@@ -532,7 +534,7 @@ Pipe Kafka::read(
                 }
                 else if (offset >= 0 && offset < marks.low) /// if offset < marks.low, consuming will stuck
                     offset = marks.low;
-                else if (offset == ProtonConsts::LatestSN || offset > marks.high)
+                else if (offset == cluster::Constants::LatestSN || offset > marks.high)
                     offset = marks.high;
             }
             pipes.emplace_back(std::make_shared<KafkaSource>(
@@ -548,8 +550,8 @@ Pipe Kafka::read(
                 max_block_size,
                 settings->consumer_stall_timeout_ms.totalMilliseconds(),
                 external_stream_counter,
-                logger,
-                context));
+                context,
+                logger));
         }
     }
 
@@ -575,13 +577,14 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
     auto sink = std::make_shared<KafkaSink>(
         *this,
         metadata_snapshot->getSampleBlock(),
-        message_key_ast,
         producer,
+        settings->connection_timeout_ms.value.totalMilliseconds(),
+        /*refresh_topic_partitions=*/context->isQueryFromMaterializedView(),
         external_stream_counter,
-        &Poco::Logger::get(fmt::format("{}.{}", getLoggerName(), producer->name())),
+        getLogger(fmt::format("{}.{}", getLoggerName(), producer->name())),
         context);
 
-    producer->start();
+    producer->start(/*need_poll=*/context->isQueryFromMaterializedView());
     return sink;
 }
 

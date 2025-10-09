@@ -1,0 +1,91 @@
+tags:
+  - versioned_kv_aggr
+description: versioned_kv with multiple primary keys
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: drop stream if exists test15_versioned_kv_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: create stream test15_versioned_kv_stream(id int64, location string, val float64) primary key (id, location) settings mode='versioned_kv'
+  - type: wait
+    time: 2
+  
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_versioned_kv_stream(id, location, val) values (1, 'a1', 11), (2, 'b1', 22), (3, 'c1', 33)
+    schema:
+      - name: id
+        type: int64
+      - name: location
+        type: string
+      - name: val
+        type: float64
+  - type: wait
+    time: 2
+
+  - name: "1510"
+    type: stream
+    node: 
+      - p1
+    query:
+      select count(id), min(val), max(val), sum(val), avg(val) from test15_versioned_kv_stream emit periodic 2s
+    schema:
+      - name: count(id)
+        type: uint64
+      - name: min(val)
+        type: float64
+      - name: max(val)
+        type: float64
+      - name: sum(val)
+        type: float64
+      - name: avg(val)
+        type: float64
+
+  - type: check
+    target_name: "1510"
+    expected_result:
+      - - "3"
+        - "11"
+        - "33"
+        - "66"
+        - "22"
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_versioned_kv_stream(id, location, val) values (1, 'a2', 1), (2, 'b1', 44), (3, 'c2', 55)
+    schema:
+      - name: id
+        type: int64
+      - name: location
+        type: string
+      - name: val
+        type: float64
+
+  - type: check
+    target_name: "1510"
+    expected_result:
+      - - "5"
+        - "1"
+        - "55"
+        - "144"
+        - "28.8"

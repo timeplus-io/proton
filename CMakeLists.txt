@@ -59,8 +59,8 @@ if (ENABLE_CHECK_HEAVY_BUILDS)
     # set CPU time limit to 1000 seconds
     set (RLIMIT_CPU 1000)
 
-    # gcc10/gcc10/clang -fsanitize=memory is too heavy
-    if (SANITIZE STREQUAL "memory")
+    # Sanitizers are too heavy
+    if (SANITIZE OR SANITIZE_COVERAGE OR WITH_COVERAGE)
        set (RLIMIT_DATA 30000000000) # 30G
     endif()
 
@@ -115,6 +115,9 @@ if (CMAKE_GENERATOR STREQUAL "Ninja" AND NOT DISABLE_COLORED_BUILD)
     # Turn on colored output. https://github.com/ninja-build/ninja/wiki/FAQ
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdiagnostics-color=always")
+    # ... such manually setting of flags can be removed once CMake supports a variable to
+    # activate colors in *all* build systems: https://gitlab.kitware.com/cmake/cmake/-/issues/15502
+    # --> available since CMake 3.24: https://stackoverflow.com/a/73349744
 endif ()
 
 include (cmake/check_flags.cmake)
@@ -132,22 +135,13 @@ if (COMPILER_CLANG)
         set(COMPILER_FLAGS "${COMPILER_FLAGS} -gdwarf-aranges")
     endif ()
 
-    if (HAS_USE_CTOR_HOMING)
-        # For more info see https://blog.llvm.org/posts/2021-04-05-constructor-homing-for-debug-info/
-        if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO")
-            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang -fuse-ctor-homing")
-            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -fuse-ctor-homing")
-        endif()
+    # See https://blog.llvm.org/posts/2021-04-05-constructor-homing-for-debug-info/
+    if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang -fuse-ctor-homing")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -fuse-ctor-homing")
     endif()
 
     no_warning(enum-constexpr-conversion) # breaks Protobuf in clang-16
-endif ()
-
-# If compiler has support for -Wreserved-identifier. It is difficult to detect by clang version,
-# because there are two different branches of clang: clang and AppleClang.
-# (AppleClang is not supported by proton, but some developers have misfortune to use it).
-if (HAS_RESERVED_IDENTIFIER)
-    add_compile_definitions (HAS_RESERVED_IDENTIFIER)
 endif ()
 
 option(ENABLE_TESTS "Provide unit_test_dbms target with Google.Test unit tests" ON)
@@ -190,7 +184,7 @@ endif()
 option(USE_DEBUG_HELPERS "Enable debug helpers" ${USE_DEBUG_HELPERS})
 
 # proton : starts
-# to fix linker complain `libunwind: malformed __unwind_info at 0x11BDC292C bad second level page`
+# https://github.com/timeplus-io/proton-enterprise/issues/4415
 # Skip generation of the unwind tables, as they might require a lot of space when sanitizers
 # are enabled and not fit into the .eh_frame section. Disabling the unwind tables might have
 # side effects on code which does frame walking, such as
@@ -283,6 +277,34 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_C_STANDARD 11)
 set (CMAKE_C_EXTENSIONS ON) # required by most contribs written in C
 set (CMAKE_C_STANDARD_REQUIRED ON)
+
+if (COMPILER_GCC OR COMPILER_CLANG)
+    # Enable C++14 sized global deallocation functions. It should be enabled by setting -std=c++14 but I'm not sure.
+    # See https://reviews.llvm.org/D112921
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsized-deallocation")
+endif ()
+
+# falign-functions=32 prevents from random performance regressions with the code change. Thus, providing more stable
+# benchmarks.
+if (COMPILER_GCC OR COMPILER_CLANG)
+    set(COMPILER_FLAGS "${COMPILER_FLAGS} -falign-functions=32")
+endif ()
+
+if (ARCH_AMD64)
+    # align branches within a 32-Byte boundary to avoid the potential performance loss when code layout change,
+    # which makes benchmark results more stable.
+    set(BRANCHES_WITHIN_32B_BOUNDARIES "-mbranches-within-32B-boundaries")
+    if (COMPILER_GCC)
+        # gcc is in assembler, need to add "-Wa," prefix
+        set(BRANCHES_WITHIN_32B_BOUNDARIES "-Wa,${BRANCHES_WITHIN_32B_BOUNDARIES}")
+    endif()
+
+    set(COMPILER_FLAGS "${COMPILER_FLAGS} ${BRANCHES_WITHIN_32B_BOUNDARIES}")
+endif()
+
+if (COMPILER_GCC)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+endif ()
 
 # Compiler-specific coverage flags e.g. -fcoverage-mapping for gcc
 option(WITH_COVERAGE "Profile the resulting binary/binaries" OFF)
@@ -398,6 +420,7 @@ endif ()
 if (WERROR)
     # Don't pollute CMAKE_CXX_FLAGS with -Werror as it will break some CMake checks.
     # Instead, adopt modern cmake usage requirement.
+    # TODO: Set CMAKE_COMPILE_WARNING_AS_ERROR (cmake 3.24)
     target_compile_options(global-group INTERFACE "-Werror")
 endif ()
 
@@ -412,13 +435,36 @@ endif ()
 
 set (CMAKE_POSTFIX_VARIABLE "CMAKE_${CMAKE_BUILD_TYPE_UC}_POSTFIX")
 
-if (NOT SANITIZE)
-    set (CMAKE_POSITION_INDEPENDENT_CODE OFF)
+# We enable position independent encoding for all build types except build with -flto=thin:
+# 1. Position independent binaries and libraries have no limit for maximum size of relocation. It allows to avoid
+# multiple sophisticated problems like linking with sanitizers or linking of rust.
+# 2. Position independent binaries and libraries are a little bit slower, than position dependent. We consider
+# build with -flto=thin as trully "production" build where each % of performance is important.
+# 3. For some unknow reason -flto=thin lead to some other way of linkage. For example for rust libraries build
+# we don't see any relocation-related errors without -fPIC, but with enabled -flto=thin. While without
+# -flto=thin we have relocation errors like:
+# rust-lld: error: relocation R_X86_64_32S cannot be used against symbol 'SEED_encrypt'; recompile with -fPIC
+#
+# NOTE: -fno-pie disables -fPIC, so that is why we check ENABLE_THINLTO in the branch bellow
+#
+# For some sophisticated platforms we have different issues with fPIC:
+# For example riscv toolchain itself compiled without fPIC
+if (NOT ENABLE_THINLTO AND (ARCH_AMD64 OR ARCH_AARCH64))
+    set(ENABLE_POSITION_INDEPENDENT_BINARY 1)
 endif()
 
-if (OS_LINUX AND NOT (ARCH_AARCH64 OR ARCH_S390X) AND NOT SANITIZE)
-    # Slightly more efficient code can be generated
-    # It's disabled for ARM because otherwise proton cannot run on Android.
+if (ENABLE_POSITION_INDEPENDENT_BINARY)
+    set (CMAKE_POSITION_INDEPENDENT_CODE OFF)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+endif()
+
+if (NOT OS_ANDROID AND OS_LINUX AND NOT ARCH_S390X AND NOT SANITIZE AND NOT ENABLE_POSITION_INDEPENDENT_BINARY)
+    # Using '-no-pie' builds executables with fixed addresses, resulting in slightly more efficient code
+    # and keeping binary addresses constant even with ASLR enabled.
+    # Disabled on Android as it requires PIE: https://source.android.com/docs/security/enhancements#android-5
+    # Disabled on IBM S390X due to build issues with 'no-pie'
+    # Disabled with sanitizers to avoid issues with maximum relocation size: https://github.com/ClickHouse/ClickHouse/pull/49145
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fno-pie")
     set (CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -fno-pie")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie -Wl,-no-pie")
@@ -431,6 +477,8 @@ else()
 endif ()
 
 enable_testing() # Enable for tests without binary
+
+option(ENABLE_OPENSSL_DYNAMIC "This option removes SSL from ClickHouse and will link to the OpenSSL version supplied by OS." OFF)
 
 # when installing to /usr - place configs to /etc but for /usr/local place to /usr/local/etc
 if (CMAKE_INSTALL_PREFIX STREQUAL "/usr")

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Common/NamePrompter.h"
+#include <Parsers/ASTCreateQuery.h>
 #include <Common/ProgressIndication.h>
 #include <Common/InterruptListener.h>
 #include <Common/ShellCommand.h>
 #include <Common/Stopwatch.h>
+#include <Common/DNSResolver.h>
 #include <Core/ExternalTable.h>
 #include <Poco/Util/Application.h>
 #include <Interpreters/Context.h>
@@ -13,6 +15,7 @@
 #include <boost/program_options.hpp>
 #include <Storages/StorageFile.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 
 
 namespace po = boost::program_options;
@@ -69,7 +72,7 @@ protected:
 
     virtual bool processWithFuzzing(const String &)
     {
-        throw Exception("Query processing with fuzzing is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Query processing with fuzzing is not implemented");
     }
 
     virtual bool executeMultiQuery(const String & all_queries_text) = 0;
@@ -103,6 +106,7 @@ protected:
     {
         std::optional<ProgramOptionsDescription> main_description;
         std::optional<ProgramOptionsDescription> external_description;
+        std::optional<ProgramOptionsDescription> hosts_and_ports_description;
     };
 
     virtual void updateLoggerLevel(const String &) {}
@@ -110,11 +114,22 @@ protected:
     virtual void addOptions(OptionsDescription & options_description) = 0;
     virtual void processOptions(const OptionsDescription & options_description,
                                 const CommandLineOptions & options,
-                                const std::vector<Arguments> & external_tables_arguments) = 0;
+                                const std::vector<Arguments> & external_tables_arguments,
+                                const std::vector<Arguments> & hosts_and_ports_arguments) = 0;
     virtual void processConfig() = 0;
+
+    void setInsertionTable(const ASTInsertQuery & insert_query);
 
 protected:
     bool processQueryText(const String & text);
+
+    virtual void readArguments(
+        int argc,
+        char ** argv,
+        Arguments & common_arguments,
+        std::vector<Arguments> & external_tables_arguments,
+        std::vector<Arguments> & hosts_and_ports_arguments) = 0;
+
 
 private:
     void receiveResult(ASTPtr parsed_query);
@@ -141,19 +156,21 @@ private:
     void sendDataFromStdin(Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query);
     void sendExternalTables(ASTPtr parsed_query);
 
-    void initBlockOutputStream(const Block & block, ASTPtr parsed_query);
+    void initOutputFormat(const Block & block, ASTPtr parsed_query);
     void initLogsOutputStream();
 
     String prompt() const;
 
     void resetOutput();
-    void outputQueryInfo(bool echo_query_);
-    void readArguments(int argc, char ** argv, Arguments & common_arguments, std::vector<Arguments> & external_tables_arguments);
     void parseAndCheckOptions(OptionsDescription & options_description, po::variables_map & options, Arguments & arguments);
 
     void updateSuggest(const ASTCreateQuery & ast_create);
 
+    bool addMergeTreeSettings(ASTCreateQuery & ast_create);
+
 protected:
+    static bool isSyncInsertWithData(const ASTInsertQuery & insert_query, const ContextPtr & context);
+
     SharedContextHolder shared_context;
     ContextMutablePtr global_context;
 
@@ -196,6 +213,7 @@ protected:
 
     /// Settings specified via command line args
     Settings cmd_settings;
+    MergeTreeSettings cmd_merge_tree_settings;
 
     /// thread status should be destructed before shared context because it relies on process list.
     std::optional<ThreadStatus> thread_status;
@@ -267,6 +285,17 @@ protected:
     } profile_events;
 
     QueryProcessingStage::Enum query_processing_stage;
+
+    struct HostAndPort
+    {
+        String host;
+        std::optional<UInt16> port;
+    };
+
+    std::vector<HostAndPort> hosts_and_ports{};
+
+    bool allow_repeated_settings = false;
+    bool allow_merge_tree_settings = false;
 
     bool cancelled = false;
 

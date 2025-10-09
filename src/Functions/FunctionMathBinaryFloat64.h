@@ -42,13 +42,18 @@ private:
         const auto check_argument_type = [this] (const IDataType * arg)
         {
             if (!isNativeNumber(arg))
-                throw Exception{"Illegal type " + arg->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}",
+                    arg->getName(), getName());
         };
 
         check_argument_type(arguments.front().get());
         check_argument_type(arguments.back().get());
 
+        return std::make_shared<DataTypeFloat64>();
+    }
+
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
         return std::make_shared<DataTypeFloat64>();
     }
 
@@ -185,16 +190,16 @@ private:
                 if ((res = executeTyped<LeftType, RightType>(left_arg_typed, right_arg)))
                     return true;
 
-                throw Exception{"Illegal column " + right_arg->getName() + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of second argument of function {}",
+                    right_arg->getName(), getName());
             }
             if (const auto left_arg_typed = checkAndGetColumnConst<ColVecLeft>(left_arg))
             {
                 if ((res = executeTyped<LeftType, RightType>(left_arg_typed, right_arg)))
                     return true;
 
-                throw Exception{"Illegal column " + right_arg->getName() + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN};
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of second argument of function {}",
+                    right_arg->getName(), getName());
             }
 
             return false;
@@ -204,8 +209,8 @@ private:
         TypeIndex right_index = col_right.type->getTypeId();
 
         if (!callOnBasicTypes<true, true, false, false>(left_index, right_index, call))
-            throw Exception{"Illegal column " + col_left.column->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}",
+                col_left.column->getName(), getName());
 
         return res;
     }

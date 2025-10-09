@@ -1,0 +1,91 @@
+tags:
+- global aggr
+- two level
+- emit changelog
+description: global aggregation emit changelog query over global aggregation emit
+  changelog
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test30_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test30_stream (i int, k string)
+- type: wait
+  time: 2
+
+- name: 3000
+  type: stream
+  query: select count() from (select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s) emit periodic 1s
+  schema:
+  - name: count()
+    type: uint64
+- type: wait
+  time: 1
+
+- name: 3001
+  type: stream
+  query: select count(), _tp_delta from (select k, count() from changelog(test30_stream, i) group by k emit periodic 1s) emit changelog periodic 1s
+  schema:
+  - name: count()
+    type: uint64
+  - name: _tp_delta
+    type: int8
+
+- name: 3002
+  type: stream
+  query: select count(), _tp_delta from (select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s) emit changelog periodic 1s
+  schema:
+  - name: count()
+    type: uint64
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream(i, k) values
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+  inputs:
+    - [1, 'k1']
+    - [2, 'k1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream(i, k) values
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+  inputs:
+    - [1, 'k2']
+
+- type: check
+  target_name: 3000
+  expected_result:
+  - [1]
+  - [2]
+
+- type: check
+  target_name: 3001
+  expected_result:
+  - [1, 1]
+  - [1, -1]
+  - [2, 1]
+
+- type: check
+  target_name: 3002
+  expected_result:
+  - [1, 1]
+  - [1, -1]
+  - [2, 1]

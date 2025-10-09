@@ -1,0 +1,229 @@
+tags:
+  - cleanup
+
+description: |
+  Tests covering the sync recreate clean scenario.
+  Main steps:
+  - create 2 streams
+  - insert data into 2 streams
+  - execute sync recreate cleanup rest api on 1st stream
+  - execute async recreate cleanup rest api on 2st stream
+  - check no data in 2 streams
+
+  - execute sync delete cleanup rest api on 2st stream
+  - execute async delete cleanup rest api on 1st stream
+  - check no stream exist
+
+cluster:
+  - p3k1
+
+steps:
+  # create table
+  - type: query
+    sql: |
+      create stream test37_stream1 (
+        i int32,
+        i8 int8,
+        f32 float32,
+        json string
+      ) settings flush_threshold_ms = '100';
+
+  - type: query
+    sql: |
+      create stream test37_stream2 (
+        s string,
+        dt datetime64(6) default now64(6)
+      ) settings flush_threshold_ms = '100';
+
+  - type: wait
+    time: 2
+
+  # insert data
+  - type: query
+    sql: insert into test37_stream1(i, i8, f32) values (1, 1, 1.1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test37_stream2(s, dt) values
+      ('dev1', '2024-01-01 00:00:01')
+      ('dev2', '2024-01-01 00:00:02');
+
+  - type: wait
+    time: 1
+
+  # query before clean
+  - name: cleanup-5-1
+    type: stream
+    query: SELECT count() FROM table(test37_stream1)
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - name: cleanup-5-2
+    type: stream
+    query: SELECT count() FROM table(test37_stream2)
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: cleanup-5-1
+    expected_result:
+      - [1]
+
+  - type: check
+    target_name: cleanup-5-2
+    expected_result:
+      - [2]
+
+  # recreate cleanup
+  - type: rest
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: recreate
+      stream_list:
+        - test37_stream1
+      database: default
+      synchronous: true
+      timeout_seconds: 600
+  - type: wait
+    time: 2
+
+  - name: cleanup-5-3
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    type: rest
+    query_id: cleanup-5-3
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: recreate
+      stream_list:
+        - test37_stream2
+      database: default
+      synchronous: false
+      timeout_seconds: 600
+  - type: wait
+    time: 5
+
+  - name: cleanup-5-4
+    type: rest
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=3_cleanup-5-3
+
+  - type: check
+    target_name: cleanup-5-4
+    mode: random
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - test37_stream2
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-5-3
+
+  # check: query after recreate clean
+  - name: cleanup-5-5
+    type: stream
+    query: SELECT count() FROM table(test37_stream1)
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - name: cleanup-5-6
+    type: stream
+    query: SELECT count() FROM table(test37_stream2)
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: cleanup-5-5
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: cleanup-5-6
+    expected_result:
+      - [0]
+
+  # delete cleanup
+  - name: cleanup-5-7
+    type: rest
+    query_id: cleanup-5-7
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: delete
+      stream_list:
+        - test37_stream2
+      database: default
+      synchronous: true
+      timeout_seconds: 600
+  - type: wait
+    time: 2
+
+  - name: cleanup-5-8
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: rest
+    query_id: cleanup-5-8
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: delete
+      stream_list:
+        - test37_stream1
+      database: default
+      synchronous: false
+      timeout_seconds: 600
+  - type: wait
+    time: 3
+
+  - name: cleanup-5-9
+    type: rest
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=2_cleanup-5-8
+
+  - type: check
+    target_name: cleanup-5-9
+    mode: random
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - test37_stream1
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-5-8
+
+  # check: query after delete clean
+  - name: cleanup-5-10
+    type: stream
+    query: show streams where name in ('test37_stream1', 'test37_stream2')
+    schema:
+      - name: name
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: cleanup-5-10
+    expected_result:
+      - []

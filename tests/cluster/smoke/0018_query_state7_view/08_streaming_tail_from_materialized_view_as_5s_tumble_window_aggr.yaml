@@ -1,0 +1,148 @@
+tags:
+- query_state
+- materialized view
+description: streaming tail from materialized view as tumble window aggregation state
+  checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists test19_state_mv7
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists test19_state_view7
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream7
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream7 (id string, location string, value float,
+    timestamp datetime64(3) default now64(3))
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view test19_state_mv7 as select id, sum(value) as sum_value,
+    window_start as win_start, window_end as win_end from tumble(test19_state_stream7,
+    timestamp, 5s) group by id, window_start, window_end
+- type: wait
+  name: 1
+
+- name: '19172'
+  type: stream
+  query_id: '19172'
+  query: subscribe to select id, sum_value, win_start, win_end from test19_state_mv7
+    settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: string
+  - name: sum_value
+    type: float64
+  - name: win_start
+    type: datetime64(3)
+  - name: win_end
+    type: datetime64(3)
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev1',
+    'ca', 58.3, '2020-02-02 20:00:01') ('dev1', 'ca', 59, '2020-02-02 20:00:02') ('dev2',
+    'ca', 66, '2020-02-02 20:00:03')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 58.3, '2020-02-02 20:00:01']
+  - [dev1, 'ca', 59, '2020-02-02 20:00:02']
+  - [dev2, 'ca', 66, '2020-02-02 20:00:03']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev1',
+    'ca', 77, '2020-02-02 20:00:04') ('dev2', 'ca', 69, '2020-02-02 20:00:05') ('dev3',
+    'ca', 55, '2020-02-02 20:00:07')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 77, '2020-02-02 20:00:04']
+  - [dev2, 'ca', 69, '2020-02-02 20:00:05']
+  - [dev3, 'ca', 55, '2020-02-02 20:00:07']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev3',
+    'ca', 55, '2020-02-02 20:00:07') ('dev2', 'ca', 69, '2020-02-02 20:00:08') ('dev3',
+    'ca', 72, '2020-02-02 20:00:09')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev3, 'ca', 55, '2020-02-02 20:00:07']
+  - [dev2, 'ca', 69, '2020-02-02 20:00:08']
+  - [dev3, 'ca', 72, '2020-02-02 20:00:09']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev6',
+    'ca', 66, '2020-02-02 20:00:11')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev6, 'ca', 66, '2020-02-02 20:00:11']
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '19172'
+
+- type: query
+  sql: drop view if exists test19_state_mv7
+
+- type: check
+  target_name: '19172'
+  mode: random
+  expected_result:
+  - [dev1, '194.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+  - [dev2, '66.0', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+  - [dev3, '182.0', '2020-02-02 20:00:05', '2020-02-02 20:00:10']
+  - [dev2, '138.0', '2020-02-02 20:00:05', '2020-02-02 20:00:10']

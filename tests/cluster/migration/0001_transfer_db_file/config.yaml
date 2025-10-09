@@ -1,0 +1,50 @@
+name: transfer_db_file
+
+description: Test sling data transfer between timeplus and file
+
+tags:
+  - migration
+  - sling
+
+setup:
+  scope: suite
+  steps:
+  - type: command
+    node: [sling]
+    shell: |
+      sling conns list
+
+  - type: command
+    node: [sling]
+    shell: |
+      sling conns test TIMEPLUS
+
+  - type: command
+    node: [sling]
+    shell: pwd
+
+  - type: command
+    node: [sling]
+    shell: |
+      rm -rf migration_test *.csv
+      mkdir -p migration_test
+
+  - type: query
+    sql: DROP STREAM IF EXISTS src;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS tgt;
+
+teardown:
+  scope: suite
+  steps:
+  - type: command
+    node: [sling]
+    shell: |
+      rm -rf migration_test
+
+  - type: query
+    sql: DROP STREAM IF EXISTS src;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS tgt;

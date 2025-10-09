@@ -1,0 +1,58 @@
+tags:
+- data_enrichment_join
+- left-join
+description: append-only left asof join append-only
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test10_append_left_stream;
+  
+- type: query
+  sql: drop stream if exists test10_append_right_stream;
+  
+- type: wait
+  time: 1
+  
+- type: query
+  sql: create stream test10_append_left_stream(i int, k string);
+  
+- type: query
+  sql: create stream test10_append_right_stream(j int, kk string);
+  
+- type: wait
+  time: 2
+  
+- name: '1058'
+  type: stream
+  query: SELECT i, k, j, kk FROM test10_append_left_stream left asof join test10_append_right_stream
+    ON k = kk AND i <= j
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+    - name: j
+      type: int32
+    - name: kk
+      type: string
+      
+- type: wait
+  time: 1
+  
+- type: query
+  sql: insert into test10_append_right_stream(j, kk) VALUES (1, 'a'), (3, 'a'), (2,
+    'b'), (4, 'c');
+  
+- type: query
+  sql: insert into test10_append_left_stream(i, k) VALUES (2, 'a');
+  
+- type: query
+  sql: insert into test10_append_left_stream(i, k) VALUES (3, 'b');
+
+- type: check
+  target_name: '1058'
+  expected_result:
+  - [2, a, 3, a]
+  - [3, b, 0, '']

@@ -32,6 +32,13 @@ public:
         return ptr;
     }
 
+    ASTSubquery() = default;
+
+    explicit ASTSubquery(ASTPtr child)
+    {
+        children.emplace_back(std::move(child));
+    }
+
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
 protected:

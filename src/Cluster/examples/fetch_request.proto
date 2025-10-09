@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+enum FetchIsolation {
+  Committed = 0;
+  LogEnd = 1;
+}
+
+message UUID {
+  // UUID Fields
+  bytes uuid = 1;
+}
+
+message Stream {
+  string ns = 1;
+  string name = 2;
+  UUID id = 3;
+}
+
+message FetchShard {
+    uint32 shard = 1;
+    int64 sn = 2;
+    uint64 max_bytes = 3;
+    int64 file_position = 4;
+    uint64 schema_version = 5;
+    repeated uint64 request_column_positions = 6;
+    string predicates = 7;
+}
+
+message FetchStream {
+  Stream stream = 1;
+  repeated FetchShard fetch_shards = 2;
+}
+
+message ForgetStream {
+  Stream stream = 1;
+  repeated uint32 shards = 2;
+}
+
+message FetchRequestData {
+  FetchIsolation isolation = 1;
+  int64 max_wait_ms = 2;
+  uint64 max_bytes = 3;
+  uint64 session_id = 4;
+  uint64 session_epoch = 5;
+  string locality = 6;
+  repeated FetchStream fetch_streams = 7;
+  repeated ForgetStream forget_streams = 8;
+}
+
+message RequestHeaderData {
+  uint32 opcode = 1;
+  uint32 version = 2;
+  uint64 correlation_id = 3;
+}
+
+message FetchRequest {
+    FetchRequestData request_data = 1;
+}

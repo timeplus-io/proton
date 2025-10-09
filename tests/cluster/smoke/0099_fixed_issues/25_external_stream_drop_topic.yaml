@@ -1,0 +1,90 @@
+tags:
+  - materialized view
+description: (#4316) fix double free issue when drop kafka topic during injest data into external stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 3
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists test_mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_random_stream;
+
+  - type: query
+    sql: drop stream if exists test_target;
+
+  - type: query
+    sql: drop stream if exists test_external;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create random stream test_random_stream
+          (
+            id string default to_string(rand() % 100),
+            value string default 'abcd'
+          );
+
+  - type: query
+    sql: create stream test_target
+          (
+            id int64,
+            value string
+          );
+
+  - type: query
+    sql: create external stream test_external
+          (
+            id string,
+            value string
+          )
+          settings type='kafka', brokers='stream-store:9092', topic='test', data_format='JSONEachRow';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create materialized view test_mv into test_target as select to_int64(id), value from test_external;
+  - type: wait
+    time: 1
+
+  - name: 2100
+    type: stream
+    query: insert into test_external select id, value from test_random_stream settings eps=5;
+  - type: wait
+    time: 5
+
+  - type: kafka
+    name: delete
+    topic: test
+
+  # need wait some time here for this issue
+  - type: wait
+    time: 25
+
+  - name: 2101
+    type: health_check
+    protocol: tcp
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: 2101
+    expected_result:
+    - ['true']

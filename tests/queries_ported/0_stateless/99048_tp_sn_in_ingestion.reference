@@ -1,0 +1,15 @@
+=== Initial state of destination stream ===
+0
+=== State after ingestion ===
+2
+=== Testing _tp_sn restriction ===
+=== State after testing _tp_sn restriction ===
+2
+=== MV State after ingesting data with all columns ===
+7
+=== MV State after ingesting data without _tp_sn ===
+7
+=== MV State after ingesting data without _tp_time ===
+7
+=== MV State after ingesting data without id ===
+7

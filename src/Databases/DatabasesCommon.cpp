@@ -26,79 +26,6 @@ namespace ErrorCodes
     extern const int CANNOT_GET_CREATE_STREAM_QUERY;
 }
 
-void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemoryMetadata & metadata)
-{
-    auto & ast_create_query = query->as<ASTCreateQuery &>();
-
-    bool has_structure = ast_create_query.columns_list && ast_create_query.columns_list->columns;
-
-    if (ast_create_query.as_table_function && !has_structure)
-        /// proton: starts
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot alter stream {} because it was created AS function"
-                                                     " and doesn't have structure in metadata", backQuote(ast_create_query.getTable()));
-        /// proton: ends
-
-    if (!has_structure && !ast_create_query.is_dictionary)
-        /// proton: starts
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot alter stream {} metadata doesn't have structure", backQuote(ast_create_query.getTable()));
-        /// proton: ends
-
-    if (!ast_create_query.is_dictionary)
-    {
-        ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata.columns);
-        ASTPtr new_indices = InterpreterCreateQuery::formatIndices(metadata.secondary_indices);
-        ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(metadata.constraints);
-        ASTPtr new_projections = InterpreterCreateQuery::formatProjections(metadata.projections);
-
-        ast_create_query.columns_list->replace(ast_create_query.columns_list->columns, new_columns);
-        ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->indices, new_indices);
-        ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->constraints, new_constraints);
-        ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->projections, new_projections);
-    }
-
-    if (metadata.select.inner_query)
-    {
-        query->replace(ast_create_query.select, metadata.select.inner_query);
-    }
-
-    /// MaterializedView, Dictionary are types of CREATE query without storage.
-    if (ast_create_query.storage)
-    {
-        ASTStorage & storage_ast = *ast_create_query.storage;
-
-        bool is_extended_storage_def
-            = storage_ast.partition_by || storage_ast.primary_key || storage_ast.order_by || storage_ast.sample_by || storage_ast.settings;
-
-        if (is_extended_storage_def)
-        {
-            if (metadata.sorting_key.definition_ast)
-                storage_ast.set(storage_ast.order_by, metadata.sorting_key.definition_ast);
-
-            if (metadata.primary_key.definition_ast)
-                storage_ast.set(storage_ast.primary_key, metadata.primary_key.definition_ast);
-
-            if (metadata.sampling_key.definition_ast)
-                storage_ast.set(storage_ast.sample_by, metadata.sampling_key.definition_ast);
-            else if (storage_ast.sample_by != nullptr) /// SAMPLE BY was removed
-                storage_ast.sample_by = nullptr;
-
-            if (metadata.table_ttl.definition_ast)
-                storage_ast.set(storage_ast.ttl_table, metadata.table_ttl.definition_ast);
-            else if (storage_ast.ttl_table != nullptr) /// TTL was removed
-                storage_ast.ttl_table = nullptr;
-
-            if (metadata.settings_changes)
-                storage_ast.set(storage_ast.settings, metadata.settings_changes);
-        }
-    }
-
-    if (metadata.comment.empty())
-        ast_create_query.reset(ast_create_query.comment);
-    else
-        ast_create_query.set(ast_create_query.comment, std::make_shared<ASTLiteral>(metadata.comment));
-}
-
-
 ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_storage, bool only_ordinary, uint32_t max_parser_depth, bool throw_on_error)
 {
     auto table_id = storage->getStorageID();
@@ -106,7 +33,8 @@ ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_
     if (metadata_ptr == nullptr)
     {
         if (throw_on_error)
-            throw Exception(ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY, "Cannot get metadata of {}.{}", backQuote(table_id.database_name), backQuote(table_id.table_name));
+            throw Exception(ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY, "Cannot get metadata of {}.{}",
+                            backQuote(table_id.database_name), backQuote(table_id.table_name));
         else
             return nullptr;
     }
@@ -128,7 +56,7 @@ ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_
             columns = metadata_ptr->columns.getAll();
         for (const auto & column_name_and_type: columns)
         {
-            const auto & ast_column_declaration = std::make_shared<ASTColumnDeclaration>();
+            const auto ast_column_declaration = std::make_shared<ASTColumnDeclaration>();
             ast_column_declaration->name = column_name_and_type.name;
             /// parser typename
             {
@@ -143,7 +71,8 @@ ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_
                 if (!parser.parse(pos, ast_type, expected))
                 {
                     if (throw_on_error)
-                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot parser metadata of {}.{}", backQuote(table_id.database_name), backQuote(table_id.table_name));
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot parse metadata of {}.{}",
+                                        backQuote(table_id.database_name), backQuote(table_id.table_name));
                     else
                         return nullptr;
                 }
@@ -160,7 +89,7 @@ ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_
 
 
 DatabaseWithOwnTablesBase::DatabaseWithOwnTablesBase(const String & name_, const String & logger, ContextPtr context_)
-        : IDatabase(name_), WithContext(context_->getGlobalContext()), log(&Poco::Logger::get(logger))
+        : IDatabase(name_), WithContext(context_->getGlobalContext()), log(getLogger(logger))
 {
 }
 
@@ -211,10 +140,8 @@ StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_n
 
     auto it = tables.find(table_name);
     if (it == tables.end())
-        /// proton: starts
         throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist",
                         backQuote(database_name), backQuote(table_name));
-        /// proton: ends
     res = it->second;
     tables.erase(it);
 
@@ -238,10 +165,8 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
 {
     auto table_id = table->getStorageID();
     if (table_id.database_name != database_name)
-        /// proton: starts
         throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create stream in `{}`",
                         database_name, table_id.database_name);
-        /// proton: ends
 
     if (table_id.hasUUID())
     {
@@ -253,9 +178,7 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
     {
         if (table_id.hasUUID())
             DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
-        /// proton: starts
         throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "{} {} already exists.", table->getName(), table_id.getFullTableName());
-        /// proton: ends
     }
 }
 
@@ -272,13 +195,13 @@ void DatabaseWithOwnTablesBase::shutdown()
 
     for (const auto & kv : tables_snapshot)
     {
-        kv.second->flush();
+        kv.second->flush(/*dropping=*/false);
     }
 
     for (const auto & kv : tables_snapshot)
     {
         auto table_id = kv.second->getStorageID();
-        kv.second->flushAndShutdown();
+        kv.second->flushAndShutdown(/*dropping=*/false);
         if (table_id.hasUUID())
         {
             assert(getDatabaseName() == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil);
@@ -344,8 +267,8 @@ StorageInMemoryCreateQueryPtr parseCreateQueryFromAST(const IAST * query, const 
     create->as_table.clear();
     create->if_not_exists = false;
     create->replace_view = false;
-    create->replace_table = false;
-    create->create_or_replace = false;
+    /// create->replace_table = false;
+    /// create->create_or_replace = false;
 
     /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
     if (!create->isView())

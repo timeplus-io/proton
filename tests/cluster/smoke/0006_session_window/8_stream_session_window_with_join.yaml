@@ -1,0 +1,78 @@
+tags:
+  - session window
+  - cluster_table_bug
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: stream session window with multiple session keys, triggered by interval,
+  2s interval with session_size 10, joins with test7_session_d
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test7_session_d
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test7_session_d (id string, type string)
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test7_session_d (id, type) values ('dev1', 'roof') ('dev2', 'field')
+      ('dev3', 'window') ('dev4', 'wall') ('dev5', 'roof') ('dev6', 'window') ('dev7',
+      'wall') ('dev8', 'floor')
+  - type: wait
+    time: 3
+
+  - name: '701'
+    type: stream
+    query: |
+      select max(value), to_string(window_start), to_string(window_end), id, b.type, location
+      from session(test7_session, timestamp, 2s) as a
+      join table(test7_session_d) as b
+      on a.id = b.id
+      partition by id, location
+      group by window_start, window_end, b.type
+    schema:
+      - name: max(value)
+        type: float32
+      - name: to_string(window_start)
+        type: string
+      - name: to_string(window_end)
+        type: string
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: location
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:00')
+        ('dev2', 'bj', 58.3, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:01')
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:02')
+        ('dev2', 'ca', 60, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:02')
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev2', 'ca', 67, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:15')
+
+  - type: check
+    target_name: '701'
+    expected_result:
+      - [ '57.3', '2020-02-02 20:00:00.000', '2020-02-02 20:00:02.000', dev1, roof, ca ]
+      - [ '60', '2020-02-02 20:00:02.000', '2020-02-02 20:00:12.000', dev2, field, ca ]
+
+  - type: query
+    sql: drop stream if exists test7_session_d

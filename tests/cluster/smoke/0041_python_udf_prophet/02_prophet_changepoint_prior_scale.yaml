@@ -1,0 +1,78 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.changepoint_prior_scale function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (ds date, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getChangepointPriorScale(ds date, y float) RETURNS array(tuple(string, float, float, float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+      from prophet import Prophet
+
+      class getChangepointPriorScale:
+          def __init__(self):
+              self.changepoint_prior_scale = [()]
+
+          def serialize(self):
+              data = {}
+              data['changepoint_prior_scale'] = self.changepoint_prior_scale
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.changepoint_prior_scale = data['changepoint_prior_scale']
+
+          def merge(self, other):
+              pass
+
+          def process(self, dss, ys):
+              if len(dss) < 2:
+                  return
+              df = pd.DataFrame(zip(dss,ys), columns=['ds', 'y'])
+              m = Prophet(changepoint_prior_scale=0.5)
+              m.fit(df)
+              future = m.make_future_dataframe(periods=3)
+              forecast = m.predict(future)
+              forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail()
+              forecast[forecast.columns[0]] = forecast[forecast.columns[0]].astype('string')
+              self.changepoint_prior_scale = [tuple(r) for r in forecast.values.tolist()]
+
+          def finalize(self):
+              return [self.changepoint_prior_scale]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf15-2-1
+    type: stream
+    query: select getChangepointPriorScale(ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(tuple(string, float32, float32, float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(ds, y) values
+          ('2007-12-10', 9.590761) ('2007-12-11', 8.519590)
+          ('2007-12-12', 8.183677) ('2007-12-13', 8.072467)
+          ('2007-12-14', 7.893572);
+
+  - type: check
+    target_name: python-udf15-2-1
+    expected_result:
+      - [['2007-12-13', 8.07247016437835, 8.07247016437835, 8.07247016437835], ['2007-12-14', 7.893576336904625, 7.893576336904625, 7.893576336904625], ['2007-12-15', 7.7146825094309, 7.486332346926773, 7.94832997960525], ['2007-12-16', 7.535788681957175, 6.811323202634447, 8.27955721531522], ['2007-12-17', 7.35689485448345, 5.9626474859299075, 8.849527644146546]]

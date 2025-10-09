@@ -1,0 +1,193 @@
+tags:
+- udf
+description: |
+  Test drop and recreate timeplus external stream
+  Main Steps:
+    1.Create stream, external timeplus stream, udf
+    2.Ingest data into stream and external timeplus stream
+    3.Check external timeplus stream
+    4.Check js udf
+    5.Drop function, external stream, stream
+    6.Repeat Step 1-5
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop function if exists add_five;
+
+  - type: query
+    sql: drop stream if exists tp_02_source_ex;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists tp_02_source;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream tp_02_source (key string, value int) settings shards=3;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create external stream tp_02_source_ex
+      settings type='timeplus', hosts='localhost:8463', stream='tp_02_source';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five(value int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+        function add_five(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+5;
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: tp-00-select_ex
+    query: select key, value from tp_02_source_ex;
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+
+  - type: stream
+    name: tp-00-select_udf
+    query: select add_five(value) as res from tp_02_source_ex;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into tp_02_source (key, value) values 
+      ('one', 1), ('two', 2), ('three', 3);
+
+  - type: query
+    sql: |
+      insert into tp_02_source_ex (key, value) values 
+      ('four', 4), ('five', 5), ('six', 6);
+
+  - type: check
+    target_name: tp-00-select_ex
+    expected_result:
+      - ["one", 1]
+      - ["two", 2]
+      - ["three", 3]
+      - ["four", 4]
+      - ["five", 5]
+      - ["six", 6]
+
+  - type: check
+    target_name: tp-00-select_udf
+    expected_result:
+      - [6]
+      - [7]
+      - [8]
+      - [9]
+      - [10]
+      - [11]
+
+  # drop and recreate
+  - type: query
+    sql: drop function add_five;
+
+  - type: query
+    sql: drop stream tp_02_source_ex;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream tp_02_source;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream tp_02_source (key string, value int) settings shards=3;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create external stream tp_02_source_ex
+      settings type='timeplus', hosts='localhost:8463', stream='tp_02_source';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five(value int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+        function add_five(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+5;
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: tp-00-select_ex
+    query: select key, value from tp_02_source_ex;
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+
+  - type: stream
+    name: tp-00-select_udf
+    query: select add_five(value) as res from tp_02_source_ex;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into tp_02_source (key, value) values 
+      ('one', 7), ('two', 8), ('three', 9);
+
+  - type: query
+    sql: |
+      insert into tp_02_source_ex (key, value) values 
+      ('four', 10), ('five', 11), ('six', 12);
+
+  - type: check
+    target_name: tp-00-select_ex
+    expected_result:
+      - ["one", 7]
+      - ["two", 8]
+      - ["three", 9]
+      - ["four", 10]
+      - ["five", 11]
+      - ["six", 12]
+
+  - type: check
+    target_name: tp-00-select_udf
+    expected_result:
+      - [12]
+      - [13]
+      - [14]
+      - [15]
+      - [16]
+      - [17]

@@ -120,7 +120,13 @@ public:
     ExpressionActionsPtr clone() const;
 
     /// proton: starts.
+    ExpressionActionsPtr deepClone() const;
+
     std::vector<ExecutableFunctionPtr> getStatefulFunctions() const;
+
+    void replaceStatefulFunctions(const std::vector<ExecutableFunctionPtr> & funcs);
+
+    std::vector<std::function<ExecutableFunctionPtr()>> getStatefulFunctionBuilders() const;
     /// proton: ends.
 
 private:
@@ -264,7 +270,7 @@ struct ExpressionActionsChain : WithContext
         {
             if (allow_empty)
                 return {};
-            throw Exception("Empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty ExpressionActionsChain");
         }
 
         return typeid_cast<ExpressionActionsStep *>(steps.back().get())->actions_dag;
@@ -273,7 +279,7 @@ struct ExpressionActionsChain : WithContext
     Step & getLastStep()
     {
         if (steps.empty())
-            throw Exception("Empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty ExpressionActionsChain");
 
         return *steps.back();
     }

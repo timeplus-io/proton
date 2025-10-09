@@ -1,0 +1,52 @@
+tags:
+  - raft
+
+description: Test metadata consistence in raft cluster
+
+cluster:
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test43_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: CREATE STREAM test43_stream(i int)
+
+  - name: cluster-1-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: show streams where name = 'test43_stream'
+    schema:
+      - name: name
+        type: string
+
+  - name: cluster-1-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: show streams where name = 'test43_stream'
+    schema:
+      - name: name
+        type: string
+
+  - type: check
+    target_name: cluster-1-1
+    expected_result:
+    - ['test43_stream']
+
+  - type: check
+    target_name: cluster-1-2
+    expected_result:
+    - ['test43_stream']

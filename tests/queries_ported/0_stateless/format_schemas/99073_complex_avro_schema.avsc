@@ -1,0 +1,579 @@
+{
+    "type": "record",
+    "name": "CheckListType",
+    "fields": [
+        {
+            "name": "item",
+            "type": {
+                "type": "array",
+                "items": {
+                    "type": "record",
+                    "name": "CheckType",
+                    "fields": [
+                        {
+                            "name": "TransactionID",
+                            "type": "string"
+                        },
+                        {
+                            "name": "IIN_BIN",
+                            "type": "string"
+                        },
+                        {
+                            "name": "LegalAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "PhysicalAddress",
+                            "default": null,
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "name": "KkmID",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AnnullationStatus",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "RegNumbKKM",
+                            "type": "string"
+                        },
+                        {
+                            "name": "FactoryNumbKKM",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TaxPayerActivityType",
+                            "type": {
+                                "type": "enum",
+                                "name": "DomainTypeEnum",
+                                "symbols": [
+                                    "DOMAIN_TRADING",
+                                    "DOMAIN_SERVICES",
+                                    "DOMAIN_GASOIL",
+                                    "DOMAIN_HOTELS",
+                                    "DOMAIN_TAXI",
+                                    "DOMAIN_PARKING"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "OperationType",
+                            "type": {
+                                "type": "enum",
+                                "name": "OperationTypeEnum",
+                                "symbols": [
+                                    "OPERATION_BUY",
+                                    "OPERATION_BUY_RETURN",
+                                    "OPERATION_SELL",
+                                    "OPERATION_SELL_RETURN"
+                                ]
+                            }
+                        },
+                        {
+                            "name": "OperationDate",
+                            "type": {
+                                "type": "long",
+                                "logicalType": "timestamp-millis"
+                            }
+                        },
+                        {
+                            "name": "CashierCode",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CheckSumm",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 20,
+                                "scale": 4
+                            }
+                        },
+                        {
+                            "name": "ReceivedSumm",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 20,
+                                "scale": 4
+                            }
+                        },
+                        {
+                            "name": "DeliverySumm",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 20,
+                                "scale": 4
+                            }
+                        },
+                        {
+                            "name": "DiscountSumm",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 20,
+                                "scale": 4
+                            }
+                        },
+                        {
+                            "name": "MarkupSumm",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 20,
+                                "scale": 4
+                            }
+                        },
+                        {
+                            "name": "Payments",
+                            "type": {
+                                "type": "array",
+                                "items": {
+                                    "type": "record",
+                                    "name": "PaymentType",
+                                    "fields": [
+                                        {
+                                            "name": "Type",
+                                            "type": {
+                                                "type": "enum",
+                                                "name": "PaymentTypeEnum",
+                                                "symbols": [
+                                                    "PAYMENT_CASH",
+                                                    "PAYMENT_CARD",
+                                                    "PAYMENT_CREDIT",
+                                                    "PAYMENT_TARE",
+                                                    "PAYMENT_MOBILE"
+                                                ]
+                                            }
+                                        },
+                                        {
+                                            "name": "Sum",
+                                            "type": {
+                                                "type": "bytes",
+                                                "logicalType": "decimal",
+                                                "precision": 20,
+                                                "scale": 4
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "CheckPositionList",
+                            "type": {
+                                "type": "array",
+                                "items": {
+                                    "type": "record",
+                                    "name": "PositionType",
+                                    "fields": [
+                                        {
+                                            "name": "ItemType",
+                                            "type": {
+                                                "type": "enum",
+                                                "name": "ItemTypeEnum",
+                                                "symbols": [
+                                                    "ITEM_TYPE_COMMODITY",
+                                                    "ITEM_TYPE_STORNO_COMMODITY",
+                                                    "ITEM_TYPE_MARKUP",
+                                                    "ITEM_TYPE_STORNO_MARKUP",
+                                                    "ITEM_TYPE_DISCOUNT",
+                                                    "ITEM_TYPE_STORNO_DISCOUNT"
+                                                ]
+                                            }
+                                        },
+                                        {
+                                            "name": "Item",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                {
+                                                    "type": "record",
+                                                    "name": "ItemsType",
+                                                    "fields": [
+                                                        {
+                                                            "name": "ItemKod",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "ItemName",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "SectionKod",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "ItemCount",
+                                                            "type": "long"
+                                                        },
+                                                        {
+                                                            "name": "ItemPrice",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        },
+                                                        {
+                                                            "name": "FullItemPrice",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        },
+                                                        {
+                                                            "name": "ItemNDS",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "DiscountOrMarkUp",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                {
+                                                    "type": "record",
+                                                    "name": "DiscountMarkUpType",
+                                                    "fields": [
+                                                        {
+                                                            "name": "DiscountOrMarkUpName",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "DiscountOrMarkUpSumm",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        },
+                                                        {
+                                                            "name": "TaxDiscountOrMarkUpItem",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "ItemStorno",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                {
+                                                    "type": "record",
+                                                    "name": "ItemStornoType",
+                                                    "fields": [
+                                                        {
+                                                            "name": "ItemStornoName",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "SectionCodeForStorno",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "ItemStornoCount",
+                                                            "type": "long"
+                                                        },
+                                                        {
+                                                            "name": "StornoItemPrice",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        },
+                                                        {
+                                                            "name": "FullStornoItemSumm",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        },
+                                                        {
+                                                            "name": "TaxStornoItem",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "DiscountMarkupStorno",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                {
+                                                    "type": "record",
+                                                    "name": "DiscountMarkupStornoType",
+                                                    "fields": [
+                                                        {
+                                                            "name": "DiscountMarkupStornoName",
+                                                            "type": "string"
+                                                        },
+                                                        {
+                                                            "name": "DiscountMarkupStornoSumm",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+                                                                "scale": 4
+                                                            }
+                                                        },
+                                                        {
+                                                            "name": "TaxDiscountMarkupStorno",
+                                                            "type": {
+                                                                "type": "bytes",
+                                                                "logicalType": "decimal",
+                                                                "precision": 20,
+
+                                                                "scale": 4
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "name": "MarkingCode",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        {
+                                            "name": "RegControlStampNum",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        {
+                                            "name": "ProductId",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        {
+                                            "name": "Gtin",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        {
+                                            "name": "UnitCode",
+                                            "default": null,
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "AdlServiceAccountNumber",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlGasOilCorrectionNumber",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlGasOilCorrectionSum",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "bytes",
+                                    "logicalType": "decimal",
+                                    "precision": 20,
+                                    "scale": 4
+                                }
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlGasOilCardNumber",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlTaxiCarNumber",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlTaxiIsOrder",
+                            "type": [
+                                "null",
+                                "boolean"
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlTaxiCurrentFee",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "bytes",
+                                    "logicalType": "decimal",
+                                    "precision": 20,
+                                    "scale": 4
+                                }
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlParkingBeginTime",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "long",
+                                    "logicalType": "timestamp-millis"
+                                }
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlParkingEndTime",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "long",
+                                    "logicalType": "timestamp-millis"
+                                }
+                            ],
+                            "default": null
+                        },
+                        {
+                            "name": "AdlByerInfoEmail",
+                            "default": null,
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "name": "AdlByerPhoneInfoNumber",
+                            "default": null,
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "name": "AdlByerInfoNumber",
+                            "default": null,
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "name": "FullSummNDS",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 20,
+                                "scale": 4
+                            }
+                        },
+                        {
+                            "name": "FiscalSign",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AutonomousSign",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Buyer_IIN_BIN",
+                            "default": null,
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "name": "KkmUseAddress",
+                            "default": null,
+                            "type": [
+                                "null",
+                                "string"
+                            ]
+                        },
+                        {
+                            "name": "DateTimeToOFD",
+                            "type": {
+                                "type": "long",
+                                "logicalType": "timestamp-millis"
+                            }
+                        },
+                        {
+                            "name": "ProtocolVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ElementId",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

@@ -103,21 +103,23 @@ void DistinctTransform::transform(Chunk & chunk)
     }
 
     /// Just go to the next chunk if there isn't any new record in the current one.
-    if (data.getTotalRowCount() == old_set_size)
+    size_t new_set_size = data.getTotalRowCount();
+    if (new_set_size == old_set_size)
         return;
 
-    if (!set_size_limits.check(data.getTotalRowCount(), data.getTotalByteCount(), "DISTINCT", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
+    if (!set_size_limits.check(new_set_size, data.getTotalByteCount(), "DISTINCT", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
         return;
 
     for (auto & column : columns)
         column = column->filter(filter, -1);
 
-    chunk.setColumns(std::move(columns), data.getTotalRowCount() - old_set_size);
+    chunk.setColumns(std::move(columns), new_set_size - old_set_size);
 }
 
 /// proton: starts.
 void DistinctTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
+    chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { data.serialize(wb); });
 }
 

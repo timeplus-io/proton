@@ -1,0 +1,55 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (lam float, size int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_poisson(lam float, size int) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_poisson(lam, size):
+          res = []
+          for i in range(len(lam)):
+              if size[i] > 0:
+                  s = np.random.poisson(lam[i], size[i])
+                  check = abs(sum(s)/size[i]-lam[i])
+                  res.append(float(check))
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-20-1
+    type: stream
+    query: select test_random_poisson(lam, size) as res, lam, size from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: lam
+        type: float32
+      - name: size
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(lam, size) values (5, 10000)(8, 20000);
+
+  - type: check
+    target_name: python-udf2-20-1
+    expected_result:
+      - [any_value, 5, 10000] # around 0.04
+      - [any_value, 8, 20000] # around 0.01

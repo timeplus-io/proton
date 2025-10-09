@@ -20,8 +20,8 @@ namespace DB
 {
 struct Settings;
 
-
-struct RankCorrelationData : public StatisticalSample<Float64, Float64>
+template <bool use_arena>
+struct RankCorrelationData : public StatisticalSample<Float64, Float64, use_arena>
 {
     Float64 getResult()
     {
@@ -46,12 +46,13 @@ struct RankCorrelationData : public StatisticalSample<Float64, Float64>
     }
 };
 
+template <bool use_arena>
 class AggregateFunctionRankCorrelation :
-    public IAggregateFunctionDataHelper<RankCorrelationData, AggregateFunctionRankCorrelation>
+    public IAggregateFunctionDataHelper<RankCorrelationData<use_arena>, AggregateFunctionRankCorrelation<use_arena>>
 {
 public:
     explicit AggregateFunctionRankCorrelation(const DataTypes & arguments)
-        :IAggregateFunctionDataHelper<RankCorrelationData, AggregateFunctionRankCorrelation> ({arguments}, {})
+        : IAggregateFunctionDataHelper<RankCorrelationData<use_arena>, AggregateFunctionRankCorrelation> ({arguments}, {}, std::make_shared<DataTypeNumber<Float64>>())
     {}
 
     String getName() const override
@@ -59,12 +60,7 @@ public:
         return "rank_corr";
     }
 
-    bool allocatesMemoryInArena() const override { return true; }
-
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeNumber<Float64>>();
-    }
+    bool allocatesMemoryInArena() const override { return use_arena; }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {

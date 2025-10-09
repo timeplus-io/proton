@@ -15,6 +15,7 @@ namespace DB
 class ASTCreateQuery;
 class ASTExpressionList;
 class ASTConstraintDeclaration;
+class ASTStorage;
 class IDatabase;
 using DatabasePtr = std::shared_ptr<IDatabase>;
 
@@ -25,7 +26,15 @@ using DatabasePtr = std::shared_ptr<IDatabase>;
 class InterpreterCreateQuery : public IInterpreter, WithMutableContext
 {
 public:
+    /// proton : starts. There are 2 cases when calling this ctor
+    /// 1. Creating system MergeTree tables which are always `local`
+    /// 2. Creating MergeTree / StorageStream streams which will go through the
+    ///    distributed stream provisioning process
+    /// proton : ends
     InterpreterCreateQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_);
+
+    /// This ctor is for load existing streams
+    InterpreterCreateQuery(const ASTPtr & query_ptr_, UInt32 schema_version_, ContextMutablePtr context_);
 
     BlockIO execute() override;
 
@@ -62,9 +71,11 @@ public:
     static ColumnsDescription getColumnsDescription(const ASTExpressionList & columns, ContextPtr context, bool attach);
     static ConstraintsDescription getConstraintsDescription(const ASTExpressionList * constraints);
 
-    static void prepareOnClusterQuery(ASTCreateQuery & create, ContextPtr context, const String & cluster_name);
-
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & ast, ContextPtr) const override;
+
+    /// proton : starts
+    static void completeTableCreationAST(ASTCreateQuery & create, ContextMutablePtr local_context);
+    /// proton : ends
 
 private:
     struct TableProperties
@@ -79,8 +90,9 @@ private:
     BlockIO createTable(ASTCreateQuery & create);
 
     /// proton: start
-    void handleStreamCreation(const String & current_database, ASTCreateQuery & create);
     void handleExternalStreamCreation(ASTCreateQuery & create);
+    BlockIO createDatabaseOnCluster(ASTCreateQuery & create);
+    void createDatabaseEngineFromSettings(ASTStorage * storage);
     /// proton: end
 
     /// Calculate list of columns, constraints, indices, etc... of table. Rewrite query in canonical way.
@@ -91,11 +103,15 @@ private:
 
     /// Create IStorage and add it to database. If table already exists and IF NOT EXISTS specified, do nothing and return false.
     bool doCreateTable(ASTCreateQuery & create, const TableProperties & properties);
-    BlockIO doCreateOrReplaceTable(ASTCreateQuery & create, const InterpreterCreateQuery::TableProperties & properties);
+    /// BlockIO doCreateOrReplaceTable(ASTCreateQuery & create, const InterpreterCreateQuery::TableProperties & properties);
     /// Inserts data in created table if it's CREATE ... SELECT
     BlockIO fillTableIfNeeded(const ASTCreateQuery & create);
 
     void assertOrSetUUID(ASTCreateQuery & create, const DatabasePtr & database) const;
+
+    /// Update create query with columns description from storage if query doesn't have it.
+    /// It's used to prevent automatic schema inference while table creation on each server startup.
+    void addColumnsDescriptionToCreateQueryIfNecessary(ASTCreateQuery & create, const StoragePtr & storage);
 
     ASTPtr query_ptr;
 
@@ -108,5 +124,10 @@ private:
 
     mutable String as_database_saved;
     mutable String as_table_saved;
+
+    /// proton : starts
+    UInt32 schema_version = 1;
+    LoggerPtr log;
+    /// proton : ends
 };
 }

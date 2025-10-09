@@ -1,0 +1,168 @@
+tags:
+  - query_state
+  - not_supported # DB::Exception: Window functions are not supported in streaming queries. (NOT_IMPLEMENTED)
+  - skip
+description: multiple recover tumble window in substream from a state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream5
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream5 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '19105'
+    query_id: '19105'
+    type: stream
+    query: subscribe to select id, count(*) over (partition by id), min(value) over
+      (partition by id), max(value) over (partition by id), window_start, window_end
+      from tumble(test19_state_stream5, timestamp, 5s) group by id, value, window_start, window_end
+      settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: count() OVER (PARTITION BY id)
+        type: uint64
+      - name: min(value) OVER (PARTITION BY id)
+        type: float32
+      - name: max(value) OVER (PARTITION BY id)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:02')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 66, '2020-02-02 20:00:04')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 69, '2020-02-02 20:00:06')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 67, '2020-02-02 20:00:07')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '19105'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 55, '2020-02-02 20:00:11')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 77, '2020-02-02 20:00:12')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 66, '2020-02-02 20:00:13')
+
+  - name: 19105-1
+    query_id: 19105-1
+    type: stream
+    query: recover from '19105'
+    schema:
+      - name: id
+        type: string
+      - name: count() OVER (PARTITION BY id)
+        type: uint64
+      - name: min(value) OVER (PARTITION BY id)
+        type: float32
+      - name: max(value) OVER (PARTITION BY id)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='19105' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 68, '2020-02-02 20:00:15')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 78, '2020-02-02 20:00:16')
+
+  - name: 19105-2
+    query_id: 19105-2
+    type: stream
+    query: recover from '19105'
+    schema:
+      - name: id
+        type: string
+      - name: count() OVER (PARTITION BY id)
+        type: uint64
+      - name: min(value) OVER (PARTITION BY id)
+        type: float32
+      - name: max(value) OVER (PARTITION BY id)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='19105' sync
+
+  - type: query
+    sql: unsubscribe to '19105'
+
+  - type: check
+    target_name: '19105'
+    mode: random
+    expected_result:
+      - [ dev1, 2, '57.3', '66', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ dev2, 1, '58.3', '58.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+
+  - type: check
+    target_name: 19105-1
+    mode: random
+    expected_result:
+      - [ dev1, 1, '67', '67', '2020-02-02 20:00:05', '2020-02-02 20:00:10' ]
+      - [ dev2, 1, '69', '69', '2020-02-02 20:00:05', '2020-02-02 20:00:10' ]
+
+  - type: check
+    target_name: 19105-2
+    mode: random
+    expected_result:
+      - [ dev1, 1, '55', '55', '2020-02-02 20:00:10', '2020-02-02 20:00:15' ]
+      - [ dev2, 2, '66', '77', '2020-02-02 20:00:10', '2020-02-02 20:00:15' ]

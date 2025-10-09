@@ -1,0 +1,5 @@
+name: stream_join_versioned_kv
+description: Tests covering the stream join versioned_kv stream query smoke cases.
+tags:
+- smoke
+# if run cluster p1k1,pls remove the node in each step

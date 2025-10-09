@@ -1,0 +1,56 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (low float64, high float64, size int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_uniform(low float64, high float64, size int) RETURNS bool LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_uniform(low, high, size):
+          res = []
+          for i in range(len(low)):
+              s = np.random.uniform(low[i], high[i], size[i])
+              check = np.all(s >= low[i])
+              res.append(check.item())
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-25-1
+    type: stream
+    query: select test_random_uniform(low, high, size) as res, low, high, size from udf_stream;
+    schema:
+      - name: res
+        type: bool
+      - name: low
+        type: float64
+      - name: high
+        type: float64
+      - name: size
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(low, high, size) values (-1,0,1000)(-2,3,1000);
+
+  - type: check
+    target_name: python-udf2-25-1
+    expected_result:
+      - [True, -1,0,1000]
+      - [True, -2,3,1000]

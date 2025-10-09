@@ -1,0 +1,86 @@
+tags:
+  - uda
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/7346
+
+description: Test covering python uda test on pycaret.classification function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (d1 string, d2 float, target int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION classifierTester(d1 string, d2 float, target int) RETURNS array(float) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+      from pycaret.classification import ClassificationExperiment
+
+      class classifierTester:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, d1s, d2s, targets):
+              if len(d1s) < 4:
+                  return
+              data = pd.DataFrame(zip(d1s, d2s, targets),
+                                  columns=['d1', 'd2', 'target'])
+              s = ClassificationExperiment()
+              s.setup(data=data, target='target', session_id=123)
+              model = s.create_model('lr', fold=2)
+              predictions = s.predict_model(model, data = data)
+              prediction_score = predictions['prediction_score']
+              self.res = prediction_score.to_list()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf12-0-1
+    type: stream
+    query: select classifierTester(d1, d2, target) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into uda_stream(d1, d2, target) values
+      ('CH', 1.75, 1) ('CH', 1.75, 0) ('CH', 1.86, 1)
+      ('MM', 1.69, 0) ('CH', 1.69, 1);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into uda_stream(d1, d2, target) values
+      ('CH', 1.75, 1) ('CH', 1.75, 0) ('CH', 1.86, 1)
+      ('MM', 1.69, 0) ('CH', 1.69, 1);
+
+  - type: check
+    target_name: python-udf12-0-1
+    expected_result:
+      - [[0.7106, 0.7106, 0.711, 0.5789, 0.7104]]
+      - [[0.7106, 0.7106, 0.711, 0.5789, 0.7104]]

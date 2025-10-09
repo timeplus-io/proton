@@ -1,0 +1,48 @@
+tags:
+- raw_json
+description: create external stream ex_pulsar_02, and run stream query to parse json field from field raw of external1 and insert data into redpanda topic test and verify result
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: pulsar
+  name: delete
+  topic: test_02
+
+- type: pulsar
+  name: create
+  topic: test_02
+
+- type: query
+  sql: drop stream if exists ex_pulsar_02
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create external stream ex_pulsar_02 (raw string) settings type='pulsar', service_url='pulsar://pulsar:6650', topic = 'test_02'
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: pulsar-02
+  query: select raw:value from ex_pulsar_02
+  schema:
+  - name: raw:value
+    type: string
+
+- type: wait
+  time: 1
+
+- type: pulsar
+  name: produce
+  topic: test_02 
+  messages:
+  - value: "powershell.exe"
+    string_c: "{42FC7E13-CB3E-5C05-0000-0010A0125101}"
+
+- type: check
+  target_name: pulsar-02
+  expected_result:
+  - ["powershell.exe"]

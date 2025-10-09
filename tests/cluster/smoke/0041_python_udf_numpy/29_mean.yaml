@@ -1,0 +1,75 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value int64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getMean(value int64) RETURNS float LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getMean:
+          def __init__(self):
+              self.mean = 0
+              self.arr = []
+
+          def serialize(self):
+              data = {}
+              data['mean'] = self.mean
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.mean = data['mean']
+
+          def merge(self, other):
+              self.arr = [float(i) for i in other.arr]
+
+          def process(self, values):
+              fvalues = [float(i) for i in values]
+              tmp_arr = np.array(fvalues)
+              self.arr.extend(tmp_arr)
+              self.mean = float(np.mean(self.arr))
+
+          def finalize(self):
+              return self.mean
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-29-1
+    type: stream
+    query: select getMean(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values (3)(5)(7);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(value) values (1)(2)(3);
+
+  - type: check
+    target_name: python-udf2-29-1
+    expected_result:
+      - [5]
+      - [3.5]

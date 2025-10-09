@@ -17,14 +17,16 @@ COPY alpine-root/ /
 
 RUN addgroup -S -g 101 timeplus \
     && adduser -S -h /var/lib/proton -s /bin/bash -G timeplus -g "timeplus server" -u 101 timeplus \
-    && mkdir -p /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client \
+    && mkdir -p /var/lib/proton/var/log/proton-server /etc/proton-server /etc/proton-client \
     && chown timeplus:timeplus /var/lib/proton \
     && chown root:timeplus /var/log/proton-server \
     && chmod +x /entrypoint.sh \
     && apk add --no-cache su-exec bash tzdata \
     && cp /usr/share/zoneinfo/UTC /etc/localtime \
     && echo "UTC" > /etc/timezone \
-    && chmod ugo+Xrw -R /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client
+    && chown timeplus:timeplus -R /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client
+
+USER 101:101
 
 # we need to allow "others" access to proton folder, because docker container
 # can be started with arbitrary uid (openshift usecase)

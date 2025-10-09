@@ -1,0 +1,25 @@
+name: session
+description: Tests covering session window test cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop stream if exists test7_session
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: |
+        create stream test7_session (
+          id string,
+          location string,
+          value float32,
+          json string,
+          timestamp datetime64(3) default now64(3)
+        ) settings event_time_column='timestamp';
+
+    - type: wait
+      time: 1

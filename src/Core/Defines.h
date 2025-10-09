@@ -1,18 +1,24 @@
 #pragma once
 
 #include <base/defines.h>
+#include <base/unit.h>
 
 #define DBMS_DEFAULT_PORT 8463
 #define DBMS_DEFAULT_SECURE_PORT 9440
+
 #define DBMS_DEFAULT_CONNECT_TIMEOUT_SEC 10
 #define DBMS_DEFAULT_SEND_TIMEOUT_SEC 300
 #define DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC 300
+
 /// Timeout for synchronous request-result protocol call (like Ping or TablesStatus).
 #define DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC 5
 #define DBMS_DEFAULT_POLL_INTERVAL 10
 
 /// The size of the I/O buffer by default.
 #define DBMS_DEFAULT_BUFFER_SIZE 1048576ULL
+
+/// The initial size of adaptive I/O buffer by default.
+static constexpr auto DBMS_DEFAULT_INITIAL_ADAPTIVE_BUFFER_SIZE = 16384ULL;
 
 #define PADDING_FOR_SIMD 64
 
@@ -36,7 +42,6 @@
 
 #define DEFAULT_PERIODIC_LIVE_VIEW_REFRESH_SEC 60
 #define SHOW_CHARS_ON_SYNTAX_ERROR ptrdiff_t(160)
-#define DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_MAX_TRIES 3
 /// each period reduces the error counter by 2 times
 /// too short a period can cause errors to disappear immediately after creation.
 #define DBMS_CONNECTION_POOL_WITH_FAILOVER_DEFAULT_DECREASE_ERROR_PERIOD 60
@@ -46,11 +51,14 @@
 /// The boundary on which the blocks for asynchronous file operations should be aligned.
 #define DEFAULT_AIO_FILE_BLOCK_SIZE 4096
 
-#define DEFAULT_HTTP_READ_BUFFER_TIMEOUT 180
+#define DEFAULT_HTTP_READ_BUFFER_TIMEOUT 30
 #define DEFAULT_HTTP_READ_BUFFER_CONNECTION_TIMEOUT 1
 /// Maximum number of http-connections between two endpoints
 /// the number is unmotivated
 #define DEFAULT_COUNT_OF_HTTP_CONNECTIONS_PER_ENDPOINT 15
+
+static constexpr auto DEFAULT_TCP_KEEP_ALIVE_TIMEOUT = 290;
+static constexpr auto DEFAULT_HTTP_KEEP_ALIVE_TIMEOUT = 30;
 
 /// proton: starts.
 #define DBMS_DEFAULT_PATH "/var/lib/proton/"
@@ -63,12 +71,21 @@
 
 /// Default limit on recursion depth of recursive descend parser.
 #define DBMS_DEFAULT_MAX_PARSER_DEPTH 1000
+/// Default limit on the amount of backtracking of recursive descend parser.
+static constexpr auto DBMS_DEFAULT_MAX_PARSER_BACKTRACKS = 1000000;
 
 /// Default limit on query size.
 #define DBMS_DEFAULT_MAX_QUERY_SIZE 262144
 
 /// Max depth of hierarchical dictionary
 #define DBMS_HIERARCHICAL_DICTIONARY_MAX_DEPTH 1000
+
+
+/// Default maximum (total and entry) sizes and policies of various caches
+static constexpr auto DEFAULT_UNCOMPRESSED_CACHE_SIZE_RATIO = 0.5l;
+static constexpr auto DEFAULT_MARK_CACHE_SIZE_RATIO = 0.5l;
+static constexpr auto DEFAULT_COMPILED_EXPRESSION_CACHE_MAX_SIZE = 128_MiB;
+static constexpr auto DEFAULT_COMPILED_EXPRESSION_CACHE_MAX_ENTRIES = 10'000;
 
 /// Query profiler cannot work with sanitizers.
 /// Sanitizers are using quick "frame walking" stack unwinding (this implies -fno-omit-frame-pointer)
@@ -84,3 +101,4 @@
 #else
 #define QUERY_PROFILER_DEFAULT_SAMPLE_RATE_NS 0
 #endif
+

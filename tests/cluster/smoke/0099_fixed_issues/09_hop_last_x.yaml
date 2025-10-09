@@ -1,0 +1,52 @@
+tags:
+  - tumble window over table function query
+description: (#2513) stremaing hop query with last x
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_2513
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_2513
+        (
+          i int,
+          s string
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: with cte as (select i, s, _tp_time as event_time from test_stream_2513) select window_start, window_end from tumble(table(cte), _tp_time, 2s)
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+      - name: _tp_time
+        type: datetime64(3)
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9901
+    query: with cte as (select i, s, _tp_time from test_stream_2513) select window_start, window_end from tumble(table(cte), _tp_time, 2s)
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - ["error_code:47"]
+
+  - type: check
+    target_name: 9901
+    expected_result: 
+      - []

@@ -1,0 +1,130 @@
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value datetime);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_properties_naive(value datetime) RETURNS datetime LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_properties_naive(value):
+          res = [arrow.get(v).naive for v in value]
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_properties_ymd(value datetime) RETURNS array(int) LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_properties_ymd(value):
+          res = []
+          for v in value:
+              a = arrow.get(v)
+              ymd = [a.year, a.month, a.day]
+              res.append(ymd)
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_properties_date(value datetime) RETURNS date LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_properties_date(value):
+          res = [arrow.get(v).date() for v in value]
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_properties_time(value datetime('UTC')) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_properties_time(value):
+          res = []
+          for v in value:
+              time = str(v) + ' ' + str(v.tzinfo)
+              a = arrow.get(v)
+              time = time + ' ' + a.to('UTC').time().strftime('%H:%M:%S')
+              res.append(time)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf7-0-1
+    type: stream
+    query: select test_properties_naive(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: datetime
+      - name: value
+        type: datetime
+
+  - name: python-udf7-0-2
+    type: stream
+    query: select test_properties_ymd(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: array(int32)
+      - name: value
+        type: datetime
+
+  - name: python-udf7-0-3
+    type: stream
+    query: select test_properties_date(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: date
+      - name: value
+        type: datetime
+
+  - name: python-udf7-0-4
+    type: stream
+    query: select test_properties_time(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: datetime
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream(value) values (parse_datetime32_best_effort('2025-01-01T01:11:11Z'));
+
+  - type: check
+    target_name: python-udf7-0-1
+    expected_result:
+      - ['2025-01-01 01:11:11', '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-0-2
+    expected_result:
+      - [[2025, 1, 1], '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-0-3
+    expected_result:
+      - ['2025-01-01', '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-0-4
+    expected_result:
+      - ['2025-01-01 01:11:11+00:00 UTC 01:11:11', '2025-01-01 01:11:11']

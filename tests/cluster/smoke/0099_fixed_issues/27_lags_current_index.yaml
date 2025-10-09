@@ -1,0 +1,56 @@
+tags:
+  - lags
+  - streaming functions
+description: Support using index 0 to represent current event in lags function 
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists t_lags27
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_lags27(id string, value float32, time datetime64(3))
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 009927
+    query: select value, lags(value, 0, 2) as prev_1_3, lags(value, 0, 2, -1) as `prev_2_5_-1` from t_lags27
+    schema:
+      - name: value
+        type: float32
+      - name: prev_1_3
+        type: array(float32)
+      - name: prev_2_5_-1
+        type: array(float32)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into t_lags27(id, value, time) values
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: float32
+      - name: time 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 1, '2020-02-02 20:00:01']
+      - ['dev2', 2, '2020-02-02 20:01:02']
+      - ['dev2', 3, '2020-02-02 20:00:02']
+      - ['dev2', 4, '2020-02-02 20:01:02']
+      - ['dev3', 5, '2020-02-02 20:01:03']
+
+  - type: check
+    target_name: 009927
+    expected_result:
+      - [1, [1.0, 0.0, 0.0], [1.0, -1.0, -1.0]]
+      - [2, [2.0, 1.0, 0.0], [2.0, 1.0, -1.0]]
+      - [3, [3.0, 2.0, 1.0], [3.0, 2.0, 1.0]]
+      - [4, [4.0, 3.0, 2.0], [4.0, 3.0, 2.0]]
+      - [5, [5.0, 4.0, 3.0], [5.0, 4.0, 3.0]]
+

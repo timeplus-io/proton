@@ -8,9 +8,11 @@ namespace DB
 RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr params_)
     : IAccumulatingTransform(std::move(header), appendGroupingSetColumn(params_->getHeader()), ProcessorID::RollupTransformID)
     , params(std::move(params_))
-    , keys(params->params.keys)
     , aggregates_mask(getAggregatesMask(params->getHeader(), params->params.aggregates))
 {
+    keys.reserve(params->params.keys_size);
+    for (const auto & key : params->params.keys)
+        keys.emplace_back(input.getHeader().getPositionByName(key));
 }
 
 void RollupTransform::consume(Chunk chunk)
@@ -24,9 +26,9 @@ Chunk RollupTransform::merge(Chunks && chunks, bool final)
     for (auto & chunk : chunks)
         rollup_blocks.emplace_back(getInputPort().getHeader().cloneWithColumns(chunk.detachColumns()));
 
-    auto rollup_block = params->aggregator.mergeBlocks(rollup_blocks, final);
-    auto num_rows = rollup_block.rows();
-    return Chunk(rollup_block.getColumns(), num_rows);
+    auto current_block = params->aggregator.mergeBlocks(rollup_blocks, final, is_cancelled);
+    auto num_rows = current_block.rows();
+    return Chunk(current_block.getColumns(), num_rows);
 }
 
 MutableColumnPtr getColumnWithDefaults(Block const & header, size_t key, size_t n)

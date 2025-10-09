@@ -1,0 +1,115 @@
+tags:
+  - query_state
+description: recover session window aggregation from a state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream3
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream3 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1977'
+    query_id: '1977'
+    type: stream
+    query: subscribe to select id, max(value), window_start, window_end from session(test19_state_stream3,
+      timestamp, 2s) group by id, window_start, window_end settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 60, '2020-02-02 20:00:01')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 66, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1977'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev3',
+      'ca', 58.3, '2020-02-02 20:00:05')
+
+  - type: wait
+    time: 2
+
+  - name: 1977-1
+    query_id: 1977-1
+    type: stream
+    query: recover from '1977'
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='1977' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1977'
+
+  - type: check
+    target_name: '1977'
+    mode: random
+    expected_result:
+      - [ dev1, 60, '2020-02-02 20:00:00', '2020-02-02 20:00:03' ]
+      - [ dev2, 58.3, '2020-02-02 20:00:00', '2020-02-02 20:00:03' ]
+    
+  - type: check
+    target_name: 1977-1
+    expected_result:
+      - [ dev2, 66, '2020-02-02 20:00:03', '2020-02-02 20:00:05' ]

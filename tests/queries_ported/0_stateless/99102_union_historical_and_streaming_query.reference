@@ -1,0 +1,12 @@
+======== Execute historical pipelines sequentially ========
+table1	k1
+table1	k1
+table2	k2
+table2	k2
+stream3	k3
+======== Execute historical pipelines in parallel  ========
+table
+table
+table
+table
+stream

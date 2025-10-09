@@ -1,0 +1,89 @@
+tags:
+  - unsupport
+  - skip
+
+description: |
+  Test ddl dictionary with source Executable File
+  Main steps:
+  1.Create Shell script in proton container under '/var/lib/proton/user_files/' directory
+  2.Create stream and ingest data
+  3.Create dictionary with source Executable File
+  4.Verify dictionary connectivity via dict_get
+  5.Drop dictionary
+
+steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      file='/var/lib/proton/user_files/smoke_dict_09.sh'
+      content='#!/bin/bash\necho -e "1\tp111"\necho -e "2\tp222"\necho -e "3\tp333"' &&
+      rm -rf $file &&
+      echo "$content" > $file &&
+      chmod +x $file
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS executable_file_flat;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY executable_file_flat(id uint64 DEFAULT 0, value string DEFAULT 'qqq')
+      PRIMARY KEY id
+      SOURCE(EXECUTABLE(command '/var/lib/proton/user_files/smoke_dict_09.sh' format 'TabSeparated'))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: wait
+    time: 1
+
+  - name: dict-4-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('executable_file_flat', 'value', '1');
+    schema:
+      - name: dict_get('executable_file_flat', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-4-1
+    expected_result:
+      - ['p111']
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: DROP DICTIONARY executable_file_flat;
+
+  - type: wait
+    time: 1
+
+  - name: dict-4-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('executable_file_flat', 'value', '1');
+    schema:
+      - name: dict_get('executable_file_flat', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-4-2
+    expected_result:
+      - ['error_code:36']

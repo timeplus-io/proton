@@ -5,6 +5,7 @@
 #include <Formats/FormatFactory.h>
 #include <IO/PeekableReadBuffer.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeObject.h>
 
 namespace DB
 {
@@ -72,4 +73,20 @@ public:
         return {{"json", std::make_shared<DataTypeString>()}};
     }
 };
+
+class JSONAsObjectExternalSchemaReader : public IExternalSchemaReader
+{
+public:
+    explicit JSONAsObjectExternalSchemaReader(const FormatSettings & settings_);
+
+    NamesAndTypesList readSchema() override
+    {
+        chassert(settings.json.allow_json_type);
+        return {{"json", std::make_shared<DataTypeObject>(DataTypeObject::SchemaFormat::JSON)}};
+    }
+
+private:
+    FormatSettings settings;
+};
+
 }

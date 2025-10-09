@@ -1,0 +1,37 @@
+tags:
+  - stream_join_stream
+description: stream to stream left join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '1003'
+    type: stream
+    query: select s, ss from test10_left_stream left join test10_right_stream on i=ii and date_diff_within(10s, ts, tts)
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')
+
+  - type: query
+    sql: insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:45:10')(2, 's2', '2022-05-23 15:45:10')(3, 's2', '2022-05-23 15:45:20')
+
+  - type: query
+    sql: insert into test10_left_stream(i, s, ts) values (2, 'ss', '2022-05-23 15:45:15')(3, 'sss', '2022-05-23 15:45:15')(4, 'ssss', '2022-05-23 15:45:15')
+
+  - type: check
+    target_name: '1003'
+    expected_result:
+      - ['s', '']
+      - ['s', 's1']
+      - ['ss', 's2']
+      - ['sss', 's2']
+      - ['ssss', '']
+

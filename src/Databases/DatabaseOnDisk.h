@@ -6,6 +6,9 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/IStorage.h>
 
+/// proton : starts
+#include <Cluster/Protocol/StreamDescriptor.h>
+/// proton : ends
 
 namespace DB
 {
@@ -16,7 +19,9 @@ std::pair<String, StoragePtr> createTableFromAST(
     const String & database_name,
     const String & table_data_path_relative,
     ContextMutablePtr context,
-    bool force_restore);
+    bool force_restore,
+    Int32 schema_version,
+    bool attach = true);
 
 /** Get the string with the table definition based on the CREATE query.
   * It is an ATTACH query that you can execute to create a table from the correspondent database.
@@ -43,7 +48,8 @@ public:
     void dropTable(
         ContextPtr context,
         const String & table_name,
-        bool no_delay) override;
+        bool sync,
+        const ASTPtr & query) override;
 
     void renameTable(
         ContextPtr context,
@@ -66,7 +72,7 @@ public:
     String getTableDataPath(const ASTCreateQuery & query) const override { return getTableDataPath(query.getTable()); }
     String getMetadataPath() const override { return metadata_path; }
 
-    static ASTPtr parseQueryFromMetadata(Poco::Logger * log, ContextPtr context, const String & metadata_file_path, bool throw_on_error = true, bool remove_empty = false);
+    static ASTPtr parseQueryFromMetadata(LoggerPtr log, ContextPtr context, const String & metadata_file_path, bool throw_on_error = true, bool remove_empty = false);
 
     /// will throw when the table we want to attach already exists (in active / detached / detached permanently form)
     void checkMetadataFilenameAvailability(const String & to_table_name) const override;
@@ -85,7 +91,7 @@ protected:
 
     ASTPtr getCreateTableQueryImpl(
         const String & table_name,
-        ContextPtr context,
+        ContextPtr local_context,
         bool throw_on_error) const override;
 
     ASTPtr getCreateQueryFromMetadata(const String & metadata_path, bool throw_on_error) const;
@@ -95,6 +101,8 @@ protected:
                                    const String & table_metadata_tmp_path, const String & table_metadata_path, ContextPtr query_context);
 
     virtual void removeDetachedPermanentlyFlag(ContextPtr context, const String & table_name, const String & table_metadata_path, bool attach) const;
+
+    void createTableInMetaStore(const StoragePtr & table, const ASTPtr & query, String statement);
 
     const String metadata_path;
     const String data_path;

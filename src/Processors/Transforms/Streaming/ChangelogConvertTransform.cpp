@@ -10,8 +10,6 @@
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
-#include <ranges>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -26,12 +24,14 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     const DB::Block & input_header,
     const DB::Block & output_header,
     std::vector<std::string> key_column_names,
-    const std::string & version_column_name)
+    const std::string & version_column_name,
+    bool backfill_key_unique_)
     : IProcessor({input_header}, {output_header}, ProcessorID::ChangelogConvertTransformID)
+    , backfill_key_unique(backfill_key_unique_)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
     , source_chunks(cached_block_metrics)
     , last_log_ts(MonotonicMilliseconds::now())
-    , logger(&Poco::Logger::get("ChangelogConvertTransform"))
+    , logger(getLogger("ChangelogConvertTransform"))
 {
     assert(!key_column_names.empty());
     assert(!input_header.has(ProtonConsts::RESERVED_DELTA_FLAG));
@@ -40,8 +40,10 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     output_column_positions.reserve(output_header.columns());
 
     for (const auto & col : output_header)
+    {
         if (col.name != ProtonConsts::RESERVED_DELTA_FLAG)
             output_column_positions.push_back(input_header.getPositionByName(col.name));
+    }
 
     assert(output_column_positions.size() == output_header.columns() - 1);
 
@@ -63,13 +65,12 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     index.create(hash_type);
     key_sizes.swap(key_sizes_);
 
-    auto key_sizes_str_v = key_sizes | std::views::transform([](const auto & size) { return std::to_string(size); });
     LOG_INFO(
         logger,
         "Prepare converting changelog by keys_num={}, keys_size={} (each key size: {}), input_header={}",
         key_sizes.size(),
         std::accumulate(key_sizes.begin(), key_sizes.end(), static_cast<size_t>(0)),
-        fmt::join(key_sizes_str_v, ", "),
+        fmt::join(key_sizes, ", "),
         input_header.dumpStructure());
 }
 
@@ -163,7 +164,7 @@ void ChangelogConvertTransform::work()
         const auto & columns = chunk.getColumns();
         for (auto key_col_pos : key_column_positions)
         {
-            /// Matierlize Sparse/Const/LowCardinality columns
+            /// Materialize Sparse/Const/LowCardinality columns
             materialized_columns.push_back(columns[key_col_pos]->convertToFullIfNeeded());
             key_columns.push_back(materialized_columns.back().get());
         }
@@ -183,7 +184,7 @@ void ChangelogConvertTransform::work()
         transformEmptyChunk();
 
     /// Every 30 seconds, log metrics
-    if (MonotonicMilliseconds::now() - last_log_ts > 30'000)
+    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
     {
         size_t hash_total_row_count = index.getTotalRowCount();
         size_t hash_total_row_refs_bytes = hash_total_row_count * sizeof(RefCountDataBlock<LightChunk>);
@@ -216,16 +217,40 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     source_chunks.pushBack(std::move(input_data.chunk));
     assert(!input_data.chunk);
 
+    const auto & last_inserted_chunk = source_chunks.lastDataBlock();
+    const auto & last_inserted_chunk_columns = last_inserted_chunk.getColumns();
+
+    KeyGetter key_getter(key_columns, key_sizes, nullptr);
+    using Mapped = typename Map::mapped_type;
+
+    /// Fast path during backfilling
+    if (backfillingNewKeys())
+    {
+        for (size_t row = 0; row < rows; ++row)
+        {
+            auto result = key_getter.emplaceKey(map, row, pool);
+            chassert(result.isInserted());
+            new (&result.getMapped()) Mapped(&source_chunks, row);
+        }
+
+        Columns result_chunk_columns;
+        result_chunk_columns.reserve(output_chunk_header.getNumColumns());
+        for (auto pos : output_column_positions)
+            result_chunk_columns.push_back(last_inserted_chunk_columns[pos]);
+
+        auto delta_column = output_chunk_header.getColumns().back()->cloneEmpty();
+        delta_column->insertMany(1, rows);
+        result_chunk_columns.push_back(std::move(delta_column));
+        output_chunks.emplace_back(std::move(result_chunk_columns), rows);
+        return;
+    }
+
     /// Prepare 2 resulting chunks : 1) retracting chunk 2) transformed origin chunk
     auto retract_chunk_columns{output_chunk_header.cloneEmptyColumns()};
     for (auto & col : retract_chunk_columns)
         col->reserve(rows);
 
-    KeyGetter key_getter(key_columns, key_sizes, nullptr);
-
     size_t num_retractions = 0;
-    const auto & last_inserted_chunk = source_chunks.lastDataBlock();
-    const auto & last_inserted_chunk_columns = last_inserted_chunk.getColumns();
 
     /// In the same chunk, we may have multiple rows which have same primary key values, in this case
     /// we only generate max one retract event.
@@ -239,44 +264,49 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     /// 2) On the other hand, when `1, k` is processed, if we haven't seen it before (brand new key), we will add it as a new key.
     /// when `2, k` in the same chunk is processed, we shall not generate a retract, instead we can just override `1, k` with `2, k`.
 
-    std::unordered_map<typename Map::mapped_type::element_type *, size_t> retracted;
+    using KeyType = std::decay_t<decltype(keyHolderGetKey(key_getter.getKeyHolder(0, pool)))>;
+    std::unordered_map<KeyType, size_t> retracted;
 
     IColumn::Filter filter(rows, 1);
 
-    Arena lookup_pool;
+    Mapped * mapped = nullptr;
 
+    auto retract_and_update = [&](const KeyType & key, size_t row) {
+        /// 1) Retract
+        auto [iter, inserted] = retracted.try_emplace(key, row);
+        if (inserted)
+        {
+            /// Never saw this, first retract
+            const auto & prev_source_chunk_columns = mapped->block().getColumns();
+            for (size_t i = 0; auto pos : output_column_positions)
+                retract_chunk_columns[i++]->insertFrom(*prev_source_chunk_columns[pos], mapped->row_num);
+
+            ++num_retractions;
+        }
+        else
+        {
+            /// Have seen this before, either brand new or retracted
+            filter[iter->second] = 0;
+            iter->second = row;
+        }
+
+        /// 2) Override existing ref which will deref previous reference
+        mapped->~Mapped();
+        new (mapped) Mapped(&source_chunks, row);
+    };
+
+    typename Map::LookupResult it;
+    bool inserted = false;
     for (size_t row = 0; row < rows; ++row)
     {
-        auto find_result = key_getter.findKey(map, row, lookup_pool);
-        if (find_result.isFound())
+        /// Here we do not call `key_getter.emplaceKey(map, row, lookup_pool)` in order to get the key for retract check.
+        /// The operation is equivalent for keys without nullable/low_cardinality (Before this we have materialized all keys)
+        auto key_holder = key_getter.getKeyHolder(row, pool);
+        map.emplace(key_holder, it, inserted);
+        mapped = &it->getMapped();
+        if (!inserted)
         {
             /// This is an existing key
-            auto & mapped = find_result.getMapped();
-
-            auto retract_and_update = [&]() {
-                /// 1) Retract
-                auto iter = retracted.find(mapped.get());
-                if (iter == retracted.end())
-                {
-                    /// Never saw this, first retract
-                    const auto & prev_source_chunk_columns = mapped->block().getColumns();
-                    for (size_t i = 0; auto pos : output_column_positions)
-                        retract_chunk_columns[i++]->insertFrom(*prev_source_chunk_columns[pos], mapped->row_num);
-
-                    ++num_retractions;
-                    retracted.emplace(mapped.get(), row);
-                }
-                else
-                {
-                    /// Have seen this before, either brand new or retracted
-                    filter[iter->second] = 0;
-                    iter->second = row;
-                }
-
-                /// 2) Override existing ref which will deref previous reference
-                *mapped = typename Map::mapped_type::element_type(&source_chunks, row);
-            };
-
             if (version_column_position)
             {
                 const auto & prev_version_column = mapped->block().getColumns()[*version_column_position];
@@ -286,7 +316,11 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
                 /// If they have same version, row arrives at later time is treated having higher version
                 if (current_version_column->compareAt(row, mapped->row_num, *prev_version_column, -1) >= 0)
                 {
-                    retract_and_update();
+                    /// SerializedKeyHolder was discard after insert failed
+                    if constexpr (std::is_same_v<std::decay_t<decltype(key_holder)>, SerializedKeyHolder>)
+                        retract_and_update(it->getKey(), row);
+                    else
+                        retract_and_update(keyHolderGetKey(key_holder), row);
                 }
                 else
                 {
@@ -295,19 +329,23 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
                 }
             }
             else
-                retract_and_update();
+            {
+                if constexpr (std::is_same_v<std::decay_t<decltype(key_holder)>, SerializedKeyHolder>)
+                    retract_and_update(it->getKey(), row);
+                else
+                    retract_and_update(keyHolderGetKey(key_holder), row);
+            }
         }
         else
         {
             /// This is a new key
-            auto emplace_result = key_getter.emplaceKey(map, row, pool);
-            assert(emplace_result.isInserted());
-
-            auto & mapped = emplace_result.getMapped();
-            new (&mapped) typename Map::mapped_type(std::make_unique<typename Map::mapped_type::element_type>(&source_chunks, row));
+            new (mapped) Mapped(&source_chunks, row);
 
             /// Brand new key is treated as retracted since there is nothing to retract
-            retracted.emplace(mapped.get(), row);
+            if constexpr (std::is_same_v<std::decay_t<decltype(key_holder)>, SerializedKeyHolder>)
+                retracted.emplace(it->getKey(), row);
+            else
+                retracted.emplace(keyHolderGetKey(key_holder), row);
         }
     }
 
@@ -388,6 +426,15 @@ Block ChangelogConvertTransform::transformOutputHeader(const DB::Block & output_
 
 void ChangelogConvertTransform::transformEmptyChunk()
 {
+    /// MarkSource is always generating the historical data start / end mark in a separate and empty chunk
+    if (!backfill_done)
+    {
+        if (!backfill_started)
+            backfill_started |= input_data.chunk.isHistoricalDataStart();
+        else
+            backfill_done |= input_data.chunk.isHistoricalDataEnd();
+    }
+
     Columns output_columns;
     output_columns.reserve(output_chunk_header.getNumColumns());
 
@@ -406,15 +453,15 @@ void ChangelogConvertTransform::transformEmptyChunk()
 
 void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
+    chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         SerializedBlocksToIndices serialized_blocks_to_indices;
         source_chunks.serialize(wb, getVersion(), getInputs().front().getHeader(), &serialized_blocks_to_indices);
 
         index.serialize(
             /*MappedSerializer*/
-            [&](const std::unique_ptr<RowRefWithRefCount<LightChunk>> & mapped_, WriteBuffer & wb_) {
-                assert(mapped_);
-                mapped_->serialize(serialized_blocks_to_indices, wb_);
+            [&](const RowRefWithRefCount<LightChunk> & mapped_, WriteBuffer & wb_) {
+                mapped_.serialize(serialized_blocks_to_indices, wb_);
             },
             wb);
 
@@ -433,10 +480,8 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
 
         index.deserialize(
             /*MappedDeserializer*/
-            [&](std::unique_ptr<RowRefWithRefCount<LightChunk>> & mapped_, Arena &, ReadBuffer & rb_) {
-                auto new_mapped = std::make_unique<RowRefWithRefCount<LightChunk>>();
-                new_mapped->deserialize(&source_chunks, deserialized_indices_to_blocks, rb_);
-                mapped_ = std::move(new_mapped);
+            [&](RowRefWithRefCount<LightChunk> & mapped_, Arena &, ReadBuffer & rb_) {
+                mapped_.deserialize(&source_chunks, deserialized_indices_to_blocks, rb_);
             },
             pool,
             rb);

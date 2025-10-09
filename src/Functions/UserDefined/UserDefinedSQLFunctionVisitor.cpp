@@ -4,14 +4,14 @@
 #include <unordered_set>
 #include <stack>
 
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
-#include "Parsers/ASTColumnDeclaration.h"
 
 
 namespace DB
@@ -128,7 +128,7 @@ ASTPtr UserDefinedSQLFunctionVisitor::tryToReplaceFunction(const ASTFunction & f
             "Recursive function call detected during function call {}",
             function.name);
 
-    auto user_defined_function = UserDefinedSQLFunctionFactory::instance().tryGet(function.name);
+    auto user_defined_function = UserDefinedFunctionFactory::instance().tryGetSQLFunction(function.name);
     if (!user_defined_function)
         return nullptr;
 

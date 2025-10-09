@@ -1,0 +1,74 @@
+tags:
+  - validate
+  - hopping window
+  - skip # https://github.com/timeplus-io/proton-enterprise/issues/6984
+  
+description: extra tests on mv hop window aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      insert into hop_source_stream(id, location, value, json, timestamp) values
+      ('dev1', 'ca', 83, '{"create_time":"2024-01-01 20:00:06"}', '2024-01-01 20:00:06.000')
+      ('dev2', 'ca', 27, '{"create_time":"2024-01-01 20:00:08"}', '2024-01-01 20:00:08.000')
+      ('dev3', 'ca', 94, '{"create_time":"2024-01-01 20:00:07"}', '2024-01-01 20:00:07.000')
+      ('dev3', 'ca', 67, '{"create_time":"2024-01-01 20:00:09"}', '2024-01-01 20:00:09.000');
+
+  - type: wait
+    time: 2
+
+  - name: view-12-3
+    type: stream
+    query: select * except (_tp_time) from hop_mv settings seek_to='earliest';
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-12-3
+    mode: random
+    expected_result:
+      - ['2', 'dev2', '77', '2024-01-01 20:00:03', '2024-01-01 20:00:08']
+      - ['2', 'dev3', '94', '2024-01-01 20:00:03', '2024-01-01 20:00:08']
+      - ['2', 'dev1', '83', '2024-01-01 20:00:03', '2024-01-01 20:00:08']
+      - ['1', 'dev2', '58', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+      - ['1', 'dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+      - ['0', 'dev1', '60', '2024-01-01 19:59:57', '2024-01-01 20:00:02']
+
+  - name: view-12-4
+    type: stream
+    query: select * except (_tp_time) from hop_target_stream settings seek_to='earliest';
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-12-4
+    mode: random
+    expected_result:
+      - ['2', 'dev2', '77', '2024-01-01 20:00:03', '2024-01-01 20:00:08']
+      - ['2', 'dev3', '94', '2024-01-01 20:00:03', '2024-01-01 20:00:08']
+      - ['2', 'dev1', '83', '2024-01-01 20:00:03', '2024-01-01 20:00:08']
+      - ['1', 'dev2', '58', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+      - ['1', 'dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+      - ['0', 'dev1', '60', '2024-01-01 19:59:57', '2024-01-01 20:00:02']

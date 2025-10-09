@@ -828,30 +828,35 @@ private:
 
 public:
     explicit AggregateFunctionsCountedValue(const DataTypePtr & type, const Settings * settings)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionsCountedValue<Data>>({type}, {})
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionsCountedValue<Data>>({type}, {}, createResultType(type))
         , serialization(type->getDefaultSerialization())
-        , max_size(settings->retract_max.value)
     {
-        if (StringRef(Data::name()) == StringRef("min") || StringRef(Data::name()) == StringRef("max"))
+        if (std::string_view(Data::name()) == "min" || std::string_view(Data::name()) == "max")
         {
             if (!type->isComparable())
                 throw Exception(
-                    "Illegal type " + type->getName() + " of argument of aggregate function " + getName()
-                        + " because the values of that data type are not comparable",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of argument of aggregate function {} because the values of that data type are not comparable",
+                    type->getName(),
+                    getName());
         }
+
+
+        if (settings)
+            max_size = settings->retract_max.value;
+        else
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Settings is null");
     }
 
     void create(AggregateDataPtr place) const override { new (place) Data(max_size); }
 
     String getName() const override { return Data::name(); }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypePtr & type_)
     {
-        auto result_type = this->argument_types.at(0);
         if constexpr (Data::is_nullable)
-            return makeNullable(result_type);
-        return result_type;
+            return makeNullable(type_);
+        return type_;
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
@@ -874,7 +879,7 @@ public:
         this->data(place).write(buf, *serialization);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
         this->data(place).read(buf, *serialization, arena);
     }

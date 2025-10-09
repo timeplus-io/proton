@@ -59,8 +59,8 @@ NamesAndTypesList StorageSystemUsers::getNamesAndTypes()
 void StorageSystemUsers::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
     context->checkAccess(AccessType::SHOW_USERS);
-    const auto & access_control = context->getAccessControl();
-    std::vector<UUID> ids = access_control.findAll<User>();
+    const auto access_control = context->getAccessControl();
+    std::vector<UUID> ids = access_control->findAll<User>();
 
     size_t column_index = 0;
     auto & column_name = assert_cast<ColumnString &>(*res_columns[column_index++]);
@@ -166,7 +166,7 @@ void StorageSystemUsers::fillData(MutableColumns & res_columns, ContextPtr conte
         column_host_names_regexp_offsets.push_back(column_host_names_regexp.size());
         column_host_names_like_offsets.push_back(column_host_names_like.size());
 
-        auto default_roles_ast = default_roles.toASTWithNames(access_control);
+        auto default_roles_ast = default_roles.toASTWithNames(*access_control);
         column_default_roles_all.push_back(default_roles_ast->all);
         for (const auto & role_name : default_roles_ast->names)
             column_default_roles_list.insertData(role_name.data(), role_name.length());
@@ -175,7 +175,7 @@ void StorageSystemUsers::fillData(MutableColumns & res_columns, ContextPtr conte
             column_default_roles_except.insertData(except_name.data(), except_name.length());
         column_default_roles_except_offsets.push_back(column_default_roles_except.size());
 
-        auto grantees_ast = grantees.toASTWithNames(access_control);
+        auto grantees_ast = grantees.toASTWithNames(*access_control);
         column_grantees_any.push_back(grantees_ast->all);
         for (const auto & grantee_name : grantees_ast->names)
             column_grantees_list.insertData(grantee_name.data(), grantee_name.length());
@@ -189,11 +189,11 @@ void StorageSystemUsers::fillData(MutableColumns & res_columns, ContextPtr conte
 
     for (const auto & id : ids)
     {
-        auto user = access_control.tryRead<User>(id);
+        auto user = access_control->tryRead<User>(id);
         if (!user)
             continue;
 
-        auto storage = access_control.findStorage(id);
+        auto storage = access_control->findStorage(id);
         if (!storage)
             continue;
 

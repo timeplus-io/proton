@@ -1,0 +1,24 @@
+name: ddl_column2
+description: add test case about ddl column on mutable stream
+tags:
+  - smoke
+  - ddl-column
+  - mutable_stream
+
+setup:
+  scope: case
+  steps:
+    - type: query
+      sql: drop view if exists test26_mv;
+
+    - type: query
+      sql: drop view if exists test26_mv1;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test26_stream;
+
+    - type: wait
+      time: 1

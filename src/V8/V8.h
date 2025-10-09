@@ -42,7 +42,7 @@ private:
     std::mutex mutex;
     std::unordered_map<v8::Isolate * , std::unique_ptr<IsolateData>> isolate_data_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

@@ -34,7 +34,7 @@ ENV SHA=nosha
 ENV DATA="https://s3.amazonaws.com/clickhouse-test-reports/codebrowser/data"
 
 CMD mkdir -p $BUILD_DIRECTORY && cd $BUILD_DIRECTORY && \
-    cmake $SOURCE_DIRECTORY -DCMAKE_CXX_COMPILER=/usr/bin/clang\+\+-14 -DCMAKE_C_COMPILER=/usr/bin/clang-14 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_EMBEDDED_COMPILER=0 -DENABLE_S3=0 && \
+    cmake $SOURCE_DIRECTORY -DCMAKE_CXX_COMPILER=/usr/bin/clang\+\+-14 -DCMAKE_C_COMPILER=/usr/bin/clang-14 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_EMBEDDED_COMPILER=0 && \
     mkdir -p $HTML_RESULT_DIRECTORY && \
     $CODEGEN -b $BUILD_DIRECTORY -a -o $HTML_RESULT_DIRECTORY -p ClickHouse:$SOURCE_DIRECTORY:$SHA -d $DATA | ts '%Y-%m-%d %H:%M:%S' && \
     cp -r $STATIC_DATA $HTML_RESULT_DIRECTORY/ &&\

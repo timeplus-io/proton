@@ -1,0 +1,78 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.quantile function - population quantileiance
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getQuantile(x int, y int) RETURNS float LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getQuantile:
+          def __init__(self):
+              self.quantile = 0
+              self.x_history = []
+              self.y_history = []
+
+          def serialize(self):
+              data = {}
+              data['quantile'] = self.quantile
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.quantile = data['quantile']
+
+          def merge(self, other):
+              self.x_history = other.x_history
+              self.y_history = other.y_history
+
+          def process(self, xs, ys):
+              p = 0.5     
+              self.x_history += xs
+              self.y_history += ys
+              arr = np.vstack((self.x_history, self.y_history))
+              self.quantile = float(np.quantile(arr, p))
+
+          def finalize(self):
+              return self.quantile
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-8-1
+    type: stream
+    query: select getQuantile(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (10,3) (7,2) (4,1);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (3,4) (4,5) (5,6);
+
+  - type: check
+    target_name: python-udf2-8-1
+    expected_result:
+      - [3.5]
+      - [4.0]

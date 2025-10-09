@@ -53,6 +53,7 @@ public:
 
     /// proton: starts.
     void work() override;
+    bool hasState() const override { return true; }
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
     /// proton: ends.

@@ -30,7 +30,10 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
     {
-        return std::make_shared<ColumnT>();
+        if constexpr (std::is_same_v<ColumnT, DB::DataTypeDateTime64>)
+            return std::make_shared<ColumnT>(3, "UTC");
+        else
+            return std::make_shared<ColumnT>();
     }
 
     bool isDeterministic() const override { return false; }

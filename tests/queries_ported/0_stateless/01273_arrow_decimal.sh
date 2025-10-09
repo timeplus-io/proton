@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tags: no-fasttest
+# Tags: no-fasttest, no-python
 
 set -e
 
@@ -13,4 +13,3 @@ ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_decimal VALUES (0.123, 0.1231231
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_decimal FORMAT Arrow" | ${CLICKHOUSE_CLIENT} --query="INSERT INTO arrow_decimal FORMAT Arrow"
 ${CLICKHOUSE_CLIENT} --query="SELECT * FROM arrow_decimal"
 ${CLICKHOUSE_CLIENT} --query="DROP STREAM arrow_decimal"
-

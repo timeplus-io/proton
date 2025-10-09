@@ -1,19 +1,19 @@
 #pragma once
 
-#include <base/types.h>
+#include <Core/UUID.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
-#include <Interpreters/Context_fwd.h>
+#include <base/types.h>
 #include <Common/Exception.h>
-#include <Common/ThreadPool.h>
-#include <Core/UUID.h>
+#include <Common/ThreadPool_fwd.h>
 
 #include <ctime>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
-#include <map>
 
 
 namespace DB
@@ -29,6 +29,7 @@ class AlterCommands;
 class SettingsChanges;
 using DictionariesWithID = std::vector<std::pair<String, UUID>>;
 struct ParsedTablesMetadata;
+struct ParsedTableMetadata;
 struct QualifiedTableName;
 
 namespace ErrorCodes
@@ -151,12 +152,16 @@ public:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Not implemented");
     }
 
-    virtual void loadTableFromMetadata(ContextMutablePtr /*local_context*/, const String & /*file_path*/, const QualifiedTableName & /*name*/, const ASTPtr & /*ast*/, bool /*force_restore*/)
+    virtual void loadTableFromMetadata(ContextMutablePtr /*local_context*/, const QualifiedTableName & /*name*/, const ParsedTableMetadata & /*parsed_meta_data*/, bool /*force_restore*/)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Not implemented");
     }
 
     virtual void startupTables(ThreadPool & /*thread_pool*/, bool /*force_restore*/, bool /*force_attach*/) {}
+
+    /// proton: starts
+    virtual bool configureTableEngine(ASTCreateQuery &) const { return false; }
+    /// proton: ends
 
     /// Check the existence of the table in memory (attached).
     virtual bool isTableExist(const String & name, ContextPtr context) const = 0;
@@ -169,6 +174,8 @@ public:
     /// Get the table for work. Return nullptr if there is no table.
     virtual StoragePtr tryGetTable(const String & name, ContextPtr context) const = 0;
 
+    virtual StoragePtr getTable(const String & name, ContextPtr context) const;
+
     virtual UUID tryGetTableUUID(const String & /*table_name*/) const { return UUIDHelpers::Nil; }
 
     using FilterByNameFunction = std::function<bool(const String &)>;
@@ -177,8 +184,20 @@ public:
     /// It is possible to have "hidden" tables that are not visible when passing through, but are visible if you get them by name using the functions above.
     virtual DatabaseTablesIteratorPtr getTablesIterator(ContextPtr context, const FilterByNameFunction & filter_by_table_name = {}) const = 0; /// NOLINT
 
+    /// Returns list of table names.
+    virtual Strings getAllTableNames(ContextPtr context) const
+    {
+        // NOTE: This default implementation wait for all tables to be loaded and started up. It should be reimplemented for databases that support async loading.
+        Strings result;
+        for (auto table_it = getTablesIterator(context); table_it->isValid(); table_it->next())
+            result.emplace_back(table_it->name());
+        return result;
+    }
+
     /// Is the database empty.
     virtual bool empty() const = 0;
+
+    virtual bool isReadOnly() const { return false; }
 
     /// Add the table to the database. Record its presence in the metadata.
     virtual void createTable(
@@ -187,16 +206,17 @@ public:
         const StoragePtr & /*table*/,
         const ASTPtr & /*query*/)
     {
-        throw Exception("There is no CREATE STREAM query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "There is no CREATE STREAM query for Database{}", getEngineName());
     }
 
     /// Delete the table from the database, drop table and delete the metadata.
     virtual void dropTable( /// NOLINT
         ContextPtr /*context*/,
         const String & /*name*/,
-        [[maybe_unused]] bool no_delay = false)
+        bool /*sync = false*/,
+        const ASTPtr & /*query*/)
     {
-        throw Exception("There is no DROP TABLE query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "There is no DROP TABLE query for Database{}", getEngineName());
     }
 
     /// Add a table to the database, but do not add it to the metadata. The database may not support this method.
@@ -204,20 +224,20 @@ public:
     /// Note: ATTACH TABLE statement actually uses createTable method.
     virtual void attachTable(ContextPtr /* context */, const String & /*name*/, const StoragePtr & /*table*/, [[maybe_unused]] const String & relative_table_path = {})
     {
-        throw Exception("There is no ATTACH TABLE query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "There is no ATTACH TABLE query for Database{}", getEngineName());
     }
 
     /// Forget about the table without deleting it, and return it. The database may not support this method.
     virtual StoragePtr detachTable(ContextPtr /* context */, const String & /*name*/)
     {
-        throw Exception("There is no DETACH TABLE query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "There is no DETACH TABLE query for Database{}", getEngineName());
     }
 
     /// Forget about the table without deleting it's data, but rename metadata file to prevent reloading it
     /// with next restart. The database may not support this method.
     virtual void detachTablePermanently(ContextPtr /*context*/, const String & /*name*/)
     {
-        throw Exception("There is no DETACH TABLE PERMANENTLY query for Database" + getEngineName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "There is no DETACH TABLE PERMANENTLY query for Database{}", getEngineName());
     }
 
     /// Rename the table and possibly move the table to another database.
@@ -229,7 +249,7 @@ public:
         bool /*exchange*/,
         bool /*dictionary*/)
     {
-        throw Exception(getEngineName() + ": renameTable() is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: renameTable() is not supported", getEngineName());
     }
 
     using ASTModifier = std::function<void(IAST &)>;
@@ -239,9 +259,12 @@ public:
     virtual void alterTable(
         ContextPtr /*context*/,
         const StorageID & /*table_id*/,
-        const StorageInMemoryMetadata & /*metadata*/)
+        const StorageInMemoryMetadata & /*metadata*/,
+        [[maybe_unused]] String alter_command = {}, /// added by proton
+        [[maybe_unused]] std::vector<String> alter_command_asts = {} /// added by proton
+    )
     {
-        throw Exception(getEngineName() + ": alterTable() is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: alterTable() is not supported", getEngineName());
     }
 
     /// Returns time of table's metadata change, 0 if there is no corresponding metadata file.
@@ -286,7 +309,7 @@ public:
 
     virtual void renameDatabase(ContextPtr, const String & /*new_name*/)
     {
-        throw Exception(getEngineName() + ": RENAME DATABASE is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: RENAME DATABASE is not supported", getEngineName());
     }
 
     /// Whether the contained tables should be written to a backup.
@@ -314,6 +337,7 @@ public:
 
     virtual void waitDetachedTableNotInUse(const UUID & /*uuid*/) { }
     virtual void checkDetachedTableNotInUse(const UUID & /*uuid*/) { }
+    virtual void setDetachedTableNotInUseForce(const UUID & /*uuid*/) { }
 
     /// Ask all tables to complete the background threads they are using and delete all table objects.
     virtual void shutdown() = 0;
@@ -335,13 +359,16 @@ public:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Database engine {} does not run a replication thread!", getEngineName());
     }
 
+    /// Returns CREATE TABLE queries and corresponding tables prepared for writing to a backup.
+    virtual std::vector<std::pair<ASTPtr, StoragePtr>> getTablesForBackup(const FilterByNameFunction & filter, const ContextPtr & context) const;
+
     virtual ~IDatabase() = default;
 
 protected:
     virtual ASTPtr getCreateTableQueryImpl(const String & /*name*/, ContextPtr /*context*/, bool throw_on_error) const
     {
         if (throw_on_error)
-            throw Exception("There is no SHOW CREATE STREAM query for Database" + getEngineName(), ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY);
+            throw Exception(ErrorCodes::CANNOT_GET_CREATE_STREAM_QUERY, "There is no SHOW CREATE STREAM query for Database{}", getEngineName());
         return nullptr;
     }
 

@@ -19,7 +19,9 @@ bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     ParserKeyword p_mutation{"MUTATION"};
     ParserKeyword p_part_move_to_shard{"PART_MOVE_TO_SHARD"};
     ParserKeyword p_transaction{"TRANSACTION"};
-    ParserKeyword p_on{"ON"};
+    /// proton: starts
+    /// ParserKeyword p_on{"ON"};
+    /// proton: ends
     ParserKeyword p_test{"TEST"};
     ParserKeyword p_sync{"SYNC"};
     ParserKeyword p_async{"ASYNC"};
@@ -40,8 +42,10 @@ bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     else
         return false;
 
-    if (p_on.ignore(pos, expected) && !ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-        return false;
+    /// proton: starts
+    /// if (p_on.ignore(pos, expected) && !ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///     return false;
+    /// proton: ends
 
     if (!p_where.ignore(pos, expected) || !p_where_expression.parse(pos, query->where_expression, expected))
         return false;

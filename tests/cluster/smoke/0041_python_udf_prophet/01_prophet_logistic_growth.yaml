@@ -1,0 +1,83 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.growth function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (ds date, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getGrowth(ds date, y float) RETURNS array(tuple(string, float, float, float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+      from prophet import Prophet
+
+      class getGrowth:
+          def __init__(self):
+              self.growth = [()]
+
+          def serialize(self):
+              data = {}
+              data['growth'] = self.growth
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.growth = data['growth']
+
+          def merge(self, other):
+              pass
+
+          def process(self, dss, ys):
+              if len(dss) < 2:
+                  return
+              df = pd.DataFrame(zip(dss,ys), columns=['ds', 'y'])
+              df['y'] = 10 - df['y']
+              df['cap'] = 6
+              df['floor'] = 1.5
+              m = Prophet(growth='logistic')
+              m.fit(df)
+              future = m.make_future_dataframe(periods=3)
+              future['cap'] = 6
+              future['floor'] = 1.5
+              forecast = m.predict(future)
+              forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail()
+              forecast[forecast.columns[0]] = forecast[forecast.columns[0]].astype('string')
+              self.growth = [tuple(r) for r in forecast.values.tolist()]
+
+          def finalize(self):
+              return [self.growth]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf15-1-1
+    type: stream
+    query: select getGrowth(ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(tuple(string, float32, float32, float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(ds, y) values
+          ('2007-12-10', 9.590761) ('2007-12-11', 8.519590)
+          ('2007-12-12', 8.183677) ('2007-12-13', 8.072467)
+          ('2007-12-14', 7.893572);
+
+  - type: check
+    target_name: python-udf15-1-1
+    expected_result:
+      - [[['2007-12-13', 1.821487219705172, 1.2119150322868086, 2.464008408819895], ['2007-12-14', 2.1330426978138286, 1.5414728180954647, 2.7158388988528235], ['2007-12-15', 2.662526976746605, 2.0625610417471205, 3.2640963272962145], ['2007-12-16', 3.4155033047685794, 2.817817217286319, 4.049551564961877], ['2007-12-17', 4.253775792015401, 3.6362309067808023, 4.8482221362714855]]]

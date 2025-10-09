@@ -67,8 +67,8 @@ public:
 	typedef typename Bucket::iterator    BucketIterator;
 	typedef typename BucketVec::iterator BucketVecIterator;
 
-	class ConstIterator: public std::iterator<std::forward_iterator_tag, Value>
-	{
+    class ConstIterator
+    {
 	public:
 		ConstIterator(): _initialized(false)
 		{

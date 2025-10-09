@@ -3,6 +3,7 @@
 #include <Common/SipHash.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
+#include <Common/Logger.h>
 
 #include <Poco/Net/Context.h>
 #include <Poco/Net/HTTPBasicCredentials.h>
@@ -61,7 +62,7 @@ public:
         bool skip_cert_check);
 
     String fetchSchema(UInt32 id) const;
-    std::pair<UInt32, String> fetchLatestSchemaForTopic(const String & topic_name) const;
+    std::pair<UInt32, String> fetchLatestSchemaForSubject(const String & subject) const;
 
 private:
     UInt32 fetchLatestSubjectVersion(const String & subject_name) const;
@@ -73,7 +74,7 @@ private:
     String ca_location;
     Poco::Net::Context::VerificationMode Verification_mode;
 
-    Poco::Logger* logger;
+    LoggerPtr logger;
 };
 
 }

@@ -6,6 +6,10 @@
     #include <emmintrin.h>
 #endif
 
+#if defined(__aarch64__) && defined(__ARM_NEON)
+#    include <arm_neon.h>
+#      pragma clang diagnostic ignored "-Wreserved-identifier"
+#endif
 
 namespace DB
 {

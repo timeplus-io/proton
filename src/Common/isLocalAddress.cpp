@@ -116,9 +116,9 @@ bool isLocalAddress(const Poco::Net::IPAddress & address)
 }
 
 
-bool isLocalAddress(const Poco::Net::SocketAddress & address, UInt16 clickhouse_port)
+bool isLocalAddress(const Poco::Net::SocketAddress & address, UInt16 local_tcp_port)
 {
-    return clickhouse_port == address.port() && isLocalAddress(address.host());
+    return local_tcp_port == address.port() && isLocalAddress(address.host());
 }
 
 

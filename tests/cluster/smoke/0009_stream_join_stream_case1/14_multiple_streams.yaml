@@ -1,0 +1,56 @@
+tags:
+  - stream_join_stream
+description: multiple stream to stream join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists middle_stream
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream middle_stream (iii int, sss string, ttts datetime)
+
+  - type: wait
+    time: 2
+
+  - name: 1037-1
+    type: stream
+    query: select s, ss, sss from (select i, s, ss, ts from test10_left_stream1 inner
+      join test10_right_stream1 on i=ii and date_diff_within(10s, ts, tts)) as joined
+      inner join middle_stream on i=iii and date_diff_within(10s, ts, ttts)
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+      - name: sss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_left_stream1(i, s, ts) values (1, 's', '2022-05-23 15:45:10')
+
+  - type: query
+    sql: insert into middle_stream(iii, sss, ttts) values (1, 'sss', '2022-05-23 15:45:10')
+
+  - type: query
+    sql: insert into test10_right_stream1(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1,
+      's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23
+      15:45:10'),(1, 's5', '2022-05-23 15:45:15'),(1, 's6', '2022-05-23 15:45:19'),(1,
+      's7', '2022-05-23 15:45:20'),(1, 's8', '2022-05-23 15:45:21')
+
+  - type: check
+    target_name: 1037-1
+    expected_result:
+      - [ s, s2, sss ]
+      - [ s, s3, sss ]
+      - [ s, s4, sss ]
+      - [ s, s5, sss ]
+      - [ s, s6, sss ]
+      - [ s, s7, sss ]

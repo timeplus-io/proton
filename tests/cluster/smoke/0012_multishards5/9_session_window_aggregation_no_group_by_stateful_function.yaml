@@ -1,0 +1,177 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_aggregation
+- window_aggregation
+- session_window_aggregation
+- no_group_by
+- stateful_function
+description: session window aggregation no group by, stateful function
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists test13_view2_5;
+
+- type: wait
+  time: 1
+- type: query
+  sql: drop view if exists test13_view1_5;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test13_multishard_5;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    create stream if not exists test13_multishard_5(speed int, id int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    create materialized view if not exists test13_view1_5 as
+    select speed,
+           id, timestamp
+    from test13_multishard_5;
+
+- type: wait
+  time: 1
+
+- name: '1349'
+  type: stream
+  query: |
+    select max(speed),
+           min(speed),
+           avg(speed),
+           window_start as s,
+           window_end as e
+    from session(test13_view1_5, timestamp, 5m, [speed >= 60, speed < 60))
+    group by window_start,
+             window_end;
+  schema:
+    - name: max(speed)
+      type: int32
+    - name: min(speed)
+      type: int32
+    - name: avg(speed)
+      type: float64
+    - name: s
+      type: datetime64(3)
+    - name: e
+      type: datetime64(3)
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (40, 1, '2021-11-02 20:00:01');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (50, 2, '2021-11-02 20:00:02');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (60, 1, '2021-11-02 20:00:03');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (70, 2, '2021-11-02 20:00:04');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (80, 1, '2021-11-02 20:00:05');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (90, 2, '2021-11-02 20:00:06');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (80, 1, '2021-11-02 20:00:07');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (70, 2, '2021-11-02 20:00:08');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (60, 1, '2021-11-02 20:00:09');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (50, 2, '2021-11-02 20:00:10');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into test13_multishard_5(speed, id, timestamp)
+    values (40, 1, '2021-11-02 20:00:11');
+
+- type: wait
+  time: 3
+
+- type: query
+  sql: drop view if exists test13_view1_5;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test13_multishard_5;
+
+- type: check
+  target_name: '1349'
+  expected_result:
+  - [90, 60, 72.85714285714286, '2021-11-02 20:00:03', '2021-11-02 20:00:10']

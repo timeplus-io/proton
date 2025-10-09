@@ -1,0 +1,120 @@
+tags:
+  - versioned_kv_join_versioned_kv
+description: version_kv to versioned_kv inner join global aggregation
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node: 
+      - p1
+    sql: drop stream if exists test15_vk_left_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: drop stream if exists test15_vk_right_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: create stream test15_vk_left_stream (i int64, s string) primary key s settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: query
+    node: 
+      - p1
+    sql: create stream test15_vk_right_stream (ii int64, ss string) primary key ss settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - name: "1505"
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select sum(i + ii) as total from test15_vk_left_stream join test15_vk_right_stream on s=ss group by s emit periodic 2s
+    schema:
+      - name: total
+        type: int64
+  - type: wait
+    time: 3
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii, ss) values (1, 's1')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_left_stream(i, s) values (3, 's1')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: "1505"
+    expected_result:
+      - - 4
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_vk_left_stream(i, s) values (2, 's1')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: "1505"
+    expected_result:
+      - - 3
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii, ss) values (4, 's1')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: "1505"
+    expected_result:
+      - - 6

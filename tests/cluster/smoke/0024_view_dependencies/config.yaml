@@ -1,0 +1,49 @@
+name: view_dependencies
+description: Test suite covering the view/materialized view dependencies check smoke cases.
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  # setup for case 0
+  - type: query
+    sql: drop view if exists view_with_source_stream
+  - type: query
+    sql: drop view if exists mv_with_source_stream1
+  - type: query
+    sql: drop view if exists mv_with_source_stream2
+  - type: query
+    sql: drop stream if exists tmp
+  - type: wait
+    time: 2
+
+  # setup for case 1
+  - type: query
+    sql: drop view if exists view_with_source_view
+  - type: query
+    sql: drop view if exists mv_with_source_view
+  - type: query
+    sql: drop view if exists source_view
+  - type: query
+    sql: drop view if exists tmp_view
+  - type: wait
+    time: 2
+
+  # setup for case 2
+  - type: query
+    sql: drop view if exists view_with_source_mv
+  - type: query
+    sql: drop view if exists mv_with_source_mv
+  - type: query
+    sql: drop view if exists source_mv
+
+  # setup for all cases
+  - type: query
+    sql: drop stream if exists stream0024
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream stream0024(i int)
+  - type: wait
+    time: 2

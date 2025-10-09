@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Core/Streaming/Watermark.h>
 #include <Parsers/IAST.h>
 
 namespace DB
@@ -11,33 +10,44 @@ public:
     enum StreamMode
     {
         STREAM,
-        CHANGELOG
+        CHANGELOG,
+        DELTA,
     };
-    StreamMode stream_mode = StreamMode::STREAM;
+    std::optional<StreamMode> stream_mode;
 
-    /// [AFTER WATERMARK]
-    bool after_watermark = false;
+    /// [AFTER WINDOW CLOSE]
+    bool after_window_close = false;
 
-    /// [WITH DELAY INTERVAL 1 SECOND].
+    /// [WITH DELAY 1s]
     ASTPtr delay_interval;
 
-    /// [PERIODIC INTERVAL 1 SECOND]
+    /// [PERIODIC 1s [REPEAT]]
     ASTPtr periodic_interval;
+    bool repeat = false; /// If repeatedly emit last emitted results, no matter if there is new event or not
 
-    /// [ON UPDATE]
+    /// [ON UPDATE [WITH BATCH 1s]]
     bool on_update = false;
+    ASTPtr batch_interval;
 
-    /// [TIMEOUT INTERVAL 5 SECOND]
+    /// [PER EVENT]
+    bool per_event = false;
+
+    /// [TIMEOUT 5s]
     ASTPtr timeout_interval;
+
     /// [LAST <last-x> [ON PROCTIME]]]
     ASTPtr last_interval;
     bool proc_time = false; /// Proc time or event time processing.
 
-    bool repeat = false; /// If repeatedly emit last emitted results, no matter if there is new event or not
+    /// AFTER KEY EXPIRE [IDENTIFIED BY ts_col] WITH [ONLY] MAXSPAN <interval> AND TIMEOUT <interval>
+    ASTPtr key_ts_col;
+    ASTPtr key_max_span_interval;
+    /// Only emit keys with max span
+    bool only_max_span = false;
 
     String getID(char) const override { return "Emit"; }
 
-    ASTPtr clone() const override { return std::make_shared<ASTEmitQuery>(*this); }
+    ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
 

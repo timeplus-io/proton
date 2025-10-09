@@ -66,10 +66,8 @@ DataTypeMap::DataTypeMap(const DataTypePtr & key_type_, const DataTypePtr & valu
 
 void DataTypeMap::assertKeyType() const
 {
-    if (!checkKeyType(key_type))
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Type of map key must be a type, that can be represented by integer or string or fixed_string (possibly low_cardinality) or uuid,"
-            " but {} given", key_type->getName());
+    if (!isValidKeyType(key_type))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Type map cannot have a key of type {}", key_type->getName());
 }
 
 
@@ -108,7 +106,7 @@ bool DataTypeMap::equals(const IDataType & rhs) const
     return nested->equals(*rhs_map.nested);
 }
 
-bool DataTypeMap::checkKeyType(DataTypePtr key_type)
+bool DataTypeMap::isValidKeyType(DataTypePtr key_type)
 {
     if (key_type->getTypeId() == TypeIndex::LowCardinality)
     {
@@ -127,10 +125,25 @@ bool DataTypeMap::checkKeyType(DataTypePtr key_type)
     return true;
 }
 
-static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
+DataTypePtr DataTypeMap::getNestedTypeWithUnnamedTuple() const
+{
+    const auto & from_array = assert_cast<const DataTypeArray &>(*nested);
+    const auto & from_tuple = assert_cast<const DataTypeTuple &>(*from_array.getNestedType());
+    return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(from_tuple.getElements()));
+}
+
+void DataTypeMap::forEachChild(const DB::IDataType::ChildCallback & callback) const
+{
+    callback(*key_type);
+    key_type->forEachChild(callback);
+    callback(*value_type);
+    value_type->forEachChild(callback);
+}
+
+static DataTypePtr create(const ASTPtr & arguments, [[maybe_unused]] bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.size() != 2)
-        throw Exception("The map data type family must have two arguments: key and value types", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "map data type family must have two arguments: key and value types");
 
     DataTypes nested_types;
     nested_types.reserve(arguments->children.size());

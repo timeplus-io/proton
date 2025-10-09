@@ -19,9 +19,6 @@ namespace ErrorCodes
   */
 struct ArrayCumSumNonNegativeImpl
 {
-    using column_type = ColumnArray;
-    using data_type = DataTypeArray;
-
     static bool needBoolean() { return false; }
     static bool needExpression() { return false; }
     static bool needOneArray() { return false; }
@@ -46,7 +43,8 @@ struct ArrayCumSumNonNegativeImpl
             return std::make_shared<DataTypeArray>(nested);
         }
 
-        throw Exception("array_cum_sum_non_negative cannot add values of type " + expression_return->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "array_cum_sum_non_negative cannot add values of type {}", expression_return->getName());
     }
 
 
@@ -118,7 +116,7 @@ struct ArrayCumSumNonNegativeImpl
             executeType<Decimal128, Decimal128>(mapped, array, res))
             return res;
         else
-            throw Exception("Unexpected column for array_cum_sum_non_negative: " + mapped->getName(), ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Unexpected column for array_cum_sum_non_negative: {}", mapped->getName());
     }
 
 };

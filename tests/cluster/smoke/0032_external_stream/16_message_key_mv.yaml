@@ -1,0 +1,115 @@
+tags:
+  - multi_shard
+  - message_key
+description: (#6151) Test partitioning with message key and records with the same metric should be send to only 1 partition.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test_16
+
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: create
+    topic: test_16
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: query
+    sql: drop view if exists mv_source_to_kafka_14_01
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists source_stream
+
+  - type: query
+    sql: drop stream if exists test_kafka_14_01
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: 
+      CREATE STREAM source_stream (
+        metric string,
+        value int32
+      )
+
+  - type: query
+    sql: create external stream test_kafka_14_01
+        (
+           metric string,
+           value int32,
+           _tp_message_key string
+        )
+        settings type = 'kafka', 
+        brokers = 'k1:9092', 
+        topic = 'test_16', 
+        data_format = 'JSONEachRow',
+        one_message_per_row = 1;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: 
+      CREATE MATERIALIZED VIEW mv_source_to_kafka_14_01 
+      INTO test_kafka_14_01 AS
+      SELECT
+        metric,
+        value,
+        metric as _tp_message_key
+      FROM source_stream;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 33_14_01
+    query: |
+      SELECT COUNT(DISTINCT _tp_shard) AS distinct_shard_count
+      FROM test_kafka_14_01
+      WHERE metric = 'metric1'
+    schema:
+      - name: distinct_shard_count
+        type: uint64
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into source_stream (metric, value) values ('metric1', 1)('metric2', 2)('metric3', 3)('metric1', 4)('metric2', 5)('metric3', 6)('metric1', 7)('metric1', 8)('metric1', 9)
+
+  - type: check
+    target_name: 33_14_01
+    expected_result:
+      - [1]
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: 33_14_02
+    query: |
+      SELECT 
+        COUNT(DISTINCT _tp_shard) AS distinct_shard_count
+      FROM table(test_kafka_14_01)
+      WHERE metric = 'metric1'
+    schema:
+      - name: distinct_shard_count
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: 33_14_02
+    expected_result:
+      - [1]

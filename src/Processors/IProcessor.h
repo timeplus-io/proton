@@ -34,6 +34,9 @@ struct ProcessorMetrics
 {
     int64_t processing_time_ns = 0;
     uint64_t processed_bytes = 0;
+
+    std::optional<std::pair<int64_t, int64_t>> last_processed_sn_range;
+    std::string last_error_message;
 };
 /// proton: ends.
 
@@ -246,12 +249,8 @@ public:
 
     /// In case if query was cancelled executor will wait till all processors finish their jobs.
     /// Generally, there is no reason to check this flag. However, it may be reasonable for long operations (e.g. i/o).
-    bool isCancelled() const { return is_cancelled; }
-    void cancel()
-    {
-        is_cancelled = true;
-        onCancel();
-    }
+    bool isCancelled() const { return is_cancelled.load(std::memory_order_acquire); }
+    void cancel() noexcept;
 
     /// Additional method which is called in case if ports were updated while work() method.
     /// May be used to stop execution in rare cases.
@@ -294,6 +293,7 @@ public:
     const auto & getOutputs() const { return outputs; }
 
     /// Debug output.
+    String debug() const;
     void dump() const;
 
     /// Used to print pipeline.
@@ -324,6 +324,7 @@ public:
         uint64_t read_rows = 0;
         uint64_t read_bytes = 0;
         uint64_t total_rows_approx = 0;
+        uint64_t total_bytes = 0;
     };
 
     struct ReadProgress
@@ -346,6 +347,9 @@ public:
     void setStreaming(bool is_streaming_) { is_streaming = is_streaming_; }
     bool isStreaming() const { return is_streaming; }
 
+    /// Check if processor has state. Used for checkpointing.
+    virtual bool hasState() const { return false; }
+
     /// Serialize processor
     void marshal(WriteBuffer & wb) const;
 
@@ -354,7 +358,10 @@ public:
     /// to reconstruct the graph / dependency
     String unmarshal(ReadBuffer & rb);
 
-    ProcessorMetrics getMetrics() const { return metrics; }
+    const ProcessorMetrics & getMetrics() const { return metrics; }
+    ProcessorMetrics & getMetrics() { return metrics; }
+
+    void setLastErrorMessage(std::string err_msg) { metrics.last_error_message = std::move(err_msg); }
 
     void setLogicID(UInt32 logic_id_) { logic_pid = logic_id_; }
     UInt32 getLogicID() const { return logic_pid; }
@@ -379,7 +386,9 @@ protected:
     /// proton: ends.
 
 protected:
-    virtual void onCancel() {}
+    virtual void onCancel() noexcept {}
+
+    std::atomic<bool> is_cancelled{false};
 
     /// proton: starts.
     virtual VersionType getVersionFromRevision(UInt64 revision) const;
@@ -400,8 +409,6 @@ private:
     /// - input_wait_elapsed_us
     /// - output_wait_elapsed_us
     friend class ExecutingGraph;
-
-    std::atomic<bool> is_cancelled{false};
 
     std::string processor_description;
 

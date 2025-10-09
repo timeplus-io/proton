@@ -1,0 +1,71 @@
+tags:
+  - versioned_kv_subquery/view/materialized_view
+  - global_aggregation
+  - gtoup_by_primary_key
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description:
+  versioned_kv, partition by no primary key, global aggregation, group
+  by primary key.stategul function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_substream_8(val int, id int, name string)
+      primary key id settings mode='versioned_kv';
+  - type: wait
+    time: 2
+
+  - name: "1455"
+    type: stream
+    query:
+      select max(val), min(val), avg(val), id, name from test14_substream_8 partition
+      by name group by id emit periodic 1s;
+    schema:
+      - name: max(val)
+        type: int32
+      - name: min(val)
+        type: int32
+      - name: avg(val)
+        type: float64
+      - name: id
+        type: int32
+      - name: name
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_substream_8(val, id, name) values (1, 2, 'a')(3, 3, 'b')(5,
+      1, 'c');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_substream_8(val, id, name) values (8, 2, 'a')(9, 3, 'b')(11,
+      2, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_substream_8(val, id, name) values (10, 1, 'c')(14, 2, 'b');
+
+  - type: check
+    target_name: "1455"
+    mode: random
+    expected_result:
+      - [1, 1, 1, 2, a]
+      - [3, 3, 3, 3, b]
+      - [5, 5, 5, 1, c]
+      - [0, 0, nan, 2, a]
+      - [11, 11, 11, 2, b]
+      - [9, 9, 9, 3, b]
+      - [14, 14, 14, 2, b]
+      - [9, 9, 9, 3, b]
+      - [10, 10, 10, 1, c]

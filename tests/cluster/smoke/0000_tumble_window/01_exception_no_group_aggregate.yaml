@@ -1,0 +1,24 @@
+tags:
+  - syntax exception
+description: stream query expected exception:not under aggregate and not in group
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select id, max(value), window_start, window_end from tumble(test_smoke, timestamp, interval 5 second) group by window_start, window_end emit stream
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['error_code:215']

@@ -1,4 +1,4 @@
-#include <Interpreters/Streaming/PagedAsofRowRefs.h>
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/PagedAsofRowRefs.h>
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>

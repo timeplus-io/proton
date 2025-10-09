@@ -12,6 +12,8 @@
 #include <Common/ProtonCommon.h>
 #include <Common/intExp.h>
 
+#include <numeric>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -23,6 +25,7 @@ extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
 extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 extern const int BAD_ARGUMENTS;
 extern const int MISSING_SESSION_KEY;
+extern const int UNSUPPORTED;
 }
 
 namespace Streaming
@@ -32,27 +35,27 @@ namespace
 std::optional<IntervalKind> mapIntervalKind(const String & func_name)
 {
     if (func_name == "to_interval_nanosecond")
-        return IntervalKind::Nanosecond;
+        return IntervalKind::Kind::Nanosecond;
     else if (func_name == "to_interval_microsecond")
-        return IntervalKind::Microsecond;
+        return IntervalKind::Kind::Microsecond;
     else if (func_name == "to_interval_millisecond")
-        return IntervalKind::Millisecond;
+        return IntervalKind::Kind::Millisecond;
     else if (func_name == "to_interval_second")
-        return IntervalKind::Second;
+        return IntervalKind::Kind::Second;
     else if (func_name == "to_interval_minute")
-        return IntervalKind::Minute;
+        return IntervalKind::Kind::Minute;
     else if (func_name == "to_interval_hour")
-        return IntervalKind::Hour;
+        return IntervalKind::Kind::Hour;
     else if (func_name == "to_interval_day")
-        return IntervalKind::Day;
+        return IntervalKind::Kind::Day;
     else if (func_name == "to_interval_week")
-        return IntervalKind::Week;
+        return IntervalKind::Kind::Week;
     else if (func_name == "to_interval_month")
-        return IntervalKind::Month;
+        return IntervalKind::Kind::Month;
     else if (func_name == "to_interval_quarter")
-        return IntervalKind::Quarter;
+        return IntervalKind::Kind::Quarter;
     else if (func_name == "to_interval_year")
-        return IntervalKind::Year;
+        return IntervalKind::Kind::Year;
     else
         return {};
 }
@@ -172,14 +175,14 @@ ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
 
     /// tumble(table, [timestamp_expr], win_interval, [timezone])
     if (func_ast->children.size() != 1)
-        throw Exception(TUMBLE_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, TUMBLE_HELP_MESSAGE);
 
     const auto & args = func_ast->arguments->children;
     if (args.size() < 2)
-        throw Exception(TUMBLE_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, TUMBLE_HELP_MESSAGE);
 
     if (args.size() > 4)
-        throw Exception(TUMBLE_HELP_MESSAGE, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, TUMBLE_HELP_MESSAGE);
 
     ASTPtr table;
     ASTPtr time_expr;
@@ -232,7 +235,7 @@ ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
         return {table, time_expr, win_interval, timezone};
     } while (false);
 
-    throw Exception(TUMBLE_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
+    throw Exception::createRuntime(ErrorCodes::BAD_ARGUMENTS, TUMBLE_HELP_MESSAGE);
 }
 
 ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
@@ -241,14 +244,14 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
 
     /// hop(table, [timestamp_expr], hop_interval, win_interval, [timezone])
     if (func_ast->children.size() != 1)
-        throw Exception(HOP_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, HOP_HELP_MESSAGE);
 
     const auto & args = func_ast->arguments->children;
     if (args.size() < 3)
-        throw Exception(HOP_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, HOP_HELP_MESSAGE);
 
     if (args.size() > 5)
-        throw Exception(HOP_HELP_MESSAGE, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, HOP_HELP_MESSAGE);
 
     ASTPtr table;
     ASTPtr time_expr;
@@ -262,69 +265,75 @@ ASTs checkAndExtractHopArguments(const ASTFunction * func_ast)
 
         if (args.size() == 3)
         {
-            /// Case: hop(table, INTERVAL 5 SECOND, INTERVAL 1 MINITUE)
+            /// Case: hop(table, INTERVAL 5 SECOND, INTERVAL 1 MINUTE)
             if (isIntervalAST(args[1]) && isIntervalAST(args[2]))
             {
                 hop_interval = args[1];
                 win_interval = args[2];
             }
             else
+            {
                 break; /// throw error
+            }
         }
         else if (args.size() == 4)
         {
             if (isIntervalAST(args[1]) && isIntervalAST(args[2]) && isTimeZoneAST(args[3]))
             {
-                /// Case: hop(table, INTERVAL 5 SECOND, INTERVAL 1 MINITUE, timezone)
+                /// Case: hop(table, INTERVAL 5 SECOND, INTERVAL 1 MINUTE, timezone)
                 hop_interval = args[1];
                 win_interval = args[2];
                 timezone = args[3];
             }
             else if (isTimeExprAST(args[1]) && isIntervalAST(args[2]) && isIntervalAST(args[3]))
             {
-                /// Case: hop(table, time_expr, INTERVAL 5 SECOND, INTERVAL 1 MINITUE)
+                /// Case: hop(table, time_expr, INTERVAL 5 SECOND, INTERVAL 1 MINUTE)
                 time_expr = args[1];
                 hop_interval = args[2];
                 win_interval = args[3];
             }
             else
+            {
                 break; /// throw error
+            }
         }
         else
         {
             assert(args.size() == 5);
             if (isTimeExprAST(args[1]) && isIntervalAST(args[2]) && isIntervalAST(args[3]) && isTimeZoneAST(args[4]))
             {
-                /// Case: hop(table, time_column, INTERVAL 5 SECOND, INTERVAL 1 MINITUE, timezone)
+                /// Case: hop(table, time_column, INTERVAL 5 SECOND, INTERVAL 1 MINUTE, timezone)
                 time_expr = args[1];
                 hop_interval = args[2];
                 win_interval = args[3];
                 timezone = args[4];
             }
             else
+            {
                 break; /// throw error
+            }
         }
 
         return {table, time_expr, hop_interval, win_interval, timezone};
     } while (false);
 
-    throw Exception(HOP_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
+    throw Exception::createRuntime(ErrorCodes::BAD_ARGUMENTS, HOP_HELP_MESSAGE);
 }
 
 ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionSession(func_ast));
 
-    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision] | [start_prediction, end_prediction])
+    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval], [range_comparison] | [start_prediction, end_prediction])
     if (func_ast->children.size() != 1)
-        throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, SESSION_HELP_MESSAGE);
 
     const auto & args = func_ast->arguments->children;
     if (args.size() < 2)
-        throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, SESSION_HELP_MESSAGE);
 
     if (args.size() > 5)
-        throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, SESSION_HELP_MESSAGE);
 
     ASTs asts;
     ASTPtr table;
@@ -356,7 +365,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         else
         {
             /// Must contains `timeout_interval`
-            throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+            throw Exception::createRuntime(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, SESSION_HELP_MESSAGE);
         }
 
         /// Handle optional max_session_size
@@ -371,14 +380,14 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         /// Handle optional start_condition/end_condition
         if (i < args.size())
         {
-            /// OPT-1: Handle range comparision
-            if (auto * range_comparision = args[i]->as<ASTSessionRangeComparision>())
+            /// OPT-1: Handle range comparison
+            if (auto * range_comparison = args[i]->as<ASTSessionRangeComparision>())
             {
-                assert(range_comparision->children.size() == 2);
-                start_condition = range_comparision->children[0];
-                end_condition = range_comparision->children[1];
-                start_with_inclusion = std::make_shared<ASTLiteral>(range_comparision->start_with_inclusion);
-                end_with_inclusion = std::make_shared<ASTLiteral>(range_comparision->end_with_inclusion);
+                assert(range_comparison->children.size() == 2);
+                start_condition = range_comparison->children[0];
+                end_condition = range_comparison->children[1];
+                start_with_inclusion = std::make_shared<ASTLiteral>(range_comparison->start_with_inclusion);
+                end_with_inclusion = std::make_shared<ASTLiteral>(range_comparison->end_with_inclusion);
                 ++i;
             }
             /// OPT-2: handle start/end prediction
@@ -389,8 +398,8 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
                     end_condition = args[i++]; /// end_predication
                 else
                     throw Exception(
-                        "session window requires both start and end predictions or none, but only start or end prediction is specified",
-                        ErrorCodes::MISSING_SESSION_KEY);
+                        ErrorCodes::MISSING_SESSION_KEY,
+                        "session window requires both start and end predictions or none, but only start or end prediction is specified");
 
                 start_with_inclusion = std::make_shared<ASTLiteral>(true);
                 end_with_inclusion = std::make_shared<ASTLiteral>(true);
@@ -412,7 +421,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 
     } while (false);
 
-    throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
+    throw Exception::createDeprecated(SESSION_HELP_MESSAGE, ErrorCodes::BAD_ARGUMENTS);
 }
 
 void checkIntervalAST(const ASTPtr & ast, const String & msg)
@@ -424,13 +433,13 @@ void checkIntervalAST(const ASTPtr & ast, const String & msg)
         auto kind = mapIntervalKind(func_node->name);
         if (kind)
         {
-            if (*kind <= IntervalKind::Day)
+            if (*kind <= IntervalKind::Kind::Day)
                 return;
             else
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "{}: the max interval kind supported is DAY.", msg);
         }
     }
-    throw Exception(msg, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    throw Exception::createDeprecated(msg, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Kind & kind)
@@ -440,11 +449,11 @@ void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Ki
     if (auto opt_kind = mapIntervalKind(ast->name); opt_kind)
         kind = opt_kind.value();
     else
-        throw Exception("Invalid interval function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Invalid interval function");
 
     const auto * val = ast->arguments ? ast->arguments->children.front()->as<ASTLiteral>() : nullptr;
     if (!val)
-        throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Invalid interval argument");
 
     if (val->value.getType() == Field::Types::UInt64)
     {
@@ -459,7 +468,11 @@ void extractInterval(const ASTFunction * ast, Int64 & interval, IntervalKind::Ki
         interval = std::stoi(val->value.safeGet<String>());
     }
     else
-        throw Exception("Invalid interval argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Invalid interval argument");
+
+    if (interval <= 0)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "Invalid interval value '{}', it must be a positive integer", ast->formatForErrorMessage());
 }
 
 WindowInterval extractInterval(const ASTFunction * ast)
@@ -483,8 +496,9 @@ UInt32 toStartTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num_units, co
     switch (kind)
     {
 #define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        return ToStartOfTransform<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
+    case IntervalKind::Kind::KIND: \
+    { \
+        return ToStartOfTransform<IntervalKind::Kind::KIND>::execute(time_sec, num_units, time_zone); \
     }
         CASE_WINDOW_KIND(Nanosecond)
         CASE_WINDOW_KIND(Microsecond)
@@ -510,8 +524,9 @@ Int64 toStartTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, const Date
     switch (kind)
     {
 #define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        return ToStartOfTransform<IntervalKind::KIND>::execute(dt, num_units, time_zone, time_scale); \
+    case IntervalKind::Kind::KIND: \
+    { \
+        return ToStartOfTransform<IntervalKind::Kind::KIND>::execute(dt, num_units, time_zone, time_scale); \
     }
         CASE_WINDOW_KIND(Nanosecond)
         CASE_WINDOW_KIND(Microsecond)
@@ -534,8 +549,9 @@ ALWAYS_INLINE UInt32 addTime(UInt32 time_sec, IntervalKind::Kind kind, Int64 num
     switch (kind)
     {
 #define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        return AddTime<IntervalKind::KIND>::execute(time_sec, num_units, time_zone); \
+    case IntervalKind::Kind::KIND: \
+    { \
+        return AddTime<IntervalKind::Kind::KIND>::execute(time_sec, num_units, time_zone); \
     }
         CASE_WINDOW_KIND(Nanosecond)
         CASE_WINDOW_KIND(Microsecond)
@@ -561,8 +577,9 @@ ALWAYS_INLINE Int64 addTime(Int64 dt, IntervalKind::Kind kind, Int64 num_units, 
     switch (kind)
     {
 #define CASE_WINDOW_KIND(KIND) \
-    case IntervalKind::KIND: { \
-        return AddTime<IntervalKind::KIND>::execute(dt, num_units, time_zone, time_scale); \
+    case IntervalKind::Kind::KIND: \
+    { \
+        return AddTime<IntervalKind::Kind::KIND>::execute(dt, num_units, time_zone, time_scale); \
     }
         CASE_WINDOW_KIND(Nanosecond)
         CASE_WINDOW_KIND(Microsecond)
@@ -623,15 +640,15 @@ String BaseScaleInterval::toString() const
     return fmt::format("{}{}", num_units, (scale == SCALE_NANOSECOND ? "ns" : "M"));
 }
 
-UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind)
+UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind::Kind kind)
 {
-    if (kind >= IntervalKind::Second)
+    if (kind >= IntervalKind::Kind::Second)
         return 0;
 
     UInt32 scale = 9;
-    if (kind == IntervalKind::Millisecond)
+    if (kind == IntervalKind::Kind::Millisecond)
         scale = 3;
-    else if (kind == IntervalKind::Microsecond)
+    else if (kind == IntervalKind::Kind::Microsecond)
         scale = 6;
 
     /// To reduce scale, for examples: 1000ms <=> 1s, actual scale is 0
@@ -701,9 +718,9 @@ TumbleWindowParams::TumbleWindowParams(TableFunctionDescriptionPtr window_desc) 
             window_scale,
             time_scale);
 
-    if ((interval_kind == IntervalKind::Millisecond && (3600 * common::exp10_i64(3)) % window_interval != 0)
-        || (interval_kind == IntervalKind::Microsecond && (3600 * common::exp10_i64(6)) % window_interval != 0)
-        || (interval_kind == IntervalKind::Nanosecond && (3600 * common::exp10_i64(9)) % window_interval != 0))
+    if ((interval_kind == IntervalKind::Kind::Millisecond && (3600 * common::exp10_i64(3)) % window_interval != 0)
+        || (interval_kind == IntervalKind::Kind::Microsecond && (3600 * common::exp10_i64(6)) % window_interval != 0)
+        || (interval_kind == IntervalKind::Kind::Nanosecond && (3600 * common::exp10_i64(9)) % window_interval != 0))
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS, "Invalid window interval, one hour must have an integer number of windows in tumble function");
 }
@@ -746,9 +763,9 @@ HopWindowParams::HopWindowParams(TableFunctionDescriptionPtr window_desc) : Wind
             hop_window_scale,
             time_scale);
 
-    if ((interval_kind == IntervalKind::Millisecond && (3600 * common::exp10_i64(3)) % slide_interval != 0)
-        || (interval_kind == IntervalKind::Microsecond && (3600 * common::exp10_i64(6)) % slide_interval != 0)
-        || (interval_kind == IntervalKind::Nanosecond && (3600 * common::exp10_i64(9)) % slide_interval != 0))
+    if ((interval_kind == IntervalKind::Kind::Millisecond && (3600 * common::exp10_i64(3)) % slide_interval != 0)
+        || (interval_kind == IntervalKind::Kind::Microsecond && (3600 * common::exp10_i64(6)) % slide_interval != 0)
+        || (interval_kind == IntervalKind::Kind::Nanosecond && (3600 * common::exp10_i64(9)) % slide_interval != 0))
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS, "Invalid slide interval, one hour must have an integer number of slides in hop function");
 
@@ -794,14 +811,19 @@ WindowParamsPtr WindowParams::create(const TableFunctionDescriptionPtr & desc)
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(desc->type));
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 void assignWindow(
     Columns & columns, const WindowInterval & interval, size_t time_col_pos, bool time_col_is_datetime64, const DateLUTImpl & time_zone)
 {
     assert(columns.size() > time_col_pos);
-    const auto & time_column = columns[time_col_pos];
+    /// FIXME: handle ColumnSparse/ColumnConst
+    auto time_column = columns[time_col_pos]->convertToFullColumnIfSparse()->convertToFullColumnIfConst();
+
+    if (interval.interval <= 0)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid window interval '{}', it must be a positive integer", interval.interval);
+
     Columns window_cols;
     if (time_col_is_datetime64)
     {
@@ -828,8 +850,13 @@ void assignWindow(
     columns.emplace_back(std::move(window_cols[1]));
 }
 
-void reassignWindow(Chunk & chunk, const Window & window, bool time_col_is_datetime64, std::optional<size_t> start_pos, std::optional<size_t> end_pos)
+void reassignWindow(
+    Chunk & chunk, const Window & window, bool time_col_is_datetime64, std::optional<size_t> start_pos, std::optional<size_t> end_pos)
 {
+    auto rows = chunk.rows();
+    if (!rows)
+        return;
+
     auto fill_time = [&](ColumnPtr & column, Int64 ts) {
         auto col = IColumn::mutate(std::move(column));
         if (time_col_is_datetime64)
@@ -838,10 +865,6 @@ void reassignWindow(Chunk & chunk, const Window & window, bool time_col_is_datet
             std::ranges::fill(assert_cast<ColumnDateTime &>(*col).getData(), static_cast<UInt32>(ts));
         column = std::move(col);
     };
-
-    auto rows = chunk.rows();
-    if (!rows)
-        return;
 
     auto columns = chunk.detachColumns();
     if (start_pos.has_value())

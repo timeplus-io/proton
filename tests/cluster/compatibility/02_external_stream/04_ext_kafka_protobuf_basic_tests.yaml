@@ -1,0 +1,42 @@
+tags:
+  - prepare
+  - validate
+  - kafka
+  - protobuf
+  - format_schema
+
+description: basic tests on kafka external stream with protobuf format
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: ext-4-1
+    type: stream
+    query: select * from ex_kafka_proto settings seek_to='earliest';
+    schema:
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: bool_c
+        type: bool    
+      - name: string_c
+        type: string
+      - name: map_c
+        type: map(string, int32)
+      - name: enum_c
+        type: enum8('a'=0, 'b'=1, 'z'=26)
+      - name: array_c
+        type: array(int32)
+
+  - type: check
+    target_name: ext-4-1
+    mode: random # multi-partition not use message key sent to partitions randomly
+    expected_result:
+      - [-2147483647, -9223372036854775807, 4294967295, 18446744073709551615,  true, 'aaaa', {'key1': 111}, 'a', [1, 2, 3]]

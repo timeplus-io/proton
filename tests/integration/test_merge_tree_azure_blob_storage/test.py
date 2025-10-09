@@ -3,8 +3,10 @@ import time
 import os
 
 import pytest
-from helpers.cluster import ClickHouseCluster, get_instances_dir
+
+from helpers.cluster import ClickHouseCluster
 from helpers.utility import generate_values, replace_config, SafeThread
+from azure.storage.blob import BlobServiceClient
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -15,6 +17,53 @@ TABLE_NAME = "blob_storage_table"
 AZURE_BLOB_STORAGE_DISK = "blob_storage_disk"
 LOCAL_DISK = "hdd"
 CONTAINER_NAME = "cont"
+
+
+def generate_cluster_def(port):
+    path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "./_gen/disk_storage_conf.xml",
+    )
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(
+            f"""<clickhouse>
+    <storage_configuration>
+        <disks>
+            <blob_storage_disk>
+                <type>azure_blob_storage</type>
+                <storage_account_url>http://azurite1:{port}/devstoreaccount1</storage_account_url>
+                <container_name>cont</container_name>
+                <skip_access_check>false</skip_access_check>
+                <account_name>devstoreaccount1</account_name>
+                <account_key>Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==</account_key>
+                <max_single_part_upload_size>100000</max_single_part_upload_size>
+                <min_upload_part_size>100000</min_upload_part_size>
+                <max_single_download_retries>10</max_single_download_retries>
+                <max_single_read_retries>10</max_single_read_retries>
+            </blob_storage_disk>
+            <hdd>
+                <type>local</type>
+                <path>/</path>
+            </hdd>
+        </disks>
+        <policies>
+            <blob_storage_policy>
+                <volumes>
+                    <main>
+                        <disk>blob_storage_disk</disk>
+                    </main>
+                    <external>
+                        <disk>hdd</disk>
+                    </external>
+                </volumes>
+            </blob_storage_policy>
+        </policies>
+    </storage_configuration>
+</clickhouse>
+"""
+        )
+    return path
 
 
 @pytest.fixture(scope="module")
@@ -33,7 +82,7 @@ def cluster():
         cluster.shutdown()
 
 # Note: use this for selects and inserts and create table queries.
-# For inserts there is no guarantee that retries will not result in duplicates.
+# For inserts there is no guarant@pytest.mark.long_runee that retries will not result in duplicates.
 # But it is better to retry anyway because 'Connection was closed by the server' error
 # happens in fact only for inserts because reads already have build-in retries in code.
 def azure_query(node, query, try_num=3):
@@ -325,48 +374,102 @@ def test_apply_new_settings(cluster):
     azure_query(node, f"INSERT INTO {TABLE_NAME} VALUES {generate_values('2020-01-04', 4096, -1)}")
 
 
-# NOTE: this test takes a couple of minutes when run together with other tests
-@pytest.mark.long_run
-def test_restart_during_load(cluster):
-    node = cluster.instances[NODE_NAME]
-    create_table(node, TABLE_NAME)
-
-    # Force multi-part upload mode.
-    replace_config(CONFIG_PATH, "<container_already_exists>false</container_already_exists>", "")
-
-    azure_query(node, f"INSERT INTO {TABLE_NAME} VALUES {generate_values('2020-01-04', 4096)}")
-    azure_query(node, f"INSERT INTO {TABLE_NAME} VALUES {generate_values('2020-01-05', 4096, -1)}")
-
-
-    def read():
-        for ii in range(0, 5):
-            logging.info(f"Executing {ii} query")
-            assert azure_query(node, f"SELECT sum(id) FROM {TABLE_NAME} FORMAT Values") == "(0)"
-            logging.info(f"Query {ii} executed")
-            time.sleep(0.2)
-
-    def restart_disk():
-        for iii in range(0, 2):
-            logging.info(f"Restarting disk, attempt {iii}")
-            node.query(f"SYSTEM RESTART DISK {AZURE_BLOB_STORAGE_DISK}")
-            logging.info(f"Disk restarted, attempt {iii}")
-            time.sleep(0.5)
-
-    threads = []
-    for _ in range(0, 4):
-        threads.append(SafeThread(target=read))
-
-    threads.append(SafeThread(target=restart_disk))
-
-    for thread in threads:
-        thread.start()
-
-    for thread in threads:
-        thread.join()
-
-
 def test_big_insert(cluster):
     node = cluster.instances[NODE_NAME]
     create_table(node, TABLE_NAME)
-    azure_query(node, f"INSERT INTO {TABLE_NAME} select '2020-01-03', number, toString(number) from numbers(5000000)")
-    assert int(azure_query(node, f"SELECT count() FROM {TABLE_NAME}")) == 5000000
+
+    check_query = "SELECT '2020-01-03', number, toString(number) FROM numbers(1000000)"
+
+    azure_query(
+        node,
+        f"INSERT INTO {TABLE_NAME} {check_query}",
+    )
+    assert azure_query(node, f"SELECT * FROM {TABLE_NAME} ORDER BY id") == node.query(
+        check_query
+    )
+
+    blob_container_client = cluster.blob_service_client.get_container_client(
+        CONTAINER_NAME
+    )
+
+    blobs = blob_container_client.list_blobs()
+    max_single_part_upload_size = 100000
+    checked = False
+
+    for blob in blobs:
+        blob_client = cluster.blob_service_client.get_blob_client(
+            CONTAINER_NAME, blob.name
+        )
+        committed, uncommited = blob_client.get_block_list()
+
+        blocks = committed
+        last_id = len(blocks)
+        id = 1
+        if len(blocks) > 1:
+            checked = True
+
+        for block in blocks:
+            print(f"blob: {blob.name}, block size: {block.size}")
+            if id == last_id:
+                assert max_single_part_upload_size >= block.size
+            else:
+                assert max_single_part_upload_size == block.size
+            id += 1
+    assert checked
+
+
+def test_endpoint_error_check(cluster):
+    node = cluster.instances[NODE_NAME]
+    account_name = "devstoreaccount1"
+    port = cluster.azurite_port
+
+    query = f"""
+    DROP TABLE IF EXISTS test SYNC;
+
+    CREATE TABLE test (a Int32)
+    ENGINE = MergeTree() ORDER BY tuple()
+    SETTINGS disk = disk(
+    type = azure_blob_storage,
+    endpoint = 'http://azurite1:{port}/{account_name}',
+    endpoint_contains_account_name = 'true',
+    account_name = 'devstoreaccount1',
+    account_key = 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==',
+    skip_access_check = 0);
+    """
+
+    expected_err_msg = "Expected container_name in endpoint"
+    assert expected_err_msg in azure_query(node, query, expect_error="true")
+
+    query = f"""
+    DROP TABLE IF EXISTS test SYNC;
+
+    CREATE TABLE test (a Int32)
+    ENGINE = MergeTree() ORDER BY tuple()
+    SETTINGS disk = disk(
+    type = azure_blob_storage,
+    endpoint = 'http://azurite1:{port}',
+    endpoint_contains_account_name = 'true',
+    account_name = 'devstoreaccount1',
+    account_key = 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==',
+    skip_access_check = 0);
+    """
+
+    expected_err_msg = "Expected account_name in endpoint"
+    assert expected_err_msg in azure_query(node, query, expect_error="true")
+
+    query = f"""
+    DROP TABLE IF EXISTS test SYNC;
+
+    CREATE TABLE test (a Int32)
+    ENGINE = MergeTree() ORDER BY tuple()
+    SETTINGS disk = disk(
+    type = azure_blob_storage,
+    endpoint = 'http://azurite1:{port}',
+    endpoint_contains_account_name = 'false',
+    account_name = 'devstoreaccount1',
+    account_key = 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==',
+    skip_access_check = 0);
+    """
+
+    expected_err_msg = "Expected container_name in endpoint"
+    assert expected_err_msg in azure_query(node, query, expect_error="true")

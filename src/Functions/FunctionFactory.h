@@ -37,7 +37,6 @@ public:
     template <typename Function>
     void registerFunction(const std::string & name, FunctionDocumentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
-
         if constexpr (std::is_base_of_v<IFunction, Function>)
             registerFunction(name, &adaptFunctionToOverloadResolver<Function>, std::move(doc), case_sensitiveness);
         else

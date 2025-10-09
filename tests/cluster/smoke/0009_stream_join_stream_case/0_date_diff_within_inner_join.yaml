@@ -1,0 +1,39 @@
+tags:
+  - local-run
+  - stream_join_stream
+description: stream to stream inner join by using date_diff_within
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '1001'
+    type: stream
+    query: select s, ss from test10_left_stream inner join test10_right_stream on i=ii
+      and date_diff_within(10s, ts, tts)
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_left_stream(i, s, ts) values (1, 's', '2022-05-23 15:45:10')
+
+  - type: query
+    sql: insert into test10_right_stream(ii, ss, tts) values(1, 's1', '2022-05-23 15:44:59'),(1,
+      's2', '2022-05-23 15:45:00'),(1, 's3', '2022-05-23 15:45:09'),(1, 's4', '2022-05-23
+      15:45:10'),(1, 's5', '2022-05-23 15:45:15'),(1, 's6', '2022-05-23 15:45:19'),(1,
+      's7', '2022-05-23 15:45:20'),(1, 's8', '2022-05-23 15:45:21')
+
+  - type: check
+    target_name: '1001'
+    expected_result:
+      - [ s, s2 ]
+      - [ s, s3 ]
+      - [ s, s4 ]
+      - [ s, s5 ]
+      - [ s, s6 ]
+      - [ s, s7 ]

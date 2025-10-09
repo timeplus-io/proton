@@ -1,0 +1,87 @@
+tags:
+- udf2
+description: SQL - UDA (support changelog) with versioned kv stream
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS 025_versioned_kv_types;
+
+- type: query
+  sql: DROP FUNCTION IF EXISTS test_count_25;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE STREAM 025_versioned_kv_types (`i32` int32, `f32` float) primary key i32 SETTINGS mode='versioned_kv';
+
+- name: udf-25-0
+  type: query
+  sql: "CREATE AGGREGATE FUNCTION test_count_25(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+          {
+            initialize: function() {
+              this.count = 0;
+            },
+
+            process: function(values, deltas) {
+              let is_changelog = (deltas !== undefined);
+              for (let i = 0; i < values.length; i++) {
+                if (is_changelog) {
+                  if (deltas[i] === 1) {
+                    this.count += 1;
+                  } else if (deltas[i] === -1) 
+                    this.count -= 1;
+                } else 
+                    this.count += 1;
+              }
+            },
+
+            finalize: function() {
+              return this.count;
+            },
+
+            serialize: function() {
+              let s = {
+                'count': this.count
+              };
+              return JSON.stringify(s);
+            },
+
+            deserialize: function(state_str) {
+              let s = JSON.parse(state_str);
+              this.count = s['count'];
+            },
+
+            merge: function(state_str) {
+              let s = JSON.parse(state_str);
+              this.count += s['count'];
+            }
+          }
+        $$;"
+- type: wait
+  time: 2
+
+- name: udf-25-1
+  type: stream
+  query: select test_count_25(f32) from 025_versioned_kv_types;
+  schema:
+  - name: test_count_25(f32)
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO 025_versioned_kv_types (i32, f32) SELECT number, number * 10 FROM numbers(10);
+- type: wait
+  time: 2
+
+- type: query
+  sql: INSERT INTO 025_versioned_kv_types (i32, f32) VALUES (1, 0.1);
+
+- type: check
+  target_name: udf-25-1
+  expected_result:
+  - [10.0]
+  - [10.0]

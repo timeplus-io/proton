@@ -1,0 +1,76 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.var(ddof=1) function - sample variance
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+  - type: query
+    sql: drop function if exists getVar;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getVar(x int, y int) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getVar:
+          def __init__(self):
+              self.var = 0
+
+          def serialize(self):
+              data = {}
+              data['var'] = self.var
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.var = data['var']
+
+          def merge(self, other):
+              self.var = self.var
+
+          def process(self, xs, ys):
+              arr = np.vstack((xs, ys))
+              self.var = float(np.var(arr, ddof=1))
+
+          def finalize(self):
+              return self.var
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-1-1
+    type: stream
+    query: select getVar(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (1,2) (3,4);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (5,5) (6,6);
+
+  - type: check
+    target_name: python-udf2-1-1
+    expected_result:
+      - [1.6666666666666667]
+      - [0.3333333333333333]

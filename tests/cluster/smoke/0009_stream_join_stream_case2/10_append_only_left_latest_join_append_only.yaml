@@ -1,0 +1,64 @@
+tags:
+  - data_enrichment_join
+  - left-join
+description: append-only left latest join append-only
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test10_append_left_stream;
+
+  - type: query
+    sql: drop stream if exists test10_append_right_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test10_append_left_stream (i int, s string);
+
+  - type: query
+    sql: create stream test10_append_right_stream (ii int, ss string);
+
+  - type: wait
+    time: 3
+
+  - name: '1060'
+    type: stream
+    query: select i, s, ii, ss from test10_append_left_stream left latest join test10_append_right_stream
+      on i=ii
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+      - name: ii
+        type: int32
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_append_right_stream(ii, ss) values (1, 'ss1')
+
+  - type: query
+    sql: insert into test10_append_left_stream(i, s) values (1, 's1');
+
+  - type: query
+    sql: insert into test10_append_right_stream(ii, ss) values (1, 'ss3');
+
+  - type: query
+    sql: insert into test10_append_left_stream(i, s) values (1, 's2');
+
+  - type: query
+    sql: insert into test10_append_left_stream(i, s) values (2, 's3');
+
+  - type: check
+    target_name: '1060'
+    expected_result:
+      - [ 1, s1, 1, ss1 ]
+      - [ 1, s2, 1, ss3 ]
+      - [ 2, s3, 0, '' ]

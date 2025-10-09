@@ -2,6 +2,7 @@
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <QueryPipeline/Pipe.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Cache/FileCacheFactory.h>
 
 namespace DB
 {
@@ -23,8 +24,15 @@ StorageSystemDisks::StorageSystemDisks(const StorageID & table_id_)
         {"total_space", std::make_shared<DataTypeUInt64>()},
         {"keep_free_space", std::make_shared<DataTypeUInt64>()},
         {"type", std::make_shared<DataTypeString>()},
+        {"object_storage_type", std::make_shared<DataTypeString>()/*"Type of object storage if disk type is object_storage"*/},
+        {"metadata_type", std::make_shared<DataTypeString>()/*"Type of metadata storage if disk type is object_storage"*/},
         {"is_encrypted", std::make_shared<DataTypeUInt8>()},
+        {"is_read_only", std::make_shared<DataTypeUInt8>()},
+        {"is_write_once", std::make_shared<DataTypeUInt8>()},
+        {"is_remote", std::make_shared<DataTypeUInt8>()},
+        {"is_broken", std::make_shared<DataTypeUInt8>()},
         {"cache_path", std::make_shared<DataTypeString>()},
+        {"used_by", std::make_shared<DataTypeString>()}, /// proton: updated. new `used_by` column
     }));
     setInMemoryMetadata(storage_metadata);
 }
@@ -46,8 +54,15 @@ Pipe StorageSystemDisks::read(
     MutableColumnPtr col_total = ColumnUInt64::create();
     MutableColumnPtr col_keep = ColumnUInt64::create();
     MutableColumnPtr col_type = ColumnString::create();
+    MutableColumnPtr col_object_storage_type = ColumnString::create();
+    MutableColumnPtr col_metadata_type = ColumnString::create();
     MutableColumnPtr col_is_encrypted = ColumnUInt8::create();
+    MutableColumnPtr col_is_read_only = ColumnUInt8::create();
+    MutableColumnPtr col_is_write_once = ColumnUInt8::create();
+    MutableColumnPtr col_is_remote = ColumnUInt8::create();
+    MutableColumnPtr col_is_broken = ColumnUInt8::create();
     MutableColumnPtr col_cache_path = ColumnString::create();
+    MutableColumnPtr col_used_by = ColumnString::create();  /// proton: updated
 
     for (const auto & [disk_name, disk_ptr] : context->getDisksMap())
     {
@@ -57,14 +72,25 @@ Pipe StorageSystemDisks::read(
         col_total->insert(disk_ptr->getTotalSpace());
         col_keep->insert(disk_ptr->getKeepingFreeSpace());
         auto data_source_description = disk_ptr->getDataSourceDescription();
-        col_type->insert(toString(data_source_description.type));
+        col_type->insert(magic_enum::enum_name(data_source_description.type));
+        col_object_storage_type->insert(magic_enum::enum_name(data_source_description.object_storage_type));
+        col_metadata_type->insert(magic_enum::enum_name(data_source_description.metadata_type));
         col_is_encrypted->insert(data_source_description.is_encrypted);
+        col_is_read_only->insert(disk_ptr->isReadOnly());
+        col_is_write_once->insert(disk_ptr->isWriteOnce());
+        col_is_remote->insert(disk_ptr->isRemote());
+        col_is_broken->insert(disk_ptr->isBroken());
 
         String cache_path;
         if (disk_ptr->supportsCache())
-            cache_path = disk_ptr->getCacheBasePath();
+            cache_path = FileCacheFactory::instance().getByName(disk_ptr->getCacheName()).settings.base_path;
 
         col_cache_path->insert(cache_path);
+
+        /// proton: starts. new `used_by` column
+        const auto used_by = DatabaseCatalog::instance().getStoragesByDisk(disk_name);
+        col_used_by->insert(fmt::format("{}", fmt::join(used_by, ", ")));
+        /// proton: ends
     }
 
     Columns res_columns;
@@ -74,8 +100,15 @@ Pipe StorageSystemDisks::read(
     res_columns.emplace_back(std::move(col_total));
     res_columns.emplace_back(std::move(col_keep));
     res_columns.emplace_back(std::move(col_type));
+    res_columns.emplace_back(std::move(col_object_storage_type));
+    res_columns.emplace_back(std::move(col_metadata_type));
     res_columns.emplace_back(std::move(col_is_encrypted));
+    res_columns.emplace_back(std::move(col_is_read_only));
+    res_columns.emplace_back(std::move(col_is_write_once));
+    res_columns.emplace_back(std::move(col_is_remote));
+    res_columns.emplace_back(std::move(col_is_broken));
     res_columns.emplace_back(std::move(col_cache_path));
+    res_columns.emplace_back(std::move(col_used_by));   /// proton: updated
 
     UInt64 num_rows = res_columns.at(0)->size();
     Chunk chunk(std::move(res_columns), num_rows);

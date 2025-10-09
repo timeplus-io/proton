@@ -6,6 +6,7 @@
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/TransactionVersionMetadata.h>
+#include <IO/AsyncReadCounters.h>
 
 namespace ProfileEvents
 {
@@ -77,6 +78,7 @@ struct QueryLogElement
     Int32 exception_code{}; // because ErrorCodes are int
     String exception;
     String stack_trace;
+    std::string_view exception_format_string{};
 
     ClientInfo client_info;
 
@@ -84,6 +86,7 @@ struct QueryLogElement
 
     std::vector<UInt64> thread_ids;
     std::shared_ptr<ProfileEvents::Counters::Snapshot> profile_counters;
+    std::shared_ptr<AsyncReadCounters> async_read_counters;
     std::shared_ptr<Settings> query_settings;
 
     TransactionID tid;

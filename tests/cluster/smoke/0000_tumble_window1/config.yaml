@@ -1,0 +1,62 @@
+name: tumble_window1
+description: Tests covering the steam query smoke cases.
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+    # clean view
+    - type: query
+      sql: drop view if exists test_smoke1_join_v
+    - type: wait
+      time: 2
+  
+    # create table
+    - type: query
+      sql: drop stream if exists test_smoke1;
+    - type: wait
+      time: 1
+    - type: query
+      sql: create stream test_smoke1(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3));
+
+    - type: query
+      sql: drop stream if exists test_smoke1_no_default_tp_time;
+    - type: wait
+      time: 1
+    - type: query
+      sql: create stream test_smoke1_no_default_tp_time(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3));
+
+    - type: query
+      sql: drop stream if exists test_smoke1_seek;
+    - type: wait
+      time: 1
+    - type: query
+      sql: create stream test_smoke1_seek(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3));
+
+    - type: query
+      sql: drop stream if exists test_smoke1_d;
+    - type: wait
+      time: 1
+    - type: query
+      sql: create stream test_smoke1_d(id string, type string);
+
+    - type: wait
+      time: 3
+
+    # insert data
+    - type: query
+      sql: insert into test_smoke1_d(id, type) values
+      schema:
+        - name: id
+          type: string
+        - name: type
+          type: string
+      inputs:
+        - [dev1, 'roof']
+        - [dev2, 'field']
+        - [dev3, 'window']
+        - [dev4, 'wall']
+        - [dev5, 'roof']
+        - [dev6, 'window']
+        - [dev7, 'wall']
+        - [dev8, 'floor']

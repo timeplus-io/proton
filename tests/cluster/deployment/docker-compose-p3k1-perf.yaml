@@ -1,0 +1,166 @@
+services:
+  probe:
+    image: timeplus/probe:0.1.13
+    container_name: ${CONTAINER_NAME_PREFIX}_p3k1_probe
+    stdin_open: true
+    environment:
+      - PROTON_VERSION=${PROTON_VERSION}
+      - DATA_DIR=${DATA_DIR}
+      - RESULT_DIR=${RESULT_DIR}
+      - DOCKER_PROJECT=${DOCKER_PROJECT}
+    volumes:
+      - ../deployment:/deploy # deployment dir
+      - ../smoke:/smoke # smoke test dir
+      - ../end2end:/e2e # end2end test dir
+      - ../performance:/perf # performance test dir
+      - ../resource:/resource # performance test use: generate data from file and record output file
+      - ../log/p3k1/${CONTAINER_NAME_PREFIX}_log:/log
+      - ${SSH_DIR}/smoke:/root/.ssh:ro  # For SSH use, please prepare .ssh directory with root privillage for local test
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
+    networks:
+      - mynetwork
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p1:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server1
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=${CONTAINER_NAME_PREFIX}_proton-server1
+      - METADATA_NODE_QUORUM="${CONTAINER_NAME_PREFIX}_proton-server1:8464,${CONTAINER_NAME_PREFIX}_proton-server2:8464,${CONTAINER_NAME_PREFIX}_proton-server3:8464"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server1/log:/var/log/proton-server
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "8.0"   # Limit to 8 CPU cores
+          memory: "16g"  # Limit memory to 16 GB
+        reservations:
+          cpus: "1.0"   # Reserve 1 CPU core
+          memory: "4g"  # Reserve 4 GB of memory
+  p2:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server2
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=${CONTAINER_NAME_PREFIX}_proton-server2
+      - METADATA_NODE_QUORUM="${CONTAINER_NAME_PREFIX}_proton-server1:8464,${CONTAINER_NAME_PREFIX}_proton-server2:8464,${CONTAINER_NAME_PREFIX}_proton-server3:8464"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server2/log:/var/log/proton-server
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "8.0"   # Limit to 8 CPU cores
+          memory: "16g"  # Limit memory to 16 GB
+        reservations:
+          cpus: "1.0"   # Reserve 1 CPU core
+          memory: "4g"  # Reserve 4 GB of memory
+  p3:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: ${CONTAINER_NAME_PREFIX}_proton-server3
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=${CONTAINER_NAME_PREFIX}_proton-server3
+      - METADATA_NODE_QUORUM="${CONTAINER_NAME_PREFIX}_proton-server1:8464,${CONTAINER_NAME_PREFIX}_proton-server2:8464,${CONTAINER_NAME_PREFIX}_proton-server3:8464"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server3/log:/var/log/proton-server
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "8.0"   # Limit to 8 CPU cores
+          memory: "16g"  # Limit memory to 16 GB
+        reservations:
+          cpus: "1.0"   # Reserve 1 CPU core
+          memory: "4g"  # Reserve 4 GB of memory
+  k1:
+    image: timeplus/redpanda-smoke-test:v24.2.12
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://stream-store,OUTSIDE://stream-store:9092
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --check=false
+    container_name: ${CONTAINER_NAME_PREFIX}_p3k1_stream-store
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ../resource/data:/home/data
+    networks:
+      mynetwork:
+        aliases:
+          - stream-store
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      restart_policy:
+        condition: on-failure
+  init_topic:
+    command:
+       - --brokers=k1:9092
+       - topic
+       - create
+       - nexmark-auction 
+       - nexmark-person 
+       - nexmark-bid 
+    image: redpandadata/redpanda:v24.2.12
+    networks:
+      - mynetwork
+    depends_on:
+      k1:
+        condition: service_healthy
+  pulsar:
+    image: apachepulsar/pulsar:3.3.1
+    command:
+    - sh
+    - -c
+    - bin/apply-config-from-env.py conf/standalone.conf && bin/pulsar standalone
+    environment:
+    - PULSAR_STANDALONE_USE_ZOOKEEPER=1
+    - PULSAR_PREFIX_brokerEntryMetadataInterceptors=org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor
+    - PULSAR_PREFIX_exposingBrokerEntryMetadataToClientEnabled=true
+    networks:
+    - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+networks:
+  mynetwork:
+    driver: bridge

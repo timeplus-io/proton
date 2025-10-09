@@ -1,0 +1,4 @@
+name: emit_mode
+description: Tests SQL commands for different emit mode.
+tags:
+- smoke

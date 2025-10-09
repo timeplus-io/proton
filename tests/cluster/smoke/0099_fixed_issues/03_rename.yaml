@@ -1,0 +1,68 @@
+tags:
+  - rename
+description: (#1445) [parser] fix rename function failure(example:maxIf to max_if)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_rename_fail_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_rename_fail_stream
+        (
+          student_name string, 
+          subject string,
+          score int
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_rename_fail_stream(student_name, subject, score) values
+    schema:
+      - name: student_name
+        type: string
+      - name: subject
+        type: string
+      - name: score
+        type: int32
+    inputs:
+      - ['Marc','Math', 60]
+      - ['Marc','Science', 70]
+      - ['Marcus', 'Math', 80]
+      - ['Marcus', 'Science', 90]
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: select max(score) filter(where subject = 'Math')as  max_math_score, avg(score) filter (where subject = 'Science') as avg_science_score from table(test_rename_fail_stream)
+    schema:
+      - name: max_math_score
+        type: int32
+      - name: avg_science_score
+        type: float64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9901
+    query: select min(score) filter(where subject = 'Math')as  min_math_score, sum(score) filter (where subject = 'Science') as sum_science_score from table(test_rename_fail_stream)
+    schema:
+      - name: min_math_score
+        type: int32
+      - name: sum_science_score
+        type: int64
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - ["80", "80.0"]
+
+  - type: check
+    target_name: 9901
+    expected_result:
+      - ["60", "160"]

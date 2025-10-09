@@ -1,0 +1,58 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_print(value string) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import sys
+      import io
+
+      def test_print(value):
+          res = []
+          for x in value:
+              captured_output = io.StringIO()
+              original_stdout = sys.stdout
+              sys.stdout = captured_output
+              print(x) 
+              sys.stdout = original_stdout
+              res.append(captured_output.getvalue().strip())
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-8-1
+    type: stream
+    query: select test_print(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values ('sugar')('spice')('everything');
+
+  - type: check
+    target_name: python-udf1-8-1
+    expected_result:
+      - ['sugar', 'sugar']
+      - ['spice', 'spice']
+      - ['everything', 'everything']

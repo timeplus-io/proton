@@ -1,0 +1,83 @@
+tags:
+  - udf
+
+description: Test covering asyncio subprocesses
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_subprocesses(value int) RETURNS string LANGUAGE PYTHON AS $$
+      import sys
+      import asyncio
+
+      async def get_date(value):
+          code = f'from datetime import datetime; print(datetime(2024, 12, {value}))'
+
+          proc = await asyncio.create_subprocess_exec(
+              sys.executable, '-c', code,
+              stdout=asyncio.subprocess.PIPE)
+
+          data = await proc.stdout.readline()
+          line = data.decode('ascii').rstrip()
+
+          await proc.wait()
+          return f"{line}"
+
+      def test_async_subprocesses(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(get_date(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-5-1
+    type: stream
+    query: select test_async_subprocesses(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values (0)(1)(2);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test41_stream(value) values (3)(4)(-1);
+
+  - type: check
+    target_name: python-udf-5-1
+    expected_result:
+      - ['', 0]
+      - ['2024-12-01 00:00:00', 1]
+      - ['2024-12-02 00:00:00', 2]
+      - ['2024-12-03 00:00:00', 3]
+      - ['2024-12-04 00:00:00', 4]
+      - ['', -1]

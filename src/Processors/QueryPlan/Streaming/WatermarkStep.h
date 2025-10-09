@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Processors/QueryPlan/ITransformingStep.h>
-#include <Processors/Transforms/Streaming/WatermarkStamper.h>
+#include <Processors/Transforms/Streaming/EmitParams.h>
 
 namespace DB
 {
@@ -11,8 +11,7 @@ namespace Streaming
 class WatermarkStep final : public ITransformingStep
 {
 public:
-    WatermarkStep(
-        const DataStream & input_stream_, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log);
+    WatermarkStep(const DataStream & input_stream_, EmitParamsPtr params_, bool skip_stamping_for_backfill_data_);
 
     ~WatermarkStep() override = default;
 
@@ -20,9 +19,13 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
-    WatermarkStamperParamsPtr params;
+    void updateOutputStream() override
+    {
+        output_stream = createOutputStream(input_streams.front(), input_streams.front().header, getDataStreamTraits());
+    }
+
+    EmitParamsPtr params;
     bool skip_stamping_for_backfill_data;
-    Poco::Logger * log;
 };
 }
 }

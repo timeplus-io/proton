@@ -1,0 +1,30 @@
+name: python_udf_river
+description: Tests covering the python_udf river library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - river
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # river
+    - type: query
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'river';
+
+    - type: wait
+      time: 15
+
+    - type: command
+      name: python-udf13-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "river") | length > 0'
+    
+    - type: check
+      target_name: python-udf13-1
+      expected_result: ['true']

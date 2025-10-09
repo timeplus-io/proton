@@ -1,0 +1,55 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(float64), valueb array(float64));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_series_cov(valuea array(float64), valueb array(float64)) RETURNS float64 LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_series_cov(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              s1 = pd.Series(a)
+              s2 = pd.Series(b)
+              series_cov =s1.cov(s2)
+              res.append(series_cov)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-16-1
+    type: stream
+    query: select test_series_cov(valuea, valueb) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb) values 
+          ([0.90010907, 0.13484424, 0.62036035], [0.12528585, 0.26962463, 0.51111198])
+          ([0.9, 0.1, 0.6], [0.1, 0.2, 0.5]);
+
+  - type: check
+    target_name: python-udf3-16-1
+    expected_result:
+      - [-0.01685762652715874]
+      - [-0.008333333333333342]

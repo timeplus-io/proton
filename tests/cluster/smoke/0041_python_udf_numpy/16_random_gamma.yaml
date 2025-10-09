@@ -1,0 +1,55 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (shape float, scale float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_gamma(shape float, scale float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_gamma(shape, scale):
+          res = []
+          n = 1000
+          for i in range(len(shape)):
+              s = np.random.gamma(shape[i], scale[i], n)
+              check = sum(1 for x in s if shape[i]-1 <= x <= shape[i]+1)/n
+              res.append(float(check))
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-16-1
+    type: stream
+    query: select test_random_gamma(shape, scale) as res, shape, scale from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: shape
+        type: float32
+      - name: scale
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(shape, scale) values (2.0, 2.0)(3.0, 3.0);
+
+  - type: check
+    target_name: python-udf2-16-1
+    expected_result:
+      - [any_value, 2.0, 2.0] # around 0.03
+      - [any_value, 3.0, 3.0] # around 0.01

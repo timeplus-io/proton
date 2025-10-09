@@ -1,0 +1,79 @@
+description: test drop query of select_only user 
+
+steps:
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP ROLE if exists select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP policy if exists policy1 ON default.test00_stream;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP USER if exists user_select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP stream if exists test00_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROLE select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create user user_select_only identified with plaintext_password by 'password';
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create stream test00_stream(i int, s string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: grant CREATE TEMPORARY TABLE ON *.* TO user_select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: GRANT SELECT ON test00_stream TO user_select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: insert into test00_stream(i,s) values (1,'wby'), (2,'yr');
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROW POLICY policy1 ON test00_stream FOR SELECT USING s != 'wby' TO user_select_only;
+
+  - name: '111'
+    type: stream
+    user: user_select_only
+    password: password
+    query: select i, s from table(test00_stream);
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: check
+    target_name: '111'
+    expected_result:
+      - [2, 'yr']

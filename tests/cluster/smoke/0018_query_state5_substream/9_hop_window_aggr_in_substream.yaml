@@ -1,0 +1,79 @@
+tags:
+  - query_state
+description: hop window aggregation in substream state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream5
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream5 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '19109'
+    query_id: '19109'
+    type: stream
+    query: subscribe to select id, count(*), min(value), max(value), window_start, window_end
+      from hop(test19_state_stream5, timestamp, 3s, 5s) partition by id group by window_start,
+      window_end settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: min(value)
+        type: float32
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:00')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 68, '2020-02-02 20:00:01')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 55, '2020-02-02 20:00:03')
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 69, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '19109'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '19109'
+
+  - type: check
+    target_name: '19109'
+    expected_result:
+      - [ dev2, 1, '58.3', '58.3', '2020-02-02 19:59:57', '2020-02-02 20:00:02' ]
+      - [ dev1, 2, '57.3', '68', '2020-02-02 19:59:57', '2020-02-02 20:00:02' ]

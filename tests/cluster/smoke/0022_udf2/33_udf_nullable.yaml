@@ -1,0 +1,58 @@
+tags:
+- udf2
+
+description: SQL - Test nullable data type on Javascript UDF
+
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS users;
+
+- type: query
+  sql: DROP FUNCTION IF EXISTS is_work_email;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE STREAM users(id int, email nullable(string));
+
+- type: query
+  sql: |
+    CREATE OR REPLACE FUNCTION is_work_email(email string) RETURNS bool LANGUAGE JAVASCRIPT AS
+    $$
+    function is_work_email(values){
+      return values.map(email=>!email.endsWith("@gmail.com"));
+    }
+    $$;
+
+- type: wait
+  time: 2
+
+- name: udf-33-1
+  type: stream
+  query: select is_work_email(email) as res from users;
+  schema:
+  - name: res
+    type: nullable(bool)
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into users(id) values(1)(2)(3);
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into users(id) values(4)(5)(6);
+
+- type: check
+  target_name: udf-33-1
+  expected_result:
+  - [null]
+  - [null]
+  - [null]
+  - [null]
+  - [null]
+  - [null]

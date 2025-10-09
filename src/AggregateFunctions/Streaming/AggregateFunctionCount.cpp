@@ -1,4 +1,4 @@
-#include "AggregateFunctionCount.h"
+#include <AggregateFunctions/Streaming/AggregateFunctionCount.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/FactoryHelpers.h>

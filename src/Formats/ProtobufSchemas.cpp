@@ -2,6 +2,7 @@
 
 #if USE_PROTOBUF
 #    include <Common/Exception.h>
+#    include <Common/LRUCache.h>
 #    include <Formats/FormatSchemaInfo.h>
 #    include <Formats/KafkaSchemaRegistry.h>
 #    include <Formats/ProtobufSchemas.h>
@@ -45,29 +46,18 @@ public:
     {
         // Search the message type among already imported ones.
         const auto * descriptor = importer.pool()->FindMessageTypeByName(message_name);
-        if (descriptor)
+        if (descriptor != nullptr)
             return descriptor;
 
         const auto * file_descriptor = importer.Import(schema_path);
-        if (error)
-        {
-            auto info = error.value();
-            error.reset();
-            throw Exception(
-                ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
-                "Cannot parse '{}' file, found an error at line {}, column {}, {}",
-                info.filename,
-                info.line,
-                info.column,
-                info.message);
-        }
-
+        // If there are parsing errors, AddError() throws an exception and in this case the following line
+        // isn't executed.
         assert(file_descriptor);
 
         if (with_envelope == WithEnvelope::No)
         {
             const auto * message_descriptor = file_descriptor->FindMessageTypeByName(message_name);
-            if (!message_descriptor)
+            if (message_descriptor == nullptr)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Could not find a message named '{}' in the schema file '{}'",
                     message_name, schema_path);
 
@@ -76,12 +66,12 @@ public:
         else
         {
             const auto * envelope_descriptor = file_descriptor->FindMessageTypeByName("Envelope");
-            if (!envelope_descriptor)
+            if (envelope_descriptor == nullptr)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Could not find a message named 'Envelope' in the schema file '{}'",
                     schema_path);
 
             const auto * message_descriptor = envelope_descriptor->FindNestedTypeByName(message_name); // silly protobuf API disallows a restricting the field type to messages
-            if (!message_descriptor)
+            if (message_descriptor == nullptr)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Could not find a message named '{}' in the schema file '{}'",
                     message_name, schema_path);
 
@@ -93,28 +83,19 @@ private:
     // Overrides google::protobuf::compiler::MultiFileErrorCollector:
     void AddError(const String & filename, int line, int column, const String & message) override
     {
-        /// Protobuf library code is not exception safe, we should
-        /// remember the error and throw it later from our side.
-        error = ErrorInfo{filename, line, column, message};
+        throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
+                        "Cannot parse '{}' file, found an error at line {}, column {}, {}",
+                        filename, std::to_string(line), std::to_string(column), message);
     }
 
     google::protobuf::compiler::DiskSourceTree disk_source_tree;
     google::protobuf::compiler::Importer importer;
     const WithEnvelope with_envelope;
-
-    struct ErrorInfo
-    {
-        String filename;
-        int line;
-        int column;
-        String message;
-    };
-
-    std::optional<ErrorInfo> error;
 };
 
 
-const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSchema(const FormatSchemaInfo & info, WithEnvelope with_envelope, const String & google_protos_path)
+ProtobufSchemas::DescriptorHolder
+ProtobufSchemas::getMessageTypeForFormatSchema(const FormatSchemaInfo & info, WithEnvelope with_envelope, const String & google_protos_path)
 {
     std::lock_guard lock(mutex);
     auto it = importers.find(info.schemaDirectory());
@@ -122,64 +103,29 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
         it = importers
                  .emplace(
                      info.schemaDirectory(),
-                     std::make_unique<ImporterWithSourceTree>(info.schemaDirectory(), google_protos_path, with_envelope))
+                     std::make_shared<ImporterWithSourceTree>(info.schemaDirectory(), google_protos_path, with_envelope))
                  .first;
     auto * importer = it->second.get();
-    return importer->import(info.schemaPath(), info.messageName());
+    return DescriptorHolder(it->second, importer->import(info.schemaPath(), info.messageName()));
 }
 
 /// proton: starts
-namespace
+/// Overrides google::protobuf::io::ErrorCollector:
+void ProtobufSchemas::AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message)
 {
-
-class ErrorCollectorImpl : public google::protobuf::io::ErrorCollector
-{
-public:
-    struct ErrorInfo
-    {
-        int line;
-        int column;
-        String message;
-    };
-
-    ErrorCollectorImpl() = default;
-
-    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
-    {
-        /// Protobuf library code is not exception safe, we should
-        /// remember the error and throw it later from our side.
-        if (!error_) /// Only remember the first error.
-            error_ = {line, column, message};
-    }
-
-    std::optional<ErrorInfo> error()
-    {
-        return error_;
-    }
-
-private:
-
-    std::optional<ErrorInfo> error_;
-};
-
+    throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
+        "Cannot parse schema, found an error at line {}, column {}, error: {}", line, column, message);
 }
 
 void ProtobufSchemas::validateSchema(std::string_view schema)
 {
-    ErrorCollectorImpl error_collector{};
-
     google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
-    google::protobuf::io::Tokenizer tokenizer(&input, &error_collector);
+    google::protobuf::io::Tokenizer tokenizer(&input, this);
     google::protobuf::FileDescriptorProto descriptor;
     google::protobuf::compiler::Parser parser;
 
-    parser.RecordErrorsTo(&error_collector);
-
+    parser.RecordErrorsTo(this);
     parser.Parse(&tokenizer, &descriptor);
-
-    if (auto error = error_collector.error(); error)
-        throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
-            "Cannot parse schema, found an error at line {}, column {}, error: {}", error->line, error->column, error->message);
 }
 /// proton: ends
 

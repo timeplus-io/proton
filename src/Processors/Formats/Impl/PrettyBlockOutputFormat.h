@@ -50,6 +50,11 @@ protected:
     void writeValueWithPadding(
         const IColumn & column, const ISerialization & serialization, size_t row_num,
         size_t value_width, size_t pad_to_width, bool align_right);
+
+    void resetFormatterImpl() override
+    {
+        total_rows = 0;
+    }
 };
 
 }

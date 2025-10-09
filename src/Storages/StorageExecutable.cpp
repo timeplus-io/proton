@@ -80,7 +80,7 @@ StorageExecutable::StorageExecutable(
     : IStorage(table_id_)
     , settings(settings_)
     , input_queries(input_queries_)
-    , log(settings.is_executable_pool ? &Poco::Logger::get("StorageExecutablePool") : &Poco::Logger::get("StorageExecutable"))
+    , log(settings.is_executable_pool ? getLogger("StorageExecutablePool") : getLogger("StorageExecutable"))
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns);
@@ -209,7 +209,7 @@ void registerStorageExecutable(StorageFactory & factory)
         {
             size_t max_command_execution_time = 10;
 
-            size_t max_execution_time_seconds = static_cast<size_t>(args.getContext()->getSettings().max_execution_time.totalSeconds());
+            size_t max_execution_time_seconds = static_cast<size_t>(args.getContext()->getSettingsRef().max_execution_time.totalSeconds());
             if (max_execution_time_seconds != 0 && max_command_execution_time > max_execution_time_seconds)
                 max_command_execution_time = max_execution_time_seconds;
 

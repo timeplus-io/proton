@@ -43,7 +43,7 @@ REGISTER_FUNCTION(Hashing)
         FunctionDocumentation{
             .description="Calculates value of XXH3 64-bit hash function. Refer to https://github.com/Cyan4973/xxHash for detailed documentation.",
             .examples{{"hash", "SELECT xxh3('ClickHouse')", ""}},
-            .categories{"Hash"}
+            .category{"Hash"}
         },
         FunctionFactory::CaseSensitive);
 
@@ -60,7 +60,7 @@ It returns a blake3 hash as a byte array with type fixed_string(32).
 )",
         .examples{
             {"hash", "SELECT hex(blake3('ABC'))", ""}},
-        .categories{"Hash"}
+        .category{"Hash"}
     },
     FunctionFactory::CaseSensitive);
 

@@ -1,0 +1,37 @@
+tags:
+  - local-run
+  - type
+description: create a stream t_unit with uint type and ingest, query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists t_uint
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream t_uint (uint uint)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_uint (uint) values (123456)
+  
+  - type: wait
+    time: 1
+  
+  - name: 801-1
+    type: stream
+    query: select uint from t_uint settings seek_to = 'earliest'
+    schema:
+      - name: uint
+        type: uint32
+
+  - type: check
+    target_name: 801-1
+    expected_result:
+      - [ 123456 ]

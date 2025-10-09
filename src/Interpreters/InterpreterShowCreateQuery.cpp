@@ -1,11 +1,11 @@
 #include <Storages/IStorage.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/formatAST.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <QueryPipeline/BlockIO.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeUUID.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsDateTime.h>
 #include <Common/typeid_cast.h>
 #include <Access/Common/AccessFlags.h>
 #include <Interpreters/Context.h>
@@ -30,17 +30,39 @@ BlockIO InterpreterShowCreateQuery::execute()
 }
 
 
-Block InterpreterShowCreateQuery::getSampleBlock()
+Block InterpreterShowCreateQuery::getSampleBlock() const
 {
-    return Block{{
-        ColumnString::create(),
-        std::make_shared<DataTypeString>(),
-        "statement"}};
+    /// proton : starts
+    const auto & settings = getContext()->getSettingsRef();
+    if (settings.show_multi_versions)
+        return Block{
+            {ColumnString::create(), std::make_shared<DataTypeString>(), "statement"},
+            {ColumnUInt32::create(), std::make_shared<DataTypeUInt32>(), "version"},
+            {ColumnDateTime64::create(0, 3), std::make_shared<DataTypeDateTime64>(3, "UTC"), "last_modified"},
+            {ColumnString::create(), std::make_shared<DataTypeString>(), "last_modified_by"},
+            {ColumnDateTime64::create(0, 3), std::make_shared<DataTypeDateTime64>(3, "UTC"), "created"},
+            {ColumnString::create(), std::make_shared<DataTypeString>(), "created_by"},
+            {ColumnUUID::create(), std::make_shared<DataTypeUUID>(), "uuid"},
+        };
+    else if (settings.verbose && (query_ptr->as<ASTShowCreateTableQuery>() != nullptr))
+        return Block{
+            {ColumnString::create(), std::make_shared<DataTypeString>(), "statement"},
+            {ColumnString::create(), std::make_shared<DataTypeString>(), "placements"},
+        };
+    else
+        return Block{{
+            ColumnString::create(),
+            std::make_shared<DataTypeString>(),
+            "statement"}};
+    /// proton : ends
 }
 
 
 QueryPipeline InterpreterShowCreateQuery::executeImpl()
 {
+    auto query_context = getContext();
+    auto table_id = StorageID::createEmpty();
+
     ASTPtr create_query;
     ASTQueryWithTableAndOutput * show_query;
     if ((show_query = query_ptr->as<ASTShowCreateTableQuery>()) ||
@@ -48,16 +70,16 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
         (show_query = query_ptr->as<ASTShowCreateDictionaryQuery>()))
     {
         auto resolve_table_type = show_query->temporary ? Context::ResolveExternal : Context::ResolveOrdinary;
-        auto table_id = getContext()->resolveStorageID(*show_query, resolve_table_type);
+        table_id = query_context->resolveStorageID(*show_query, resolve_table_type);
 
         bool is_dictionary = static_cast<bool>(query_ptr->as<ASTShowCreateDictionaryQuery>());
 
         if (is_dictionary)
-            getContext()->checkAccess(AccessType::SHOW_DICTIONARIES, table_id);
+            query_context->checkAccess(AccessType::SHOW_DICTIONARIES, table_id);
         else
-            getContext()->checkAccess(AccessType::SHOW_COLUMNS, table_id);
+            query_context->checkAccess(AccessType::SHOW_COLUMNS, table_id);
 
-        create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
+        create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, query_context);
 
         auto & ast_create_query = create_query->as<ASTCreateQuery &>();
         if (query_ptr->as<ASTShowCreateViewQuery>())
@@ -68,7 +90,7 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
         }
         else if (is_dictionary)
         {
-            if (!ast_create_query.is_dictionary)
+            if (!ast_create_query.isDictionary())
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "{}.{} is not a DICTIONARY",
                     backQuote(ast_create_query.getDatabase()), backQuote(ast_create_query.getTable()));
         }
@@ -76,25 +98,30 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
     else if ((show_query = query_ptr->as<ASTShowCreateDatabaseQuery>()))
     {
         if (show_query->temporary)
-            throw Exception("Temporary databases are not possible.", ErrorCodes::SYNTAX_ERROR);
-        show_query->setDatabase(getContext()->resolveDatabase(show_query->getDatabase()));
-        getContext()->checkAccess(AccessType::SHOW_DATABASES, show_query->getDatabase());
+            throw Exception(ErrorCodes::SYNTAX_ERROR, "Temporary databases are not possible.");
+        show_query->setDatabase(query_context->resolveDatabase(show_query->getDatabase()));
+        query_context->checkAccess(AccessType::SHOW_DATABASES, show_query->getDatabase());
         create_query = DatabaseCatalog::instance().getDatabase(show_query->getDatabase())->getCreateDatabaseQuery();
     }
 
     if (!create_query)
-        throw Exception("Unable to show the create query of " + show_query->getTable() + ". Maybe it was created by the system.", ErrorCodes::THERE_IS_NO_QUERY);
+        throw Exception(ErrorCodes::THERE_IS_NO_QUERY,
+                        "Unable to show the create query of {}. Maybe it was created by the system.",
+                        show_query->getTable());
 
-    if (!getContext()->getSettingsRef().show_table_uuid_in_table_create_query_if_not_nil)
+    /// proton : starts
+    if (query_context->getSettingsRef().show_multi_versions)
+        return showMultiVersions(table_id);
+    /// proton : ends
+
+    if (!query_context->getSettingsRef().show_uuid)
     {
         auto & create = create_query->as<ASTCreateQuery &>();
         create.uuid = UUIDHelpers::Nil;
         create.to_inner_uuid = UUIDHelpers::Nil;
     }
 
-    WriteBufferFromOwnString buf;
-    formatAST(*create_query, buf, false, false);
-    String res = buf.str();
+    String res = create_query->formatWithPossiblyHidingSensitiveData(/*max_length=*/0, /*one_line=*/false, /*show_secrets=*/false);
 
     MutableColumnPtr column = ColumnString::create();
     column->insert(res);

@@ -2,7 +2,6 @@
 
 #if USE_AWS_S3
 
-#include <Storages/StorageS3Cluster.h>
 #include <Storages/StorageS3.h>
 #include <Storages/checkAndGetLiteralArgument.h>
 
@@ -14,7 +13,7 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <TableFunctions/TableFunctionS3.h>
 #include <TableFunctions/TableFunctionS3Cluster.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 #include <Access/Common/AccessFlags.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTExpressionList.h>
@@ -43,7 +42,7 @@ void TableFunctionS3Cluster::parseArguments(const ASTPtr & ast_function, Context
 
     if (args_func.size() != 1)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' must have arguments.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function '{}' must have arguments.", getName());
         /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
@@ -66,7 +65,7 @@ void TableFunctionS3Cluster::parseArguments(const ASTPtr & ast_function, Context
     /// proton: ends
 
     if (args.size() < 2 || args.size() > 7)
-        throw Exception(message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createDeprecated(message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     for (auto & arg : args)
         arg = evaluateConstantExpressionOrIdentifierAsLiteral(arg, context);
@@ -74,16 +73,16 @@ void TableFunctionS3Cluster::parseArguments(const ASTPtr & ast_function, Context
     /// This arguments are always the first
     configuration.cluster_name = checkAndGetLiteralArgument<String>(args[0], "cluster_name");
 
-    if (!context->tryGetCluster(configuration.cluster_name))
-        throw Exception(ErrorCodes::BAD_GET, "Requested cluster '{}' not found", configuration.cluster_name);
+    /// if (!context->tryGetCluster(configuration.cluster_name))
+    ///    throw Exception(ErrorCodes::BAD_GET, "Requested cluster '{}' not found", configuration.cluster_name);
 
     /// Just cut the first arg (cluster_name) and try to parse s3 table function arguments as is
     ASTs clipped_args;
     clipped_args.reserve(args.size());
     std::copy(args.begin() + 1, args.end(), std::back_inserter(clipped_args));
 
-    /// StorageS3ClusterConfiguration inherints from StorageS3Configuration, so it is safe to upcast it.
-    TableFunctionS3::parseArgumentsImpl(message, clipped_args, context, static_cast<StorageS3Configuration & >(configuration));
+    /// StorageS3ClusterConfiguration inherints from StorageS3::Configuration, so it is safe to upcast it.
+    TableFunctionS3::parseArgumentsImpl(message, clipped_args, context, static_cast<StorageS3::Configuration &>(configuration));
 }
 
 
@@ -91,8 +90,9 @@ ColumnsDescription TableFunctionS3Cluster::getActualTableStructure(ContextPtr co
 {
     context->checkAccess(getSourceAccessType());
 
+    configuration.update(context);
     if (configuration.structure == "auto")
-        return StorageS3::getTableStructureFromData(configuration, false, std::nullopt, context);
+        return StorageS3::getTableStructureFromData(configuration, std::nullopt, context);
 
     return parseColumnsListFromString(configuration.structure, context);
 }
@@ -118,11 +118,11 @@ StoragePtr TableFunctionS3Cluster::executeImpl(
         /// On worker node this filename won't contains globs
         storage = StorageS3::create(
             configuration,
+            context,
             StorageID(getDatabaseName(), table_name),
             columns,
             ConstraintsDescription{},
             /* comment */String{},
-            context,
             /* format_settings */std::nullopt, /// No format_settings for S3Cluster
             /*distributed_processing=*/true);
     }
@@ -141,11 +141,13 @@ StoragePtr TableFunctionS3Cluster::executeImpl(
     return storage;
 }
 
-
-void registerTableFunctionS3Cluster(TableFunctionFactory & factory)
+/// proton: starts
+/// Disabled S3 table functions in favor of S3 external stream
+void registerTableFunctionS3Cluster(TableFunctionFactory &)
 {
-    factory.registerFunction<TableFunctionS3Cluster>();
+    /// factory.registerFunction<TableFunctionS3Cluster>();
 }
+/// proton: ends
 
 
 }

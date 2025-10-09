@@ -1,0 +1,47 @@
+tags:
+  - count_if(*)
+description: (#1476) fix count_if function with argument *
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists count_if_with_AsteriskArguement
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream count_if_with_AsteriskArguement
+        (
+          age int, 
+          name string
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into count_if_with_AsteriskArguement(age,name) values
+    schema:
+      - name: age
+        type: int32
+      - name: name
+        type: string
+    inputs:
+      - [20,'lrx']
+      - [18,'yl']
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: select count(),count(*) filter(where name='lrx') from table(count_if_with_AsteriskArguement)
+    schema:
+      - name: count()
+        type: uint64
+      - name: count_if(equals(name, 'lrx'))
+        type: uint64
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - ["2", "1"]

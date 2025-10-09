@@ -1,0 +1,153 @@
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        value string
+        rhs.id uint64
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 1 2 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: not_equals(id, 0) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             FUNCTION not_equals(id : 0, 0 :: 2) -> not_equals(id, 0) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_STREAM_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: not_equals(rhs.id, 0) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION not_equals(rhs.id : 3, 0 :: 2) -> not_equals(rhs.id, 0) bool : 1
+    Positions: 1 3 0
+      ReadFromMergeTree (default.test_STREAM_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+--
+2	Value_2	2	Value_2
+--
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        value string
+        rhs.id uint64
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 1 2 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: not_equals(id, 0) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             FUNCTION not_equals(id : 0, 0 :: 2) -> not_equals(id, 0) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_STREAM_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: not_equals(rhs.id, 0) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION not_equals(rhs.id : 3, 0 :: 2) -> not_equals(rhs.id, 0) bool : 1
+    Positions: 1 3 0
+      ReadFromMergeTree (default.test_STREAM_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+--
+2	Value_2	2	Value_2
+--
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        value string
+        rhs.id uint64
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 1 2 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: and(not_equals(id, 0), not_equals(id, 0)) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             FUNCTION not_equals(id : 0, 0 : 2) -> not_equals(id, 0) bool : 3
+             FUNCTION not_equals(id : 0, 0 :: 2) -> not_equals(id, 0) bool : 4
+             FUNCTION and(not_equals(id, 0) :: 4, not_equals(id, 0) :: 3) -> and(not_equals(id, 0), not_equals(id, 0)) bool : 2
+    Positions: 2 0 1
+      ReadFromMergeTree (default.test_STREAM_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: and(not_equals(rhs.id, 0), not_equals(rhs.id, 0)) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION not_equals(rhs.id : 3, 0 : 2) -> not_equals(rhs.id, 0) bool : 1
+             FUNCTION not_equals(rhs.id : 3, 0 :: 2) -> not_equals(rhs.id, 0) bool : 4
+             FUNCTION and(not_equals(rhs.id, 0) :: 4, not_equals(rhs.id, 0) :: 1) -> and(not_equals(rhs.id, 0), not_equals(rhs.id, 0)) bool : 2
+    Positions: 2 3 0
+      ReadFromMergeTree (default.test_STREAM_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+--
+2	Value_2	2	Value_2

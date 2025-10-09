@@ -76,12 +76,12 @@ namespace
 BlockIO InterpreterCreateQuotaQuery::execute()
 {
     auto & query = query_ptr->as<ASTCreateQuotaQuery &>();
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     getContext()->checkAccess(query.alter ? AccessType::ALTER_QUOTA : AccessType::CREATE_QUOTA);
 
     std::optional<RolesOrUsersSet> roles_from_query;
     if (query.roles)
-        roles_from_query = RolesOrUsersSet{*query.roles, access_control, getContext()->getUserID()};
+        roles_from_query = RolesOrUsersSet{*query.roles, *access_control, getContext()->getUserID()};
 
     if (query.alter)
     {
@@ -93,11 +93,11 @@ BlockIO InterpreterCreateQuotaQuery::execute()
         };
         if (query.if_exists)
         {
-            auto ids = access_control.find<Quota>(query.names);
-            access_control.tryUpdate(ids, update_func);
+            auto ids = access_control->find<Quota>(query.names);
+            access_control->tryUpdate(ids, update_func);
         }
         else
-            access_control.update(access_control.getIDs<Quota>(query.names), update_func);
+            access_control->update(access_control->getIDs<Quota>(query.names), update_func);
     }
     else
     {
@@ -110,11 +110,11 @@ BlockIO InterpreterCreateQuotaQuery::execute()
         }
 
         if (query.if_not_exists)
-            access_control.tryInsert(new_quotas);
+            access_control->tryInsert(new_quotas);
         else if (query.or_replace)
-            access_control.insertOrReplace(new_quotas);
+            access_control->insertOrReplace(new_quotas);
         else
-            access_control.insert(new_quotas);
+            access_control->insert(new_quotas);
     }
 
     return {};

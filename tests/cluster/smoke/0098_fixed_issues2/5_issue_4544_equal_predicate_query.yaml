@@ -1,0 +1,136 @@
+tags:
+- fixed_issues
+
+description: (#4544) fix issue that historic query with equal predicate cannot return result while greater-equal can
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS t_metrics
+- type: wait
+  time: 2
+
+- type: query
+  sql: CREATE STREAM IF NOT EXISTS t_metrics (
+      event_ts uint64,
+      metric string,
+      value string,
+      metric_date int64,
+      metric_time int64,
+      metric_datetime int64,
+      tagK1 low_cardinality(string),
+      tagV1 string,
+      tagK2 low_cardinality(string),
+      tagV2 string,
+      tagK3 low_cardinality(string),
+      tagV3 string,
+      tagK4 low_cardinality(string),
+      tagV4 string,
+      tagK5 low_cardinality(string),
+      tagV5 string,
+      INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 2,
+      INDEX metric_date_index metric_date TYPE minmax GRANULARITY 3,
+      INDEX metric_datetime_index metric_datetime TYPE minmax GRANULARITY 3
+      )
+      PARTITION BY to_start_of_hour(_tp_time)
+      ORDER BY (metric, metric_date, metric_datetime)
+      SETTINGS index_granularity = 8192, logstore_retention_bytes = '-1', logstore_retention_ms = '86400000', index_granularity = 8192;
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into t_metrics(event_ts, metric, value, metric_date, metric_time, metric_datetime, tagK1, tagV1, tagK2, tagV2, tagK3, tagV3, tagK4, tagV4, tagK5, tagV5, _tp_time) values (1627682400, 'cpu_usage', '75', 1627682400, 1627682400, 1627682400,  'host', 'server1', 'region', 'us-west', 'env', 'production', 'app', 'web', 'instance', '1','2020-02-02 20:00:00')
+
+- type: wait
+  time: 5
+
+- name: fixed-issues2-5-1
+  type: stream
+  query: select * from table(t_metrics) where metric='cpu_usage' and metric_datetime='1627682400'
+  schema:
+    - name: event_ts
+      type: uint64
+    - name: metric
+      type: string
+    - name: value
+      type: string
+    - name: metric_date
+      type: int64
+    - name: metric_time
+      type: int64
+    - name: metric_datetime
+      type: int64
+    - name: tagK1
+      type: low_cardinality(string)
+    - name: tagV1
+      type: string
+    - name: tagK2
+      type: low_cardinality(string)
+    - name: tagV2
+      type: string
+    - name: tagK3
+      type: low_cardinality(string)
+    - name: tagV3
+      type: string
+    - name: tagK4
+      type: low_cardinality(string)
+    - name: tagV4
+      type: string
+    - name: tagK5
+      type: low_cardinality(string)
+    - name: tagV5
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+
+- name: fixed-issues2-5-2
+  type: stream
+  query: select * from table(t_metrics) where metric='cpu_usage' and metric_datetime>='1627682400'
+  schema:
+    - name: event_ts
+      type: uint64
+    - name: metric
+      type: string
+    - name: value
+      type: string
+    - name: metric_date
+      type: int64
+    - name: metric_time
+      type: int64
+    - name: metric_datetime
+      type: int64
+    - name: tagK1
+      type: low_cardinality(string)
+    - name: tagV1
+      type: string
+    - name: tagK2
+      type: low_cardinality(string)
+    - name: tagV2
+      type: string
+    - name: tagK3
+      type: low_cardinality(string)
+    - name: tagV3
+      type: string
+    - name: tagK4
+      type: low_cardinality(string)
+    - name: tagV4
+      type: string
+    - name: tagK5
+      type: low_cardinality(string)
+    - name: tagV5
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+
+- type: check
+  target_name: fixed-issues2-5-1
+  expected_result:
+    - [1627682400, 'cpu_usage', 75, 1627682400, 1627682400, 1627682400,'host', 'server1', 'region', 'us-west', 'env', 'production', 'app', 'web', 'instance', 1 ,'2020-02-02 20:00:00']
+
+- type: check
+  target_name: fixed-issues2-5-2
+  expected_result:
+    - [1627682400, 'cpu_usage', 75, 1627682400, 1627682400, 1627682400,'host', 'server1', 'region', 'us-west', 'env', 'production', 'app', 'web', 'instance', 1 ,'2020-02-02 20:00:00']

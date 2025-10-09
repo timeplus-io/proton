@@ -1,9 +1,9 @@
 #include <Columns/ColumnDecimal.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Interpreters/Streaming/CachedBlockMetrics.h>
-#include <Interpreters/Streaming/RefCountDataBlockList.h>
-#include <Interpreters/Streaming/RowRefs.h>
+#include <Interpreters/Streaming/HashJoin/CachedBlockMetrics.h>
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/RefCountDataBlockList.h>
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/RowRefs.h>
 
 #include <gtest/gtest.h>
 

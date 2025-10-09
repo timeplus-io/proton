@@ -14,7 +14,7 @@
     "tests": [
         {
             "id": 0,
-            "tags": ["view_dependencies"],
+            "tags": ["view_dependencies", "bug"],
             "name": "view_denpendencies_with_stream",
             "description": "create a view or materialized view with source stream, then try drop/rename source stream",
             "steps":[
@@ -54,7 +54,7 @@
         },
         {
             "id": 1,
-            "tags": ["view_dependencies"],
+            "tags": ["view_dependencies", "bug"],
             "name": "view_denpendencies_with_view",
             "description": "create a view or materialized view with source view, then try drop/rename source view",
             "steps":[
@@ -83,7 +83,7 @@
         },
         {
             "id": 2,
-            "tags": ["view_dependencies"],
+            "tags": ["view_dependencies", "bug"],
             "name": "view_denpendencies_with_mv",
             "description": "create a view or materialized view with source mv, then try drop/rename source mv",
             "steps":[

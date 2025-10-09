@@ -1,0 +1,148 @@
+tags:
+- func
+- bug
+- probe_bug
+description: Tests covering max_k aggregation with decimal argument and nested tuple
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 2
+  
+- type: query
+  sql: drop stream if exists maxk_types1
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: create stream maxk_types1(uint8 uint8,uint16 uint16,uint32 uint32,uint64 uint64,uint128
+    uint128,uint256 uint256,int8 int8,int16 int16,int32 int32,int64 int64,int128 int128,int256
+    int256,float32 float32,float64 float64,date date,date32 date32,datetime datetime,datetime64
+    datetime64,string string,fixed_string fixed_string(1),enum enum('a'=1,'b'=2,'c'=3),enum16
+    enum16('a'=1,'b'=2,'c'=3),decimal32 decimal32(5),decimal64 decimal64(5),decimal128
+    decimal128(5),decimal256 decimal256(5))
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: insert into maxk_types1(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8
+    ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime
+    ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128
+    ,decimal256) values(1,1,1,1,1,1, 1,1,1,1,1,1, 1.0,1.0, '2022-12-16','2022-12-16',
+    '2022-03-24 17:17:17','2022-03-24 17:17:17' ,'a','a' , 'a','a' ,1.00,1.00,1.00,1.00)
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: insert into maxk_types1(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8
+    ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime
+    ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128
+    ,decimal256) values(2,2,2,2,2,2, 2,2,2,2,2,2, 2.0,2.0, '2022-12-16','2022-12-16',
+    '2022-12-16 17:17:17','2022-12-16 17:17:17' ,'b','b' , 'b','b' ,2.00,2.00,2.00,2.00)
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: insert into maxk_types1(uint8 ,uint16 ,uint32 ,uint64 ,uint128 ,uint256 ,int8
+    ,int16 ,int32 ,int64 ,int128 ,int256 ,float32 ,float64 ,date ,date32 ,datetime
+    ,datetime64 ,string ,fixed_string ,enum ,enum16 ,decimal32 ,decimal64 ,decimal128
+    ,decimal256) values(3,3,3,3,3,3, 3,3,3,3,3,3, 3.0,3.0, '2022-12-16','2022-12-16',
+    '2022-12-16 17:17:17','2022-12-16 17:17:17' ,'c','c' , 'c','c' ,3.00,3.00,3.00,3.00)
+  
+- type: wait
+  time: 2
+  
+- name: '800'
+  type: stream
+  query: select max_k(decimal128,2) as a from table(maxk_types1)
+  schema:
+    - name: a
+      type: array(decimal(38, 5))
+  
+- type: wait
+  time: 2
+  
+- name: '801'
+  type: stream
+  query: select max_k((decimal32,string),2) as a from table(maxk_types1)
+  schema:
+    - name: a
+      type: array(tuple(tuple(decimal(9, 5), string)))
+      
+- type: wait
+  time: 2
+  
+- name: '802'
+  type: stream
+  query: select max_k(((string,decimal32),decimal64),2,uint8) as a from table(maxk_types1)
+  schema:
+    - name: a
+      type: array(tuple(tuple(tuple(string, decimal(9, 5)), decimal(18, 5)), uint8))
+  
+- type: wait
+  time: 2
+  
+- name: '803'
+  type: stream
+  query: select max_k( (uint8,uint16,uint32,uint64,uint128,uint256,int8,int16,int32,int64,int128,int256,float32,float64),2) as a from table(maxk_types1)
+  schema:
+    - name: a
+      type: array(tuple(tuple(uint8,uint16,uint32,uint64,uint128,uint256,int8,int16,int32,int64,int128,int256,float32,float64)))
+  
+- type: wait
+  time: 2
+  
+- name: '804'
+  type: stream
+  query: select max_k( (date,date32,datetime,datetime64,string,fixed_string),2 ) as a from
+    table(maxk_types1)
+  schema:
+    - name: a
+      type: array(tuple(tuple(date,date32,datetime,datetime64,string,fixed_string)))
+      
+- type: wait
+  time: 2
+  
+- name: '805'
+  type: stream
+  query: select max_k( (enum,enum16,decimal32,decimal64,decimal128,decimal256),2 ) as a
+    from table(maxk_types1)
+  schema:
+    - name: a
+      type: array(tuple(tuple(enum,enum16,decimal32,decimal64,decimal128,decimal256)))
+      
+- type: check
+  target_name: '800'
+  expected_result:
+  - ['[Decimal(''3''), Decimal(''2'')]']
+    
+- type: check
+  target_name: '801'
+  expected_result:
+  - ["[((Decimal('3'), 'c'),), ((Decimal('2'), 'b'),)]"]
+    
+- type: check
+  target_name: '802'
+  expected_result:
+  - ["[((('c', Decimal('3')), Decimal('3')), 3), ((('b', Decimal('2')), Decimal('2')), 2)]"]
+    
+- type: check
+  target_name: '803'
+  expected_result:
+  - ["[((3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3.0, 3.0),), ((2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2.0, 2.0),)]"]
+    
+- type: check
+  target_name: '804'
+  expected_result:
+  - ["[((datetime.date(2022, 12, 16), datetime.date(2022, 12, 16), datetime.datetime(2022, 12, 16, 17, 17, 17), datetime.datetime(2022, 12, 16, 17, 17, 17), 'c', 'c'),), ((datetime.date(2022, 12, 16), datetime.date(2022, 12, 16), datetime.datetime(2022, 12, 16, 17, 17, 17), datetime.datetime(2022, 12, 16, 17, 17, 17), 'b', 'b'),)]"]
+    
+- type: check
+  target_name: '805'
+  expected_result:
+  - [ "[(('c', 'c', Decimal('3'), Decimal('3'), Decimal('3'), Decimal('3')),), (('b', 'b', Decimal('2'), Decimal('2'), Decimal('2'), Decimal('2')),)]" ]
+    

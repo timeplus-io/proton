@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../shell_config.sh
+. "$CURDIR"/../shell_config.sh
+
+export CLICKHOUSE_TEST_UNIQUE_NAME="${CLICKHOUSE_TEST_NAME}_${CLICKHOUSE_DATABASE}"
+
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv1"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv2"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv3"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv4"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv5"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv6"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv7"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv8"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv9"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv10"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv11"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_pv12"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS test_02428_v1"
+sleep 2
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS test_02428_Catalog"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS ${CLICKHOUSE_TEST_UNIQUE_NAME}.pv1"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog"
+sleep 2
+$CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS ${CLICKHOUSE_TEST_UNIQUE_NAME}"
+$CLICKHOUSE_CLIENT -q "DROP VIEW IF EXISTS 02428_trace_view"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS 02428_otel_traces_trace_id_ts"
+$CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS 02428_otel_traces"
+
+$CLICKHOUSE_CLIENT -q "CREATE STREAM test_02428_Catalog (Name string, Price uint64, Quantity uint64) ENGINE = Memory"
+
+$CLICKHOUSE_CLIENT -q "INSERT INTO test_02428_Catalog VALUES ('Pen', 10, 3)"
+$CLICKHOUSE_CLIENT -q "INSERT INTO test_02428_Catalog VALUES ('Book', 50, 2)"
+$CLICKHOUSE_CLIENT -q "INSERT INTO test_02428_Catalog VALUES ('Paper', 20, 1)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv1 AS SELECT * FROM test_02428_Catalog WHERE Price={price:uint64}"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv1(price=20)"
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM \`test_02428_pv1\`(price=20)"
+
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv1" 2>&1 |  grep -q "UNKNOWN_QUERY_PARAMETER\|UNKNOWN_IDENTIFIER" && echo 'ERROR' || echo 'OK'
+$CLICKHOUSE_CLIENT --param_p 10 -q "SELECT Price FROM test_02428_pv1(price={p:uint64})"
+
+$CLICKHOUSE_CLIENT --param_l 1 -q "SELECT Price FROM test_02428_pv1(price=50) LIMIT ({l:uint64})"
+# proton does not support attach right now.
+# $CLICKHOUSE_CLIENT -q "DETACH STREAM test_02428_pv1"
+# $CLICKHOUSE_CLIENT -q "ATTACH STREAM test_02428_pv1"
+
+$CLICKHOUSE_CLIENT -q "EXPLAIN SYNTAX SELECT * from test_02428_pv1(price=10)"
+
+$CLICKHOUSE_CLIENT -q "INSERT INTO test_02428_pv1 VALUES ('Bag', 50, 2)" 2>&1 |  grep -Fq "NOT_IMPLEMENTED" && echo 'ERROR' || echo 'OK'
+
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM pv123(price=20)" 2>&1 |  grep -Fq "UNKNOWN_FUNCTION" && echo 'ERROR' || echo 'OK'
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_v1 AS SELECT * FROM test_02428_Catalog WHERE Price=10"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_v1(price=10)" 2>&1 |  grep -Fq "UNKNOWN_FUNCTION" && echo 'ERROR' || echo 'OK'
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv2 AS SELECT * FROM test_02428_Catalog WHERE Price={price:uint64} AND Quantity={quantity:uint64}"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv2(price=50,quantity=2)"
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv2(price=50)"  2>&1 |  grep -Fq "UNKNOWN_QUERY_PARAMETER" && echo 'ERROR' || echo 'OK'
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv3 AS SELECT * FROM test_02428_Catalog WHERE Price={price:uint64} AND Quantity=3"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv3(price=10)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv4 AS SELECT * FROM test_02428_Catalog WHERE Price={price:uint64} OR Price={price:uint64}*2"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv4(price=10) ORDER BY Price"
+
+$CLICKHOUSE_CLIENT -q "CREATE DATABASE ${CLICKHOUSE_TEST_UNIQUE_NAME}"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "CREATE STREAM ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog (Name string, Price uint64, Quantity uint64) ENGINE = Memory"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "INSERT INTO ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog VALUES ('Pen', 10, 3)"
+$CLICKHOUSE_CLIENT -q "INSERT INTO ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog VALUES ('Book', 50, 2)"
+$CLICKHOUSE_CLIENT -q "INSERT INTO ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog VALUES ('Paper', 20, 1)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW ${CLICKHOUSE_TEST_UNIQUE_NAME}.pv1 AS SELECT * FROM ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog WHERE Price={price:uint64}"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM ${CLICKHOUSE_TEST_UNIQUE_NAME}.pv1(price=20)"
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM \`${CLICKHOUSE_TEST_UNIQUE_NAME}.pv1\`(price=20) SETTINGS allow_experimental_analyzer = 0"  2>&1 |  grep -Fq "UNKNOWN_FUNCTION" &&  echo 'ERROR' || echo 'OK'
+
+# proton does not support analyzer atm
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM \`${CLICKHOUSE_TEST_UNIQUE_NAME}.pv1\`(price=20) SETTINGS allow_experimental_analyzer = 1"  2>&1 |  grep -Fq "UNKNOWN_FUNCTION" &&  echo 'ERROR' || echo 'OK'
+
+$CLICKHOUSE_CLIENT -q "INSERT INTO test_02428_Catalog VALUES ('Book2', 30, 8)"
+$CLICKHOUSE_CLIENT -q "INSERT INTO test_02428_Catalog VALUES ('Book3', 30, 8)"
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv5 AS SELECT Price FROM test_02428_Catalog WHERE Price={price:uint64} HAVING Quantity in (SELECT {quantity:uint64}) LIMIT {limit:uint64}"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT Price FROM test_02428_pv5(price=30, quantity=8, limit=1)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv6 AS SELECT Price+{price:uint64} FROM test_02428_Catalog GROUP BY Price+{price:uint64} ORDER BY Price+{price:uint64}"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv6(price=10)"
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv7 AS SELECT Price/{price:uint64} FROM test_02428_Catalog ORDER BY Price"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv7(price=10)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv8 AS SELECT Price FROM test_02428_Catalog WHERE Price IN ({prices:array(uint64)}) ORDER BY Price"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv8(prices=[10,20])"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv9 AS SELECT Price FROM test_02428_Catalog WHERE Price IN (10,20) AND Quantity={quantity:uint64} ORDER BY Price"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv9(quantity=3)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv10 AS SELECT Price FROM test_02428_Catalog WHERE Price={Pri:uint64} ORDER BY Price"
+sleep 1
+
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv10(Pri=10)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv11 AS SELECT * from ( SELECT Price FROM test_02428_Catalog WHERE Price={price:uint64} )"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv11(price=10)"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW test_02428_pv12 AS SELECT * from ( SELECT Price FROM test_02428_Catalog WHERE Price IN (SELECT number FROM numbers({price:uint64})) )"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_pv12(price=11)"
+
+$CLICKHOUSE_CLIENT -q "CREATE STREAM 02428_otel_traces (TraceId string) ENGINE = Memory()"
+$CLICKHOUSE_CLIENT -q "CREATE STREAM 02428_otel_traces_trace_id_ts (TraceId string, Start datetime64(3)) ENGINE  = Memory()"
+
+$CLICKHOUSE_CLIENT -q "INSERT INTO 02428_otel_traces(TraceId) VALUES ('1')"
+$CLICKHOUSE_CLIENT -q "INSERT INTO 02428_otel_traces_trace_id_ts(TraceId, Start) VALUES('1', now())"
+
+$CLICKHOUSE_CLIENT -q "CREATE VIEW 02428_trace_view AS WITH  {trace_id:string} AS trace_id,
+                              ( SELECT min(Start) FROM 02428_otel_traces_trace_id_ts WHERE TraceId = trace_id
+                               ) AS start SELECT
+                       TraceId AS traceID
+                       FROM 02428_otel_traces"
+$CLICKHOUSE_CLIENT -q "SELECT * FROM 02428_trace_view(trace_id='1')"
+
+
+$CLICKHOUSE_CLIENT -q "CREATE STREAM test_02428_stream1(id int);"
+sleep 1
+$CLICKHOUSE_CLIENT -q "CREATE MATERIALIZED VIEW test_02428_mv1  AS SELECT * FROM test_02428_stream1;"
+sleep 1
+$CLICKHOUSE_CLIENT -q "SELECT * FROM test_02428_mv1(test)" 2>&1 |  grep -Fq "UNKNOWN_FUNCTION" && echo 'ERROR' || echo 'OK'
+
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_mv1"
+$CLICKHOUSE_CLIENT -q "DROP STREAM test_02428_stream1"
+
+
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv1"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv2"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv3"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv4"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv5"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv6"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv7"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv8"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv9"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv10"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv11"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_pv12"
+$CLICKHOUSE_CLIENT -q "DROP VIEW test_02428_v1"
+sleep 2
+
+$CLICKHOUSE_CLIENT -q "DROP STREAM test_02428_Catalog"
+
+$CLICKHOUSE_CLIENT -q "DROP STREAM ${CLICKHOUSE_TEST_UNIQUE_NAME}.pv1"
+$CLICKHOUSE_CLIENT -q "DROP STREAM ${CLICKHOUSE_TEST_UNIQUE_NAME}.Catalog"
+sleep 2
+
+$CLICKHOUSE_CLIENT -q "DROP DATABASE ${CLICKHOUSE_TEST_UNIQUE_NAME}"
+$CLICKHOUSE_CLIENT -q "DROP VIEW 02428_trace_view"
+$CLICKHOUSE_CLIENT -q "DROP STREAM 02428_otel_traces_trace_id_ts"
+$CLICKHOUSE_CLIENT -q "DROP STREAM 02428_otel_traces"

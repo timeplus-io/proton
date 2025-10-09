@@ -1,0 +1,191 @@
+tags:
+  - python_udf
+
+description: |
+  Test create, replace, drop, recreate alert
+  Main Steps:
+  1.Create stream
+  2.Create 2 python udf
+  3.Create alert select stream call python udf
+  4.Show alerts
+  5.Replace alert select stream call another python udf
+  6.Show alerts and show create alert
+  7.Drop alert
+  8.Show alerts
+  9.Recreate alert
+  10.Show alerts
+
+steps:
+  - type: query
+    sql: CREATE STREAM monitor(value string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION print(value string) RETURNS string LANGUAGE PYTHON AS $$
+      def print(value):
+          for v in value:
+              print(v)
+          return value
+      $$
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION requests_Proton(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import json
+      import requests
+      def requests_Proton(value):
+          for v in value:
+              requests.post("http://p1:8123/proton/v1/ingest/streams/monitor", 
+              data=json.dumps({"columns":["value"],"data":[[v]]}))
+          return value
+      $$
+      
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE ALERT test
+      BATCH 10 EVENTS WITH TIMEOUT 5s
+      LIMIT 1 ALERTS PER 15s
+      CALL print
+      AS SELECT value FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO monitor(value) values ('s1') ('s2') ('s3');
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: alert-0-1
+    query: SHOW ALERTS;
+    schema:
+      - name: name
+        type: string
+      - name: uuid
+        type: string
+
+  - type: check
+    target_name: alert-0-1
+    expected_result:
+      - ['test', any_value]
+
+  - type: query
+    sql: |
+      CREATE or REPLACE ALERT test
+      BATCH 9 EVENTS WITH TIMEOUT 4s
+      LIMIT 1 ALERTS PER 14s
+      CALL requests_Proton
+      AS SELECT value FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO monitor(value) values ('s4');
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: alert-1-1
+    query: SHOW ALERTS SETTINGS verbose=true;
+    schema:
+      - name: name
+        type: string
+      - name: uuid
+        type: string
+      - name: version
+        type: uint32
+      - name: last_modified
+        type: datetime64(3)
+      - name: last_modified_by
+        type: string
+      - name: created
+        type: datetime64(3)
+      - name: created_by
+        type: string
+
+  - type: check
+    target_name: alert-1-1
+    expected_result:
+      - ['test', any_value, 2, any_value, 'default', any_value, 'default']
+
+  - type: stream
+    name: alert-2-1
+    query: SHOW CREATE ALERT test;
+    schema:
+      - name: statement
+        type: string
+
+  - type: check
+    target_name: alert-2-1
+    expected_result:
+    -
+      - |-
+        CREATE ALERT default.test
+        BATCH 9 EVENTS WITH TIMEOUT 4s
+        LIMIT 1 ALERT PER 14s
+        CALL requests_Proton
+        AS SELECT
+          value
+        FROM
+          default.monitor
+
+  - type: query
+    sql: DROP ALERT test;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: alert-3-1
+    query: SHOW ALERTS;
+    schema:
+      - name: name
+        type: string
+      - name: uuid
+        type: string
+
+  - type: check
+    target_name: alert-3-1
+    expected_result: []
+
+  - type: query
+    sql: |
+      CREATE ALERT test
+      BATCH 9 EVENTS WITH TIMEOUT 4s
+      LIMIT 1 ALERTS PER 14s
+      CALL requests_Proton
+      AS SELECT value FROM monitor;
+
+  - type: stream
+    name: alert-4-1
+    query: SHOW ALERTS SETTINGS verbose=true;
+    schema:
+      - name: name
+        type: string
+      - name: uuid
+        type: string
+      - name: version
+        type: uint32
+      - name: last_modified
+        type: datetime64(3)
+      - name: last_modified_by
+        type: string
+      - name: created
+        type: datetime64(3)
+      - name: created_by
+        type: string
+
+  - type: check
+    target_name: alert-4-1
+    expected_result:
+      - ['test', any_value, 1, any_value, '', any_value, 'default']

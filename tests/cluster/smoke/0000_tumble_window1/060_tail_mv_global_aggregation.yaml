@@ -1,0 +1,74 @@
+tags:
+  - materialized view
+  - global aggregation
+description: streaming tail from materialized view as global aggregation by sum and group by id w/by 5s periodic, create materialized view as global aggregation by sum and group by id w/by 5s periodic, select id, sum_value from mv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_smoke1_stream_sum_view
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create materialized view test_smoke1_stream_sum_view as select id, sum(value) as sum_value from test_smoke1 group by id emit periodic 5s
+
+  - type: wait
+    time: 5
+
+  - type: stream
+    name: '101'
+    query: select id, sum_value from test_smoke1_stream_sum_view
+    schema:
+      - name: id
+        type: string
+      - name: sum_value
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00']
+      - ['dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05']
+      - ['dev2', 'ca', 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02']
+      - ['dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08']
+      - ['dev3', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00']
+      - ['dev3', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05']
+      - ['dev2', 'ca', 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02']
+      - ['dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08']
+  - type: wait
+    time: 5
+
+  - type: query
+    sql: drop view if exists test_smoke1_stream_sum_view
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: '101'
+    mode: random
+    expected_result:
+      - ['dev2', '273.3']
+      - ['dev8', '288']
+      - ['dev1', '123.3']
+      - ['dev3', '123.3']

@@ -1,0 +1,39 @@
+tags:
+- type
+description: create a stream t_bool with bool type and ingest, query, but of proton-python-driver
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 1
+  
+- type: query
+  sql: drop stream if exists t_bool
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: create stream t_bool (bool bool)
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: insert into t_bool (bool) values (true)
+
+- type: wait
+  time: 2
+
+- name: 801-1
+  type: stream
+  query: select bool from t_bool settings seek_to = 'earliest'
+  schema:
+    - name: bool
+      type: bool
+
+- type: check
+  target_name: 801-1
+  expected_result:
+  - ['True']

@@ -1,14 +1,15 @@
+#include <Cluster/KafkaLog/KafkaWAL.h>
+#include <Cluster/KafkaLog/KafkaWALConsumer.h>
+#include <Cluster/KafkaLog/KafkaWALConsumerMultiplexer.h>
+#include <Cluster/KafkaLog/KafkaWALContext.h>
+#include <Cluster/KafkaLog/KafkaWALSettings.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <KafkaLog/KafkaWAL.h>
-#include <KafkaLog/KafkaWALConsumer.h>
-#include <KafkaLog/KafkaWALConsumerMultiplexer.h>
-#include <KafkaLog/KafkaWALContext.h>
-#include <KafkaLog/KafkaWALSettings.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/ProtonCommon.h>
 #include <Common/TerminalSize.h>
 #include <Common/ThreadPool.h>
@@ -19,8 +20,14 @@
 
 using namespace std;
 using namespace DB;
-using namespace nlog;
-using namespace klog;
+using namespace cluster;
+using namespace cluster::klog;
+
+namespace CurrentMetrics
+{
+extern const Metric LocalThread;
+extern const Metric LocalThreadActive;
+}
 
 namespace
 {
@@ -55,10 +62,11 @@ Block prepareData(Int32 batch_size)
     ColumnWithTypeAndName cpu_col_with_type(std::move(cpu_col), float64_type, "cpu");
     block.insert(cpu_col_with_type);
 
-    String log{"2021.01.13 03:48:02.311031 [ 4070  ] {} <Information> Application: It looks like the process has no CAP_IPC_LOCK "
-               "capability, binary mlock will be disabled. It could happen due to incorrect proton package installation. You could resolve "
-               "the problem manually with 'sudo setcap cap_ipc_lock=+ep /home/ghost/code/private-daisy/build/programs/proton '. Note     "
-               "that it will not work on 'nosuid' mounted filesystems"};
+    String log{
+        "2021.01.13 03:48:02.311031 [ 4070  ] {} <Information> Application: It looks like the process has no CAP_IPC_LOCK "
+        "capability, binary mlock will be disabled. It could happen due to incorrect proton package installation. You could resolve "
+        "the problem manually with 'sudo setcap cap_ipc_lock=+ep /home/ghost/code/private-daisy/build/programs/proton '. Note     "
+        "that it will not work on 'nosuid' mounted filesystems"};
     auto raw_col = string_type->createColumn();
     for (Int32 i = 0; i < batch_size; ++i)
     {
@@ -549,7 +557,7 @@ String calculateFileName(const BenchmarkSettings & settings)
 using ResultQueue = vector<Int32>;
 using ResultQueues = vector<ResultQueue>;
 using TimePoint = chrono::time_point<chrono::steady_clock>;
-using RecordContainer = unordered_map<UInt64, pair<shared_ptr<nlog::Record>, TimePoint>>;
+using RecordContainer = unordered_map<UInt64, pair<shared_ptr<cluster::SchemaRecord>, TimePoint>>;
 
 KafkaWALPtrs createDWals(const BenchmarkSettings & bench_settings, Int32 size)
 {
@@ -566,7 +574,7 @@ KafkaWALPtrs createDWals(const BenchmarkSettings & bench_settings, Int32 size)
     return wals;
 }
 
-struct Data : public klog::ConsumeCallbackData
+struct Data : public cluster::klog::ConsumeCallbackData
 {
     mutex & cmutex;
     RecordContainer & inflights;
@@ -588,7 +596,7 @@ struct Data : public klog::ConsumeCallbackData
     {
     }
 
-    const DB::Block & getSchema(UInt16) const override { return header; }
+    const DB::Block & getSchema(const std::string &, const DB::UUID &, uint16_t) const override { return header; }
 };
 
 void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mutex, const BenchmarkSettings & bench_settings)
@@ -636,10 +644,10 @@ void ingestAsync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_m
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
-        auto record
-            = make_shared<nlog::Record>(OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size), nlog::NO_SCHEMA);
+        auto record = make_shared<cluster::SchemaRecord>(
+            cluster::protocol::OpCode::InsertData, prepareData(bench_settings.producer_settings.batch_size), cluster::Nulls::NullVersion);
         record->setShard(i % result.partitions);
-        record->addHeader("_idem", to_string(i));
+        record->setIdempotentKey(to_string(i));
 
         shared_ptr<Data> data{new Data(cmutex, inflights, result_queue, total, failed, i)};
 
@@ -699,9 +707,10 @@ void ingestSync(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mu
 
     for (Int32 i = 0; i < bench_settings.producer_settings.iterations; ++i)
     {
-        Record record{OpCode::ADD_DATA_BLOCK, prepareData(bench_settings.producer_settings.batch_size), nlog::NO_SCHEMA};
+        SchemaRecord record{
+            cluster::protocol::OpCode::InsertData, prepareData(bench_settings.producer_settings.batch_size), cluster::Nulls::NullVersion};
         record.setShard(i % dresult.partitions);
-        record.addHeader("_idem", to_string(i));
+        record.setIdempotentKey(to_string(i));
 
         auto start = chrono::steady_clock::now();
         const AppendResult & result = wal->append(record, ctx);
@@ -738,7 +747,8 @@ void doIngest(KafkaWALPtr & wal, ResultQueue & result_queue, mutex & stdout_mute
 Int64 ingest(KafkaWALPtrs & wals, ResultQueues & result_queues, const BenchmarkSettings & bench_settings)
 {
     auto bench_start = chrono::steady_clock::now();
-    ThreadPool worker_pool{static_cast<size_t>(bench_settings.producer_settings.concurrency)};
+    ThreadPool worker_pool{
+        CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, static_cast<size_t>(bench_settings.producer_settings.concurrency)};
     mutex stdout_mutex;
 
     for (Int32 jobid = 0; jobid < bench_settings.producer_settings.concurrency; ++jobid)
@@ -763,7 +773,7 @@ Int64 ingest(KafkaWALPtrs & wals, ResultQueues & result_queues, const BenchmarkS
     return chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - bench_start).count();
 }
 
-struct ConsumeContext : public klog::ConsumeCallbackData
+struct ConsumeContext : public cluster::klog::ConsumeCallbackData
 {
     mutex & stdout_mutex;
     atomic_uint64_t & consumed;
@@ -777,10 +787,10 @@ struct ConsumeContext : public klog::ConsumeCallbackData
     {
     }
 
-    const DB::Block & getSchema(UInt16) const override { return header; }
+    const DB::Block & getSchema(const std::string &, const DB::UUID &, uint16_t) const override { return header; }
 };
 
-void doConsume(nlog::RecordPtrs records, klog::ConsumeCallbackData * data)
+void doConsume(cluster::SchemaRecordPtrs records, cluster::klog::ConsumeCallbackData * data)
 {
     if (records.empty())
     {
@@ -794,7 +804,7 @@ void doConsume(nlog::RecordPtrs records, klog::ConsumeCallbackData * data)
     {
         lock_guard<mutex> lock(cctx->stdout_mutex);
 
-        cout << "partition=" << record->getShard() << " offset=" << record->getSN() << " idem=" << record->getHeader("_idem") << endl;
+        cout << "partition=" << record->getShard() << " offset=" << record->getSN() << " idem=" << record->idempotentKey() << endl;
 
         if (cctx->dumpdata)
         {
@@ -808,7 +818,10 @@ void doConsume(nlog::RecordPtrs records, klog::ConsumeCallbackData * data)
 void consume(KafkaWALPtrs & wals, const BenchmarkSettings & bench_settings)
 {
     mutex stdout_mutex;
-    ThreadPool worker_pool{bench_settings.consumer_settings.kafka_topic_partition_offsets.size()};
+    ThreadPool worker_pool{
+        CurrentMetrics::LocalThread,
+        CurrentMetrics::LocalThreadActive,
+        bench_settings.consumer_settings.kafka_topic_partition_offsets.size()};
 
     auto table_schema{prepareData(0)};
 
@@ -887,7 +900,7 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
 
     atomic_uint64_t consumed = 0;
 
-    struct CallbackData : public klog::ConsumeCallbackData
+    struct CallbackData : public cluster::klog::ConsumeCallbackData
     {
         const BenchmarkSettings & settings;
         atomic_uint64_t & consumed;
@@ -906,10 +919,10 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
         {
         }
 
-        const DB::Block & getSchema(UInt16) const override { return header; }
+        const DB::Block & getSchema(const std::string &, const DB::UUID &, uint16_t) const override { return header; }
     };
 
-    auto callback = [](RecordPtrs records, klog::ConsumeCallbackData * data) -> void {
+    auto callback = [](cluster::SchemaRecordPtrs records, cluster::klog::ConsumeCallbackData * data) -> void {
         auto pdata = static_cast<CallbackData *>(data);
 
         pdata->consumed += records.size();
@@ -929,7 +942,7 @@ void incrementalConsume(const BenchmarkSettings & bench_settings, Int32 size)
             }
 
             cout << "jobid=" << pdata->jobid << " topic=" << record->getStream() << " partition=" << record->getShard()
-                 << " offset=" << record->getSN() << " idem=" << record->getHeader("_idem") << endl;
+                 << " offset=" << record->getSN() << " idem=" << record->idempotentKey() << endl;
 
             if (pdata->settings.consumer_settings.dumpdata)
             {

@@ -1,0 +1,143 @@
+tags:
+  - nullable
+  - append_only
+  - versioned_kv
+  - left-join
+
+description: Test append-only stream left join versioned_kv stream with nullable column
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test42_weituo;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test42_hangqing;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM test42_weituo
+      (
+        id int,
+        t_uint64 nullable(uint64),
+        t_float64 nullable(float64),
+        t_decimal9 nullable(decimal(9, 5)),
+        t_string nullable(string),
+        t_bool nullable(bool),
+        t_datetime64 nullable(datetime64(3))
+      )
+
+  - type: query
+    sql: |
+      CREATE STREAM test42_hangqing
+      (
+        id int,
+        t_uint64 nullable(uint64),
+        t_float64 nullable(float64),
+        t_decimal9 nullable(decimal(9, 5)),
+        t_string nullable(string),
+        t_bool nullable(bool),
+        t_datetime64 nullable(datetime64(3))
+      )
+      PRIMARY KEY id
+      SETTINGS mode = 'versioned_kv'
+
+  - type: wait
+    time: 2
+
+  - name: nullable-5-1
+    type: stream
+    query: select id, t_uint64, t_float64, t_decimal9, t_string, t_bool, t_datetime64, b.id, b.t_uint64, b.t_float64, b.t_decimal9, b.t_string, b.t_bool, b.t_datetime64 from test42_weituo as a left join test42_hangqing as b on a.id = b.id;
+    schema:
+      - name: id
+        type: int32
+      - name: t_uint64
+        type: nullable(uint64)
+      - name: t_float64
+        type: nullable(float64)
+      - name: t_decimal9
+        type: nullable(decimal(9, 5))
+      - name: t_string
+        type: nullable(string)
+      - name: t_bool
+        type: nullable(bool)
+      - name: t_datetime64
+        type: nullable(datetime64(3))
+      - name: b.id
+        type: int32
+      - name: b.t_uint64
+        type: nullable(uint64)
+      - name: b.t_float64
+        type: nullable(float64)
+      - name: b.t_decimal9
+        type: nullable(decimal(9, 5))
+      - name: b.t_string
+        type: nullable(string)
+      - name: b.t_bool
+        type: nullable(bool)
+      - name: b.t_datetime64
+        type: nullable(datetime64(3))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test42_hangqing(id, t_uint64, t_float64, t_decimal9, t_string, t_bool, t_datetime64) values
+    schema:
+      - name: id
+        type: int32
+      - name: t_uint64
+        type: nullable(uint64)
+      - name: t_float64
+        type: nullable(float64)
+      - name: t_decimal9
+        type: nullable(decimal(9,5))
+      - name: t_string
+        type: nullable(string)
+      - name: t_bool
+        type: nullable(bool)
+      - name: t_datetime64
+        type: nullable(datetime64(3))
+    inputs:
+      - [1, 7, 12.648398459818415, 8.69666, 'dev-1', true, '2024-01-01 00:00:11.001']
+      - [2, 3, 22.397195069328955, 8.52773, 'dev-2', false, '2024-01-01 00:00:12.002']
+      - [3, 4, 32.419882375106754, 8.55413, 'dev-3', true, '2024-01-01 00:00:13.003']
+      - [5, 9, 52.834674282612909, 8.62136, 'dev-5', false, '2024-01-01 00:00:14.004']
+
+  - type: query
+    sql: insert into test42_weituo(id, t_uint64, t_float64, t_decimal9, t_string, t_bool, t_datetime64) values
+    schema:
+      - name: id
+        type: int32
+      - name: t_uint64
+        type: nullable(uint64)
+      - name: t_float64
+        type: nullable(float64)
+      - name: t_decimal9
+        type: nullable(decimal(9,5))
+      - name: t_string
+        type: nullable(string)
+      - name: t_bool
+        type: nullable(bool)
+      - name: t_datetime64
+        type: nullable(datetime64(3))
+    inputs:
+      - [1, 2, 12.871033328037873, 8.35418, 'dev1', false, '2024-01-01 00:00:01.001']
+      - [2, 0, 22.456102782026145, 8.71705, 'dev2', true, '2024-01-01 00:00:02.002']
+      - [3, 6, 32.473060502292853, 8.34831, 'dev3', true, '2024-01-01 00:00:03.003']
+      - [4, 8, 42.609511310433069, 8.71279, 'dev4', false, '2024-01-01 00:00:04.004']
+
+  - type: check
+    target_name: nullable-5-1
+    expected_result:
+      - [1, 2, 12.871033328037873, '8.35418', 'dev1', false, '2024-01-01 00:00:01.001', 1, 7, 12.648398459818415, '8.69666', 'dev-1', true, '2024-01-01 00:00:11.001']
+      - [2, 0, 22.456102782026145, '8.71705', 'dev2', true, '2024-01-01 00:00:02.002', 2, 3, 22.397195069328955, '8.52773', 'dev-2', false, '2024-01-01 00:00:12.002']
+      - [3, 6, 32.473060502292853, '8.34831', 'dev3', true, '2024-01-01 00:00:03.003', 3, 4, 32.419882375106754, '8.55413', 'dev-3', true, '2024-01-01 00:00:13.003']
+      - [4, 8, 42.609511310433069, '8.71279', 'dev4', false, '2024-01-01 00:00:04.004', 0, null, null, null, null, null, null]

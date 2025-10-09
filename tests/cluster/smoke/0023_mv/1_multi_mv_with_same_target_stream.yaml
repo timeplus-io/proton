@@ -1,0 +1,120 @@
+tags:
+- materialized view with target stream
+description: create 2 materialized views with same target stream
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists mv_with_target_stream_1
+
+- type: query
+  sql: drop view if exists mv_with_target_stream_2
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists source_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists target_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream source_mv_stream (i int) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream target_mv_stream (ii int) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view mv_with_target_stream_1 into target_mv_stream as select _tp_time, i + 1 as ii from source_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view mv_with_target_stream_2 into target_mv_stream as select _tp_time, i + 10 as ii from source_mv_stream
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into source_mv_stream(i) values
+  schema:
+  - name: i
+    type: int32
+  inputs:
+  - [1]
+  - [2]
+  - [3]
+- type: wait
+  time: 2
+
+- name: '2405'
+  type: stream
+  query: select ii from table(mv_with_target_stream_1) ORDER BY ii ASC
+  schema:
+  - name: ii
+    type: int32
+- type: wait
+  time: 1
+
+- name: '2406'
+  type: stream
+  query: select ii from table(mv_with_target_stream_2) ORDER BY ii ASC
+  schema:
+  - name: ii
+    type: int32
+- type: wait
+  time: 1
+
+- name: '2407'
+  type: stream
+  query: select ii from table(target_mv_stream) ORDER BY ii ASC
+  schema:
+  - name: ii
+    type: int32
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists mv_with_target_stream_1
+
+- type: query
+  sql: drop view if exists mv_with_target_stream_2
+
+- type: check
+  target_name: '2405'
+  expected_result:
+  - [2]
+  - [3]
+  - [4]
+  - [11]
+  - [12]
+  - [13]
+
+- type: check
+  target_name: '2406'
+  expected_result:
+  - [2]
+  - [3]
+  - [4]
+  - [11]
+  - [12]
+  - [13]
+
+- type: check
+  target_name: '2407'
+  expected_result:
+  - [2]
+  - [3]
+  - [4]
+  - [11]
+  - [12]
+  - [13]

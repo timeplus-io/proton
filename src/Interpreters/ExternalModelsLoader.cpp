@@ -1,3 +1,4 @@
+#include <Common/logger_useful.h>
 #include <Interpreters/ExternalModelsLoader.h>
 #include <Interpreters/Context.h>
 
@@ -11,13 +12,13 @@ namespace ErrorCodes
 
 
 ExternalModelsLoader::ExternalModelsLoader(ContextPtr context_)
-    : ExternalLoader("external model", &Poco::Logger::get("ExternalModelsLoader")), WithContext(context_)
+    : ExternalLoader("external model", getLogger("ExternalModelsLoader")), WithContext(context_)
 {
     setConfigSettings({"model", "name", {}, {}});
     enablePeriodicUpdates(true);
 }
 
-std::shared_ptr<const IExternalLoadable> ExternalModelsLoader::create(
+std::shared_ptr<IExternalLoadable> ExternalModelsLoader::createObject(
     const std::string & name, const Poco::Util::AbstractConfiguration & config,
     const std::string & config_prefix, const std::string & /* repository_name */) const
 {
@@ -35,7 +36,7 @@ std::shared_ptr<const IExternalLoadable> ExternalModelsLoader::create(
     }
     else
     {
-        throw Exception("Unknown model type: " + type, ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Unknown model type: {}", type);
     }
 }
 }

@@ -1,0 +1,84 @@
+tags:
+  - local-run
+  - tumble window
+description: tumble window aggregate by max and group by id, window_start, window_end.
+              stream tumble window max(value) aggregate group by id, window_start, window_end
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select id, max(value), window_start, window_end from tumble(test_smoke, timestamp, interval 5 second) group by id, window_start, window_end emit stream
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: 102
+    query: select id, max(value), window_start, window_end from tumble(test_smoke, timestamp, interval 5 second) group by id, window_start, window_end emit stream
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: '103'
+    query: select id, max(value) from table(test_smoke) group by id, location
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:00']
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:03']
+      - ['dev6', 'ca', 66, '\"create_time\":\"2021-11-02 20:00:11\"', '2020-02-02 20:00:04']
+      - ['dev8', 'ca', 67, '\"create_time\":\"2021-11-02 20:00:11\"', '2020-02-02 20:00:10']
+
+  - type: check
+    target_name: 101
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - ['dev2', '58.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+      - ['dev6', '66.0', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+      - ['dev1', '57.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+
+  - type: check
+    target_name: 102
+    mode: <<or .aggregation_check_mode "sequence">> 
+    expected_result:
+      - ['dev2', '58.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+      - ['dev6', '66.0', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+      - ['dev1', '57.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05']

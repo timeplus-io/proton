@@ -74,7 +74,7 @@ void MultiplexedConnections::sendScalarsData(Scalars & data)
     std::lock_guard lock(cancel_mutex);
 
     if (!sent_query)
-        throw Exception("Cannot send scalars data: query not yet sent.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot send scalars data: query not yet sent.");
 
     for (ReplicaState & state : replica_states)
     {
@@ -89,10 +89,10 @@ void MultiplexedConnections::sendExternalTablesData(std::vector<ExternalTablesDa
     std::lock_guard lock(cancel_mutex);
 
     if (!sent_query)
-        throw Exception("Cannot send external tables data: query not yet sent.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot send external tables data: query not yet sent.");
 
     if (data.size() != active_connection_count)
-        throw Exception("Mismatch between replicas and data sources", ErrorCodes::MISMATCH_REPLICAS_DATA_SOURCES);
+        throw Exception(ErrorCodes::MISMATCH_REPLICAS_DATA_SOURCES, "Mismatch between replicas and data sources");
 
     auto it = data.begin();
     for (ReplicaState & state : replica_states)
@@ -112,19 +112,25 @@ void MultiplexedConnections::sendQuery(
     const String & query_id,
     UInt64 stage,
     ClientInfo & client_info,
-    bool with_pending_data)
+    bool with_pending_data,
+    std::optional<SettingsChanges> settings_changes) /// proton: add settings_changes.
 {
     std::lock_guard lock(cancel_mutex);
 
     if (sent_query)
-        throw Exception("Query already sent.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query already sent.");
 
     Settings modified_settings = settings;
+
+    /// proton: starts.
+    if (settings_changes.has_value())
+        modified_settings.applyChanges(*settings_changes);
+    /// proton: ends.
 
     for (auto & replica : replica_states)
     {
         if (!replica.connection)
-            throw Exception("MultiplexedConnections: Internal error", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "MultiplexedConnections: Internal error");
 
         /// if (replica.connection->getServerRevision(timeouts) < DBMS_MIN_REVISION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD)
         /// {
@@ -133,11 +139,11 @@ void MultiplexedConnections::sendQuery(
         ///    modified_settings.group_by_two_level_threshold_bytes = 0;
         /// }
 
-        if (settings.allow_experimental_parallel_reading_from_replicas)
+        if (replica_info)
         {
             client_info.collaborate_with_initiator = true;
-            client_info.count_participating_replicas = replica_info.all_replicas_count;
-            client_info.number_of_current_replica = replica_info.number_of_current_replica;
+            client_info.count_participating_replicas = replica_info->all_replicas_count;
+            client_info.number_of_current_replica = replica_info->number_of_current_replica;
         }
     }
 
@@ -174,7 +180,7 @@ void MultiplexedConnections::sendIgnoredPartUUIDs(const std::vector<UUID> & uuid
     std::lock_guard lock(cancel_mutex);
 
     if (sent_query)
-        throw Exception("Cannot send uuids after query is sent.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot send uuids after query is sent.");
 
     for (ReplicaState & state : replica_states)
     {
@@ -194,7 +200,7 @@ void MultiplexedConnections::sendReadTaskResponse(const String & response)
 }
 
 
-void MultiplexedConnections::sendMergeTreeReadTaskResponse(PartitionReadResponse response)
+void MultiplexedConnections::sendMergeTreeReadTaskResponse(const ParallelReadResponse & response)
 {
     std::lock_guard lock(cancel_mutex);
     if (cancelled)
@@ -230,7 +236,7 @@ void MultiplexedConnections::sendCancel()
     std::lock_guard lock(cancel_mutex);
 
     if (!sent_query || cancelled)
-        throw Exception("Cannot cancel. Either no query sent or already cancelled.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot cancel. Either no query sent or already cancelled.");
 
     for (ReplicaState & state : replica_states)
     {
@@ -247,7 +253,7 @@ Packet MultiplexedConnections::drain()
     std::lock_guard lock(cancel_mutex);
 
     if (!cancelled)
-        throw Exception("Cannot drain connections: cancel first.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot drain connections: cancel first.");
 
     Packet res;
     res.type = Protocol::Server::EndOfStream;
@@ -258,6 +264,7 @@ Packet MultiplexedConnections::drain()
 
         switch (packet.type)
         {
+            case Protocol::Server::MergeTreeAllRangesAnnounecement:
             case Protocol::Server::MergeTreeReadTaskRequest:
             case Protocol::Server::ReadTaskRequest:
             case Protocol::Server::PartUUIDs:
@@ -306,14 +313,14 @@ std::string MultiplexedConnections::dumpAddressesUnlocked() const
 Packet MultiplexedConnections::receivePacketUnlocked(AsyncCallback async_callback, bool is_draining)
 {
     if (!sent_query)
-        throw Exception("Cannot receive packets: no query sent.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot receive packets: no query sent.");
     if (!hasActiveConnections())
-        throw Exception("No more packets are available.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No more packets are available.");
 
     ReplicaState & state = getReplicaForReading(is_draining);
     current_connection = state.connection;
     if (current_connection == nullptr)
-        throw Exception("Logical error: no available replica", ErrorCodes::NO_AVAILABLE_REPLICA);
+        throw Exception(ErrorCodes::NO_AVAILABLE_REPLICA, "Logical error: no available replica");
 
     Packet packet;
     {
@@ -338,6 +345,7 @@ Packet MultiplexedConnections::receivePacketUnlocked(AsyncCallback async_callbac
 
     switch (packet.type)
     {
+        case Protocol::Server::MergeTreeAllRangesAnnounecement:
         case Protocol::Server::MergeTreeReadTaskRequest:
         case Protocol::Server::ReadTaskRequest:
         case Protocol::Server::PartUUIDs:

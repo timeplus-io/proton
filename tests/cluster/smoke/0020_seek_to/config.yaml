@@ -1,0 +1,41 @@
+name: seek_to
+description: Tests covering seek_to by sequence number
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  # clean view
+  - type: query
+    sql: drop view if exists seek_to_mv;
+  - type: query
+    sql: drop view if exists seek_to_view;
+  - type: query
+    sql: drop view if exists seek_to_view1;
+  - type: query
+    sql: drop view if exists seek_to_view2;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test21_limit_by_stream;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test21_limit_by_stream(i int, s string, t datetime64(3,
+      'UTC')) settings event_time_column='t';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test21_limit_by_stream(i, s, t) values (1, 's1', '2022-12-01 00:00:01.111');
+
+  - type: query
+    sql: insert into test21_limit_by_stream(i, s, t) values (2, 's2', '2022-12-01 00:00:02.111');
+
+  - type: query
+    sql: insert into test21_limit_by_stream(i, s, t) values (3, 's3', '2022-12-01 00:00:03.111');
+
+  - type: query
+    sql: insert into test21_limit_by_stream(i, s, t) values (4, 's4', '2022-12-01 00:00:04.111');

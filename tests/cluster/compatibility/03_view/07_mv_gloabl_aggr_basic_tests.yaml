@@ -1,0 +1,46 @@
+tags:
+  - prepare
+  - validate
+  - global aggregation
+
+description: basic tests on mv global aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+
+  - name: view-6-1
+    type: stream
+    query: select * except (_tp_time) from aggr_mv settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: min
+        type: float32
+      - name: max
+        type: float32
+
+  - type: check
+    target_name: view-6-1
+    expected_result:
+      - ['dev2', 58, 77]
+      - ['dev1', 31, 60]
+
+  - name: view-6-2
+    type: stream
+    query: select * except (_tp_time) from aggr_target_stream settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: min
+        type: float32
+      - name: max
+        type: float32
+
+  - type: check
+    target_name: view-6-2
+    expected_result:
+      - ['dev2', 58, 77]
+      - ['dev1', 31, 60]

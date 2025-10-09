@@ -35,7 +35,7 @@ std::pair<String, Int32> sendRequest(
     const std::vector<std::pair<String, String>> & headers,
     /// Timeout second for connect/send/receive
     ConnectionTimeouts timeouts,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
 
     PooledHTTPSessionPtr session;
@@ -79,25 +79,16 @@ std::pair<String, Int32> sendRequest(
         String response_body{response_stream.str()};
 
         auto status = response.getStatus();
-        if (status == Poco::Net::HTTPResponse::HTTP_OK)
-        {
-            LOG_INFO(
-                log,
-                "Successfully executed request to uri={} successfully, method={} payload={} query_id={}",
-                uri.toString(),
-                method,
-                payload,
-                query_id);
-        }
-        else
+        if (status >= Poco::Net::HTTPResponse::HTTP_MULTIPLE_CHOICES)
         {
             LOG_ERROR(
                 log,
-                "Failed to execute request to uri={} method={} payload={} query_id={}, error={}",
+                "Failed to execute request to uri={} method={} payload={} query_id={}, response_code={}, response_body={}",
                 uri.toString(),
                 method,
                 payload,
                 query_id,
+                response.getReason(),
                 response_body);
         }
 
@@ -119,9 +110,8 @@ std::pair<String, Int32> sendRequest(
                 query_id,
                 e.message(),
                 getCurrentExceptionMessage(true, true));
-            return {"Execution timeout", toHTTPCode(e)};   
+            return {"Execution timeout", toHTTPCode(e)};
         }
-
         LOG_ERROR(
             log,
             "Failed to send request to uri={} method={} payload={} query_id={} error={} exception={}",

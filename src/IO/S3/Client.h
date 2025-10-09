@@ -24,7 +24,6 @@ struct ServerSideEncryptionKMSConfig
 
 #if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
 
-#include <Common/logger_useful.h>
 #include <Common/assert_cast.h>
 #include <base/scope_guard.h>
 
@@ -107,6 +106,7 @@ class Client : private Aws::S3::S3Client
 {
 public:
     class RetryStrategy;
+    class RetryContext; /// proton: added
 
     /// we use a factory method to verify arguments before creating a client because
     /// there are certain requirements on arguments for it to work correctly
@@ -117,7 +117,8 @@ public:
             const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> & credentials_provider,
             const PocoHTTPClientConfiguration & client_configuration,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
-            bool use_virtual_addressing);
+            bool use_virtual_addressing,
+            std::shared_ptr<RetryContext> retry_context_); /// proton: added retry_context_
 
     std::unique_ptr<Client> clone() const;
 
@@ -135,7 +136,6 @@ public:
         catch (...)
         {
             tryLogCurrentException(log);
-            throw;
         }
     }
 
@@ -144,6 +144,18 @@ public:
     const String & getRegion() const { return explicit_region; }
 
     Aws::Auth::AWSCredentials getCredentials() const;
+
+    /// proton: starts
+    class RetryContext
+    {
+    public:
+        bool isCancelled() const { return cancelled.test(); }
+        void cancel() { cancelled.test_and_set(); }
+
+    private:
+        std::atomic_flag cancelled;
+    };
+    /// proton: ends
 
     /// Decorator for RetryStrategy needed for this client to work correctly.
     /// We want to manually handle permanent moves (status code 301) because:
@@ -154,7 +166,7 @@ public:
     class RetryStrategy : public Aws::Client::RetryStrategy
     {
     public:
-        explicit RetryStrategy(std::shared_ptr<Aws::Client::RetryStrategy> wrapped_strategy_);
+        RetryStrategy(std::shared_ptr<Aws::Client::RetryStrategy> wrapped_strategy_, std::shared_ptr<RetryContext>); /// proton: updated
 
         /// NOLINTNEXTLINE(google-runtime-int)
         bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors>& error, long attemptedRetries) const override;
@@ -173,6 +185,7 @@ public:
         void RequestBookkeeping(const Aws::Client::HttpResponseOutcome& httpResponseOutcome, const Aws::Client::AWSError<Aws::Client::CoreErrors>& lastError) override;
     private:
         std::shared_ptr<Aws::Client::RetryStrategy> wrapped_strategy;
+        std::shared_ptr<RetryContext> context;
     };
 
     /// SSE-KMS headers MUST be signed, so they need to be added before the SDK signs the message
@@ -181,6 +194,8 @@ public:
     /// the headers should only be set for PutObject, CopyObject, POST Object, and CreateMultipartUpload.
     template <typename RequestType>
     void setKMSHeaders(RequestType & request) const;
+
+    bool bucketExists(const std::string & bucket) const; /// proton: added
 
     Model::HeadObjectOutcome HeadObject(const HeadObjectRequest & request) const;
     Model::ListObjectsV2Outcome ListObjectsV2(const ListObjectsV2Request & request) const;
@@ -205,6 +220,13 @@ public:
     using Aws::S3::S3Client::DisableRequestProcessing;
 
     ProviderType getProviderType() const;
+
+    void cancel() const
+    {
+        if(retry_context)
+            retry_context->cancel();
+    }
+
 private:
     friend struct ::MockS3::Client;
 
@@ -213,7 +235,8 @@ private:
            const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> & credentials_provider_,
            const PocoHTTPClientConfiguration & client_configuration,
            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
-           bool use_virtual_addressing);
+           bool use_virtual_addressing,
+           std::shared_ptr<Client::RetryContext> retry_context_); /// proton: added retry_context_
 
     Client(
         const Client & other, const PocoHTTPClientConfiguration & client_configuration);
@@ -267,7 +290,9 @@ private:
 
     const ServerSideEncryptionKMSConfig sse_kms_config;
 
-    Poco::Logger * log;
+    std::shared_ptr<RetryContext> retry_context; /// proton: added
+
+    LoggerPtr log;
 };
 
 class ClientFactory

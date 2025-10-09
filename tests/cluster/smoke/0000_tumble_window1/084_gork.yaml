@@ -1,0 +1,120 @@
+tags:
+  - functions
+  - streaming functions
+  - cluster_table_bug
+description: function grok
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_smoke1_join_v;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_smoke1;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_smoke1(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3))
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: '102'
+    query: "select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from test_smoke1"
+    schema:
+      - name: map
+        type: map(string, string)
+      - name: "array_element(grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}'), 'id')"
+        type: string
+      - name: "array_element(grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}'), 'type')"
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 1, '{"id": 1, "type": T1, "ipv4": 127.0.0.1, "ipv6": ::1, "uuid": feb540dc-c4e4-4c7e-a975-02f0304364a9}', '2020-02-02 20:00:01']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 2, '{"id": 2, "type": T2, "ipv4": 199.101.192.190, "ipv6": 1050:0000:0000:0000:0005:0600:300c:326b, "uuid": Feb540dc-c4e4-4c7e-a975-02f0304364a9, "data": "abc"}', '2020-02-02 20:01:02']
+      - ['dev2', 'ca', 3, '{"id": 3, "type": T3, "ipv4": 0.0.0.0, "ipv6": 1050:0:0:0:5:600:300c:326b, "uuid": 0eb540dc-c4e4-4c7e-a975-02f0304364a9, "data": "abc"}', '2020-02-02 20:00:02']
+      - ['dev2', 'ca', 4, '{"id": 4, "data": "abc", "type":T4, "ipv4":0.0.0.0, "ipv6":1050:0:0:0:5:600:300c:326b, "uuid":feb540dc-C4e4-4c7e-a975-02f0304364a9}', '2020-02-02 20:01:02']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 5, '{"id": 5, "type": T5, "ipv4": 172.31.255.255, "ipv6": ff06::c3, "uuid": feb540dc-C4e4-4c7e-a975-02f0304364a9, "data": "abc"}', '2020-02-02 20:01:03']
+
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: '103'
+    query: "select grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}') as map, map['id'], map['type'] from table(test_smoke1)"
+    schema:
+      - name: map
+        type: map(string, string)
+      - name: "array_element(grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}'), 'id')"
+        type: string
+      - name: "array_element(grok(json, '{\"id\": %{INT:id}, \"type\": %{DATA:type}, \"ipv4\": %{IPV4:ipv4}, \"ipv6\": %{IP:ipv6}, \"uuid\": %{UUID:uuid}%{DATA}'), 'type')"
+        type: string
+
+  - type: check
+    target_name: '102'
+    mode: random
+    expected_result:
+      - [{'id': 1, 'type': 'T1', 'ipv4': 127.0.0.1, 'ipv6': '::1', 'uuid': 'feb540dc-c4e4-4c7e-a975-02f0304364a9'}, 1, 'T1']
+      - [{'id': 2, 'type': T2, 'ipv4': 199.101.192.190, 'ipv6': 1050:0000:0000:0000:0005:0600:300c:326b, 'uuid': Feb540dc-c4e4-4c7e-a975-02f0304364a9}, 2, 'T2']
+      - [{'id': 3, 'type': 'T3', 'ipv4': 0.0.0.0, 'ipv6': 1050:0:0:0:5:600:300c:326b, 'uuid': 0eb540dc-c4e4-4c7e-a975-02f0304364a9}, 3, 'T3']
+      - [{}, '', '']
+      - [{'id': 5, 'type': T5, 'ipv4': 172.31.255.255, 'ipv6': ff06::c3, 'uuid': feb540dc-C4e4-4c7e-a975-02f0304364a9}, 5, 'T5']
+
+  - type: check
+    target_name: '103'
+    mode: random
+    expected_result:
+      - [{'id': 1, 'type': 'T1', 'ipv4': '127.0.0.1', 'ipv6': '::1', 'uuid': 'feb540dc-c4e4-4c7e-a975-02f0304364a9'}, '1', 'T1']
+      - [{'id': 2, 'type': 'T2', 'ipv4': '199.101.192.190', 'ipv6': '1050:0000:0000:0000:0005:0600:300c:326b', 'uuid': 'Feb540dc-c4e4-4c7e-a975-02f0304364a9'}, '2', 'T2']
+      - [{'id': 3, 'type': 'T3', 'ipv4': '0.0.0.0', 'ipv6': '1050:0:0:0:5:600:300c:326b', 'uuid': '0eb540dc-c4e4-4c7e-a975-02f0304364a9'}, '3', 'T3']
+      - [{}, '', '']
+      - [{'id': 5, 'type': 'T5', 'ipv4': '172.31.255.255', 'ipv6': 'ff06::c3', 'uuid': 'feb540dc-C4e4-4c7e-a975-02f0304364a9'}, '5', 'T5']

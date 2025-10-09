@@ -1,0 +1,77 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - subquery
+  - subquery/view/matierlized_view
+  - tail/aggr
+  - stateful_function
+description: subquery from subquery tail with stateful function, add
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+      settings mode='versioned_kv', shards=3;
+  - type: wait
+    time: 2
+
+  - name: "1474"
+    type: stream
+    query: |
+      select lag(i, 1),
+             k2
+      from
+        (select i,
+                k1,
+                k2
+         from test14_multishard_10
+         where k1 = 1 );
+    schema: 
+      - name: lag(i, 1)
+        type: float32
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (1, 1, 'a');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (2, 0, 'b');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (3, 1, 'c');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (4, 0, 'd');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_10(i, k1, k2)
+      values (5, 1, 'e');
+
+  - type: check
+    target_name: "1474"
+    expected_result:
+      - [0, a]
+      - [1, c]
+      - [3, e]

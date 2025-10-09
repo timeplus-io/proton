@@ -1,0 +1,138 @@
+description: |
+  basic cases for timeplus external streams:
+  * read: streaming and table
+  * write
+  * be used in a MV (both as source and sink)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists tp_00_mv
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists tp_00_target_ex
+
+  - type: query
+    sql: drop stream if exists tp_00_source_ex
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists tp_00_target
+
+  - type: query
+    sql: drop stream if exists tp_00_source
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream tp_00_source
+      (
+        key string,
+        value int
+      ) settings shards=3
+
+  - type: query
+    sql: |
+      create stream tp_00_target
+      (
+        key string,
+        value int
+      )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create external stream tp_00_source_ex
+      settings type='timeplus', hosts='localhost:8463', stream='tp_00_source'
+
+  - type: query
+    sql: |
+      create external stream tp_00_target_ex
+      settings type='timeplus', hosts='localhost:8463', stream='tp_00_target'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view tp_00_mv into tp_00_target_ex as select key, value from tp_00_source_ex
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: tp-00-select_ex
+    query: select key, value from tp_00_target_ex
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+
+  - type: stream
+    name: tp-00-select_mv
+    query: select key, value from tp_00_mv
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into tp_00_source_ex (key, value) values ('one', 1), ('two', 2), ('three', 3), ('four', 4), ('five', 5), ('six', 6)
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: tp-00-select_table
+    query: select key, value from table(tp_00_target_ex)
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: tp-00-select_ex
+    expected_result:
+      - ["one", 1]
+      - ["two", 2]
+      - ["three", 3]
+      - ["four", 4]
+      - ["five", 5]
+      - ["six", 6]
+
+  - type: check
+    target_name: tp-00-select_mv
+    expected_result:
+      - ["one", 1]
+      - ["two", 2]
+      - ["three", 3]
+      - ["four", 4]
+      - ["five", 5]
+      - ["six", 6]
+
+  - type: check
+    target_name: tp-00-select_table
+    expected_result:
+      - ["one", 1]
+      - ["two", 2]
+      - ["three", 3]
+      - ["four", 4]
+      - ["five", 5]
+      - ["six", 6]

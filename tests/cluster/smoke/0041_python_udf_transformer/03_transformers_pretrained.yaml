@@ -1,0 +1,91 @@
+tags:
+  - udf
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/7349
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (label int, text string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_prechained(label int, text string) RETURNS string LANGUAGE PYTHON AS
+      $$
+      from datasets import Dataset, DatasetDict
+      from transformers import AutoTokenizer, AutoModelForSequenceClassification, TrainingArguments, Trainer
+      import numpy as np
+      import evaluate
+
+      model_name = '/var/lib/proton/user_files/bert-base-uncased'
+      tokenizer = AutoTokenizer.from_pretrained(model_name)
+      model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=5, torch_dtype='auto')
+      training_args = TrainingArguments(output_dir='/var/lib/proton/user_files/test_trainer', eval_strategy="epoch")
+      metric = evaluate.load('/var/lib/proton/user_files/accuracy')
+
+      def tokenize_function(examples):
+          return tokenizer(examples["text"], padding="max_length", truncation=True)
+
+      def compute_metrics(eval_pred):
+          logits, labels = eval_pred
+          predictions = np.argmax(logits, axis=-1)
+          return metric.compute(predictions=predictions, references=labels)
+
+      def test_prechained(label, text):
+          data = [{'label': l, 'text': t} for l, t in zip(label, text)]
+          train_dataset = Dataset.from_list(data)
+          test_dataset = Dataset.from_list(data)
+          dataset = DatasetDict({
+              "train": train_dataset,
+              "test": test_dataset
+          })
+          tokenized_datasets = dataset.map(tokenize_function, batched=True)
+
+          trainer = Trainer(
+              model=model,
+              args=training_args,
+              train_dataset=train_dataset,
+              eval_dataset=test_dataset,
+              compute_metrics=compute_metrics,
+          )
+          trainer.train()
+          return text
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf16-3-1
+    type: stream
+    query: select test_prechained(text) as res, text from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: text
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(text) values
+      (4, 'But what about second breakfast?')
+      (1, 'Do not think he knows about second breakfast, Pip.')
+      (3, 'What about elevensies?')
+      (3, 'Great food and service!')
+      (0, 'Terrible experience, would not recommend.');
+
+  - type: check
+    target_name: python-udf16-3-1
+    expected_result:
+      - ['[CLS] but what about second breakfast? [SEP] [PAD] [PAD] [PAD] [PAD] [PAD]', 'But what about second breakfast?']
+      - ['[CLS] do not think he knows about second breakfast, pip. [SEP]', 'Do not think he knows about second breakfast, Pip.']
+      - ['[CLS] what about elevensies? [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]', 'What about elevensies?']

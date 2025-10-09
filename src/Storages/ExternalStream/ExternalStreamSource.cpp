@@ -2,15 +2,14 @@
 
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
-#include <Common/ProtonCommon.h>
 
 namespace DB
 {
 
 ExternalStreamSource::ExternalStreamSource(
-    const Block & header_, const StorageSnapshotPtr & storage_snapshot_, size_t max_block_size_, ContextPtr query_context_)
+    const Block & header_, StorageSnapshotPtr storage_snapshot_, size_t max_block_size_, ContextPtr query_context_)
     : header(header_)
-    , storage_snapshot(storage_snapshot_)
+    , storage_snapshot(std::move(storage_snapshot_))
     , header_chunk(Chunk(header_.getColumns(), 0))
     , max_block_size(max_block_size_)
     , read_buffer("", 0)
@@ -24,12 +23,12 @@ void ExternalStreamSource::getPhysicalHeader()
     for (const auto & col : header)
     {
         /// The _tp_message_key column always maps to the message key.
-        if (col.name == ProtonConsts::RESERVED_MESSAGE_KEY)
+        /// The _tp_time column always maps to the message timestamp.
+        /// The _tp_message_headers column always maps to the message properties.
+        if (col.name == ProtonConsts::RESERVED_MESSAGE_KEY || col.name == ProtonConsts::RESERVED_EVENT_TIME || col.name == ProtonConsts::RESERVED_MESSAGE_HEADERS)
             continue;
 
-        if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&col](auto & non_virtual_column) {
-                return non_virtual_column.name == col.name;
-            }))
+        if (std::ranges::any_of(non_virtual_header, [&col](auto & non_virtual_column) { return non_virtual_column.name == col.name; }))
             physical_header.insert(col);
     }
 
@@ -69,6 +68,12 @@ void ExternalStreamSource::initInputFormatExecutor(const String & data_format, c
     {
         auto column_mapping = input->getColumnMapping();
         auto schema = storage_snapshot->metadata->getSampleBlock();
+        if (auto pos = schema.tryGetPositionByName(ProtonConsts::RESERVED_EVENT_TIME); pos)
+            schema.erase(*pos);
+        if (auto pos = schema.tryGetPositionByName(ProtonConsts::RESERVED_MESSAGE_KEY); pos)
+            schema.erase(*pos);
+        if (auto pos = schema.tryGetPositionByName(ProtonConsts::RESERVED_MESSAGE_HEADERS); pos)
+            schema.erase(*pos);
 
         column_mapping->is_set = true;
         column_mapping->column_indexes_for_input_fields.resize(schema.columns());
@@ -77,7 +82,7 @@ void ExternalStreamSource::initInputFormatExecutor(const String & data_format, c
         for (size_t i = 0; const auto & name : column_mapping->names_of_columns)
         {
             if (auto pos = physical_header.tryGetPositionByName(name))
-                column_mapping->column_indexes_for_input_fields[i] = *pos;
+                column_mapping->column_indexes_for_input_fields[i] = pos;
 
             ++i;
         }

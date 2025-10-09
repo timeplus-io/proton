@@ -37,7 +37,7 @@ ZlibDeflatingWriteBuffer::ZlibDeflatingWriteBuffer(
     int rc = deflateInit2(&zstr, compression_level, Z_DEFLATED, window_bits, 8, Z_DEFAULT_STRATEGY);
 
     if (rc != Z_OK)
-        throw Exception(std::string("deflateInit2 failed: ") + zError(rc) + "; zlib version: " + ZLIB_VERSION, ErrorCodes::ZLIB_DEFLATE_FAILED);
+        throw Exception(ErrorCodes::ZLIB_DEFLATE_FAILED, "deflateInit2 failed: {}; zlib version: {}", zError(rc), ZLIB_VERSION);
 }
 
 void ZlibDeflatingWriteBuffer::nextImpl()
@@ -60,7 +60,7 @@ void ZlibDeflatingWriteBuffer::nextImpl()
             out->position() = out->buffer().end() - zstr.avail_out;
 
             if (rc != Z_OK)
-                throw Exception(std::string("deflate failed: ") + zError(rc), ErrorCodes::ZLIB_DEFLATE_FAILED);
+                throw Exception(ErrorCodes::ZLIB_DEFLATE_FAILED, "deflate failed: {}", zError(rc));
         }
         while (zstr.avail_in > 0 || zstr.avail_out == 0);
     }
@@ -72,17 +72,7 @@ void ZlibDeflatingWriteBuffer::nextImpl()
     }
 }
 
-ZlibDeflatingWriteBuffer::~ZlibDeflatingWriteBuffer()
-{
-    try
-    {
-        finalize();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
-}
+ZlibDeflatingWriteBuffer::~ZlibDeflatingWriteBuffer() = default;
 
 void ZlibDeflatingWriteBuffer::finalizeBefore()
 {
@@ -99,7 +89,7 @@ void ZlibDeflatingWriteBuffer::finalizeBefore()
         out->position() = out->buffer().end() - zstr.avail_out;
 
         if (rc != Z_OK)
-            throw Exception(std::string("deflate failed: ") + zError(rc), ErrorCodes::ZLIB_DEFLATE_FAILED);
+            throw Exception(ErrorCodes::ZLIB_DEFLATE_FAILED, "deflate failed: {}", zError(rc));
     }
     while (zstr.avail_out == 0);
 
@@ -118,7 +108,7 @@ void ZlibDeflatingWriteBuffer::finalizeBefore()
         }
 
         if (rc != Z_OK)
-            throw Exception(std::string("deflate finalizeImpl() failed: ") + zError(rc), ErrorCodes::ZLIB_DEFLATE_FAILED);
+            throw Exception(ErrorCodes::ZLIB_DEFLATE_FAILED, "deflate finalizeImpl() failed: {}", zError(rc));
     }
 }
 
@@ -128,7 +118,7 @@ void ZlibDeflatingWriteBuffer::finalizeAfter()
     {
         int rc = deflateEnd(&zstr);
         if (rc != Z_OK)
-            throw Exception(std::string("deflateEnd failed: ") + zError(rc), ErrorCodes::ZLIB_DEFLATE_FAILED);
+            throw Exception(ErrorCodes::ZLIB_DEFLATE_FAILED, "deflateEnd failed: {}", zError(rc));
     }
     catch (...)
     {

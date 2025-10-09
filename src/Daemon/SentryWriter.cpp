@@ -12,11 +12,11 @@
 #include <Common/SymbolIndex.h>
 #include <Common/StackTrace.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
-#include <Core/ServerUUID.h>
+#include <Core/ServerMeta.h>
 #include <Common/hex.h>
 
 #include "config.h"
-#include "config_version.h"
+#include <Common/config_version.h>
 
 #if USE_SENTRY
 
@@ -38,7 +38,7 @@ void setExtras()
     if (!anonymize)
         sentry_set_extra("server_name", sentry_value_new_string(getFQDNOrHostName().c_str()));
 
-    DB::UUID server_uuid = DB::ServerUUID::get();
+    const auto & server_uuid = DB::ServerMeta::getIdentity();
     if (server_uuid != DB::UUIDHelpers::Nil)
     {
         std::string server_uuid_str = DB::toString(server_uuid);
@@ -70,7 +70,7 @@ void SentryWriter::initialize(Poco::Util::LayeredConfiguration & config)
 {
     bool enabled = false;
     bool debug = config.getBool("send_crash_reports.debug", false);
-    auto * logger = &Poco::Logger::get("SentryWriter");
+    auto logger = getLogger("SentryWriter");
 
     if (config.getBool("send_crash_reports.enabled", false))
     {
@@ -142,7 +142,7 @@ void SentryWriter::shutdown()
 
 void SentryWriter::onFault(int sig, const std::string & error_message, const StackTrace & stack_trace)
 {
-    auto * logger = &Poco::Logger::get("SentryWriter");
+    auto logger = getLogger("SentryWriter");
     if (initialized)
     {
         sentry_value_t event = sentry_value_new_message_event(SENTRY_LEVEL_FATAL, "fault", error_message.c_str());

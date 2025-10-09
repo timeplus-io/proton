@@ -1,0 +1,110 @@
+tags:
+  - tail
+description: recover from an unsubscribed query shall fail
+cluster:
+  - p1k1
+#  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream(i int, s string)
+
+  - type: wait
+    time: 1
+
+  - name: '1902'
+    query_id: '1902'
+    type: stream
+    query: subscribe to select i, s from test19_state_stream settings seek_to='earliest',
+      checkpoint_interval=1
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (1, 's1')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (2, 's2')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1902'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (3, 's3')
+
+  - type: wait
+    time: 1
+
+  - name: 1902-1
+    query_id: 1902-1
+    type: stream
+    query: recover from '1902'
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='1902' sync
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: unsubscribe to '1902'
+
+  - type: wait
+    time: 2
+
+  - name: 1902-2
+    query_id: 1902-2
+    type: stream
+    query: recover from '1902'
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: '1902'
+    expected_result:
+      - [ 1, s1 ]
+      - [ 2, s2 ]
+
+  - type: check
+    target_name: 1902-1
+    expected_result:
+      - [ 3, s3 ]
+
+  - type: check
+    target_name: 1902-2
+    expected_result:
+      - [ error_code:674 ]

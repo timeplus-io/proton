@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.product function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getProduct(x int, y int) RETURNS array(array(int)) LANGUAGE PYTHON AS $$
+      import pickle
+      import itertools
+
+      class getProduct:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.product = 0
+
+          def serialize(self):
+              data = {}
+              data['product'] = self.product
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.product = data['product']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              temp_product = []
+              res = itertools.product(xs, ys)
+              for item in res:
+                  temp_product.append(list(item))
+              self.product = temp_product
+
+          def finalize(self):
+              return self.product
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-23-1
+    type: stream
+    query: select getProduct(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(int32))
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (1,3)(2,4);
+
+  - type: check
+    target_name: python-udf1-23-1
+    expected_result:
+      - [[[1,3], [1,4], [2,3], [2,4]]]

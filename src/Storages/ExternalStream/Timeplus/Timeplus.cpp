@@ -1,7 +1,3 @@
-#include <Storages/ExternalStream/Timeplus/Timeplus.h>
-
-#include "config_version.h"
-
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -10,9 +6,10 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/Distributed/DistributedSettings.h>
+#include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/getStreamShardsOfRemoteStream.h>
-#include <Poco/Util/AbstractConfiguration.h>
+#include <Common/config_version.h>
 #include <Common/parseRemoteDescription.h>
 
 namespace DB
@@ -49,7 +46,7 @@ void createDirIfNotExists(const String & dirname)
             err.message());
 }
 
-void tryRemoveDir(const fs::path & dirname, Poco::Logger * logger)
+void tryRemoveDir(const fs::path & dirname, LoggerPtr logger)
 {
     LOG_INFO(logger, "Trying to remove remote stream metadata directory {}", dirname.string());
     std::error_code err;
@@ -85,18 +82,18 @@ namespace ExternalStream
 {
 
 Timeplus::Timeplus(
-    IStorage * storage,
-    StorageInMemoryMetadata & storage_metadata,
+    StorageID storage_id,
+    StorageInMemoryMetadata storage_metadata,
     std::unique_ptr<ExternalStreamSettings> settings_,
     bool attach,
     ContextPtr context)
-    : StorageProxy(storage->getStorageID())
+    : StorageProxy(storage_id)
     , remote_stream_id(getRemoteStreamStorageID(*settings_))
     , cache_dir(
           fs::path(context->getConfigRef().getString("path", DBMS_DEFAULT_PATH)) / "cache" / "external_streams"
           / toString(getStorageID().uuid))
     , secure(settings_->secure)
-    , logger(&Poco::Logger::get(getName()))
+    , logger(getLogger(getName()))
 {
     createDirIfNotExists(cache_dir);
 
@@ -107,18 +104,24 @@ Timeplus::Timeplus(
     auto default_port = secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT;
     auto addresses = parseRemoteDescriptionForExternalDatabase(hosts, /*max_addresses=*/10, /*default_port=*/default_port);
 
-    std::vector<std::vector<String>> names;
-    names.reserve(addresses.size());
+    std::vector<std::vector<std::pair<String, cluster::NodeID>>> remote_addrs;
+    remote_addrs.reserve(addresses.size());
     for (const auto & addr : addresses)
-        names.push_back({fmt::format("{}:{}", addr.first, addr.second)});
+    {
+        remote_addrs.emplace_back();
+        remote_addrs.back().emplace_back(fmt::format("{}:{}", addr.first, addr.second), cluster::Nulls::NullNodeID);
+    }
 
     auto user = settings_->user.value;
     Cluster init_cluster
         = {context->getSettings(),
-           names,
+           remote_addrs,
            /*username=*/user.empty() ? "default" : user,
            /*password=*/settings_->password.value,
-           context->getTCPPort(),
+           /*cluster_id=*/"",
+           /*cluster_secret=*/"",
+           context->getNodeID(),
+           static_cast<UInt16>(default_port),
            /*treat_local_as_remote=*/true, /// always treat the connection as remote to avoid confusion
            /*treat_local_port_as_remote*/ true,
            secure};
@@ -202,22 +205,26 @@ Timeplus::Timeplus(
     }
 
     storage_metadata.setColumns(columns);
+    setInMemoryMetadata(storage_metadata);
 
     for (UInt32 i = 1; i < remote_stream_shards; ++i)
-        names.push_back(names.front());
+        remote_addrs.push_back(remote_addrs.front());
 
     auto cluster = std::make_shared<Cluster>(
         context->getSettings(),
-        names,
+        remote_addrs,
         /*username=*/user.empty() ? "default" : user,
         /*password=*/settings_->password.value,
+        /*cluster_id=*/"",
+        /*cluster_secret=*/"",
+        context->getNodeID(),
         static_cast<UInt16>(default_port),
         /*treat_local_as_remote=*/true, /// always treat the connection as remote to avoid confusion
         /*treat_local_port_as_remote*/ true,
         secure);
 
     storage_ptr = StorageDistributed::create(
-        storage->getStorageID(),
+        std::move(storage_id),
         columns,
         ConstraintsDescription{},
         /*comment=*/String{},
@@ -251,7 +258,7 @@ void Timeplus::read(
 {
     auto new_context = Context::createCopy(context_);
     /// client_name is required (and it MUST start with VERSION_NAME) to enable internal channel on the remote server to set the SN on blocks.
-    /// When timeplusd restarts, and a stream is used in a MV, when the MV recovers, client_name will be empty.
+    /// When proton restarts, and a stream is used in a MV, when the MV recovers, client_name will be empty.
     if (new_context->getClientInfo().client_name.empty())
         new_context->getClientInfo().client_name = VERSION_NAME;
 

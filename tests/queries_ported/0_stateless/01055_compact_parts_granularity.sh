@@ -10,7 +10,7 @@ $CLICKHOUSE_CLIENT -q "DROP STREAM IF EXISTS mt_compact"
 
 $CLICKHOUSE_CLIENT -q "CREATE STREAM mt_compact(a int, s string) ENGINE = MergeTree ORDER BY a
                         SETTINGS min_rows_for_wide_part = 1000,
-                        index_granularity = 14;"
+                        index_granularity = 14, ratio_of_defaults_for_sparse_serialization = 1;"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM STOP MERGES mt_compact"
 
@@ -22,7 +22,7 @@ $CLICKHOUSE_CLIENT -q "SYSTEM START MERGES mt_compact"
 
 # Retry because already started concurrent merges may interrupt optimize
 for _ in {0..10}; do
-    $CLICKHOUSE_CLIENT -q "OPTIMIZE TABLE mt_compact FINAL SETTINGS optimize_throw_if_noop=1" 2>/dev/null
+    $CLICKHOUSE_CLIENT -q "OPTIMIZE STREAM mt_compact FINAL SETTINGS optimize_throw_if_noop=1" 2>/dev/null
     if [ $? -eq 0 ]; then
         break
     fi

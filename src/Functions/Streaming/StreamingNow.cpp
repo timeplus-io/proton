@@ -30,16 +30,16 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         /// NOTE: The `FilterTransform` will try optimizing filter ConstColumn to always_false or always_true,
-        /// for exmaple: `now() < '2020-1-1 00:00:01'`, it will be optimized always_true or always_false.
+        /// for example: `now() < '2020-1-1 00:00:01'`, it will be optimized always_true or always_false.
         /// So we can not create a constant column, since the column data isn't constants value in fact.
         return result_type->createColumnConst(input_rows_count, static_cast<UInt64>(time(nullptr)))->convertToFullColumnIfConst();
     }
 };
 
-class FunctionBaseNow : public IFunctionBase
+class FunctionBaseNow final : public IFunctionBase
 {
 public:
-    explicit FunctionBaseNow(DataTypes argument_types_, DataTypePtr return_type_)
+    FunctionBaseNow(DataTypes argument_types_, DataTypePtr return_type_)
         : argument_types(std::move(argument_types_)), return_type(std::move(return_type_)) {}
 
     String getName() const override { return "now"; }
@@ -87,12 +87,12 @@ public:
     {
         if (arguments.size() > 1)
         {
-            throw Exception("Arguments size of function " + getName() + " should be 0 or 1", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Arguments size of function {} should be 0 or 1", getName());
         }
         if (arguments.size() == 1 && !isStringOrFixedString(arguments[0].type))
         {
             throw Exception(
-                "Arguments of function " + getName() + " should be string or fixed_string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Arguments of function {} should be string or fixed_string", getName());
         }
         if (arguments.size() == 1)
         {
@@ -105,12 +105,11 @@ public:
     {
         if (arguments.size() > 1)
         {
-            throw Exception("Arguments size of function " + getName() + " should be 0 or 1", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Arguments size of function {} should be 0 or 1", getName());
         }
         if (arguments.size() == 1 && !isStringOrFixedString(arguments[0].type))
         {
-            throw Exception(
-                "Arguments of function " + getName() + " should be string or fixed_string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Arguments of function {} should be string or fixed_string", getName());
         }
         if (arguments.size() == 1)
             return std::make_unique<FunctionBaseNow>(

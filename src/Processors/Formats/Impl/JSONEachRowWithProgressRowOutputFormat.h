@@ -13,9 +13,9 @@ public:
     JSONEachRowWithProgressRowOutputFormat(
         WriteBuffer & out_,
         const Block & header_,
-        const RowOutputFormatParams & params_,
-        const FormatSettings & settings_)
-        : JSONEachRowRowOutputFormat(out_, header_, params_, settings_, ProcessorID::JSONEachRowWithProgressRowOutputFormatID)
+        const FormatSettings & settings_,
+        bool pretty_json_ = false)
+        : JSONEachRowRowOutputFormat(out_, header_, settings_, pretty_json_, ProcessorID::JSONEachRowWithProgressRowOutputFormatID)
     {
     }
 

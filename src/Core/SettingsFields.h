@@ -43,7 +43,7 @@ struct SettingFieldNumber
     SettingFieldNumber & operator=(Type x) { value = x; changed = true; return *this; }
     SettingFieldNumber & operator=(const Field & f);
 
-    operator Type() const { return value; }
+    operator Type() const { return value; } /// NOLINT
     explicit operator Field() const { return value; }
 
     String toString() const;
@@ -55,7 +55,10 @@ struct SettingFieldNumber
 
 using SettingFieldUInt64 = SettingFieldNumber<UInt64>;
 using SettingFieldInt64 = SettingFieldNumber<Int64>;
+using SettingFieldUInt32 = SettingFieldNumber<UInt32>;
+using SettingFieldInt32 = SettingFieldNumber<Int32>;
 using SettingFieldFloat = SettingFieldNumber<float>;
+using SettingFieldDouble = SettingFieldNumber<double>;
 using SettingFieldBool = SettingFieldNumber<bool>;
 
 
@@ -75,7 +78,7 @@ struct SettingFieldMaxThreads
     SettingFieldMaxThreads & operator=(UInt64 x) { is_auto = !x; value = is_auto ? getAuto() : x; changed = true; return *this; }
     SettingFieldMaxThreads & operator=(const Field & f);
 
-    operator UInt64() const { return value; }
+    operator UInt64() const { return value; } /// NOLINT
     explicit operator Field() const { return value; }
 
     /// Writes "auto(<number>)" instead of simple "<number>" if `is_auto==true`.
@@ -118,10 +121,10 @@ struct SettingFieldTimespan
     SettingFieldTimespan & operator =(UInt64 x) { *this = Poco::Timespan{static_cast<Poco::Timespan::TimeDiff>(x * microseconds_per_unit)}; return *this; }
     SettingFieldTimespan & operator =(const Field & f);
 
-    operator Poco::Timespan() const { return value; }
+    operator Poco::Timespan() const { return value; } /// NOLINT
 
     template <class Rep, class Period = std::ratio<1>>
-    operator std::chrono::duration<Rep, Period>() const { return std::chrono::duration_cast<std::chrono::duration<Rep, Period>>(std::chrono::microseconds(value.totalMicroseconds())); }
+    operator std::chrono::duration<Rep, Period>() const { return std::chrono::duration_cast<std::chrono::duration<Rep, Period>>(std::chrono::microseconds(value.totalMicroseconds())); } /// NOLINT
 
     explicit operator UInt64() const { return value.totalMicroseconds() / microseconds_per_unit; }
     explicit operator Field() const { return operator UInt64(); }
@@ -158,11 +161,34 @@ struct SettingFieldString
     SettingFieldString & operator =(const char * str) { *this = std::string_view{str}; return *this; }
     SettingFieldString & operator =(const Field & f) { *this = f.safeGet<const String &>(); return *this; }
 
-    operator const String &() const { return value; }
+    operator const String &() const { return value; } /// NOLINT
     explicit operator Field() const { return value; }
 
     const String & toString() const { return value; }
     void parseFromString(const String & str) { *this = str; }
+
+    void writeBinary(WriteBuffer & out) const;
+    void readBinary(ReadBuffer & in);
+};
+
+struct SettingFieldMap
+{
+public:
+    Map value;
+    bool changed = false;
+
+    explicit SettingFieldMap(const Map & map = {}) : value(map) {}
+    explicit SettingFieldMap(Map && map) : value(std::move(map)) {}
+    explicit SettingFieldMap(const Field & f);
+
+    SettingFieldMap & operator =(const Map & map) { value = map; changed = true; return *this; }
+    SettingFieldMap & operator =(const Field & f);
+
+    operator const Map &() const { return value; } /// NOLINT
+    explicit operator Field() const { return value; }
+
+    String toString() const;
+    void parseFromString(const String & str);
 
     void writeBinary(WriteBuffer & out) const;
     void readBinary(ReadBuffer & in);
@@ -301,9 +327,8 @@ void SettingFieldEnum<EnumT, Traits>::readBinary(ReadBuffer & in)
         auto it = map.find(value); \
         if (it != map.end()) \
             return it->second; \
-        throw Exception( \
-            "Unexpected value of " #NEW_NAME ":" + std::to_string(std::underlying_type<EnumType>::type(value)), \
-            ERROR_CODE_FOR_UNEXPECTED_NAME); \
+        throw Exception(ERROR_CODE_FOR_UNEXPECTED_NAME, \
+            "Unexpected value of " #NEW_NAME ":{}", std::to_string(std::underlying_type<EnumType>::type(value))); \
     } \
     \
     typename SettingField##NEW_NAME::EnumType SettingField##NEW_NAME##Traits::fromString(std::string_view str) \
@@ -318,7 +343,7 @@ void SettingFieldEnum<EnumT, Traits>::readBinary(ReadBuffer & in)
         auto it = map.find(str); \
         if (it != map.end()) \
             return it->second; \
-        String msg = "Unexpected value of " #NEW_NAME ": '" + String{str} + "'. Must be one of ["; \
+        String msg; \
         bool need_comma = false; \
         for (auto & name : map | boost::adaptors::map_keys) \
         { \
@@ -326,8 +351,7 @@ void SettingFieldEnum<EnumT, Traits>::readBinary(ReadBuffer & in)
                 msg += ", "; \
             msg += "'" + String{name} + "'"; \
         } \
-        msg += "]"; \
-        throw Exception(msg, ERROR_CODE_FOR_UNEXPECTED_NAME); \
+        throw Exception(ERROR_CODE_FOR_UNEXPECTED_NAME, "Unexpected value of " #NEW_NAME ": '{}'. Must be one of [{}]", String{str}, msg); \
     }
 
 // Mostly like SettingFieldEnum, but can have multiple enum values (or none) set at once.
@@ -427,7 +451,8 @@ void SettingFieldMultiEnum<EnumT, Traits>::readBinary(ReadBuffer & in)
         static EnumType fromString(std::string_view str); \
     }; \
     \
-    using SettingField##NEW_NAME = SettingFieldMultiEnum<ENUM_TYPE, SettingField##NEW_NAME##Traits>;
+    using SettingField##NEW_NAME = SettingFieldMultiEnum<ENUM_TYPE, SettingField##NEW_NAME##Traits>; \
+    using NEW_NAME##List = typename SettingField##NEW_NAME::ValueType;
 
 #define IMPLEMENT_SETTING_MULTI_ENUM(ENUM_TYPE, ERROR_CODE_FOR_UNEXPECTED_NAME, ...) \
     IMPLEMENT_SETTING_MULTI_ENUM_WITH_RENAME(ENUM_TYPE, ERROR_CODE_FOR_UNEXPECTED_NAME, __VA_ARGS__)

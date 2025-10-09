@@ -17,6 +17,7 @@ import urllib.parse
 import shlex
 import urllib3
 import requests
+import pyspark
 
 try:
     # Please, add modules that required for specific tests only here.
@@ -35,6 +36,7 @@ try:
     from confluent_kafka.avro.cached_schema_registry_client import (
         CachedSchemaRegistryClient,
     )
+    from .hdfs_api import HDFSApi  # imports requests_kerberos
 except Exception as e:
     logging.warning(f"Cannot import some modules, some tests may not work: {e}")
 
@@ -50,7 +52,6 @@ from helpers.client import QueryRuntimeException
 import docker
 
 from .client import Client
-from .hdfs_api import HDFSApi
 
 from .config_cluster import *
 
@@ -308,6 +309,7 @@ class ClickHouseCluster:
         custom_dockerd_host=None,
         zookeeper_keyfile=None,
         zookeeper_certfile=None,
+        with_spark=False,
     ):
         for param in list(os.environ.keys()):
             logging.debug("ENV %40s %s" % (param, os.environ[param]))
@@ -353,6 +355,7 @@ class ClickHouseCluster:
         self.env_variables["TSAN_OPTIONS"] = "second_deadlock_stack=1"
         self.env_variables["CLICKHOUSE_WATCHDOG_ENABLE"] = "0"
         self.env_variables["CLICKHOUSE_NATS_TLS_SECURE"] = "0"
+        self.env_variables["SPARK_PATH"] = os.environ.get("SPARK_HOME")
         self.up_called = False
 
         custom_dockerd_host = custom_dockerd_host or os.environ.get(
@@ -416,6 +419,8 @@ class ClickHouseCluster:
         self.minio_redirect_host = "proxy1"
         self.minio_redirect_ip = None
         self.minio_redirect_port = 8080
+
+        self.spark_session = None
 
         self.with_azurite = False
 
@@ -574,6 +579,19 @@ class ClickHouseCluster:
             shutil.rmtree(self.instances_dir, ignore_errors=True)
             logging.debug(f"Removed :{self.instances_dir}")
         os.mkdir(self.instances_dir)
+
+        if with_spark:
+            # if you change packages, don't forget to update them in docker/test/integration/runner/dockerd-entrypoint.sh
+            (
+                pyspark.sql.SparkSession.builder.appName("spark_test")
+                .config(
+                    "spark.jars.packages",
+                    "org.apache.hudi:hudi-spark3.3-bundle_2.12:0.13.0,io.delta:delta-core_2.12:2.2.0,org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.1.0",
+                )
+                .master("local")
+                .getOrCreate()
+                .stop()
+            )
 
     def print_all_docker_pieces(self):
         res_networks = subprocess.check_output(
@@ -3121,6 +3139,7 @@ class ClickHouseInstance:
         user=None,
         password=None,
         database=None,
+        query_id=None,
     ):
         logging.debug(f"Executing query {sql} on {self.name}")
         return self.client.query_and_get_error(
@@ -3131,6 +3150,7 @@ class ClickHouseInstance:
             user=user,
             password=password,
             database=database,
+            query_id=query_id,
         )
 
     # The same as query_and_get_error but ignores successful query.
@@ -3216,6 +3236,24 @@ class ClickHouseInstance:
             )
 
         return error
+
+    def append_hosts(self, name, ip):
+        self.exec_in_container(
+            (["bash", "-c", "echo '{}' {} >> /etc/hosts".format(ip, name)]),
+            privileged=True,
+            user="root",
+        )
+
+    def set_hosts(self, hosts):
+        entries = ["127.0.0.1 localhost", "::1 localhost"]
+        for host in hosts:
+            entries.append(f"{host[0]} {host[1]}")
+
+        self.exec_in_container(
+            ["bash", "-c", 'echo -e "{}" > /etc/hosts'.format("\\n".join(entries))],
+            privileged=True,
+            user="root",
+        )
 
     # Connects to the instance via HTTP interface, sends a query and returns both the answer and the error message
     # as a tuple (output, error).
@@ -4162,6 +4200,17 @@ class ClickHouseInstance:
             if path:
                 objects = objects + self.get_s3_data_objects(path)
         return objects
+
+    def create_format_schema(self, file_name, content):
+        self.exec_in_container(
+            [
+                "bash",
+                "-c",
+                "echo '{}' > {}".format(
+                    content, "/var/lib/clickhouse/format_schemas/" + file_name
+                ),
+            ]
+        )
 
 
 class ClickHouseKiller(object):

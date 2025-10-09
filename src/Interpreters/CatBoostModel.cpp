@@ -92,13 +92,11 @@ public:
         handle = std::make_unique<CatBoostModelHolder>(api);
         if (!handle)
         {
-            std::string msg = "Cannot create CatBoost model: ";
-            throw Exception(msg + api->GetErrorString(), ErrorCodes::CANNOT_LOAD_CATBOOST_MODEL);
+            throw Exception(ErrorCodes::CANNOT_LOAD_CATBOOST_MODEL, "Cannot create CatBoost model: {}", api->GetErrorString());
         }
         if (!api->LoadFullModelFromFile(handle->get(), model_path.c_str()))
         {
-            std::string msg = "Cannot load CatBoost model: ";
-            throw Exception(msg + api->GetErrorString(), ErrorCodes::CANNOT_LOAD_CATBOOST_MODEL);
+            throw Exception(ErrorCodes::CANNOT_LOAD_CATBOOST_MODEL,  "Cannot load CatBoost model: {}", api->GetErrorString());
         }
 
         float_features_count = api->GetFloatFeaturesCount(handle->get());
@@ -111,7 +109,7 @@ public:
     ColumnPtr evaluate(const ColumnRawPtrs & columns) const override
     {
         if (columns.empty())
-            throw Exception("Got empty columns list for CatBoost model.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Got empty columns list for CatBoost model.");
 
         if (columns.size() != float_features_count + cat_features_count)
         {
@@ -121,7 +119,7 @@ public:
                 buffer << "Number of columns is different with number of features: ";
                 buffer << columns.size() << " vs " << float_features_count << " + " << cat_features_count;
             }
-            throw Exception(msg, ErrorCodes::BAD_ARGUMENTS);
+            throw Exception::createDeprecated(msg, ErrorCodes::BAD_ARGUMENTS);
         }
 
         for (size_t i = 0; i < float_features_count; ++i)
@@ -133,7 +131,7 @@ public:
                     WriteBufferFromString buffer(msg);
                     buffer << "Column " << i << " should be numeric to make float feature.";
                 }
-                throw Exception(msg, ErrorCodes::BAD_ARGUMENTS);
+                throw Exception::createDeprecated(msg, ErrorCodes::BAD_ARGUMENTS);
             }
         }
 
@@ -151,7 +149,7 @@ public:
                     WriteBufferFromString buffer(msg);
                     buffer << "Column " << i << " should be numeric or string.";
                 }
-                throw Exception(msg, ErrorCodes::BAD_ARGUMENTS);
+                throw Exception::createDeprecated(msg, ErrorCodes::BAD_ARGUMENTS);
             }
         }
 
@@ -295,7 +293,7 @@ private:
             else if (const auto * column_fixed_string = typeid_cast<const ColumnFixedString *>(column))
                 data.push_back(placeFixedStringColumn(*column_fixed_string, buffer + i, size));
             else
-                throw Exception("Cannot place string column.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot place string column.");
         }
 
         return data;
@@ -388,7 +386,7 @@ private:
                                               result_buf, column_size * tree_count))
             {
 
-                throw Exception(error_msg + api->GetErrorString(), ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL);
+                throw Exception(ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL, "{}{}", error_msg, api->GetErrorString());
             }
             return result;
         }
@@ -411,7 +409,7 @@ private:
                                           cat_features_buf, cat_features_count,
                                           result_buf, column_size * tree_count))
             {
-                throw Exception(error_msg + api->GetErrorString(), ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL);
+                throw Exception(ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL, "{}{}", error_msg, api->GetErrorString());
             }
         }
         else
@@ -427,7 +425,7 @@ private:
                     cat_features_buf, cat_features_count,
                     result_buf, column_size * tree_count))
             {
-                throw Exception(error_msg + api->GetErrorString(), ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL);
+                throw Exception(ErrorCodes::CANNOT_APPLY_CATBOOST_MODEL, "{}{}", error_msg, api->GetErrorString());
             }
         }
 
@@ -517,7 +515,7 @@ bool CatBoostModel::isModified() const
     return true;
 }
 
-std::shared_ptr<const IExternalLoadable> CatBoostModel::clone() const
+std::shared_ptr<IExternalLoadable> CatBoostModel::clone() const
 {
     return std::make_shared<CatBoostModel>(name, model_path, lib_path, lifetime);
 }
@@ -551,7 +549,7 @@ DataTypePtr CatBoostModel::getReturnType() const
 ColumnPtr CatBoostModel::evaluate(const ColumnRawPtrs & columns) const
 {
     if (!model)
-        throw Exception("CatBoost model was not loaded.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "CatBoost model was not loaded.");
     return model->evaluate(columns);
 }
 

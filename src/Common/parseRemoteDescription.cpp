@@ -27,8 +27,7 @@ static void append(std::vector<String> & to, const std::vector<String> & what, s
 
     if (what.size() * to.size() > max_addresses)
         /// proton: starts
-        throw Exception("Function 'remote': first argument generates too many result addresses",
-                        ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': first argument generates too many result addresses");
         /// proton: ends
     std::vector<String> res;
     for (const auto & elem_to : to)
@@ -100,42 +99,30 @@ std::vector<String> parseRemoteDescription(const String & description, size_t l,
                 if (cnt == 0) break;
             }
             if (cnt != 0)
-                /// proton: starts
-                throw Exception("Function 'remote': incorrect brace sequence in first argument",
-                                ErrorCodes::BAD_ARGUMENTS);
-                /// proton: ends
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': incorrect brace sequence in first argument");
             /// The presence of a dot - numeric interval
             if (last_dot != -1)
             {
                 size_t left, right;
+                /// proton: starts
                 if (description[last_dot - 1] != '.')
-                    /// proton: starts
-                    throw Exception("Function 'remote': incorrect argument in braces (only one dot): " + description.substr(i, m - i + 1),
-                                    ErrorCodes::BAD_ARGUMENTS);
-                    /// proton: ends
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': incorrect argument in braces (only one dot): {}",
+                                    description.substr(i, m - i + 1));
                 if (!parseNumber(description, i + 1, last_dot - 1, left))
-                    /// proton: starts
-                    throw Exception("Function 'remote': incorrect argument in braces (Incorrect left number): "
-                                    + description.substr(i, m - i + 1),
-                                    ErrorCodes::BAD_ARGUMENTS);
-                    /// proton: ends
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': "
+                                    "incorrect argument in braces (Incorrect left number): {}",
+                                    description.substr(i, m - i + 1));
                 if (!parseNumber(description, last_dot + 1, m, right))
-                    /// proton: starts
-                    throw Exception("Function 'remote': incorrect argument in braces (Incorrect right number): "
-                                    + description.substr(i, m - i + 1),
-                                    ErrorCodes::BAD_ARGUMENTS);
-                    /// proton: ends
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': "
+                                    "incorrect argument in braces (Incorrect right number): {}",
+                                    description.substr(i, m - i + 1));
                 if (left > right)
-                    /// proton: starts
-                    throw Exception("Function 'remote': incorrect argument in braces (left number is greater then right): "
-                                    + description.substr(i, m - i + 1),
-                                    ErrorCodes::BAD_ARGUMENTS);
-                    /// proton: ends
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': "
+                                    "incorrect argument in braces (left number is greater then right): {}",
+                                    description.substr(i, m - i + 1));
                 if (right - left + 1 >  max_addresses)
-                    /// proton: starts
-                    throw Exception("Function 'remote': first argument generates too many result addresses",
-                        ErrorCodes::BAD_ARGUMENTS);
-                    /// proton: ends
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': first argument generates too many result addresses");
+                /// proton: ends
                 bool add_leading_zeroes = false;
                 size_t len = last_dot - 1 - (i + 1);
                 /// If the left and right borders have equal numbers, then you must add leading zeros.
@@ -179,8 +166,7 @@ std::vector<String> parseRemoteDescription(const String & description, size_t l,
     res.insert(res.end(), cur.begin(), cur.end());
     if (res.size() > max_addresses)
         /// proton: starts
-        throw Exception("Function 'remote': first argument generates too many result addresses",
-            ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function 'remote': first argument generates too many result addresses");
         /// proton: ends
 
     return res;
@@ -197,7 +183,7 @@ std::vector<std::pair<String, uint16_t>> parseRemoteDescriptionForExternalDataba
         size_t colon = address.find(':');
         if (colon == String::npos)
         {
-            LOG_WARNING(&Poco::Logger::get("ParseRemoteDescription"), "Port is not found for host: {}. Using default port {}", address, default_port);
+            LOG_WARNING(getLogger("ParseRemoteDescription"), "Port is not found for host: {}. Using default port {}", address, default_port);
             result.emplace_back(std::make_pair(address, default_port));
         }
         else

@@ -1,3 +1,6 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
 drop stream if exists tp_1;
 -- In this test, we are going to create an old part with written projection which does not exist in stream metadata
 create stream tp_1 (x int32, y int32, projection p (select x, y order by x)) engine = MergeTree order by y partition by int_div(y, 100) settings old_parts_lifetime=1;
@@ -14,6 +17,6 @@ alter stream tp_1 drop projection pp;
 -- Now, we don't load projection pp for attached part, but it is written on disk
 alter stream tp_1 attach partition '0';
 -- Make this part obsolete
-optimize table tp_1 final;
+optimize stream tp_1 final;
 -- Now, DROP STREAM triggers part removal
 drop stream tp_1;

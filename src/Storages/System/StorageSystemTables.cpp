@@ -8,6 +8,7 @@
 #include <Databases/IDatabase.h>
 #include <Access/ContextAccess.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/MetadataHelper.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
@@ -18,17 +19,23 @@
 #include <DataTypes/DataTypeArray.h>
 #include <Disks/IStoragePolicy.h>
 #include <Processors/ISource.h>
+#include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/SourceStepWithFilter.h>
 #include <QueryPipeline/Pipe.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
 #include <DataTypes/DataTypeUUID.h>
+
+/// proton: starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/Requests/ListStreamsRequest.h>
+#include <Cluster/Protocol/ListStreamsResponseData.h>
+#include <Storages/MatView/StorageMaterializedView.h>
+/// proton: ends
 
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-    extern const int STREAM_IS_DROPPED;
-}
 
 
 StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
@@ -65,6 +72,13 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
         {"loading_dependencies_table", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"loading_dependent_database", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"loading_dependent_table", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        /// proton : starts
+        {"schema_version", std::make_shared<DataTypeInt32>()},
+        {"read_bytes", std::make_shared<DataTypeUInt64>()},
+        {"read_rows", std::make_shared<DataTypeUInt64>()},
+        {"written_bytes", std::make_shared<DataTypeUInt64>()},
+        {"written_rows", std::make_shared<DataTypeUInt64>()},
+        /// proton : ends
     }, {
         {"table", std::make_shared<DataTypeString>(), "name"}
     }));
@@ -72,7 +86,10 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
 }
 
 
-static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, ContextPtr context)
+namespace
+{
+
+ColumnPtr getFilteredDatabases(const ActionsDAG::Node * predicate, ContextPtr context)
 {
     MutableColumnPtr column = ColumnString::create();
 
@@ -86,13 +103,31 @@ static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, Contex
     }
 
     Block block { ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "database") };
-    VirtualColumnUtils::filterBlockWithQuery(query_info.query, block, context);
+    VirtualColumnUtils::filterBlockWithPredicate(predicate, block, context);
     return block.getByPosition(0).column;
 }
 
-static ColumnPtr getFilteredTables(const ASTPtr & query, const ColumnPtr & filtered_databases_column, ContextPtr context)
+ColumnPtr getFilteredTables(const ActionsDAG::Node * predicate, const ColumnPtr & filtered_databases_column, ContextPtr context)
 {
-    MutableColumnPtr column = ColumnString::create();
+    Block sample {
+        ColumnWithTypeAndName(nullptr, std::make_shared<DataTypeString>(), "name"),
+        ColumnWithTypeAndName(nullptr, std::make_shared<DataTypeString>(), "engine")
+    };
+
+    MutableColumnPtr database_column = ColumnString::create();
+    MutableColumnPtr engine_column;
+
+    auto dag = VirtualColumnUtils::splitFilterDagForAllowedInputs(predicate, &sample);
+    if (dag)
+    {
+        bool filter_by_engine = false;
+        for (const auto * input : dag->getInputs())
+            if (input->result_name == "engine")
+                filter_by_engine = true;
+
+        if (filter_by_engine)
+            engine_column= ColumnString::create();
+    }
 
     for (size_t database_idx = 0; database_idx < filtered_databases_column->size(); ++database_idx)
     {
@@ -102,29 +137,39 @@ static ColumnPtr getFilteredTables(const ASTPtr & query, const ColumnPtr & filte
             continue;
 
         for (auto table_it = database->getTablesIterator(context); table_it->isValid(); table_it->next())
-            column->insert(table_it->name());
+        {
+            database_column->insert(table_it->name());
+            if (engine_column)
+                engine_column->insert(table_it->table()->getName());
+        }
     }
 
-    Block block {ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "name")};
-    VirtualColumnUtils::filterBlockWithQuery(query, block, context);
+    Block block {ColumnWithTypeAndName(std::move(database_column), std::make_shared<DataTypeString>(), "name")};
+    if (engine_column)
+        block.insert(ColumnWithTypeAndName(std::move(engine_column), std::make_shared<DataTypeString>(), "engine"));
+
+    if (dag)
+        VirtualColumnUtils::filterBlockWithDAG(dag, block, context);
+
     return block.getByPosition(0).column;
 }
 
 /// Avoid heavy operation on tables if we only queried columns that we can get without table object.
 /// Otherwise it will require table initialization for Lazy database.
-static bool needLockStructure(const DatabasePtr & database, const Block & header)
+static bool needTable(const DatabasePtr & database, const Block & header)
 {
     if (database->getEngineName() != "Lazy")
         return true;
 
-    static const std::set<std::string> columns_without_lock = { "database", "name", "uuid", "metadata_modification_time" };
+    static const std::set<std::string> columns_without_table = { "database", "name", "uuid", "metadata_modification_time" };
     for (const auto & column : header.getColumnsWithTypeAndName())
     {
-        if (columns_without_lock.find(column.name) == columns_without_lock.end())
+        if (columns_without_table.find(column.name) == columns_without_table.end())
             return true;
     }
     return false;
 }
+
 
 class TablesBlockSource final : public ISource
 {
@@ -146,6 +191,20 @@ public:
         tables.reserve(size);
         for (size_t idx = 0; idx < size; ++idx)
             tables.insert(tables_->getDataAt(idx).toString());
+
+        auto & metastore = Globals::getMetaStore();
+        auto list_stream_resp = metastore.listStreams(std::make_shared<cluster::ListStreamsRequest>(
+            "", "", metastore.nodeID(), /*consistent_read_=*/false, /*timeout_ms=*/10'000, /*request_version=*/2));
+        if (list_stream_resp->hasError())
+        {
+            const auto & err = list_stream_resp->error();
+            throw Exception(err.error_code, "Failed to load all streams error_message={}", err.error_message);
+        }
+
+        stream_descs.reserve(list_stream_resp->data().stream_descs.size());
+        for (const auto & stream_desc : list_stream_resp->data().stream_descs)
+            stream_descs[stream_desc->stream.id] = stream_desc;
+        /// proton: ends.
     }
 
     String getName() const override { return "Tables"; }
@@ -239,7 +298,7 @@ protected:
                         {
                             auto temp_db = DatabaseCatalog::instance().getDatabaseForTemporaryTables();
                             ASTPtr ast = temp_db ? temp_db->tryGetCreateTableQuery(table.second->getStorageID().getTableName(), context) : nullptr;
-                            res_columns[res_index++]->insert(ast ? queryToString(ast) : "");
+                            res_columns[res_index++]->insert(ast ? ast->formatForLogging() : "");
                         }
 
                         // engine_full
@@ -267,7 +326,7 @@ protected:
             if (!tables_it || !tables_it->isValid())
                 tables_it = database->getTablesIterator(context);
 
-            const bool need_lock_structure = needLockStructure(database, getPort().getHeader());
+            const bool need_table = needTable(database, getPort().getHeader());
 
             for (; rows_count < max_block_size && tables_it->isValid(); tables_it->next())
             {
@@ -280,27 +339,25 @@ protected:
 
                 StoragePtr table = nullptr;
                 TableLockHolder lock;
-
-                if (need_lock_structure)
+                if (need_table)
                 {
                     table = tables_it->table();
-                    if (table == nullptr)
-                    {
+                    if (!table)
                         // Table might have just been removed or detached for Lazy engine (see DatabaseLazy::tryGetTable())
                         continue;
-                    }
-                    try
+
+                    /// The only column that requires us to hold a shared lock is data_paths as rename might alter them (on ordinary tables)
+                    /// and it's not protected internally by other mutexes
+                    static const size_t DATA_PATHS_INDEX = 5;
+                    if (columns_mask[DATA_PATHS_INDEX])
                     {
-                        lock = table->lockForShare(context->getCurrentQueryId(), context->getSettingsRef().lock_acquire_timeout);
-                    }
-                    catch (const Exception & e)
-                    {
-                        if (e.code() == ErrorCodes::STREAM_IS_DROPPED)
+                        lock = table->tryLockForShare(context->getCurrentQueryId(),
+                                                      context->getSettingsRef().lock_acquire_timeout);
+                        if (!lock)
+                            // Table was dropped while acquiring the lock, skipping table
                             continue;
-                        throw;
                     }
                 }
-
                 ++rows_count;
 
                 size_t src_index = 0;
@@ -312,12 +369,15 @@ protected:
                 if (columns_mask[src_index++])
                     res_columns[res_index++]->insert(table_name);
 
+                /// proton: starts.
+                auto uuid = tables_it->uuid();
                 if (columns_mask[src_index++])
-                    res_columns[res_index++]->insert(tables_it->uuid());
+                    res_columns[res_index++]->insert(uuid);
+                /// proton: ends.
 
                 if (columns_mask[src_index++])
                 {
-                    assert(table != nullptr);
+                    chassert(table != nullptr);
                     res_columns[res_index++]->insert(table->getName());
                 }
 
@@ -326,20 +386,36 @@ protected:
 
                 if (columns_mask[src_index++])
                 {
-                    assert(table != nullptr);
+                    chassert(lock != nullptr);
                     Array table_paths_array;
                     auto paths = table->getDataPaths();
                     table_paths_array.reserve(paths.size());
                     for (const String & path : paths)
                         table_paths_array.push_back(path);
                     res_columns[res_index++]->insert(table_paths_array);
+                    /// We don't need the lock anymore
+                    lock = nullptr;
                 }
 
                 if (columns_mask[src_index++])
                     res_columns[res_index++]->insert(database->getObjectMetadataPath(table_name));
 
                 if (columns_mask[src_index++])
-                    res_columns[res_index++]->insert(static_cast<UInt64>(database->getObjectMetadataModificationTime(table_name)));
+                {
+                    /// proton: starts.
+                    if (uuid != UUIDHelpers::Nil)
+                    {
+                        if (auto it = stream_descs.find(uuid); it != stream_descs.end())
+                            res_columns[res_index++]->insert(static_cast<UInt64>(it->second->last_modify_timestamp_ms / 1000));
+                        else
+                            res_columns[res_index++]->insert(static_cast<UInt64>(database->getObjectMetadataModificationTime(table_name)));
+                    }
+                    else
+                    {
+                        res_columns[res_index++]->insert(static_cast<UInt64>(database->getObjectMetadataModificationTime(table_name)));
+                    }
+                    /// proton: ends.
+                }
 
                 {
                     Array dependencies_table_name_array;
@@ -367,35 +443,29 @@ protected:
                 if (columns_mask[src_index] || columns_mask[src_index + 1] || columns_mask[src_index + 2] || columns_mask[src_index + 3])
                 {
                     /// proton: starts.
+                    /// getInMemoryCreateQuery() requires explicit setInMemoryCreateQuery() call during table creation.
+                    /// but we didn't apply this same logic for MysqlDB/PostgreSQL/Iceberg previously.
                     StorageInMemoryCreateQueryPtr create_query_snapshot;
                     assert(table);
                     create_query_snapshot = table->getInMemoryCreateQuery();
 
-                    if (columns_mask[src_index++])
+                    if (create_query_snapshot)
                     {
-                        if (create_query_snapshot)
+                        // create_table_query
+                        if (columns_mask[src_index++])
                         {
-                            if (context->getSettingsRef().show_table_uuid_in_table_create_query_if_not_nil)
+                            if (context->getSettingsRef().show_uuid)
                                 res_columns[res_index++]->insert(create_query_snapshot->getQueryUUID());
                             else
                                 res_columns[res_index++]->insert(create_query_snapshot->getQuery());
                         }
-                        else
-                            res_columns[res_index++]->insert("");
-                    }
 
-                    if (columns_mask[src_index++])
-                    {
-                        if (create_query_snapshot)
+                        // engine_full
+                        if (columns_mask[src_index++])
                             res_columns[res_index++]->insert(create_query_snapshot->getEngineFull());
-                        else
-                            res_columns[res_index++]->insert("");
-                    }
 
-                    // mode
-                    if (columns_mask[src_index++])
-                    {
-                        if (create_query_snapshot)
+                        // mode
+                        if (columns_mask[src_index++])
                         {
                             String mode = create_query_snapshot->getMode();
                             if (mode.empty() && table->getName() == "Stream")
@@ -403,17 +473,52 @@ protected:
 
                             res_columns[res_index++]->insert(mode);
                         }
-                        else
-                            res_columns[res_index++]->insert("");
                     }
                     /// proton: ends.
+                    else
+                    {
+                        ASTPtr ast = database->tryGetCreateTableQuery(table_name, context);
+                        auto * ast_create = ast ? ast->as<ASTCreateQuery>() : nullptr;
 
+                        if (ast_create && !context->getSettingsRef().show_uuid)
+                        {
+                            ast_create->uuid = UUIDHelpers::Nil;
+                            ast_create->to_inner_uuid = UUIDHelpers::Nil;
+                        }
+
+                        // create_table_query
+                        if (columns_mask[src_index++])
+                        res_columns[res_index++]->insert(ast ? ast->formatForLogging() : "");
+
+                        // engine_full
+                        if (columns_mask[src_index++])
+                        {
+                            String engine_full;
+
+                            if (ast_create && ast_create->storage)
+                            {
+                            engine_full = ast_create->formatForLogging();
+
+                                static const char * const extra_head = " ENGINE = ";
+                                if (startsWith(engine_full, extra_head))
+                                    engine_full = engine_full.substr(strlen(extra_head));
+                            }
+
+                            res_columns[res_index++]->insert(engine_full);
+                        }
+
+                        // mode
+                        if (columns_mask[src_index++])
+                            res_columns[res_index++]->insertDefault();
+                    }
+
+                    // as_select
                     if (columns_mask[src_index++])
                     {
                         /// proton: FIXME: XXX
                         String as_select;
 //                        if (ast_create && ast_create->select)
-//                            as_select = queryToString(*ast_create->select);
+//                            as_select = format({context, *ast_create->select});
                         res_columns[res_index++]->insert(as_select);
                     }
                 }
@@ -428,7 +533,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getPartitionKeyAST()))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatForLogging());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -436,7 +541,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getSortingKey().expression_list_ast))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatForLogging());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -444,7 +549,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getPrimaryKey().expression_list_ast))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatForLogging());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -452,7 +557,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getSamplingKeyAST()))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatForLogging());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -470,7 +575,22 @@ protected:
                 settings.select_sequential_consistency = 0;
                 if (columns_mask[src_index++])
                 {
-                    auto total_rows = table ? table->totalRows(settings) : std::nullopt;
+                    /// proton: starts
+                    std::optional<UInt64> total_rows = std::nullopt;
+                    if (table)
+                    {
+                        if (auto mv = std::dynamic_pointer_cast<StorageMaterializedView>(table); mv)
+                        {
+                            /// For materialized view, only count the internal stream rows
+                            if (!mv->getExternalTargetTableID().has_value())
+                                total_rows = mv->getTargetTable()->totalRows(settings);
+                        }
+                        else
+                        {
+                            total_rows = table->totalRows(settings);
+                        }
+                    }
+                    /// proton: ends
                     if (total_rows)
                         res_columns[res_index++]->insert(*total_rows);
                     else
@@ -479,7 +599,7 @@ protected:
 
                 if (columns_mask[src_index++])
                 {
-                    auto total_bytes = table ? table->totalBytes(settings) : std::nullopt;
+                    auto total_bytes = table->totalBytes(settings);
                     if (total_bytes)
                         res_columns[res_index++]->insert(*total_bytes);
                     else
@@ -553,8 +673,45 @@ protected:
                         res_columns[res_index++]->insert(loading_dependent_databases);
                     if (columns_mask[src_index++])
                         res_columns[res_index++]->insert(loading_dependent_tables);
-
                 }
+                /// proton : starts. schema_version
+                else
+                    src_index += 4;
+
+                if (columns_mask[src_index++])
+                {
+                    assert(table);
+                    res_columns[res_index++]->insert(table->schemaVersion());
+                }
+
+                // read_bytes
+                if (columns_mask[src_index++])
+                {
+                    assert(table);
+                    res_columns[res_index++]->insert(table->readBytes(/*reset=*/false));
+                }
+
+                // read_rows
+                if (columns_mask[src_index++])
+                {
+                    assert(table);
+                    res_columns[res_index++]->insert(table->readRows(/*reset=*/false));
+                }
+
+                // write_bytes
+                if (columns_mask[src_index++])
+                {
+                    assert(table);
+                    res_columns[res_index++]->insert(table->writtenBytes(/*reset=*/false));
+                }
+
+                // write_rows
+                if (columns_mask[src_index++])
+                {
+                    assert(table);
+                    res_columns[res_index++]->insert(table->writtenRows(/*reset=*/false));
+                }
+                /// proton : ends
             }
         }
 
@@ -572,25 +729,54 @@ private:
     bool done = false;
     DatabasePtr database;
     std::string database_name;
+    /// proton: starts.
+    /// Stream descriptors loaded from metastore. for external database like MySQL/PostgreSQL/Iceberg the uuid is Null.
+    std::unordered_map<UUID, cluster::protocol::StreamDescriptorPtr> stream_descs;
+    /// proton: ends
 };
 
+}
 
-Pipe StorageSystemTables::read(
+class ReadFromSystemTables : public SourceStepWithFilter
+{
+public:
+    std::string getName() const override { return "ReadFromSystemTables"; }
+    void initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
+
+    ReadFromSystemTables(
+        Block sample_block,
+        ContextPtr context_,
+        std::vector<UInt8> columns_mask_,
+        size_t max_block_size_)
+        : SourceStepWithFilter(DataStream{.header = std::move(sample_block)})
+        , context(std::move(context_))
+        , columns_mask(std::move(columns_mask_))
+        , max_block_size(max_block_size_)
+    {
+    }
+
+private:
+    ContextPtr context;
+    std::vector<UInt8> columns_mask;
+    size_t max_block_size;
+};
+
+void StorageSystemTables::read(
+    QueryPlan & query_plan,
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
+    SelectQueryInfo & /*query_info*/,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     const size_t max_block_size,
     const size_t /*num_streams*/)
 {
     storage_snapshot->check(column_names);
+    Block sample_block = storage_snapshot->metadata->getSampleBlock();
 
     /// Create a mask of what columns are needed in the result.
-
     NameSet names_set(column_names.begin(), column_names.end());
 
-    Block sample_block = storage_snapshot->metadata->getSampleBlock();
     Block res_block;
 
     std::vector<UInt8> columns_mask(sample_block.columns());
@@ -603,11 +789,28 @@ Pipe StorageSystemTables::read(
         }
     }
 
-    ColumnPtr filtered_databases_column = getFilteredDatabases(query_info, context);
-    ColumnPtr filtered_tables_column = getFilteredTables(query_info.query, filtered_databases_column, context);
+    auto reading = std::make_unique<ReadFromSystemTables>(
+        std::move(res_block),
+        context,
+        std::move(columns_mask),
+        max_block_size);
 
-    return Pipe(std::make_shared<TablesBlockSource>(
-        std::move(columns_mask), std::move(res_block), max_block_size, std::move(filtered_databases_column), std::move(filtered_tables_column), context));
+    query_plan.addStep(std::move(reading));
+}
+
+void ReadFromSystemTables::initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
+{
+    auto filter_actions_dag = ActionsDAG::buildFilterActionsDAG(filter_nodes.nodes);
+    const ActionsDAG::Node * predicate = nullptr;
+    if (filter_actions_dag)
+        predicate = filter_actions_dag->getOutputs().at(0);
+
+    ColumnPtr filtered_databases_column = getFilteredDatabases(predicate, context);
+    ColumnPtr filtered_tables_column = getFilteredTables(predicate, filtered_databases_column, context);
+
+    Pipe pipe(std::make_shared<TablesBlockSource>(
+        std::move(columns_mask), getOutputStream().header, max_block_size, std::move(filtered_databases_column), std::move(filtered_tables_column), context));
+    pipeline.init(std::move(pipe));
 }
 
 }

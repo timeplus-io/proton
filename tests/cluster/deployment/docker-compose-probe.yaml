@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+  probe:
+    image: timeplus/probe:0.1.13
+    network_mode: "host"
+    container_name: probe
+    stdin_open: true
+    volumes:
+      - ../deployment:/deploy
+      - ../smoke:/smoke
+      - $HOME/.ssh/smoke:/root/.ssh:ro # Before mount volumes, run ssh.sh or change ssh path according to your local path
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error

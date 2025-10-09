@@ -20,6 +20,14 @@ void registerTableFunctionGenerate(TableFunctionFactory & factory);
 void registerTableFunctionS3(TableFunctionFactory & factory);
 void registerTableFunctionS3Cluster(TableFunctionFactory & factory);
 void registerTableFunctionCOS(TableFunctionFactory & factory);
+void registerTableFunctionHudi(TableFunctionFactory & factory);
+void registerTableFunctionDeltaLake(TableFunctionFactory & factory);
+void registerTableFunctionIceberg(TableFunctionFactory & factory);
+#endif
+
+#if USE_HDFS
+void registerTableFunctionHDFS(TableFunctionFactory & factory);
+void registerTableFunctionHDFSCluster(TableFunctionFactory & factory);
 #endif
 
 void registerTableFunctionView(TableFunctionFactory & factory);
@@ -37,7 +45,10 @@ void registerTableFunctionHist(TableFunctionFactory & factory);
 void registerTableFunctionSession(TableFunctionFactory & factory);
 void registerTableFunctionDedup(TableFunctionFactory & factory);
 void registerTableFunctionChangelog(TableFunctionFactory & factory);
+void registerTableFunctionRowify(TableFunctionFactory & factory);
 }
+
+void registerTableFunctionPythonCall(TableFunctionFactory & factory);
 /// proton: ends
 
 void registerTableFunctions();

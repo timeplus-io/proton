@@ -1,0 +1,197 @@
+tags:
+- join watermark alignment
+- latest join
+- query state
+description: streaming (left) latest join with watermark alignment
+cluster:
+- p1k1
+# - p3k1 # subscribe to no support for cluster
+steps:
+- type: query
+  sql: drop stream if exists test_32_stream
+
+- type: query
+  sql: create stream test_32_stream(i int, v string)
+- type: wait
+  time: 1
+
+- name: 3204
+  type: stream
+  query_id: '3204'
+  query: subscribe to with r1 as (select i % 5 as id, v, _tp_time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time from test_32_stream where i >= 50)
+            select r1.v, r2.v from r1 latest join r2 on r1.id = r2.id and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- name: 3205
+  type: stream
+  query_id: '3205'
+  query: subscribe to with r1 as (select i % 5 as id, v, _tp_time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time from test_32_stream where i >= 50)
+            select r1.v, r2.v from r1 left latest join r2 on r1.id = r2.id and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 't1', '2023-01-01 00:00:04']
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [51, 't2', '2023-01-01 00:00:06']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tt1', '2023-01-01 00:00:05']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'ttt1', '2023-01-01 00:00:08']
+
+- type: query
+  sql: kill query where query_id = '3204'
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '3205'
+- type: wait
+  time: 3
+
+- name: 3204-1
+  type: stream
+  query: recover from '3204'
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- name: 3205-1
+  type: stream
+  query: recover from '3205'
+  schema:
+    - name: v
+      type: string
+    - name: r2.v
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [51, 'tt2', '2023-01-01 00:00:07']
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tttt1', '2023-01-01 00:00:09']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values(51, 'ttt2', '2023-1-1 00:00:10')
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [51, 'ttt2', '2023-01-01 00:00:10']
+- type: wait
+  time: 1
+
+- type: query
+  sql: unsubscribe to '3204'
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '3205'
+
+- type: check
+  target_name: 3204
+  expected_result: 
+    - []
+
+- type: check
+  target_name: 3204-1
+  expected_result:
+    - ["ttt1", "tt2"]
+    - ["tttt1", "tt2"]
+
+- type: check
+  target_name: 3205
+  expected_result:
+    - ["t1", ""]
+    - ["tt1", ""]
+
+- type: check
+  target_name: 3205-1
+  expected_result:
+    - ["ttt1", "tt2"]
+    - ["tttt1", "tt2"]

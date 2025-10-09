@@ -1,0 +1,176 @@
+tags:
+- func
+description: some bool funtions
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 1
+  
+- name: '801'
+  type: stream
+  query: select multi_if(multi_search_any('hello world',['hello']),'a','default') as a
+  schema: 
+    - name: a
+      type: string
+  
+- type: wait
+  time: 1
+  
+- name: '802'
+  type: stream
+  query: select multi_match_any('hello world', ['hello1', 'world']) as a
+  schema: 
+    - name: a
+      type: bool
+  
+- type: wait
+  time: 1
+  
+- name: '803'
+  type: stream
+  query: select not_ilike('hello world', '%hellO %') as a, not_like('hello world', '%hellO
+    %') as b, like('hello world', '%hellO %') as c, match('hello world', 'world') as d
+  schema:
+    - name: a
+      type: bool
+    - name: b
+      type: bool
+    - name: c
+      type: bool
+    - name: d
+      type: bool
+  
+- type: wait
+  time: 1
+  
+- type: stream
+  query: select * from system.asynchronous_metric_log where metric='AsynchronousMetricsCalculationTimeSpent'
+  schema:
+    - name: event_date
+      type: date
+    - name: event_time
+      type: datetime
+    - name: event_time_microseconds
+      type: datetime64(6)
+    - name: metric
+      type: low_cardinality(string)
+    - name: value
+      type: float64
+
+- type: wait
+  time: 1
+  
+- name: '804'
+  type: stream
+  query: SELECT to_uint64(1) IN (SELECT * FROM system.numbers LIMIT 1100000) as a
+  schema:
+    - name: a
+      type: bool
+  
+- type: wait
+  time: 1
+  
+- name: '805'
+  type: stream
+  query: SELECT -1 IN (-1) as a , -1 IN (1, -1, 2) as b, 1. IN (1) as c, 1.1 IN (1, -1) as d, 1. IN (3,
+    1., -1) as e, 1 IN (3, 2, 1) as f, to_int16(-1) IN (255) as g, materialize(-1) IN (-1) as h, materialize(-1)
+    IN (1, -1, 2) as i, materialize(1.) IN (1) as j, materialize(1.1) IN (1, -1) as k, materialize(1.)
+    IN (3, 1., -1) as l, materialize(1) IN (3, 2, 1) as m, materialize(to_int16(-1)) IN (255) as n
+  schema:
+    - name: a
+      type: bool
+    - name: b
+      type: bool
+    - name: c
+      type: bool
+    - name: d
+      type: bool
+    - name: e
+      type: bool
+    - name: f
+      type: bool
+    - name: g
+      type: bool
+    - name: h
+      type: bool
+    - name: i
+      type: bool
+    - name: j
+      type: bool
+    - name: k
+      type: bool
+    - name: l
+      type: bool
+    - name: m
+      type: bool
+    - name: n
+      type: bool
+      
+- type: wait
+  time: 1
+  
+- name: '806'
+  type: stream
+  query: SELECT DISTINCT array_filter(x -> not_empty(x), array_join([[''], ['is_registred'],
+    ['registration_month','user_login','is_registred'], ['is_registred'], ['is_registred'],
+    ['']])) as a
+  schema:
+    - name: a
+      type: array(string)
+  
+- type: wait
+  time: 1
+  
+- name: '807'
+  type: stream
+  query: SELECT has([0, 0, 1], 1) as a , has([0, 0, 0], 1) as b, not 1 as c , not false as d, true as e where true
+  schema:
+    - name: a
+      type: bool
+    - name: b
+      type: bool
+    - name: c
+      type: bool
+    - name: d
+      type: bool
+    - name: e
+      type: bool
+      
+- type: check
+  target_name: '801'
+  expected_result:
+  - [a]
+
+- type: check
+  target_name: '802'
+  expected_result:
+  - ['True']
+    
+- type: check
+  target_name: '803'
+  expected_result:
+  - ['False', 'True', 'False', 'True']
+    
+- type: check
+  target_name: '804'
+  expected_result:
+  - ['True']
+    
+- type: check
+  target_name: '805'
+  expected_result:
+  - ['True', 'True', 'True', 'False', 'True', 'True', 'False', 'True', 'True', 'True', 'False', 'True', 'True', 'False']
+    
+- type: check
+  target_name: '806'
+  expected_result:
+  - [[]]
+  - [['is_registred']]
+  - [['registration_month', 'user_login', 'is_registred']]
+    
+- type: check
+  target_name: '807'
+  expected_result:
+  - ['True', 'False', 'False', 'True', 'True']

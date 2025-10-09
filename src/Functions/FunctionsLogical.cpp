@@ -90,7 +90,7 @@ void convertAnyColumnToBool(const IColumn * column, UInt8Container & res)
         !tryConvertColumnToBool<UInt64>(column, res) &&
         !tryConvertColumnToBool<Float32>(column, res) &&
         !tryConvertColumnToBool<Float64>(column, res))
-        throw Exception("Unexpected type of column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Unexpected type of column: {}", column->getName());
 }
 
 
@@ -234,9 +234,8 @@ struct ValueGetterBuilderImpl<>
 {
     static TernaryValueGetter build(const IColumn * x)
     {
-        throw Exception(
-                std::string("Unknown numeric column of type: ") + demangle(typeid(*x).name()),
-                ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+                "Unknown numeric column of type: {}", demangle(typeid(*x).name()));
     }
 };
 
@@ -334,9 +333,7 @@ struct OperationApplier<Op, OperationApplierImpl, 0>
     template <bool, typename Columns, typename Result>
     static void NO_INLINE doBatchedApply(Columns &, Result &, size_t)
     {
-        throw Exception(
-                "OperationApplier<...>::apply(...): not enough arguments to run this method",
-                ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "OperationApplier<...>::apply(...): not enough arguments to run this method");
     }
 };
 
@@ -404,13 +401,13 @@ struct TypedExecutorInvoker<Op>
     template <typename T, typename Result>
     static void apply(const ColumnVector<T> &, const IColumn & y, Result &)
     {
-        throw Exception(std::string("Unknown numeric column y of type: ") + demangle(typeid(y).name()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown numeric column y of type: {}", demangle(typeid(y).name()));
     }
 
     template <typename Result>
     static void apply(const IColumn & x, const IColumn &, Result &)
     {
-        throw Exception(std::string("Unknown numeric column x of type: ") + demangle(typeid(x).name()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown numeric column x of type: {}", demangle(typeid(x).name()));
     }
 };
 
@@ -478,9 +475,9 @@ template <typename Impl, typename Name>
 DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTypes & arguments) const
 {
     if (arguments.size() < 2)
-        throw Exception("Number of arguments for function \"" + getName() + "\" should be at least 2: passed "
-            + toString(arguments.size()),
-            ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+        throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION,
+                    "Number of arguments for function \"{}\" should be at least 2: passed {}",
+                    getName(), arguments.size());
 
     bool has_nullable_arguments = false;
     for (size_t i = 0; i < arguments.size(); ++i)
@@ -491,16 +488,14 @@ DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTyp
         {
             has_nullable_arguments = arg_type->isNullable();
             if (has_nullable_arguments && !Impl::specialImplementationForNulls())
-                throw Exception("Logical error: Unexpected type of argument for function \"" + getName() + "\": "
-                    " argument " + toString(i + 1) + " is of type " + arg_type->getName(), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: Unexpected type of argument for function \"{}\": "
+                    " argument {} is of type {}", getName(), i + 1, arg_type->getName());
         }
 
         if (!(isNativeNumber(arg_type)
             || (Impl::specialImplementationForNulls() && (arg_type->onlyNull() || isNativeNumber(removeNullable(arg_type))))))
-            throw Exception("Illegal type ("
-                + arg_type->getName()
-                + ") of " + toString(i + 1) + " argument of function " + getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type ({}) of {} argument of function {}",
+                arg_type->getName(), i + 1, getName());
     }
 
     /// proton: starts. return bool
@@ -538,7 +533,7 @@ template <typename Impl, typename Name>
 ColumnPtr FunctionAnyArityLogical<Impl, Name>::executeShortCircuit(ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const
 {
     if (Name::name != NameAnd::name && Name::name != NameOr::name)
-        throw Exception("Function " + getName() + " doesn't support short circuit execution", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function {} doesn't support short circuit execution", getName());
 
     executeColumnIfNeeded(arguments[0]);
 

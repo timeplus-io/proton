@@ -1,0 +1,106 @@
+tags:
+- adding-new-column
+description: streaming query after add a column
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists add_new_column_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream add_new_column_stream (id int, name string, val float, ts datetime)
+- type: wait
+  time: 2
+
+- name: '2701'
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 2
+
+- type: query
+  sql: 
+    insert into add_new_column_stream (id, name, val, ts) values
+    (1, 's1', 11.1, '2020-02-02 20:00:01');
+- type: wait
+  time: 1
+
+- type: query
+  sql: 
+    insert into add_new_column_stream (id, name, val, ts) values 
+    (2, 's2', 22.2, '2020-02-02 20:00:02');
+- type: wait
+  time: 1
+
+- type: query
+  sql: 
+    insert into add_new_column_stream (id, name, val, ts) values
+    (3, 's3', 33.3, '2020-02-02 20:00:03');
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_array array(int32)
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_map map(string, string)
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_tuple tuple(int32, int32)
+- type: wait
+  time: 1
+
+- name: 2701-1
+  type: stream
+  query: select id, name, val, ts, add_array[1], add_map['k1'], add_tuple.1 from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  - name: array_element(add_array, 1)
+    type: int32
+  - name: array_element(add_map, 'k1')
+    type: string
+  - name: tuple_element(add_tuple, 1)
+    type: int32
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into add_new_column_stream (id, name, val, ts, add_array, add_map, add_tuple) values
+    (4, 'add_array', 44.4, '2020-02-02 20:00:04', [1, 2], map_cast('k1','v1','k2','v2'), (1,2));
+
+- type: check
+  target_name: '2701'
+  expected_result:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+  - [2, 's2', 22.2, '2020-02-02 20:00:02']
+  - [3, 's3', 33.3, '2020-02-02 20:00:03']
+  - [4, 'add_array', 44.4, '2020-02-02 20:00:04']
+
+- type: check
+  target_name: 2701-1
+  expected_result:
+  - [4, 'add_array', 44.4, '2020-02-02 20:00:04', 1, 'v1', 1]

@@ -1,0 +1,59 @@
+tags:
+  - dedup
+description: dedup with explicit key limits but with default TTL
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: "1802"
+    node:
+      - p1
+    type: stream
+    query: select i, s from dedup(dedup_stream, s, 0s, 2)
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 1
+    
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into dedup_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into dedup_stream(i, s) values (2, 's2'), (3, 's3'), (1, 's1')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1802"
+    expected_result:
+    <<if eq .aggregation_check_mode "random">>
+      - [1, 's1']
+      - [2, 's2']
+      - [3, 's3']
+    <<else>>
+      - [1, 's1']
+      - [2, 's2']
+      - [3, 's3']
+      - [1, 's1']
+    <<end>>

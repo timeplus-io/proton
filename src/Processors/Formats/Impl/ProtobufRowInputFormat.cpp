@@ -39,34 +39,37 @@ ProtobufRowInputFormat::ProtobufRowInputFormat(
     bool flatten_google_wrappers_,
     const String & google_protos_path)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
-    , reader(std::make_unique<ProtobufReader>(in_))
-    , serializer(ProtobufSerializer::create(
-          header_.getNames(),
-          header_.getDataTypes(),
-          missing_column_indices,
-          *ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info_.getSchemaInfo(), ProtobufSchemas::WithEnvelope::No, google_protos_path),
-          with_length_delimiter_,
-          /* with_envelope = */ false,
-          flatten_google_wrappers_,
-         *reader))
+    , descriptor(ProtobufSchemas::instance().getMessageTypeForFormatSchema(
+          schema_info_.getSchemaInfo(), ProtobufSchemas::WithEnvelope::No, google_protos_path))
+    , with_length_delimiter(with_length_delimiter_)
+    , flatten_google_wrappers(flatten_google_wrappers_)
 {
 }
 
-/// proton: starts
-void ProtobufRowInputFormat::setReadBuffer(ReadBuffer & buf)
+void ProtobufRowInputFormat::createReaderAndSerializer()
 {
-    IInputFormat::setReadBuffer(buf);
-    reader->setReadBuffer(buf);
+    reader = std::make_unique<ProtobufReader>(*in);
+    serializer = ProtobufSerializer::create(
+        getPort().getHeader().getNames(),
+        getPort().getHeader().getDataTypes(),
+        missing_column_indices,
+        descriptor,
+        with_length_delimiter,
+        /* with_envelope = */ false,
+        flatten_google_wrappers,
+        *reader);
 }
-/// proton: ends
 
 bool ProtobufRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & row_read_extension)
 {
+    if (!reader)
+        createReaderAndSerializer();
+
     if (reader->eof())
         return false;
 
     size_t row_num = columns.empty() ? 0 : columns[0]->size();
-    if (!row_num)
+    if (row_num == 0u)
         serializer->setColumns(columns.data(), columns.size());
 
     serializer->readRow(row_num);
@@ -78,6 +81,13 @@ bool ProtobufRowInputFormat::readRow(MutableColumns & columns, RowReadExtension 
     return true;
 }
 
+void ProtobufRowInputFormat::setReadBuffer(ReadBuffer & in_)
+{
+    if (reader)
+        reader->setReadBuffer(in_);
+    IRowInputFormat::setReadBuffer(in_);
+}
+
 bool ProtobufRowInputFormat::allowSyncAfterError() const
 {
     return true;
@@ -86,6 +96,13 @@ bool ProtobufRowInputFormat::allowSyncAfterError() const
 void ProtobufRowInputFormat::syncAfterError()
 {
     reader->endMessage(true);
+}
+
+void ProtobufRowInputFormat::resetParser()
+{
+    IRowInputFormat::resetParser();
+    serializer.reset();
+    reader.reset();
 }
 
 void registerInputFormatProtobuf(FormatFactory & factory)
@@ -112,6 +129,7 @@ void registerInputFormatProtobuf(FormatFactory & factory)
 
             return std::make_shared<ProtobufConfluentRowInputFormat>(buf, sample, std::move(params), settings);
         });
+    factory.markFormatSupportsSubsetOfColumns("ProtobufSingle");
 
     factory.registerInputFormat(
         "Protobuf", [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings)
@@ -125,6 +143,7 @@ void registerInputFormatProtobuf(FormatFactory & factory)
                 settings.protobuf.input_flatten_google_wrappers,
                 settings.protobuf.google_protos_path);
         });
+    factory.markFormatSupportsSubsetOfColumns("Protobuf");
     /// proton: ends
 }
 
@@ -141,9 +160,9 @@ ProtobufSchemaReader::ProtobufSchemaReader(const FormatSettings & format_setting
 
 NamesAndTypesList ProtobufSchemaReader::readSchema()
 {
-    const auto * message_descriptor
-        = ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info, ProtobufSchemas::WithEnvelope::No, google_protos_path);
-    return protobufSchemaToCHSchema(message_descriptor, skip_unsupported_fields);
+    auto descriptor = ProtobufSchemas::instance().getMessageTypeForFormatSchema(
+        schema_info, ProtobufSchemas::WithEnvelope::No, google_protos_path);
+    return protobufSchemaToCHSchema(descriptor.message_descriptor, skip_unsupported_fields);
 }
 
 /// proton: starts
@@ -192,6 +211,14 @@ public:
         throw Exception(ErrorCodes::INVALID_DATA, "Failed to parse schema, line={}, column={}, message={}", line, column, message);
     }
 
+    /// Get message type from latest subject schema
+    const google::protobuf::Descriptor * getMessageType(const String & subject)
+    {
+        auto [schema_id, _] = registry.fetchLatestSchemaForSubject(subject);
+        const auto * fd = getSchema(schema_id);
+        return fd->message_type(0);
+    }
+
     const google::protobuf::Descriptor * getMessageType(uint32_t schema_id, const std::vector<Int64> & indexes)
     {
         assert(!indexes.empty());
@@ -225,7 +252,7 @@ private:
     const google::protobuf::FileDescriptor * getSchema(uint32_t id)
     {
         const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
-        if (loaded_descriptor)
+        if (loaded_descriptor != nullptr)
             return loaded_descriptor;
 
         return fetchSchema(id);
@@ -236,7 +263,7 @@ private:
         std::lock_guard lock(mutex);
         /// Just in case we got beaten
         const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
-        if (loaded_descriptor)
+        if (loaded_descriptor != nullptr)
             return loaded_descriptor;
 
         auto schema = registry.fetchSchema(id);
@@ -249,7 +276,7 @@ private:
         parser.Parse(&tokenizer, &file_descriptor);
 
         auto const * descriptor = descriptor_pool.BuildFile(file_descriptor);
-        if (descriptor && descriptor->message_type_count() > 0)
+        if ((descriptor != nullptr) && descriptor->message_type_count() > 0)
             return descriptor;
 
         throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema");
@@ -299,18 +326,20 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
     const auto & header = getPort().getHeader();
 
     ProtobufReader reader{*in};
-    serializer = ProtobufSerializer::create(
+    /// No importer for the descriptor to hold.
+    ProtobufSchemas::DescriptorHolder descriptor{/*importer_=*/nullptr, registry->getMessageType(schema_id, indexes)};
+    auto serializer = ProtobufSerializer::create(
         header.getNames(),
         header.getDataTypes(),
         missing_column_indices,
-        *registry->getMessageType(schema_id, indexes),
+        descriptor,
         /*with_length_delimiter=*/false,
         /* with_envelope = */ false,
         flatten_google_wrappers,
         reader);
 
     size_t row_num = columns.empty() ? 0 : columns[0]->size();
-    if (!row_num)
+    if (row_num == 0u)
         serializer->setColumns(columns.data(), columns.size());
 
     serializer->readRow(row_num);
@@ -323,6 +352,19 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
             row_read_extension.read_columns[column_idx] = false;
     }
     return true;
+}
+
+ProtobufConfluentSchemaReader::ProtobufConfluentSchemaReader(const FormatSettings & format_settings)
+    : registry(getConfluentSchemaRegistry(format_settings))
+    , subject(format_settings.kafka_schema_registry.topic_name)
+    , skip_unsupported_fields(format_settings.protobuf.skip_fields_with_unsupported_types_in_schema_inference)
+{
+}
+
+NamesAndTypesList ProtobufConfluentSchemaReader::readSchema()
+{
+    const auto descriptor = registry->getMessageType(subject);
+    return protobufSchemaToCHSchema(descriptor, skip_unsupported_fields);
 }
 
 ProtobufSchemaWriter::ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
@@ -338,35 +380,52 @@ void ProtobufSchemaWriter::validate()
 
 bool ProtobufSchemaWriter::write(bool replace_if_exist)
 {
+    bool should_clear_cache{false};
+
     if (std::filesystem::exists(schema_info.absoluteSchemaPath()))
+    {
         if (!replace_if_exist)
             return false;
 
+        /// Need to clear the cache for schema replacement, or there will be some strange errors.
+        should_clear_cache = true;
+    }
+
     WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
     write_buffer.write(schema_body.data(), schema_body.size());
+
+    if (should_clear_cache)
+        ProtobufSchemas::instance().clear();
+
     return true;
 }
 /// proton: ends
 
 void registerProtobufSchemaReader(FormatFactory & factory)
 {
-    factory.registerExternalSchemaReader(
-        "Protobuf", [](const FormatSettings & settings) { return std::make_shared<ProtobufSchemaReader>(settings); });
-    factory.registerFileExtension("pb", "Protobuf");
     /// proton: starts
+    factory.registerExternalSchemaReader("Protobuf", [](const FormatSettings & settings) -> ExternalSchemaReaderPtr {
+        if (!settings.schema.format_schema.empty())
+            return std::make_shared<ProtobufSchemaReader>(settings);
+        return std::make_shared<ProtobufConfluentSchemaReader>(settings);
+    });
+    factory.registerFileExtension("pb", "Protobuf");
     factory.registerSchemaFileExtension("proto", "Protobuf");
 
     factory.registerExternalSchemaWriter("Protobuf", [](std::string_view schema_body, const FormatSettings & settings) {
         return std::make_shared<ProtobufSchemaWriter>(schema_body, settings);
     });
-    /// proton: ends
 
-    factory.registerExternalSchemaReader(
-        "ProtobufSingle", [](const FormatSettings & settings) { return std::make_shared<ProtobufSchemaReader>(settings); });
+    factory.registerExternalSchemaReader("ProtobufSingle", [](const FormatSettings & settings) -> ExternalSchemaReaderPtr {
+        if (!settings.schema.format_schema.empty())
+            return std::make_shared<ProtobufSchemaReader>(settings);
+        return std::make_shared<ProtobufConfluentSchemaReader>(settings);
+    });
+    /// proton: ends
 
     for (const auto & name : {"Protobuf", "ProtobufSingle"})
         factory.registerAdditionalInfoForSchemaCacheGetter(
-            name, [](const FormatSettings & settings) { return "Format schema: " + settings.schema.format_schema; });
+            name, [](const FormatSettings & settings) { return fmt::format("format_schema={}", settings.schema.format_schema); });
 }
 
 }

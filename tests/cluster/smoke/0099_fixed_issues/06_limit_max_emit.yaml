@@ -1,0 +1,164 @@
+tags:
+  - emit interval
+description: (#2105) limit the max emit interval is day
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_2105
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_2105
+        (
+          value int
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: select count() from test_stream_2105 emit periodic 1ns
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9901
+    query: select count() from test_stream_2105 emit periodic 1us
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9902
+    query: select count() from test_stream_2105 emit periodic 1ms
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9903
+    query: select count() from test_stream_2105 emit periodic 1s
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9904
+    query: select count() from test_stream_2105 emit periodic 1m
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9905
+    query: select count() from test_stream_2105 emit periodic 1h
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9906
+    query: select count() from test_stream_2105 emit periodic 1d
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9907
+    query: select count() from test_stream_2105 emit periodic 1w
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9908
+    query: select count() from test_stream_2105 emit periodic 1M
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9909
+    query: select count() from test_stream_2105 emit periodic 1q
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9910
+    query: select count() from test_stream_2105 emit periodic 1y
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: 9900
+    expected_result: []
+
+  - type: check
+    target_name: 9901
+    expected_result: []
+
+  - type: check
+    target_name: 9902
+    expected_result: []
+
+  - type: check
+    target_name: 9903
+    expected_result: []
+
+  - type: check
+    target_name: 9904
+    expected_result: []
+
+  - type: check
+    target_name: 9905
+    expected_result: []
+
+  - type: check
+    target_name: 9906
+    expected_result: []
+
+  - type: check
+    target_name: 9907
+    expected_result:
+      - ["error_code:43"]
+
+  - type: check
+    target_name: 9908
+    expected_result:
+      - ["error_code:43"]
+
+  - type: check
+    target_name: 9909
+    expected_result:
+      - ["error_code:43"]
+
+  - type: check
+    target_name: 9910
+    expected_result:
+      - ["error_code:43"]

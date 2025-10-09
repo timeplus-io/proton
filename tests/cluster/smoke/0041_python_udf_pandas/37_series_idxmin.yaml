@@ -1,0 +1,54 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value array(int));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_series_idxmin(value array(int)) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_series_idxmin(value):
+          res = []
+          for v in value:
+              if len(v) > 0:
+                  s = pd.Series(v, index=['A', 'B', 'C'])
+                  series_idxmin = s.idxmin()
+                  res.append(series_idxmin)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-37-2
+    type: stream
+    query: select test_series_idxmin(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          ([1, 2, 4]) ([3, 6, 2]);
+
+  - type: check
+    target_name: python-udf3-37-2
+    expected_result:
+      - ['A']
+      - ['C']

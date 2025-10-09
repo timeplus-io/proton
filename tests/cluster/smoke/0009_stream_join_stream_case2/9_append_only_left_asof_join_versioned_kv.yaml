@@ -1,0 +1,69 @@
+tags:
+- data_enrichment_join
+- left-join
+description: append-only left asof join versioned-kv
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test10_append_left_stream;
+  
+- type: query
+  sql: drop stream if exists test10_vk_right_stream;
+  
+- type: wait
+  time: 1
+  
+- type: query
+  sql: create stream test10_append_left_stream(i int, k string);
+  
+- type: query
+  sql: create stream test10_vk_right_stream(j int, k string, kk string)
+    primary key (k, kk) settings mode='versioned_kv';
+  
+- type: wait
+  time: 2
+  
+- name: '1059'
+  type: stream
+  query: SELECT i, test10_append_left_stream.k, j, test10_vk_right_stream.k, kk FROM
+    test10_append_left_stream left asof JOIN test10_vk_right_stream ON test10_append_left_stream.k
+    = test10_vk_right_stream.k AND i <= j SETTINGS keep_versions = 3
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+    - name: j
+      type: int32
+    - name: test10_vk_right_stream.k
+      type: string
+    - name: kk
+      type: string
+
+- type: wait
+  time: 1
+  
+- type: query
+  sql: INSERT INTO test10_vk_right_stream(j, k, kk) VALUES (100, 'a', 'bb'), (102,
+    'a', 'cc'), (103, 'a', 'dd'), (104, 'a', 'ee');
+
+- type: query
+  sql: INSERT INTO test10_append_left_stream(i, k) VALUES (101, 'a');
+
+- type: query
+  sql: INSERT INTO test10_vk_right_stream(j, k, kk) VALUES (105, 'a', 'cc');
+
+- type: query
+  sql: INSERT INTO test10_append_left_stream(i, k) VALUES (101, 'a');
+
+- type: query
+  sql: INSERT INTO test10_append_left_stream(i, k) VALUES (106, 'a');
+
+- type: check
+  target_name: '1059'
+  expected_result:
+  - [101, a, 102, a, cc]
+  - [101, a, 103, a, dd]
+  - [106, a, 0, '', '']

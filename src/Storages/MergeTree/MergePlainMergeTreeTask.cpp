@@ -25,7 +25,6 @@ void MergePlainMergeTreeTask::onCompleted()
     task_result_callback(delay);
 }
 
-
 bool MergePlainMergeTreeTask::executeStep()
 {
     /// Make out memory tracker a parent of current thread memory tracker
@@ -111,7 +110,7 @@ void MergePlainMergeTreeTask::prepare()
             merge_list_entry.get());
     };
 
-    merge_task = storage.merger_mutator.mergePartsToTemporaryPart(
+    merge_task = storage.merger_mutator->mergePartsToTemporaryPart(
             future_part,
             metadata_snapshot,
             merge_list_entry.get(),
@@ -132,10 +131,12 @@ void MergePlainMergeTreeTask::finish()
     new_part = merge_task->getFuture().get();
 
     MergeTreeData::Transaction transaction(storage, txn.get());
-    storage.merger_mutator.renameMergedTemporaryPart(new_part, future_part->parts, txn, transaction);
+    storage.merger_mutator->renameMergedTemporaryPart(new_part, future_part->parts, txn, transaction);
     transaction.commit();
 
     write_part_log({});
+
+    StorageMergeTree::incrementMergedPartsProfileEvent(new_part->getType());
 }
 
 }

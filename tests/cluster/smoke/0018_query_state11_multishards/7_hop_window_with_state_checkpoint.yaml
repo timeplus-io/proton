@@ -1,0 +1,240 @@
+tags:
+- checkpoint
+- multishards
+description: hop window from multishards state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists multishards_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream multishards_stream (id int, name string, val float, ts datetime)
+    settings shards=3
+- type: wait
+  time: 1
+
+- name: '19307'
+  type: stream
+  query_id: '19307'
+  query: 'subscribe to select id, count(*), min(val), max(val), sum(val), avg(val),
+    window_start, window_end from hop(multishards_stream, ts, 3s, 5s) group by id,
+    window_start, window_end emit stream settings checkpoint_interval=1                        '
+  schema:
+  - name: id
+    type: int32
+  - name: count()
+    type: uint64
+  - name: min(val)
+    type: float32
+  - name: max(val)
+    type: float32
+  - name: sum(val)
+    type: float64
+  - name: avg(val)
+    type: float64
+  - name: window_start
+    type: datetime
+  - name: window_end
+    type: datetime
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+  - [2, 's2', 22.2, '2020-02-02 20:00:02']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 's3', 33.3, '2020-02-02 20:00:03']
+  - [1, 's4', 44.4, '2020-02-02 20:00:04']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's5', 55.5, '2020-02-02 20:00:05']
+  - [3, 's6', 66.6, '2020-02-02 20:00:06']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's7', 77.7, '2020-02-02 20:00:07']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's8', 88.8, '2020-02-02 20:00:08']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 's9', 99.9, '2020-02-02 20:00:09']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19307'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's10', 111.1, '2020-02-02 20:00:10']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's11', 222.2, '2020-02-02 20:00:11']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 's12', 333.3, '2020-02-02 20:00:12']
+- type: wait
+  time: 3
+
+- name: 19307-1
+  type: stream
+  query: recover from '19307'
+  schema:
+  - name: id
+    type: int32
+  - name: count()
+    type: uint64
+  - name: min(val)
+    type: float32
+  - name: max(val)
+    type: float32
+  - name: sum(val)
+    type: float64
+  - name: avg(val)
+    type: float64
+  - name: window_start
+    type: datetime
+  - name: window_end
+    type: datetime
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19307' sync
+
+- type: query
+  sql: unsubscribe to '19307'
+
+- type: check
+  target_name: '19307'
+  expected_result:
+  - [1, 1, 11.1, 11.1, 11.100000381469727, 11.100000381469727, '2020-02-02 19:59:57', '2020-02-02 20:00:02']
+  - [1, 2, 11.1, 44.4, 55.50000190734863, 27.750000953674316, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+  - [2, 1, 22.2, 22.2, 22.200000762939453, 22.200000762939453, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+  - [3, 1, 33.3, 33.3, 33.29999923706055, 33.29999923706055, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+
+- type: check
+  target_name: 19307-1
+  expected_result:
+  - [1, 2, 44.4, 77.7, 122.0999984741211, 61.04999923706055, '2020-02-02 20:00:03', '2020-02-02 20:00:08']
+  - [2, 1, 55.5, 55.5, 55.5, 55.5, '2020-02-02 20:00:03', '2020-02-02 20:00:08']
+  - [3, 2, 33.3, 66.6, 99.89999771118164, 49.94999885559082, '2020-02-02 20:00:03', '2020-02-02 20:00:08']

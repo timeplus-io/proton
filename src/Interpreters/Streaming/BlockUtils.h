@@ -1,9 +1,8 @@
 #pragma once
 
-#include "Interpreters/Context_fwd.h"
+#include <Interpreters/Context_fwd.h>
 
 #include <Core/Block.h>
-#include <NativeLog/Record/OpCodes.h>
 
 namespace DB
 {

@@ -11,6 +11,7 @@
 #include <Disks/DirectoryIterator.h>
 #include <Disks/WriteMode.h>
 #include <Disks/ObjectStorages/IObjectStorage.h>
+#include <Disks/DiskType.h>
 #include <Common/ErrorCodes.h>
 
 namespace DB
@@ -22,6 +23,8 @@ namespace ErrorCodes
 }
 
 class IMetadataStorage;
+struct UnlinkMetadataFileOperationOutcome;
+using UnlinkMetadataFileOperationOutcomePtr = std::shared_ptr<UnlinkMetadataFileOperationOutcome>;
 
 /// Tries to provide some "transactions" interface, which allow
 /// to execute (commit) operations simultaneously. We don't provide
@@ -40,6 +43,12 @@ public:
 
     /// Write metadata string to file
     virtual void writeStringToFile(const std::string & /* path */, const std::string & /* data */)
+    {
+        throwNotImplemented();
+    }
+
+    /// Writes the data inline with the metadata
+    virtual void writeInlineDataToFile(const std::string & /* path */, const std::string & /* data */)
     {
         throwNotImplemented();
     }
@@ -111,24 +120,25 @@ public:
     virtual void createEmptyMetadataFile(const std::string & path) = 0;
 
     /// Create metadata file on paths with content (blob_name, size_in_bytes)
-    virtual void createMetadataFile(const std::string & path, const std::string & blob_name, uint64_t size_in_bytes) = 0;
+    virtual void createMetadataFile(const std::string & path, ObjectStorageKey key, uint64_t size_in_bytes) = 0;
 
     /// Add to new blob to metadata file (way to implement appends)
-    virtual void addBlobToMetadata(const std::string & /* path */, const std::string & /* blob_name */, uint64_t /* size_in_bytes */)
+    virtual void addBlobToMetadata(const std::string & /* path */, ObjectStorageKey /* key */, uint64_t /* size_in_bytes */)
     {
         throwNotImplemented();
     }
 
     /// Unlink metadata file and do something special if required
     /// By default just remove file (unlink file).
-    virtual void unlinkMetadata(const std::string & path)
+    virtual UnlinkMetadataFileOperationOutcomePtr unlinkMetadata(const std::string & path)
     {
         unlinkFile(path);
+        return nullptr;
     }
 
     virtual ~IMetadataTransaction() = default;
 
-private:
+protected:
     [[noreturn]] static void throwNotImplemented()
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Operation is not implemented");
@@ -143,10 +153,12 @@ using MetadataTransactionPtr = std::shared_ptr<IMetadataTransaction>;
 class IMetadataStorage : private boost::noncopyable
 {
 public:
-    virtual MetadataTransactionPtr createTransaction() const = 0;
+    virtual MetadataTransactionPtr createTransaction() = 0;
 
     /// Get metadata root path.
     virtual const std::string & getPath() const = 0;
+
+    virtual MetadataStorageType getType() const = 0;
 
     /// ==== General purpose methods. Define properties of object storage file based on metadata files ====
 
@@ -185,6 +197,12 @@ public:
         throwNotImplemented();
     }
 
+    /// Read inline data for file to string from path
+    virtual std::string readInlineDataToString(const std::string & /* path */) const
+    {
+        throwNotImplemented();
+    }
+
     virtual ~IMetadataStorage() = default;
 
     /// ==== More specefic methods. Previous were almost general purpose. ====
@@ -199,9 +217,7 @@ public:
     /// object_storage_path is absolute.
     virtual StoredObjects getStorageObjects(const std::string & path) const = 0;
 
-    virtual std::string getObjectStorageRootPath() const = 0;
-
-private:
+protected:
     [[noreturn]] static void throwNotImplemented()
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Operation is not implemented");

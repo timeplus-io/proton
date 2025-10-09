@@ -1,0 +1,34 @@
+tags:
+  - materizlized view
+  - skip # remote env unstable so skip temporarily
+
+description: |
+  Test external table with secure that config system trust SSL security certificate
+  Main steps:
+    1.Create external table with type=clickhouse, secure=true
+    2.Query external stream and verify data from Clickhouse TABLE
+
+steps:
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE sink_ch_ext
+      SETTINGS type = 'clickhouse', address = 'tls-test.timeplus-iq7op.altinity.cloud:9440', 
+      database = 'default', table = 'ch_sink_table', 
+      secure='true', 
+      user = 'admin', password = '4I2fPwsOVa2f';
+
+  - name: extch-3-1
+    type: stream
+    query: SELECT count() FROM sink_ch_ext;
+    schema:
+      - name: count()
+        type: uint64
+  
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: extch-3-1
+    mode: random
+    expected_result:
+      - [any_value]

@@ -4,6 +4,7 @@
 #include <IO/Kafka/Handle.h>
 #include <IO/Kafka/mapErrorCode.h>
 #include <Common/logger_useful.h>
+#include <Common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -19,7 +20,7 @@ namespace Kafka
 Client::Client(const std::shared_ptr<Handle> & handle_, const std::string & topic)
     : handle(handle_)
     , topic_handle({rd_kafka_topic_new(handle->get(), topic.c_str(), nullptr), rd_kafka_topic_destroy})
-    , logger(&Poco::Logger::get(fmt::format("{}-{}", name(), topicName())))
+    , logger(getLogger(fmt::format("{}-{}", name(), topicName())))
 {
 }
 
@@ -43,11 +44,11 @@ std::string Client::topicName() const
     return rd_kafka_topic_name(topic_handle.get());
 }
 
-int32_t Client::getPartitionCount() const
+int32_t Client::getPartitionCount(uint64_t timeout_ms) const
 {
     const struct rd_kafka_metadata * metadata = nullptr;
 
-    auto err = rd_kafka_metadata(getHandle(), 0, getTopicHandle(), &metadata, /*timeout_ms=*/5000);
+    auto err = rd_kafka_metadata(getHandle(), 0, getTopicHandle(), &metadata, static_cast<int>(timeout_ms));
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
         throw Exception(
             mapErrorCode(err),
@@ -117,7 +118,7 @@ Consumer::Consumer(const ConnectionPtr & owner_, const ConsumerHandlePtr & handl
 {
 }
 
-void Consumer::initialize(const std::vector<int32_t> & partitions)
+void Consumer::initialize(const std::vector<uint64_t> & partitions)
 {
     partitions_progress.reserve(partitions.size());
     for (auto p : partitions)
@@ -207,6 +208,8 @@ void Consumer::consumeBatch(int32_t partition, uint32_t count, int32_t timeout_m
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
         static_cast<rd_kafka_message_t **>(malloc(sizeof(rd_kafka_message_t *) * count)), free};
 
+    auto & progress = partitions_progress[partition];
+
     Int64 res{0};
     {
         /// Allows all sources which use the same consumer can consume data at the same time.
@@ -215,41 +218,32 @@ void Consumer::consumeBatch(int32_t partition, uint32_t count, int32_t timeout_m
 
         if (res < 0)
         {
-            error_callback(rd_kafka_last_error());
+            error_callback(rd_kafka_last_error(), std::string_view{});
             return;
         }
 
         if (res > 0)
         {
-            auto & progress = partitions_progress[partition];
-            progress.low = rkmessages.get()[0]->offset;
-            progress.high = rkmessages.get()[res - 1]->offset;
+            auto first_offset = rkmessages.get()[0]->offset;
+            progress.low = first_offset;
+            progress.high = first_offset;
         }
     }
+
+    SCOPE_EXIT_SAFE(for (ssize_t idx = 0; idx < res; ++idx) rd_kafka_message_destroy(rkmessages.get()[idx]););
 
     for (ssize_t idx = 0; idx < res; ++idx)
     {
         auto * rkmessage = rkmessages.get()[idx];
 
-        try
-        {
-            if (rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR)
-                error_callback(rkmessage->err);
-            else
-                callback(rkmessage, res, nullptr);
-        }
-        catch (...)
-        {
-            /// just log the error to make sure the messages get destroyed
-            LOG_ERROR(
-                logger,
-                "Uncaught exception during consuming topic={} partition={} error={}",
-                topicName(),
-                partition,
-                DB::getCurrentExceptionMessage(true, true));
-        }
+        /// Properly record the progress so that it can skip posion data (in MV) properly.
+        if (likely(rkmessage->offset != RD_KAFKA_OFFSET_INVALID))
+            progress.high = rkmessage->offset;
 
-        rd_kafka_message_destroy(rkmessage);
+        if (rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR)
+            callback(rkmessage, res, nullptr);
+        else
+            error_callback(rkmessage->err, std::string_view{reinterpret_cast<const char *>(rkmessage->payload), rkmessage->len});
     }
 }
 
@@ -267,10 +261,11 @@ Producer::Producer(const ProducerHandlePtr & handle_, const std::string & topic)
 {
 }
 
-void Producer::start()
+void Producer::start(bool need_poll)
 {
     auto * producer_handle = dynamic_cast<ProducerHandle *>(handle.get());
-    producer_handle->startPolling();
+    if (need_poll)
+        producer_handle->startPolling();
     producer_handle->increaseUseCount();
 }
 

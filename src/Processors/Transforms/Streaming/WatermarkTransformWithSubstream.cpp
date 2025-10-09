@@ -1,14 +1,9 @@
 #include <Processors/Transforms/Streaming/WatermarkTransformWithSubstream.h>
 
-#include <Checkpoint/CheckpointContext.h>
-#include <Checkpoint/CheckpointCoordinator.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Processors/Transforms/Streaming/HopWatermarkStamper.h>
-#include <Processors/Transforms/Streaming/SessionWatermarkStamper.h>
-#include <Processors/Transforms/Streaming/TumbleWatermarkStamper.h>
+#include <Interpreters/Streaming/Substream/HybridSubstreamHashMap.h>
+#include <Interpreters/Streaming/Substream/MemorySubstreamHashMap.h>
 #include <Common/ProtonCommon.h>
-#include <Common/assert_cast.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -20,38 +15,59 @@ extern const int UNSUPPORTED;
 
 namespace Streaming
 {
-namespace
-{
-WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::Logger * logger)
-{
-    assert(params.mode != EmitMode::None);
-    if (params.window_params)
-    {
-        switch (params.window_params->type)
-        {
-            case WindowType::Tumble:
-                return std::make_unique<TumbleWatermarkStamper>(params, logger);
-            case WindowType::Hop:
-                return std::make_unique<HopWatermarkStamper>(params, logger);
-            case WindowType::Session:
-                return std::make_unique<SessionWatermarkStamper>(params, logger);
-            default:
-                break;
-        }
-    }
-    return std::make_unique<WatermarkStamper>(params, logger);
-}
-}
-
 WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
-    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * logger)
+    const Block & header,
+    EmitParamsPtr params_,
+    bool skip_stamping_for_backfill_data_,
+    HashTableType hash_table_type,
+    const String & spill_dir,
+    size_t max_hot_key_count)
     : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID)
     , params(std::move(params_))
     , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
+    , logger(getLogger("WatermarkTransformWithSubstream"))
+    , last_log_ts(MonotonicMilliseconds::now())
 {
-    watermark_template = initWatermark(*params, logger);
+    chassert(params->mode != EmitMode::None);
+    watermark_template = std::make_unique<WatermarkStamper>(*params, logger);
     assert(watermark_template);
     watermark_template->preProcess(header);
+
+    initSubstreamHashMap(hash_table_type, spill_dir, max_hot_key_count);
+}
+
+void WatermarkTransformWithSubstream::initSubstreamHashMap(
+    HashTableType hash_table_type, const String & spill_dir, size_t max_hot_key_count)
+{
+    auto value_serializer = [](const void * value, WriteBuffer & wb) {
+        const auto & watermark = *reinterpret_cast<const ValueType *>(value);
+        watermark->serialize(wb);
+        return ErrorCodes::OK;
+    };
+
+    auto value_deserializer = [this](void * value, ReadBuffer & rb) {
+        auto & watermark = *reinterpret_cast<ValueType *>(value);
+        watermark = watermark_template->clone();
+        watermark->deserialize(rb);
+        return ErrorCodes::OK;
+    };
+
+    switch (hash_table_type)
+    {
+        case HashTableType::Memory:
+        {
+            substream_watermarks
+                = std::make_unique<MemorySubstreamHashMap<ValueType>>(std::move(value_serializer), std::move(value_deserializer));
+            return;
+        }
+        case HashTableType::Hybrid:
+        {
+            substream_watermarks = std::make_unique<HybridSubstreamHashMap<ValueType>>(
+                spill_dir + "_substream", max_hot_key_count, std::move(value_serializer), std::move(value_deserializer), logger);
+            return;
+        }
+    }
+    UNREACHABLE();
 }
 
 IProcessor::Status WatermarkTransformWithSubstream::prepare()
@@ -126,18 +142,21 @@ void WatermarkTransformWithSubstream::work()
     if (process_chunk.isHistoricalDataEnd() && skip_stamping_for_backfill_data) [[unlikely]]
     {
         mute_watermark = false;
-        output_chunks.reserve(substream_watermarks.size() + 1);
+        output_chunks.reserve(substream_watermarks->size() + 1);
         /// Propagate historical data end flag first
         output_chunks.emplace_back(process_chunk.clone());
-        for (auto & [id, watermark] : substream_watermarks)
-        {
-            auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setSubstreamID(std::move(id));
-            process_chunk.setChunkContext(std::move(chunk_ctx)); /// reset context
 
-            watermark->processAfterUnmuted(process_chunk);
-            output_chunks.emplace_back(process_chunk.clone());
-        }
+        substream_watermarks->forEachKeyValue(
+            [&](const auto & id, auto value) {
+                auto chunk_ctx = ChunkContext::create();
+                chunk_ctx->setSubstreamID(id);
+                process_chunk.setChunkContext(std::move(chunk_ctx)); /// reset context
+
+                auto & watermark = *reinterpret_cast<ValueType *>(value.getMutableMapped());
+                watermark->processAfterUnmuted(process_chunk);
+                output_chunks.emplace_back(process_chunk.clone());
+            },
+            /*inmemory=*/false);
         return;
     }
 
@@ -172,19 +191,31 @@ void WatermarkTransformWithSubstream::work()
         /// FIXME: This is a very ugly and inefficient implementation and needs to revisit.
         if (!mute_watermark && watermark_template->requiresPeriodicOrTimeoutEmit())
         {
-            output_chunks.reserve(substream_watermarks.size());
-            for (auto & [id, watermark] : substream_watermarks)
-            {
-                process_chunk.setChunkContext(nullptr); /// clear context, act as a heart beat
-                watermark->process(process_chunk);
+            std::vector<SubstreamID> expried_substreams;
+            substream_watermarks->forEachKeyValue(
+                [&](const auto & id, auto value) {
+                    auto & watermark = *reinterpret_cast<ValueType *>(value.getMutableMapped());
+                    process_chunk.setChunkContext(nullptr); /// clear context, act as a heart beat
+                    watermark->process(process_chunk);
 
-                if (process_chunk.hasChunkContext())
-                {
-                    process_chunk.trySetSubstreamID(id);
-                    output_chunks.emplace_back(process_chunk.clone());
-                    propagated_heartbeat = true;
-                }
-            }
+                    if (process_chunk.hasChunkContext())
+                    {
+                        if (process_chunk.getWatermark() == TIMEOUT_WATERMARK)
+                            expried_substreams.emplace_back(id);
+                        else
+                            /// If exists periodic watermark, shall be propagated all substreams
+                            output_chunks.reserve(substream_watermarks->size());
+
+                        process_chunk.setSubstreamID(id);
+                        output_chunks.emplace_back(process_chunk.clone());
+                        propagated_heartbeat = true;
+                    }
+                },
+                /*inmemory=*/false);
+
+            /// Remove expired substreams
+            for (auto & id : expried_substreams)
+                removeSubstreamWatermark(id);
         }
 
         if (!propagated_heartbeat)
@@ -193,49 +224,38 @@ void WatermarkTransformWithSubstream::work()
             output_chunks.emplace_back(std::move(process_chunk));
         }
     }
+
+    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    {
+        LOG_INFO(logger, "Substream metrics: {}", substream_watermarks->metricsString());
+        last_log_ts = MonotonicMilliseconds::now();
+    }
 }
 
 WatermarkStamper & WatermarkTransformWithSubstream::getOrCreateSubstreamWatermark(const SubstreamID & id)
 {
-    auto iter = substream_watermarks.find(id);
-    if (iter == substream_watermarks.end())
-        return *(substream_watermarks.emplace(id, watermark_template->clone()).first->second);
+    auto [value, inserted] = substream_watermarks->emplaceKey(id);
+    auto & watermark = *reinterpret_cast<ValueType *>(value);
+    if (inserted)
+        watermark = watermark_template->clone();
 
-    return *(iter->second);
+    return *watermark;
 }
 
-void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
+bool WatermarkTransformWithSubstream::removeSubstreamWatermark(const SubstreamID & id)
 {
-    /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
-    assert(output_chunks.empty());
-    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        writeIntBinary(substream_watermarks.size(), wb);
-
-        for (const auto & [id, watermark] : substream_watermarks)
-        {
-            serialize(id, wb);
-            watermark->serialize(wb);
-        }
-    });
+    return substream_watermarks->removeKey(id);
 }
 
-void WatermarkTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
+String WatermarkTransformWithSubstream::getName() const
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType, ReadBuffer & rb) {
-        size_t size = 0;
-        readIntBinary(size, rb);
-
-        substream_watermarks.reserve(size);
-        for (size_t i = 0; i < size; ++i)
-        {
-            SubstreamID substream_id{};
-            deserialize(substream_id, rb);
-
-            auto watermark = watermark_template->clone();
-            watermark->deserialize(rb);
-            substream_watermarks.emplace(std::move(substream_id), std::move(watermark));
-        }
-    });
+    switch (substream_watermarks->type())
+    {
+        case HashTableType::Memory:
+            return fmt::format("{}TransformWithSubstream", watermark_template->getName());
+        case HashTableType::Hybrid:
+            return fmt::format("Hybrid{}TransformWithSubstream", watermark_template->getName());
+    }
 }
 }
 }

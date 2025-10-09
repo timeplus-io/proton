@@ -1,0 +1,75 @@
+tags:
+  - materialized view
+  - session window
+  - bug
+description: create materialized view as 2s session window with session id based on
+  id, location,  aggregation by count and group by __tp_session_id, window_start,
+  window_end, id, location, select id, location, count_value from table(mv), designated
+  timestamp as eventtime column in session sql
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test1_mv_stream_session_v
+    
+  - type: wait
+    time: 1
+    
+  - name: '300'
+    type: query
+    sql: create materialized view test1_mv_stream_session_v as select
+      id, count(value) as count_value, window_start as s, window_end as e from session(test1_mv,
+      timestamp, 2s, id, location) group by __tp_session_id, window_start, window_end,
+      id, location
+    
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00'),
+      ('dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:02');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02'),
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev3', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00'),
+      ('dev3', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01'),
+      ('dev2', 'ca', 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02'),
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08');
+
+  - type: wait
+    time: 2
+    
+  - name: '301'
+    type: query
+    sql: select id, sum_value from table(test1_mv_stream_session_v)
+    schema:
+      - name: id
+        type: string
+      - name: sum_value
+        type: float64
+        
+  - type: check
+    target_name: '301'
+    expected_result:
+      - [ dev1, '123.3' ]
+      - [ dev2, '117.3' ]
+      - [ dev8, '67' ]
+

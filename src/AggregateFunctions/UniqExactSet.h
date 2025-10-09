@@ -3,9 +3,9 @@
 #include <Common/CurrentThread.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/ThreadPool.h>
-#include <Common/setThreadName.h>
 #include <Common/scope_guard_safe.h>
-
+#include <Common/setThreadName.h>
+#include <Common/threadPoolCallbackRunner.h>
 
 namespace DB
 {
@@ -14,6 +14,13 @@ namespace ErrorCodes
 {
 extern const int TOO_LARGE_ARRAY_SIZE;
 }
+
+enum class SetLevelHint
+{
+    singleLevel,
+    twoLevel,
+    unknown,
+};
 
 template <typename SingleLevelSet, typename TwoLevelSet>
 class UniqExactSet
@@ -24,21 +31,39 @@ class UniqExactSet
 public:
     using value_type = typename SingleLevelSet::value_type;
 
-    template <typename Arg, bool use_single_level_hash_table = true>
+    template <typename Arg, SetLevelHint hint>
     auto ALWAYS_INLINE insert(Arg && arg)
     {
-        if constexpr (use_single_level_hash_table)
+        if constexpr (hint == SetLevelHint::singleLevel)
+        {
             asSingleLevel().insert(std::forward<Arg>(arg));
-        else
+        }
+        else if constexpr (hint == SetLevelHint::twoLevel)
+        {
             asTwoLevel().insert(std::forward<Arg>(arg));
+        }
+        else
+        {
+            if (isSingleLevel())
+            {
+                auto && [_, inserted] = asSingleLevel().insert(std::forward<Arg>(arg));
+                if (inserted && worthConvertingToTwoLevel(asSingleLevel().size()))
+                    convertToTwoLevel();
+            }
+            else
+            {
+                asTwoLevel().insert(std::forward<Arg>(arg));
+            }
+        }
     }
 
     /// In merge, if one of the lhs and rhs is twolevelset and the other is singlelevelset, then the singlelevelset will need to convertToTwoLevel().
     /// It's not in parallel and will cost extra large time if the thread_num is large.
     /// This method will convert all the SingleLevelSet to TwoLevelSet in parallel if the hashsets are not all singlelevel or not all twolevel.
-    static void parallelizeMergePrepare(const std::vector<UniqExactSet *> & data_vec, ThreadPool & thread_pool)
+    static void parallelizeMergePrepare(const std::vector<UniqExactSet *> & data_vec, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled)
     {
-        unsigned long single_level_set_num = 0;
+        UInt64 single_level_set_num = 0;
+        UInt64 all_single_hash_size = 0;
 
         for (auto ele : data_vec)
         {
@@ -46,24 +71,37 @@ public:
                 single_level_set_num ++;
         }
 
-        if (single_level_set_num > 0 && single_level_set_num < data_vec.size())
+        if (single_level_set_num == data_vec.size())
+        {
+            for (auto ele : data_vec)
+                all_single_hash_size += ele->size();
+        }
+
+        /// If all the hashtables are mixed by singleLevel and twoLevel, or all singleLevel (larger than 6000 for average value), they could be converted into
+        /// twoLevel hashtables in parallel and then merge together. please refer to the following PR for more details.
+        /// https://github.com/ClickHouse/ClickHouse/pull/50748
+        /// https://github.com/ClickHouse/ClickHouse/pull/52973
+        if ((single_level_set_num > 0 && single_level_set_num < data_vec.size()) || ((all_single_hash_size/data_vec.size()) > 6000))
         {
             try
             {
                 auto data_vec_atomic_index = std::make_shared<std::atomic_uint32_t>(0);
-                auto thread_func = [data_vec, data_vec_atomic_index, thread_group = CurrentThread::getGroup()]()
+                auto thread_func = [data_vec, data_vec_atomic_index, &is_cancelled, thread_group = CurrentThread::getGroup()]()
                 {
                     SCOPE_EXIT_SAFE(
                         if (thread_group)
-                            CurrentThread::detachQueryIfNotDetached();
+                            CurrentThread::detachFromGroupIfNotDetached();
                     );
                     if (thread_group)
-                        CurrentThread::attachToIfDetached(thread_group);
+                        CurrentThread::attachToGroupIfDetached(thread_group);
 
                     setThreadName("UniqExaConvert");
 
                     while (true)
                     {
+                        if (is_cancelled.load(std::memory_order_seq_cst))
+                            return;
+
                         const auto i = data_vec_atomic_index->fetch_add(1);
                         if (i >= data_vec.size())
                             return;
@@ -84,8 +122,14 @@ public:
         }
     }
 
-    auto merge(const UniqExactSet & other, ThreadPool * thread_pool = nullptr)
+    auto merge(const UniqExactSet & other, ThreadPool * thread_pool = nullptr, std::atomic<bool> * is_cancelled = nullptr)
     {
+        if (size() == 0 && worthConvertingToTwoLevel(other.size()))
+        {
+            two_level_set = other.getTwoLevelSet();
+            return;
+        }
+
         if (isSingleLevel() && other.isTwoLevel())
             convertToTwoLevel();
 
@@ -96,39 +140,49 @@ public:
         else
         {
             auto & lhs = asTwoLevel();
+
+            if (other.isSingleLevel())
+                return lhs.merge(other.asSingleLevel());
+
             const auto rhs_ptr = other.getTwoLevelSet();
             const auto & rhs = *rhs_ptr;
             if (!thread_pool)
             {
                 for (size_t i = 0; i < rhs.NUM_BUCKETS; ++i)
+                {
                     lhs.impls[i].merge(rhs.impls[i]);
+                }
             }
             else
             {
-                auto next_bucket_to_merge = std::make_shared<std::atomic_uint32_t>(0);
-
-                auto thread_func = [&lhs, &rhs, next_bucket_to_merge, thread_group = CurrentThread::getGroup()]()
+                ThreadPoolCallbackRunnerLocal<void> runner(*thread_pool, "UniqExactMerger");
+                try
                 {
-                    SCOPE_EXIT_SAFE(
-                        if (thread_group)
-                            CurrentThread::detachQueryIfNotDetached();
-                    );
-                    if (thread_group)
-                        CurrentThread::attachToIfDetached(thread_group);
-                    setThreadName("UniqExactMerger");
+                    auto next_bucket_to_merge = std::make_shared<std::atomic_uint32_t>(0);
 
-                    while (true)
+                    auto thread_func = [&lhs, &rhs, next_bucket_to_merge, is_cancelled, thread_group = CurrentThread::getGroup()]()
                     {
-                        const auto bucket = next_bucket_to_merge->fetch_add(1);
-                        if (bucket >= rhs.NUM_BUCKETS)
-                            return;
-                        lhs.impls[bucket].merge(rhs.impls[bucket]);
-                    }
-                };
+                        while (true)
+                        {
+                            if (is_cancelled->load())
+                                return;
 
-                for (size_t i = 0; i < std::min<size_t>(thread_pool->getMaxThreads(), rhs.NUM_BUCKETS); ++i)
-                    thread_pool->scheduleOrThrowOnError(thread_func);
-                thread_pool->wait();
+                            const auto bucket = next_bucket_to_merge->fetch_add(1);
+                            if (bucket >= rhs.NUM_BUCKETS)
+                                return;
+                            lhs.impls[bucket].merge(rhs.impls[bucket]);
+                        }
+                    };
+
+                    for (size_t i = 0; i < std::min<size_t>(thread_pool->getMaxThreads(), rhs.NUM_BUCKETS); ++i)
+                        runner(thread_func, Priority{});
+                    runner.waitForAllToFinishAndRethrowFirstError();
+                }
+                catch (...)
+                {
+                    is_cancelled->store(true);
+                    runner.waitForAllToFinishAndRethrowFirstError();
+                }
             }
         }
     }
@@ -136,7 +190,6 @@ public:
     void read(ReadBuffer & in)
     {
         size_t new_size = 0;
-        auto * const position = in.position();
         readVarUInt(new_size, in);
         if (new_size > 100'000'000'000)
             throw DB::Exception(
@@ -154,8 +207,14 @@ public:
         }
         else
         {
-            in.position() = position; // Rollback position
-            asSingleLevel().read(in);
+            asSingleLevel().reserve(new_size);
+
+            for (size_t i = 0; i < new_size; ++i)
+            {
+                typename SingleLevelSet::Cell x;
+                x.read(in);
+                asSingleLevel().insert(x.getValue());
+            }
         }
     }
 

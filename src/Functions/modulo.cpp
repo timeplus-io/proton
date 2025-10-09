@@ -73,11 +73,11 @@ struct ModuloByConstantImpl
         }
 
         if (unlikely(static_cast<A>(b) == 0))
-            throw Exception("Division by zero", ErrorCodes::ILLEGAL_DIVISION);
+            throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Division by zero");
 
         /// Division by min negative value.
         if (std::is_signed_v<B> && b == std::numeric_limits<B>::lowest())
-            throw Exception("Division by the most negative number", ErrorCodes::ILLEGAL_DIVISION);
+            throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Division by the most negative number");
 
         /// Modulo of division by negative number is the same as the positive number.
         if (b < 0)
@@ -159,6 +159,7 @@ REGISTER_FUNCTION(Modulo)
 }
 
 struct NameModuloLegacy { static constexpr auto name = "modulo_legacy"; };
+
 using FunctionModuloLegacy = BinaryArithmeticOverloadResolver<ModuloLegacyImpl, NameModuloLegacy, false>;
 
 REGISTER_FUNCTION(ModuloLegacy)
@@ -182,7 +183,7 @@ Returns the difference between `a` and the nearest integer not greater than `a` 
 In other words, the function returning the modulus (modulo) in the terms of Modular Arithmetic.
         )",
             .examples{{"positiveModulo", "SELECT positive_modulo(-1, 10);", ""}},
-            .categories{"Arithmetic"}},
+            .category{"Arithmetic"}},
         FunctionFactory::CaseInsensitive);
 
     /// Compatibility with Spark:

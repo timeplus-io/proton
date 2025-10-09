@@ -27,7 +27,7 @@ struct ToStartOfTransform;
 
 #define TRANSFORM_DATE(INTERVAL_KIND) \
     template <> \
-    struct ToStartOfTransform<IntervalKind::INTERVAL_KIND> \
+    struct ToStartOfTransform<IntervalKind::Kind::INTERVAL_KIND> \
     { \
         static UInt32 execute(UInt32 time_sec, UInt64 delta, const DateLUTImpl & time_zone) \
         { \
@@ -50,7 +50,7 @@ TRANSFORM_DATE(Week)
 #undef TRANSFORM_DATE
 
 template <>
-struct ToStartOfTransform<IntervalKind::Day>
+struct ToStartOfTransform<IntervalKind::Kind::Day>
 {
     static UInt32 execute(UInt32 time_sec, UInt64 delta, const DateLUTImpl & time_zone)
     {
@@ -67,7 +67,7 @@ struct ToStartOfTransform<IntervalKind::Day>
 
 #define TRANSFORM_TIME(INTERVAL_KIND) \
     template <> \
-    struct ToStartOfTransform<IntervalKind::INTERVAL_KIND> \
+    struct ToStartOfTransform<IntervalKind::Kind::INTERVAL_KIND> \
     { \
         static UInt32 execute(UInt32 time_sec, UInt64 delta, const DateLUTImpl & time_zone) \
         { \
@@ -89,7 +89,7 @@ TRANSFORM_TIME(Second)
 /// Subsceonds: assume an hour has integer intervals
 #define TRANSFORM_TIME(INTERVAL_KIND, INTERVAL_SCALE) \
     template <> \
-    struct ToStartOfTransform<IntervalKind::INTERVAL_KIND> \
+    struct ToStartOfTransform<IntervalKind::Kind::INTERVAL_KIND> \
     { \
         static constexpr auto interval_scale_multiplier = common::exp10_i64(INTERVAL_SCALE); \
         static UInt32 execute(UInt32 t, UInt64 delta, const DateLUTImpl & time_zone) \
@@ -132,7 +132,7 @@ struct AddTime;
 
 #define ADD_DATE(INTERVAL_KIND) \
     template <> \
-    struct AddTime<IntervalKind::INTERVAL_KIND> \
+    struct AddTime<IntervalKind::Kind::INTERVAL_KIND> \
     { \
         static inline UInt32 execute(UInt32 time_sec, Int64 delta, const DateLUTImpl & time_zone) \
         { \
@@ -155,7 +155,7 @@ ADD_DATE(Day)
 
 #define ADD_TIME(INTERVAL_KIND, INTERVAL) \
     template <> \
-    struct AddTime<IntervalKind::INTERVAL_KIND> \
+    struct AddTime<IntervalKind::Kind::INTERVAL_KIND> \
     { \
         static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 time_sec, Int64 delta, const DateLUTImpl &) \
         { \
@@ -175,7 +175,7 @@ ADD_TIME(Second, 1)
 
 #define ADD_TIME(INTERVAL_KIND, INTERVAL_SCALE) \
     template <> \
-    struct AddTime<IntervalKind::INTERVAL_KIND> \
+    struct AddTime<IntervalKind::Kind::INTERVAL_KIND> \
     { \
         static constexpr auto interval_scale_multiplier = common::exp10_i64(INTERVAL_SCALE); \
         static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 time_sec, Int64 delta, const DateLUTImpl &) \

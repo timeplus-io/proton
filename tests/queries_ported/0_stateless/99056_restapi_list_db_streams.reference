@@ -1,0 +1,17 @@
+==== Testing Memory Engine ====
+Extracted values:
+  - Database: 99056Mem
+  - Stream Name: u
+  - Column Name: id
+  - Engine: Memory
+Memory DB test passed successfully!
+
+==== Testing MySQL Integration ====
+Extracted MySQL values:
+  - Database: mysql_tpch
+  - Table: region
+  - Engine: MySQL
+  - Column Count: 3
+MySQL DB test passed successfully!
+
+All tests completed successfully!

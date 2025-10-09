@@ -52,7 +52,7 @@ protected:
     virtual void onConsume(Chunk chunk) = 0;
     virtual GenerateResult onGenerate() = 0;
     virtual void onFinish() {}
-    virtual void onException() {}
+    virtual void onException(std::exception_ptr /* exception */) { }
 
     /// proton: starts. Call default checkpoint routine.
     /// If subclass likes to have a different checkpoint strategy, it needs

@@ -1,0 +1,157 @@
+tags:
+- replay_stream
+- stream query
+description: replay two streams using the same start_time to keep the replay timelines of the two streams aligned.
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test29_stream_1
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test29_stream_1 (id int, time_col datetime64(3));
+
+- type: query
+  sql: drop stream if exists test29_stream_2
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test29_stream_2 (id int, time_col datetime64(3));
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_1(id, time_col) values
+  schema:
+    - name: id
+      type: int32
+    - name: time_col
+      type: datetime64(3)
+  inputs:
+    - [1, '2024-01-20 16:01:14.000']
+    - [3, '2024-01-20 16:01:15.000']
+    - [6, '2024-01-20 16:01:17.000']
+    - [7, '2024-01-20 16:01:20.000'] 
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_2(id, time_col) values
+  schema:
+    - name: id
+      type: int32
+    - name: time_col
+      type: datetime64(3)
+  inputs:
+    - [2, '2024-01-20 16:01:14.500']
+    - [4, '2024-01-20 16:01:15.400']
+    - [5, '2024-01-20 16:01:16.000']
+    - [8, '2024-01-20 16:01:20.050']
+
+- type: wait
+  time: 3
+
+- name: 29051
+  type: stream
+  query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
+      settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000Z'
+      UNION select id from test29_stream_2 where _tp_time > earliest_timestamp()
+      settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000Z'
+  schema:
+  - name: id
+    type: int32
+
+- type: wait
+  time: 5
+
+- type: query
+  sql: insert into test29_stream_1(id, time_col) values
+  schema:
+    - name: id
+      type: int32
+    - name: time_col
+      type: datetime64(3)
+  inputs:
+    - [9, '2024-01-20 16:01:20.100']
+
+- type: wait
+  time: 1
+
+- name: 29052
+  type: stream
+  query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
+      settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:16.000Z'
+      UNION select id from test29_stream_2 where _tp_time > earliest_timestamp()
+      settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:16.000Z'
+  schema:
+  - name: id
+    type: int32
+
+- type: wait
+  time: 5
+
+- type: query
+  sql: insert into test29_stream_2(id, time_col) values
+  schema:
+    - name: id
+      type: int32
+    - name: time_col
+      type: datetime64(3)
+  inputs:
+    - [10, '2024-01-20 16:01:20.200']
+
+- type: wait
+  time: 1
+
+- name: 29053
+  type: stream
+  query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
+      settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000Z', replay_end_time = '2024-01-20 16:01:16.000Z'
+      UNION select id from test29_stream_2 where _tp_time > earliest_timestamp()
+      settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000Z', replay_end_time = '2024-01-20 16:01:16.000Z'
+  schema:
+  - name: id
+    type: int32
+
+- type: wait
+  time: 5
+
+- type: check
+  target_name: 29051
+  expected_result:
+  - [1]
+  - [2]
+  - [3]
+  - [4]
+  - [5]
+  - [6]
+  - [7]
+  - [8]
+  - [9]
+  - [10]
+
+- type: check
+  target_name: 29052
+  expected_result:
+  - [5]
+  - [6]
+  - [7]
+  - [8]
+  - [9]
+  - [10]
+
+- type: check
+  target_name: 29053
+  expected_result:
+  - [1]
+  - [2]
+  - [3]
+  - [4]

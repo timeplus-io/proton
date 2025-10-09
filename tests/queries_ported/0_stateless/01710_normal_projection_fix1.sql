@@ -1,3 +1,7 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
+
 drop stream if exists t;
 
 create stream t (i int, j int) engine MergeTree order by i;

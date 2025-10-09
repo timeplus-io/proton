@@ -1,9 +1,10 @@
+#include <Interpreters/AsynchronousInsertQueue.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <algorithm>
-#include <iterator>
+#include <exception>
 #include <memory>
 #include <vector>
 #include <string_view>
-#include <cstring>
 #include <base/types.h>
 #include <base/scope_guard.h>
 #include <Poco/Net/NetException.h>
@@ -23,6 +24,7 @@
 #include <IO/WriteHelpers.h>
 #include <Formats/NativeReader.h>
 #include <Formats/NativeWriter.h>
+#include <Formats/FormatFactory.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/TablesStatus.h>
@@ -30,15 +32,15 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/Session.h>
 #include <Server/TCPServer.h>
-#include <Storages/Streaming/StorageStream.h>
+#include <Storages/Stream/StorageStream.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
 #include <Access/Credentials.h>
-#include <Storages/ColumnDefault.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Compression/CompressionFactory.h>
 #include <Common/logger_useful.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/thread_local_rng.h>
 #include <fmt/format.h>
 
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
@@ -47,10 +49,16 @@
 #include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Processors/Sinks/SinkToStorage.h>
 
-#include "Core/Protocol.h"
+#include <Core/Protocol.h>
+#include "Storages/MergeTree/RequestResponse.h"
 #include "TCPHandler.h"
 
-#include "config_version.h"
+#include <Common/config_version.h>
+
+/// proton: starts
+#include <Bootstrap/Globals.h>
+/// proton: ends
+
 
 using namespace std::literals;
 using namespace DB;
@@ -102,7 +110,7 @@ TCPHandler::TCPHandler(IServer & server_, TCPServer & tcp_server_, const Poco::N
     , tcp_server(tcp_server_)
     , parse_proxy_protocol(parse_proxy_protocol_)
     , snapshot_mode(snapshot_mode_)
-    , log(&Poco::Logger::get("TCPHandler"))
+    , log(getLogger("TCPHandler"))
     , server_display_name(std::move(server_display_name_))
 {
 }
@@ -210,11 +218,11 @@ void TCPHandler::runImpl()
         if (!tcp_server.isOpen() || server.isCancelled() || in->eof())
             break;
 
-        Stopwatch watch;
         state.reset();
 
         /// Initialized later.
         std::optional<CurrentThread::QueryScope> query_scope;
+        OpenTelemetry::TracingContextHolderPtr thread_trace_context;
 
         /** An exception during the execution of request (it must be sent over the network to the client).
          *  The client will be able to accept it, if it did not happen while sending another packet and the client has not disconnected yet.
@@ -222,6 +230,17 @@ void TCPHandler::runImpl()
         std::unique_ptr<DB::Exception> exception;
         bool network_error = false;
         bool query_duration_already_logged = false;
+        auto log_query_duration = [this, &query_duration_already_logged]()
+        {
+            if (query_duration_already_logged)
+                return;
+            query_duration_already_logged = true;
+            auto elapsed_sec = state.watch.elapsedSeconds();
+            /// We already logged more detailed info if we read some rows
+            if (elapsed_sec < 1.0 && state.progress.read_rows)
+                return;
+            LOG_DEBUG(log, "Processed in {} sec.", elapsed_sec);
+        };
 
         try
         {
@@ -239,6 +258,12 @@ void TCPHandler::runImpl()
               */
             if (state.empty() && state.part_uuids_to_ignore && !receivePacket())
                 continue;
+
+            /// Set up tracing context for this query on current thread
+            thread_trace_context = std::make_unique<OpenTelemetry::TracingContextHolder>("TCPHandler",
+                query_context->getClientInfo().client_trace_context,
+                query_context->getSettingsRef(),
+                query_context->getOpenTelemetrySpanLog());
 
             /// proton: starts. Disable send_logs_level
             query_scope.emplace(query_context);
@@ -279,7 +304,7 @@ void TCPHandler::runImpl()
             query_context->setExternalTablesInitializer([this] (ContextPtr context)
             {
                 if (context != query_context)
-                    throw Exception("Unexpected context in external tables initializer", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected context in external tables initializer");
 
                 /// Get blocks of temporary tables
                 readData();
@@ -294,7 +319,7 @@ void TCPHandler::runImpl()
             query_context->setInputInitializer([this] (ContextPtr context, const StoragePtr & input_storage)
             {
                 if (context != query_context)
-                    throw Exception("Unexpected context in Input initializer", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected context in Input initializer");
 
                 auto metadata_snapshot = input_storage->getInMemoryMetadataPtr();
                 state.need_receive_data_for_input = true;
@@ -314,7 +339,7 @@ void TCPHandler::runImpl()
             query_context->setInputBlocksReaderCallback([this] (ContextPtr context) -> Block
             {
                 if (context != query_context)
-                    throw Exception("Unexpected context in InputBlocksReader", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected context in InputBlocksReader");
 
                 if (!readDataNext())
                 {
@@ -339,7 +364,17 @@ void TCPHandler::runImpl()
                 return receiveReadTaskResponseAssumeLocked();
             });
 
-            query_context->setMergeTreeReadTaskCallback([this](PartitionReadRequest request) -> std::optional<PartitionReadResponse>
+            query_context->setMergeTreeAllRangesCallback([this](InitialAllRangesAnnouncement announcement)
+            {
+                std::lock_guard lock(task_callback_mutex);
+
+                if (state.is_cancelled)
+                    return;
+
+                sendMergeTreeAllRangesAnnounecementAssumeLocked(announcement);
+            });
+
+            query_context->setMergeTreeReadTaskCallback([this](ParallelReadRequest request) -> std::optional<ParallelReadResponse>
             {
                 std::lock_guard lock(task_callback_mutex);
 
@@ -357,8 +392,8 @@ void TCPHandler::runImpl()
             after_send_progress.restart();
 
             if (state.io.pipeline.pushing())
-            /// FIXME: check explicitly that insert query suggests to receive data via native protocol,
             {
+                /// FIXME: check explicitly that insert query suggests to receive data via native protocol,
                 state.need_receive_data_for_insert = true;
                 processInsertQuery();
             }
@@ -368,44 +403,45 @@ void TCPHandler::runImpl()
             }
             else if (state.io.pipeline.completed())
             {
-                CompletedPipelineExecutor executor(state.io.pipeline);
-                /// Should not check for cancel in case of input.
-                if (!state.need_receive_data_for_input)
                 {
-                    auto callback = [this]()
+                    CompletedPipelineExecutor executor(state.io.pipeline);
+
+                    /// Should not check for cancel in case of input.
+                    if (!state.need_receive_data_for_input)
                     {
-                        std::lock_guard lock(fatal_error_mutex);
+                        auto callback = [this]()
+                        {
+                            std::lock_guard lock(fatal_error_mutex);
 
-                        if (isQueryCancelled())
-                            return true;
+                            if (isQueryCancelled())
+                                return true;
 
-                        sendProgress();
-                        sendSelectProfileEvents();
-                        sendLogs();
+                            sendProgress();
+                            sendSelectProfileEvents();
+                            sendLogs();
 
-                        return false;
-                    };
+                            return false;
+                        };
 
-                    executor.setCancelCallback(callback, interactive_delay / 1000);
+                        executor.setCancelCallback(callback, interactive_delay / 1000);
+                    }
+                    executor.execute();
                 }
-                executor.execute();
 
                 /// Send final progress
                 ///
-                /// NOTE: we cannot send Progress for regular INSERT (w/ VALUES)
+                /// NOTE: we cannot send Progress for regular INSERT (with VALUES)
                 /// w/o breaking protocol compatibility, but it can be done
                 /// by increasing revision.
                 sendProgress();
+                sendSelectProfileEvents();
             }
 
             state.io.onFinish();
 
             /// Do it before sending end of stream, to have a chance to show log message in client.
             query_scope->logPeakMemoryUsage();
-
-            watch.stop();
-            LOG_DEBUG(log, "Processed in {} sec.", watch.elapsedSeconds());
-            query_duration_already_logged = true;
+            log_query_duration();
 
             if (state.is_connection_closed)
                 break;
@@ -418,6 +454,8 @@ void TCPHandler::runImpl()
             /// (i.e. deallocations from the Aggregator with two-level aggregation)
             state.reset();
             query_scope.reset();
+            last_sent_snapshots.clear();
+            thread_trace_context.reset();
         }
         catch (const Exception & e)
         {
@@ -454,9 +492,8 @@ void TCPHandler::runImpl()
             exception = std::make_unique<DB::Exception>(Exception::CreateFromPocoTag{}, e);
         }
 // Server should die on std logic errors in debug, like with assert()
-// or ErrorCodes::LOGICAL_ERROR. This helps catch these errors in
-// tests.
-#ifndef NDEBUG
+// or ErrorCodes::LOGICAL_ERROR. This helps catch these errors in tests.
+#ifdef DEBUG_OR_SANITIZER_BUILD
         catch (const std::logic_error & e)
         {
             state.io.onException();
@@ -473,13 +510,16 @@ void TCPHandler::runImpl()
         catch (...)
         {
             state.io.onException();
-            exception = std::make_unique<DB::Exception>("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
+            exception = std::make_unique<DB::Exception>(ErrorCodes::UNKNOWN_EXCEPTION, "Unknown exception");
         }
 
         try
         {
             if (exception)
             {
+                if (thread_trace_context)
+                    thread_trace_context->root_span.addAttribute(*exception);
+
                 try
                 {
                     /// Try to send logs to client, but it could be risky too
@@ -493,7 +533,7 @@ void TCPHandler::runImpl()
 
                 const auto & e = *exception;
                 if (e.code() != ErrorCodes::QUERY_WAS_CANCELLED)
-                    LOG_ERROR(log, fmt::runtime(getExceptionMessage(e, true)));
+                    LOG_ERROR(log, getExceptionMessageAndPattern(e, /* with_stacktrace */ true));
                 sendException(*exception, send_exception_with_stack_trace);
             }
         }
@@ -517,6 +557,8 @@ void TCPHandler::runImpl()
             LOG_WARNING(log, "Can't skip data packets after query failure.");
         }
 
+        log_query_duration();
+
         try
         {
             /// QueryState should be cleared before QueryScope, since otherwise
@@ -524,6 +566,7 @@ void TCPHandler::runImpl()
             /// (i.e. deallocations from the Aggregator with two-level aggregation)
             state.reset();
             query_scope.reset();
+            thread_trace_context.reset();
         }
         catch (...)
         {
@@ -532,12 +575,6 @@ void TCPHandler::runImpl()
              *  For example, a pipeline could run in multiple threads, and an exception could occur in each of them.
              *  Ignore it.
              */
-        }
-
-        if (!query_duration_already_logged)
-        {
-            watch.stop();
-            LOG_DEBUG(log, "Processed in {} sec.", watch.elapsedSeconds());
         }
 
         /// It is important to destroy query context here. We do not want it to live arbitrarily longer than the query.
@@ -644,7 +681,6 @@ void TCPHandler::skipData()
     while (readDataNext())
         ;
 }
-
 
 void TCPHandler::processInsertQuery()
 {
@@ -818,7 +854,6 @@ void TCPHandler::processTablesStatusRequest()
         response.table_states_by_id.emplace(table_name, std::move(status));
     }
 
-
     writeVarUInt(Protocol::Server::TablesStatusResponse, *out);
 
     /// For testing hedged requests
@@ -837,7 +872,7 @@ void TCPHandler::receiveUnexpectedTablesStatusRequest()
     TablesStatusRequest skip_request;
     skip_request.read(*in, client_tcp_protocol_version);
 
-    throw NetException("Unexpected packet TablesStatusRequest received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet TablesStatusRequest received from client");
 }
 
 void TCPHandler::sendPartUUIDs()
@@ -862,7 +897,15 @@ void TCPHandler::sendReadTaskRequestAssumeLocked()
 }
 
 
-void TCPHandler::sendMergeTreeReadTaskRequestAssumeLocked(PartitionReadRequest request)
+void TCPHandler::sendMergeTreeAllRangesAnnounecementAssumeLocked(InitialAllRangesAnnouncement announcement)
+{
+    writeVarUInt(Protocol::Server::MergeTreeAllRangesAnnounecement, *out);
+    announcement.serialize(*out);
+    out->next();
+}
+
+
+void TCPHandler::sendMergeTreeReadTaskRequestAssumeLocked(ParallelReadRequest request)
 {
     writeVarUInt(Protocol::Server::MergeTreeReadTaskRequest, *out);
     request.serialize(*out);
@@ -953,7 +996,7 @@ bool TCPHandler::receiveProxyHeader()
     /// Only PROXYv1 is supported.
     /// Validation of protocol is not fully performed.
 
-    LimitReadBuffer limit_in(*in, 107, true); /// Maximum length from the specs.
+    LimitReadBuffer limit_in(*in, {.read_no_more=107, .expect_eof=true}); /// Maximum length from the specs.
 
     assertString("PROXY ", limit_in);
 
@@ -1034,6 +1077,7 @@ std::string formatHTTPErrorResponseWhenUserIsConnectedToWrongPort(const Poco::Ut
 
 }
 
+
 std::unique_ptr<Session> TCPHandler::makeSession()
 {
     auto interface = is_interserver_mode ? ClientInfo::Interface::TCP_INTERSERVER : ClientInfo::Interface::TCP;
@@ -1059,6 +1103,7 @@ std::unique_ptr<Session> TCPHandler::makeSession()
     return res;
 }
 
+
 void TCPHandler::receiveHello()
 {
     /// Receive `hello` packet.
@@ -1075,10 +1120,10 @@ void TCPHandler::receiveHello()
         if (packet_type == 'G' || packet_type == 'P')
         {
             writeString(formatHTTPErrorResponseWhenUserIsConnectedToWrongPort(server.config()), *out);
-            throw Exception("Client has connected to wrong port", ErrorCodes::CLIENT_HAS_CONNECTED_TO_WRONG_PORT);
+            throw Exception(ErrorCodes::CLIENT_HAS_CONNECTED_TO_WRONG_PORT, "Client has connected to wrong port");
         }
         else
-            throw NetException("Unexpected packet from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+            throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet from client");
     }
 
     readStringBinary(client_name, *in);
@@ -1091,7 +1136,7 @@ void TCPHandler::receiveHello()
     readStringBinary(password, *in);
 
     if (user.empty())
-        throw NetException("Unexpected packet from client (no user in Hello package)", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet from client (no user in Hello package)");
 
     LOG_DEBUG(log, "Connected {} version {}.{}.{}, revision: {}{}{}.",
         client_name,
@@ -1136,16 +1181,16 @@ void TCPHandler::receiveUnexpectedHello()
     readStringBinary(skip_string, *in);
     readStringBinary(skip_string, *in);
 
-    throw NetException("Unexpected packet Hello received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet Hello received from client");
 }
 
 
 void TCPHandler::sendHello()
 {
     writeVarUInt(Protocol::Server::Hello, *out);
-    writeStringBinary(DBMS_NAME, *out);
-    writeVarUInt(DBMS_VERSION_MAJOR, *out);
-    writeVarUInt(DBMS_VERSION_MINOR, *out);
+    writeStringBinary(VERSION_NAME, *out);
+    writeVarUInt(VERSION_MAJOR, *out);
+    writeVarUInt(VERSION_MINOR, *out);
     writeVarUInt(DBMS_TCP_PROTOCOL_VERSION, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
         writeStringBinary(DateLUT::instance().getTimeZone(), *out);
@@ -1154,8 +1199,20 @@ void TCPHandler::sendHello()
         writeStringBinary(server_display_name, *out);
 
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
-        writeVarUInt(DBMS_VERSION_PATCH, *out);
+        writeVarUInt(VERSION_PATCH, *out);
 
+    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_V2)
+    {
+        chassert(!nonce.has_value());
+        /// Contains lots of stuff (including time), so this should be enough for NONCE.
+        nonce.emplace(thread_local_rng());
+        writeIntBinary(nonce.value(), *out);
+    }
+    else
+    {
+        LOG_WARNING(LogFrequencyLimiter(log, 10),
+                    "Using deprecated interserver protocol because the client is too old. Consider upgrading all nodes in cluster.");
+    }
     out->next();
 }
 
@@ -1216,7 +1273,7 @@ bool TCPHandler::receivePacket()
             return false;
 
         default:
-            throw Exception("Unknown packet " + toString(packet_type) + " from client", ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
+            throw Exception(ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT, "Unknown packet {} from client", toString(packet_type));
     }
 }
 
@@ -1231,7 +1288,7 @@ void TCPHandler::receiveUnexpectedIgnoredPartUUIDs()
 {
     std::vector<UUID> skip_part_uuids;
     readVectorBinary(skip_part_uuids, *in);
-    throw NetException("Unexpected packet IgnoredPartUUIDs received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet IgnoredPartUUIDs received from client");
 }
 
 
@@ -1254,21 +1311,21 @@ String TCPHandler::receiveReadTaskResponseAssumeLocked()
         }
         else
         {
-            throw Exception(fmt::format("Received {} packet after requesting read task",
-                    Protocol::Client::toString(packet_type)), ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+            throw Exception(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Received {} packet after requesting read task",
+                    Protocol::Client::toString(packet_type));
         }
     }
     UInt64 version;
     readVarUInt(version, *in);
     if (version != DBMS_CLUSTER_PROCESSING_PROTOCOL_VERSION)
-        throw Exception("Protocol version for distributed processing mismatched", ErrorCodes::UNKNOWN_PROTOCOL);
+        throw Exception(ErrorCodes::UNKNOWN_PROTOCOL, "Protocol version for distributed processing mismatched");
     String response;
     readStringBinary(response, *in);
     return response;
 }
 
 
-std::optional<PartitionReadResponse> TCPHandler::receivePartitionMergeTreeReadTaskResponseAssumeLocked()
+std::optional<ParallelReadResponse> TCPHandler::receivePartitionMergeTreeReadTaskResponseAssumeLocked()
 {
     UInt64 packet_type = 0;
     readVarUInt(packet_type, *in);
@@ -1287,11 +1344,11 @@ std::optional<PartitionReadResponse> TCPHandler::receivePartitionMergeTreeReadTa
         }
         else
         {
-            throw Exception(fmt::format("Received {} packet after requesting read task",
-                    Protocol::Client::toString(packet_type)), ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+            throw Exception(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Received {} packet after requesting read task",
+                    Protocol::Client::toString(packet_type));
         }
     }
-    PartitionReadResponse response;
+    ParallelReadResponse response;
     response.deserialize(*in);
     return response;
 }
@@ -1358,15 +1415,26 @@ void TCPHandler::receiveQuery()
     {
         client_info.interface = ClientInfo::Interface::TCP_INTERSERVER;
 #if USE_SSL
-        String cluster_secret = server.context()->getCluster(cluster)->getSecret();
+        String cluster_secret = Globals::getServerDescriptor().secret;
+
         if (salt.empty() || cluster_secret.empty())
         {
-            auto exception = Exception(ErrorCodes::AUTHENTICATION_FAILED, "Interserver authentication failed");
-            session->onAuthenticationFailure(/* user_name */ std::nullopt, socket().peerAddress(), exception);
+            auto exception = Exception(ErrorCodes::AUTHENTICATION_FAILED, "Interserver authentication failed (no salt/cluster secret)");
+            session->onAuthenticationFailure(/*user_name=*/ std::nullopt, socket().peerAddress(), exception);
+            throw exception; /// NOLINT
+        }
+
+        if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_V2 && !nonce.has_value())
+        {
+            auto exception = Exception(ErrorCodes::AUTHENTICATION_FAILED, "Interserver authentication failed (no nonce)");
+            session->onAuthenticationFailure(/*user_name=*/ std::nullopt, socket().peerAddress(), exception);
             throw exception; /// NOLINT
         }
 
         std::string data(salt);
+        // For backward compatibility
+        if (nonce.has_value())
+            data += std::to_string(nonce.value());
         data += cluster_secret;
         data += state.query;
         data += state.query_id;
@@ -1395,9 +1463,8 @@ void TCPHandler::receiveQuery()
             session->authenticate(AlwaysAllowCredentials{client_info.initial_user}, client_info.initial_address);
         }
 #else
-        auto exception = Exception(
-            "Inter-server secret support is disabled, because proton was built without SSL library",
-            ErrorCodes::AUTHENTICATION_FAILED);
+        auto exception = Exception(ErrorCodes::AUTHENTICATION_FAILED,
+            "Inter-server secret support is disabled, because proton was built without SSL library");
         session->onAuthenticationFailure(/* user_name */ std::nullopt, socket().peerAddress(), exception);
         throw exception; /// NOLINT
 #endif
@@ -1449,14 +1516,6 @@ void TCPHandler::receiveQuery()
 
     query_context->addQueryParameters(convertToQueryParameters(passed_params));
 
-    /// Disable function name normalization when it's a secondary query, because queries are either
-    /// already normalized on initiator node, or not normalized and should remain unnormalized for
-    /// compatibility.
-    if (query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-    {
-        query_context->setSetting("normalize_function_names", false);
-    }
-
     /// For testing hedged requests
     if (unlikely(sleep_after_receiving_query.totalMilliseconds()))
     {
@@ -1496,7 +1555,7 @@ void TCPHandler::receiveUnexpectedQuery()
     if (client_tcp_protocol_version >= DBMS_MIN_PROTOCOL_VERSION_WITH_PARAMETERS)
         skip_settings.read(*in, settings_format);
 
-    throw NetException("Unexpected packet Query received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet Query received from client");
 }
 
 bool TCPHandler::receiveData(bool scalar)
@@ -1557,6 +1616,7 @@ bool TCPHandler::receiveData(bool scalar)
         /// INSERT query.
         state.block_for_insert = block;
     }
+
     return true;
 }
 
@@ -1579,7 +1639,7 @@ bool TCPHandler::receiveUnexpectedData(bool throw_exception)
         state.read_all_data = true;
 
     if (throw_exception)
-        throw NetException("Unexpected packet Data received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet Data received from client");
 
     return read_ok;
 }
@@ -1605,7 +1665,8 @@ void TCPHandler::initBlockInput()
         state.block_in = std::make_unique<NativeReader>(
             *state.maybe_compressed_in,
             header,
-            client_tcp_protocol_version);
+            client_tcp_protocol_version,
+            getFormatSettings(query_context));
     }
 }
 
@@ -1635,9 +1696,17 @@ void TCPHandler::initBlockOutput(const Block & block)
 
         state.block_out = std::make_unique<NativeWriter>(
             *state.maybe_compressed_out,
+            client_tcp_protocol_version,
             block.cloneEmpty(),
-            client_tcp_protocol_version);
-            /// !query_settings.low_cardinality_allow_in_native_format);
+            getFormatSettings(query_context),
+            !query_settings.low_cardinality_allow_in_native_format);
+
+        /// proton: starts.
+        /// If client is other timeplus, we can enable internal channel to send more additional content,
+        /// such as `watermark` or `sequence number` etc.
+        if (query_context->getClientInfo().client_name.starts_with(VERSION_NAME))
+            state.block_out->enableInternalChannel();
+        /// proton: ends.
     }
 }
 
@@ -1646,12 +1715,9 @@ void TCPHandler::initLogsBlockOutput(const Block & block)
     if (!state.logs_block_out)
     {
         /// Use uncompressed stream since log blocks usually contain only one row
-        /// const Settings & query_settings = query_context->getSettingsRef();
+        const Settings & query_settings = query_context->getSettingsRef();
         state.logs_block_out = std::make_unique<NativeWriter>(
-            *out,
-            block.cloneEmpty(),
-            client_tcp_protocol_version);
-            /// !query_settings.low_cardinality_allow_in_native_format);
+            *out, client_tcp_protocol_version, block.cloneEmpty(), getFormatSettings(query_context), !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 
@@ -1660,12 +1726,9 @@ void TCPHandler::initProfileEventsBlockOutput(const Block & block)
 {
     if (!state.profile_events_block_out)
     {
-        /// const Settings & query_settings = query_context->getSettingsRef();
+        const Settings & query_settings = query_context->getSettingsRef();
         state.profile_events_block_out = std::make_unique<NativeWriter>(
-            *out,
-            block.cloneEmpty(),
-            client_tcp_protocol_version);
-            /// !query_settings.low_cardinality_allow_in_native_format);
+            *out, client_tcp_protocol_version, block.cloneEmpty(), getFormatSettings(query_context), !query_settings.low_cardinality_allow_in_native_format);
     }
 }
 
@@ -1698,7 +1761,7 @@ bool TCPHandler::isQueryCancelled()
         {
             case Protocol::Client::Cancel:
                 if (state.empty())
-                    throw NetException("Unexpected packet Cancel received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+                    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet Cancel received from client");
                 LOG_INFO(log, "Query was cancelled.");
                 state.is_cancelled = true;
                 /// For testing connection collector.
@@ -1713,7 +1776,7 @@ bool TCPHandler::isQueryCancelled()
                 return true;
 
             default:
-                throw NetException("Unknown packet from client " + toString(packet_type), ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
+                throw NetException(ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT, "Unknown packet from client {}", toString(packet_type));
         }
     }
 
@@ -1828,6 +1891,9 @@ void TCPHandler::sendProgress()
 {
     writeVarUInt(Protocol::Server::Progress, *out);
     auto increment = state.progress.fetchValuesAndResetPiecewiseAtomically();
+    UInt64 current_elapsed_ns = state.watch.elapsedNanoseconds();
+    increment.elapsed_ns = current_elapsed_ns - state.prev_elapsed_ns;
+    state.prev_elapsed_ns = current_elapsed_ns;
     increment.write(*out, client_tcp_protocol_version);
     out->next();
 }

@@ -1,0 +1,50 @@
+tags:
+  - local-run
+  - changelog(table))
+  - subquery
+description: subquery from changelog(table), cover add,delete,update
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_subquery_3;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_subquery_3(i int, k1 int, k2 string);
+  - type: wait
+    time: 2
+
+  - name: "1451"
+    type: stream
+    query: select i, k1, k2, _tp_delta from (select * from changelog(test14_subquery_3, k1, k2));
+    schema:
+      - name: i
+        type: int32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_subquery_3(i, k1, k2) values(1, 2, 'a');
+
+  - type: query
+    sql: insert into test14_subquery_3(i, k1, k2) values(2, 2, 'a');
+
+  - type: query
+    sql: insert into test14_subquery_3(i, k1, k2) values(2, 3, 'a');
+
+  - type: check
+    target_name: "1451"
+    expected_result:
+      - [1, 2, a, 1]
+      - [1, 2, a, -1]
+      - [2, 2, a, 1]
+      - [2, 3, a, 1]

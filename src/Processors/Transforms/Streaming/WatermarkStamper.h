@@ -1,14 +1,10 @@
 #pragma once
 
-#include <Core/Types.h>
+#include <Core/Streaming/Watermark.h>
 #include <Interpreters/Streaming/WindowCommon.h>
-#include <Interpreters/TreeRewriter.h>
+#include <Processors/Transforms/Streaming/EmitParams.h>
 #include <Common/serde.h>
-
-namespace Poco
-{
-class Logger;
-}
+#include <Common/Logger.h>
 
 namespace DB
 {
@@ -17,38 +13,17 @@ class Chunk;
 
 namespace Streaming
 {
-struct WatermarkStamperParams
+
+SERDE class WatermarkStamper final
 {
 public:
-    WatermarkStamperParams(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, WindowParamsPtr window_params_);
-
-    WindowParamsPtr window_params;
-
-    EmitMode mode = EmitMode::None;
-
-    WindowInterval periodic_interval;
-
-    /// With timeout
-    WindowInterval timeout_interval;
-
-    /// With delay
-    WindowInterval delay_interval;
-
-    bool repeat = false;
-};
-
-using WatermarkStamperParamsPtr = std::shared_ptr<const WatermarkStamperParams>;
-
-SERDE class WatermarkStamper
-{
-public:
-    WatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_) : params(params_), log(log_) { }
+    WatermarkStamper(const EmitParams & params_, LoggerPtr logger_) : params(params_), logger(logger_) { }
     WatermarkStamper(const WatermarkStamper &) = default;
-    virtual ~WatermarkStamper() { }
+    ~WatermarkStamper() = default;
 
-    virtual std::unique_ptr<WatermarkStamper> clone() const { return std::make_unique<WatermarkStamper>(*this); }
+    std::unique_ptr<WatermarkStamper> clone() const { return std::make_unique<WatermarkStamper>(*this); }
 
-    virtual String getName() const { return "WatermarkStamper"; }
+    String getName() const;
 
     void preProcess(const Block & header);
 
@@ -63,11 +38,11 @@ public:
 
     VersionType getVersion() const;
 
-    virtual void serialize(WriteBuffer & wb) const;
-    virtual void deserialize(ReadBuffer & rb);
+    void serialize(WriteBuffer & wb) const;
+    void deserialize(ReadBuffer & rb);
 
 protected:
-    virtual VersionType getVersionFromRevision(UInt64 revision) const;
+    VersionType getVersionFromRevision(UInt64 revision) const;
 
 private:
     void processWatermark(Chunk & chunk);
@@ -75,8 +50,7 @@ private:
     template <typename TimeColumnType, bool apply_watermark_per_row>
     void processWatermarkImpl(Chunk & chunk);
 
-    /// \param use_processing_time - if true, use processing time as watermark, otherwise use event time `watermark_ts`
-    void processPeriodic(Chunk & chunk, bool use_processing_time);
+    void processPeriodic(Chunk & chunk);
 
     void processTimeout(Chunk & chunk);
 
@@ -85,15 +59,15 @@ private:
     ALWAYS_INLINE Int64 calculateWatermark(Int64 event_ts) const;
     ALWAYS_INLINE Int64 calculateWatermarkPerRow(Int64 event_ts) const;
 
-    virtual Int64 calculateWatermarkImpl(Int64 event_ts) const;
-
     void initPeriodicTimer(const WindowInterval & interval);
 
     void initTimeoutTimer(const WindowInterval & interval);
 
+    bool useEventTime() const { return time_col_pos >= 0; }
+
 protected:
-    const WatermarkStamperParams & params;
-    Poco::Logger * log;
+    const EmitParams & params;
+    LoggerPtr logger;
 
     ssize_t time_col_pos = -1;
 

@@ -41,16 +41,12 @@ private:
 
 public:
     AggregationFunctionXirr(const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<AggregationFunctionXirrData, AggregationFunctionXirr<V, D>>{arguments, params}
+        : IAggregateFunctionDataHelper<AggregationFunctionXirrData, AggregationFunctionXirr<V, D>>{arguments, params, std::make_shared<DataTypeNumber<Float64>>()}
     {
         hasGuess = (arguments.size() == 3);
     }
 
-    AggregationFunctionXirr() : IAggregateFunctionDataHelper<AggregationFunctionXirrData, AggregationFunctionXirr<V, D>>{} { }
-
     String getName() const override { return "xirr"; }
-
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeNumber<Float64>>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 

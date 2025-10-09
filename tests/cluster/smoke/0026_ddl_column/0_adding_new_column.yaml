@@ -1,0 +1,400 @@
+tags:
+- ddl-column
+- bug
+description: streaming query after add a column
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists add_new_column_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream add_new_column_stream (id int, name string, val float, ts datetime)
+- type: wait
+  time: 1
+
+- name: '2700'
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's2', 22.2, '2020-02-02 20:00:02']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 's3', 33.3, '2020-02-02 20:00:03']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_int int FIRST
+- type: wait
+  time: 1
+
+- name: 2700-1
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 4, 'add_int', 44.4, '2020-02-02 20:00:04']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_float float
+- type: wait
+  time: 1
+
+- name: 2700-2
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 5, 'add_float', 55.5, 11.1, '2020-02-02 20:00:05']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_bool bool
+- type: wait
+  time: 1
+
+- name: 2700-3
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 6, 'add_bool', 66.6, 22.2, '2020-02-02 20:00:06', 'true']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_str string
+- type: wait
+  time: 1
+
+- name: 2700-4
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [4, 7, 'add_str', 77.7, 33.3, '2020-02-02 20:00:07', 'false', 'add_str']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_date date
+- type: wait
+  time: 1
+
+- name: 2700-5
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [5, 8, 'add_date', 88.8, 44.4, '2020-02-02 20:00:08', '2020-02-03', 'true', 'add_date']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_datetime datetime
+- type: wait
+  time: 1
+
+- name: 2700-6
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [6, 9, 'add_datetime', 99.9, 55.5, '2020-02-02 20:00:09', '2020-02-04', '2020-02-05 20:00:05', 'false', 'add_datetime']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_json json
+- type: wait
+  time: 1
+
+- name: 2700-7
+  type: stream
+  query: select id, name, val, ts from add_new_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (* expect _tp_time) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [7, 10, 'add_json', 111, 66.6, '2020-02-02 20:00:10', '2020-02-05', '2020-02-06 20:00:06', 'true', 'add_json', '{"a":1}']
+
+- type: check
+  target_name: '2700'
+  expected_result:
+  - [1, s1, 11.1, '2020-02-02 20:00:01']
+  - [2, s2, 22.2, '2020-02-02 20:00:02']
+  - [3, s3, 33.3, '2020-02-02 20:00:03']
+  - [4, add_int, 44.4, '2020-02-02 20:00:04']
+  - [5, add_float, 55.5, '2020-02-02 20:00:05']
+  - [6, add_bool, 66.6, '2020-02-02 20:00:06']
+  - [7, add_str, 77.7, '2020-02-02 20:00:07']
+  - [8, add_date, 88.8, '2020-02-02 20:00:08']
+  - [9, add_datetime, 99.9, '2020-02-02 20:00:09']
+  - [10, add_json, 111, '2020-02-02 20:00:10']
+
+- type: check
+  target_name: 2700-1
+  expected_result:
+  - [1, 4, add_int, 44.4, '2020-02-02 20:00:04']
+  - [2, 5, add_float, 55.5, '2020-02-02 20:00:05']
+  - [3, 6, add_bool, 66.6, '2020-02-02 20:00:06']
+  - [4, 7, add_str, 77.7, '2020-02-02 20:00:07']
+  - [5, 8, add_date, 88.8, '2020-02-02 20:00:08']
+  - [6, 9, add_datetime, 99.9, '2020-02-02 20:00:09']
+  - [7, 10, add_json, 111, '2020-02-02 20:00:10']
+
+- type: check
+  target_name: 2700-2
+  expected_result:
+  - [2, 5, add_float, 55.5, 11.1, '2020-02-02 20:00:05']
+  - [3, 6, add_bool, 66.6, 22.2, '2020-02-02 20:00:06']
+  - [4, 7, add_str, 77.7, 33.3, '2020-02-02 20:00:07']
+  - [5, 8, add_date, 88.8, 44.4, '2020-02-02 20:00:08']
+  - [6, 9, add_datetime, 99.9, 55.5, '2020-02-02 20:00:09']
+  - [7, 10, add_json, 111, 66.6, '2020-02-02 20:00:10']
+
+- type: check
+  target_name: 2700-3
+  expected_result:
+  - [3, 6, add_bool, 66.6, 22.2, '2020-02-02 20:00:06', true]
+  - [4, 7, add_str, 77.7, 33.3, '2020-02-02 20:00:07', false]
+  - [5, 8, add_date, 88.8, 44.4, '2020-02-02 20:00:08', true]
+  - [6, 9, add_datetime, 99.9, 55.5, '2020-02-02 20:00:09', false]
+  - [7, 10, add_json, 111, 66.6, '2020-02-02 20:00:10', true]
+
+- type: check
+  target_name: 2700-4
+  expected_result:
+  - [4, 7, add_str, 77.7, 33.3, '2020-02-02 20:00:07', false, add_str]
+  - [5, 8, add_date, 88.8, 44.4, '2020-02-02 20:00:08', true, add_date]
+  - [6, 9, add_datetime, 99.9, 55.5, '2020-02-02 20:00:09', false, add_datetime]
+  - [7, 10, add_json, 111, 66.6, '2020-02-02 20:00:10', true, add_json]
+
+- type: check
+  target_name: 2700-5
+  expected_result:
+  - [5, 8, add_date, 88.8, 44.4, '2020-02-02 20:00:08', '2020-02-03', true, add_date]
+  - [6, 9, add_datetime, 99.9, 55.5, '2020-02-02 20:00:09', '2020-02-04', false, add_datetime]
+  - [7, 10, add_json, 111, 66.6, '2020-02-02 20:00:10', '2020-02-05', true, add_json]
+
+- type: check
+  target_name: 2700-6
+  expected_result:
+  - [6, 9, add_datetime, 99.9, 55.5, '2020-02-02 20:00:09', '2020-02-04', '2020-02-05 20:00:05', false, add_datetime]
+  - [7, 10, add_json, 111, 66.6, '2020-02-02 20:00:10', '2020-02-05', '2020-02-06 20:00:06', true, add_json]
+
+- type: check
+  target_name: 2700-6
+  expected_result:
+  - [7, 10, add_json, 111, 66.6, '2020-02-02 20:00:10', '2020-02-05', '2020-02-06 20:00:06', true, '{"a":1}']

@@ -1,0 +1,51 @@
+tags:
+- udf
+description: stock - in historic query
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: stock
+    arguments:
+    - name: rowtime
+      type: datetime64(6)
+    - name: price
+      type: float32
+    is_aggregation: true
+    return_type: tuple(start_price float32, bottom_ts datetime64(1), end_price float32,
+      down_duration uint64)
+    source: |
+      {
+        has_customized_emit:true,
+        initialize:function(){this.bottom_ts=new Date();this.last_down_price=-1.0;this.start_price=-1.0;this.down_duration=1;this.result=[]},
+        process:function(rowtime,price){for(let i=0;i<rowtime.length;i++){if(this.start_price<0||(this.last_down_price<0&&price[i]>=this.start_price)){this.start_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=1}else if((this.last_down_price<0&&price[i]<this.start_price)||(price[i]<this.last_down_price)){this.last_down_price=price[i];this.bottom_ts=rowtime[i];this.down_duration=this.down_duration+1}else if(price[i]>this.last_down_price){this.result.push({'start_price':this.start_price,'bottom_ts':this.bottom_ts,'end_price':price[i],'down_duration':this.down_duration});this.bottom_ts=rowtime[i];this.start_price=price[i];this.last_down_price=-1.0;this.down_duration=1}else{this.down_duration=this.down_duration+1}}return this.result.length},
+        finalize:function(){var old_result=this.result;this.result=[];return old_result},
+        serialize:function(){let s={'bottom_ts':this.bottom_ts,'last_down_price':this.last_down_price,'start_price':this.start_price,'down_duration':this.down_duration,'result':this.result};return JSON.stringify(s)},
+        deserialize:function(state_str){let s=JSON.parse(state_str);this.bottom_ts=s['bottom_ts'];this.last_down_price=s['last_down_price'];this.start_price=s['start_price'];this.down_duration=s['down_duration'];this.result=s['result'];},
+        merge:function(){}
+      }
+- type: wait
+  time: 5
+
+- name: udf-11
+  type: stream
+  query: select i8, stock(dt, f32) as st, count(1) from table(udf_types) group by
+    i8
+  schema:
+  - name: i8
+    type: int8
+  - name: st
+    type: float32
+  - name: count(1)
+    type: uint64
+
+- type: check
+  target_name: udf-11
+  expected_result:
+  - ["error_code:2534"]

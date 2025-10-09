@@ -5,8 +5,10 @@
 #include <base/types.h>
 #include <Core/Names.h>
 #include <boost/noncopyable.hpp>
-#include <Common/logger_useful.h>
+#include <Common/LoggingFormatStringHelpers.h>
 
+
+namespace Poco { class Logger; }
 
 namespace DB
 {
@@ -54,13 +56,13 @@ public:
 
 private:
     template<typename UpdateF, typename ElemsT>
-    bool updateCacheImpl(UpdateF && update_func, ElemsT && elems, const String & log_msg);
+    bool updateCacheImpl(UpdateF && update_func, ElemsT && elems, FormatStringHelper<String> log_msg);
 
     DNSResolver();
 
     struct Impl;
     std::unique_ptr<Impl> impl;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Updates cached value and returns true it has been changed.
     bool updateHost(const String & host);

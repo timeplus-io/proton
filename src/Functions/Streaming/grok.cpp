@@ -57,7 +57,7 @@ namespace
                 {
                     /// Set keys/values
                     for (const auto & [capturing_index, capturing_name] : regex.CapturingGroupNames())
-                        row_map.emplace_back(capturing_name, matches[capturing_index].ToString());
+                        row_map.emplace_back(capturing_name, matches[capturing_index]);
                 }
 
                 /// Not matched: empty map
@@ -87,9 +87,9 @@ namespace
             while (
                 grok_regex.Match(replaced_pattern, 0, replaced_pattern.size(), re2::RE2::Anchor::UNANCHORED, grok_matches, num_captures))
             {
-                String string_to_replace(grok_matches[0].ToString());
-                String pattern_name(grok_matches[1].ToString());
-                String capture_name(grok_matches[2].ToString());
+                String string_to_replace(grok_matches[0]);
+                String pattern_name(grok_matches[1]);
+                String capture_name(grok_matches[2]);
 
                 assert(!pattern_name.empty());
 

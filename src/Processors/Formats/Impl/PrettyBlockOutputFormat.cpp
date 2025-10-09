@@ -11,6 +11,7 @@
 #include <IO/Operators.h>
 #include <Common/PODArray.h>
 #include <Common/UTF8Helpers.h>
+#include <Common/PODArray.h>
 
 namespace DB
 {
@@ -401,7 +402,6 @@ void registerOutputFormatPretty(FormatFactory & factory)
     factory.registerOutputFormat("Pretty", [](
         WriteBuffer & buf,
         const Block & sample,
-        const RowOutputFormatParams &,
         const FormatSettings & format_settings)
     {
         return std::make_shared<PrettyBlockOutputFormat>(buf, sample, format_settings);
@@ -412,7 +412,6 @@ void registerOutputFormatPretty(FormatFactory & factory)
     factory.registerOutputFormat("PrettyNoEscapes", [](
         WriteBuffer & buf,
         const Block & sample,
-        const RowOutputFormatParams &,
         const FormatSettings & format_settings)
     {
         FormatSettings changed_settings = format_settings;

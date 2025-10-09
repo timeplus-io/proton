@@ -40,7 +40,7 @@ bool hasAggregates(const ASTPtr & query, const ASTSelectQuery & select_query)
 }
 }
 
-EmitInterpreter::LastXRule::LastXRule(const Settings & settings_, Poco::Logger * log_) : settings(settings_), log(log_)
+EmitInterpreter::LastXRule::LastXRule(const Settings & settings_, LoggerPtr log_) : settings(settings_), log(log_)
 {
 }
 
@@ -134,7 +134,7 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     ///     table(table1), table(table2)      -> hop(table(table1), ...), hop(table(table2), ...)
     auto table_expressions{getTableExpressions(select_query)};
     if (table_expressions.size() > 1)
-        throw Exception("No support several tables in the `emit last` policy", ErrorCodes::SYNTAX_ERROR);
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "No support several tables in the `emit last` policy");
 
     auto table_expression = table_expressions[0];
     if (!hasAggregates(query, select_query) || !table_expression)
@@ -165,9 +165,9 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
         / std::abs(periodic_interval_bs.num_units);
     if (keep_windows == 0 || keep_windows > settings.max_windows)
         throw Exception(
-            "Too big range or too small emit interval. Make sure 'range / emit_interval' is less or equal to "
-                + std::to_string(settings.max_windows),
-            ErrorCodes::SYNTAX_ERROR);
+            ErrorCodes::SYNTAX_ERROR,
+            "Too big range or too small emit interval. Make sure 'range / emit_interval' is less or equal to {}",
+            std::to_string(settings.max_windows));
 
     /// To keep same scale between last interval and periodic interval.
     convertToSameKindIntervalAST(periodic_interval_bs, last_interval_bs, periodic_interval, last_interval);
@@ -180,7 +180,7 @@ bool EmitInterpreter::LastXRule::handleGlobalAggr(ASTSelectQuery & select_query)
     else if (table_expression->subquery)
         table = table_expression->subquery;
     else
-        throw Exception("The stream is empty", ErrorCodes::SYNTAX_ERROR);
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "The stream is empty");
 
     /// Create a table function: hop(table_expression, now(), periodic_interval, last_time_interval)
     /// The table_expression can be table, table(table) and subquery.
@@ -280,16 +280,19 @@ void EmitInterpreter::checkEmitAST(ASTPtr & query)
     assert(emit);
 
     if (emit->periodic_interval)
-        checkIntervalAST(emit->periodic_interval, "Invalid EMIT PERIODIC interval");
+        checkIntervalAST(emit->periodic_interval, "Invalid PERIODIC interval in EMIT clause");
+
+    if (emit->batch_interval)
+        checkIntervalAST(emit->batch_interval, "Invalid BATCH interval in EMIT clause");
 
     if (emit->delay_interval)
-        checkIntervalAST(emit->delay_interval, "Invalid EMIT DELAY interval");
+        checkIntervalAST(emit->delay_interval, "Invalid DELAY interval in EMIT clause");
 
     if (emit->last_interval)
-        checkIntervalAST(emit->last_interval, "Invalid EMIT LAST interval");
+        checkIntervalAST(emit->last_interval, "Invalid LAST interval in EMIT clause");
 
     if (emit->timeout_interval)
-        checkIntervalAST(emit->timeout_interval, "Invalid EMIT TIMEOUT interval");
+        checkIntervalAST(emit->timeout_interval, "Invalid TIMEOUT interval in EMIT clause");
 }
 
 }

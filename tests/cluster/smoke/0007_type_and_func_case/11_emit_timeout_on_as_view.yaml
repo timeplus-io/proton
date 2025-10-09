@@ -1,0 +1,115 @@
+tags:
+  - timeout
+description: 'create a stream t_timeout, and create a view as a tumble query with
+  emit timeout and check emit by timeout '
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists timeout_v
+
+  - type: query
+    sql: drop view if exists timeout_v2
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists t_timeout
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_timeout(id int, value int, time datetime64(3,'UTC'))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create materialized view timeout_v as
+      select emit_version(), id, count()
+      from tumble(t_timeout, time, 5s)
+      group by id, window_end
+      emit after window close and timeout 5s
+
+  - type: query
+    sql: |
+      create materialized view timeout_v2 as
+      select emit_version(), id, count()
+      from tumble(t_timeout, time, 5s)
+      group by id, window_end
+      emit timeout 5s
+
+  - type: wait
+    time: 2
+
+  - name: 801-1
+    type: stream
+    query: |
+      select * except (_tp_time)
+      from timeout_v
+      settings seek_to = 'earliest'
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: id
+        type: int32
+      - name: count()
+        type: uint64
+
+  - name: 801-2
+    type: stream
+    query: |
+      select * except (_tp_time)
+      from timeout_v2
+      settings seek_to = 'earliest'
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: id
+        type: int32
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 2
+  
+  - type: query
+    sql: |
+      insert into t_timeout(id, value, time)
+      values
+      (1, 10, '2020-01-01 00:00:00'),
+      (2, 10, '2020-01-01 00:00:00'),
+      (3, 10, '2020-01-01 00:00:00'),
+      (1, 20, '2020-01-01 00:00:00'),
+      (2, 20, '2020-01-01 00:00:00'),
+      (3, 20, '2020-01-01 00:00:00'),
+      (1, 30, '2020-01-01 00:00:05'),
+      (1, 10, '2020-01-01 00:00:06')
+
+  - type: check
+    target_name: 801-1
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [ '0', '3', 2 ]
+      - [ '0', '2', 2 ]
+      - [ '0', '1', 2 ]
+      - [ '1', '1', 2 ]
+
+  - type: check
+    target_name: 801-2
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [ '0', '3', 2 ]
+      - [ '0', '2', 2 ]
+      - [ '0', '1', 2 ]
+      - [ '1', '1', 2 ]
+
+  - type: query
+    sql: drop view if exists timeout_v
+
+  - type: query
+    sql: drop view if exists timeout_v2

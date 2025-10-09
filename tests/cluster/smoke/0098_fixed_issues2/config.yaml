@@ -1,0 +1,4 @@
+name: fixed_issues2
+description: Tests covering fixed issues smoke cases.
+tags:
+  - smoke

@@ -3,12 +3,15 @@
 #include <cassert>
 #include <stdexcept> // for std::logic_error
 #include <string>
+#include <type_traits>
 #include <vector>
 #include <functional>
 #include <iosfwd>
 
 #include <base/types.h>
 #include <base/unaligned.h>
+#include <fmt/core.h>
+#include <fmt/ostream.h>
 
 #include <city.h>
 
@@ -156,7 +159,8 @@ inline bool memequalSSE2Wide(const char * p1, const char * p2, size_t size)
     {
         case 3: if (!compareSSE2(p1 + 32, p2 + 32)) return false; [[fallthrough]];
         case 2: if (!compareSSE2(p1 + 16, p2 + 16)) return false; [[fallthrough]];
-        case 1: if (!compareSSE2(p1, p2)) return false;
+        case 1: if (!compareSSE2(p1, p2)) return false; [[fallthrough]];
+        default: ;
     }
 
     return compareSSE2(p1 + size - 16, p2 + size - 16);
@@ -332,5 +336,18 @@ namespace ZeroTraits
     inline void set(StringRef & x) { x.size = 0; }
 }
 
+namespace PackedZeroTraits
+{
+    template <typename Second, template <typename, typename> class PackedPairNoInit>
+    inline bool check(const PackedPairNoInit<StringRef, Second> p)
+    { return 0 == p.key.size; }
+
+    template <typename Second, template <typename, typename> class PackedPairNoInit>
+    inline void set(PackedPairNoInit<StringRef, Second> & p)
+    { p.key.size = 0; }
+}
+
 
 std::ostream & operator<<(std::ostream & os, StringRef str);
+
+template<> struct fmt::formatter<StringRef> : fmt::ostream_formatter {};

@@ -1,0 +1,23 @@
+name: query_state4
+description: Tests covering query state checkpointing smoke test cases
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists test19_join
+  - type: wait
+    time: 1
+  - type: query
+    sql: create stream test19_join (id string, type string)
+  - type: wait
+    time: 1
+  - type: query
+    sql: insert into test19_join(id, type) values ('dev1', 'roof'), ('dev2', 'field'),
+      ('dev3', 'window'), ('dev4', 'wall')
+  - type: wait
+    time: 1
+  - type: query
+    sql: insert into test19_join(id, type) values ('dev5', 'roof'), ('dev6', 'window'),
+      ('dev7', 'wall'), ('dev8', 'floor')

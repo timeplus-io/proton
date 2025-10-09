@@ -1,3 +1,5 @@
+SET show_uuid = 0;
+
 DROP STREAM IF EXISTS minmax_idx;
 DROP STREAM IF EXISTS minmax_idx2;
 
@@ -13,7 +15,7 @@ INSERT INTO minmax_idx VALUES (1, 2);
 
 ALTER STREAM minmax_idx ADD INDEX idx1 u64 * i32 TYPE minmax GRANULARITY 10;
 ALTER STREAM minmax_idx ADD INDEX idx2 u64 + i32 TYPE minmax GRANULARITY 10;
-ALTER STREAM minmax_idx ADD INDEX idx3 (u64 - i32) TYPE minmax GRANULARITY 10 AFTER idx1;
+ALTER STREAM minmax_idx ADD INDEX idx3 (u64 - i32) TYPE minmax GRANULARITY 10;
 
 SHOW CREATE minmax_idx;
 

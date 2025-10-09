@@ -3,13 +3,11 @@
 #include <Storages/IStorage.h>
 #include <Storages/ExternalDataSourceConfiguration.h>
 #include <Storages/Cache/SchemaCache.h>
-
-#include <Common/logger_useful.h>
+#include <Common/FileRenamer.h>
 
 #include <atomic>
 #include <shared_mutex>
 #include <base/shared_ptr_helper.h>
-
 
 namespace DB
 {
@@ -69,17 +67,27 @@ public:
         const ColumnsDescription & columns;
         const ConstraintsDescription & constraints;
         const String & comment;
+
+        const std::string rename_after_processing;
     };
 
     NamesAndTypesList getVirtuals() const override;
 
     static Strings getPathsList(const String & table_path, const String & user_files_path, ContextPtr context, size_t & total_bytes_to_read);
 
-    /// Check if the format is column-oriented.
-    /// Is is useful because column oriented formats could effectively skip unknown columns
+    /// Check if the format supports reading only some subset of columns.
+    /// Is is useful because such formats could effectively skip unknown columns
     /// So we can create a header of only required columns in read method and ask
     /// format to read only them. Note: this hack cannot be done with ordinary formats like TSV.
-    bool isColumnOriented() const override;
+    bool supportsSubsetOfColumns(const ContextPtr & context) const;
+
+    bool supportsSubcolumns() const override { return true; }
+
+    bool supportsDynamicSubcolumns() const override { return true; }
+
+    bool prefersLargeBlocks() const override;
+
+    bool parallelizeOutputAfterReading(ContextPtr context) const override;
 
     bool supportsPartitionBy() const override { return true; }
 
@@ -140,7 +148,7 @@ private:
 
     mutable std::shared_timed_mutex rwlock;
 
-    Poco::Logger * log = &Poco::Logger::get("StorageFile");
+    LoggerPtr log = getLogger("StorageFile");
 
     /// Total number of bytes to read (sums for multiple files in case of globs). Needed for progress bar.
     size_t total_bytes_to_read = 0;
@@ -154,6 +162,11 @@ private:
     std::unique_ptr<ReadBuffer> read_buffer_from_fd;
     std::unique_ptr<ReadBuffer> peekable_read_buffer_from_fd;
     std::atomic<bool> has_peekable_read_buffer_from_fd = false;
+
+    // Counts the number of readers
+    std::atomic<int32_t> readers_counter = 0;
+    FileRenamer file_renamer;
+    bool was_renamed = false;
 };
 
 }

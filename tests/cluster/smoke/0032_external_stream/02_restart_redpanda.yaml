@@ -1,0 +1,101 @@
+tags:
+  - skip
+description: test external stream failure handling
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: query
+    sql: drop view if exists test33_mv
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test33_external
+
+  - type: query
+    sql: drop stream if exists test33_stream2
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test33_external
+        (
+          raw string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test'
+
+  - type: query
+    sql: create stream test33_stream2
+        (
+          id int,
+          value string
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create materialized view test33_mv into test33_stream2
+          as select to_int(raw:id) as id, raw:value as value from test33_external;
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 3302
+    query: select id, value from test33_stream2
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 1
+        value: sometext
+  - type: wait
+    time: 2
+  
+  - type: command
+    node: [s1]
+    shell: docker restart $(docker ps -a --format '{{.Names}}' --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep stream-store)
+
+  - type: wait
+    time: 5
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 3
+        value: sometext3
+  - type: wait
+    time: 5
+  
+  - type: query
+    sql: drop view if exists test33_mv
+
+  - type: check
+    target_name: 3302
+    expected_result:
+      - - "1"
+        - sometext
+      - - "3"
+        - sometext3

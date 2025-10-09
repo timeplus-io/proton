@@ -1,0 +1,140 @@
+tags:
+- query_state
+- stream_join_stream
+- to_support
+description: recover append-only innner asof join versioned-kv parallel_hash from
+  state checkpoint
+cluster:
+- p1k1
+#  # unsupport subscribe to
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream2
+- type: query
+  sql: drop stream if exists test19_right_stream2
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream2 (i int, s string, ts datetime)
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)
+    primary key ii settings mode='versioned_kv'
+- type: wait
+  time: 1
+
+- name: '19232'
+  type: stream
+  query_id: '19232'
+  query: subscribe to select s, ss from test19_left_stream2 inner asof join test19_right_stream2
+    on i=ii AND test19_left_stream2.ts > test19_right_stream2.tts settings join_algorithm
+    = 'parallel_hash', checkpoint_interval=1
+  schema:
+  - name: s
+    type: string
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_right_stream2(ii, ss, tts) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  - name: tts
+    type: datetime
+  inputs:
+  - [1, 's1', '2022-05-23 15:45:09']
+  - [1, 's2', '2022-05-23 15:45:10']
+  - [1, 's3', '2022-05-23 15:45:11']
+  - [1, 's4', '2022-05-23 15:45:12']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream2(i, s, ts) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's', '2022-05-23 15:45:10']
+
+- type: query
+  sql: insert into test19_left_stream2(i, s, ts) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's', '2022-05-23 15:45:13']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19232'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_right_stream2(ii, ss, tts) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  - name: tts
+    type: datetime
+  inputs:
+  - [2, 's5', '2022-05-23 15:45:14']
+  - [2, 's6', '2022-05-23 15:45:15']
+
+- name: 19232-1
+  type: stream
+  query: recover from '19232'
+  schema:
+  - name: s
+    type: string
+  - name: ss
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test19_left_stream2(i, s, ts) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 'ss', '2022-05-23 15:45:15']
+- type: wait
+  time: 2
+
+- type: query
+  sql: unsubscribe to '19232'
+
+- type: check
+  target_name: '19232'
+  expected_result:
+  - [s, s4]
+
+- type: check
+  target_name: 19232-1
+  expected_result:
+  - [ss, s5]

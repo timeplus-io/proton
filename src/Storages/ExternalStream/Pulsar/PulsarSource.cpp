@@ -2,16 +2,18 @@
 
 #if USE_PULSAR
 
-#    include <Checkpoint/CheckpointContext.h>
-#    include <Checkpoint/CheckpointCoordinator.h>
-#    include <Interpreters/Context.h>
-#    include <Common/Stopwatch.h>
-#    include <Common/logger_useful.h>
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
+#include <Interpreters/Context.h>
+#include <Storages/ExternalStream/Pulsar/Pulsar.h>
+#include <Storages/ExternalStream/Pulsar/Util.h>
+#include <Common/Stopwatch.h>
+#include <Common/logger_useful.h>
 
-#    include <pulsar/Result.h>
-#    include <Poco/Base64Encoder.h>
+#include <pulsar/Result.h>
+#include <Poco/Base64Encoder.h>
 
-#    include <sstream>
+#include <sstream>
 
 namespace DB
 {
@@ -56,26 +58,33 @@ PulsarSource::PulsarSource(
     const String & data_format,
     const FormatSettings & format_settings,
     pulsar::Reader && reader_,
+    const std::shared_ptr<Pulsar> & storage_,
     ExternalStreamCounterPtr counter,
-    Poco::Logger * logger_,
+    LoggerPtr logger_,
     const ContextPtr & context_)
-    : Streaming::ISource(header_, true, ProcessorID::PulsarSourceID)
+    : Streaming::ISource(header_, true, logger_, ProcessorID::PulsarSourceID)
     , ExternalStreamSource(header_, storage_snapshot_, context_->getSettingsRef().max_block_size.value, context_)
     , virtual_header(virtual_header_)
     , generate_timeout_ms(getGenerateTimeoutMs(context_))
+    , storage(storage_)
     , reader(std::move(reader_))
+    , ignore_format_errors(format_settings.ignore_parsing_errors)
     , external_stream_counter(counter)
-    , logger(logger_)
 {
     setStreaming(is_streaming_);
     if (!is_streaming_)
     {
-        if (auto res = reader.getLastMessageId(end_message_id); res != pulsar::ResultOk)
+        auto res = executeWithRetry(
+            [&, this]() { return reader.getLastMessageId(end_message_id); }, "getLastMessageId", /*timeout_ms=*/2'000, logger);
+
+        if (res != pulsar::ResultOk)
             throw Exception(
                 ErrorCodes::CANNOT_CONNECT_SERVER, "Failed to get last message id of topic {}: {}", getTopic(), pulsar::strResult(res));
     }
 
     initInputFormatExecutor(data_format, format_settings);
+
+    setDescription(fmt::format("topic={}", getTopic()));
 }
 
 PulsarSource::~PulsarSource()
@@ -88,6 +97,9 @@ Chunk PulsarSource::generate()
 {
     if (isCancelled() || is_finished)
         return {};
+
+    if (consume_exception)
+        consume_exception->rethrow();
 
     MutableColumns batch;
     pulsar::Message msg;
@@ -116,11 +128,20 @@ Chunk PulsarSource::generate()
             is_finished = true;
 
         timeout_ms = generate_timeout_ms - static_cast<Int64>(stopwatch.elapsedMilliseconds());
+        if (consumed_messages == 0)
+        {
+            /// reader.seek(msg_id) excludes the msg_id, thus, if latest_consumed_message_id is available, should use it
+            if (latest_consumed_message_id)
+                latest_consumed_batch_begin_message_id = latest_consumed_message_id;
+            else
+                latest_consumed_batch_begin_message_id = {msg.getMessageId()};
+        }
+
+        ++consumed_messages;
 
         if (messages_to_skip > 0)
         {
             --messages_to_skip;
-            ++consumed_messages;
             LOG_INFO(
                 logger, "Message {} skipped as start SN reset, {} more to skip", formatMessageId(msg.getMessageId()), messages_to_skip);
             continue;
@@ -134,11 +155,25 @@ Chunk PulsarSource::generate()
         {
             new_rows = format_executor->execute(buf);
         }
-        catch (const Exception & ex)
+        catch (Exception & ex)
         {
-            /// If it failed to parse the message, logs the error and continue without blocking consuming the other messages.
-            LOG_ERROR(logger, "Failed to parse message, id={}, error={}", formatMessageId(msg.getMessageId()), ex.message());
-            continue;
+            if (ignore_format_errors)
+            {
+                LOG_ERROR(
+                    logger,
+                    "Failed to parse message topic={} message_id={} error={}",
+                    getTopic(),
+                    formatMessageId(msg.getMessageId()),
+                    ex.message());
+                continue;
+            }
+            else
+            {
+                ex.addMessage("Failed to parse message topic={} message_id={}", getTopic(), formatMessageId(msg.getMessageId()));
+                consume_exception.emplace(std::move(ex));
+                /// Do not read more messages, instead move on and record the lastProcessedSN.
+                break;
+            }
         }
 
         auto new_data = format_executor->getResultColumns();
@@ -185,13 +220,12 @@ Chunk PulsarSource::generate()
         }
 
         rows += new_rows;
-        ++consumed_messages;
     }
 
     if (consumed_messages > 0)
     {
         auto last_processed_sn = lastProcessedSN();
-        setLastProcessedSN(last_processed_sn + consumed_messages);
+        setLastProcessedSNRange({.start = last_processed_sn + 1, .end = last_processed_sn + consumed_messages});
         latest_consumed_message_id = msg.getMessageId();
     }
 
@@ -204,10 +238,18 @@ Chunk PulsarSource::generate()
         return header_chunk.clone();
 }
 
-void PulsarSource::onCancel()
+void PulsarSource::onCancel() noexcept
 {
     LOG_INFO(logger, "Cancelling");
-    reader.close();
+
+    try
+    {
+        reader.close();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Failed to close Puslar reader");
+    }
 }
 
 Chunk PulsarSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
@@ -247,6 +289,12 @@ Chunk PulsarSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 void PulsarSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 {
     ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType, ReadBuffer & rb) {
+        if (rb.eof()) /// No checkpoint data
+        {
+            LOG_INFO(logger, "No checkpoint to recover");
+            return;
+        }
+
         String recovered_topic;
         readStringBinary(recovered_topic, rb);
 
@@ -274,7 +322,7 @@ void PulsarSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 
         Int64 recovered_sn;
         readVarInt(recovered_sn, rb);
-        setLastProcessedSN(recovered_sn);
+        setLastCheckpointSN(recovered_sn);
 
         // If lastProcessedSN > -1, it means it's now in auto-recovery phase, and it needs to
         // skip some bad data (which causes exceptions). Otherwise, for a normal recovery,
@@ -285,10 +333,106 @@ void PulsarSource::doRecover(CheckpointContextPtr ckpt_ctx_)
         LOG_INFO(
             logger, "Recovered checkpoint topic={} message_id={} sn={}", getTopic(), formatMessageId(recovered_message_id), recovered_sn);
 
-        reader.seek(recovered_message_id);
+        auto res = executeWithRetry(
+            [&, this]() { return reader.seek(recovered_message_id); }, "seekWithMessageId", /*timeout_ms=*/2'000, logger);
+
+        if (res != pulsar::ResultOk)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Failed to seek to checkpointed message_id {} on topic {}: {}",
+                formatMessageId(recovered_message_id),
+                getTopic(),
+                pulsar::strResult(res));
     });
 }
 
+Strings PulsarSource::doFetchData(const Streaming::SequenceRange & sn_range)
+{
+    auto last_sn_range = lastProcessedSNRange();
+    if (!latest_consumed_batch_begin_message_id || last_sn_range.start < 0)
+    {
+        LOG_INFO(
+            logger,
+            "Fetching data of sn_range ({}, {}), but no messages were consumed from topic {} yet",
+            sn_range.start,
+            sn_range.end,
+            getTopic());
+        return {};
+    }
+
+    auto start = sn_range.start;
+    auto end = sn_range.end;
+    if (end < last_sn_range.start)
+    {
+        /// All data are gone, show something to the users so that they won't be confused why messages are empty.
+        return {fmt::format("Messages of sn range ({}, {}) were lost track", start, end)};
+    }
+
+    start = std::max(start, last_sn_range.start);
+    end = std::min(end, last_sn_range.end);
+
+    auto skip = start - last_sn_range.start;
+    auto count = end - start + 1;
+
+    LOG_INFO(
+        logger,
+        "Fetching data sn_range=({}, {}) actual_range=({},{}) skip={} count={}",
+        sn_range.start,
+        sn_range.end,
+        start,
+        end,
+        skip,
+        count);
+
+    if (count < 1)
+        return {};
+
+    Strings results;
+    results.reserve(count);
+
+    auto local_reader = storage->createReader(query_context, getTopic());
+    SCOPE_EXIT_SAFE(local_reader.close());
+
+    auto res = executeWithRetry(
+        [&, this]() { return local_reader.seek(*latest_consumed_batch_begin_message_id); },
+        "seekWithMessageId",
+        /*timeout_ms=*/2'000,
+        logger);
+
+    if (res != pulsar::ResultOk)
+        throw Exception(
+            ErrorCodes::CANNOT_RECEIVE_MESSAGE,
+            "Failed to seek to message_id {} on topic {} for fetching data sn_range=({}, {}): {}",
+            formatMessageId(*latest_consumed_batch_begin_message_id),
+            getTopic(),
+            sn_range.start,
+            sn_range.end,
+            pulsar::strResult(res));
+
+    pulsar::Message msg;
+    while (count > 0)
+    {
+        res = local_reader.readNext(msg, static_cast<int>(generate_timeout_ms));
+
+        if (res == pulsar::ResultTimeout || res == pulsar::ResultAlreadyClosed) /// That means no more messages to read
+            break;
+
+        if (res != pulsar::ResultOk)
+            throw Exception(
+                ErrorCodes::CANNOT_RECEIVE_MESSAGE, "Failed to fetch message from topic {}: {}", getTopic(), pulsar::strResult(res));
+
+        if (skip > 0)
+        {
+            --skip;
+            continue;
+        }
+
+        results.push_back(msg.getDataAsString());
+        --count;
+    }
+
+    return results;
+}
 }
 
 }

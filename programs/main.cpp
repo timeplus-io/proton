@@ -13,6 +13,7 @@
 #include <tuple>
 #include <utility> /// pair
 
+#include "config.h"
 #include "config_tools.h"
 
 #include <Common/StringUtils/StringUtils.h>
@@ -45,15 +46,18 @@ int mainObfuscator(int argc, char ** argv);
 #if ENABLE_PROTON_GIT_IMPORT
 int mainGitImport(int argc, char ** argv);
 #endif
-#if ENABLE_PROTON_KEEPER
-int mainKeeper(int argc, char ** argv);
-#endif
 #if ENABLE_PROTON_COMPRESSOR
 int mainCompressor(int argc, char ** argv);
 #endif
 /// proton: starts.
-#if ENABLE_PROTON_METASTORE
-int mainMetaStore(int argc, char ** argv);
+#if ENABLE_PROTON_NLOG
+int mainNativeLog(int argc, char ** argv);
+#endif
+#if ENABLE_PROTON_META
+int mainMeta(int argc, char ** argv);
+#endif
+#if ENABLE_PROTON_PYTHON
+int mainPython(int argc, char ** argv);
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_KLOG_BENCHMARK
@@ -70,7 +74,7 @@ int mainRestart(int argc, char ** argv);
 int mainHashBinary(int, char **)
 {
     /// Intentionally without newline. So you can run:
-    /// objcopy --add-section .clickhouse.hash=<(./clickhouse hash-binary) clickhouse
+    /// objcopy --add-section .proton.hash=<(./proton hash-binary) proton
     std::cout << getHashOfLoadedBinaryHex();
     return 0;
 }
@@ -108,15 +112,18 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_PROTON_GIT_IMPORT
     {"git-import", mainGitImport},
 #endif
-#if ENABLE_PROTON_KEEPER
-    {"keeper", mainKeeper},
-#endif
 #if ENABLE_PROTON_COMPRESSOR
     {"compressor", mainCompressor},
 #endif
 /// proton: starts.
-#if ENABLE_PROTON_METASTORE
-    {"metastore", mainMetaStore},
+#if ENABLE_PROTON_NLOG
+    {"nlog", mainNativeLog},
+#endif
+#if ENABLE_PROTON_META
+    {"meta", mainMeta},
+#endif
+#if ENABLE_PROTON_PYTHON
+    {"python", mainPython},
 #endif
 /// proton: ends.
 #if ENABLE_PROTON_KLOG_BENCHMARK
@@ -325,6 +332,14 @@ struct Checker
 ;
 
 }
+
+/// Prevent messages from JeMalloc in the release build.
+/// Some of these messages are non-actionable for the users, such as:
+/// <jemalloc>: Number of CPUs detected is not deterministic. Per-CPU arena disabled.
+#if USE_JEMALLOC && defined(NDEBUG) && !defined(SANITIZER)
+extern "C" void (*malloc_message)(void *, const char *s);
+__attribute__((constructor(0))) void init_je_malloc_message() { malloc_message = [](void *, const char *){}; }
+#endif
 
 /// This allows to implement assert to forbid initialization of a class in static constructors.
 /// Usage:

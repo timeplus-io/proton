@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Access/MemoryAccessStorage.h>
-#include <Common/ThreadPool.h>
+#include <Common/ThreadPool_fwd.h>
 #include <boost/container/flat_set.hpp>
 
 
@@ -70,7 +70,7 @@ private:
     std::unordered_map<std::string_view, Entry *> entries_by_name_and_type[static_cast<size_t>(AccessEntityType::MAX)];
     boost::container::flat_set<AccessEntityType> types_of_lists_to_write;
     bool failed_to_write_lists = false;                          /// Whether writing of the list files has been failed since the recent restart of the server.
-    ThreadFromGlobalPool lists_writing_thread;                   /// List files are written in a separate thread.
+    std::unique_ptr<ThreadFromGlobalPool> lists_writing_thread;                   /// List files are written in a separate thread.
     std::condition_variable lists_writing_thread_should_exit;    /// Signals `lists_writing_thread` to exit.
     bool lists_writing_thread_is_waiting = false;
     AccessChangesNotifier & changes_notifier;

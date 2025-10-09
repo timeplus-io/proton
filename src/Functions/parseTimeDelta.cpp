@@ -120,20 +120,25 @@ namespace
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                     "Number of arguments for function {} doesn't match: passed {}, should be 1.",
                     getName(),
-                    toString(arguments.size()));
+                    arguments.size());
 
             if (arguments.size() > 1)
                 throw Exception(
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                     "Number of arguments for function {} doesn't match: passed {}, should be 1.",
                     getName(),
-                    toString(arguments.size()));
+                    arguments.size());
 
             const IDataType & type = *arguments[0];
 
             if (!isString(type))
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Cannot format {} as time string.", type.getName());
 
+            return std::make_shared<DataTypeFloat64>();
+        }
+
+        DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+        {
             return std::make_shared<DataTypeFloat64>();
         }
 

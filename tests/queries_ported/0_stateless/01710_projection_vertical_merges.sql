@@ -1,3 +1,5 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
 -- Tags: long, no-parallel
 
 drop stream if exists t;
@@ -8,7 +10,7 @@ insert into t (c1, c18) select number, -number from numbers(2000000);
 
 alter stream t add projection p_norm (select * order by c1);
 
-optimize table t final;
+optimize stream t final;
 
 alter stream t materialize projection p_norm settings mutations_sync = 1;
 

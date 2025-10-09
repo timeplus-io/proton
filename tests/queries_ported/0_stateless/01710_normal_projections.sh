@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tags: disabled
+# https://github.com/timeplus-io/proton-enterprise/issues/9989
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh

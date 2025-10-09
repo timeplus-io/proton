@@ -1,0 +1,24 @@
+CREATE STREAM default.rename_table_multiple\n(\n  `key` int32,\n  `value1_string` string,\n  `value2` int32\n)\nENGINE = MergeTree\nORDER BY tuple_cast()\nSETTINGS min_bytes_for_wide_part = 0, index_granularity = 8192
+key	value1_string	value2
+1	2	3
+CREATE STREAM default.rename_table_multiple\n(\n  `key` int32,\n  `value1_string` string,\n  `value2_old` int32,\n  `value2` int64 DEFAULT 7\n)\nENGINE = MergeTree\nORDER BY tuple_cast()\nSETTINGS min_bytes_for_wide_part = 0, index_granularity = 8192
+key	value1_string	value2_old	value2
+1	2	3	7
+4	5	6	7
+CREATE STREAM default.rename_table_multiple\n(\n  `key` int32,\n  `value1_string` string,\n  `value2_old` int64 DEFAULT 7\n)\nENGINE = MergeTree\nORDER BY tuple_cast()\nSETTINGS min_bytes_for_wide_part = 0, index_granularity = 8192
+key	value1_string	value2_old
+1	2	7
+4	5	7
+7	8	10
+CREATE STREAM default.rename_table_multiple_compact\n(\n  `key` int32,\n  `value1_string` string,\n  `value2` int32\n)\nENGINE = MergeTree\nORDER BY tuple_cast()\nSETTINGS min_rows_for_wide_part = 100000, index_granularity = 8192
+key	value1_string	value2
+1	2	3
+CREATE STREAM default.rename_table_multiple_compact\n(\n  `key` int32,\n  `value1_string` string,\n  `value2_old` int32,\n  `value2` int64 DEFAULT 7\n)\nENGINE = MergeTree\nORDER BY tuple_cast()\nSETTINGS min_rows_for_wide_part = 100000, index_granularity = 8192
+key	value1_string	value2_old	value2
+1	2	3	7
+4	5	6	7
+CREATE STREAM default.rename_table_multiple_compact\n(\n  `key` int32,\n  `value1_string` string,\n  `value2_old` int64 DEFAULT 7\n)\nENGINE = MergeTree\nORDER BY tuple_cast()\nSETTINGS min_rows_for_wide_part = 100000, index_granularity = 8192
+key	value1_string	value2_old
+1	2	7
+4	5	7
+7	8	10

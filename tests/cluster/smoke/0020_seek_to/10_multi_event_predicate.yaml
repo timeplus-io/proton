@@ -1,0 +1,121 @@
+tags:
+- seek_to
+- bug
+description: Multiple event predicates
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2100'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time = '2022-12-01 00:00:01.111'
+    or _tp_time = '2022-12-01 00:00:03.111'
+  schema:
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time >= '2022-12-01 00:00:04.111'
+    and _tp_time >= '2022-12-01 00:00:02.111'
+  schema:
+  - name: s
+    type: string
+
+- name: '2102'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time < '2022-12-01 00:00:03.111'
+    and _tp_time > '2022-12-01 00:00:01.111'
+  schema:
+  - name: s
+    type: string
+
+- name: '2103'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time <= '2022-12-01 00:00:03.111'
+    and _tp_time <= '2022-12-01 00:00:04.111'
+  schema:
+  - name: s
+    type: string
+
+- name: '2104'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time > '2022-12-01 00:00:03.111'
+    and _tp_sn >= 3
+  schema:
+  - name: s
+    type: string
+
+- name: '2105'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_sn > 3 and _tp_time < '2022-12-01 00:00:03.111'
+  schema:
+  - name: s
+    type: string
+
+- name: '2106'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_sn < 8 and _tp_sn < 11 and
+    _tp_sn < 7
+  schema:
+  - name: s
+    type: string
+
+- name: '2107'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time != '2022-12-01 00:00:03.111'
+    and _tp_time <= '2022-12-01 00:00:04.111' and _tp_time >= '2022-12-01 00:00:02.111'
+  schema:
+  - name: s
+    type: string
+
+- type: check
+  target_name: '2100'
+  mode: random
+  expected_result:
+  - [s1]
+  - [s3]
+
+- type: check
+  target_name: '2101'
+  expected_result:
+  - [s4]
+
+- type: check
+  target_name: '2102'
+  expected_result:
+  - [s2]
+
+- type: check
+  target_name: '2103'
+  mode: random
+  expected_result:
+  - [s1]
+  - [s2]
+  - [s3]
+
+- type: check
+  target_name: '2104'
+  expected_result:
+  - [s4]
+
+- type: check
+  target_name: '2105'
+  expected_result:
+  - [s2]
+
+- type: check
+  target_name: '2106'
+  mode: random
+  expected_result:
+  - [s1]
+  - [s2]
+  - [s3]
+  - [s4]
+
+- type: check
+  target_name: '2107'
+  mode: random
+  expected_result:
+  - [s2]
+  - [s4]

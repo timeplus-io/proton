@@ -10,6 +10,7 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     set_source_files_properties(
         FlatDictionary.cpp
         HashedDictionary.cpp
+        SparseHashedDictionary.cpp
         HashedArrayDictionary.cpp
         CacheDictionary.cpp
         RangeHashedDictionary.cpp
@@ -17,10 +18,20 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
         PROPERTIES COMPILE_FLAGS -g0)
 endif ()
 
-list(REMOVE_ITEM clickhouse_dictionaries_sources DictionaryFactory.cpp DictionarySourceFactory.cpp DictionaryStructure.cpp getDictionaryConfigurationFromAST.cpp)
-list(REMOVE_ITEM clickhouse_dictionaries_headers DictionaryFactory.h DictionarySourceFactory.h DictionaryStructure.h getDictionaryConfigurationFromAST.h)
+extract_into_parent_list(clickhouse_dictionaries_sources dbms_sources
+    DictionaryFactory.cpp
+    DictionarySourceFactory.cpp
+    DictionaryStructure.cpp
+    getDictionaryConfigurationFromAST.cpp
+)
+extract_into_parent_list(clickhouse_dictionaries_headers dbms_headers
+    DictionaryFactory.h
+    DictionarySourceFactory.h
+    DictionaryStructure.h
+    getDictionaryConfigurationFromAST.h
+)
 
-add_library(clickhouse_dictionaries ${clickhouse_dictionaries_sources})
+add_library(clickhouse_dictionaries ${clickhouse_dictionaries_headers} ${clickhouse_dictionaries_sources})
 
 target_link_libraries(clickhouse_dictionaries
     PRIVATE
@@ -37,4 +48,9 @@ if (TARGET ch_contrib::cassandra)
 endif()
 
 add_subdirectory(Embedded)
+
 target_link_libraries(clickhouse_dictionaries PRIVATE ch_contrib::sparsehash)
+
+if (TARGET ch_contrib::jemalloc)
+    target_link_libraries(clickhouse_dictionaries PRIVATE ch_contrib::jemalloc)
+endif()

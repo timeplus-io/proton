@@ -1,0 +1,73 @@
+tags:
+  - xirr
+  - cluster_table_bug
+description: create a stream, and create a view with xirr check xirr
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists xirr_v
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_xirr
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_xirr(id int, income float, date date)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into t_xirr(id, income, date)
+      values
+      (1, -1000, '2020-01-02 00:00:01'),
+      (1, -1000, '2020-01-03 09:01:01'),
+      (1, -1000, '2020-01-05 09:01:01'),
+      (1, 3100, '2020-01-18 09:01:01'),
+      (1, 100, '2020-03-09 09:01:01')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      create view xirr_v as
+      select id, count(), xirr(income, date, 0.1) as xirr
+      from table(t_xirr)
+      group by id
+
+  - type: wait
+    time: 1
+
+  - name: 801-1
+    type: stream
+    query: select id, count(), avg(xirr) from xirr_v group by id
+    schema:
+      - name: id
+        type: int32
+      - name: count()
+        type: uint64
+      - name: avg(xirr)
+        type: float64
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists xirr_v
+
+  - type: check
+    target_name: 801-1
+    expected_result:
+      - [ '1', 1, 3.313433458588908 ]

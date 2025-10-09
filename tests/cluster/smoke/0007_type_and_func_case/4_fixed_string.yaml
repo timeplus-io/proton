@@ -1,0 +1,47 @@
+tags:
+  - type
+  - probe_bug
+description: create a stream t_fixeds with fixed_string type and ingest, query, but
+  of proton-python-driver
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists t_fixeds
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream t_fixeds (fixeds fixed_string(32))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_fixeds (fixeds) values ('{@fixed_string32}')
+
+  - type: wait
+    time: 1
+
+  - name: 801-1
+    type: stream
+    query: select fixeds from t_fixeds settings seek_to = 'earliest'
+    schema:
+      - name: fixeds
+        type: fixed_string(32)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_fixeds
+
+  - type: check
+    target_name: 801-1
+    expected_result:
+      - [ '{@fixed_string32}' ]

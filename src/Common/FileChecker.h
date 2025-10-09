@@ -1,9 +1,12 @@
 #pragma once
 
-#include <Common/logger_useful.h>
 #include <Storages/CheckResults.h>
 #include <Disks/IDisk.h>
+#include <Common/Logger.h>
+#include <map>
+#include <base/types.h>
 
+namespace Poco { class Logger; }
 
 namespace DB
 {
@@ -37,7 +40,7 @@ private:
     void load();
 
     const DiskPtr disk;
-    const Poco::Logger * log = &Poco::Logger::get("FileChecker");
+    const LoggerPtr log;
 
     String files_info_path;
     std::map<String, size_t> map;

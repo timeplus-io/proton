@@ -1,5 +1,7 @@
+SET allow_experimental_analyzer = 1;
+
 DROP STREAM IF EXISTS one;
-create stream one(dummy uint8) ;
+CREATE STREAM one(dummy uint8) ENGINE = Memory;
 
 SELECT database, t.name
     FROM system.tables AS t

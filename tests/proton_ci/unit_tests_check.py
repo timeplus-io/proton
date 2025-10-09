@@ -33,8 +33,8 @@ if PROTON_VERSION is None:
     logging.error("PROTON_VERSION is None, could not find proton-unit-test image")
     sys.exit(1)
 
-IMAGE_NAME = "ghcr.io/timeplus-io/proton-unit-test:" + PROTON_VERSION
-TIMEOUT = 30 * 60
+IMAGE_NAME = "timeplus/proton-unit-test:" + PROTON_VERSION
+TIMEOUT = 60 * 60
 
 def get_test_name(line):
     elements = reversed(line.split(" "))

@@ -1,0 +1,113 @@
+tags:
+- seek_to
+description: event time predicate
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2100'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time = '2022-12-01 00:00:01.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time >= '2022-12-01 00:00:04.112'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2102'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time < '2022-12-01 00:00:03.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2103'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time <= '2022-12-01 00:00:03.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2104'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time > '2022-12-01 00:00:03.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2105'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time >= '2022-12-01 00:00:03.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2106'
+  type: stream
+  query: select t, s from test21_limit_by_stream where _tp_time != '2022-12-01 00:00:03.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- type: check
+  target_name: '2100'
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+
+- type: check
+  target_name: '2101'
+  expected_result: []
+
+- type: check
+  target_name: '2102'
+  mode: random
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+  - ['2022-12-01 00:00:02.111000+00:00', s2]
+
+- type: check
+  target_name: '2103'
+  mode: random
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+  - ['2022-12-01 00:00:02.111000+00:00', s2]
+  - ['2022-12-01 00:00:03.111000+00:00', s3]
+
+- type: check
+  target_name: '2104'
+  expected_result:
+  - ['2022-12-01 00:00:04.111000+00:00', s4]
+
+- type: check
+  target_name: '2105'
+  mode: random
+  expected_result:
+  - ['2022-12-01 00:00:03.111000+00:00', s3]
+  - ['2022-12-01 00:00:04.111000+00:00', s4]
+
+- type: check
+  target_name: '2106'
+  mode: random
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+  - ['2022-12-01 00:00:02.111000+00:00', s2]
+  - ['2022-12-01 00:00:04.111000+00:00', s4]

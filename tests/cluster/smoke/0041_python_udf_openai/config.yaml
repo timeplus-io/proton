@@ -1,0 +1,33 @@
+name: python_udf_openai
+description: Tests covering the python_udf openai library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - open_ai
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # openai
+    - type: command
+      <<if eq .nodes "1">>
+      node: [p1]
+      <<else>>
+      node: [p1, p2, p3]
+      <<end>>
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d $'{"packages": [{"name": "openai"}]}'
+
+    - type: command
+      name: python-udf9-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "openai") | length > 0'
+    
+    - type: check
+      target_name: python-udf9-1
+      expected_result: ['true']

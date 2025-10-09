@@ -1,6 +1,4 @@
-#include <queue>
 #include <IO/WriteBufferFromString.h>
-#include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Processors/Executors/ExecutingGraph.h>
 #include <Processors/Executors/PipelineExecutor.h>
@@ -10,6 +8,7 @@
 #include <Common/scope_guard_safe.h>
 #include <Common/CurrentThread.h>
 #include <Common/MemoryTracker.h>
+#include <Common/logger_useful.h>
 #include <Common/setThreadName.h>
 
 #ifndef NDEBUG
@@ -17,13 +16,11 @@
 #endif
 
 /// proton: starts.
-#include <Checkpoint/CheckpointContext.h>
-#include <Checkpoint/CheckpointCoordinator.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PipelineMetricLog.h>
-#include <Common/VersionRevision.h>
 /// proton: ends.
 
+#include <queue>
 
 namespace DB
 {
@@ -33,16 +30,14 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-namespace
-{
-const String GRAPH_CKPT_FILE = "dag";
-}
-
-PipelineExecutor::PipelineExecutor(Processors & processors, QueryStatus * elem)
-    : process_list_element(elem)
+PipelineExecutor::PipelineExecutor(std::shared_ptr<Processors> & processors, QueryStatusPtr elem)
+    : process_list_element(std::move(elem))
 {
     if (process_list_element)
+    {
         profile_processors = process_list_element->getContext()->getSettingsRef().log_processors_profiles;
+        trace_processors = process_list_element->getContext()->getSettingsRef().opentelemetry_trace_processors;
+    }
 
     try
     {
@@ -53,7 +48,7 @@ PipelineExecutor::PipelineExecutor(Processors & processors, QueryStatus * elem)
         /// If exception was thrown while pipeline initialization, it means that query pipeline was not build correctly.
         /// It is logical error, and we need more information about pipeline.
         WriteBufferFromOwnString buf;
-        printPipeline(processors, buf);
+        printPipeline(*processors, buf);
         buf.finalize();
         exception.addMessage("Query pipeline:\n" + buf.str());
 
@@ -70,12 +65,10 @@ PipelineExecutor::PipelineExecutor(Processors & processors, QueryStatus * elem)
 
 PipelineExecutor::~PipelineExecutor()
 {
+    deregisterCheckpoint(); /// proton : added
+
     if (process_list_element)
         process_list_element->removePipelineExecutor(this);
-
-    /// proton : starts
-    deregisterCheckpoint();
-    /// proton : ends
 }
 
 const Processors & PipelineExecutor::getProcessors() const
@@ -228,7 +221,7 @@ void PipelineExecutor::finalizeExecution()
     }
 
     if (!all_processors_finished)
-        throw Exception("Pipeline stuck. Current state:\n" + dumpPipeline(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Pipeline stuck. Current state:\n{}", dumpPipeline());
 }
 
 void PipelineExecutor::executeSingleThread(size_t thread_num)
@@ -237,7 +230,7 @@ void PipelineExecutor::executeSingleThread(size_t thread_num)
 
 #ifndef NDEBUG
     auto & context = tasks.getThreadContext(thread_num);
-    LOG_TRACE(log,
+    LOG_TEST(log,
               "Thread finished. Total time: {} sec. Execution time: {} sec. Processing time: {} sec. Wait time: {} sec.",
               context.total_time_ns / 1e9,
               context.execution_time_ns / 1e9,
@@ -317,24 +310,25 @@ void PipelineExecutor::initializeExecution(size_t num_threads)
     Queue queue;
     graph->initializeExecution(queue);
 
-    tasks.init(num_threads, profile_processors, read_progress_callback.get());
+    tasks.init(num_threads, profile_processors, trace_processors, read_progress_callback.get());
     tasks.fill(queue);
 }
 
 void PipelineExecutor::executeImpl(size_t num_threads, ExecuteMode exec_mode_)
 {
-    OpenTelemetrySpanHolder span("PipelineExecutor::executeImpl()");
-
-    initializeExecution(num_threads);
-
     /// proton : starts
     if (process_list_element)
         LOG_INFO(
             log, "Using {} threads to execute pipeline for query_id={}", num_threads, process_list_element->getClientInfo().current_query_id);
 
     execute_threads = num_threads;
-    registerCheckpoint(exec_mode_);
+
+    /// Make sure to call Processor::recover() before Processor::prepare()
+    if (!checkpointRegistered())
+        registerCheckpoint(exec_mode_);
     /// proton : ends
+
+    initializeExecution(num_threads);
 
     using ThreadsData = std::vector<ThreadFromGlobalPool>;
     ThreadsData threads;
@@ -366,7 +360,7 @@ void PipelineExecutor::executeImpl(size_t num_threads, ExecuteMode exec_mode_)
                 setThreadName("QueryPipelineEx");
 
                 if (thread_group)
-                    CurrentThread::attachTo(thread_group);
+                    CurrentThread::attachToGroup(thread_group);
 
                 try
                 {
@@ -430,168 +424,9 @@ String PipelineExecutor::dumpPipeline() const
 }
 
 /// proton: starts.
-void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_)
-{
-    if (exec_mode_ == ExecuteMode::NORMAL)
-        return;
-
-    assert(process_list_element);
-    graph->initCheckpointNodes();
-
-    auto query_context = process_list_element->getContext();
-
-    Int64 interval = 0;
-    if (exec_mode_ == ExecuteMode::RECOVER)
-    {
-        recover();
-        interval = recovered_ckpt_interval;
-    }
-    else
-        interval = query_context->getSettingsRef().checkpoint_interval.value;
-
-    /// Here requires a lock to cover following scenarios in multi-threads:
-    /// 1) registerQuery() -> dtor() OR cancel() -> deregisterQuery()
-    /// 2) dtor() OR cancel() -> deregisterQuery() -> registerQuery()
-    /// 3) dtor() OR cancel() -> registerQuery() -> deregisterQuery()
-    std::lock_guard lock(register_checkpoint_mutex);
-    if (cancelled)
-        return;
-
-    exec_mode = exec_mode_;
-    auto & ckpt_coordinator = CheckpointCoordinator::instance(query_context->getGlobalContext());
-    ckpt_coordinator.registerQuery(process_list_element->getClientInfo().current_query_id, process_list_element->getQuery(), interval, weak_from_this(), recovered_epoch);
-}
-
-void PipelineExecutor::deregisterCheckpoint()
-{
-    std::lock_guard lock(register_checkpoint_mutex);
-    if (exec_mode == ExecuteMode::SUBSCRIBE || exec_mode == ExecuteMode::RECOVER)
-    {
-        CheckpointCoordinator::instance(process_list_element->getContext()->getGlobalContext())
-            .deregisterQuery(process_list_element->getClientInfo().current_query_id);
-
-        /// Reset exec_mode to NORMAL to avoid re-execute deregisterQuery again although it doesn't hurt
-        exec_mode = ExecuteMode::NORMAL;
-    }
-}
-
-void PipelineExecutor::serialize(CheckpointContextPtr ckpt_ctx) const
-{
-    if (exec_mode == ExecuteMode::SUBSCRIBE)
-    {
-        ckpt_ctx->coordinator->preCheckpoint(ckpt_ctx);
-
-        /// For recover mode, we don't want to re-checkpoint dag.ckpt
-        /// Create the query ckpt folder.
-        UInt64 interval = process_list_element->getContext()->getSettingsRef().checkpoint_interval.value;
-
-        /// Version + Interval + Query + Graph
-        ckpt_ctx->coordinator->checkpoint(getVersion(), GRAPH_CKPT_FILE, ckpt_ctx, [&](WriteBuffer & wb) {
-            /// Interval
-            DB::writeIntBinary(interval, wb);
-            /// Threads
-            DB::writeIntBinary(execute_threads, wb);
-            /// Graph
-            graph->serialize(wb);
-        });
-    }
-}
-
-bool PipelineExecutor::hasProcessedNewDataSinceLastCheckpoint() const noexcept
-{
-    return graph->hasProcessedNewDataSinceLastCheckpoint();
-}
-
-void PipelineExecutor::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
-{
-    graph->triggerCheckpoint(std::move(ckpt_ctx));
-}
-
-void PipelineExecutor::recover()
-{
-    auto & ckpt_coordinator = CheckpointCoordinator::instance(process_list_element->getContext()->getGlobalContext());
-
-    /// Validate the execute graph doesn't change
-    ckpt_coordinator.recover(process_list_element->getClientInfo().current_query_id, [&](CheckpointContextPtr ckpt_ctx) {
-        recovered_epoch = ckpt_ctx->epoch;
-        auto epoch_zero_ckpt_ctx = std::make_shared<CheckpointContext>(*ckpt_ctx);
-        /// We will need reset epoch to zero for metadata recover since CheckpointContext::checkpointDir(...)
-        /// depends on epoch
-        epoch_zero_ckpt_ctx->epoch = 0;
-
-        ckpt_ctx->coordinator->recover(GRAPH_CKPT_FILE, std::move(epoch_zero_ckpt_ctx), [&](VersionType version_, ReadBuffer & rb) {
-            version = version_;
-
-            /// Interval
-            DB::readIntBinary(recovered_ckpt_interval, rb);
-
-            /// Threads
-            DB::readIntBinary(execute_threads, rb);
-
-            /// Graph
-            try
-            {
-                graph->deserialize(rb);
-            }
-            catch (const Exception & e)
-            {
-                LOG_ERROR(
-                    log,
-                    "Failed to recover query states from checkpoint : {}. Maybe the new query plan is not compatible with checkpointed. checkpointed_query={}",
-                    e.message(),
-                    process_list_element->getQuery());
-                throw e;
-            }
-
-            /// Recover query states from checkpoint
-            if (ckpt_ctx->epoch > 0)
-                graph->recover(ckpt_ctx);
-        });
-    });
-}
-
 String PipelineExecutor::getStats() const
 {
     return graph->getStats();
 }
-
-std::vector<UInt32> PipelineExecutor::getCheckpointAckNodeIDs() const
-{
-    std::vector<UInt32> node_ids;
-    node_ids.reserve(graph->checkpoint_ack_nodes.size());
-    for (const auto & node : graph->checkpoint_ack_nodes)
-        node_ids.push_back(node->processor->getLogicID());
-
-    return node_ids;
-}
-
-std::vector<UInt32> PipelineExecutor::getCheckpointSourceNodeIDs() const
-{
-    std::vector<UInt32> node_ids;
-    node_ids.reserve(graph->checkpoint_trigger_nodes.size());
-    for (const auto & node : graph->checkpoint_trigger_nodes)
-        node_ids.push_back(node->processor->getLogicID());
-
-    return node_ids;
-}
-
-VersionType PipelineExecutor::getVersionFromRevision(UInt64 revision) const
-{
-    if (version)
-        return *version;
-
-    return static_cast<VersionType>(revision);
-}
-
-VersionType PipelineExecutor::getVersion() const
-{
-    auto ver = getVersionFromRevision(ProtonRevision::getVersionRevision());
-
-    if (!version)
-        version = ver;
-
-    return ver;
-}
-
 /// proton: ends.
 }

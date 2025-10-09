@@ -1,0 +1,142 @@
+tags:
+- materialized view
+description: union multiple materialied view with versioned_kv join query
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists mv_with_inner_stream
+
+- type: query
+  sql: drop view if exists mv_with_target_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists source_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists source_mv_versioned_kv
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists target_mv_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream source_mv_stream(i int, v string, t datetime64(3, 'UTC')) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream source_mv_versioned_kv(id int, value string) primary key id settings mode='versioned_kv', flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream target_mv_stream(customerId int, timestamp string, recordValue string, value string) settings flush_threshold_count=1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view mv_with_inner_stream as with results as (select i, format_datetime(window_end, '%Y-%m-%d %H:%i:%S', 'UTC') AS timestamp, to_string(max(v)) AS recordValue from tumble(source_mv_stream, t, 2s) group by i, window_end) select source_mv_versioned_kv.id as customerId, results.timestamp as timestamp, results.recordValue as recordValue, source_mv_versioned_kv.value as value from results inner join source_mv_versioned_kv on i = id
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view mv_with_target_stream into target_mv_stream as with results as (select i, format_datetime(window_end, '%Y-%m-%d %H:%i:%S', 'UTC') AS timestamp, to_string(max(v)) AS recordValue from tumble(source_mv_stream, t, 2s) group by i, window_end) select source_mv_versioned_kv.id as customerId, results.timestamp as timestamp, results.recordValue as recordValue, source_mv_versioned_kv.value as value from results inner join source_mv_versioned_kv on i = id
+- type: wait
+  time: 1
+
+- name: '2400'
+  type: stream
+  query: select (* except _tp_time) from mv_with_inner_stream union select (* except _tp_time) from mv_with_target_stream
+  schema:
+  - name: customerId
+    type: int32
+  - name: timestamp
+    type: string
+  - name: recordValue
+    type: string
+  - name: value
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into source_mv_versioned_kv(id, value) values
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: string
+  inputs:
+  - [1, 'test']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into source_mv_stream(i, v, t) values
+  schema:
+  - name: i
+    type: int32
+  - name: v
+    type: string
+  - name: t
+    type: datetime64(3)
+  inputs:
+  - [1, 't1', '2022-10-01 00:00:00']
+  - [2, 't2', '2022-10-01 00:00:01']
+  - [3, 't3', '2022-10-01 00:00:03']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into source_mv_versioned_kv(id, value) values
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: string
+  inputs:
+  - [1, 'test2']
+  - [2, 'test3']
+
+- type: query
+  sql: insert into source_mv_stream(i, v, t) values
+  schema:
+  - name: i
+    type: int32
+  - name: v
+    type: string
+  - name: t
+    type: datetime64(3)
+  inputs:
+  - [1, 't11', '2022-10-01 00:00:03']
+  - [2, 't22', '2022-10-01 00:00:03']
+  - [3, 't33', '2022-10-01 00:00:04']
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists mv_with_inner_stream
+
+- type: query
+  sql: drop view if exists mv_with_target_stream
+
+- type: check
+  target_name: '2400'
+  mode: <<or .aggregation_check_mode "sequence">>
+  expected_result:
+  - [1, '2022-10-01 00:00:02', t1, 'test']
+  - [1, '2022-10-01 00:00:02', t1, 'test']
+  - [1, '2022-10-01 00:00:04', t11, 'test2']
+  - [2, '2022-10-01 00:00:04', t22, 'test3']
+  - [1, '2022-10-01 00:00:04', t11, 'test2']
+  - [2, '2022-10-01 00:00:04', t22, 'test3']

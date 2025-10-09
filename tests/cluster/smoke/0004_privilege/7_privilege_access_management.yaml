@@ -1,0 +1,74 @@
+description: test drop query of select_only user 
+
+steps:
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP ROLE if exists select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP USER if exists user_select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP USER if exists user_management;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP stream if exists test00_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROLE select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create user user_management identified with plaintext_password by 'password';
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: GRANT ACCESS MANAGEMENT ON *.* TO user_management;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: grant select_only to user_management;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: user_management
+    password: password
+    sql: create user user_select_only;
+
+  - type: wait
+    time: 1
+
+  - name: '110'
+    type: stream
+    node: [p1]
+    user: proton
+    password: proton@t+
+    query: select name from system.users where name = 'user_select_only'
+    schema:
+      - name: name
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: '110'
+    expected_result:
+      - [ 'user_select_only']

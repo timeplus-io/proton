@@ -1,0 +1,44 @@
+services:
+  probe:
+    image: timeplus/probe:0.1.13
+    container_name: p1s1_probe
+    stdin_open: true
+    volumes:
+      - ../deployment:/deploy # deployment dir
+      - ../migration:/migration # migration test dir
+      - ../log/p1k1/log:/log
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p1:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: proton-server
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - ${FULL_LOG_DIR:-./log}/proton-server/log:/var/log/proton-server
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  sling:
+    image: timeplus/sling-cli:1.2.20-timeplus.3
+    container_name: sling
+    volumes:
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - .sling:/root/.sling
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+networks:
+  mynetwork:
+    driver: bridge

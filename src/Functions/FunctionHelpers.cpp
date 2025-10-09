@@ -6,7 +6,6 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <Common/assert_cast.h>
-#include <DataTypes/DataTypeNullable.h>
 
 
 namespace DB
@@ -15,6 +14,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ILLEGAL_COLUMN;
+    extern const int LOGICAL_ERROR;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
@@ -81,7 +81,7 @@ ColumnWithTypeAndName columnGetNested(const ColumnWithTypeAndName & col)
             return ColumnWithTypeAndName{ nullable_res, nested_type, col.name };
         }
         else
-            throw Exception("Illegal column for DataTypeNullable", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column for DataTypeNullable");
     }
     return col;
 }
@@ -100,16 +100,13 @@ void validateArgumentType(const IFunction & func, const DataTypes & arguments,
                           const char * expected_type_description)
 {
     if (arguments.size() <= argument_index)
-        throw Exception("Incorrect number of arguments of function " + func.getName(),
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Incorrect number of arguments of function {}",
+                        func.getName());
 
     const auto & argument = arguments[argument_index];
     if (!validator_func(*argument))
-        throw Exception("Illegal type " + argument->getName() +
-                        " of " + std::to_string(argument_index) +
-                        " argument of function " + func.getName() +
-                        " expected " + expected_type_description,
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of {} argument of function {} expected {}",
+                        argument->getName(), std::to_string(argument_index), func.getName(), expected_type_description);
 }
 
 namespace
@@ -130,12 +127,13 @@ void validateArgumentsImpl(const IFunction & func,
         const auto & arg = arguments[i + argument_offset];
         const auto & descriptor = descriptors[i];
         if (int error_code = descriptor.isValid(arg.type, arg.column); error_code != 0)
-            throw Exception("Illegal type of argument #" + std::to_string(argument_offset + i + 1) // +1 is for human-friendly 1-based indexing
-                            + (descriptor.argument_name ? " '" + std::string(descriptor.argument_name) + "'" : String{})
-                            + " of function " + func.getName()
-                            + (descriptor.expected_type_description ? String(", expected ") + descriptor.expected_type_description : String{})
-                            + (arg.type ? ", got " + arg.type->getName() : String{}),
-                            error_code);
+            throw Exception(error_code,
+                            "Illegal type of argument #{}{} of function {}{}{}",
+                            argument_offset + i + 1,    // +1 is for human-friendly 1-based indexing
+                            (descriptor.argument_name ? " '" + std::string(descriptor.argument_name) + "'" : String{}),
+                            func.getName(),
+                            (descriptor.expected_type_description ? String(", expected ") + descriptor.expected_type_description : String{}),
+                            (arg.type ? ", got " + arg.type->getName() : String{}));
     }
 }
 
@@ -184,15 +182,11 @@ void validateFunctionArgumentTypes(const IFunction & func,
             return result;
         };
 
-        throw Exception("Incorrect number of arguments for function " + func.getName()
-                        + " provided " + std::to_string(arguments.size())
-                        + (!arguments.empty() ? " (" + join_argument_types(arguments) + ")" : String{})
-                        + ", expected " + std::to_string(mandatory_args.size())
-                        + (!optional_args.empty() ? " to " + std::to_string(mandatory_args.size() + optional_args.size()) : "")
-                        + " (" + join_argument_types(mandatory_args)
-                        + (!optional_args.empty() ? ", [" + join_argument_types(optional_args) + "]" : "")
-                        + ")",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Incorrect number of arguments for function {} provided {}{}, expected {}{} ({}{})",
+            func.getName(), arguments.size(), (!arguments.empty() ? " (" + join_argument_types(arguments) + ")" : String{}),
+            mandatory_args.size(), (!optional_args.empty() ? " to " + std::to_string(mandatory_args.size() + optional_args.size()) : ""),
+            join_argument_types(mandatory_args), (!optional_args.empty() ? ", [" + join_argument_types(optional_args) + "]" : ""));
     }
 
     validateArgumentsImpl(func, arguments, 0, mandatory_args);
@@ -215,11 +209,11 @@ checkAndGetNestedArrayOffset(const IColumn ** columns, size_t num_arguments)
             offsets_i = &arr->getOffsets();
         }
         else
-            throw Exception("Illegal column " + columns[i]->getName() + " as argument of function", ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} as argument of function", columns[i]->getName());
         if (i == 0)
             offsets = offsets_i;
         else if (*offsets_i != *offsets)
-            throw Exception("Lengths of all arrays passed to aggregate function must be equal.", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH, "Lengths of all arrays passed to aggregate function must be equal.");
     }
     return {nested_columns, offsets->data()};
 }
@@ -295,6 +289,37 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & a
     return ColumnNullable::create(src_not_nullable->convertToFullColumnIfConst(), result_null_map_column);
 }
 
+ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnPtr & null_map)
+{
+    if (src->onlyNull())
+        return src;
+
+    ColumnPtr src_not_nullable = src;
+    if (const auto * nullable = checkAndGetColumn<ColumnNullable>(src.get()))
+    {
+        src_not_nullable = nullable->getNestedColumnPtr();
+        const auto & src_null_map = nullable->getNullMapColumn().getData();
+
+        /// Reuse null_map as result_null_map if possible, thus avoiding unnecessary memory allocation.
+        auto result_null_map_column = IColumn::mutate(std::move(null_map));
+        auto & result_null_map = assert_cast<ColumnUInt8 &>(*result_null_map_column).getData();
+        for (size_t i = 0; i < result_null_map.size(); ++i)
+            result_null_map[i] |= src_null_map[i];
+
+        return ColumnNullable::create(src_not_nullable->convertToFullColumnIfConst(), std::move(result_null_map_column));
+    }
+    else if (const auto * const_src = checkAndGetColumn<ColumnConst>(src.get()))
+    {
+        const NullMap & null_map_data = assert_cast<const ColumnUInt8 &>(*null_map).getData();
+        ColumnPtr result_null_map_column = ColumnUInt8::create(1, null_map_data[0] || const_src->isNullAt(0));
+        const auto * nullable_data = checkAndGetColumn<ColumnNullable>(&const_src->getDataColumn());
+        auto data_not_nullable = nullable_data ? nullable_data->getNestedColumnPtr() : const_src->getDataColumnPtr();
+        return ColumnConst::create(ColumnNullable::create(data_not_nullable, result_null_map_column), const_src->size());
+    }
+    else
+        return ColumnNullable::create(src->convertToFullColumnIfConst(), null_map);
+}
+
 NullPresence getNullPresense(const ColumnsWithTypeAndName & args)
 {
     NullPresence res;
@@ -318,4 +343,27 @@ bool isDecimalOrNullableDecimal(const DataTypePtr & type)
     return isDecimal(assert_cast<const DataTypeNullable *>(type.get())->getNestedType());
 }
 
+/// Note that, for historical reasons, most of the functions use the first argument size to determine which is the
+/// size of all the columns. When short circuit optimization was introduced, `input_rows_count` was also added for
+/// all functions, but many have not been adjusted
+void checkFunctionArgumentSizes(const ColumnsWithTypeAndName & arguments, size_t input_rows_count)
+{
+    for (size_t i = 0; i < arguments.size(); i++)
+    {
+        if (isColumnConst(*arguments[i].column))
+            continue;
+
+        size_t current_size = arguments[i].column->size();
+
+        if (current_size != input_rows_count)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Expected the argument nº#{} ('{}' of type {}) to have {} rows, but it has {}",
+                i + 1,
+                arguments[i].name,
+                arguments[i].type->getName(),
+                input_rows_count,
+                current_size);
+    }
+}
 }

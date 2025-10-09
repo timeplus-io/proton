@@ -1,0 +1,44 @@
+name: privilege
+description: Tests covering the privilige smoke cases.
+tags:
+  - smoke
+  - privilege
+
+setup:
+  scope: suite
+  steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1,p2,p3]
+    <<end>>
+    shell: |
+       perl -0777 -i -pe "s|networks:\n            - ip: '::1'\n            - ip: 127.0.0.1\n        access_management: 1|networks:\n            - ip: '::/0'\n        access_management: 1|g" /etc/proton-server/users.yaml
+
+  - type: wait
+    time: 2
+
+  - name: cluster-1
+    type: health_check
+    protocol: tcp
+
+  - type: check
+    target_name: cluster-1
+    expected_result:
+    - ['true']
+
+teardown:
+  scope: suite
+  steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1,p2,p3]
+    <<end>>
+    shell: |
+      perl -0777 -i -pe "s|networks:\n            - ip: '::/0'\n        access_management: 1|networks:\n            - ip: '::1'\n            - ip: 127.0.0.1\n        access_management: 1|g" /etc/proton-server/users.yaml
+
+  - type: wait
+    time: 3

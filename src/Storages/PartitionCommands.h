@@ -73,6 +73,12 @@ struct PartitionCommand
     String move_destination_name;
 
     static std::optional<PartitionCommand> parse(const ASTAlterCommand * command);
+    /// proton: starts
+    static std::shared_ptr<ASTAlterCommand> generateASTAlterCommand(const PartitionCommand & command);
+    static std::string partitionCommandToString(const PartitionCommand & command, const String & table, const String & database);
+    static std::optional<PartitionCommand> stringToPartitionCommand(std::string_view query_string);
+    /// proton: ends
+
     /// Convert type of the command to string (use not only type, but also
     /// different flags)
     std::string typeToString() const;
@@ -92,14 +98,14 @@ struct PartitionCommandResultInfo
     /// Part name, always filled
     String part_name;
     /// Part name in /detached directory, filled in ATTACH
-    String old_part_name;
+    String old_part_name = {};
     /// Absolute path to backup directory, filled in FREEZE
-    String backup_path;
+    String backup_path = {};
     /// Absolute path part backup, filled in FREEZE
-    String part_backup_path;
+    String part_backup_path = {};
     /// Name of the backup (specified by user or increment value), filled in
     /// FREEZE
-    String backup_name;
+    String backup_name = {};
 };
 
 using PartitionCommandsResultInfo = std::vector<PartitionCommandResultInfo>;

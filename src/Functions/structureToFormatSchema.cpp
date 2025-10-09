@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 #include <Interpreters/Context.h>
 #include <IO/WriteBufferFromVector.h>
 #include <Formats/StructureToCapnProtoSchema.h>
@@ -115,7 +115,7 @@ Function that converts proton table structure to CapnProto format schema
 "    x @1 : UInt32;\n"
 "}"},
             },
-            .categories{"Other"}
+            .category{"Other"}
         },
         FunctionFactory::CaseSensitive);
 }
@@ -137,7 +137,7 @@ Function that converts proton table structure to Protobuf format schema
 "    uint32 x = 2;\n"
 "}"},
             },
-            .categories{"Other"}
+            .category{"Other"}
         },
         FunctionFactory::CaseSensitive);
 }

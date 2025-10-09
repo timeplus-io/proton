@@ -1,8 +1,6 @@
-#include "SearchHandler.h"
+#include <Server/RestRouterHandlers/SchemaValidator.h>
+#include <Server/RestRouterHandlers/SearchHandler.h>
 
-#include "SchemaValidator.h"
-
-#include <IO/ConcatReadBuffer.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -38,7 +36,7 @@ void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload, HTTPServerR
 
     /// FIXME : enforce SELECT query at low level to avoid this sql parsing here
     const auto & query = getQuery(payload);
-    LOG_INFO(log, "Execute query: {}", query);
+    LOG_DEBUG(log, "Execute query: {}", query);
     ReadBufferFromString in{query};
 
     /// Prepare output buffer

@@ -1,0 +1,62 @@
+tags:
+- shuffle by
+- skip # unstable in CI, not reproduce in local, skip temporarily
+description: global aggregation query with shuffle by, convering stremaing and historical
+  query, by default disable convert to two level
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test_31_multishards_stream
+- type: wait
+  time: 2
+
+- type: query
+  sql: create stream test_31_multishards_stream(i int, v string) settings shards=3
+- type: wait
+  time: 4
+
+- type: query
+  sql: insert into test_31_multishards_stream(i, v) select i % 100 + 1, v from test_31_rstream settings max_block_size=100, max_events=10000
+- type: wait
+  time: 4
+
+- name: 3100
+  type: stream
+  query: "with cte as (select i, count() from test_31_multishards_stream where _tp_time > earliest_ts() shuffle by i group by i settings group_by_two_level_threshold=10) select count() from cte settings emit_during_backfill=false"
+  schema:
+    - name: count()
+      type: uint64
+
+- name: 3101
+  type: stream
+  query: "with cte as (select i, count() from table(test_31_multishards_stream) shuffle by i group by i settings group_by_two_level_threshold=10, max_block_size=100, max_events=10000) select count() from cte"
+  schema:
+    - name: count()
+      type: uint64
+
+- name: 3102
+  type: stream
+  query: "with cte as (select i, count() from test_31_multishards_stream where _tp_time > earliest_ts() shuffle by i group by i emit changelog settings group_by_two_level_threshold=10) select count() from cte settings emit_during_backfill=false"
+  schema:
+    - name: count()
+      type: uint64
+
+- type: wait
+  time: 2
+
+- type: check
+  target_name: 3100
+  expected_result:
+  - [100]
+
+- type: check
+  target_name: 3100
+  expected_result:
+  - [100]
+
+- type: check
+  target_name: 3102
+  expected_result:
+  - [100]

@@ -2,12 +2,14 @@
 
 # pylint: disable=too-many-return-statements
 # pylint: disable=global-variable-not-assigned
+# pylint: disable=anomalous-backslash-in-string
 
 import enum
 import shutil
 import sys
 import os
 import os.path
+import glob
 import signal
 import re
 import copy
@@ -62,6 +64,8 @@ TEST_FILE_EXTENSIONS = ['.sql', '.sql.j2', '.sh', '.py', '.expect']
 
 VERSION_PATTERN = r"^((\d+\.)?(\d+\.)?(\d+\.)?\d+)$"
 
+
+TEST_MAX_RUN_TIME_IN_SECONDS = 180
 
 def stringhash(s):
     # default hash() function consistent
@@ -354,7 +358,9 @@ class FailureReason(enum.Enum):
     STDERR = "having stderror: "
     EXCEPTION = "having having exception in stdout: "
     RESULT_DIFF = "result differs with reference: "
-    TOO_LONG = "Test runs too long (> 60s). Make it faster."
+    TOO_LONG = (
+        f"Test runs too long (> {TEST_MAX_RUN_TIME_IN_SECONDS}s). Make it faster."
+    )
     INTERNAL_QUERY_FAIL = "Internal query (CREATE/DROP DATABASE) failed:"
 
     # SKIPPED reasons
@@ -369,17 +375,63 @@ class FailureReason(enum.Enum):
     S3_STORAGE = "s3-storage"
     BUILD = "not running for current build"
     BACKWARD_INCOMPATIBLE = "test is backward incompatible"
+    NO_PARALLEL_REPLICAS = "smth in not supported with parallel replicas"
 
     # UNKNOWN reasons
     NO_REFERENCE = "no reference file"
     INTERNAL_ERROR = "Test internal error: "
 
 
+def threshold_generator(always_on_prob, always_off_prob, min_val, max_val):
+    def gen():
+        tmp = random.random()
+        if tmp <= always_on_prob:
+            return min_val
+        if tmp <= always_on_prob + always_off_prob:
+            return max_val
+
+        if isinstance(min_val, int) and isinstance(max_val, int):
+            return random.randint(min_val, max_val)
+        else:
+            return random.uniform(min_val, max_val)
+
+    return gen
+
+
+# To keep dependency list as short as possible, tzdata is not used here (to
+# avoid try/except block for import)
+def get_localzone():
+    return os.getenv("TZ", "/".join(os.readlink("/etc/localtime").split("/")[-2:]))
+
+
+def supports_io_uring():
+    return not subprocess.call(
+        [
+            args.binary,
+            "-q",
+            "select * from file('/dev/null', 'LineAsString')",
+            "--storage_file_read_method",
+            "io_uring",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def get_local_filesystem_methods():
+    methods = ["read", "pread", "mmap", "pread_threadpool"]
+    if supports_io_uring():
+        methods.append("io_uring")
+    return methods
+
+
 class SettingsRandomizer:
     settings = {
         "max_insert_threads": lambda: 0 if random.random() < 0.5 else random.randint(1, 16),
-        "group_by_two_level_threshold": lambda: 1 if random.random() < 0.1 else 2 ** 60 if random.random() < 0.11 else 100000,
-        "group_by_two_level_threshold_bytes": lambda: 1 if random.random() < 0.1 else 2 ** 60 if random.random() < 0.11 else 50000000,
+        "group_by_two_level_threshold": threshold_generator(0.2, 0.2, 1, 1000000),
+        "group_by_two_level_threshold_bytes": threshold_generator(
+            0.2, 0.2, 1, 50000000
+        ),
         "distributed_aggregation_memory_efficient": lambda: random.randint(0, 1),
         "fsync_metadata": lambda: random.randint(0, 1),
         "priority": lambda: min(3, int(abs(random.gauss(0, 2)))),
@@ -390,6 +442,104 @@ class SettingsRandomizer:
         "prefer_localhost_replica": lambda: random.randint(0, 1),
         "max_block_size": lambda: random.randint(8000, 100000),
         "max_threads": lambda: random.randint(1, 64),
+        "min_compress_block_size": lambda: random.randint(1, 1048576 * 3),
+        "max_compress_block_size": lambda: random.randint(1, 1048576 * 3),
+        "min_bytes_to_use_direct_io": threshold_generator(
+            0.2, 0.5, 1, 10 * 1024 * 1024 * 1024
+        ),
+        "min_bytes_to_use_mmap_io": threshold_generator(
+            0.2, 0.5, 1, 10 * 1024 * 1024 * 1024
+        ),
+        "local_filesystem_read_method": lambda: random.choice(
+            get_local_filesystem_methods()
+        ),
+        "remote_filesystem_read_method": lambda: random.choice(["read", "threadpool"]),
+        "local_filesystem_read_prefetch": lambda: random.randint(0, 1),
+        "filesystem_cache_segments_batch_size": lambda: random.choice([0, 3, 10, 50]),
+        "read_from_filesystem_cache_if_exists_otherwise_bypass_cache": lambda: random.randint(
+            0, 1
+        ),
+        "throw_on_error_from_cache_on_write_operations": lambda: random.randint(0, 1),
+        "remote_filesystem_read_prefetch": lambda: random.randint(0, 1),
+        "allow_prefetched_read_pool_for_remote_filesystem": lambda: random.randint(
+            0, 1
+        ),
+        "filesystem_prefetch_max_memory_usage": lambda: random.choice(
+            ["10Mi", "100Mi", "500Mi"]
+        ),
+        "filesystem_prefetches_limit": lambda: random.choice(
+            [0, 10]
+        ),  # 0 means unlimited (but anyway limited by prefetch_max_memory_usage)
+        "filesystem_prefetch_min_bytes_for_single_read_task": lambda: random.choice(
+            ["1Mi", "8Mi", "16Mi"]
+        ),
+        "filesystem_prefetch_step_marks": lambda: random.choice(
+            [0, 50]
+        ),  # 0 means 'auto'
+        "filesystem_prefetch_step_bytes": lambda: random.choice(
+            [0, "100Mi"]
+        ),  # 0 means 'auto'
+        # "compile_expressions": lambda: random.randint(0, 1), - this setting has a bug: https://github.com/ClickHouse/ClickHouse/issues/51264
+        "compile_aggregate_expressions": lambda: random.randint(0, 1),
+        "compile_sort_description": lambda: random.randint(0, 1),
+        "merge_tree_coarse_index_granularity": lambda: random.randint(2, 32),
+        "optimize_distinct_in_order": lambda: random.randint(0, 1),
+        "max_bytes_before_external_sort": threshold_generator(
+            0.3, 0.5, 0, 10 * 1024 * 1024 * 1024
+        ),
+        "max_bytes_before_external_group_by": threshold_generator(
+            0.3, 0.5, 0, 10 * 1024 * 1024 * 1024
+        ),
+        "max_bytes_before_remerge_sort": lambda: random.randint(1, 3000000000),
+        "min_compress_block_size": lambda: random.randint(1, 1048576 * 3),
+        "max_compress_block_size": lambda: random.randint(1, 1048576 * 3),
+        "merge_tree_compact_parts_min_granules_to_multibuffer_read": lambda: random.randint(
+            1, 128
+        ),
+        "optimize_sorting_by_input_stream_properties": lambda: random.randint(0, 1),
+        "http_response_buffer_size": lambda: random.randint(0, 10 * 1048576),
+        "http_wait_end_of_query": lambda: random.random() > 0.5,
+        "enable_memory_bound_merging_of_aggregation_results": lambda: random.randint(
+            0, 1
+        ),
+        "min_count_to_compile_expression": lambda: random.choice([0, 3]),
+        "min_count_to_compile_aggregate_expression": lambda: random.choice([0, 3]),
+        "min_count_to_compile_sort_description": lambda: random.choice([0, 3]),
+        "session_timezone": lambda: random.choice(
+            [
+                # special non-deterministic around 1970 timezone, see [1].
+                #
+                #   [1]: https://github.com/ClickHouse/ClickHouse/issues/42653
+                "America/Mazatlan",
+                "America/Hermosillo",
+                "Mexico/BajaSur",
+                # These timezones had DST transitions on some unusual dates (e.g. 2000-01-15 12:00:00).
+                "Africa/Khartoum",
+                "Africa/Juba",
+                # server default that is randomized across all timezones
+                # NOTE: due to lots of trickery we cannot use empty timezone here, but this should be the same.
+                get_localzone(),
+            ]
+        ),
+        # This setting affect part names and their content which can be read from tables in tests.
+        # We have a lot of tests which relies on part names, so it's very unsafe to enable randomization
+        # of this setting
+        # "prefer_warmed_unmerged_parts_seconds": lambda: random.randint(0, 10),
+        "use_page_cache_for_disks_without_file_cache": lambda: random.random() < 0.7,
+        "page_cache_inject_eviction": lambda: random.random() < 0.5,
+        "merge_tree_read_split_ranges_into_intersecting_and_non_intersecting_injection_probability": lambda: round(
+            random.random(), 2
+        ),
+        "prefer_external_sort_block_bytes": lambda: random.choice([0, 1, 100000000]),
+        "cross_join_min_rows_to_compress": lambda: random.choice([0, 1, 100000000]),
+        "cross_join_min_bytes_to_compress": lambda: random.choice([0, 1, 100000000]),
+        "min_external_table_block_size_bytes": lambda: random.choice([0, 1, 100000000]),
+        "max_parsing_threads": lambda: random.choice([0, 1, 10]),
+        "optimize_functions_to_subcolumns": lambda: random.randint(0, 1),
+        "parallel_replicas_local_plan": lambda: random.randint(0, 1),
+        "query_plan_join_swap_table": lambda: random.choice(["auto", "false", "true"]),
+        "enable_vertical_final": lambda: random.randint(0, 1),
+        "output_format_native_write_json_as_string": lambda: random.randint(0, 1),
     }
 
     @staticmethod
@@ -397,6 +547,45 @@ class SettingsRandomizer:
         random_settings = []
         for setting, generator in SettingsRandomizer.settings.items():
             random_settings.append(setting + "=" + str(generator()) + "")
+        return random_settings
+
+
+class MergeTreeSettingsRandomizer:
+    settings = {
+        # Temporary disable due to large number of failures. TODO: fix.
+        # "ratio_of_defaults_for_sparse_serialization": threshold_generator(
+        #     0.1, 0.6, 0.0, 1.0
+        # ),
+        "prefer_fetch_merged_part_size_threshold": threshold_generator(
+            0.2, 0.5, 1, 10 * 1024 * 1024 * 1024
+        ),
+        "vertical_merge_algorithm_min_rows_to_activate": threshold_generator(
+            0.4, 0.4, 1, 1000000
+        ),
+        "vertical_merge_algorithm_min_columns_to_activate": threshold_generator(
+            0.4, 0.4, 1, 100
+        ),
+        "min_merge_bytes_to_use_direct_io": threshold_generator(
+            0.25, 0.25, 1, 10 * 1024 * 1024 * 1024
+        ),
+        "index_granularity_bytes": lambda: random.randint(1024, 30 * 1024 * 1024),
+        "merge_max_block_size": lambda: random.randint(1, 8192 * 3),
+        "index_granularity": lambda: random.randint(1, 65536),
+        "min_bytes_for_wide_part": threshold_generator(0.3, 0.3, 0, 1024 * 1024 * 1024),
+        "compress_marks": lambda: random.randint(0, 1),
+        "compress_primary_key": lambda: random.randint(0, 1),
+        "marks_compress_block_size": lambda: random.randint(8000, 100000),
+        "primary_key_compress_block_size": lambda: random.randint(8000, 100000),
+        "replace_long_file_name_to_hash": lambda: random.randint(0, 1),
+        "max_file_name_length": threshold_generator(0.3, 0.3, 0, 128),
+    }
+
+    @staticmethod
+    def get_random_settings(args):
+        random_settings = []
+        for setting, generator in MergeTreeSettingsRandomizer.settings.items():
+            if setting not in args.changed_merge_tree_settings:
+                random_settings.append(f"{setting}={generator()}")
         return random_settings
 
 
@@ -480,32 +669,48 @@ class TestCase:
 
         return testcase_args
 
-    def add_random_settings(self, args, client_options):
-        if self.tags and 'no-random-settings' in self.tags:
-            return client_options
-        if args.no_random_settings:
-            return client_options
+    @staticmethod
+    def cli_format_settings(settings_list) -> str:
+        return " ".join([f"--{setting}" for setting in settings_list])
 
-        if len(self.base_url_params) == 0:
-            os.environ['CLICKHOUSE_URL_PARAMS'] = '&'.join(self.random_settings)
-        else:
-            os.environ['CLICKHOUSE_URL_PARAMS'] = self.base_url_params + '&' + '&'.join(self.random_settings)
+    def has_show_create_table_in_test(self):
+        return not subprocess.call(["grep", "-iq", "show create", self.case_file])
 
-        new_options = " --allow_repeated_settings --" + " --".join(self.random_settings)
-        os.environ['CLICKHOUSE_CLIENT_OPT'] = self.base_client_options + new_options + ' '
+    def add_random_settings(self, client_options):
+        new_options = ""
+        if self.randomize_settings:
+            if len(self.base_url_params) == 0:
+                os.environ["CLICKHOUSE_URL_PARAMS"] = "&".join(self.random_settings)
+            else:
+                os.environ["CLICKHOUSE_URL_PARAMS"] = (
+                    self.base_url_params + "&" + "&".join(self.random_settings)
+                )
+
+            new_options += f" {self.cli_format_settings(self.random_settings)}"
+
+        if self.randomize_merge_tree_settings:
+            new_options += f" --allow_merge_tree_settings {self.cli_format_settings(self.merge_tree_random_settings)}"
+
+        if new_options != "":
+            new_options += " --allow_repeated_settings"
+
+            os.environ["CLICKHOUSE_CLIENT_OPT"] = (
+                self.base_client_options + new_options + " "
+            )
+
         return client_options + new_options
 
     def remove_random_settings_from_env(self):
         os.environ['CLICKHOUSE_URL_PARAMS'] = self.base_url_params
         os.environ['CLICKHOUSE_CLIENT_OPT'] = self.base_client_options
 
-    def add_info_about_settings(self, args, description):
-        if self.tags and 'no-random-settings' in self.tags:
-            return description
-        if args.no_random_settings:
-            return description
+    def add_info_about_settings(self, description):
+        if self.randomize_settings:
+            description += f"\nSettings used in the test: {self.cli_format_settings(self.random_settings)}"
+        if self.randomize_merge_tree_settings:
+            description += f"\n\nMergeTree settings used in test: {self.cli_format_settings(self.merge_tree_random_settings)}"
 
-        return description + "\n" + "Settings used in the test: " + "--" + " --".join(self.random_settings) + "\n"
+        return description + "\n"
 
     def __init__(self, suite, case: str, args, is_concurrent: bool):
         self.case: str = case   # case file name
@@ -524,6 +729,38 @@ class TestCase:
 
         self.testcase_args = None
         self.runs_count = 0
+
+        has_no_random_settings_tag = self.tags and "no-random-settings" in self.tags
+
+        self.randomize_settings = not (
+                args.no_random_settings or has_no_random_settings_tag
+        )
+
+        has_no_random_merge_tree_settings_tag = (
+                self.tags and "no-random-merge-tree-settings" in self.tags
+        )
+
+        # If test contains SHOW CREATE TABLE do not
+        # randomize merge tree settings, because
+        # they will be added to table definition and test will fail
+        self.randomize_merge_tree_settings = not (
+                args.no_random_merge_tree_settings
+                or has_no_random_settings_tag
+                or has_no_random_merge_tree_settings_tag
+                or self.has_show_create_table_in_test()
+        )
+
+        if self.randomize_settings:
+            self.random_settings = SettingsRandomizer.get_random_settings()
+
+        if self.randomize_merge_tree_settings:
+            self.merge_tree_random_settings = (
+                MergeTreeSettingsRandomizer.get_random_settings(args)
+            )
+
+        self.base_url_params = os.environ['CLICKHOUSE_URL_PARAMS'] if 'CLICKHOUSE_URL_PARAMS' in os.environ else ''
+
+        self.base_client_options = os.environ['CLICKHOUSE_CLIENT_OPT'] if 'CLICKHOUSE_CLIENT_OPT' in os.environ else ''
 
         self.random_settings = SettingsRandomizer.get_random_settings()
         self.base_url_params = os.environ['CLICKHOUSE_URL_PARAMS'] if 'CLICKHOUSE_URL_PARAMS' in os.environ else ''
@@ -562,6 +799,9 @@ class TestCase:
 
         elif os.path.exists(os.path.join(suite.suite_path, self.name) + '.disabled') and not args.disabled:
             return FailureReason.DISABLED
+
+        elif "no-parallel-replicas" in tags and args.no_parallel_replicas:
+            return FailureReason.NO_PARALLEL_REPLICAS
 
         elif args.skip and any(s in self.name for s in args.skip):
             return FailureReason.SKIP
@@ -636,8 +876,11 @@ class TestCase:
 
                 if os.path.isfile(self.stdout_file):
                     description += ", result:\n\n"
-                    description += '\n'.join(open(self.stdout_file).read().splitlines()[:100])
-                    description += '\n'
+                    with open(self.stdout_file, "rb") as f:
+                        description += trim_for_log(
+                            f.read().decode("utf-8", errors="ignore")
+                        )
+                    description += "\n"
 
                 description += "\nstdout:\n{}\n".format(stdout)
                 return TestResult(self.name, TestStatus.FAIL, reason, total_time, description)
@@ -668,7 +911,11 @@ class TestCase:
             description += "\n{}\n".format(diff)
             return TestResult(self.name, TestStatus.FAIL, FailureReason.RESULT_DIFF, total_time, description)
 
-        if self.testcase_args.test_runs > 1 and total_time > 60 and 'long' not in self.tags:
+        if (
+            self.testcase_args.test_runs > 1
+            and total_time > TEST_MAX_RUN_TIME_IN_SECONDS
+            and "long" not in self.tags
+        ):
             # We're in Flaky Check mode, check the run time as well while we're at it.
             return TestResult(self.name, TestStatus.FAIL, FailureReason.TOO_LONG, total_time, description)
 
@@ -806,31 +1053,44 @@ class TestCase:
 
             self.runs_count += 1
             self.testcase_args = self.configure_testcase_args(args, self.case_file, suite.suite_tmp_path)
-            client_options = self.add_random_settings(args, client_options)
+            client_options = self.add_random_settings(client_options)
             proc, stdout, stderr, total_time = self.run_single_test(server_logs_level, client_options)
 
             result = self.process_result_impl(proc, stdout, stderr, total_time)
             result.check_if_need_retry(args, stdout, stderr, self.runs_count)
             if result.status == TestStatus.FAIL:
-                result.description = self.add_info_about_settings(args, result.description)
+                result.description = self.add_info_about_settings(result.description)
             return result
         except KeyboardInterrupt as e:
             raise e
         except HTTPError:
-            return TestResult(self.name, TestStatus.FAIL,
-                              FailureReason.INTERNAL_QUERY_FAIL,
-                              0.,
-                              self.add_info_about_settings(args, self.get_description_from_exception_info(sys.exc_info())))
+            return TestResult(
+                self.name,
+                TestStatus.FAIL,
+                FailureReason.INTERNAL_QUERY_FAIL,
+                0.0,
+                self.add_info_about_settings(
+                    self.get_description_from_exception_info(sys.exc_info())
+                ),
+            )
         except (ConnectionRefusedError, ConnectionResetError):
-            return TestResult(self.name, TestStatus.FAIL,
-                              FailureReason.SERVER_DIED,
-                              0.,
-                              self.add_info_about_settings(args, self.get_description_from_exception_info(sys.exc_info())))
+            return TestResult(
+                self.name,
+                TestStatus.FAIL,
+                FailureReason.SERVER_DIED,
+                0.0,
+                self.add_info_about_settings(
+                    self.get_description_from_exception_info(sys.exc_info())
+                ),
+            )
         except:
-            return TestResult(self.name, TestStatus.UNKNOWN,
-                              FailureReason.INTERNAL_ERROR,
-                              0.,
-                              self.get_description_from_exception_info(sys.exc_info()))
+            return TestResult(
+                self.name,
+                TestStatus.UNKNOWN,
+                FailureReason.INTERNAL_ERROR,
+                0.0,
+                self.get_description_from_exception_info(sys.exc_info()),
+            )
         finally:
             self.remove_random_settings_from_env()
 
@@ -1229,6 +1489,19 @@ def collect_build_flags(args):
     return result
 
 
+def collect_changed_merge_tree_settings(args):
+    changed_settings = (
+        clickhouse_execute(
+            args,
+            "SELECT name FROM system.merge_tree_settings WHERE changed",
+        )
+        .strip()
+        .splitlines()
+    )
+
+    return list(map(lambda s: s.decode(), changed_settings))
+
+
 def suite_key_func(item: str) -> Union[int, Tuple[int, str]]:
     if args.order == 'random':
         return random.random()
@@ -1313,6 +1586,111 @@ def removesuffix(text, *suffixes):
     return text
 
 
+def reportLogStats(args):
+    query = """
+        WITH
+            120 AS mins,
+            (
+                SELECT (count(), sum(length(message)))
+                FROM system.text_log
+                WHERE (now() - toIntervalMinute(mins)) < event_time
+            ) AS total
+        SELECT
+            count() AS count,
+            round(count / (total.1), 3) AS `count_%`,
+            formatReadableSize(sum(length(message))) AS size,
+            round(sum(length(message)) / (total.2), 3) AS `size_%`,
+            countDistinct(logger_name) AS uniq_loggers,
+            countDistinct(thread_id) AS uniq_threads,
+            groupArrayDistinct(toString(level)) AS levels,
+            round(sum(query_id = '') / count, 3) AS `background_%`,
+            message_format_string
+        FROM system.text_log
+        WHERE (now() - toIntervalMinute(mins)) < event_time
+        GROUP BY message_format_string
+        ORDER BY count DESC
+        LIMIT 100
+        FORMAT TSVWithNamesAndTypes
+    """
+    value = clickhouse_execute(args, query).decode()
+    print("\nTop patterns of log messages:\n")
+    print(value)
+    print("\n")
+
+    query = """
+        WITH
+            120 AS mins
+        SELECT
+            count() AS count,
+            substr(replaceRegexpAll(message, '[^A-Za-z]+', ''), 1, 32) AS pattern,
+            substr(any(message), 1, 256) as runtime_message,
+            any((extract(source_file, '\/[a-zA-Z0-9_]+\.[a-z]+'), source_line)) as line 
+        FROM system.text_log
+        WHERE (now() - toIntervalMinute(mins)) < event_time AND message_format_string = ''
+        GROUP BY pattern
+        ORDER BY count DESC
+        LIMIT 30
+        FORMAT TSVWithNamesAndTypes
+    """
+    value = clickhouse_execute(args, query).decode()
+    print("\nTop messages without format string (fmt::runtime):\n")
+    print(value)
+    print("\n")
+
+    query = """
+        SELECT message_format_string, count(), substr(any(message), 1, 120) AS any_message
+        FROM system.text_log
+        WHERE (now() - toIntervalMinute(120)) < event_time
+        AND (message NOT LIKE (replaceRegexpAll(message_format_string, '{[:.0-9dfx]*}', '%') AS s))
+        AND (message NOT LIKE concat('%Exception: ', s, '%'))
+        GROUP BY message_format_string ORDER BY count() DESC LIMIT 20 FORMAT TSVWithNamesAndTypes
+    """
+    value = clickhouse_execute(args, query).decode(errors="replace")
+    print("\nTop messages that does not match its format string:\n")
+    print(value)
+    print("\n")
+
+    query = """
+        WITH ('', '({}) Keys: {}', '({}) {}', 'Aggregating', 'Became leader', 'Cleaning queue', 'Creating set.',
+              'Cyclic aliases', 'Detaching {}', 'Executing {}', 'Fire events: {}', 'Found part {}', 'Loaded queue',
+              'No sharding key', 'No tables', 'Query: {}', 'Removed', 'Removed part {}', 'Removing parts.',
+              'Request URI: {}', 'Sending part {}', 'Sent handshake', 'Starting {}', 'Will mimic {}', 'Writing to {}',
+              'dropIfEmpty', 'loadAll {}', '{} ({}:{})', '{} -> {}', '{} {}', '{}: {}', 'Query was cancelled',
+              'Table {} already exists', '{}%', 'Cancelled merging parts', 'All replicas are lost',
+              'Cancelled mutating parts', 'Read object: {}', 'New segment: {}', 'Unknown geometry type {}',
+              'Table {} is not replicated', '{} {}.{} already exists', 'Attempt to read after eof',
+              'Replica {} already exists', 'Convert overflow', 'key must be a tuple', 'Division by zero',
+              'No part {} in committed state', 'Files set to {}', 'Bytes set to {}', 'Sharding key {} is not used',
+              'Cannot parse datetime', 'Bad get: has {}, requested {}', 'There is no {} in {}', 'Numeric overflow'
+        ) AS known_short_messages
+        SELECT count() AS c, message_format_string, substr(any(message), 1, 120)
+        FROM system.text_log
+        WHERE (now() - toIntervalMinute(120)) < event_time
+            AND (length(message_format_string) < 16
+                OR (length(message_format_string) < 30 AND message ilike '%DB::Exception%'))
+            AND message_format_string NOT IN known_short_messages
+        GROUP BY message_format_string ORDER BY c DESC LIMIT 30 FORMAT TSVWithNamesAndTypes
+    """
+    value = clickhouse_execute(args, query).decode(errors="replace")
+    print("\nTop short messages:\n")
+    print(value)
+    print("\n")
+
+    query = """
+        SELECT max((freq, message_format_string)), level
+        FROM (SELECT count() / (SELECT count() FROM system.text_log
+              WHERE (now() - toIntervalMinute(120)) < event_time) AS freq,
+              min(level) AS level, message_format_string FROM system.text_log
+              WHERE (now() - toIntervalMinute(120)) < event_time
+              GROUP BY message_format_string ORDER BY freq DESC)
+        GROUP BY level
+    """
+    value = clickhouse_execute(args, query).decode(errors="replace")
+    print("\nTop messages by level:\n")
+    print(value)
+    print("\n")
+
+
 def main(args):
     global server_died
     global stop_time
@@ -1331,6 +1709,7 @@ def main(args):
         raise Exception(msg)
 
     args.build_flags = collect_build_flags(args)
+    args.changed_merge_tree_settings = collect_changed_merge_tree_settings(args)
 
     if args.skip:
         args.skip = set(args.skip)
@@ -1429,6 +1808,12 @@ def main(args):
     else:
         print("All tests have finished.")
 
+    if args.report_logs_stats:
+        try:
+            reportLogStats(args)
+        except Exception as e:
+            print(f"Failed to get stats about log messages: {e}")
+
     sys.exit(exit_code.value)
 
 
@@ -1522,8 +1907,21 @@ if __name__ == '__main__':
     parser.add_argument('--s3-storage', action='store_true', default=False, help='Run tests over s3 storage')
     parser.add_argument('--no-random-settings', action='store_true', default=False, help='Disable settings randomization')
 
+    parser.add_argument(
+        "--no-random-merge-tree-settings",
+        action="store_true",
+        default=False,
+        help="Disable MergeTree settings randomization",
+    )
     parser.add_argument('--run-by-hash-num', type=int, help='Run tests matching crc32(test_name) % run_by_hash_total == run_by_hash_num')
     parser.add_argument('--run-by-hash-total', type=int, help='Total test groups for crc32(test_name) % run_by_hash_total == run_by_hash_num')
+
+    parser.add_argument(
+        "--no-parallel-replicas",
+        action="store_true",
+        default=False,
+        help="Do not include tests that are not supported with parallel replicas feature",
+    )
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--zookeeper', action='store_true', default=None, dest='zookeeper', help='Run zookeeper related tests')
@@ -1535,6 +1933,13 @@ if __name__ == '__main__':
 
     group.add_argument('--backward-compatibility-check', action='store_true', help='Run tests for further backwoard compatibility testing by ignoring all'
                                                                                    'drop queries in tests for collecting data from new version of server')
+
+    parser.add_argument(
+        "--report-logs-stats",
+        action="store_true",
+        default=False,
+        help="Report statistics about log messages",
+    )
     args = parser.parse_args()
 
     if args.queries and not os.path.isdir(args.queries):

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <cstring>
 #include <cstddef>
@@ -315,4 +316,9 @@ inline void trim(std::string & str, char c = ' ')
 {
     trimRight(str, c);
     trimLeft(str, c);
+}
+
+constexpr bool containsGlobs(const std::string & str)
+{
+    return str.find_first_of("*?{") != std::string::npos;
 }

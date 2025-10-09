@@ -267,7 +267,7 @@ function run_tests
       NPROC=1
     fi
     time clickhouse-test --hung-check -j "${NPROC}" --order=random \
-            --fast-tests-only --no-long --testname --shard --zookeeper --check-zookeeper-session \
+            --fast-tests-only --no-random-merge-tree-settings --no-long --testname --shard --zookeeper --check-zookeeper-session --report-logs-stats \
             -- "$FASTTEST_FOCUS" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \
         | tee "$FASTTEST_OUTPUT/test_result.txt"

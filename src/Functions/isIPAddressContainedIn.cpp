@@ -45,7 +45,7 @@ public:
             addr = IPv6AddrType();
             bool success = DB::parseIPv6whole(address_str.begin(), address_str.end(), std::get<IPv6AddrType>(addr).data());
             if (!success)
-                throw::DB::Exception(fmt::format("Neither ipv4 nor ipv6 address: {}", address_str), DB::ErrorCodes::CANNOT_PARSE_TEXT);
+                throw::DB::Exception(DB::ErrorCodes::CANNOT_PARSE_TEXT, "Neither ipv4 nor ipv6 address: {}", address_str);
         }
     }
 
@@ -81,9 +81,9 @@ IPAddressCIDR parseIPWithCIDR(std::string_view cidr_str)
     size_t pos_slash = cidr_str.find('/');
 
     if (pos_slash == 0)
-        throw DB::Exception("Error parsing IP address with prefix: " + std::string(cidr_str), DB::ErrorCodes::CANNOT_PARSE_TEXT);
+        throw DB::Exception(DB::ErrorCodes::CANNOT_PARSE_TEXT, "Error parsing IP address with prefix: {}", std::string(cidr_str));
     if (pos_slash == std::string_view::npos)
-        throw DB::Exception("The text does not contain '/': " + std::string(cidr_str), DB::ErrorCodes::CANNOT_PARSE_TEXT);
+        throw DB::Exception(DB::ErrorCodes::CANNOT_PARSE_TEXT, "The text does not contain '/': {}", std::string(cidr_str));
 
     std::string_view addr_str = cidr_str.substr(0, pos_slash);
     IPAddressVariant addr(addr_str);
@@ -96,7 +96,7 @@ IPAddressCIDR parseIPWithCIDR(std::string_view cidr_str)
     uint8_t max_prefix = (addr.asV6() ? IPV6_BINARY_LENGTH : IPV4_BINARY_LENGTH) * 8;
     bool has_error = parse_error != std::errc() || parse_end != prefix_str_end || prefix > max_prefix;
     if (has_error)
-        throw DB::Exception("The CIDR has a malformed prefix bits: " + std::string(cidr_str), DB::ErrorCodes::CANNOT_PARSE_TEXT);
+        throw DB::Exception(DB::ErrorCodes::CANNOT_PARSE_TEXT, "The CIDR has a malformed prefix bits: {}", std::string(cidr_str));
 
     return {addr, static_cast<UInt8>(prefix)};
 }
@@ -152,20 +152,24 @@ namespace DB
         DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
         {
             if (arguments.size() != 2)
-                throw Exception(
-                    "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) + ", should be 2",
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Number of arguments for function {} doesn't match: passed {}, should be 2",
+                    getName(), arguments.size());
 
             const DataTypePtr & addr_type = arguments[0];
             const DataTypePtr & prefix_type = arguments[1];
 
             if (!isString(addr_type) || !isString(prefix_type))
-                throw Exception("The arguments of function " + getName() + " must be string",
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The arguments of function {} must be string", getName());
 
             /// proton: starts. return bool
             return DataTypeFactory::instance().get("bool");
             /// proton: ends.
+        }
+
+        DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+        {
+            return std::make_shared<DataTypeUInt8>();
         }
 
         size_t getNumberOfArguments() const override { return 2; }

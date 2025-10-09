@@ -10,19 +10,21 @@ public:
     explicit TabularTableRestRouterHandler(ContextMutablePtr query_context_) : TableRestRouterHandler(query_context_, "Tabular") { }
     ~TabularTableRestRouterHandler() override { }
 
-private:
-    static std::map<String, std::map<String, String>> create_schema;
-    static std::map<String, std::map<String, String>> column_schema;
-
+public:
     void buildTablesJSON(Poco::JSON::Object & resp, const TablePtrs & tables) const override;
 
     bool validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const override;
+
     String getDefaultPartitionGranularity() const override;
     String getDefaultOrderByGranularity() const override;
     String getColumnsDefinition(const Poco::JSON::Object::Ptr & payload) const override;
     String getOrderByExpr(
         const Poco::JSON::Object::Ptr & payload, const String & time_column, const String & default_order_by_granularity) const override;
     String subtype() const override { return "tabular"; }
+
+private:
+    static std::map<String, std::map<String, String>> create_schema;
+    static std::map<String, std::map<String, String>> column_schema;
 };
 
 }

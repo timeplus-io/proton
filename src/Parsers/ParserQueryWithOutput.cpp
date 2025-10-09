@@ -25,13 +25,23 @@
 #include <Parsers/Access/ParserShowGrantsQuery.h>
 #include <Parsers/Access/ParserShowPrivilegesQuery.h>
 #include <Common/Exception.h>
+#include <Common/assert_cast.h>
 
 /// proton : starts
 #include <Parsers/ParserDropExternalTableQuery.h>
+#include <Parsers/ParserShowAlertsQuery.h>
+#include <Parsers/ParserShowCreateAlertQuery.h>
 #include <Parsers/ParserShowCreateFormatSchemaQuery.h>
+#include <Parsers/ParserShowCreateFunctionQuery.h>
+#include <Parsers/ParserShowCreateTaskQuery.h>
+#include <Parsers/ParserShowDisksQuery.h>
 #include <Parsers/ParserShowFormatSchemasQuery.h>
+#include <Parsers/ParserShowFunctionsQuery.h>
+#include <Parsers/ParserShowStoragePoliciesQuery.h>
+#include <Parsers/ParserShowTasksQuery.h>
 #include <Parsers/Streaming/ParserSubscribeQuery.h>
 /// proton : ends
+
 
 
 namespace DB
@@ -66,6 +76,14 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     /// proton: starts
     ParserShowFormatSchemasQuery show_format_schemas_p;
     ParserShowCreateFormatSchemaQuery show_create_format_schema_p;
+    ParserShowCreateFunctionQuery show_create_func_p;
+    ParserShowFunctionsQuery show_func_p;
+    ParserShowDisksQuery show_disks_p;
+    ParserShowStoragePoliciesQuery show_storage_policies_p;
+    ParserShowAlertsQuery show_alerts_p;
+    ParserShowCreateAlertQuery show_create_alert_p;
+    ParserShowTasksQuery show_tasks_p;
+    ParserShowCreateTaskQuery show_create_task_p;
     /// proton: ends
 
     ASTPtr query;
@@ -79,6 +97,12 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         /// proton: starts
         || show_create_format_schema_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        || show_create_alert_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        || show_create_func_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        || show_create_task_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        || show_func_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        || show_disks_p.parse(pos, query, expected)
+        || show_storage_policies_p.parse(pos, query, expected)
         /// proton: ends
         || show_tables_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)
@@ -98,6 +122,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || watch_p.parse(pos, query, expected)
         /// proton: starts
         || show_format_schemas_p.parse(pos, query, expected)
+        || show_alerts_p.parse(pos, query, expected)
+        || show_tasks_p.parse(pos, query, expected)
         /// proton: ends
         || show_access_p.parse(pos, query, expected)
         || show_access_entities_p.parse(pos, query, expected)

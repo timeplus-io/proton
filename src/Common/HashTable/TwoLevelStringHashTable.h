@@ -41,7 +41,8 @@ public:
     Impl impls[NUM_BUCKETS];
     bool updated_buckets[NUM_BUCKETS] = {false};
 
-    TwoLevelStringHashTable() {}
+    TwoLevelStringHashTable() = default;
+    TwoLevelStringHashTable(size_t ) {} /// NOLINT
 
     template <typename Source>
     TwoLevelStringHashTable(const Source & src)

@@ -1,0 +1,73 @@
+name: multishards4
+description: Tests covering the multishard stream query smoke cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      sql: |
+        CREATE OR REPLACE AGGREGATE FUNCTION test_13_4_sec_large(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+          {
+            initialize: function() { 
+              this.max = -1.0;
+              this.sec = -1.0;
+            },
+
+            process: function(values) {
+              for(let i=0; i<values.length; i++) {
+                if(values[i] > this.max) {
+                  this.sec = this.max;
+                  this.max = values[i];
+                }
+                if(values[i] < this.max && values[i] > this.sec)
+                  this.sec = values[i];
+              }
+            },
+
+            finalize: function() {
+              return this.sec;
+            },
+
+            serialize: function() {
+              let s = {"max": this.max, "sec":this.sec };
+              return JSON.stringify(s);
+            },
+
+            deserialize: function(state_str) {
+              let s = JSON.parse(state_str);
+              this.max = s["max"];
+              this.sec = s["sec"];
+            },
+
+            merge: function(state_str) {
+              let s = JSON.parse(state_str);
+              if (s["sec"] >= this.max) {
+                this.max = s["max"];
+                this.sec = s["sec"];
+              } else if (s["max"] >= this.max) {
+                this.sec = this.max;
+                this.max = s["max"];
+              } else if (s["max"] > this.sec) {
+                this.sec = s["max"];
+              }
+            }
+          }
+        $$;
+
+teardown:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop function if exists test_13_4_sec_large;
+      
+    - type: query
+      sql: |
+        drop view if exists test13_view1_4;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: |
+        drop stream if exists test13_multishard_4;

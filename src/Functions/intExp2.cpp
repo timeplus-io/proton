@@ -24,7 +24,7 @@ struct IntExp2Impl
     static inline ResultType apply([[maybe_unused]] A a)
     {
         if constexpr (is_big_int_v<A>)
-            throw DB::Exception("int_exp2 not implemented for big integers", ErrorCodes::NOT_IMPLEMENTED);
+            throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "int_exp2 not implemented for big integers");
         else
             return intExp2(static_cast<int>(a));
     }
@@ -35,7 +35,7 @@ struct IntExp2Impl
     static inline llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * arg, bool)
     {
         if (!arg->getType()->isIntegerTy())
-            throw Exception("int_exp2 expected an integral type", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "int_exp2 expected an integral type");
         return b.CreateShl(llvm::ConstantInt::get(arg->getType(), 1), arg);
     }
 #endif

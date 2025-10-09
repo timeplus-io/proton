@@ -1,0 +1,52 @@
+tags:
+  - query_state
+description: global aggregation with function P95 state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream1 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1928'
+    query_id: '1928'
+    type: stream
+    query: subscribe to select quantile(value, 0.95) from test19_state_stream1 emit
+      periodic 1s settings checkpoint_interval=1
+    schema:
+      - name: quantile(value, 0.95)
+        type: float64
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test19_state_stream1(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'),
+      ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1928'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1928'
+  
+  - type: check
+    target_name: '1928'
+    expected_result:
+      - [ '65.23' ]

@@ -1,0 +1,65 @@
+tags:
+  - append_time_test
+description: (#223) Covering the append time test.The orginal issue is append_time column is 0 while select _tp_time and _tp_append_time together
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_append_time
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_append_time
+        (
+          id int,
+          value int
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_append_time(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: int32
+    inputs:
+      - [1, 2]
+      - [3, 2]
+      - [5, 2]
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: '9919'
+    query: with cte as (select *, _tp_append_time from test_append_time)select date_diff('millisecond', to_datetime64(_tp_append_time/1000, 3, 'UTC'), _tp_time) < 10 from cte where _tp_time > earliest_timestamp()
+    schema:
+      - name: less(date_diff('millisecond', to_datetime64(divide(_tp_append_time, 1000), 3, 'UTC'), _tp_time), 10)
+        type: bool
+  - type: wait
+    time: 5
+
+  - type: query
+    sql: insert into test_append_time(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: int32
+    inputs:
+      - [5, 2]
+      - [6, 2]
+      - [6, 2]
+
+  - type: check
+    target_name: '9919'
+    expected_result:
+      - ["True"]
+      - ["True"]
+      - ["True"]
+      - ["True"]
+      - ["True"]
+      - ["True"]

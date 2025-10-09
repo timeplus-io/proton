@@ -32,6 +32,15 @@ public:
 
         return date_lut.getImplementation(time_zone);
     }
+
+    /// proton: starts. 
+    static ALWAYS_INLINE const DateLUTImpl & instance(int64_t offset)
+    {
+        const auto & date_lut = getInstance();
+        return date_lut.getImplementation(offset);
+    }
+    /// proton: ends.
+
     static void setDefaultTimezone(const std::string & time_zone)
     {
         auto & date_lut = getInstance();
@@ -47,6 +56,10 @@ private:
 
     const DateLUTImpl & getImplementation(const std::string & time_zone) const;
 
+    /// proton: starts.
+    const DateLUTImpl & getImplementation(int64_t offset) const;
+    /// proton: ends.
+
     using DateLUTImplPtr = std::unique_ptr<DateLUTImpl>;
 
     /// Time zone name -> implementation.
@@ -56,6 +69,11 @@ private:
     std::atomic<const DateLUTImpl *> default_impl;
 };
 
+inline UInt64 timeInMilliseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(timepoint.time_since_epoch()).count();
+}
+
 inline UInt64 timeInMicroseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
 {
     return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
@@ -64,4 +82,9 @@ inline UInt64 timeInMicroseconds(std::chrono::time_point<std::chrono::system_clo
 inline UInt64 timeInSeconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
 {
     return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
+}
+
+inline UInt64 timeInNanoseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(timepoint.time_since_epoch()).count();
 }

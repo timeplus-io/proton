@@ -1,11 +1,11 @@
 #include <Processors/Formats/Impl/AvroConfluentRowOutputFormat.h>
 #if USE_AVRO
 
+#include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 
 #include <Formats/KafkaSchemaRegistryForAvro.h>
 
-#include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDate32.h>
@@ -13,9 +13,12 @@
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/IDataType.h>
 #include <DataTypes/NestedUtils.h>
 
 #include <Columns/ColumnArray.h>
@@ -27,9 +30,10 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 
-#include <Formats/Avro/Schemas.h>
 #include <Formats/Avro/OutputStreamWriteBufferAdapter.h>
+#include <Formats/Avro/Schemas.h>
 
+#include <algorithm>
 #include <Schema.hh>
 #include <Types.hh>
 
@@ -60,9 +64,9 @@ String nodeName(avro::NodePtr node)
         return avro::toString(node->type());
 }
 
-bool typesMatched(avro::Type avro_type, const DataTypePtr & timeplusd_type)
+bool typesMatched(avro::Type avro_type, const DataTypePtr & proton_type)
 {
-    auto which = WhichDataType(timeplusd_type);
+    auto which = WhichDataType(proton_type);
 
     switch (avro_type)
     {
@@ -103,13 +107,13 @@ bool typesMatched(avro::Type avro_type, const DataTypePtr & timeplusd_type)
     return false;
 }
 
-/// Return the leaf node position of a union if that leaf node matches the timeplusd_type.
-std::optional<int> findUnionNodeByType(const avro::NodePtr & union_node, const DataTypePtr & timeplusd_type)
+/// Return the leaf node position of a union if that leaf node matches the proton_type.
+std::optional<int> findUnionNodeByType(const avro::NodePtr & union_node, const DataTypePtr & proton_type)
 {
     for (int i = 0; i < static_cast<int>(union_node->leaves()); i++)
     {
         const auto & leaf = union_node->leafAt(i);
-        if (typesMatched(leaf->type(), timeplusd_type))
+        if (typesMatched(leaf->type(), proton_type))
             return i;
     }
     return {};
@@ -128,13 +132,53 @@ Exception multiple_columns_to_union_exception(const String & field_name)
         field_name);
 }
 
+template <typename DecimalType>
+AvroSchemaSerializer::SerializeFn createDecimalSerializeFn(
+    const IDataType & data_type, const avro::LogicalType & logical_type, AvroSchemaSerializer::SerializeFn union_index_serializer)
+{
+    if (logical_type.type() != avro::LogicalType::DECIMAL)
+        throw Exception(
+            ErrorCodes::TYPE_MISMATCH,
+            "Type `{}` requires `decimal` logical type, but got {}",
+            data_type.getPrettyName(),
+            logical_type.type());
+
+    const auto & provided_type = assert_cast<const DecimalType &>(data_type);
+
+    if (static_cast<int>(provided_type.getScale()) != logical_type.scale())
+        throw Exception(
+            ErrorCodes::TYPE_MISMATCH,
+            "Type `{}` requires `decimal` logical type with scale = {}, but got {}",
+            provided_type.getPrettyName(),
+            provided_type.getScale(),
+            logical_type.scale());
+
+    if (static_cast<int>(provided_type.getPrecision()) != logical_type.precision())
+        throw Exception(
+            ErrorCodes::TYPE_MISMATCH,
+            "Type `{}` requires `decimal` logical type with precision = {}, but got {}",
+            provided_type.getPrettyName(),
+            provided_type.getPrecision(),
+            logical_type.precision());
+
+    return [ser = std::move(union_index_serializer)](const IColumn & column, size_t row_num, avro::Encoder & enc) {
+        if (ser)
+            ser(column, row_num, enc);
+
+        const auto & col = assert_cast<const typename DecimalType::ColumnType &>(column);
+        WriteBufferFromOwnString buf;
+        writeBinaryBigEndian(col.getElement(row_num).value, buf);
+        enc.encodeBytes(reinterpret_cast<const uint8_t *>(buf.str().data()), buf.str().size());
+    };
+}
+
 }
 
 AvroSchemaSerializer::Action
 AvroSchemaSerializer::Action::serializeAction(int target_column_idx_, SerializeFn serialize_fn_, std::optional<int> union_idx_)
 {
     Action result;
-    result.type = Serialize;
+    result.type = Type::Serialize;
     result.target_column_idx = target_column_idx_;
     result.union_idx = union_idx_;
     result.serialize_fn = serialize_fn_;
@@ -144,7 +188,7 @@ AvroSchemaSerializer::Action::serializeAction(int target_column_idx_, SerializeF
 AvroSchemaSerializer::Action AvroSchemaSerializer::Action::groupAction(std::vector<Action> field_actions, std::optional<int> union_idx_)
 {
     Action result;
-    result.type = Group;
+    result.type = Type::Group;
     result.union_idx = union_idx_;
     result.actions = field_actions;
     return result;
@@ -153,7 +197,7 @@ AvroSchemaSerializer::Action AvroSchemaSerializer::Action::groupAction(std::vect
 AvroSchemaSerializer::Action AvroSchemaSerializer::Action::arrayAction(std::vector<Action> field_actions, std::optional<int> union_idx_)
 {
     Action result;
-    result.type = Array;
+    result.type = Type::Array;
     result.union_idx = union_idx_;
     result.actions = field_actions;
     return result;
@@ -164,7 +208,7 @@ AvroSchemaSerializer::Action AvroSchemaSerializer::Action::nestedAction(
 {
     assert(nested_column_indexes_.size() == nested_column_indexes_.size());
     Action result;
-    result.type = Nested;
+    result.type = Type::Nested;
     result.union_idx = union_idx_;
     result.nested_column_indexes = nested_column_indexes_;
     result.nested_serializers = nested_serializers_;
@@ -178,24 +222,32 @@ void AvroSchemaSerializer::Action::execute(const Columns & columns, size_t row_n
 
     switch (type)
     {
-        case Unknown:
+        case Type::Unknown:
             throw Exception(ErrorCodes::UNKNOWN_TYPE, "Unknown avro serialization action type");
-        case Serialize:
+        case Type::Serialize:
         {
-            const auto & col = columns.at(target_column_idx);
-            serialize_fn(*col, row_num, enc);
+            if (target_column_idx < 0)
+            {
+                auto col = DataTypeNothing{}.createColumn();
+                serialize_fn(*col, row_num, enc);
+            }
+            else
+            {
+                const auto & col = columns.at(target_column_idx);
+                serialize_fn(*col, row_num, enc);
+            }
             break;
         }
-        case Group:
+        case Type::Group:
         {
             for (const auto & action : actions)
                 action.execute(columns, row_num, enc);
             break;
         }
-        case Array:
+        case Type::Array:
             serializeArray(columns, row_num, enc);
             break;
-        case Nested:
+        case Type::Nested:
             serializeNested(columns, row_num, enc);
             break;
     }
@@ -238,11 +290,31 @@ void AvroSchemaSerializer::Action::serializeArray(const Columns & columns, size_
     size_t row_count = 0;
     std::vector<ColumnPtr> nested_columns(columns.size());
 
-    assert(std::all_of(actions.begin(), actions.end(), [](const auto & action) { return action.type == Serialize; }));
+    std::vector<int> idxes;
+    idxes.reserve(columns.size());
 
-    for (const auto & action : actions)
+    std::function<void(std::vector<Action>)> fill_idxes = [&idxes, &fill_idxes](std::vector<Action> actions_) {
+        for (const auto & action : actions_)
+        {
+            switch (action.type)
+            {
+                case Type::Serialize:
+                    if (action.target_column_idx >= 0)
+                        idxes.push_back(action.target_column_idx);
+                    break;
+                case Type::Array:
+                    fill_idxes(action.actions);
+                    break;
+                default:
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected serializer type {} in array serializer", action.type);
+            }
+        }
+    };
+    fill_idxes(actions);
+
+    for (const auto & idx : idxes)
     {
-        const ColumnArray & column_array = assert_cast<const ColumnArray &>(*columns.at(action.target_column_idx));
+        const ColumnArray & column_array = assert_cast<const ColumnArray &>(*columns.at(idx));
         if (row_count == 0)
         {
             const ColumnArray::Offsets & offsets = column_array.getOffsets();
@@ -250,22 +322,66 @@ void AvroSchemaSerializer::Action::serializeArray(const Columns & columns, size_
             size_t next_offset = offsets[row_num];
             row_count = next_offset - offset;
         }
-        nested_columns[action.target_column_idx] = column_array.getDataPtr();
+        nested_columns[idx] = column_array.getDataPtr();
     }
 
     enc.arrayStart();
     if (row_count > 0)
-    {
         enc.setItemCount(row_count);
-    }
     for (size_t row = 0; row < row_count; row++)
         for (const auto & action : actions)
             action.execute(nested_columns, row, enc);
     enc.arrayEnd();
 }
 
+String AvroSchemaSerializer::Action::toString() const
+{
+    WriteBufferFromOwnString wb;
+    switch (type)
+    {
+        case Type::Array:
+            writeString(fmt::format("Array@{}", target_column_idx), wb);
+            if (union_idx)
+                writeString(":" + DB::toString(*union_idx), wb);
+            writeString("[\n", wb);
+            for (const auto & action : actions)
+                writeString(action.toString() + "\n", wb);
+            writeString("]", wb);
+            break;
+        case Type::Group:
+            writeString(fmt::format("Group@{}", target_column_idx), wb);
+            if (union_idx)
+                writeString(":" + DB::toString(*union_idx), wb);
+            writeString("{\n", wb);
+            for (const auto & action : actions)
+                writeString(action.toString() + "\n", wb);
+            writeString("}", wb);
+            break;
+        case Type::Nested:
+            writeString("Nested", wb);
+            if (union_idx)
+                writeString(":" + DB::toString(*union_idx), wb);
+            writeString("(\n", wb);
+            writeString(fmt::format("{}", fmt::join(nested_column_indexes, ", ")), wb);
+            writeString(")", wb);
+            break;
+        case Type::Serialize:
+            writeString(fmt::format("Serialize<{}", target_column_idx), wb);
+            if (union_idx)
+                writeString(":" + DB::toString(*union_idx), wb);
+            writeString(">", wb);
+            break;
+        case Type::Unknown:
+            writeString("!UNKNOWN!", wb);
+            break;
+    }
+
+    return wb.str();
+}
+
 AvroSchemaSerializer::AvroSchemaSerializer(avro::ValidSchema valid_schema, const Block & header, WriteBuffer & out)
-    : ostream(std::make_unique<Avro::OutputStreamWriteBufferAdapter>(out)), encoder(avro::validatingEncoder(valid_schema, avro::binaryEncoder()))
+    : ostream(std::make_unique<Avro::OutputStreamWriteBufferAdapter>(out))
+    , encoder(avro::validatingEncoder(valid_schema, avro::binaryEncoder()))
 {
     const auto & schema_root = valid_schema.root();
     if (schema_root->type() != avro::AVRO_RECORD)
@@ -521,12 +637,14 @@ AvroSchemaSerializer::SerializeFn AvroSchemaSerializer::createSerializeFn(const 
             if (provided_type.getScale() == 3 && actual_node->logicalType().type() != avro::LogicalType::TIMESTAMP_MILLIS)
                 throw Exception(
                     ErrorCodes::TYPE_MISMATCH,
-                    "Type `datetime64` with scale 3 requires `timestamp-millis` logical type, but got {}", actual_node->logicalType().type());
+                    "Type `datetime64` with scale 3 requires `timestamp-millis` logical type, but got {}",
+                    actual_node->logicalType().type());
 
             if (provided_type.getScale() == 6 && actual_node->logicalType().type() != avro::LogicalType::TIMESTAMP_MICROS)
                 throw Exception(
                     ErrorCodes::TYPE_MISMATCH,
-                    "Type `datetime64` with scale 6 requires `timestamp-micros` logical type, but got {}", actual_node->logicalType().type());
+                    "Type `datetime64` with scale 6 requires `timestamp-micros` logical type, but got {}",
+                    actual_node->logicalType().type());
 
             return [union_index_serializer](const IColumn & column, size_t row_num, avro::Encoder & enc) {
                 if (union_index_serializer)
@@ -769,6 +887,38 @@ AvroSchemaSerializer::SerializeFn AvroSchemaSerializer::createSerializeFn(const 
                     enc.mapEnd();
                 };
         }
+        case TypeIndex::Decimal32:
+        {
+            if (avro_type != avro::AVRO_BYTES)
+                throw type_mismatch_exception("bytes");
+
+            auto logical_type = actual_node->logicalType();
+            return createDecimalSerializeFn<DataTypeDecimal32>(*data_type, logical_type, std::move(union_index_serializer));
+        }
+        case TypeIndex::Decimal64:
+        {
+            if (avro_type != avro::AVRO_BYTES)
+                throw type_mismatch_exception("bytes");
+
+            auto logical_type = actual_node->logicalType();
+            return createDecimalSerializeFn<DataTypeDecimal64>(*data_type, logical_type, std::move(union_index_serializer));
+        }
+        case TypeIndex::Decimal128:
+        {
+            if (avro_type != avro::AVRO_BYTES)
+                throw type_mismatch_exception("bytes");
+
+            auto logical_type = actual_node->logicalType();
+            return createDecimalSerializeFn<DataTypeDecimal128>(*data_type, logical_type, std::move(union_index_serializer));
+        }
+        case TypeIndex::Decimal256:
+        {
+            if (avro_type != avro::AVRO_BYTES)
+                throw type_mismatch_exception("bytes");
+
+            auto logical_type = actual_node->logicalType();
+            return createDecimalSerializeFn<DataTypeDecimal256>(*data_type, logical_type, std::move(union_index_serializer));
+        }
         default:
             break;
     }
@@ -800,9 +950,8 @@ AvroSchemaSerializer::createAction(const Block & header, const avro::NodePtr & n
     if (node->type() == avro::AVRO_SYMBOLIC)
     {
         /// continue traversal only if some column name starts with current_path
-        auto keep_going = std::any_of(header.begin(), header.end(), [&current_path](const ColumnWithTypeAndName & col) {
-            return col.name.starts_with(current_path);
-        });
+        auto keep_going = std::ranges::any_of(
+            header, [&current_path](const ColumnWithTypeAndName & col) { return col.name.starts_with(current_path); });
         auto resolved_node = avro::resolveSymbol(node);
         if (keep_going)
             return createAction(header, resolved_node, current_path, union_index);
@@ -905,36 +1054,47 @@ AvroSchemaSerializer::createAction(const Block & header, const avro::NodePtr & n
             /// check if we have a flattened Nested table with such name.
 
             /// Create nested deserializer for each nested column.
-            std::vector<SerializeFn> nested_serializers;
-            std::vector<size_t> nested_indexes;
+            std::vector<Action> nested_actions;
             for (int i = 0; i != static_cast<int>(nested_node->leaves()); ++i)
             {
                 const auto & field_name = nested_node->nameAt(i);
                 const auto & field = nested_node->leafAt(i);
+                const auto path = concatPath(current_path, field_name);
 
-                auto nested_column_index = header.tryGetPositionByName(Nested::concatenateName(current_path, field_name));
-                if (!nested_column_index)
+                Block new_header;
+                new_header.reserve(header.columns());
+                for (const auto & col : header)
                 {
-                    if (field->type() == avro::AVRO_UNION && field->leafAt(0)->type() == avro::AVRO_NULL)
+                    if (!col.name.starts_with(path))
                     {
-                        nested_serializers.emplace_back(createDefaultNullUnionSerializeFn());
-                        nested_indexes.push_back(0); /// For null, the index doesn't matter, just need a valid value
+                        new_header.insert(col);
                     }
                     else
-                        return {};
+                    {
+                        auto new_col = col.cloneEmpty();
+                        const auto & array_type = assert_cast<const DataTypeArray &>(*col.type);
+                        new_col.type = array_type.getNestedType();
+                        new_header.insert(new_col);
+                    }
+                }
+
+                auto action = createAction(new_header, field, path);
+                if (!action)
+                    return {};
+
+                if (action->type == Action::Type::Group)
+                {
+                    /// As the GroupAction will be flatten, need to handle the union index if any
+                    if (action->union_idx)
+                        nested_actions.push_back(Action::serializeAction(-1, createUnionSerializeFn(action->union_idx.value())));
+                    /// flatten the group action
+                    nested_actions.insert(nested_actions.end(), action->actions.cbegin(), action->actions.cend());
                 }
                 else
-                {
-                    /// Nested columns have type of `array(<field_type>)`, thus we need to get the nested type in the `array`.
-                    const auto & col = header.getByPosition(*nested_column_index);
-                    const auto & array_type = assert_cast<const DataTypeArray &>(*col.type);
-                    auto nested_serializer = createSerializeFn(field, array_type.getNestedType());
-                    nested_serializers.emplace_back(nested_serializer);
-                    nested_indexes.push_back(*nested_column_index);
-                }
+                    nested_actions.push_back(*action);
             }
 
-            return Action::nestedAction(std::move(nested_indexes), std::move(nested_serializers), union_idx);
+            return Action::arrayAction(std::move(nested_actions), union_idx);
         }
 
         if (nested_node->type() == avro::AVRO_UNION)
@@ -955,13 +1115,14 @@ AvroSchemaSerializer::createAction(const Block & header, const avro::NodePtr & n
             {
                 const auto & branch_node = nested_node->leafAt(i);
                 const auto & branch_name = nodeName(branch_node);
+                const auto path = concatPath(current_path, branch_name);
 
                 Block new_header;
                 new_header.reserve(header.columns());
 
                 for (const auto & col : header)
                 {
-                    if (!col.name.starts_with(concatPath(current_path, branch_name)))
+                    if (!col.name.starts_with(path))
                     {
                         new_header.insert(col);
                         break;
@@ -975,15 +1136,15 @@ AvroSchemaSerializer::createAction(const Block & header, const avro::NodePtr & n
 
                 /// Do not pass the union index to createAction, because we will flatten the group action later, which will lose the union index information.
                 /// Thus, we create a separate action for encoding the union index.
-                auto action = createAction(new_header, branch_node, concatPath(current_path, branch_name));
+                auto action = createAction(new_header, branch_node, path);
 
                 if (action)
                 {
                     if (!nested_actions.empty())
                         throw multiple_columns_to_union_exception(nodeName(nested_node));
 
-                    nested_actions.push_back(Action::serializeAction(0, createUnionSerializeFn(i)));
-                    if (action->type == Action::Group)
+                    nested_actions.push_back(Action::serializeAction(-1, createUnionSerializeFn(i)));
+                    if (action->type == Action::Type::Group)
                         /// flatten the group action
                         nested_actions.insert(nested_actions.end(), action->actions.cbegin(), action->actions.cend());
                     else
@@ -1006,12 +1167,14 @@ AvroSchemaSerializer::createAction(const Block & header, const avro::NodePtr & n
     return {};
 }
 
-AvroConfluentRowOutputFormat::AvroConfluentRowOutputFormat(
-    WriteBuffer & out_, const Block & header_, const RowOutputFormatParams & params_, const FormatSettings & settings_)
-    : IRowOutputFormat(header_, out_, params_, ProcessorID::AvroRowOutputFormatID), settings(settings_)
+AvroConfluentRowOutputFormat::AvroConfluentRowOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & settings_)
+    : IRowOutputFormat(header_, out_, ProcessorID::AvroRowOutputFormatID), settings(settings_)
 {
-    assert(!settings.kafka_schema_registry.topic_name.empty());
-    auto schema = KafkaSchemaRegistryForAvro::getOrCreate(settings)->getSchemaForTopic(settings.kafka_schema_registry.topic_name, settings.kafka_schema_registry.force_refresh_schema);
+    chassert(!settings.kafka_schema_registry.topic_name.empty() && !settings.kafka_schema_registry.subject_name.empty());
+    auto schema = KafkaSchemaRegistryForAvro::getOrCreate(settings)->getSchemaForTopic(
+        settings.kafka_schema_registry.topic_name,
+        settings.kafka_schema_registry.subject_name,
+        settings.kafka_schema_registry.force_refresh_schema);
     schema_id = schema.first;
     serializer = std::make_unique<AvroSchemaSerializer>(std::move(schema.second), header_, out);
 }
@@ -1025,23 +1188,26 @@ void AvroConfluentRowOutputFormat::consume(DB::Chunk chunk)
 
     for (size_t row = 0; row < num_rows; ++row)
     {
-        KafkaSchemaRegistry::writeSchemaId(out, schema_id);
         write(columns, row);
         serializer->flush();
-        if (params.callback)
-            params.callback(columns, row);
         out.next(); /// Always one row per message.
     }
 }
 
 void AvroConfluentRowOutputFormat::write(const Columns & columns, size_t row_num)
 {
+    KafkaSchemaRegistry::writeSchemaId(out, schema_id);
     serializer->serializeRow(columns, row_num);
 }
 
+void AvroConfluentRowOutputFormat::finalizeImpl()
+{
+    serializer->flush();
+}
+
 AvroSchemaRowOutputFormat::AvroSchemaRowOutputFormat(
-    WriteBuffer & out_, const Block & header_, const RowOutputFormatParams & params_, const FormatSchemaInfo & schema_info, const FormatSettings & format_settings)
-    : IRowOutputFormat(header_, out_, params_, ProcessorID::AvroRowOutputFormatID), settings(format_settings)
+    WriteBuffer & out_, const Block & header_, const FormatSchemaInfo & schema_info, const FormatSettings & format_settings)
+    : IRowOutputFormat(header_, out_, ProcessorID::AvroRowOutputFormatID), settings(format_settings)
 {
     auto schema = Avro::compileSchemaFromSchemaInfo(schema_info);
     serializer = std::make_unique<AvroSchemaSerializer>(std::move(schema), header_, out);
@@ -1058,8 +1224,6 @@ void AvroSchemaRowOutputFormat::consume(DB::Chunk chunk)
     {
         write(columns, row);
         serializer->flush();
-        if (params.callback)
-            params.callback(columns, row);
         out.next(); /// Always one row per message.
     }
 }
@@ -1067,6 +1231,11 @@ void AvroSchemaRowOutputFormat::consume(DB::Chunk chunk)
 void AvroSchemaRowOutputFormat::write(const Columns & columns, size_t row_num)
 {
     serializer->serializeRow(columns, row_num);
+}
+
+void AvroSchemaRowOutputFormat::finalizeImpl()
+{
+    serializer->flush();
 }
 
 }

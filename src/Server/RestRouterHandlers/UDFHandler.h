@@ -8,15 +8,12 @@
 
 namespace DB
 {
-class MetaStoreDispatcher;
+class KeyValueServiceDispatcher;
 
 class UDFHandler final : public RestRouterHandler
 {
 public:
-    explicit UDFHandler(ContextMutablePtr query_context_)
-        : RestRouterHandler(query_context_, "UDFHandler"), metastore_repo(query_context_->getMetaStoreJSONConfigRepository())
-    {
-    }
+    explicit UDFHandler(ContextMutablePtr query_context_) : RestRouterHandler(query_context_, "UDFHandler") { }
     ~UDFHandler() override = default;
 
 protected:
@@ -32,9 +29,6 @@ private:
     std::pair<String, Int32>
     doList(const Poco::JSON::Object::Ptr & payload, const String & namespace_, const String & request_prefix) const;
     bool streamingInput() const override { return false; }
-
-private:
-    Streaming::MetaStoreJSONConfigRepository * metastore_repo;
 };
 
 }

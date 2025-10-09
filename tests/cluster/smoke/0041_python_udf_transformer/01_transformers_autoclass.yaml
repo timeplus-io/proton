@@ -1,0 +1,74 @@
+tags:
+  - uda
+
+description: Test covering python uda test on transformers function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (text string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION autoclassTester(text string) RETURNS string LANGUAGE PYTHON AS $$
+      import torch
+      from transformers import AutoTokenizer, AutoModel
+
+      class autoclassTester:
+          def __init__(self):
+              self.res = ''
+              self.model_name = '/var/lib/proton/user_files/bert-base-uncased'
+              self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+              self.model = AutoModel.from_pretrained(self.model_name)
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, texts):
+              inputs = self.tokenizer(texts, return_tensors='pt', padding=True, truncation=True)
+
+              with torch.no_grad():
+                  outputs = self.model(**inputs)
+
+              last_hidden_states = outputs.last_hidden_state
+              self.res = str(last_hidden_states.shape)
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf16-1-1
+    type: stream
+    query: select autoclassTester(text) as res from uda_stream;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(text) values
+      ('But what about second breakfast?')
+      ('Do not think he knows about second breakfast, Pip.')
+      ('What about elevensies?');
+
+  - type: check
+    target_name: python-udf16-1-1
+    expected_result:
+      - ['torch.Size([3, 13, 768])']

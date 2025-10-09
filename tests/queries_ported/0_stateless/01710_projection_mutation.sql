@@ -1,3 +1,6 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
 DROP STREAM IF EXISTS t;
 
 CREATE STREAM t (`key` uint32, `created_at` Date, `value` uint32, PROJECTION xxx (SELECT key, created_at, sum(value) GROUP BY key, created_at)) ENGINE = MergeTree PARTITION BY to_YYYYMM(created_at) ORDER BY key;

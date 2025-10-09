@@ -1,0 +1,49 @@
+tags:
+  - join
+  - union
+description: (#2229) streaming join with union query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_2229
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_2229
+        (
+          i int
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: with cte as (select * from test_stream_2229 union select * from test_stream_2229) select i from test_stream_2229 join cte using(i)
+    schema:
+      - name: i
+        type: int32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_2229(i) values
+    schema:
+      - name: i
+        type: int32
+    inputs:
+      - [1]
+      - [2]
+      - [3]
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - [1]
+      - [2]
+      - [3]
+      - [1]
+      - [2]
+      - [3]

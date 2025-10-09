@@ -46,6 +46,7 @@ template<typename Key, bool Flag>
 using CountedValueMap = DB::Streaming::CountedValueMap<Key, Flag, void>;
 }
 
+
 int main(int, char **)
 {
     perf<CountedValueMap>("absl::btree_map");

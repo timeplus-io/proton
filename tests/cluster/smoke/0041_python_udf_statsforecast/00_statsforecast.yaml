@@ -1,0 +1,72 @@
+tags:
+  - udf
+
+description: |
+  Test covering python uda test on statsforecast function
+  (#6600) fix proton crash on creating statsforecast udf
+
+steps:
+  - type: query
+    sql: drop stream if exists statsforecast;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream statsforecast(name string);
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into statsforecast(name) values ('Alan')('Bob')('Clare')('Steve')('Jack');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_forecast(name string) RETURNS string LANGUAGE PYTHON AS 
+      $$
+
+      from statsforecast import StatsForecast
+      from statsforecast.models import AutoARIMA
+      from statsforecast.utils import AirPassengersDF
+
+      df = AirPassengersDF
+      sf = StatsForecast(
+          models = [AutoARIMA(season_length = 12)],
+          freq = 'M'
+      )
+
+      def test_forecast(name):
+          results = []
+          for (name) in zip(name):
+              try:
+                  sf.fit(df)
+                  result = sf.predict(h=12, level=[95]).head()['AutoARIMA'].tolist()
+                  results.append(str(result))
+              except Exception as e:
+                  return str(e)
+          return results
+
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf11-0-1
+    type: stream
+    query: select test_forecast(name) as res from table(statsforecast);
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python-udf11-0-1
+    expected_result:
+      - ['[444.3095753949392, 418.21373846978736, 446.2434072237411, 488.23422250751855, 499.23706586967046]']
+      - ['[444.3095753949392, 418.21373846978736, 446.2434072237411, 488.23422250751855, 499.23706586967046]']
+      - ['[444.3095753949392, 418.21373846978736, 446.2434072237411, 488.23422250751855, 499.23706586967046]']
+      - ['[444.3095753949392, 418.21373846978736, 446.2434072237411, 488.23422250751855, 499.23706586967046]']
+      - ['[444.3095753949392, 418.21373846978736, 446.2434072237411, 488.23422250751855, 499.23706586967046]']

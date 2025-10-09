@@ -1,0 +1,123 @@
+description: |
+  Test ddl dictionary with source timeplus
+  Main steps:
+  1.Create stream and ingest data
+  2.Create dictionary with source Timeplus
+  3.Verify dictionary connectivity via dict_get
+
+steps:
+  - type: query
+    node: [p1]
+    sql: DROP STREAM IF EXISTS test44_stream_local;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE STREAM test44_stream_local (
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        int128_c int128,
+        int256_c int256,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uint128_c uint128,
+        uint256_c uint256,
+        float32_c float32,
+        float64_c float64,
+        decimal32_c decimal32(3),
+        decimal64_c decimal64(3),
+        decimal128_c decimal128(3),
+        decimal256_c decimal256(3),
+        uuid_c uuid,
+        string_c string,
+        array_c array(int),
+        date_c date,
+        date32_c date32,
+        datetime_c datetime,
+        datetime64_c datetime64(3),
+        null_c nullable(int32),
+        bool_c bool
+      ) SETTINGS local = true;
+
+  - type: wait
+    time: 3
+
+  - type: query
+    node: [p1]
+    sql: |
+      INSERT INTO test44_stream_local (int8_c, int16_c, int32_c, int64_c, int128_c, int256_c, uint8_c, uint16_c, uint32_c, uint64_c, uint128_c, uint256_c, float32_c, float64_c, decimal32_c, decimal64_c, decimal128_c, decimal256_c, uuid_c, string_c, array_c, date_c, date32_c, datetime_c, datetime64_c, null_c, bool_c) values 
+      (127, 32767, 2147483647, 9223372036854775807, 170141183460469231731687303715884105727, 115792089237316195423570985008687907853269984665059151610367127, 255, 65535, 4294967295, 18446744073709551615, 340282366920938463463374607431768211455, 115792089237316195423570985008687907853269984665059151610367127, 3.4028235, 1.7976931348623157, '999999.999', '999999999999999.999', '99999999999999999999999999999999.999', '9999999999999999999999999999999999999999999999999999999999999999999999999.999', '928c88b9-f37a-41d5-bef5-9cb3663c2445', '{@string}', [1, 2, 3], '2024-01-01', '2024-01-01', '2024-01-01 00:00:00', '2024-01-01 00:00:00.000', null, false);
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_flat;
+
+  - type: wait
+    time: 1
+    
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      CREATE DICTIONARY tp_flat(
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        int128_c int128,
+        int256_c int256,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uint128_c uint128,
+        uint256_c uint256,
+        float32_c float32,
+        float64_c float64,
+        decimal32_c decimal32(3),
+        decimal64_c decimal64(3),
+        decimal128_c decimal128(3),
+        decimal256_c decimal256(3),
+        uuid_c uuid,
+        string_c string,
+        array_c array(int),
+        date_c date,
+        date32_c date32,
+        datetime_c datetime,
+        datetime64_c datetime64(3),
+        null_c nullable(int32),
+        bool_c bool
+      )
+      PRIMARY KEY int8_c
+      SOURCE(TIMEPLUS(HOST '<<.CONTAINER_NAME_PREFIX>>_proton-server<<if eq .nodes "1">><<else>>1<<end>>' PORT tcp_port() USER 'default' QUERY 'SELECT * except (_tp_time) FROM table(test44_stream_local)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: wait
+    time: 1
+
+  - name: dict-7-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: SELECT dict_get('tp_flat', 'uuid_c', '127');
+    schema:
+      - name: dict_get('tp_flat', 'uuid_c', '127')
+        type: uuid
+
+  - type: check
+    target_name: dict-7-1
+    expected_result:
+      - ['928c88b9-f37a-41d5-bef5-9cb3663c2445']

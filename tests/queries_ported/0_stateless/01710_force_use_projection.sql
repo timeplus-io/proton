@@ -1,3 +1,6 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
 drop stream if exists tp;
 
 create stream tp (d1 int32, d2 int32, eventcnt int64, projection p (select sum(eventcnt) group by d1)) engine = MergeTree order by (d1, d2);

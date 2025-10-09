@@ -4,12 +4,11 @@
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <Core/Settings.h>
 
 
 namespace DB
 {
-struct Settings;
-
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
@@ -37,20 +36,22 @@ inline AggregateFunctionPtr createAggregateFunctionGroupArrayImpl(const DataType
 
     WhichDataType which(argument_type);
     if (which.idx == TypeIndex::String)
-        return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeString, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
+    {
+        if constexpr (Trait::use_arena)
+            return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeString, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
+        else
+            return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeStringWithoutArena, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
+    }
 
-    return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeGeneral, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
-
-    // Link list implementation doesn't show noticeable performance improvement
-    // if (which.idx == TypeIndex::String)
-    //     return std::make_shared<GroupArrayGeneralListImpl<GroupArrayListNodeString, Trait>>(argument_type, std::forward<TArgs>(args)...);
-
-    // return std::make_shared<GroupArrayGeneralListImpl<GroupArrayListNodeGeneral, Trait>>(argument_type, std::forward<TArgs>(args)...);
+    if constexpr (Trait::use_arena)
+        return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeGeneral, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
+    else
+        return std::make_shared<GroupArrayGeneralImpl<GroupArrayNodeGeneralWithoutArena, Trait>>(argument_type, parameters, std::forward<TArgs>(args)...);
 }
 
 template <bool Tlast>
 AggregateFunctionPtr createAggregateFunctionGroupArray(
-    const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+    const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertUnary(name, argument_types);
 
@@ -65,56 +66,69 @@ AggregateFunctionPtr createAggregateFunctionGroupArray(
     {
         auto type = parameters[0].getType();
         if (type != Field::Types::Int64 && type != Field::Types::UInt64)
-               throw Exception("Parameter for aggregate function " + name + " should be positive number", ErrorCodes::BAD_ARGUMENTS);
+               throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter for aggregate function {} should be positive number", name);
 
         if ((type == Field::Types::Int64 && parameters[0].get<Int64>() < 0) ||
             (type == Field::Types::UInt64 && parameters[0].get<UInt64>() == 0))
-            throw Exception("Parameter for aggregate function " + name + " should be positive number", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter for aggregate function {} should be positive number", name);
 
         limit_size = true;
         max_elems = parameters[0].get<UInt64>();
     }
     else
-        throw Exception("Incorrect number of parameters for aggregate function " + name + ", should be 0 or 1",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Incorrect number of parameters for aggregate function {}, should be 0 or 1", name);
 
+    bool use_arena = settings ? settings->default_hash_table != HashTableType::Hybrid : true;
     if (!limit_size)
-        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<false, Tlast, Sampler::NONE>>(argument_types[0], parameters);
+    {
+        if (use_arena)
+            return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<false, true, Tlast, Sampler::NONE>>(argument_types[0], parameters);
+        else
+            return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<false, false, Tlast, Sampler::NONE>>(argument_types[0], parameters);
+    }
     else
-        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, Tlast, Sampler::NONE>>(argument_types[0], parameters, max_elems);
+    {
+        if (use_arena)
+            return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, true, Tlast, Sampler::NONE>>(argument_types[0], parameters, max_elems);
+        else
+            return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, false, Tlast, Sampler::NONE>>(argument_types[0], parameters, max_elems);
+    }
 }
 
 AggregateFunctionPtr createAggregateFunctionGroupArraySample(
-    const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+    const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertUnary(name, argument_types);
 
     if (parameters.size() != 1 && parameters.size() != 2)
-        throw Exception("Incorrect number of parameters for aggregate function " + name + ", should be 1 or 2",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Incorrect number of parameters for aggregate function {}, should be 1 or 2", name);
 
     auto get_parameter = [&](size_t i)
     {
         auto type = parameters[i].getType();
         if (type != Field::Types::Int64 && type != Field::Types::UInt64)
-            throw Exception("Parameter for aggregate function " + name + " should be positive number", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter for aggregate function {} should be positive number", name);
 
         if ((type == Field::Types::Int64 && parameters[i].get<Int64>() < 0) ||
                 (type == Field::Types::UInt64 && parameters[i].get<UInt64>() == 0))
-            throw Exception("Parameter for aggregate function " + name + " should be positive number", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter for aggregate function {} should be positive number", name);
 
         return parameters[i].get<UInt64>();
     };
 
     UInt64 max_elems = get_parameter(0);
 
-    UInt64 seed;
+    std::optional<UInt64> seed;
     if (parameters.size() >= 2)
         seed = get_parameter(1);
-    else
-        seed = thread_local_rng();
 
-    return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true,  /* Tlast= */ false, Sampler::RNG>>(argument_types[0], parameters, max_elems, seed);
+    bool use_arena = settings ? settings->default_hash_table != HashTableType::Hybrid : true;
+    if (use_arena)
+        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, true,  /* Tlast= */ false, Sampler::RNG>>(argument_types[0], parameters, max_elems, seed);
+    else
+        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, false,  /* Tlast= */ false, Sampler::RNG>>(argument_types[0], parameters, max_elems, seed);
 }
 
 }

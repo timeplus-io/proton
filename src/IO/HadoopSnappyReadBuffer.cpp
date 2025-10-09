@@ -183,10 +183,10 @@ bool HadoopSnappyReadBuffer::nextImpl()
         in_data = in->position();
     }
 
-    if (decoder->result == Status::NEEDS_MORE_INPUT && (!in_available || in->eof()))
-    {
-        throw Exception(String("hadoop snappy decode error:") + statusToString(decoder->result), ErrorCodes::SNAPPY_UNCOMPRESS_FAILED);
-    }
+        if (decoder->result == Status::NEEDS_MORE_INPUT && (!in_available || in->eof()))
+        {
+            throw Exception(ErrorCodes::SNAPPY_UNCOMPRESS_FAILED, "hadoop snappy decode error: {}", statusToString(decoder->result));
+        }
 
     out_capacity = internal_buffer.size();
     out_data = internal_buffer.begin();
@@ -207,7 +207,7 @@ bool HadoopSnappyReadBuffer::nextImpl()
     }
     else if (decoder->result == Status::INVALID_INPUT || decoder->result == Status::BUFFER_TOO_SMALL)
     {
-        throw Exception(String("hadoop snappy decode error:") + statusToString(decoder->result), ErrorCodes::SNAPPY_UNCOMPRESS_FAILED);
+        throw Exception(ErrorCodes::SNAPPY_UNCOMPRESS_FAILED, "hadoop snappy decode error: {}", statusToString(decoder->result));
     }
     return true;
 }

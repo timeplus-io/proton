@@ -1,0 +1,17 @@
+tags:
+  - python-udf
+  - restapi
+description: check python status
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '4112'
+    type: rest
+    url: /proton/v1/python_status
+    method: GET
+
+  - type: check
+    target_name: '4112'
+    expected_result:
+      - initialized: true

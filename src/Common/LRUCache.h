@@ -336,7 +336,7 @@ private:
             auto it = cells.find(key);
             if (it == cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+                LOG_ERROR(getLogger("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
                 abort();
             }
 
@@ -354,7 +354,7 @@ private:
 
         if (current_size > (1ull << 63))
         {
-            LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+            LOG_ERROR(getLogger("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
             abort();
         }
     }

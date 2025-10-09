@@ -41,6 +41,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int NO_AVAILABLE_DATA;
+    extern const int CANNOT_ALLOCATE_MEMORY;
 }
 }
 
@@ -115,7 +116,7 @@ inline bool bitEquals(T && a, T && b)
   * 3) Hash tables that store the key and do not have a "mapped" value, e.g. the normal HashTable.
   *    GetKey returns the key, and GetMapped returns a zero void pointer. This simplifies generic
   *    code that works with mapped values: it can overload on the return type of GetMapped(), and
-  *    doesn't need other parameters. One example is insertSetMapped() function.
+  *    doesn't need other parameters. One example is Cell::setMapped() function.
   *
   * 4) Hash tables that store both the key and the "mapped" value, e.g. HashMap. Both GetKey and
   *    GetMapped are supported.
@@ -214,17 +215,6 @@ struct HashTableCell
 
 };
 
-/**
-  * A helper function for HashTable::insert() to set the "mapped" value.
-  * Overloaded on the mapped type, does nothing if it's VoidMapped.
-  */
-template <typename ValueType>
-void insertSetMapped(VoidMapped /* dest */, const ValueType & /* src */) {}
-
-template <typename MappedType, typename ValueType>
-void insertSetMapped(MappedType & dest, const ValueType & src) { dest = src.second; }
-
-
 /** Determines the size of the hash table, and when and how much it should be resized.
   * Has very small state (one UInt8) and useful for Set-s allocated in automatic memory (see uniqExact as an example).
   */
@@ -238,6 +228,8 @@ struct HashTableGrower
 
     /// If collision resolution chains are contiguous, we can implement erase operation by moving the elements.
     static constexpr auto performs_linear_probing_with_single_step = true;
+
+    static constexpr size_t max_size_degree = 23;
 
     /// The size of the hash table in the cells.
     size_t bufSize() const               { return 1ULL << size_degree; }
@@ -257,17 +249,18 @@ struct HashTableGrower
     /// Increase the size of the hash table.
     void increaseSize()
     {
-        size_degree += size_degree >= 23 ? 1 : 2;
+        size_degree += size_degree >= max_size_degree ? 1 : 2;
     }
 
     /// Set the buffer size by the number of elements in the hash table. Used when deserializing a hash table.
     void set(size_t num_elems)
     {
-        size_degree = num_elems <= 1
-             ? initial_size_degree
-             : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
-                 ? initial_size_degree
-                 : (static_cast<size_t>(log2(num_elems - 1)) + 2));
+        if (num_elems <= 1)
+            size_degree = initial_size_degree;
+        else if (initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
+            size_degree = initial_size_degree;
+        else
+            size_degree = static_cast<size_t>(log2(num_elems - 1)) + 2;
     }
 
     void setBufSize(size_t buf_size_)
@@ -279,6 +272,7 @@ struct HashTableGrower
 /** Determines the size of the hash table, and when and how much it should be resized.
   * This structure is aligned to cache line boundary and also occupies it all.
   * Precalculates some values to speed up lookups and insertion into the HashTable (and thus has bigger memory footprint than HashTableGrower).
+  * This grower assume 0.5 load factor
   */
 template <size_t initial_size_degree = 8>
 class alignas(64) HashTableGrowerWithPrecalculation
@@ -288,6 +282,7 @@ class alignas(64) HashTableGrowerWithPrecalculation
     UInt8 size_degree = initial_size_degree;
     size_t precalculated_mask = (1ULL << initial_size_degree) - 1;
     size_t precalculated_max_fill = 1ULL << (initial_size_degree - 1);
+    static constexpr size_t max_size_degree = 23;
 
 public:
     UInt8 sizeDegree() const { return size_degree; }
@@ -317,16 +312,17 @@ public:
     bool overflow(size_t elems) const { return elems > precalculated_max_fill; }
 
     /// Increase the size of the hash table.
-    void increaseSize() { increaseSizeDegree(size_degree >= 23 ? 1 : 2); }
+    void increaseSize() { increaseSizeDegree(size_degree >= max_size_degree ? 1 : 2); }
 
     /// Set the buffer size by the number of elements in the hash table. Used when deserializing a hash table.
     void set(size_t num_elems)
     {
-        size_degree = num_elems <= 1
-             ? initial_size_degree
-             : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
-                 ? initial_size_degree
-                 : (static_cast<size_t>(log2(num_elems - 1)) + 2));
+        if (num_elems <= 1)
+            size_degree = initial_size_degree;
+        else if (initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
+            size_degree = initial_size_degree;
+        else
+            size_degree = static_cast<size_t>(log2(num_elems - 1)) + 2;
         increaseSizeDegree(0);
     }
 
@@ -389,6 +385,11 @@ public:
         zeroValue()->~Cell();
     }
 
+    void clearHasZeroFlag()
+    {
+        has_zero = false;
+    }
+
     Cell * zeroValue()             { return std::launder(reinterpret_cast<Cell*>(&zero_value_storage)); }
     const Cell * zeroValue() const { return std::launder(reinterpret_cast<const Cell*>(&zero_value_storage)); }
 };
@@ -397,8 +398,9 @@ template <typename Cell>
 struct ZeroValueStorage<false, Cell>
 {
     bool hasZero() const { return false; }
-    void setHasZero() { throw DB::Exception("HashTable: logical error", DB::ErrorCodes::LOGICAL_ERROR); }
+    void setHasZero() { throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "HashTable: logical error"); }
     void clearHasZero() {}
+    void clearHasZeroFlag() {}
 
     Cell * zeroValue()             { return nullptr; }
     const Cell * zeroValue() const { return nullptr; }
@@ -468,6 +470,10 @@ protected:
     Cell * buf;               /// A piece of memory for all elements except the element with zero key.
     Grower grower;
 
+    /// proton: starts.
+    bool skip_dtor_on_destroy = std::is_trivially_destructible_v<Cell>;
+    /// proton: ends.
+
 #ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
     mutable size_t collisions = 0;
 #endif
@@ -501,9 +507,21 @@ protected:
         return place_value;
     }
 
+    static size_t allocCheckOverflow(size_t buffer_size)
+    {
+        size_t size = 0;
+        if (common::mulOverflow(buffer_size, sizeof(Cell), size))
+            throw DB::Exception(
+                DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY,
+                "Integer overflow trying to allocate memory for HashTable. Trying to allocate {} cells of {} bytes each",
+                buffer_size, sizeof(Cell));
+
+        return size;
+    }
+
     void alloc(const Grower & new_grower)
     {
-        buf = reinterpret_cast<Cell *>(Allocator::alloc(new_grower.bufSize() * sizeof(Cell)));
+        buf = reinterpret_cast<Cell *>(Allocator::alloc(allocCheckOverflow(new_grower.bufSize())));
         grower = new_grower;
     }
 
@@ -517,7 +535,7 @@ protected:
     }
 
     /// Increase the size of the buffer.
-    void resize(size_t for_num_elems = 0, size_t for_buf_size = 0)
+    void PRESERVE_MOST resize(size_t for_num_elems = 0, size_t for_buf_size = 0)
     {
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
         Stopwatch watch;
@@ -560,11 +578,11 @@ protected:
 
         if constexpr (Cell::need_to_notify_cell_during_move)
         {
-            buf = reinterpret_cast<Cell *>(Allocator::alloc(new_grower.bufSize() * sizeof(Cell)));
+            buf = reinterpret_cast<Cell *>(Allocator::alloc(allocCheckOverflow(new_grower.bufSize())));
             memcpy(reinterpret_cast<void *>(buf), reinterpret_cast<const void *>(old_buffer.get()), old_buffer_size);
         }
         else
-            buf = reinterpret_cast<Cell *>(Allocator::realloc(buf, old_buffer_size, new_grower.bufSize() * sizeof(Cell)));
+            buf = reinterpret_cast<Cell *>(Allocator::realloc(buf, old_buffer_size, allocCheckOverflow(new_grower.bufSize())));
 
         grower = new_grower;
 
@@ -639,19 +657,32 @@ protected:
 
     void destroyElements()
     {
-        if (!std::is_trivially_destructible_v<Cell>)
+        /// proton: starts.
+        if (!skip_dtor_on_destroy)
+        /// proton: ends.
         {
-            for (iterator it = begin(), it_end = end(); it != it_end; ++it)
+            for (iterator it = begin(), it_end = end(); it != it_end;)
             {
-                it.ptr->~Cell();
-                /// In case of poison_in_dtor=1 it will be poisoned,
-                /// but it maybe used later, during iteration.
-                ///
-                /// NOTE, that technically this is UB [1], but OK for now.
-                ///
-                ///   [1]: https://github.com/google/sanitizers/issues/854#issuecomment-329661378
-                __msan_unpoison(it.ptr, sizeof(*it.ptr));
+                auto ptr = it.ptr;
+                ++it;
+                ptr->~Cell();
             }
+
+            /// Everything had been destroyed in the loop above, reset the flag
+            /// only, without calling destructor.
+            this->clearHasZeroFlag();
+        }
+        else
+        {
+            /// proton: starts. may not be a trivial destructor here
+#if 0
+            /// NOTE: it is OK to call dtor for trivially destructible type
+            /// even the object hadn't been initialized, so no need to has
+            /// hasZero() check.
+            this->clearHasZero();
+#endif
+            this->clearHasZeroFlag();
+            /// proton: ends.
         }
     }
 
@@ -722,6 +753,7 @@ protected:
 
 public:
     using key_type = Key;
+    using grower_type = Grower;
     using mapped_type = typename Cell::mapped_type;
     using value_type = typename Cell::value_type;
     using cell_type = Cell;
@@ -732,7 +764,15 @@ public:
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
 
-    HashTable()
+    HashTable(bool skip_dtor_on_destroy_ = std::is_trivially_destructible_v<Cell>) : skip_dtor_on_destroy(skip_dtor_on_destroy_)
+    {
+        if (Cell::need_zero_value_storage)
+            this->zeroValue()->setZero();
+        alloc(grower);
+    }
+
+    explicit HashTable(const Grower & grower_)
+        : grower(grower_)
     {
         if (Cell::need_zero_value_storage)
             this->zeroValue()->setZero();
@@ -811,7 +851,7 @@ public:
         inline const value_type & get() const
         {
             if (!is_initialized || is_eof)
-                throw DB::Exception("No available data", DB::ErrorCodes::NO_AVAILABLE_DATA);
+                throw DB::Exception(DB::ErrorCodes::NO_AVAILABLE_DATA, "No available data");
 
             return cell.getValue();
         }
@@ -962,6 +1002,7 @@ protected:
                 --m_size;
                 buf[place_value].setZero();
                 inserted = false;
+                keyHolderDiscardKey(key_holder);
                 throw;
             }
 
@@ -989,7 +1030,7 @@ protected:
     }
 
 public:
-    void reserve(size_t num_elements)
+    void PRESERVE_MOST reserve(size_t num_elements)
     {
         resize(num_elements);
     }
@@ -1006,7 +1047,7 @@ public:
         }
 
         if (res.second)
-            insertSetMapped(res.first->getMapped(), x);
+            res.first->setMapped(x);
 
         return res;
     }
@@ -1212,6 +1253,11 @@ public:
             erased_key_position = next_position;
         }
 
+        /// proton: starts. Call destructor for non-trivially destructible cell
+        if constexpr (!std::is_trivially_destructible_v<Cell>)
+            buf[erased_key_position].~Cell();
+        /// proton: ends.
+
         buf[erased_key_position].setZero();
         --m_size;
 
@@ -1288,7 +1334,6 @@ public:
         Cell::State::read(rb);
 
         destroyElements();
-        this->clearHasZero();
         m_size = 0;
 
         size_t new_size = 0;
@@ -1312,7 +1357,6 @@ public:
         Cell::State::readText(rb);
 
         destroyElements();
-        this->clearHasZero();
         m_size = 0;
 
         size_t new_size = 0;
@@ -1346,7 +1390,6 @@ public:
     void clear()
     {
         destroyElements();
-        this->clearHasZero();
         m_size = 0;
 
         memset(static_cast<void*>(buf), 0, grower.bufSize() * sizeof(*buf));
@@ -1357,7 +1400,6 @@ public:
     void clearAndShrink()
     {
         destroyElements();
-        this->clearHasZero();
         m_size = 0;
         free();
     }

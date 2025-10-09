@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <Poco/Net/TCPServerConnection.h>
 
 #include <base/getFQDNOrHostName.h>
@@ -20,7 +21,9 @@
 
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
 
+#include "Core/Types.h"
 #include "IServer.h"
+#include "Storages/MergeTree/RequestResponse.h"
 #include "base/types.h"
 
 
@@ -101,6 +104,8 @@ struct QueryState
 
     /// To output progress, the difference after the previous sending of progress.
     Progress progress;
+    Stopwatch watch;
+    UInt64 prev_elapsed_ns = 0;
 
     /// Timeouts setter for current query
     std::unique_ptr<TimeoutSetter> timeout_setter;
@@ -146,7 +151,7 @@ private:
     TCPServer & tcp_server;
     bool parse_proxy_protocol = false;
     bool snapshot_mode = false;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     String forwarded_for;
 
@@ -184,7 +189,10 @@ private:
 
     /// For inter-server secret (remote_server.*.secret)
     bool is_interserver_mode = false;
+    /// For DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET
     String salt;
+    /// For DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_V2
+    std::optional<UInt64> nonce;
     String cluster;
 
     std::mutex task_callback_mutex;
@@ -216,7 +224,7 @@ private:
     void receiveQuery();
     void receiveIgnoredPartUUIDs();
     String receiveReadTaskResponseAssumeLocked();
-    std::optional<PartitionReadResponse> receivePartitionMergeTreeReadTaskResponseAssumeLocked();
+    std::optional<ParallelReadResponse> receivePartitionMergeTreeReadTaskResponseAssumeLocked();
     bool receiveData(bool scalar);
     bool readDataNext();
     void readData();
@@ -249,7 +257,8 @@ private:
     void sendEndOfStream();
     void sendPartUUIDs();
     void sendReadTaskRequestAssumeLocked();
-    void sendMergeTreeReadTaskRequestAssumeLocked(PartitionReadRequest request);
+    void sendMergeTreeAllRangesAnnounecementAssumeLocked(InitialAllRangesAnnouncement announcement);
+    void sendMergeTreeReadTaskRequestAssumeLocked(ParallelReadRequest request);
     void sendProfileInfo(const ProfileInfo & info);
     void sendTotals(const Block & totals);
     void sendExtremes(const Block & extremes);

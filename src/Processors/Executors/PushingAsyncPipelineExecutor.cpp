@@ -5,8 +5,9 @@
 #include <QueryPipeline/ReadProgressCallback.h>
 #include <Common/ThreadPool.h>
 #include <Common/setThreadName.h>
-#include <Poco/Event.h>
 #include <Common/scope_guard_safe.h>
+#include <Common/CurrentThread.h>
+#include <Poco/Event.h>
 
 namespace DB
 {
@@ -101,14 +102,14 @@ static void threadFunction(PushingAsyncPipelineExecutor::Data & data, ThreadGrou
 {
     SCOPE_EXIT_SAFE(
         if (thread_group)
-            CurrentThread::detachQueryIfNotDetached();
+            CurrentThread::detachFromGroupIfNotDetached();
     );
     setThreadName("QueryPushPipeEx");
 
     try
     {
         if (thread_group)
-            CurrentThread::attachTo(thread_group);
+            CurrentThread::attachToGroup(thread_group);
 
         data.executor->execute(num_threads);
     }
@@ -134,7 +135,7 @@ PushingAsyncPipelineExecutor::PushingAsyncPipelineExecutor(QueryPipeline & pipel
 
     pushing_source = std::make_shared<PushingAsyncSource>(pipeline.input->getHeader());
     connect(pushing_source->getPort(), *pipeline.input);
-    pipeline.processors.emplace_back(pushing_source);
+    pipeline.processors->emplace_back(pushing_source);
 }
 
 PushingAsyncPipelineExecutor::~PushingAsyncPipelineExecutor()

@@ -1,0 +1,68 @@
+tags:
+- query_state
+- stream_join_stream
+description: versioned-kv innner join versioned kv parallel_hash state checkpoint
+cluster:
+- p1k1
+#  # unsupport subscribe to
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream2
+- type: query
+  sql: drop stream if exists test19_right_stream2
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream2 (i int, s string, ts datetime)
+    primary key i settings mode='versioned_kv'
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)
+    primary key ii settings mode='versioned_kv'
+- type: wait
+  time: 1
+
+- name: '19227'
+  type: stream
+  query_id: '19227'
+  query: subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2
+    on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1
+  schema:
+  - name: s
+    type: string
+  - name: ss
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:11')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream2(i, s, ts) values (1, 'ss', '2022-05-23 15:45:11')
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '19227'
+
+- type: check
+  target_name: '19227'
+  expected_result:
+  - [s, s2]
+  - [ss, s2]

@@ -38,7 +38,8 @@ IMPLEMENT_SETTING_MULTI_ENUM(JoinAlgorithm, ErrorCodes::UNKNOWN_JOIN,
      {"prefer_partial_merge", JoinAlgorithm::PREFER_PARTIAL_MERGE},
      {"parallel_hash",        JoinAlgorithm::PARALLEL_HASH},
      {"direct",               JoinAlgorithm::DIRECT},
-     {"full_sorting_merge",   JoinAlgorithm::FULL_SORTING_MERGE}})
+     {"full_sorting_merge",   JoinAlgorithm::FULL_SORTING_MERGE},
+     {"grace_hash",           JoinAlgorithm::GRACE_HASH}})
 
 
 IMPLEMENT_SETTING_ENUM(TotalsMode, ErrorCodes::UNKNOWN_TOTALS_MODE,
@@ -139,4 +140,22 @@ IMPLEMENT_SETTING_ENUM(EscapingRule, ErrorCodes::BAD_ARGUMENTS,
      {"JSON", FormatSettings::EscapingRule::JSON},
      {"XML", FormatSettings::EscapingRule::XML},
      {"Raw", FormatSettings::EscapingRule::Raw}})
+
+IMPLEMENT_SETTING_ENUM(ParallelReplicasCustomKeyFilterType, ErrorCodes::BAD_ARGUMENTS,
+   {{"default", ParallelReplicasCustomKeyFilterType::DEFAULT},
+    {"range", ParallelReplicasCustomKeyFilterType::RANGE}})
+
+IMPLEMENT_SETTING_ENUM(IcebergCatalogType, ErrorCodes::BAD_ARGUMENTS,
+                       {{"rest", IcebergCatalogType::REST}})
+
+IMPLEMENT_SETTING_ENUM(LocalFSReadMethod, ErrorCodes::BAD_ARGUMENTS,
+   {{"mmap", LocalFSReadMethod::mmap},
+    {"pread", LocalFSReadMethod::pread},
+    {"read", LocalFSReadMethod::read}})
+
+IMPLEMENT_SETTING_ENUM(MsgPackUUIDRepresentation , ErrorCodes::BAD_ARGUMENTS,
+                       {{"bin", FormatSettings::MsgPackUUIDRepresentation::BIN},
+                        {"str", FormatSettings::MsgPackUUIDRepresentation::STR},
+                        {"ext", FormatSettings::MsgPackUUIDRepresentation::EXT}})
+
 }

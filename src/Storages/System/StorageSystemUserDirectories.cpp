@@ -23,8 +23,8 @@ NamesAndTypesList StorageSystemUserDirectories::getNamesAndTypes()
 
 void StorageSystemUserDirectories::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    const auto & access_control = context->getAccessControl();
-    auto storages = access_control.getStorages();
+    const auto access_control = context->getAccessControl();
+    auto storages = access_control->getStorages();
 
     size_t column_index = 0;
     auto & column_name = assert_cast<ColumnString &>(*res_columns[column_index++]);

@@ -132,7 +132,7 @@ size_t deserializeOffsets(IColumn::Offsets & offsets,
 
 /// proton: starts
 /// Returns number of  groups read
-size_t deserializeOffsetsSkip(ReadBuffer & istr)
+size_t deserializeOffsetsDiscard(ReadBuffer & istr)
 {
     size_t total_groups = 0;
     while (!istr.eof())
@@ -154,7 +154,7 @@ SerializationSparse::SerializationSparse(const SerializationPtr & nested_)
 {
 }
 
-SerializationPtr SerializationSparse::SubcolumnCreator::create(const SerializationPtr & prev) const
+SerializationPtr SerializationSparse::SubcolumnCreator::create(const SerializationPtr & prev, const DataTypePtr &) const
 {
     return std::make_shared<SerializationSparse>(prev);
 }
@@ -169,7 +169,7 @@ void SerializationSparse::enumerateStreams(
     const StreamCallback & callback,
     const SubstreamData & data) const
 {
-    const auto * column_sparse = data.column ? &assert_cast<const ColumnSparse &>(*data.column) : nullptr;
+    const auto * column_sparse = data.column ? typeid_cast<const ColumnSparse *>(data.column.get()) : nullptr;
     size_t column_size = column_sparse ? column_sparse->size() : 0;
 
     settings.path.push_back(Substream::SparseOffsets);
@@ -187,7 +187,7 @@ void SerializationSparse::enumerateStreams(
 
     auto next_data = SubstreamData(nested)
         .withType(data.type)
-        .withColumn(column_sparse ? column_sparse->getValuesPtr() : nullptr)
+        .withColumn(column_sparse ? column_sparse->getValuesPtr() : data.column)
         .withSerializationInfo(data.serialization_info);
 
     nested->enumerateStreams(settings, callback, next_data);
@@ -259,12 +259,13 @@ void SerializationSparse::serializeBinaryBulkStateSuffix(
 
 void SerializationSparse::deserializeBinaryBulkStatePrefix(
     DeserializeBinaryBulkSettings & settings,
-    DeserializeBinaryBulkStatePtr & state) const
+    DeserializeBinaryBulkStatePtr & state,
+    SubstreamsDeserializeStatesCache * cache) const
 {
     auto state_sparse = std::make_shared<DeserializeStateSparse>();
 
     settings.path.push_back(Substream::SparseElements);
-    nested->deserializeBinaryBulkStatePrefix(settings, state_sparse->nested);
+    nested->deserializeBinaryBulkStatePrefix(settings, state_sparse->nested, cache);
     settings.path.pop_back();
 
     state = std::move(state_sparse);
@@ -403,7 +404,7 @@ void SerializationSparse::serializeTextXML(const IColumn & column, size_t row_nu
 
 
 /// proton: starts
-void SerializationSparse::deserializeBinaryBulkWithMultipleStreamsSkip(
+void SerializationSparse::deserializeBinaryBulkWithMultipleStreamsDiscard(
     size_t /*limit*/,
     DeserializeBinaryBulkSettings & settings,
     DeserializeBinaryBulkStatePtr & state) const
@@ -416,14 +417,19 @@ void SerializationSparse::deserializeBinaryBulkWithMultipleStreamsSkip(
     size_t num_values = 0;
     settings.path.push_back(Substream::SparseOffsets);
     if (auto * stream = settings.getter(settings.path))
-        num_values = deserializeOffsetsSkip(*stream);
+        num_values = deserializeOffsetsDiscard(*stream);
 
     if (num_values >= 1)
         num_values -= 1;
 
     settings.path.back() = Substream::SparseElements;
-    nested->deserializeBinaryBulkWithMultipleStreamsSkip(num_values, settings, state_sparse->nested);
+    nested->deserializeBinaryBulkWithMultipleStreamsDiscard(num_values, settings, state_sparse->nested);
     settings.path.pop_back();
+}
+
+void SerializationSparse::deserializeBinaryDiscard(ReadBuffer & istr) const
+{
+    nested->deserializeBinaryDiscard(istr);
 }
 /// proton: ends
 

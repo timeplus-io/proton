@@ -1,0 +1,251 @@
+tags:
+- query_state
+- view
+description: recover tumble aggr based on tail join table view from state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists test19_state_view7
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream7
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream7 (id string, location string, value float,
+    timestamp datetime64(3) default now64(3))
+- type: wait
+  time: 1
+
+- type: query
+  sql: create view if not exists test19_state_view7 as select a.id, b.type as id_type,
+    a.value, a.timestamp from test19_state_stream7 as a join table(view_join) as b
+    on a.id = b.id
+- type: wait
+  name: 1
+
+- name: '19169'
+  type: stream
+  query_id: '19169'
+  query: subscribe to select emit_version(), id, id_type, count(), sum(value), min(value),
+    max(value), window_start, window_end from tumble(test19_state_view7, timestamp,
+    5s) group by id, id_type, window_start, window_end settings checkpoint_interval=1
+  schema:
+  - name: emit_version()
+    type: int64
+  - name: id
+    type: string
+  - name: id_type
+    type: string
+  - name: count()
+    type: uint64
+  - name: sum(value)
+    type: float64
+  - name: min(value)
+    type: float32
+  - name: max(value)
+    type: float32
+  - name: window_start
+    type: datetime64(3)
+  - name: window_end
+    type: datetime64(3)
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 58.3, '2020-02-02 20:00:01']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 59, '2020-02-02 20:00:02']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev2, 'ca', 66, '2020-02-02 20:00:03']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 77, '2020-02-02 20:00:04']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev2, 'ca', 69, '2020-02-02 20:00:05']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19169'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev3, 'ca', 55, '2020-02-02 20:00:07']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev2, 'ca', 55, '2020-02-02 20:00:08']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev3, 'ca', 72, '2020-02-02 20:00:09']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev4, 'ca', 77, '2020-02-02 20:00:10']
+- type: wait
+  time: 3
+
+- name: 19169-1
+  type: stream
+  query: recover from '19169'
+  schema:
+  - name: emit_version()
+    type: int64
+  - name: id
+    type: string
+  - name: id_type
+    type: string
+  - name: count()
+    type: uint64
+  - name: sum(value)
+    type: float64
+  - name: min(value)
+    type: float32
+  - name: max(value)
+    type: float32
+  - name: window_start
+    type: datetime64(3)
+  - name: window_end
+    type: datetime64(3)
+- type: wait
+  time: 2
+
+- type: query
+  sql: unsubscribe to '19169'
+
+- type: check
+  target_name: '19169'
+  expected_result:
+  - [0, dev1, roof, 3, 194.3, 58.3, 77, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+  - [0, dev2, field, 1, 66, 66, 66, '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+
+- type: check
+  target_name: 19169-1
+  mode: random
+  expected_result:
+  - [1, dev3, window, 2, 127, 55, 72, '2020-02-02 20:00:05', '2020-02-02 20:00:10']
+  - [1, dev2, field, 2, 124, 55, 69, '2020-02-02 20:00:05', '2020-02-02 20:00:10']

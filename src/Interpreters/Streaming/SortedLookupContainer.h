@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <deque>
 
 namespace DB::Streaming
@@ -14,7 +15,8 @@ class SortedLookupContainer
 public:
     using Base = std::deque<TEntry>;
 
-    void insert(TEntry entry, bool ascending, size_t max_size)
+    /// \return removed entry
+    std::optional<TEntry> insert(TEntry entry, bool ascending, size_t max_size)
     {
         /// Happy and perf path
         if (ascending)
@@ -22,8 +24,7 @@ public:
             if (array.empty() || less(array.back(), entry)) /// Very likely
             {
                 array.push_back(std::move(entry));
-                eraseIfExceedingMaxSize(max_size, ascending);
-                return;
+                return eraseIfExceedingMaxSize(max_size, ascending);
             }
         }
         else
@@ -31,15 +32,14 @@ public:
             if (array.empty() || less(array.front(), entry)) /// Very likely
             {
                 array.push_front(std::move(entry));
-                eraseIfExceedingMaxSize(max_size, ascending);
-                return;
+                return eraseIfExceedingMaxSize(max_size, ascending);
             }
         }
 
         /// Slow path
         auto it = std::lower_bound(array.begin(), array.end(), entry, (ascending ? less : greater));
         array.insert(it, std::move(entry));
-        eraseIfExceedingMaxSize(max_size, ascending);
+        return eraseIfExceedingMaxSize(max_size, ascending);
     }
 
     const RowRefDataBlock * upperBound(const TEntry & k, bool ascending)
@@ -71,15 +71,25 @@ public:
     const_iterator end() const { return array.end(); }
 
 private:
-    inline void eraseIfExceedingMaxSize(size_t max_size, bool ascending)
+    inline std::optional<TEntry> eraseIfExceedingMaxSize(size_t max_size, bool ascending)
     {
         if (array.size() > max_size)
         {
+            TEntry removed_entry;
             if (ascending)
+            {
+                removed_entry = array.front();
                 array.pop_front();
+            }
             else
+            {
+                removed_entry = array.back();
                 array.pop_back();
+            }
+
+            return removed_entry;
         }
+        return {};
     }
 
 private:

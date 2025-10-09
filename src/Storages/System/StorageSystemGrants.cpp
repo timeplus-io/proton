@@ -37,9 +37,9 @@ NamesAndTypesList StorageSystemGrants::getNamesAndTypes()
 void StorageSystemGrants::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
     context->checkAccess(AccessType::SHOW_USERS | AccessType::SHOW_ROLES);
-    const auto & access_control = context->getAccessControl();
-    std::vector<UUID> ids = access_control.findAll<User>();
-    insertAtEnd(ids, access_control.findAll<Role>());
+    const auto access_control = context->getAccessControl();
+    std::vector<UUID> ids = access_control->findAll<User>();
+    insertAtEnd(ids, access_control->findAll<Role>());
 
     size_t column_index = 0;
     auto & column_user_name = assert_cast<ColumnString &>(assert_cast<ColumnNullable &>(*res_columns[column_index]).getNestedColumn());
@@ -150,7 +150,7 @@ void StorageSystemGrants::fillData(MutableColumns & res_columns, ContextPtr cont
 
     for (const auto & id : ids)
     {
-        auto entity = access_control.tryRead(id);
+        auto entity = access_control->tryRead(id);
         if (!entity)
             continue;
 

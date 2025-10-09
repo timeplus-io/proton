@@ -1,0 +1,34 @@
+tags:
+- udf
+description: scalar udf with incorrect arg type
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    source: function test_23_add_five(value) { for(let i=0; i<value.length; i++) {
+      value[i] = value[i]+5; } return value;}
+- type: wait
+  time: 5
+
+- name: udf-19
+  type: stream
+  query: select test_23_add_five('s1')
+  schema:
+  - name: test_23_add_five('s1')
+    type: float32
+
+- type: check
+  target_name: udf-19
+  expected_result:
+  - ["error_code:6"]

@@ -9,6 +9,9 @@
 #include <Disks/IDisk.h>
 #include <Common/formatReadable.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/logger_useful.h>
+#include <Interpreters/Context.h>
+#include <IO/ReadBufferFromFileBase.h>
 #include <Interpreters/Set.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -24,7 +27,6 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
-
 
 namespace ErrorCodes
 {
@@ -74,7 +76,7 @@ SetOrJoinSink::SetOrJoinSink(
     , backup_file_name(backup_file_name_)
     , backup_buf(table_.disk->writeFile(fs::path(backup_tmp_path) / backup_file_name))
     , compressed_backup_buf(*backup_buf)
-    , backup_stream(compressed_backup_buf, metadata_snapshot->getSampleBlock(), 0)
+    , backup_stream(compressed_backup_buf, 0, metadata_snapshot->getSampleBlock())
     , persistent(persistent_)
 {
 }
@@ -94,8 +96,7 @@ void SetOrJoinSink::onFinish()
     if (persistent)
     {
         backup_stream.flush();
-        compressed_backup_buf.next();
-        backup_buf->next();
+        compressed_backup_buf.finalize();
         backup_buf->finalize();
 
         table.disk->replaceFile(fs::path(backup_tmp_path) / backup_file_name, fs::path(backup_path) / backup_file_name);
@@ -129,7 +130,7 @@ StorageSetOrJoinBase::StorageSetOrJoinBase(
 
 
     if (relative_path_.empty())
-        throw Exception("Join and Set storages require data path", ErrorCodes::INCORRECT_FILE_NAME);
+        throw Exception(ErrorCodes::INCORRECT_FILE_NAME, "Join and Set storages require data path");
 
     path = relative_path_;
 }
@@ -144,7 +145,7 @@ StorageSet::StorageSet(
     const String & comment,
     bool persistent_)
     : StorageSetOrJoinBase{disk_, relative_path_, table_id_, columns_, constraints_, comment, persistent_}
-    , set(std::make_shared<Set>(SizeLimits(), false, true))
+    , set(std::make_shared<Set>(SizeLimits(), 0, true))
 {
     Block header = getInMemoryMetadataPtr()->getSampleBlock();
     set->setHeader(header.getColumnsWithTypeAndName());
@@ -169,7 +170,7 @@ void StorageSet::truncate(const ASTPtr &, const StorageMetadataPtr & metadata_sn
     Block header = metadata_snapshot->getSampleBlock();
 
     increment = 0;
-    set = std::make_shared<Set>(SizeLimits(), false, true);
+    set = std::make_shared<Set>(SizeLimits(), 0, true);
     set->setHeader(header.getColumnsWithTypeAndName());
 }
 
@@ -222,7 +223,7 @@ void StorageSetOrJoinBase::restoreFromFile(const String & file_path)
     finishInsert();
 
     /// TODO Add speed, compressed bytes, data volume in memory, compression ratio ... Generalize all statistics logging in project.
-    LOG_INFO(&Poco::Logger::get("StorageSetOrJoinBase"), "Loaded from backup file {}. {} rows, {}. State has {} unique rows.",
+    LOG_INFO(getLogger("StorageSetOrJoinBase"), "Loaded from backup file {}. {} rows, {}. State has {} unique rows.",
         file_path, info.rows, ReadableSize(info.bytes), getSize(ctx));
 }
 
@@ -242,9 +243,8 @@ void registerStorageSet(StorageFactory & factory)
     factory.registerStorage("Set", [](const StorageFactory::Arguments & args)
     {
         if (!args.engine_args.empty())
-            throw Exception(
-                "Engine " + args.engine_name + " doesn't support any arguments (" + toString(args.engine_args.size()) + " given)",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Engine {} doesn't support any arguments ({} given)",
+                args.engine_name, args.engine_args.size());
 
         bool has_settings = args.storage_def->settings;
         SetSettings set_settings;

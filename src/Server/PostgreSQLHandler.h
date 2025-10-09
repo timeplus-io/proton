@@ -4,7 +4,6 @@
 #include "config.h"
 #include <Core/PostgreSQLProtocol.h>
 #include <Poco/Net/TCPServerConnection.h>
-#include <Common/logger_useful.h>
 #include "IServer.h"
 
 #if USE_SSL
@@ -39,7 +38,7 @@ public:
     void run() final;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("PostgreSQLHandler");
+    LoggerPtr log = getLogger("PostgreSQLHandler");
 
     IServer & server;
     TCPServer & tcp_server;

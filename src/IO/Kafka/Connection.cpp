@@ -147,7 +147,7 @@ void Connection::onOauthBearerTokenRefresh(rd_kafka_t * rk, const char * /*oauth
 #endif
 
 Connection::Connection(const Conf & conf_, const Limits & limits_)
-    : conf(conf_.getConf()), limits(limits_), logger(&Poco::Logger::get("KafkaConnection"))
+    : conf(conf_.getConf()), limits(limits_), logger(getLogger("KafkaConnection"))
 {
     rd_kafka_conf_set_opaque(conf.get(), this);
 #if USE_AWS_MSK_IAM
@@ -343,9 +343,9 @@ ProducerPtr Connection::getProducer(const std::string & topic)
     return handle->produceTo(topic);
 }
 
-int32_t Connection::getPartitionCount(const std::string & topic)
+int32_t Connection::getPartitionCount(const std::string & topic, uint64_t timeout_ms)
 {
-    return getProducer(topic)->getPartitionCount();
+    return getProducer(topic)->getPartitionCount(timeout_ms);
 }
 
 std::vector<Int64> Connection::getOffsetsForTimestamps(
@@ -434,7 +434,7 @@ ConnectionFactory & ConnectionFactory::instance()
     return instance;
 }
 
-ConnectionFactory::ConnectionFactory() : logger(&Poco::Logger::get("KafkaConnectionFactory"))
+ConnectionFactory::ConnectionFactory() : logger(getLogger("KafkaConnectionFactory"))
 {
 }
 

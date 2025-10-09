@@ -1,0 +1,60 @@
+tags:
+  - changelog_kv
+  - append-only
+  - Dynamic data enrichment join
+description: append-only left all join changelog_kv(partial primary join)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_append_stream1_1 (i int, k1 int, k2 string);
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql:
+      create stream test14_append_stream2_1 (j int, kk1 int, kk2 string)
+      primary key (kk1, kk2) settings mode='changelog_kv';
+  - type: wait
+    time: 1
+  
+  - name: "1428"
+    type: stream
+    query:
+      select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2 from test14_append_stream1_1
+      as a left all join test14_append_stream2_1 as b on a.k1 = b.kk1;
+    schema:
+      - name: i
+        type: int32
+      - name: k1  
+        type: int32
+      - name: k2
+        type: string
+      - name: j
+        type: int32
+      - name: kk1
+        type: int32
+      - name: kk2
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream2_1(j, kk1, kk2) values (2, 1, 'kk');
+
+  - type: query
+    sql: insert into test14_append_stream1_1(i, k1, k2) values (1, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream2_1(j, kk1, kk2, _tp_delta) values (2, 1, 'kk', -1);
+
+  - type: query
+    sql: insert into test14_append_stream1_1(i, k1, k2) values (3, 1, 'k');
+    
+  - type: check
+    target_name: "1428"
+    expected_result:
+      - [1, 1, k, 2, 1, kk]
+      - [3, 1, k, 0, 0, ""]

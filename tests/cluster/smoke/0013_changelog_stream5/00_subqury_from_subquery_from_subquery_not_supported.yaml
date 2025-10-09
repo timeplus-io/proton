@@ -1,0 +1,121 @@
+tags:
+  - local-run
+  - subquery/view/materilized_view_UDA
+  - group_by_primary_key
+  - to_support
+  - skip
+description: subqury from subquery from subquery(not supported)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION test_14_5_sec_large(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        {
+          initialize: function() { 
+            this.max = -1.0;
+            this.sec = -1.0;
+          },
+
+          process: function(values) {
+            for(let i=0; i<values.length; i++) {
+              if(values[i] > this.max) {
+                this.sec = this.max;
+                this.max = values[i];
+              }
+              if(values[i] < this.max && values[i] > this.sec)
+                this.sec = values[i];
+            }
+          },
+
+          finalize: function() {
+            return this.sec;
+          },
+
+          serialize: function() {
+            let s = {"max": this.max, "sec":this.sec };
+            return JSON.stringify(s);
+          },
+
+          deserialize: function(state_str) {
+            let s = JSON.parse(state_str);
+            this.max = s["max"];
+            this.sec = s["sec"];
+          },
+
+          merge: function(state_str) {
+            let s = JSON.parse(state_str);
+            if (s["sec"] >= this.max) {
+              this.max = s["max"];
+              this.sec = s["sec"];
+            } else if (s["max"] >= this.max) {
+              this.sec = this.max;
+              this.max = s["max"];
+            } else if (s["max"] > this.sec) {
+              this.sec = s["max"];
+            }
+          }
+        }
+      $$;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_subquery_5(i float, k1 int, k2 string);
+
+  - type: wait
+    time: 2
+
+  - name: "1412"
+    type: stream
+    query: |
+      with cte1 as (
+        with cte2 as (
+          select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2)
+        )
+        select * from cte2
+      )
+      select test_14_5_sec_large(i), k2 from cte1 group by k2;
+    schema:
+      - name: test_14_5_sec_large(i)
+        type: float32
+      - name: k2
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+  - type: check
+    target_name: "1412"
+    expected_result:
+      - [0, 0, nan, 3]
+      - [8, 2, 5, 2]
+      - [0, 0, nan, 5]

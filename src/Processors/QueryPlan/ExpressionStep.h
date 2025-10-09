@@ -1,6 +1,10 @@
 #pragma once
 #include <Processors/QueryPlan/ITransformingStep.h>
 
+/// proton: starts.
+#include <Core/HashTableType.h>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -14,13 +18,19 @@ class JoiningTransform;
 class ExpressionStep : public ITransformingStep
 {
 public:
+    /// proton: starts.
+    explicit ExpressionStep(
+        const DataStream & input_stream_,
+        const ActionsDAGPtr & actions_dag_,
+        HashTableType hash_table_type_ = HashTableType::Memory,
+        const std::string & spill_dir_ = "",
+        size_t max_hot_keys_ = 0,
+        bool preserves_substream = true);
+    /// proton: ends.
 
-    explicit ExpressionStep(const DataStream & input_stream_, const ActionsDAGPtr & actions_dag_);
     String getName() const override { return "Expression"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
-
-    void updateInputStream(DataStream input_stream, bool keep_header);
 
     void describeActions(FormatSettings & settings) const override;
 
@@ -29,7 +39,15 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
 
 private:
+    void updateOutputStream() override;
+
     ActionsDAGPtr actions_dag;
+
+    /// proton: starts.
+    HashTableType hash_table_type;
+    std::string spill_dir;
+    size_t max_hot_keys;
+    /// proton: ends.
 };
 
 }

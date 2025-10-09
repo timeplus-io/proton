@@ -63,7 +63,7 @@ public:
 
     void loadEncodingsFrequency()
     {
-        Poco::Logger * log = &Poco::Logger::get("EncodingsFrequency");
+        LoggerPtr log = getLogger("EncodingsFrequency");
 
         LOG_TRACE(log, "Loading embedded charset frequencies");
 
@@ -122,7 +122,7 @@ public:
 
     void loadEmotionalDict()
     {
-        Poco::Logger * log = &Poco::Logger::get("EmotionalDict");
+        LoggerPtr log = getLogger("EmotionalDict");
         LOG_TRACE(log, "Loading embedded emotional dictionary");
 
         auto resource = getResource("tonality_ru.zst");
@@ -161,7 +161,7 @@ public:
 
     void loadProgrammingFrequency()
     {
-        Poco::Logger * log = &Poco::Logger::get("ProgrammingFrequency");
+        LoggerPtr log = getLogger("ProgrammingFrequency");
 
         LOG_TRACE(log, "Loading embedded programming languages frequencies loading");
 

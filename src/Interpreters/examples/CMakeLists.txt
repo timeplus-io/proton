@@ -1,5 +1,10 @@
 proton_add_executable (hash_map hash_map.cpp)
-target_link_libraries (hash_map PRIVATE dbms ch_contrib::sparsehash)
+target_link_libraries (hash_map PRIVATE
+    dbms
+    clickhouse_aggregate_functions
+    clickhouse_functions
+    clickhouse_table_functions
+    ch_contrib::sparsehash)
 
 proton_add_executable (hash_map_lookup hash_map_lookup.cpp)
 target_link_libraries (hash_map_lookup PRIVATE dbms)

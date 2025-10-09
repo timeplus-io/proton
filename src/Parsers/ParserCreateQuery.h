@@ -1,6 +1,12 @@
 #pragma once
 
-#include <Parsers/IParserBase.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTDataType.h>
+#include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/ASTIdentifier_fwd.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ASTNameTypePair.h>
@@ -10,19 +16,19 @@
 #include <Parsers/ParserDataType.h>
 #include <Poco/String.h>
 
+#include <boost/algorithm/string.hpp>
 
 namespace DB
 {
 
-/** A nested table. For example, Nested(UInt32 CounterID, FixedString(2) UserAgentMajor)
-  */
-class ParserNestedTable : public IParserBase
-{
-protected:
-    const char * getName() const override { return "nested table"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
-};
-
+  /** A nested table. For example, Nested(UInt32 CounterID, FixedString(2) UserAgentMajor)
+    */
+  class ParserNestedTable : public IParserBase
+  {
+  protected:
+      const char * getName() const override { return "nested table"; }
+      bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+  };
 
 /** Storage engine or Codec. For example:
  *         Memory()
@@ -90,17 +96,15 @@ class IParserColumnDeclaration : public IParserBase
 {
 public:
     explicit IParserColumnDeclaration(bool require_type_ = true, bool allow_null_modifiers_ = false, bool check_keywords_after_name_ = false)
-    : require_type(require_type_)
-    , allow_null_modifiers(allow_null_modifiers_)
-    , check_keywords_after_name(check_keywords_after_name_)
+        : require_type(require_type_)
+        , allow_null_modifiers(allow_null_modifiers_)
+        , check_keywords_after_name(check_keywords_after_name_)
     {
     }
 
     void enableCheckTypeKeyword() { check_type_keyword = true; }
 
 protected:
-    using ASTDeclarePtr = std::shared_ptr<ASTColumnDeclaration>;
-
     const char * getName() const  override{ return "column declaration"; }
 
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
@@ -124,7 +128,9 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_null{"NULL"};
     ParserKeyword s_not{"NOT"};
     ParserKeyword s_materialized{"MATERIALIZED"};
+    ParserKeyword s_ephemeral{Keyword::EPHEMERAL};
     ParserKeyword s_alias{"ALIAS"};
+    ParserKeyword s_auto_increment{Keyword::AUTO_INCREMENT};
     ParserKeyword s_comment{"COMMENT"};
     ParserKeyword s_codec{"CODEC"};
     ParserKeyword s_ttl{"TTL"};
@@ -164,6 +170,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ASTPtr type;
     String default_specifier;
     std::optional<bool> null_modifier;
+    /// bool ephemeral_default = false;
     ASTPtr default_expression;
     ASTPtr comment_expression;
     ASTPtr codec_expression;
@@ -191,6 +198,40 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         if (!expr_parser.parse(pos, default_expression, expected))
             return false;
     }
+    else if (s_ephemeral.ignore(pos, expected))
+    {
+        default_specifier = s_ephemeral.getName();
+        if (!expr_parser.parse(pos, default_expression, expected) && type)
+        {
+            /// ephemeral_default = true;
+
+            auto default_function = std::make_shared<ASTFunction>();
+            default_function->name = "defaultValueOfTypeName";
+            default_function->arguments = std::make_shared<ASTExpressionList>();
+            /// Ephemeral columns don't really have secrets but we need to format into a String, hence the strange call
+            default_function->arguments->children.emplace_back(std::make_shared<ASTLiteral>(type->as<ASTDataType>()->formatForLogging()));
+            default_expression = default_function;
+        }
+
+        if (!default_expression && !type)
+            return false;
+    }
+    else if (s_auto_increment.ignore(pos, expected))
+    {
+        default_specifier = s_auto_increment.getName();
+        /// if type is not provided for a column with AUTO_INCREMENT then using uint64 by default
+        if (!type)
+        {
+            const String type_int("uint64");
+            Tokens tokens(type_int.data(), type_int.data() + type_int.size());
+            Pos tmp_pos(tokens, pos.max_depth);
+            Expected tmp_expected;
+            ParserDataType().parse(tmp_pos, type, tmp_expected);
+        }
+    }
+    /// This will rule out unusual expressions like *, t.* that cannot appear in DEFAULT
+    if (default_expression && !dynamic_cast<const ASTWithAlias *>(default_expression.get()))
+        return false;
 
     if (require_type && !type && !default_expression)
         return false; /// reject column name without type
@@ -236,6 +277,11 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 
     column_declaration->null_modifier = null_modifier;
 
+    /// proton : starts
+    if (boost::iequals(default_specifier, "AUTO_INCREMENT"))
+        column_declaration->default_specifier = default_specifier;
+    /// proton : ends
+
     if (default_expression)
     {
         column_declaration->default_specifier = default_specifier;
@@ -266,9 +312,21 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
 
 class ParserColumnDeclarationList : public IParserBase
 {
+public:
+    explicit ParserColumnDeclarationList(bool require_type_ = true, bool allow_null_modifiers_ = true, bool check_keywords_after_name_ = false)
+        : require_type(require_type_)
+        , allow_null_modifiers(allow_null_modifiers_)
+        , check_keywords_after_name(check_keywords_after_name_)
+    {
+    }
+
 protected:
     const char * getName() const override { return "column declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+
+    const bool require_type;
+    const bool allow_null_modifiers;
+    const bool check_keywords_after_name;
 };
 
 
@@ -360,6 +418,14 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
+class ParserCreateNamedCollectionQuery : public IParserBase
+{
+protected:
+    const char * getName() const override { return "CREATE NAMED COLLECTION"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+};
+
+
 /** Query like this:
   * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name [UUID 'uuid'] [ON CLUSTER cluster]
   * (
@@ -382,9 +448,7 @@ protected:
 class ParserCreateTableQuery : public IParserBase
 {
 protected:
-    /// proton: starts
     const char * getName() const override { return "CREATE STREAM or ATTACH STREAM query"; }
-    /// proton: ends
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 
@@ -462,9 +526,7 @@ protected:
 class ParserCreateQuery : public IParserBase
 {
 protected:
-    /// proton: starts
     const char * getName() const override { return "CREATE STREAM or ATTACH STREAM query"; }
-    /// proton: ends
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
 };
 

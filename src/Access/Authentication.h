@@ -38,7 +38,7 @@ struct Authentication
 
 template <typename CredentialsType>
 Authentication::Require<CredentialsType>::Require(const String & realm_)
-    : Exception("Credentials required", ErrorCodes::BAD_ARGUMENTS)
+    : Exception(ErrorCodes::BAD_ARGUMENTS, "Credentials required")
     , realm(realm_)
 {
 }

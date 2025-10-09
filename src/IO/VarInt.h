@@ -1,9 +1,11 @@
 #pragma once
 
 #include <base/types.h>
+#include <base/defines.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 
+#include <iostream>
 
 namespace DB
 {

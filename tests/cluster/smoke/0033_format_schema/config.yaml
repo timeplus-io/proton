@@ -1,0 +1,5 @@
+name: format_schema
+description: Tests SQL commands for managing format schemas.
+tags:
+- smoke
+- format_schema

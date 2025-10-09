@@ -56,6 +56,11 @@ public:
         return std::make_shared<DataTypeFloat64>();
     }
 
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
+        return std::make_shared<DataTypeFloat64>();
+    }
+
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         auto non_const_arguments = arguments;
@@ -83,7 +88,7 @@ public:
             if (resolution > MAX_H3_RES)
                 throw Exception(
                     ErrorCodes::ARGUMENT_OUT_OF_BOUND,
-                    "The argument 'resolution' ({}) of function {} is out of bounds because the maximum resolution in H3 library is ",
+                    "The argument 'resolution' ({}) of function {} is out of bounds because the maximum resolution in H3 library is {}",
                     toString(resolution), getName(), MAX_H3_RES);
 
             Float64 res = getHexagonEdgeLengthAvgM(resolution);

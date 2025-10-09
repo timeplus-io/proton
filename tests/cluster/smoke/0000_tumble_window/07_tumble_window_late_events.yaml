@@ -1,0 +1,154 @@
+tags:
+  - tumble window
+  - delay
+description: stream tumble late events drop w/ window delay interval -#107, an example positive test that uses insert into w/o column
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after window close with delay interval 2 second
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - type: stream
+    name: 101-1
+    query: select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark with delay interval 2 second
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:30']
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:31']
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:32']
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 59.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:50']
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:34']
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:37']
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:45']
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['2020-02-02 20:00:30', '2020-02-02 20:00:35', 3]
+
+  - type: check
+    target_name: 101-1
+    expected_result:
+      - ['2020-02-02 20:00:30', '2020-02-02 20:00:35', 3]

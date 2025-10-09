@@ -5,9 +5,6 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Disks/IDisk.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/parseQuery.h>
 
@@ -86,13 +83,18 @@ public:
 
         void sync() const;
 
-        void addToChecksums(IMergeTreeDataPart::Checksums & checksums);
+        void addToChecksums(MergeTreeDataPartChecksums & checksums);
     };
 
     using StreamPtr = std::unique_ptr<Stream>;
 
     MergeTreeDataPartWriterOnDisk(
-        const MergeTreeMutableDataPartPtr & data_part_,
+        const String & data_part_name_,
+        const String & logger_name_,
+        const SerializationByName & serializations_,
+        MutableDataPartStoragePtr data_part_storage_,
+        const MergeTreeIndexGranularityInfo & index_granularity_info_,
+        const MergeTreeSettingsPtr & storage_settings_,
         const NamesAndTypesList & columns_list,
         const StorageMetadataPtr & metadata_snapshot_,
         const std::vector<MergeTreeIndexPtr> & indices_to_recalc,
@@ -118,10 +120,10 @@ protected:
     void calculateAndSerializeSkipIndices(const Block & skip_indexes_block, const Granules & granules_to_write);
 
     /// Finishes primary index serialization: write final primary index row (if required) and compute checksums
-    void fillPrimaryIndexChecksums(MergeTreeData::DataPart::Checksums & checksums);
+    void fillPrimaryIndexChecksums(MergeTreeDataPartChecksums & checksums);
     void finishPrimaryIndexSerialization(bool sync);
     /// Finishes skip indices serialization: write all accumulated data to disk and compute checksums
-    void fillSkipIndicesChecksums(MergeTreeData::DataPart::Checksums & checksums);
+    void fillSkipIndicesChecksums(MergeTreeDataPartChecksums & checksums);
     void finishSkipIndicesSerialization(bool sync);
 
     /// Get global number of the current which we are writing (or going to start to write)
@@ -131,6 +133,14 @@ protected:
 
     /// Get unique non ordered skip indices column.
     Names getSkipIndicesColumns() const;
+
+    virtual void addStreams(const NameAndTypePair & name_and_type, const ColumnPtr & column, const ASTPtr & effective_codec_desc) = 0;
+
+    /// On first block create all required streams for columns with dynamic subcolumns and remember the block sample.
+    /// On each next block check if dynamic structure of the columns equals to the dynamic structure of the same
+    /// columns in the sample block. If for some column dynamic structure is different, adjust it so it matches
+    /// the structure from the sample.
+    void initOrAdjustDynamicStructureIfNeeded(Block & block);
 
     const MergeTreeIndices skip_indices;
 
@@ -162,11 +172,28 @@ protected:
     /// Data is already written up to this mark.
     size_t current_mark = 0;
 
+    bool is_dynamic_streams_initialized = false;
+    Block block_sample;
+
 private:
     void initSkipIndices();
     void initPrimaryIndex();
 
     virtual void fillIndexGranularity(size_t index_granularity_for_block, size_t rows_in_block) = 0;
+
+    struct ExecutionStatistics
+    {
+        ExecutionStatistics(size_t skip_indices_cnt, size_t stats_cnt)
+            : skip_indices_build_us(skip_indices_cnt, 0), statistics_build_us(stats_cnt, 0)
+        {
+        }
+
+        std::vector<size_t> skip_indices_build_us; // [i] corresponds to the i-th index
+        std::vector<size_t> statistics_build_us; // [i] corresponds to the i-th stat
+    };
+    ExecutionStatistics execution_stats;
+
+    LoggerPtr log;
 };
 
 }

@@ -412,23 +412,21 @@ public:
     }
 
     explicit AggregateFunctionSum(const DataTypes & argument_types_)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {})
-        , scale(0)
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {}, createResultType(0))
     {}
 
     AggregateFunctionSum(const IDataType & data_type, const DataTypes & argument_types_)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {})
-        , scale(getDecimalScale(data_type))
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionSum<T, TResult, Data, Type>>(argument_types_, {}, createResultType(getDecimalScale(data_type)))
     {}
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(UInt32 scale_)
     {
         if constexpr (!is_decimal<T>)
             return std::make_shared<DataTypeNumber<TResult>>();
         else
         {
             using DataType = DataTypeDecimal<TResult>;
-            return std::make_shared<DataType>(DataType::maxPrecision(), scale);
+            return std::make_shared<DataType>(DataType::maxPrecision(), scale_);
         }
     }
 
@@ -508,7 +506,7 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
-        Arena * arena) const override
+        const std::vector<Arena *> & arenas) const override
     {
         const auto & column_sparse = assert_cast<const ColumnSparse &>(*columns[0]);
         const auto * values = &column_sparse.getValuesColumn();
@@ -518,7 +516,7 @@ public:
         size_t to = std::lower_bound(offsets.begin(), offsets.end(), row_end) - offsets.begin();
 
         for (size_t i = from; i < to; ++i)
-            add(places[offsets[i]] + place_offset, &values, i + 1, arena);
+            add(places[offsets[i]] + place_offset, &values, i + 1, arenas.size() == 1 ? arenas[0] : arenas[i - from]);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -553,7 +551,7 @@ public:
         for (const auto & argument_type : this->argument_types)
             can_be_compiled &= canBeNativeType(*argument_type);
 
-        auto return_type = getReturnType();
+        auto return_type = this->getResultType();
         can_be_compiled &= canBeNativeType(*return_type);
 
         return can_be_compiled;
@@ -563,25 +561,22 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
         auto * aggregate_sum_ptr = aggregate_data_ptr;
 
         b.CreateStore(llvm::Constant::getNullValue(return_type), aggregate_sum_ptr);
     }
 
-    void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const DataTypes & arguments_types, const std::vector<llvm::Value *> & argument_values) const override
+    void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const ValuesWithType & arguments) const override
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
 
         auto * sum_value_ptr = aggregate_data_ptr;
         auto * sum_value = b.CreateLoad(return_type, sum_value_ptr);
 
-        const auto & argument_type = arguments_types[0];
-        const auto & argument_value = argument_values[0];
-
-        auto * value_cast_to_result = nativeCast(b, argument_type, argument_value, return_type);
+        auto * value_cast_to_result = nativeCast(b, arguments[0], this->getResultType());
         auto * sum_result_value = sum_value->getType()->isIntegerTy() ? b.CreateAdd(sum_value, value_cast_to_result) : b.CreateFAdd(sum_value, value_cast_to_result);
 
         b.CreateStore(sum_result_value, sum_value_ptr);
@@ -591,7 +586,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
 
         auto * sum_value_dst_ptr = aggregate_data_dst_ptr;
         auto * sum_value_dst = b.CreateLoad(return_type, sum_value_dst_ptr);
@@ -607,7 +602,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
         auto * sum_value_ptr = aggregate_data_ptr;
 
         return b.CreateLoad(return_type, sum_value_ptr);
@@ -616,8 +611,6 @@ public:
 #endif
 
 private:
-    UInt32 scale;
-
     static constexpr auto & castColumnToResult(IColumn & to)
     {
         if constexpr (is_decimal<T>)

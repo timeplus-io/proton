@@ -1,0 +1,81 @@
+tags:
+  - changelog_kv_aggr
+description: aggregation function unique_exact and unique_exact changelog_kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_changelog_kv_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_changelog_kv_stream(id int, val float) primary
+      key id settings mode='changelog_kv';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)
+  - type: wait
+    time: 1
+
+  - name: "1406"
+    type: stream
+    query: |
+      select unique(id), unique(to_string(id)), unique(id, val),
+      unique_if(id, id > 2), unique_if(to_string(id), id > 2),  unique_if(id, val, val > 1), 
+      unique_exact(val), unique_exact(to_string(val)), unique_exact(id, val),
+      unique_exact_if(id, id > 2), unique_exact_if(to_string(id), id > 2), unique_exact_if(id, val, val > 1)
+      from test14_changelog_kv_stream emit periodic 1s;
+    schema:
+      - name: unique(id)
+        type: uint64
+      - name: unique(to_string(id))
+        type: uint64
+      - name: unique(id, val)
+        type: uint64
+      - name: unique_if(id, id > 2)
+        type: uint64
+      - name: unique_if(to_string(id), id > 2)
+        type: uint64
+      - name: unique_if(id, val, val > 1)
+        type: uint64
+      - name: unique_exact(val)
+        type: uint64
+      - name: unique_exact(to_string(val))
+        type: uint64
+      - name: unique_exact(id, val)
+        type: uint64
+      - name: unique_exact_if(id, id > 2)
+        type: uint64
+      - name: unique_exact_if(to_string(id), id > 2)
+        type: uint64
+      - name: unique_exact_if(id, val, val > 1)
+        type: uint64
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (1, 1.2), (4, 4.4), (5, 5.5);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val, _tp_delta) values (2, 2.2, -1);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val, _tp_delta) values (3, 3.3, -1);
+
+  - type: check
+    target_name: "1406"
+    expected_result:
+      - ["3", "3", "3", "1", "1", "3", "3", "3", "3", "1", "1", "3"]
+      - ["5", "5", "6", "3", "3", "6", "6", "6", "6", "3", "3", "6"]
+      - ["4", "4", "5", "3", "3", "5", "5", "5", "5", "3", "3", "5"]
+      - ["3", "3", "4", "2", "2", "4", "4", "4", "4", "2", "2", "4"]

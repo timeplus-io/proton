@@ -1,0 +1,4 @@
+name: query_state10
+description: Tests covering query state checkpointing smoke test cases
+tags:
+- smoke

@@ -1,0 +1,59 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_stats_t_cdf(value float64) RETURNS float64 LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      import scipy.stats as stats
+
+      def test_stats_t_cdf(value):
+          df = 2.74
+          res = stats.t.cdf(value, df)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-12-1
+    type: stream
+    query: select test_stats_t_cdf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float64
+      - name: value
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (0.0)(1.11111111)(2.22222222)(3.33333333)(4.44444444)(5.55555556)(6.66666667)(7.77777778)(8.88888889)(10.0);
+
+  - type: check
+    target_name: python-udf4-12-1
+    expected_result:
+      - [0.5, 0.0]
+      - [0.82278883, 1.11111111]
+      - [0.93937973, 2.22222222]
+      - [0.97453053, 3.33333333]
+      - [0.98721645, 4.44444444]
+      - [0.99271696, 5.55555556]
+      - [0.99545793, 6.66666667]
+      - [0.99697216, 7.77777778]
+      - [0.99787657, 8.88888889]
+      - [0.99845047, 10.0]

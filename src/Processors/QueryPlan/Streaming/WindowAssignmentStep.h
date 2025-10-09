@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Interpreters/Streaming/WindowCommon.h>
-#include <Interpreters/TreeRewriter.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
 namespace DB
@@ -16,11 +15,13 @@ public:
 
     ~WindowAssignmentStep() override = default;
 
-    String getName() const override { return "StreamingWindowAssignmentStep"; }
+    String getName() const override { return "WindowAssignmentStep"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
+    void updateOutputStream() override;
+
     WindowParamsPtr window_params;
 };
 }

@@ -29,16 +29,4 @@ std::string FunctionDocumentation::examplesAsString() const
     return res;
 }
 
-std::string FunctionDocumentation::categoriesAsString() const
-{
-    if (categories.empty())
-        return "";
-
-    auto it = categories.begin();
-    std::string res = *it;
-    for (; it != categories.end(); ++it)
-        res += ", " + *it;
-    return res;
-}
-
 }

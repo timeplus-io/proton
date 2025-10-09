@@ -1,0 +1,143 @@
+tags:
+- local-run
+- multishards
+- append_only
+- streaming_aggregation
+- global_aggregation
+- group_by
+- UDA
+description: streaming aggregation group by, UDA add
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: query
+    sql: |
+      drop view if exists test13_view2_3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_3(i float, k1 int, k2 string) settings shards=3;
+  
+  - type: wait
+    time: 2
+  
+  - name: '1320'
+    type: stream
+    query: |
+      select test_13_3_sec_large(i),
+             k2
+      from test13_multishard_3
+      group by k2
+      order by k2 emit periodic 100ms;
+    schema: 
+      - name: 'test_13_3_sec_large(i)'
+        type: float32
+      - name: 'k2'
+        type: string
+    
+    
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (1, 0, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (2, 0, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (3, 0, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (4, 0, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (5, 0, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (6, 0, 'b');
+
+  - type: check
+    target_name: '1320'
+    expected_result:
+    - [-1, a]
+    - [-1, a]
+    - [-1, b]
+    - [-1, a]
+    - [-1, b]
+    - [-1, c]
+    - [-1, a]
+    - [-1, b]
+    - [3, c]
+    - [1, a]
+    - [-1, b]
+    - [3, c]
+    - [1, a]
+    - [2, b]
+    - [3, c]

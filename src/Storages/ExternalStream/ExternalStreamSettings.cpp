@@ -28,6 +28,10 @@ void ExternalStreamSettings::loadFromQuery(ASTStorage & storage_def, bool throw_
             {
                 set(change.name, change.value);
             }
+            else if (change.name.starts_with("http_header_")) /// dynamic HTTP headers
+            {
+                continue;
+            }
             else
             {
                 if (throw_on_unknown)
@@ -40,38 +44,6 @@ void ExternalStreamSettings::loadFromQuery(ASTStorage & storage_def, bool throw_
         auto settings_ast = std::make_shared<ASTSetQuery>();
         settings_ast->is_standalone = false;
         storage_def.set(storage_def.settings, settings_ast);
-    }
-}
-
-/// Load settings from a Java-style properties file.
-/// Each line denotes a setting assignment in the form <key> = <valuie>.
-/// For example,
-///
-/// brokers = kafka-1:12345
-/// username = user1
-/// password = password1234
-/// poll_waittime_ms = 1000
-///
-/// It only updates the unchanged settings so will not overwrite settings from DDL.
-void ExternalStreamSettings::loadFromConfigFile()
-{
-    String file_path;
-    if (tryGetString("config_file", file_path) && !file_path.empty())
-    {
-        Poco::FileInputStream istr(file_path);
-        if (!istr.good())
-            throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Cannot open the configure file: {}", file_path);
-
-        Poco::AutoPtr<Poco::Util::PropertyFileConfiguration> config(new Poco::Util::PropertyFileConfiguration(istr));
-
-        auto iter = allUnchanged().begin();
-        auto end = allUnchanged().end();
-        for (; iter != end; ++iter)
-        {
-            const auto & field_name = (*iter).getName();
-            if (config->has(field_name))
-                setString(field_name, config->getString(field_name));
-        }
     }
 }
 }

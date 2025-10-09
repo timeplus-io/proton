@@ -1,0 +1,111 @@
+name: json
+description: Tests covering the steam query smoke cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test_json_d
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test_json_str
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test_json_obj
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test_json_conversion
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test_json_nested
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test_json_bool
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: create stream test_json_d (id int, location string)
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: create stream test_json_str (json string, timestamp datetime64(3)
+        default now64(3))
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: create stream test_json_obj (json json, timestamp datetime64(3)
+        default now64(3))
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: create stream test_json_conversion (id int, json json)
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: create stream test_json_nested (id int, arr array(json))
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: create stream test_json_bool (b bool)
+
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: insert into test_json_d(id, location)values(1, '{"id":"dev1", "location":"roof"}')(2,
+        '{"id":"dev2", "location":"window"}')(3, '{"id":"dev3", "location":"floor"}')(4,
+        '{"id":"dev4", "location":"ground"}')
+
+teardown:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop view if exists json_tumble_hop_mv
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop view if exists json_hop_mv
+      
+    - type: query
+      sql: drop view if exists json_tumble_hop_v
+    
+    - type: wait
+      time: 1
+      
+    - type: query
+      sql: drop view if exists json_hop_v 
+      
+    

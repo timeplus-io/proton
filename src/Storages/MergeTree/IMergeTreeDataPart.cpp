@@ -13,6 +13,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MergeTree/checkDataPart.h>
+#include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MergeTree/PartMetadataManagerOrdinary.h>
@@ -32,6 +33,7 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <Interpreters/MergeTreeTransaction.h>
 #include <Interpreters/TransactionLog.h>
+#include <Interpreters/Context.h>
 
 
 namespace CurrentMetrics
@@ -68,13 +70,12 @@ namespace ErrorCodes
 }
 
 
-void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, const PartMetadataManagerPtr & manager)
+void IMergeTreeDataPart::MinMaxIndex::load(const StorageMetadataPtr & metadata_snapshot, const PartMetadataManagerPtr & manager)
 {
-    auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
 
-    auto minmax_column_names = data.getMinMaxColumnsNames(partition_key);
-    auto minmax_column_types = data.getMinMaxColumnsTypes(partition_key);
+    auto minmax_column_names = MergeTreeData::getMinMaxColumnsNames(partition_key);
+    auto minmax_column_types = MergeTreeData::getMinMaxColumnsTypes(partition_key);
     size_t minmax_idx_size = minmax_column_types.size();
 
     hyperrectangle.reserve(minmax_idx_size);
@@ -101,13 +102,12 @@ void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, const Par
 }
 
 IMergeTreeDataPart::MinMaxIndex::WrittenFiles IMergeTreeDataPart::MinMaxIndex::store(
-    const MergeTreeData & data, IDataPartStorage & part_storage, Checksums & out_checksums) const
+    StorageMetadataPtr metadata_snapshot, IDataPartStorage & part_storage, Checksums & out_checksums) const
 {
-    auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
 
-    auto minmax_column_names = data.getMinMaxColumnsNames(partition_key);
-    auto minmax_column_types = data.getMinMaxColumnsTypes(partition_key);
+    auto minmax_column_names = MergeTreeData::getMinMaxColumnsNames(partition_key);
+    auto minmax_column_types = MergeTreeData::getMinMaxColumnsTypes(partition_key);
 
     return store(minmax_column_names, minmax_column_types, part_storage, out_checksums);
 }
@@ -135,7 +135,7 @@ IMergeTreeDataPart::MinMaxIndex::WrittenFiles IMergeTreeDataPart::MinMaxIndex::s
         HashingWriteBuffer out_hashing(*out);
         serialization->serializeBinary(hyperrectangle[i].left, out_hashing, {});
         serialization->serializeBinary(hyperrectangle[i].right, out_hashing, {});
-        out_hashing.next();
+        out_hashing.finalize();
         out_checksums.files[file_name].file_size = out_hashing.count();
         out_checksums.files[file_name].file_hash = out_hashing.getHash();
         out->preFinalize();
@@ -198,7 +198,7 @@ void IMergeTreeDataPart::MinMaxIndex::appendFiles(const MergeTreeData & data, St
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
-    auto minmax_column_names = data.getMinMaxColumnsNames(partition_key);
+    auto minmax_column_names = MergeTreeData::getMinMaxColumnsNames(partition_key);
     size_t minmax_idx_size = minmax_column_names.size();
     for (size_t i = 0; i < minmax_idx_size; ++i)
     {
@@ -207,10 +207,9 @@ void IMergeTreeDataPart::MinMaxIndex::appendFiles(const MergeTreeData & data, St
     }
 }
 
-
-static void incrementStateMetric(MergeTreeDataPartState state)
+void IMergeTreeDataPart::incrementStateMetric(MergeTreeDataPartState state_) const
 {
-    switch (state)
+    switch (state_)
     {
         case MergeTreeDataPartState::Temporary:
             CurrentMetrics::add(CurrentMetrics::PartsTemporary);
@@ -235,9 +234,9 @@ static void incrementStateMetric(MergeTreeDataPartState state)
     }
 }
 
-static void decrementStateMetric(MergeTreeDataPartState state)
+void IMergeTreeDataPart::decrementStateMetric(MergeTreeDataPartState state_) const
 {
-    switch (state)
+    switch (state_)
     {
         case MergeTreeDataPartState::Temporary:
             CurrentMetrics::sub(CurrentMetrics::PartsTemporary);
@@ -301,33 +300,6 @@ static void decrementTypeMetric(MergeTreeDataPartType type)
 IMergeTreeDataPart::IMergeTreeDataPart(
     const MergeTreeData & storage_,
     const String & name_,
-    const MutableDataPartStoragePtr & data_part_storage_,
-    Type part_type_,
-    const IMergeTreeDataPart * parent_part_)
-    : DataPartStorageHolder(data_part_storage_)
-    , storage(storage_)
-    , name(name_)
-    , info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
-    , index_granularity_info(storage_, part_type_)
-    , part_type(part_type_)
-    , parent_part(parent_part_)
-    , use_metadata_cache(storage.use_metadata_cache)
-{
-    if (parent_part)
-        state = MergeTreeDataPartState::Active;
-
-    incrementStateMetric(state);
-    incrementTypeMetric(part_type);
-
-    minmax_idx = std::make_shared<MinMaxIndex>();
-
-    initializeIndexGranularityInfo();
-    initializePartMetadataManager();
-}
-
-IMergeTreeDataPart::IMergeTreeDataPart(
-    const MergeTreeData & storage_,
-    const String & name_,
     const MergeTreePartInfo & info_,
     const MutableDataPartStoragePtr & data_part_storage_,
     Type part_type_,
@@ -374,7 +346,7 @@ String IMergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) c
         return new_part_info.getPartNameV0(min_date, max_date);
     }
     else
-        return new_part_info.getPartName();
+        return new_part_info.getPartNameV1();
 }
 
 std::optional<size_t> IMergeTreeDataPart::getColumnPosition(const String & column_name) const
@@ -442,10 +414,11 @@ std::pair<time_t, time_t> IMergeTreeDataPart::getMinMaxTime() const
 }
 
 
-void IMergeTreeDataPart::setColumns(const NamesAndTypesList & new_columns, const SerializationInfoByName & new_infos)
+void IMergeTreeDataPart::setColumns(const NamesAndTypesList & new_columns, const SerializationInfoByName & new_infos, int32_t metadata_version_)
 {
     columns = new_columns;
     serialization_infos = new_infos;
+    metadata_version = metadata_version_;
 
     column_name_to_position.clear();
     column_name_to_position.reserve(new_columns.size());
@@ -470,6 +443,37 @@ void IMergeTreeDataPart::setColumns(const NamesAndTypesList & new_columns, const
     }
 
     columns_description = ColumnsDescription(columns);
+    columns_description_with_collected_nested = ColumnsDescription(Nested::collect(columns));
+}
+
+String IMergeTreeDataPart::getProjectionName() const
+{
+    if (!parent_part)
+        return "";
+
+    if (!temp_projection_block_number)
+        return name;
+
+    if (!is_temp)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Temporary block number {} is set but projection part {} is not temporary", *temp_projection_block_number, name);
+
+    String suffix = "_" + std::to_string(*temp_projection_block_number);
+
+    if (!name.ends_with(suffix))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Temporary block number {} is set but projection part {} doesn't have it in name's suffix", *temp_projection_block_number, name);
+
+    auto pos = name.rfind(suffix);
+    chassert(pos != std::string::npos);
+    return name.substr(0, pos);
+}
+
+StorageMetadataPtr IMergeTreeDataPart::getMetadataSnapshot() const
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    if (!parent_part)
+        return metadata_snapshot;
+
+    return metadata_snapshot->projections.get(getProjectionName()).metadata;
 }
 
 NameAndTypePair IMergeTreeDataPart::getColumn(const String & column_name) const
@@ -517,9 +521,14 @@ void IMergeTreeDataPart::removeIfNeeded()
             String file_name = fileName(getDataPartStorage().getPartDirectory());
 
             if (file_name.empty())
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "relative_path {} of part {} is invalid or not set", getDataPartStorage().getPartDirectory(), name);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "relative_path {} of part {} is invalid or not set",
+                                getDataPartStorage().getPartDirectory(), name);
 
-            if (!startsWith(file_name, "tmp") && !endsWith(file_name, ".tmp_proj"))
+            fs::path part_directory_path = getDataPartStorage().getRelativePath();
+            if (part_directory_path.filename().empty())
+                part_directory_path = part_directory_path.parent_path();
+            bool is_moving_part = part_directory_path.parent_path().filename() == "moving";
+            if (!startsWith(file_name, "tmp") && !endsWith(file_name, ".tmp_proj") && !is_moving_part)
             {
                 LOG_ERROR(
                     storage.log,
@@ -537,6 +546,29 @@ void IMergeTreeDataPart::removeIfNeeded()
             LOG_TRACE(storage.log, "Removed part from old location {}", path);
         }
     }
+    catch (const Exception &)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__, fmt::format("while removing part {} with path {}", name, path));
+
+        /// proton: starts. proton does not support KeeperServer
+#if 0
+        /// In this case we want to avoid assertions, because such errors are unavoidable in setup
+        /// with zero-copy replication.
+        if (const auto * keeper_exception = dynamic_cast<const Coordination::Exception *>(&ex))
+        {
+            if (Coordination::isHardwareError(keeper_exception->code))
+                return;
+        }
+#endif
+        /// proton; ends
+
+        /// FIXME If part it temporary, then directory will not be removed for 1 day (temporary_directories_lifetime).
+        /// If it's tmp_merge_<part_name> or tmp_fetch_<part_name>,
+        /// then all future attempts to execute part producing operation will fail with "directory already exists".
+        assert(!is_temp);
+        assert(state != MergeTreeDataPartState::DeleteOnDestroy);
+        assert(state != MergeTreeDataPartState::Temporary);
+    }
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__, fmt::format("while removing part {} with path {}", name, path));
@@ -544,6 +576,8 @@ void IMergeTreeDataPart::removeIfNeeded()
         /// FIXME If part it temporary, then directory will not be removed for 1 day (temporary_directories_lifetime).
         /// If it's tmp_merge_<part_name> or tmp_fetch_<part_name>,
         /// then all future attempts to execute part producing operation will fail with "directory already exists".
+        ///
+        /// For remote disks this issue is really frequent, so we don't about server
     }
 }
 
@@ -575,15 +609,15 @@ void IMergeTreeDataPart::assertState(const std::initializer_list<MergeTreeDataPa
             states_str += ' ';
         }
 
-        throw Exception("Unexpected state of part " + getNameWithState() + ". Expected: " + states_str, ErrorCodes::NOT_FOUND_EXPECTED_DATA_PART);
+        throw Exception(ErrorCodes::NOT_FOUND_EXPECTED_DATA_PART, "Unexpected state of part {}. Expected: {}", getNameWithState(), states_str);
     }
 }
 
 void IMergeTreeDataPart::assertOnDisk() const
 {
     if (!isStoredOnDisk())
-        throw Exception("Data part '" + name + "' with type '"
-            + getType().toString() + "' is not stored on disk", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Data part '{}' with type '{}' is not stored on disk",
+            name, getType().toString());
 }
 
 
@@ -622,7 +656,8 @@ String IMergeTreeDataPart::getColumnNameWithMinimumCompressedSize(bool with_subc
     }
 
     if (!minimum_size_column)
-        throw Exception("Could not find a column of minimum size in MergeTree, part " + getDataPartStorage().getFullPath(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Could not find a column of minimum size in MergeTree, part {}",
+                        getDataPartStorage().getFullPath());
 
     return *minimum_size_column;
 }
@@ -649,7 +684,7 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
         if (!parent_part)
         {
             loadTTLInfos();
-            loadProjections(require_columns_checksums, check_consistency);
+            loadProjections(require_columns_checksums, check_consistency, false /* if_not_loaded */);
         }
 
         if (check_consistency)
@@ -684,6 +719,7 @@ void IMergeTreeDataPart::appendFilesOfColumnsChecksumsIndexes(Strings & files, b
         appendFilesOfPartitionAndMinMaxIndex(files);
         appendFilesOfTTLInfos(files);
         appendFilesOfDefaultCompressionCodec(files);
+        appendFilesOfMetadataVersion(files);
     }
 
     if (!parent_part && include_projection)
@@ -698,25 +734,52 @@ void IMergeTreeDataPart::appendFilesOfColumnsChecksumsIndexes(Strings & files, b
     }
 }
 
-void IMergeTreeDataPart::loadProjections(bool require_columns_checksums, bool check_consistency)
+MergeTreeDataPartBuilder IMergeTreeDataPart::getProjectionPartBuilder(const String & projection_name, bool is_temp_projection)
+{
+    const char * projection_extension = is_temp_projection ? ".tmp_proj" : ".proj";
+    auto projection_storage = getDataPartStorage().getProjection(projection_name + projection_extension, !is_temp_projection);
+    MergeTreeDataPartBuilder builder(storage, projection_name, projection_storage);
+    return builder.withPartInfo({"all", 0, 0, 0}).withParentPart(this);
+}
+
+void IMergeTreeDataPart::addProjectionPart(
+    const String & projection_name,
+    std::shared_ptr<IMergeTreeDataPart> && projection_part)
+{
+    if (hasProjection(projection_name))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Projection part {} in part {} is already loaded. This is a bug", projection_name, name);
+
+    projection_parts[projection_name] = std::move(projection_part);
+}
+
+void IMergeTreeDataPart::loadProjections(bool require_columns_checksums, bool check_consistency, bool if_not_loaded)
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     for (const auto & projection : metadata_snapshot->projections)
     {
-        String path = /*getRelativePath() + */ projection.name + ".proj";
+        auto path = projection.name + ".proj";
         if (getDataPartStorage().exists(path))
         {
-            auto projection_part_storage = getDataPartStorage().getProjection(projection.name + ".proj");
-            auto part = storage.createPart(projection.name, {"all", 0, 0, 0}, projection_part_storage, this);
-            part->loadColumnsChecksumsIndexes(require_columns_checksums, check_consistency);
-            projection_parts.emplace(projection.name, std::move(part));
+            if (hasProjection(projection.name))
+            {
+                if (!if_not_loaded)
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR, "Projection part {} in part {} is already loaded. This is a bug", projection.name, name);
+            }
+            else
+            {
+                auto part = getProjectionPartBuilder(projection.name).withPartFormatFromDisk().build();
+                part->loadColumnsChecksumsIndexes(require_columns_checksums, check_consistency);
+                addProjectionPart(projection.name, std::move(part));
+            }
         }
     }
 }
 
 void IMergeTreeDataPart::loadIndexGranularity()
 {
-    throw Exception("Method 'loadIndexGranularity' is not implemented for part with type " + getType().toString(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                    "Method 'loadIndexGranularity' is not implemented for part with type {}", getType().toString());
 }
 
 /// Currently we don't cache mark files of part, because cache other meta files is enough to speed up loading.
@@ -728,11 +791,9 @@ void IMergeTreeDataPart::loadIndex()
 {
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
-        throw Exception("Index granularity is not loaded before index loading", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Index granularity is not loaded before index loading");
 
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    if (parent_part)
-        metadata_snapshot = metadata_snapshot->projections.get(name).metadata;
+    auto metadata_snapshot = getMetadataSnapshot();
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     size_t key_size = primary_key.column_names.size();
 
@@ -764,13 +825,12 @@ void IMergeTreeDataPart::loadIndex()
         {
             loaded_index[i]->protect();
             if (loaded_index[i]->size() != marks_count)
-                throw Exception("Cannot read all data from index file " + index_path
-                    + "(expected size: " + toString(marks_count) + ", read: " + toString(loaded_index[i]->size()) + ")",
-                    ErrorCodes::CANNOT_READ_ALL_DATA);
+                throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "Cannot read all data from index file {}(expected size: "
+                    "{}, read: {})", index_path, marks_count, loaded_index[i]->size());
         }
 
         if (!index_file->eof())
-            throw Exception("Index file " + index_path + " is unexpectedly long", ErrorCodes::EXPECTED_END_OF_FILE);
+            throw Exception(ErrorCodes::EXPECTED_END_OF_FILE, "Index file {} is unexpectedly long", index_path);
 
         index.assign(std::make_move_iterator(loaded_index.begin()), std::make_move_iterator(loaded_index.end()));
     }
@@ -778,13 +838,7 @@ void IMergeTreeDataPart::loadIndex()
 
 void IMergeTreeDataPart::appendFilesOfIndex(Strings & files) const
 {
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    if (parent_part)
-        metadata_snapshot = metadata_snapshot->projections.has(name) ? metadata_snapshot->projections.get(name).metadata : nullptr;
-
-    if (!metadata_snapshot)
-        return;
-
+    auto metadata_snapshot = getMetadataSnapshot();
     if (metadata_snapshot->hasPrimaryKey())
     {
         String index_name = "primary" + getIndexExtensionFromFilesystem(getDataPartStorage()).value();
@@ -804,6 +858,9 @@ NameSet IMergeTreeDataPart::getFileNamesWithoutChecksums() const
 
     if (getDataPartStorage().exists(TXN_VERSION_METADATA_FILE_NAME))
         result.emplace(TXN_VERSION_METADATA_FILE_NAME);
+
+    if (getDataPartStorage().exists(METADATA_VERSION_FILE_NAME))
+        result.emplace(METADATA_VERSION_FILE_NAME);
 
     return result;
 }
@@ -863,6 +920,8 @@ void IMergeTreeDataPart::writeMetadata(const String & filename, const WriteSetti
     auto & data_part_storage = getDataPartStorage();
     auto tmp_filename = filename + ".tmp";
 
+    data_part_storage.beginTransaction();
+
     try
     {
         {
@@ -878,15 +937,20 @@ void IMergeTreeDataPart::writeMetadata(const String & filename, const WriteSetti
         try
         {
             if (data_part_storage.exists(tmp_filename))
+            {
                 data_part_storage.removeFile(tmp_filename);
+                data_part_storage.commitTransaction();
+            }
         }
         catch (...)
         {
-            tryLogCurrentException("DataPartStorageOnDisk");
+            tryLogCurrentException("DataPartStorageOnDiskFull");
         }
 
         throw;
     }
+
+    data_part_storage.commitTransaction();
 }
 
 void IMergeTreeDataPart::writeChecksums(const MergeTreeDataPartChecksums & checksums_, const WriteSettings & settings)
@@ -939,7 +1003,7 @@ void IMergeTreeDataPart::writeVersionMetadata(const VersionMetadata & version_, 
         }
         catch (...)
         {
-            tryLogCurrentException("DataPartStorageOnDisk");
+            tryLogCurrentException("DataPartStorageOnDiskFull");
         }
 
         throw;
@@ -971,9 +1035,20 @@ void IMergeTreeDataPart::removeVersionMetadata()
     getDataPartStorage().removeFileIfExists("txn_version.txt");
 }
 
+
+void IMergeTreeDataPart::removeMetadataVersion()
+{
+    getDataPartStorage().removeFileIfExists(METADATA_VERSION_FILE_NAME);
+}
+
 void IMergeTreeDataPart::appendFilesOfDefaultCompressionCodec(Strings & files)
 {
     files.push_back(DEFAULT_COMPRESSION_CODEC_FILE_NAME);
+}
+
+void IMergeTreeDataPart::appendFilesOfMetadataVersion(Strings & files)
+{
+    files.push_back(METADATA_VERSION_FILE_NAME);
 }
 
 CompressionCodecPtr IMergeTreeDataPart::detectDefaultCompressionCodec() const
@@ -997,11 +1072,14 @@ CompressionCodecPtr IMergeTreeDataPart::detectDefaultCompressionCodec() const
             {
                 if (path_to_data_file.empty())
                 {
-                    String candidate_path = /*fs::path(getRelativePath()) */ (ISerialization::getFileNameForStream(part_column, substream_path) + ".bin");
+                    auto stream_name = getStreamNameForColumn(part_column, substream_path, ".bin", getDataPartStorage());
+                    if (!stream_name)
+                        return;
 
+                    auto file_name = *stream_name + ".bin";
                     /// We can have existing, but empty .bin files. Example: LowCardinality(Nullable(...)) columns and column_name.dict.null.bin file.
-                    if (getDataPartStorage().exists(candidate_path) && getDataPartStorage().getFileSize(candidate_path) != 0)
-                        path_to_data_file = candidate_path;
+                    if (getDataPartStorage().getFileSize(file_name) != 0)
+                        path_to_data_file = file_name;
                 }
             });
 
@@ -1036,28 +1114,25 @@ void IMergeTreeDataPart::loadPartitionAndMinMaxIndex()
     }
     else
     {
-        if (!parent_part)
-            partition.load(storage, metadata_manager);
+        if (parent_part)
+        {
+            /// Projection parts don't have minmax_idx, and it's always initialized
+            minmax_idx->initialized = !isEmpty();
+            return;
+        }
+
+        partition.load(getMetadataSnapshot(), metadata_manager, storage.getContext());
 
         if (!isEmpty())
-        {
-            if (parent_part)
-                // projection parts don't have minmax_idx, and it's always initialized
-                minmax_idx->initialized = true;
-            else
-                minmax_idx->load(storage, metadata_manager);
-        }
-        if (parent_part)
-            return;
+            minmax_idx->load(getMetadataSnapshot(), metadata_manager);
     }
 
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     String calculated_partition_id = partition.getID(metadata_snapshot->getPartitionKey().sample_block);
     if (calculated_partition_id != info.partition_id)
-        throw Exception(
-            "While loading part " + getDataPartStorage().getFullPath() + ": calculated partition ID: " + calculated_partition_id
-            + " differs from partition ID in part name: " + info.partition_id,
-            ErrorCodes::CORRUPTED_DATA);
+        throw Exception(ErrorCodes::CORRUPTED_DATA, "While loading part {}: "
+            "calculated partition ID: {} differs from partition ID in part name: {}",
+            getDataPartStorage().getFullPath(), calculated_partition_id, info.partition_id);
 }
 
 void IMergeTreeDataPart::appendFilesOfPartitionAndMinMaxIndex(Strings & files) const
@@ -1124,7 +1199,7 @@ void IMergeTreeDataPart::loadRowsCount()
     {
         bool exists = metadata_manager->exists("count.txt");
         if (!exists)
-            throw Exception("No count.txt in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
+            throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No count.txt in part {}", name);
 
         read_rows_count();
 
@@ -1146,9 +1221,10 @@ void IMergeTreeDataPart::loadRowsCount()
                 if (rows_in_column != rows_count)
                 {
                     throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "Column {} has rows count {} according to size in memory "
-                        "and size of single value, but data part {} has {} rows", backQuote(column.name), rows_in_column, name, rows_count);
+                                    ErrorCodes::LOGICAL_ERROR,
+                                    "Column {} has rows count {} according to size in memory "
+                                    "and size of single value, but data part {} has {} rows",
+                                    backQuote(column.name), rows_in_column, name, rows_count);
                 }
 
                 size_t last_possibly_incomplete_mark_rows = index_granularity.getLastNonFinalMarkRows();
@@ -1158,20 +1234,25 @@ void IMergeTreeDataPart::loadRowsCount()
                 if (rows_in_column < index_granularity_without_last_mark)
                 {
                     throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "Column {} has rows count {} according to size in memory "
-                        "and size of single value, but index granularity in part {} without last mark has {} rows, which is more than in column",
-                        backQuote(column.name), rows_in_column, name, index_granularity.getTotalRows());
+                                    ErrorCodes::LOGICAL_ERROR,
+                                    "Column {} has rows count {} according to size in memory "
+                                    "and size of single value, "
+                                    "but index granularity in part {} without last mark has {} rows, which "
+                                    "is more than in column",
+                                    backQuote(column.name), rows_in_column, name, index_granularity.getTotalRows());
                 }
 
                 /// In last mark we actually written less or equal rows than stored in last mark of index granularity
                 if (rows_in_column - index_granularity_without_last_mark > last_possibly_incomplete_mark_rows)
                 {
                      throw Exception(
-                        ErrorCodes::LOGICAL_ERROR,
-                        "Column {} has rows count {} in last mark according to size in memory "
-                        "and size of single value, but index granularity in part {} in last mark has {} rows which is less than in column",
-                        backQuote(column.name), rows_in_column - index_granularity_without_last_mark, name, last_possibly_incomplete_mark_rows);
+                                     ErrorCodes::LOGICAL_ERROR,
+                                     "Column {} has rows count {} in last mark according to size in memory "
+                                     "and size of single value, "
+                                     "but index granularity in part {} "
+                                     "in last mark has {} rows which is less than in column",
+                                     backQuote(column.name), rows_in_column - index_granularity_without_last_mark,
+                                     name, last_possibly_incomplete_mark_rows);
                 }
             }
         }
@@ -1200,24 +1281,22 @@ void IMergeTreeDataPart::loadRowsCount()
 
             if (column_size % sizeof_field != 0)
             {
-                throw Exception(
-                    "Uncompressed size of column " + column.name + "(" + toString(column_size)
-                    + ") is not divisible by the size of value (" + toString(sizeof_field) + ")",
-                    ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR,
+                                "Uncompressed size of column {}({}) is not divisible by the size of value ({})",
+                                column.name, column_size, sizeof_field);
             }
 
             size_t last_mark_index_granularity = index_granularity.getLastNonFinalMarkRows();
             size_t rows_approx = index_granularity.getTotalRows();
             if (!(rows_count <= rows_approx && rows_approx < rows_count + last_mark_index_granularity))
-                throw Exception(
-                    "Unexpected size of column " + column.name + ": " + toString(rows_count) + " rows, expected "
-                    + toString(rows_approx) + "+-" + toString(last_mark_index_granularity) + " rows according to the index",
-                    ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected size of column {}: "
+                    "{} rows, expected {}+-{} rows according to the index",
+                    column.name, rows_count, rows_approx, toString(last_mark_index_granularity));
 
             return;
         }
 
-        throw Exception("Data part doesn't contain fixed size column (even Date column)", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Data part doesn't contain fixed size column (even Date column)");
     }
 }
 
@@ -1245,11 +1324,11 @@ void IMergeTreeDataPart::loadTTLInfos()
             }
             catch (const JSONException &)
             {
-                throw Exception("Error while parsing file ttl.txt in part: " + name, ErrorCodes::BAD_TTL_FILE);
+                throw Exception(ErrorCodes::BAD_TTL_FILE, "Error while parsing file ttl.txt in part: {}", name);
             }
         }
         else
-            throw Exception("Unknown ttl format version: " + toString(format_version), ErrorCodes::BAD_TTL_FILE);
+            throw Exception(ErrorCodes::BAD_TTL_FILE, "Unknown ttl format version: {}", toString(format_version));
     }
 }
 
@@ -1267,7 +1346,7 @@ void IMergeTreeDataPart::loadUUID()
         auto in = metadata_manager->read(UUID_FILE_NAME);
         readText(uuid, *in);
         if (uuid == UUIDHelpers::Nil)
-            throw Exception("Unexpected empty " + String(UUID_FILE_NAME) + " in part: " + name, ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected empty {} in part: {}", String(UUID_FILE_NAME), name);
     }
 }
 
@@ -1279,28 +1358,28 @@ void IMergeTreeDataPart::appendFilesOfUUID(Strings & files)
 void IMergeTreeDataPart::loadColumns(bool require)
 {
     String path = fs::path(getDataPartStorage().getRelativePath()) / "columns.txt";
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    if (parent_part)
-        metadata_snapshot = metadata_snapshot->projections.get(name).metadata;
-    NamesAndTypesList loaded_columns;
 
-    bool exists = metadata_manager->exists("columns.txt");
-    if (!exists)
+    NamesAndTypesList loaded_columns;
+    bool is_readonly_storage = getDataPartStorage().isReadonly();
+
+    if (!metadata_manager->exists("columns.txt"))
     {
         /// We can get list of columns only from columns.txt in compact parts.
         if (require || part_type == Type::Compact)
-            throw Exception("No columns.txt in part " + name + ", expected path " + path + " on drive " + getDataPartStorage().getDiskName(),
-                ErrorCodes::NO_FILE_IN_DATA_PART);
+            throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No columns.txt in part {}, expected path {} on drive {}",
+                name, path, getDataPartStorage().getDiskName());
 
+        auto metadata_snapshot = getMetadataSnapshot();
         /// If there is no file with a list of columns, write it down.
-        for (const NameAndTypePair & column : metadata_snapshot->getColumns().getAllPhysical())
-            if (getDataPartStorage().exists(getFileNameForColumn(column) + ".bin"))
+        for (const auto & column : metadata_snapshot->getColumns().getAllPhysical())
+            if (getFileNameForColumn(column))
                 loaded_columns.push_back(column);
 
         if (columns.empty())
-            throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
+            throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No columns in part {}", name);
 
-        writeColumns(loaded_columns, {});
+        if (!is_readonly_storage)
+            writeColumns(loaded_columns, {});
     }
     else
     {
@@ -1322,14 +1401,37 @@ void IMergeTreeDataPart::loadColumns(bool require)
     };
 
     SerializationInfoByName infos(loaded_columns, settings);
-    exists =  metadata_manager->exists(SERIALIZATION_FILE_NAME);
-    if (exists)
+    if (metadata_manager->exists(SERIALIZATION_FILE_NAME))
     {
         auto in = metadata_manager->read(SERIALIZATION_FILE_NAME);
         infos.readJSON(*in);
     }
 
-    setColumns(loaded_columns, infos);
+    int32_t loaded_metadata_version;
+    if (metadata_manager->exists(METADATA_VERSION_FILE_NAME))
+    {
+        auto in = metadata_manager->read(METADATA_VERSION_FILE_NAME);
+        readIntText(loaded_metadata_version, *in);
+    }
+    else
+    {
+        auto storage_metdata_snapshot = storage.getInMemoryMetadataPtr();
+        loaded_metadata_version = storage_metdata_snapshot->getMetadataVersion();
+        old_part_with_no_metadata_version_on_disk = true;
+        if (storage.supportsReplication())
+            LOG_WARNING(storage.log, "Part {} doesn't have metadata version on disk, setting it to {}. "
+                    "It's okay if the part was created by an old version of ClickHouse", name, loaded_metadata_version);
+    }
+
+    setColumns(loaded_columns, infos, loaded_metadata_version);
+}
+
+
+/// Project part / part with project parts / compact part doesn't support LWD.
+bool IMergeTreeDataPart::supportLightweightDeleteMutate() const
+{
+    return (part_type == MergeTreeDataPartType::Wide || part_type == MergeTreeDataPartType::Compact) &&
+        parent_part == nullptr && projection_parts.empty();
 }
 
 void IMergeTreeDataPart::assertHasVersionMetadata(MergeTreeTransaction * txn) const
@@ -1344,12 +1446,12 @@ void IMergeTreeDataPart::assertHasVersionMetadata(MergeTreeTransaction * txn) co
     assert(!txn || getDataPartStorage().exists(TXN_VERSION_METADATA_FILE_NAME));
 }
 
-void IMergeTreeDataPart::storeVersionMetadata() const
+void IMergeTreeDataPart::storeVersionMetadata(bool force) const
 {
-    if (!wasInvolvedInTransaction())
+    if (!wasInvolvedInTransaction() && !force)
         return;
 
-    LOG_TEST(storage.log, "Writing version for {} (creation: {}, removal {})", name, version.creation_tid, version.removal_tid);
+    LOG_TEST(storage.log, "Writing version for {} (creation: {}, removal {}, creation csn {})", name, version.creation_tid, version.removal_tid, version.creation_csn);
     assert(storage.supportsTransactions());
 
     if (!isStoredOnDisk())
@@ -1381,7 +1483,7 @@ void IMergeTreeDataPart::appendCSNToVersionMetadata(VersionMetadata::WhichCSN wh
 void IMergeTreeDataPart::appendRemovalTIDToVersionMetadata(bool clear) const
 {
     chassert(!version.creation_tid.isEmpty());
-    chassert(version.removal_csn == 0);
+    chassert(version.removal_csn == 0 || (version.removal_csn == Tx::PrehistoricCSN && version.removal_tid.isPrehistoric()));
     chassert(!version.removal_tid.isEmpty());
     chassert(isStoredOnDisk());
 
@@ -1389,6 +1491,12 @@ void IMergeTreeDataPart::appendRemovalTIDToVersionMetadata(bool clear) const
     {
         /// Metadata file probably does not exist, because it was not written on part creation, because it was created without a transaction.
         /// Let's create it (if needed). Concurrent writes are not possible, because creation_csn is prehistoric and we own removal_tid_lock.
+
+        /// It can happen that VersionMetadata::isVisible sets creation_csn to PrehistoricCSN when creation_tid is Prehistoric
+        /// In order to avoid a race always write creation_csn as PrehistoricCSN for Prehistoric creation_tid
+        assert(version.creation_csn == Tx::UnknownCSN || version.creation_csn == Tx::PrehistoricCSN);
+        version.creation_csn.store(Tx::PrehistoricCSN);
+
         storeVersionMetadata();
         return;
     }
@@ -1529,8 +1637,8 @@ bool IMergeTreeDataPart::assertHasValidVersionMetadata() const
     {
         WriteBufferFromOwnString expected;
         version.write(expected);
-        tryLogCurrentException(storage.log, fmt::format("File {} contains:\n{}\nexpected:\n{}\nlock: {}",
-                                                        TXN_VERSION_METADATA_FILE_NAME, content, expected.str(), version.removal_tid_lock));
+        tryLogCurrentException(storage.log, fmt::format("File {} contains:\n{}\nexpected:\n{}\nlock: {}\nname: {}",
+                                                        TXN_VERSION_METADATA_FILE_NAME, content, expected.str(), version.removal_tid_lock, name));
         return false;
     }
 }
@@ -1566,7 +1674,7 @@ try
 
     metadata_manager->deleteAll(true);
     metadata_manager->assertAllDeleted(true);
-    getDataPartStorage().rename(to.parent_path(), to.filename(), storage.log, remove_new_dir_if_exists, fsync_dir);
+    getDataPartStorage().rename(to.parent_path(), to.filename(), storage.log.load(), remove_new_dir_if_exists, fsync_dir);
     metadata_manager->updateAll(true);
 
     auto new_projection_root_path = to.string();
@@ -1613,9 +1721,9 @@ void IMergeTreeDataPart::initializePartMetadataManager()
 
 void IMergeTreeDataPart::initializeIndexGranularityInfo()
 {
-    auto mrk_ext = MergeTreeIndexGranularityInfo::getMarksExtensionFromFilesystem(getDataPartStorage());
-    if (mrk_ext)
-        index_granularity_info = MergeTreeIndexGranularityInfo(storage, MarkType{*mrk_ext});
+    auto mrk_type = MergeTreeIndexGranularityInfo::getMarksTypeFromFilesystem(getDataPartStorage());
+    if (mrk_type)
+        index_granularity_info = MergeTreeIndexGranularityInfo(storage, *mrk_type);
     else
         index_granularity_info = MergeTreeIndexGranularityInfo(storage, part_type);
 }
@@ -1655,7 +1763,8 @@ void IMergeTreeDataPart::remove()
         projection_checksums.emplace_back(IDataPartStorage::ProjectionChecksums{.name = p_name, .checksums = projection_part->checksums});
     }
 
-    getDataPartStorage().remove(std::move(can_remove_callback), checksums, projection_checksums, is_temp, getState(), storage.log);
+    bool is_temporary_part = is_temp || state == MergeTreeDataPartState::Temporary;
+    getDataPartStorage().remove(std::move(can_remove_callback), checksums, projection_checksums, is_temporary_part, storage.log.load());
 }
 
 std::optional<String> IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix, bool detached, bool broken) const
@@ -1672,7 +1781,7 @@ std::optional<String> IMergeTreeDataPart::getRelativePathForPrefix(const String 
     if (detached && parent_part)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot detach projection");
 
-    return getDataPartStorage().getRelativePathForPrefix(storage.log, prefix, detached, broken);
+    return getDataPartStorage().getRelativePathForPrefix(storage.log.load(), prefix, detached, broken);
 }
 
 std::optional<String> IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix, bool broken) const
@@ -1695,82 +1804,94 @@ void IMergeTreeDataPart::renameToDetached(const String & prefix)
     part_is_probably_removed_from_disk = true;
 }
 
-void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
+DataPartStoragePtr IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const StorageMetadataPtr & /*metadata_snapshot*/) const
 {
-    auto storage_settings = storage.getSettings();
-
-    /// In case of zero-copy replication we copy directory instead of hardlinks
-    /// because hardlinks tracking doesn't work for detached parts.
-    bool copy_instead_of_hardlink = isStoredOnRemoteDiskWithZeroCopySupport() && storage.supportsReplication() && storage_settings->allow_remote_fs_zero_copy_replication;
-
     /// Avoid unneeded duplicates of broken parts if we try to detach the same broken part multiple times.
     /// Otherwise it may pollute detached/ with dirs with _tryN suffix and we will fail to remove broken part after 10 attempts.
     bool broken = !prefix.empty();
     auto maybe_path_in_detached = getRelativePathForDetachedPart(prefix, broken);
     if (!maybe_path_in_detached)
-        return;
+        return nullptr;
 
-    getDataPartStorage().freeze(
+    /// In case of zero-copy replication we copy directory instead of hardlinks
+    /// because hardlinks tracking doesn't work for detached parts.
+    auto storage_settings = storage.getSettings();
+    IDataPartStorage::ClonePartParams params
+    {
+        .copy_instead_of_hardlink = isStoredOnRemoteDiskWithZeroCopySupport() && storage.supportsReplication() && storage_settings->allow_remote_fs_zero_copy_replication,
+        .make_source_readonly = true
+    };
+    return getDataPartStorage().freeze(
         storage.relative_data_path,
         *maybe_path_in_detached,
-        /*make_source_readonly*/ true,
-        {},
-        copy_instead_of_hardlink,
-        {});
+        Context::getGlobalContextInstance()->getReadSettings(),
+        Context::getGlobalContextInstance()->getWriteSettings(),
+        /*save_metadata_callback=*/ {},
+        params);
 }
 
-MutableDataPartStoragePtr IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const
+MutableDataPartStoragePtr IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & directory_name, const ReadSettings & read_settings, const WriteSettings & write_settings) const
 {
     assertOnDisk();
 
     if (disk->getName() == getDataPartStorage().getDiskName())
-        throw Exception("Can not clone data part " + name + " to same disk " + getDataPartStorage().getDiskName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not clone data part {} to same disk {}", name, getDataPartStorage().getDiskName());
     if (directory_name.empty())
-        throw Exception("Can not clone data part " + name + " to empty directory.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not clone data part {} to empty directory.", name);
 
     String path_to_clone = fs::path(storage.relative_data_path) / directory_name / "";
-    return getDataPartStorage().clonePart(path_to_clone, getDataPartStorage().getPartDirectory(), disk, storage.log);
+    return getDataPartStorage().clonePart(path_to_clone, getDataPartStorage().getPartDirectory(), disk, read_settings, write_settings, storage.log.load());
+}
+
+UInt64 IMergeTreeDataPart::getIndexSizeFromFile() const
+{
+    auto metadata_snapshot = getMetadataSnapshot();
+    const auto & pk = metadata_snapshot->getPrimaryKey();
+
+    if (!pk.column_names.empty())
+    {
+        String file = "primary" + getIndexExtension(false);
+        if (checksums.files.contains("primary" + getIndexExtension(true)))
+            file = "primary" + getIndexExtension(true);
+        return getFileSizeOrZero(file);
+    }
+    return 0;
 }
 
 void IMergeTreeDataPart::checkConsistencyBase() const
 {
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    if (parent_part)
-        metadata_snapshot = metadata_snapshot->projections.get(name).metadata;
-    else
-    {
-        // No need to check projections here because we already did consistent checking when loading projections if necessary.
-    }
+    auto metadata_snapshot = getMetadataSnapshot();
 
     const auto & pk = metadata_snapshot->getPrimaryKey();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
+
     if (!checksums.empty())
     {
         if (!pk.column_names.empty()
             && (!checksums.files.contains("primary" + getIndexExtension(false))
                 && !checksums.files.contains("primary" + getIndexExtension(true))))
-            throw Exception("No checksum for " + toString("primary" + getIndexExtension(false)) + " or " + toString("primary" + getIndexExtension(true)),
-                            ErrorCodes::NO_FILE_IN_DATA_PART);
+            throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No checksum for {} or {}",
+                            toString("primary" + getIndexExtension(false)), toString("primary" + getIndexExtension(true)));
 
         if (storage.format_version >= MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
         {
             if (!checksums.files.contains("count.txt"))
-                throw Exception("No checksum for count.txt", ErrorCodes::NO_FILE_IN_DATA_PART);
+                throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No checksum for count.txt");
 
             if (metadata_snapshot->hasPartitionKey() && !checksums.files.contains("partition.dat"))
-                throw Exception("No checksum for partition.dat", ErrorCodes::NO_FILE_IN_DATA_PART);
+                throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No checksum for partition.dat");
 
             if (!isEmpty() && !parent_part)
             {
                 for (const String & col_name : storage.getMinMaxColumnsNames(partition_key))
                 {
                     if (!checksums.files.contains("minmax_" + escapeForFileName(col_name) + ".idx"))
-                        throw Exception("No minmax idx file checksum for column " + col_name, ErrorCodes::NO_FILE_IN_DATA_PART);
+                        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No minmax idx file checksum for column {}", col_name);
                 }
             }
         }
 
-        getDataPartStorage().checkConsistency(checksums);
+        checksums.checkSizes(getDataPartStorage());
     }
     else
     {
@@ -1811,7 +1932,7 @@ void IMergeTreeDataPart::checkConsistencyBase() const
 
 void IMergeTreeDataPart::checkConsistency(bool /* require_part_metadata */) const
 {
-    throw Exception("Method 'checkConsistency' is not implemented for part with type " + getType().toString(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'checkConsistency' is not implemented for part with type {}", getType().toString());
 }
 
 void IMergeTreeDataPart::calculateColumnsAndSecondaryIndicesSizesOnDisk()
@@ -1823,7 +1944,7 @@ void IMergeTreeDataPart::calculateColumnsAndSecondaryIndicesSizesOnDisk()
 void IMergeTreeDataPart::calculateColumnsSizesOnDisk()
 {
     if (getColumns().empty() || checksums.empty())
-        throw Exception("Cannot calculate columns sizes when columns or checksums are not initialized", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot calculate columns sizes when columns or checksums are not initialized");
 
     calculateEachColumnSizes(columns_sizes, total_columns_size);
 }
@@ -1831,7 +1952,7 @@ void IMergeTreeDataPart::calculateColumnsSizesOnDisk()
 void IMergeTreeDataPart::calculateSecondaryIndicesSizesOnDisk()
 {
     if (checksums.empty())
-        throw Exception("Cannot calculate secondary indexes sizes when columns or checksums are not initialized", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot calculate secondary indexes sizes when columns or checksums are not initialized");
 
     auto secondary_indices_descriptions = storage.getInMemoryMetadataPtr()->secondary_indices;
 
@@ -1984,9 +2105,107 @@ IMergeTreeDataPart::uint128 IMergeTreeDataPart::getActualChecksumByFile(const St
     return in_hash.getHash();
 }
 
+std::optional<String> IMergeTreeDataPart::getStreamNameOrHash(
+    const String & stream_name,
+    const Checksums & checksums_)
+{
+    if (checksums_.files.contains(stream_name + ".bin"))
+        return stream_name;
+
+    auto hash = sipHash128String(stream_name);
+    if (checksums_.files.contains(hash + ".bin"))
+        return hash;
+
+    return {};
+}
+
+std::optional<String> IMergeTreeDataPart::getStreamNameOrHash(
+    const String & stream_name,
+    const String & extension,
+    const IDataPartStorage & storage_)
+{
+    if (storage_.exists(stream_name + extension))
+        return stream_name;
+
+    auto hash = sipHash128String(stream_name);
+    if (storage_.exists(hash + extension))
+        return hash;
+
+    return {};
+}
+
+std::optional<String> IMergeTreeDataPart::getStreamNameForColumn(
+    const String & column_name,
+    const ISerialization::SubstreamPath & substream_path,
+    const Checksums & checksums_)
+{
+    auto stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
+    return getStreamNameOrHash(stream_name, checksums_);
+}
+
+std::optional<String> IMergeTreeDataPart::getStreamNameForColumn(
+    const NameAndTypePair & column,
+    const ISerialization::SubstreamPath & substream_path,
+    const Checksums & checksums_)
+{
+    auto stream_name = ISerialization::getFileNameForStream(column, substream_path);
+    return getStreamNameOrHash(stream_name, checksums_);
+}
+
+std::optional<String> IMergeTreeDataPart::getStreamNameForColumn(
+    const String & column_name,
+    const ISerialization::SubstreamPath & substream_path,
+    const String & extension,
+    const IDataPartStorage & storage_)
+{
+    auto stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
+    return getStreamNameOrHash(stream_name, extension, storage_);
+}
+
+std::optional<String> IMergeTreeDataPart::getStreamNameForColumn(
+    const NameAndTypePair & column,
+    const ISerialization::SubstreamPath & substream_path,
+    const String & extension,
+    const IDataPartStorage & storage_)
+{
+    auto stream_name = ISerialization::getFileNameForStream(column, substream_path);
+    return getStreamNameOrHash(stream_name, extension, storage_);
+}
+
 std::unordered_map<String, IMergeTreeDataPart::uint128> IMergeTreeDataPart::checkMetadata() const
 {
     return metadata_manager->check();
+}
+
+ColumnPtr IMergeTreeDataPart::getColumnSample(const NameAndTypePair & column) const
+{
+    const size_t total_mark = getMarksCount();
+    /// If column doesn't have dynamic subcolumns or part has no data, just create column using it's type.
+    if (!column.type->hasDynamicSubcolumns() || !total_mark)
+        return column.type->createColumn();
+
+    /// Otherwise, read sample column with 0 rows from the part, so it will load dynamic structure.
+    NamesAndTypesList cols;
+    cols.emplace_back(column);
+
+    StorageMetadataPtr metadata_ptr = storage.getInMemoryMetadataPtr();
+    StorageSnapshotPtr storage_snapshot_ptr = std::make_shared<StorageSnapshot>(storage, metadata_ptr);
+
+    MergeTreeReaderPtr reader = getReader(
+        cols,
+        storage_snapshot_ptr,
+        MarkRanges{MarkRange(0, 1)},
+        /*uncompressed_cache=*/{},
+        storage.getContext()->getMarkCache().get(),
+        std::make_shared<AlterConversions>(),
+        MergeTreeReaderSettings{},
+        ValueSizeMap{},
+        ReadBufferFromFileBase::ProfileCallback{});
+
+    Columns result;
+    result.resize(1);
+    reader->readRows(0, 1, false, 0, result);
+    return result[0];
 }
 
 bool isCompactPart(const MergeTreeDataPartPtr & data_part)
@@ -2011,8 +2230,7 @@ std::optional<std::string> getIndexExtensionFromFilesystem(const IDataPartStorag
         for (auto it = data_part_storage.iterate(); it->isValid(); it->next())
         {
             const auto & extension = fs::path(it->name()).extension();
-            if (extension == getIndexExtension(false)
-                    || extension == getIndexExtension(true))
+            if (extension == getIndexExtension(true))
                 return extension;
         }
     }
@@ -2022,6 +2240,14 @@ std::optional<std::string> getIndexExtensionFromFilesystem(const IDataPartStorag
 bool isCompressedFromIndexExtension(const String & index_extension)
 {
     return index_extension == getIndexExtension(true);
+}
+
+Strings getPartsNames(const MergeTreeDataPartsVector & parts)
+{
+    Strings part_names;
+    for (const auto & p : parts)
+        part_names.push_back(p->name);
+    return part_names;
 }
 
 /// proton: starts

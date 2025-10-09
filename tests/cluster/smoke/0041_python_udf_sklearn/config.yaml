@@ -1,0 +1,29 @@
+name: python_udf_sklearn
+description: Tests covering the python udf sklearn library
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - sklearn
+arch:
+  - x86_64
+
+setup:
+  scope: suite
+  steps:
+    # scikit-learn
+    - type: query
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'scikit-learn';
+
+    - type: wait
+      time: 15
+
+    - type: command
+      name: python-udf6-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "scikit-learn") | length > 0'
+    
+    - type: check
+      target_name: python-udf6-1
+      expected_result: ['true']

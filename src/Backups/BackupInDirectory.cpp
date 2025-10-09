@@ -4,6 +4,7 @@
 #include <Disks/DiskSelector.h>
 #include <Disks/IDisk.h>
 #include <Disks/DiskLocal.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -63,11 +64,12 @@ BackupInDirectory::BackupInDirectory(
     {
         auto fspath = fs::path{dir_path};
         if (!fspath.has_filename())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Backup {}: Path to a backup must be a directory path.", getName(), quoteString(path));
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Backup {}: Path to a backup must be a directory. but {} doesn't", getName(), quoteString(path));
         path = fspath.filename() / "";
         dir_path = fs::path(path).parent_path(); /// get path without terminating slash
         String disk_path = fspath.remove_filename();
-        disk = std::make_shared<DiskLocal>(disk_path, disk_path, 0);
+
+        disk = std::make_shared<DiskLocal>(disk_path, disk_path);
     }
 
     open();
@@ -123,9 +125,7 @@ void registerBackupEngineFile(BackupFactory & factory)
         {
             if (args.size() != 1)
             {
-                throw Exception(
-                    "Backup engine 'File' requires 1 argument (path)",
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Backup engine 'File' requires 1 argument (path)");
             }
 
             path = args[0].safeGet<String>();
@@ -137,9 +137,8 @@ void registerBackupEngineFile(BackupFactory & factory)
         {
             if (args.size() != 2)
             {
-                throw Exception(
-                    "Backup engine 'Disk' requires 2 arguments (disk_name, path)",
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Backup engine 'Disk' requires 2 arguments (disk_name, path)");
             }
 
             String disk_name = args[0].safeGet<String>();

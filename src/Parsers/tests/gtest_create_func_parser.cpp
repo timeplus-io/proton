@@ -17,6 +17,8 @@
 #include <gtest/gtest.h>
 #include <Poco/JSON/Parser.h>
 
+#include "config.h"
+
 using namespace DB;
 
 TEST(ParserCreateFunctionQuery, UDFFunction)
@@ -33,7 +35,7 @@ TEST(ParserCreateFunctionQuery, UDFFunction)
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
     EXPECT_EQ(create->getFunctionName(), "add_five");
-    EXPECT_EQ(create->lang, "JavaScript");
+    EXPECT_EQ(create->lang, ASTCreateFunctionQuery::Language::JavaScript);
     EXPECT_NE(create->function_core, nullptr);
     EXPECT_NE(create->arguments, nullptr);
 
@@ -51,7 +53,7 @@ TEST(ParserCreateFunctionQuery, UDFFunction)
     String func_str = queryToString(*create, true);
     EXPECT_EQ(
         func_str,
-        "CREATE FUNCTION add_five(value float32) RETURNS float32 AS $$\n function add_five(value){for(let "
+        "CREATE FUNCTION add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$\n function add_five(value){for(let "
         "i=0;i<value.length;i++){value[i]=value[i]+5}return value}\n$$");
 
     auto json = create->toJSON();
@@ -148,3 +150,52 @@ TEST(ParserCreateFunctionQuery, ReturnType)
         json_str,
         R"###({"function":{"name":"add_five","arguments":[{"name":"value","type":"float32"},{"name":"dt","type":"datetime64(3)"}],"type":"javascript","is_aggregation":true,"return_type":"tuple(v float64, dt datetime64(1), id string)","source":" return false;"}})###");
 }
+
+#if USE_PYTHON_UDF
+TEST(ParserCreateFunctionQuery, PythonUDF)
+{
+    String input = R"(
+CREATE OR REPLACE FUNCTION test_add_five(value int) RETURNS int LANGUAGE PYTHON AS $$
+def test_add_five(value):
+    for i in range(len(value)):
+        value[i] = value[i] + 5
+    return value
+$$;
+    )";
+    ParserCreateFunctionQuery parser;
+    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+    ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
+    EXPECT_EQ(create->getFunctionName(), "test_add_five");
+    EXPECT_EQ(create->lang, ASTCreateFunctionQuery::Language::Python);
+    EXPECT_NE(create->function_core, nullptr);
+    EXPECT_NE(create->arguments, nullptr);
+
+    String args = queryToString(*create->arguments.get(), true);
+    EXPECT_EQ(args, "(value int)");
+
+    String ret = queryToString(*create->return_type.get(), true);
+    EXPECT_EQ(ret, "int");
+
+    ASTLiteral * js_src = create->function_core->as<ASTLiteral>();
+    EXPECT_EQ(js_src->value.safeGet<String>(), "\ndef test_add_five(value):\n    for i in range(len(value)):\n        value[i] = value[i] + 5\n    return value\n");
+
+}
+
+#else
+TEST(ParserCreateFunctionQuery, NotEnablePythonUDF)
+{
+    String input = R"(
+CREATE OR REPLACE FUNCTION test_add_five(value int) RETURNS int LANGUAGE PYTHON AS $$
+def test_add_five(value):
+    for i in range(len(value)):
+        value[i] = value[i] + 5
+    return value
+$$;
+    )";
+    ParserCreateFunctionQuery parser;
+    EXPECT_ANY_THROW({
+        parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+    });
+}
+
+#endif

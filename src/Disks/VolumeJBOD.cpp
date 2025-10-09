@@ -21,15 +21,14 @@ VolumeJBOD::VolumeJBOD(
     : IVolume(name_, config, config_prefix, disk_selector)
     , disks_by_size(disks.begin(), disks.end())
 {
-    Poco::Logger * logger = &Poco::Logger::get("StorageConfiguration");
+    LoggerPtr logger = getLogger("StorageConfiguration");
 
     auto has_max_bytes = config.has(config_prefix + ".max_data_part_size_bytes");
     auto has_max_ratio = config.has(config_prefix + ".max_data_part_size_ratio");
     if (has_max_bytes && has_max_ratio)
     {
-        throw Exception(
-            "Only one of 'max_data_part_size_bytes' and 'max_data_part_size_ratio' should be specified.",
-            ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
+        throw Exception(ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG,
+                        "Only one of 'max_data_part_size_bytes' and 'max_data_part_size_ratio' should be specified.");
     }
 
     if (has_max_bytes)
@@ -40,7 +39,7 @@ VolumeJBOD::VolumeJBOD(
     {
         auto ratio = config.getDouble(config_prefix + ".max_data_part_size_ratio");
         if (ratio < 0)
-            throw Exception("'max_data_part_size_ratio' have to be not less then 0.", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
+            throw Exception(ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG, "'max_data_part_size_ratio' have to be not less then 0.");
         UInt64 sum_size = 0;
         std::vector<UInt64> sizes;
         for (const auto & disk : disks)
@@ -77,7 +76,7 @@ VolumeJBOD::VolumeJBOD(const VolumeJBOD & volume_jbod,
         DiskSelectorPtr disk_selector)
     : VolumeJBOD(volume_jbod.name, config, config_prefix, disk_selector)
 {
-    are_merges_avoided_user_override = volume_jbod.are_merges_avoided_user_override.load(std::memory_order_relaxed);
+    are_merges_avoided_user_override = volume_jbod.are_merges_avoided_user_override.load();
     last_used = volume_jbod.last_used.load(std::memory_order_relaxed);
 }
 

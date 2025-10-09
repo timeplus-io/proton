@@ -5,6 +5,8 @@
 #include <Core/ColumnNumbers.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnLowCardinality.h>
+#include <Columns/ColumnVariant.h>
+#include <Columns/ColumnDynamic.h>
 
 /// proton: starts.
 #include <DataTypes/DataTypeFactory.h>
@@ -48,6 +50,19 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t) const override
     {
         const ColumnWithTypeAndName & elem = arguments[0];
+
+        if (isVariant(elem.type) || isDynamic(elem.type))
+        {
+            const auto & column_variant = isVariant(elem.type) ? assert_cast<const ColumnVariant &>(*elem.column) : assert_cast<const ColumnDynamic &>(*elem.column).getVariantColumn();
+            const auto & discriminators = column_variant.getLocalDiscriminators();
+            auto res = DataTypeUInt8().createColumn();
+            auto & data = typeid_cast<ColumnUInt8 &>(*res).getData();
+            data.reserve(discriminators.size());
+            for (auto discr : discriminators)
+                data.push_back(discr == ColumnVariant::NULL_DISCRIMINATOR);
+            return res;
+        }
+
         if (elem.type->isLowCardinalityNullable())
         {
             const auto * low_cardinality_column = checkAndGetColumn<ColumnLowCardinality>(*elem.column);

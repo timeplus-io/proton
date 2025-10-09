@@ -1,0 +1,53 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(int), valueb array(int));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_rank(valuea array(int), valueb array(int)) RETURNS array(array(float64)) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_rank(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              df = pd.DataFrame(zip(a,b))
+              df_rank = df.rank().values.tolist()
+              res.append(df_rank)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-84-1
+    type: stream
+    query: select test_df_rank(valuea, valueb) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(float64))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb) values 
+          ([1, 2, 3], [3, 2, 1]) ([4, 5, 4], [4, 4, 5]);
+
+  - type: check
+    target_name: python-udf3-84-1
+    expected_result:
+      - [[[1.0, 3.0], [2.0, 2.0], [3.0, 1.0]]]
+      - [[[1.5, 1.5], [3.0, 1.5], [1.5, 3.0]]]

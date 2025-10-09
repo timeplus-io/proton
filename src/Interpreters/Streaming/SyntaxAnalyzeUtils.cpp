@@ -18,24 +18,25 @@ std::pair<bool, bool> analyzeSelectQueryForJoinOrAggregates(const ASTPtr & selec
 
     const auto * local_select_query = select_query->as<ASTSelectQuery>();
     if (!local_select_query)
-        throw Exception("Select query is expected.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Select query is expected.");
 
     const auto & tables = local_select_query->tables();
     if (tables && tables->children.size() >= 2)
         result.first = true;
 
     if (local_select_query->groupBy())
+    {
         result.second = true;
+    }
+    else
+    {
+        /// Check if it is global aggregate without group by
+        /// select count(*) from stream;
+        GetAggregatesVisitor::Data data;
+        GetAggregatesVisitor(data).visit(select_query);
 
-    if (result.first && result.second)
-        return result;
-
-    /// Check if it is global aggregate without group by
-    /// select count(*) from stream;
-    GetAggregatesVisitor::Data data;
-    GetAggregatesVisitor(data).visit(select_query);
-
-    result.second = !data.aggregates.empty() || !data.aggregate_overs.empty();
+        result.second = !data.aggregates.empty() || !data.window_functions.empty();
+    }
     return result;
 }
 
@@ -70,7 +71,7 @@ analyzeJoinKindAndStrictness(const ASTSelectQuery & select_query, JoinStrictness
 
     JoinKind kind = table_join.kind;
     JoinStrictness strictness = table_join.strictness;
-    if (strictness == JoinStrictness::Unspecified && kind != JoinKind::Cross)
+    if (strictness == JoinStrictness::Unspecified && !isCrossOrComma(kind))
     {
         if (default_strictness == JoinStrictness::Any)
             strictness = JoinStrictness::Any;
@@ -78,8 +79,8 @@ analyzeJoinKindAndStrictness(const ASTSelectQuery & select_query, JoinStrictness
             strictness = JoinStrictness::All;
         else
             throw Exception(
-                "Expected ANY or ALL in JOIN section, because setting (join_default_strictness) is empty",
-                DB::ErrorCodes::EXPECTED_ALL_OR_ANY);
+                DB::ErrorCodes::EXPECTED_ALL_OR_ANY,
+                "Expected ANY or ALL in JOIN section, because setting (join_default_strictness) is empty");
     }
 
     return std::make_pair(kind, strictness);

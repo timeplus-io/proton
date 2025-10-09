@@ -1,18 +1,19 @@
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 
-#include <Interpreters/Streaming/Aggregator.h>
+#include <Interpreters/Streaming/Aggregator/IAggregator.h>
 #include <Processors/Chunk.h>
 #include <Processors/Transforms/Streaming/AggregatingTransform.h>
 #include <Processors/Transforms/convertToChunk.h>
 
-namespace DB
-{
-namespace Streaming
+namespace DB::Streaming
 {
 namespace
 {
-Chunk mergeChunks(ChunkList && chunks)
+[[maybe_unused]] Chunk mergeChunks(ChunkList && chunks)
 {
+    if (chunks.empty())
+        return {};
+
     size_t total_rows = 0;
     for (auto & chunk : chunks)
         total_rows += chunk.rows();
@@ -31,158 +32,113 @@ ChunkList convertBlocksToChunks(BlocksList && blocks)
 {
     ChunkList chunks;
     for (auto & block : blocks)
+    {
+        if (block.rows() == 0)
+            continue;
+
+        auto is_retract_block = block.isRetract();
         chunks.push_back(DB::convertToChunk(std::move(block)));
+        if (is_retract_block)
+            chunks.back().setConsecutiveDataFlag();
+    }
     return chunks;
 }
 
-ChunkList convertToChunksImpl(AggregatedDataVariants & data, const AggregatingTransformParams & params, ConvertType type)
+ChunkList
+convertToChunksImpl(IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, AggregatingConvertParams & cparams)
 {
-    if (data.empty())
+    if (data_variants.empty())
         return {};
 
-    BlocksList blocks;
-    switch (type)
-    {
-        case ConvertType::Updates:
-        {
-            blocks = params.aggregator.convertUpdatesToBlocks(data);
-            break;
-        }
-        case ConvertType::Retract:
-        {
-            blocks = params.aggregator.convertRetractToBlocks(data);
-            break;
-        }
-        case ConvertType::Normal:
-        {
-            blocks = params.aggregator.convertToBlocks(data, params.final, params.params.max_threads);
-            break;
-        }
-    }
-
-    return convertBlocksToChunks(std::move(blocks));
+    return convertBlocksToChunks(params.aggregator->convertToBlocks(data_variants, params.params->max_threads, cparams));
 }
+
 }
 
 namespace AggregatingHelper
 {
-ChunkList convertToChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList convertToChunks(IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params)
 {
-    return convertToChunksImpl(data, params, ConvertType::Normal);
+    AggregatingConvertParams cparams{AggregatingConvertType::Normal, params.keys_already_sharded, /*clear_state_=*/params.deltaEmit()};
+    return convertToChunksImpl(data_variants, params, cparams);
 }
 
-ChunkList mergeAndConvertToChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList mergeAndConvertToChunks(ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params)
 {
-    if (data.size() == 1)
-        return convertToChunks(*data[0], params);
+    if (many_data_variants.size() == 1)
+        return convertToChunks(*many_data_variants[0], params);
 
-    BlocksList blocks = params.aggregator.mergeAndConvertToBlocks(data, params.final, params.params.max_threads);
-
-    return convertBlocksToChunks(std::move(blocks));
+    AggregatingConvertParams cparams{AggregatingConvertType::Normal, params.keys_already_sharded, /*clear_state_=*/params.deltaEmit()};
+    return convertBlocksToChunks(params.aggregator->mergeAndConvertToBlocks(many_data_variants, params.params->max_threads, cparams));
 }
 
-Chunk spliceAndConvertToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+Chunk spliceAndConvertToChunk(
+    IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
 {
-    return DB::convertToChunk(params.aggregator.spliceAndConvertToBlock(data, params.final, buckets));
+    return convertToChunk(params.aggregator->spliceAndConvertToBlock(data_variants, buckets));
 }
 
 Chunk mergeAndSpliceAndConvertToChunk(
-    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
 {
-    if (data.size() == 1)
-        return spliceAndConvertToChunk(*data[0], params, buckets);
+    if (many_data_variants.size() == 1)
+        return spliceAndConvertToChunk(*many_data_variants[0], params, buckets);
 
-    return DB::convertToChunk(params.aggregator.mergeAndSpliceAndConvertToBlock(data, params.final, buckets));
+    return convertToChunk(params.aggregator->mergeAndSpliceAndConvertToBlock(many_data_variants, buckets));
 }
 
-ChunkList convertUpdatesToChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList convertUpdatesToChunks(IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, KeyColumns key_columns)
 {
-    return convertToChunksImpl(data, params, ConvertType::Updates);
+    AggregatingConvertParams cparams{AggregatingConvertType::Updates, std::move(key_columns), params.keys_already_sharded};
+    return convertToChunksImpl(data_variants, params, cparams);
 }
 
-ChunkList mergeAndConvertUpdatesToChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList mergeAndConvertUpdatesToChunks(
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, ManyKeyColumns many_key_columns)
 {
-    if (data.size() == 1)
-        return convertUpdatesToChunks(*data[0], params);
+    if (many_data_variants.size() == 1)
+        return convertUpdatesToChunks(
+            *many_data_variants[0], params, many_key_columns.empty() ? KeyColumns{} : std::move(many_key_columns[0]));
 
-    auto merged_updates_data = params.aggregator.mergeUpdateGroups(data);
-    if (merged_updates_data)
-        return convertToChunksImpl(*merged_updates_data, params, ConvertType::Normal);
-
-    return {};
+    AggregatingConvertParams cparams{AggregatingConvertType::Updates, std::move(many_key_columns), params.keys_already_sharded};
+    return convertBlocksToChunks(params.aggregator->mergeAndConvertToBlocks(many_data_variants, params.params->max_threads, cparams));
 }
 
-Chunk spliceAndConvertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+Chunk spliceAndConvertUpdatesToChunk(
+    IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
 {
-    return DB::convertToChunk(params.aggregator.spliceAndConvertUpdatesToBlock(data, buckets));
+    return convertToChunk(params.aggregator->spliceAndConvertUpdatesToBlock(data_variants, buckets));
 }
 
 Chunk mergeAndSpliceAndConvertUpdatesToChunk(
-    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+    ManyIAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
 {
-    if (data.size() == 1)
-        return spliceAndConvertUpdatesToChunk(*data[0], params, buckets);
+    if (data_variants.size() == 1)
+        return spliceAndConvertUpdatesToChunk(*data_variants[0], params, buckets);
 
-    return DB::convertToChunk(params.aggregator.mergeAndSpliceAndConvertUpdatesToBlock(data, buckets));
+    return convertToChunk(params.aggregator->mergeAndSpliceAndConvertUpdatesToBlock(data_variants, buckets));
 }
 
-ChunkList convertToChangelogChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList convertToChangelogChunks(IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, KeyColumns keys_hint)
 {
-    if (data.empty())
+    if (data_variants.empty())
         return {};
 
-    ChunkList results;
-    auto retracted_chunk = mergeChunks(convertToChunksImpl(data, params, ConvertType::Retract));
-    if (retracted_chunk)
-    {
-        auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
-        retracted_chunk.addColumn(std::move(retracted_delta_col));
-        retracted_chunk.setConsecutiveDataFlag();
-        results.push_back(std::move(retracted_chunk));
-    }
-
-    auto chunk = mergeChunks(convertToChunksImpl(data, params, ConvertType::Updates));
-    if (chunk)
-    {
-        auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
-        chunk.addColumn(std::move(delta_col));
-        results.push_back(std::move(chunk));
-    }
-    return results;
+    AggregatingConvertParams cparams{AggregatingConvertType::Retract, std::move(keys_hint), params.keys_already_sharded};
+    return convertBlocksToChunks(params.aggregator->convertToBlocks(data_variants, params.params->max_threads, cparams));
 }
 
-ChunkList mergeAndConvertToChangelogChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList mergeAndConvertToChangelogChunks(
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, ManyKeyColumns many_key_columns)
 {
-    if (data.size() == 1)
-        return convertToChangelogChunks(*data[0], params);
+    if (many_data_variants.size() == 1)
+        return convertToChangelogChunks(
+            *many_data_variants[0], params, many_key_columns.empty() ? KeyColumns{} : std::move(many_key_columns[0]));
 
-    ChunkList results;
-    auto merged_retracted_data = params.aggregator.mergeRetractGroups(data);
-    if (merged_retracted_data)
-    {
-        auto retracted_chunk = mergeChunks(convertToChunksImpl(*merged_retracted_data, params, ConvertType::Normal));
-        if (retracted_chunk)
-        {
-            auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
-            retracted_chunk.addColumn(std::move(retracted_delta_col));
-            retracted_chunk.setConsecutiveDataFlag();
-            results.push_back(std::move(retracted_chunk));
-        }
-    }
+    AggregatingConvertParams cparams{AggregatingConvertType::Retract, std::move(many_key_columns), params.keys_already_sharded};
+    return convertBlocksToChunks(params.aggregator->mergeAndConvertToBlocks(many_data_variants, params.params->max_threads, cparams));
+}
 
-    auto merged_updated_data = params.aggregator.mergeUpdateGroups(data);
-    if (merged_updated_data)
-    {
-        auto chunk = mergeChunks(convertToChunksImpl(*merged_updated_data, params, ConvertType::Normal));
-        if (chunk)
-        {
-            auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
-            chunk.addColumn(std::move(delta_col));
-            results.push_back(std::move(chunk));
-        }
-    }
-    return results;
 }
-}
-}
+
 }

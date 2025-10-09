@@ -1,0 +1,45 @@
+tags:
+  - prepare
+
+description: prepare data
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+
+  - type: query
+    sql: drop function if exists test_add_five;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream udf_stream(i int, i8 int8, f32 float32, s string, 
+      dt datetime64(6) default now64());
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE FUNCTION test_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        function test_add_five(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+5;
+          }
+          return value;
+        }
+      $$;
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into udf_stream (i, i8, f32, s, dt) values 
+        (1, 1, 1.0, 's1', '2020-02-02 20:00:00')
+        (2, 2, 2.0, 's2', '2020-02-02 20:00:00');
+
+  - type: wait
+    time: 1

@@ -25,9 +25,9 @@ protected:
     void updateCursor(Input & input, size_t source_num);
     bool skipLastRowFor(size_t input_number) const { return current_inputs[input_number].skip_last_row; }
 
-private:
     Block header;
 
+private:
     /// Inputs currently being merged.
     Inputs current_inputs;
     SortCursorImpls cursors;

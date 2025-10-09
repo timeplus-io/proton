@@ -38,7 +38,7 @@ private:
 public:
     explicit MergeTreePartsMover(MergeTreeData * data_)
         : data(data_)
-        , log(&Poco::Logger::get("MergeTreePartsMover"))
+        , log(getLogger("MergeTreePartsMover"))
     {
     }
 
@@ -50,7 +50,7 @@ public:
         const std::lock_guard<std::mutex> & moving_parts_lock);
 
     /// Copies part to selected reservation in detached folder. Throws exception if part already exists.
-    MergeTreeMutableDataPartPtr clonePart(const MergeTreeMoveEntry & moving_part) const;
+    MergeTreeMutableDataPartPtr clonePart(const MergeTreeMoveEntry & moving_part, const ReadSettings & read_settings, const WriteSettings & write_settings) const;
 
     /// Replaces cloned part from detached directory into active data parts set.
     /// Replacing part changes state to DeleteOnDestroy and will be removed from disk after destructor of
@@ -65,7 +65,7 @@ public:
 private:
 
     MergeTreeData * data;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

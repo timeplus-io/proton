@@ -1,41 +1,97 @@
 #pragma once
 
+#include <Checkpoint/CheckpointRequestContext.h>
+#include <Checkpoint/ExtraCheckpointContext.h>
+
+#include <base/defines.h>
+#include <base/demangle.h>
+#include <Common/Exception.h>
+
 #include <fmt/format.h>
+
 #include <cassert>
 #include <filesystem>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
+class CheckpointStorage;
 class CheckpointCoordinator;
 
-struct CheckpointContext
+struct CheckpointContext final : public std::enable_shared_from_this<CheckpointContext>
 {
-    CheckpointContext(int64_t epoch_, std::string_view qid_, CheckpointCoordinator * coordinator_)
-        : epoch(epoch_), qid(qid_), coordinator(coordinator_)
+    CheckpointContext(std::string_view qid_, const CheckpointStorage & storage_, CheckpointCoordinator * coordinator_)
+        : qid(qid_), storage(storage_), coordinator(coordinator_)
     {
-        assert(epoch >= 0);
-        assert(!qid.empty());
-        assert(coordinator);
+        chassert(!qid.empty());
+        chassert(coordinator);
     }
 
-    /// Checkpoint epoch / monotonically increasing
-    int64_t epoch;
+    bool hasExtra() const { return extra_ctx != nullptr; }
+    void setExtra(ExtraCheckpointContextPtr extra_ctx_) { extra_ctx.swap(extra_ctx_); }
 
-    /// Query ID
-    std::string qid;
+    template <typename ExtraCkptCtx>
+    std::shared_ptr<ExtraCkptCtx> getExtra() const
+    {
+        auto res = std::dynamic_pointer_cast<ExtraCkptCtx>(extra_ctx);
+        if (!res) [[unlikely]]
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR, "Failed to get extra checkpoint context '{}'", demangle(typeid(ExtraCkptCtx).name()));
 
-    CheckpointCoordinator * coordinator = nullptr;
+        return res;
+    }
 
-    std::filesystem::path checkpointDir(const std::filesystem::path & base_dir) const
+    template <typename ExtraCkptCtx>
+    std::shared_ptr<ExtraCkptCtx> tryGetExtra() const
+    {
+        return std::dynamic_pointer_cast<ExtraCkptCtx>(extra_ctx);
+    }
+
+    std::filesystem::path checkpointDir() const
     {
         /// processor checkpoint epoch starts with 1
         /// graph persistent is epoch 0
         if (epoch > 0)
-            return base_dir / qid / fmt::format("{}", epoch);
+            return fmt::format("{}/{}", qid, epoch);
         else
-            return base_dir / qid;
+            return qid;
     }
 
-    std::filesystem::path queryCheckpointDir(const std::filesystem::path & base_dir) const { return base_dir / qid; }
+    std::filesystem::path queryCheckpointDir() const { return qid; }
+
+    CheckpointContextPtr cloneWithEpoch(int64_t new_epoch, CheckpointRequestContextPtr request_ctx_ = {}) const
+    {
+        auto new_ckpt_ctx = std::make_shared<CheckpointContext>(*this);
+        new_ckpt_ctx->epoch = new_epoch;
+        if (request_ctx_)
+            new_ckpt_ctx->request_ctx.swap(request_ctx_);
+        return new_ckpt_ctx;
+    }
+
+    void registerFinishCallback(std::function<void(CheckpointContextPtr)> callback) const
+    {
+        if (!request_ctx)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "CheckpointContext::registerFinishCallback called without request context");
+
+        const_cast<CheckpointRequestContext *>(request_ctx.get())->addFinishCallbackNoExcept(std::move(callback));
+    }
+
+    /// Checkpoint epoch / monotonically increasing
+    int64_t epoch = 0;
+
+    std::string qid;
+
+    const CheckpointStorage & storage;
+
+    CheckpointCoordinator * coordinator;
+
+    ExtraCheckpointContextPtr extra_ctx;
+
+    /// If not null, it is a checkpoint request, otherwise it is used to register or recover the query
+    CheckpointRequestContextPtr request_ctx;
 };
 }

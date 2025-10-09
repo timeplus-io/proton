@@ -7,7 +7,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Common/Exception.h>
 #include <Common/ZooKeeper/KeeperException.h>
-#include <Core/ServerUUID.h>
+#include <Core/ServerMeta.h>
 #include <Common/logger_useful.h>
 #include <Common/noexcept_scope.h>
 
@@ -23,7 +23,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_STATUS_OF_TRANSACTION;
 }
 
-static void tryWriteEventToSystemLog(Poco::Logger * log, ContextPtr context,
+static void tryWriteEventToSystemLog(LoggerPtr log, ContextPtr context,
                                      TransactionsInfoLogElement::Type type, const TransactionID & tid, CSN csn = Tx::UnknownCSN)
 try
 {
@@ -45,11 +45,8 @@ catch (...)
 
 
 TransactionLog::TransactionLog()
-    : log(&Poco::Logger::get("TransactionLog"))
+    : global_context(Context::getGlobalContextInstance()), log(getLogger("TransactionLog"))
 {
-    global_context = Context::getGlobalContextInstance();
-    global_context->checkTransactionsAreAllowed();
-
     zookeeper_path = global_context->getConfigRef().getString("transaction_log.zookeeper_path", "/proton/txn");
     zookeeper_path_log = zookeeper_path + "/log";
     fault_probability_before_commit = global_context->getConfigRef().getDouble("transaction_log.fault_probability_before_commit", 0);
@@ -390,7 +387,7 @@ MergeTreeTransactionPtr TransactionLog::beginTransaction()
         std::lock_guard lock{running_list_mutex};
         CSN snapshot = latest_snapshot.load();
         LocalTID ltid = 1 + local_tid_counter.fetch_add(1);
-        txn = std::make_shared<MergeTreeTransaction>(snapshot, ltid, ServerUUID::get());
+        txn = std::make_shared<MergeTreeTransaction>(snapshot, ltid, ServerMeta::getIdentity());
         bool inserted = running_list.try_emplace(txn->tid.getHash(), txn).second;
         if (!inserted)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "I's a bug: TID {} {} exists", txn->tid.getHash(), txn->tid);
@@ -428,7 +425,7 @@ CSN TransactionLog::commitTransaction(const MergeTreeTransactionPtr & txn [[mayb
             {
                 std::bernoulli_distribution fault(fault_probability_before_commit);
                 if (fault(thread_local_rng))
-                    throw Coordination::Exception("Fault injected (before commit)", Coordination::Error::ZCONNECTIONLOSS);
+                    throw Coordination::Exception::fromMessage(Coordination::Error::ZCONNECTIONLOSS, "Fault injected (before commit)");
             }
 
             /// Commit point
@@ -438,7 +435,7 @@ CSN TransactionLog::commitTransaction(const MergeTreeTransactionPtr & txn [[mayb
             {
                 std::bernoulli_distribution fault(fault_probability_after_commit);
                 if (fault(thread_local_rng))
-                    throw Coordination::Exception("Fault injected (after commit)", Coordination::Error::ZCONNECTIONLOSS);
+                    throw Coordination::Exception::fromMessage(Coordination::Error::ZCONNECTIONLOSS, "Fault injected (after commit)");
             }
         }
         catch (const Coordination::Exception & e)

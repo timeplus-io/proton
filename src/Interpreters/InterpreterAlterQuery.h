@@ -35,6 +35,8 @@ private:
 
     BlockIO executeToDatabase(const ASTAlterQuery & alter);
 
+    void checkAlterCommandForStreaming(StoragePtr table, const ASTAlterCommand * command_ast) const;
+
     ASTPtr query_ptr;
 };
 

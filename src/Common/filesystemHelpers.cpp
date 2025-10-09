@@ -16,8 +16,16 @@
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
+#include <Disks/IDisk.h>
 
 namespace fs = std::filesystem;
+
+
+namespace ProfileEvents
+{
+    extern const Event ExternalProcessingFilesTotal;
+}
 
 namespace DB
 {
@@ -34,7 +42,6 @@ namespace ErrorCodes
     extern const int CANNOT_CREATE_FILE;
 }
 
-
 struct statvfs getStatVFS(const String & path)
 {
     struct statvfs fs;
@@ -47,19 +54,21 @@ struct statvfs getStatVFS(const String & path)
     return fs;
 }
 
-
-bool enoughSpaceInDirectory(const std::string & path [[maybe_unused]], size_t data_size [[maybe_unused]])
+bool enoughSpaceInDirectory(const std::string & path, size_t data_size)
 {
-    auto free_space = fs::space(path).free;
+    fs::path filepath(path);
+    /// `path` may point to nonexisting file, then we can't check it directly, move to parent directory
+    while (filepath.has_parent_path() && !fs::exists(filepath))
+        filepath = filepath.parent_path();
+    auto free_space = fs::space(filepath).free;
     return data_size <= free_space;
 }
 
-std::unique_ptr<TemporaryFile> createTemporaryFile(const std::string & path)
+std::unique_ptr<PocoTemporaryFile> createTemporaryFile(const std::string & folder_path)
 {
-    fs::create_directories(path);
-
-    /// NOTE: std::make_shared cannot use protected constructors
-    return std::make_unique<TemporaryFile>(path);
+    ProfileEvents::increment(ProfileEvents::ExternalProcessingFilesTotal);
+    fs::create_directories(folder_path);
+    return std::make_unique<PocoTemporaryFile>(folder_path);
 }
 
 
@@ -91,7 +100,7 @@ String getBlockDeviceId([[maybe_unused]] const String & path)
     ss << major(sb.st_dev) << ":" << minor(sb.st_dev);
     return ss.str();
 #else
-    throw DB::Exception("The function getDeviceId is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
+    throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "The function getDeviceId is supported on Linux only");
 #endif
 }
 
@@ -113,7 +122,7 @@ BlockDeviceType getBlockDeviceType([[maybe_unused]] const String & device_id)
         return BlockDeviceType::UNKNOWN;
     }
 #else
-    throw DB::Exception("The function getDeviceType is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
+    throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "The function getDeviceType is supported on Linux only");
 #endif
 }
 
@@ -135,7 +144,7 @@ UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id)
         return static_cast<UInt64>(-1);
     }
 #else
-    throw DB::Exception("The function getDeviceType is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
+    throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "The function getDeviceType is supported on Linux only");
 #endif
 }
 
@@ -143,7 +152,7 @@ UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id)
 std::filesystem::path getMountPoint(std::filesystem::path absolute_path)
 {
     if (absolute_path.is_relative())
-        throw Exception("Path is relative. It's a bug.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Path is relative. It's a bug.");
 
     absolute_path = std::filesystem::canonical(absolute_path);
 
@@ -170,29 +179,65 @@ std::filesystem::path getMountPoint(std::filesystem::path absolute_path)
     return absolute_path;
 }
 
-/// Returns name of filesystem mounted to mount_point
-#if !defined(OS_LINUX)
-[[noreturn]]
-#endif
-String getFilesystemName([[maybe_unused]] const String & mount_point)
-{
+/// proton: starts.
+/// Returns mount entry of filesystem mounted to mount_point
 #if defined(OS_LINUX)
+std::pair<std::string, std::string> getFilesystemNameType([[maybe_unused]] const String & mount_point)
+{
     FILE * mounted_filesystems = setmntent("/etc/mtab", "r");
     if (!mounted_filesystems)
-        throw DB::Exception("Cannot open /etc/mtab to get name of filesystem", ErrorCodes::SYSTEM_ERROR);
+        throw DB::Exception(ErrorCodes::SYSTEM_ERROR, "Cannot open /etc/mtab to get name of filesystem");
     mntent fs_info;
-    constexpr size_t buf_size = 4096;     /// The same as buffer used for getmntent in glibc. It can happen that it's not enough
+    constexpr size_t buf_size = 4096; /// The same as buffer used for getmntent in glibc. It can happen that it's not enough
     std::vector<char> buf(buf_size);
+
     while (getmntent_r(mounted_filesystems, &fs_info, buf.data(), buf_size) && fs_info.mnt_dir != mount_point)
         ;
     endmntent(mounted_filesystems);
+
     if (fs_info.mnt_dir != mount_point)
-        throw DB::Exception("Cannot find name of filesystem by mount point " + mount_point, ErrorCodes::SYSTEM_ERROR);
-    return fs_info.mnt_fsname;
-#else
-    throw DB::Exception("The function getFilesystemName is supported on Linux only", ErrorCodes::NOT_IMPLEMENTED);
-#endif
+        throw DB::Exception(ErrorCodes::SYSTEM_ERROR, "Cannot find name of filesystem by mount point {}", mount_point);
+
+    return {fs_info.mnt_fsname, fs_info.mnt_type};
 }
+#else
+[[noreturn]] std::pair<std::string, std::string> getFilesystemNameType([[maybe_unused]] const std::string & mount_point)
+{
+    throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "The function getFilesystemName is supported on Linux only");
+}
+#endif
+
+std::pair<std::string, std::string> tryGetFilesystemNameType([[maybe_unused]] const String & mount_point)
+{
+    try
+    {
+#if defined(OS_LINUX)
+        return getFilesystemNameType(mount_point);
+#else
+        return {};
+#endif
+    }
+    catch (const DB::Exception &)
+    {
+        return {};
+    }
+}
+/// proton: ends.
+
+/// Returns name of filesystem mounted to mount_point
+
+#if defined(OS_LINUX)
+String getFilesystemName([[maybe_unused]] const String & mount_point)
+{
+    return getFilesystemNameType(mount_point).first;
+}
+#else
+[[noreturn]]
+String getFilesystemName([[maybe_unused]] const String & mount_point)
+{
+    throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "The function getFilesystemName is supported on Linux only");
+}
+#endif
 
 bool pathStartsWith(const std::filesystem::path & path, const std::filesystem::path & prefix_path)
 {
@@ -328,7 +373,8 @@ time_t getModificationTime(const std::string & path)
     struct stat st;
     if (stat(path.c_str(), &st) == 0)
         return st.st_mtime;
-    DB::throwFromErrnoWithPath("Cannot check modification time for file: " + path, path, DB::ErrorCodes::CANNOT_STAT);
+    std::error_code m_ec(errno, std::generic_category());
+    throw fs::filesystem_error("Cannot check modification time for file", path, m_ec);
 }
 
 time_t getChangeTime(const std::string & path)
@@ -336,7 +382,8 @@ time_t getChangeTime(const std::string & path)
     struct stat st;
     if (stat(path.c_str(), &st) == 0)
         return st.st_ctime;
-    DB::throwFromErrnoWithPath("Cannot check change time for file: " + path, path, DB::ErrorCodes::CANNOT_STAT);
+    std::error_code m_ec(errno, std::generic_category());
+    throw fs::filesystem_error("Cannot check change time for file", path, m_ec);
 }
 
 Poco::Timestamp getModificationTimestamp(const std::string & path)
@@ -352,4 +399,32 @@ void setModificationTime(const std::string & path, time_t time)
     if (utime(path.c_str(), &tb) != 0)
         DB::throwFromErrnoWithPath("Cannot set modification time for file: " + path, path, DB::ErrorCodes::PATH_ACCESS_DENIED);
 }
+
+bool isSymlink(const fs::path & path)
+{
+    /// Remove trailing slash before checking if file is symlink.
+    /// Let /path/to/link is a symlink to /path/to/target/dir/ directory.
+    /// In this case is_symlink("/path/to/link") is true,
+    /// but is_symlink("/path/to/link/") is false (it's a directory)
+    if (path.filename().empty())
+        return fs::is_symlink(path.parent_path());      /// STYLE_CHECK_ALLOW_STD_FS_SYMLINK
+    return fs::is_symlink(path);        /// STYLE_CHECK_ALLOW_STD_FS_SYMLINK
+}
+
+bool isSymlinkNoThrow(const fs::path & path)
+{
+    std::error_code dummy;
+    if (path.filename().empty())
+        return fs::is_symlink(path.parent_path(), dummy);      /// STYLE_CHECK_ALLOW_STD_FS_SYMLINK
+    return fs::is_symlink(path, dummy);        /// STYLE_CHECK_ALLOW_STD_FS_SYMLINK
+}
+
+fs::path readSymlink(const fs::path & path)
+{
+    /// See the comment for isSymlink
+    if (path.filename().empty())
+        return fs::read_symlink(path.parent_path());        /// STYLE_CHECK_ALLOW_STD_FS_SYMLINK
+    return fs::read_symlink(path);      /// STYLE_CHECK_ALLOW_STD_FS_SYMLINK
+}
+
 }

@@ -50,12 +50,6 @@ public:
 
     void drop() override;
 
-    /// We need to call drop() immediately to remove meta data directory,
-    /// otherwise, if another filelog table with same name created before
-    /// the table be dropped finally, then its meta data directory will
-    /// be deleted by this table drop finally
-    bool dropTableImmediately() override { return true; }
-
     const auto & getFormatName() const { return format_name; }
 
     enum class FileStatus
@@ -154,7 +148,7 @@ private:
     FileInfos file_infos;
 
     const String format_name;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     uint64_t milliseconds_to_wait;
 

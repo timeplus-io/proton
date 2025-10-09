@@ -10,6 +10,9 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 
+/// proton: starts.
+#include <Common/MemoryHelpers.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -26,7 +29,8 @@ namespace ErrorCodes
 struct AggregateFunctionForEachData
 {
     size_t dynamic_array_size = 0;
-    char * array_of_aggregate_datas = nullptr;
+    /// proton updated: char * -> DataUniqPtr
+    DataUniqPtr array_of_aggregate_datas = {nullptr, &std::free};
 };
 
 /** Adaptor for aggregate functions.
@@ -65,11 +69,10 @@ private:
         size_t old_size = state.dynamic_array_size;
         if (old_size < new_size)
         {
-            char * old_state = state.array_of_aggregate_datas;
+            char * old_state = state.array_of_aggregate_datas.get();
 
-            char * new_state = arena.alignedAlloc(
-                new_size * nested_size_of_data,
-                nested_func->alignOfData());
+            auto new_state_ptr = alignedAllocate(new_size * nested_size_of_data, nested_func->alignOfData());
+            char * new_state = new_state_ptr.get();
 
             size_t i;
             try
@@ -98,7 +101,7 @@ private:
                         &arena);
             }
 
-            state.array_of_aggregate_datas = new_state;
+            state.array_of_aggregate_datas.swap(new_state_ptr);
             state.dynamic_array_size = new_size;
         }
 
@@ -107,17 +110,17 @@ private:
 
 public:
     AggregateFunctionForEach(AggregateFunctionPtr nested_, const DataTypes & arguments, const Array & params_)
-        : IAggregateFunctionDataHelper<AggregateFunctionForEachData, AggregateFunctionForEach>(arguments, params_)
+        : IAggregateFunctionDataHelper<AggregateFunctionForEachData, AggregateFunctionForEach>(arguments, params_, createResultType(nested_))
         , nested_func(nested_), num_arguments(arguments.size())
     {
         nested_size_of_data = nested_func->sizeOfData();
 
         if (arguments.empty())
-            throw Exception("Aggregate function " + getName() + " require at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} require at least one argument", getName());
 
         for (const auto & type : arguments)
             if (!isArray(type))
-                throw Exception("All arguments for aggregate function " + getName() + " must be arrays", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "All arguments for aggregate function {} must be arrays", getName());
     }
 
     String getName() const override
@@ -125,9 +128,9 @@ public:
         return nested_func->getName() + "_for_each";
     }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(AggregateFunctionPtr nested_)
     {
-        return std::make_shared<DataTypeArray>(nested_func->getReturnType());
+        return std::make_shared<DataTypeArray>(nested_->getResultType());
     }
 
     bool isVersioned() const override
@@ -150,7 +153,7 @@ public:
     {
         AggregateFunctionForEachData & state = data(place);
 
-        char * nested_state = state.array_of_aggregate_datas;
+        char * nested_state = state.array_of_aggregate_datas.get();
         for (size_t i = 0; i < state.dynamic_array_size; ++i)
         {
             if constexpr (up_to_state)
@@ -197,12 +200,12 @@ public:
             const IColumn::Offsets & ith_offsets = ith_column.getOffsets();
 
             if (ith_offsets[row_num] != end || (row_num != 0 && ith_offsets[row_num - 1] != begin))
-                throw Exception("The arrays passed to " + getName() + " aggregate function have different sizes", ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
+                throw Exception(ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH, "the arrays passed to {} aggregate function have different sizes", getName());
         }
 
         AggregateFunctionForEachData & state = ensureAggregateData(place, end - begin, *arena);
 
-        char * nested_state = state.array_of_aggregate_datas;
+        char * nested_state = state.array_of_aggregate_datas.get();
         for (size_t i = begin; i < end; ++i)
         {
             nested_func->add(nested_state, nested, i, arena);
@@ -215,8 +218,8 @@ public:
         const AggregateFunctionForEachData & rhs_state = data(rhs);
         AggregateFunctionForEachData & state = ensureAggregateData(place, rhs_state.dynamic_array_size, *arena);
 
-        const char * rhs_nested_state = rhs_state.array_of_aggregate_datas;
-        char * nested_state = state.array_of_aggregate_datas;
+        const char * rhs_nested_state = rhs_state.array_of_aggregate_datas.get();
+        char * nested_state = state.array_of_aggregate_datas.get();
 
         for (size_t i = 0; i < state.dynamic_array_size && i < rhs_state.dynamic_array_size; ++i)
         {
@@ -232,7 +235,7 @@ public:
         const AggregateFunctionForEachData & state = data(place);
         writeBinary(state.dynamic_array_size, buf);
 
-        const char * nested_state = state.array_of_aggregate_datas;
+        const char * nested_state = state.array_of_aggregate_datas.get();
         for (size_t i = 0; i < state.dynamic_array_size; ++i)
         {
             nested_func->serialize(nested_state, buf);
@@ -249,7 +252,7 @@ public:
 
         ensureAggregateData(place, new_size, *arena);
 
-        char * nested_state = state.array_of_aggregate_datas;
+        char * nested_state = state.array_of_aggregate_datas.get();
         for (size_t i = 0; i < new_size; ++i)
         {
             nested_func->deserialize(nested_state, buf, version, arena);
@@ -266,7 +269,7 @@ public:
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
         IColumn & elems_to = arr_to.getData();
 
-        char * nested_state = state.array_of_aggregate_datas;
+        char * nested_state = state.array_of_aggregate_datas.get();
         for (size_t i = 0; i < state.dynamic_array_size; ++i)
         {
             if constexpr (merge)
@@ -291,7 +294,7 @@ public:
 
     bool allocatesMemoryInArena() const override
     {
-        return true;
+        return nested_func->allocatesMemoryInArena();
     }
 
     bool isState() const override

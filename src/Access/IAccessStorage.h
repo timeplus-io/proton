@@ -3,6 +3,7 @@
 #include <Access/IAccessEntity.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
+#include <Common/callOnce.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -159,7 +160,7 @@ protected:
     virtual bool isAddressAllowed(const User & user, const Poco::Net::IPAddress & address) const;
 
     static UUID generateRandomID();
-    Poco::Logger * getLogger() const;
+    LoggerPtr getLogger() const;
     static String formatEntityTypeWithName(AccessEntityType type, const String & name) { return AccessEntityTypeInfo::get(type).formatEntityNameWithType(name); }
     [[noreturn]] void throwNotFound(const UUID & id) const;
     [[noreturn]] void throwNotFound(AccessEntityType type, const String & name) const;
@@ -177,7 +178,9 @@ protected:
 
 private:
     const String storage_name;
-    mutable std::atomic<Poco::Logger *> log = nullptr;
+
+    mutable OnceFlag log_initialized;
+    mutable LoggerPtr log = nullptr;
 };
 
 

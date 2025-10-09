@@ -8,6 +8,8 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/PipelineMetricLog.h>
 
+#include <Common/setThreadName.h>
+
 namespace DB
 {
 
@@ -43,7 +45,10 @@ void PipelineMetricLog::startCollectMetric(size_t collect_interval_milliseconds_
 {
     collect_interval_milliseconds = collect_interval_milliseconds_;
     stopped = false;
-    metric_flush_thread = ThreadFromGlobalPool([this] { metricThreadFunction(); });
+    metric_flush_thread = ThreadFromGlobalPool([this] {
+        setThreadName("PMetricFlusher");
+        metricThreadFunction();
+    });
 }
 
 

@@ -1,28 +1,33 @@
 #pragma once
 
-#include <Processors/IProcessor.h>
 #include <Processors/Executors/ExecutorTasks.h>
+#include <Processors/IProcessor.h>
 #include <Common/EventCounter.h>
-#include <Common/logger_useful.h>
 
 /// proton : starts
 #include <Checkpoint/CheckpointContextFwd.h>
-#include "Core/ExecuteMode.h"
+#include <Core/ExecuteMode.h>
 /// proton : ends
 
+#include <mutex>
 #include <queue>
 #include <stack>
-#include <mutex>
 
 namespace DB
 {
+/// proton: starts.
+struct CheckpointSettings;
+using CheckpointSettingsPtr = std::shared_ptr<CheckpointSettings>;
+/// proton: ends.
 
 class QueryStatus;
+using QueryStatusPtr = std::shared_ptr<QueryStatus>;
 class ExecutingGraph;
 using ExecutingGraphPtr = std::unique_ptr<ExecutingGraph>;
 
 class ReadProgressCallback;
 using ReadProgressCallbackPtr = std::unique_ptr<ReadProgressCallback>;
+
 
 /// Executes query pipeline.
 class PipelineExecutor final : public std::enable_shared_from_this<PipelineExecutor>
@@ -34,12 +39,12 @@ public:
     /// During pipeline execution new processors can appear. They will be added to existing set.
     ///
     /// Explicit graph representation is built in constructor. Throws if graph is not correct.
-    explicit PipelineExecutor(Processors & processors, QueryStatus * elem);
+    explicit PipelineExecutor(std::shared_ptr<Processors> & processors, QueryStatusPtr elem);
     ~PipelineExecutor();
 
     /// Execute pipeline in multiple threads. Must be called once.
     /// In case of exception during execution throws any occurred.
-    void execute(size_t num_threads, ExecuteMode exec_mode_ = ExecuteMode::NORMAL);
+    void execute(size_t num_threads, ExecuteMode exec_mode_ = ExecuteMode::Normal);
 
     /// Execute single step. Step will be stopped when yield_flag is true.
     /// Execution is happened in a single thread.
@@ -61,10 +66,11 @@ public:
     void setReadProgressCallback(ReadProgressCallbackPtr callback);
 
     /// proton: starts.
-    void registerCheckpoint(ExecuteMode exec_mode_);
+    void registerCheckpoint(ExecuteMode exec_mode_, CheckpointContextPtr ckpt_ctx = {});
     void deregisterCheckpoint();
 
-    bool requireExplicitCancel() const { return exec_mode == ExecuteMode::SUBSCRIBE || exec_mode == ExecuteMode::RECOVER;}
+    bool checkpointRegistered() const;
+    bool requireExplicitCancel() const { return checkpointRegistered(); }
 
     String getStats() const;
 
@@ -73,16 +79,8 @@ public:
     /// Trigger checkpointing the states of operators in the graph
     void triggerCheckpoint(CheckpointContextPtr ckpt_ctx);
 
-    /// Recover the query graph from storage
-    void recover();
-
-    /// Persistent query graph to storage when query gets executed
-    void serialize(CheckpointContextPtr ckpt_ctx) const;
-
-    /// Return ack node IDs in the graph
-    std::vector<UInt32> getCheckpointAckNodeIDs() const;
-    /// Return source node IDs in the graph
-    std::vector<UInt32> getCheckpointSourceNodeIDs() const;
+    /// Persistent query graph when query gets executed
+    void checkpointGraph(WriteBuffer & wb) const;
 
     VersionType getVersionFromRevision(UInt64 revision) const;
     VersionType getVersion() const;
@@ -90,6 +88,10 @@ public:
     ExecutingGraph & getExecGraph() const { return *graph; }
 
     bool isCancelled() const { return cancelled; }
+
+private:
+    /// Recover the query graph from storage
+    std::pair<Int64, CheckpointSettingsPtr> recover(CheckpointContextPtr ckpt_ctx);
     /// proton: ends.
 
 private:
@@ -102,22 +104,22 @@ private:
     bool is_execution_initialized = false;
     /// system.processors_profile_log
     bool profile_processors = false;
+    /// system.opentelemetry_span_log
+    bool trace_processors = false;
 
     std::atomic_bool cancelled = false;
 
     /// proton : starts
-    std::mutex register_checkpoint_mutex;
-    ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    mutable std::mutex register_checkpoint_mutex;
+    ExecuteMode exec_mode = ExecuteMode::Normal;
     UInt16 execute_threads = 0;
     mutable std::optional<VersionType> version;
-    UInt64 recovered_ckpt_interval = 0;
-    Int64 recovered_epoch = 0;
     /// proton : ends
 
-    Poco::Logger * log = &Poco::Logger::get("PipelineExecutor");
+    LoggerPtr log = getLogger("PipelineExecutor");
 
     /// Now it's used to check if query was killed.
-    QueryStatus * const process_list_element = nullptr;
+    QueryStatusPtr process_list_element;
 
     ReadProgressCallbackPtr read_progress_callback;
 

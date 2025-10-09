@@ -1,0 +1,93 @@
+tags:
+  - to_support
+  - uda
+
+description: Test covering custom emit
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (id int, value float64);
+  - type: wait
+    time: 1
+
+  # every 5 elements, we calculate the sum and emit
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION test_emit(value float64) RETURNS float64 LANGUAGE PYTHON AS $$
+      class test_emit:
+          def __init__(self):
+              self.data = []
+              self.has_customized_emit = True
+              self.result = []
+          
+          def serialize(self):
+              pass
+          
+          def deserialize(self, data):
+              pass
+          
+          def merge(self, data):
+              pass
+              
+          def process(self, values):
+              for item in values:
+                  self.data.append(item)
+                  if len(self.data) == 5:
+                      # calculate the sum of the last 5 elements
+                      avg = sum(self.data)
+                      self.result.append(avg)
+                      # clear the data list
+                      self.data = []
+              return len(self.result)
+                      
+
+          def finalize(self):
+              old_result = self.result
+              self.result = []
+              return old_result
+      $$
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-11
+    type: stream
+    query: select test_emit(value) as res from test41_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: float64
+    inputs:
+      - [1, 2.1]
+      - [2, 3.1]
+      - [3, 4.1]
+      - [4, 5.1]
+      - [3, 6.1]
+      - [3, 7.1]
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: python_udf-11
+    expected_result:
+      - [20.5]

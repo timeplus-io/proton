@@ -68,7 +68,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(
     Block & sample_block_,
     std::shared_ptr<ShellCommandSourceCoordinator> coordinator_,
     ContextPtr context_)
-    : log(&Poco::Logger::get("ExecutableDictionarySource"))
+    : log(getLogger("ExecutableDictionarySource"))
     , dict_struct(dict_struct_)
     , configuration(configuration_)
     , sample_block(sample_block_)
@@ -90,7 +90,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(
 }
 
 ExecutableDictionarySource::ExecutableDictionarySource(const ExecutableDictionarySource & other)
-    : log(&Poco::Logger::get("ExecutableDictionarySource"))
+    : log(getLogger("ExecutableDictionarySource"))
     , update_time(other.update_time)
     , dict_struct(other.dict_struct)
     , configuration(other.configuration)
@@ -226,7 +226,9 @@ void registerDictionarySourceExecutable(DictionarySourceFactory & factory)
         /// It's OK for dictionaries created by administrator from xml-file, but
         /// maybe dangerous for dictionaries created from DDL-queries.
         if (created_from_ddl && global_context->getApplicationType() != Context::ApplicationType::LOCAL)
-            throw Exception(ErrorCodes::DICTIONARY_ACCESS_DENIED, "Dictionaries with executable dictionary source are not allowed to be created from DDL query");
+            throw Exception(ErrorCodes::DICTIONARY_ACCESS_DENIED,
+                            "Dictionaries with executable dictionary source are not allowed "
+                            "to be created from DDL query");
 
         auto context = copyContextAndApplySettingsFromDictionaryConfig(global_context, config, config_prefix);
 

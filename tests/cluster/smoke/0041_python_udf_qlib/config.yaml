@@ -1,0 +1,52 @@
+name: python_udf_qlib
+description: |
+  Tests covering the python_udf qlib library 
+  Note: 
+    - Skip this suite due to data download requirement, no suitable to run in smoke.
+  Manual Steps:
+    1. Pip install pyqlib via restapi or proton python command
+    2. Login in proton container and run below command to download:
+      bash -c 'proton python --config-file /etc/proton-server/config.yaml -m qlib.run.get_data qlib_data --target_dir var/lib/proton/.qlib/qlib_data/cn_data --region cn'
+
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - qlib
+  - bug # {"code":702,"error_msg":"Request failed: Code: 702. DB::Exception: Failed to run 'pip install --user pyqlib': return code is 1. (PYTHON_PIP_ERROR)
+
+arch:
+  - x86_64
+
+setup:
+  scope: suite
+  steps:
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "pyqlib"}'
+
+    - type: command
+      name: python-udf-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "pyqlib") | length > 0'
+    
+    - type: check
+      target_name: python-udf-1
+      expected_result: ['true']
+
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "pandas"}'
+
+    - type: command
+      name: python-udf-2
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "pandas") | length > 0'
+ 
+    - type: check
+      target_name: python-udf-2
+      expected_result: ['true']

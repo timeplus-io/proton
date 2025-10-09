@@ -96,9 +96,6 @@ using ArrayAggregateResult = typename ArrayAggregateResultImpl<ArrayElement, ope
 template<AggregateOperation aggregate_operation>
 struct ArrayAggregateImpl
 {
-    using column_type = ColumnArray;
-    using data_type = DataTypeArray;
-
     static bool needBoolean() { return false; }
     static bool needExpression() { return false; }
     static bool needOneArray() { return false; }
@@ -166,9 +163,8 @@ struct ArrayAggregateImpl
 
         if (!callOnIndexAndDataType<void>(expression_return->getTypeId(), call))
         {
-            throw Exception(
-                "array aggregation function cannot be performed on type " + expression_return->getName(),
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "array aggregation function cannot be performed on type {}",
+                expression_return->getName());
         }
 
         return result;
@@ -404,7 +400,7 @@ struct ArrayAggregateImpl
             executeType<DateTime64>(mapped, offsets, res))
             return res;
         else
-            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Unexpected column for array_sum: {}" + mapped->getName());
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Unexpected column for array_sum: {}", mapped->getName());
     }
 };
 

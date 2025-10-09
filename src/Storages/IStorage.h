@@ -11,6 +11,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/VirtualColumnsDescription.h>
 #include <Storages/TableLockHolder.h>
 #include <Storages/StorageSnapshot.h>
 #include <Common/ActionLock.h>
@@ -18,12 +19,15 @@
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
 
-#include <optional>
-#include <shared_mutex>
 #include <compare>
+#include <optional>
 
 /// proton : starts
 #include <Core/Streaming/DataStreamSemantic.h>
+#include <Common/SharedMutex.h>
+#include <Cluster/Common/CallResult.h>
+
+#include <unordered_map>
 /// proton : ends
 
 namespace DB
@@ -31,7 +35,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int NOT_IMPLEMENTED;
+extern const int NOT_IMPLEMENTED;
 }
 
 using StorageActionBlockType = size_t;
@@ -75,6 +79,11 @@ class IBackupEntry;
 using BackupEntries = std::vector<std::pair<String, std::shared_ptr<const IBackupEntry>>>;
 using RestoreDataTasks = std::vector<std::function<void()>>;
 
+/// proton: starts.
+class Chunk;
+using ChunkList = std::list<Chunk>;
+/// proton: ends.
+
 struct ColumnSize
 {
     size_t marks = 0;
@@ -104,8 +113,7 @@ public:
     IStorage() = delete;
     /// Storage metadata can be set separately in setInMemoryMetadata method
     explicit IStorage(StorageID storage_id_)
-        : storage_id(std::move(storage_id_))
-        , metadata(std::make_unique<StorageInMemoryMetadata>()) {} //-V730
+        : storage_id(std::move(storage_id_)), metadata(std::make_unique<StorageInMemoryMetadata>()) { } //-V730
 
     IStorage(const IStorage &) = delete;
     IStorage & operator=(const IStorage &) = delete;
@@ -115,6 +123,8 @@ public:
 
     /// The name of the table.
     StorageID getStorageID() const;
+
+    virtual bool isMergeTree() const { return false; }
 
     /// Returns true if the storage receives data from a remote server or servers.
     virtual bool isRemote() const { return false; }
@@ -134,8 +144,15 @@ public:
     /// Returns true if the storage supports insert queries with the PARTITION BY section.
     virtual bool supportsPartitionBy() const { return false; }
 
+    /// Returns true if the storage supports queries with the TTL section.
+    virtual bool supportsTTL() const { return false; }
+
     /// Returns true if the storage supports queries with the PREWHERE section.
     virtual bool supportsPrewhere() const { return false; }
+
+    /// Returns which columns supports PREWHERE, or empty std::nullopt if all columns is supported.
+    /// This is needed for engines whose aggregates data from multiple tables, like Merge.
+    virtual std::optional<NameSet> supportedPrewhereColumns() const { return std::nullopt; }
 
     /// Returns true if the storage supports optimization of moving conditions to PREWHERE section.
     virtual bool canMoveConditionsToPrewhere() const { return supportsPrewhere(); }
@@ -162,8 +179,10 @@ public:
     /// This method can return true for readonly engines that return the same rows for reading (such as SystemNumbers)
     virtual bool supportsTransactions() const { return false; }
 
+    /// Returns true if the storage supports storing of data type Object.
+    virtual bool supportsDynamicSubcolumnsDeprecated() const { return false; }
+
     /// Returns true if the storage supports storing of dynamic subcolumns.
-    /// For now it makes sense only for data type Object.
     virtual bool supportsDynamicSubcolumns() const { return false; }
 
     /// Requires squashing small blocks to large for optimal storage.
@@ -172,7 +191,6 @@ public:
 
     /// Returns true if the storage is for system, which cannot be target of SHOW CREATE TABLE.
     virtual bool isSystemStorage() const { return false; }
-
 
     /// Optional size information of each physical column.
     /// Currently it's only used by the MergeTree family for query optimizations.
@@ -197,12 +215,9 @@ public:
     /// Update storage metadata. Used in ALTER or initialization of Storage.
     /// Metadata object is multiversion, so this method can be called without
     /// any locks.
-    void setInMemoryMetadata(const StorageInMemoryMetadata & metadata_)
-    {
-        metadata.set(std::make_unique<StorageInMemoryMetadata>(metadata_));
-    }
-
     /// proton: start.
+    void setInMemoryMetadata(const StorageInMemoryMetadata & metadata_);
+
     /// Get immutable version (snapshot) of storage CreateQuery. CreateQuery object is
     /// multiversion, so it can be concurrently changed, but returned copy can be
     /// used without any locks.
@@ -216,11 +231,11 @@ public:
         create_query.set(std::make_unique<StorageInMemoryCreateQuery>(*create_query_));
     }
 
-    StorageMetadataPtr getInMemoryMetadataPtr(UInt16 /*version*/) const
-    {
-        /// proton: FIXME, introduce versioning schema physically in metastore
-        return metadata.get();
-    }
+    std::pair<StorageMetadataPtr, const Block &> getMetadataByVersion(UInt16 /*version*/) const;
+
+    StorageMetadataPtr getInMemoryMetadataByVersion(UInt16 version) const { return getMetadataByVersion(version).first; }
+
+    const Block & getSchemaByVersion(UInt16 version) const { return getMetadataByVersion(version).second; }
 
     /// Insert queries squash blocks for buffering (see InterpreterInsertQuery.cpp).
     /// However, not all storages need this feature, for example, external streams
@@ -236,6 +251,17 @@ public:
     virtual bool supportsStreamingQuery() const { return false; }
 
     virtual bool isExternalTable() const { return false; }
+
+    /// Light ingest is storing data on disk without full columns.
+    /// For example, users insert with partial columns of a table, only partial columns are stored
+    /// on disk and during query time, we fill the missing columns with default values
+    virtual bool supportsLightIngest(const Settings &) const noexcept { return false; }
+
+    virtual bool supportsAutoIncrementColumn() const noexcept { return false; }
+
+    /// When no columns are selected for streaming query, like SELECT count() FROM stream,
+    /// this function returns the best / preferred column to query.
+    virtual std::optional<String> preferredColumn() const { return {}; }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast
@@ -258,18 +284,30 @@ public:
     virtual BackupEntries backup(const ASTs & partitions, ContextPtr context);
 
     /// Extract data from the backup and put it to the storage.
-    virtual RestoreDataTasks restoreFromBackup(const BackupPtr & backup, const String & data_path_in_backup, const ASTs & partitions, ContextMutablePtr context);
+    virtual RestoreDataTasks
+    restoreFromBackup(const BackupPtr & backup, const String & data_path_in_backup, const ASTs & partitions, ContextMutablePtr context);
 
     /// Returns whether the column is virtual - by default all columns are real.
     /// Initially reserved virtual column name may be shadowed by real column.
     bool isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const;
 
+    /// Return true if there is at least one part containing lightweight deleted mask.
+    virtual bool hasLightweightDeletedMask() const { return false; }
+
+    /// Return true if storage can execute lightweight delete mutations.
+    virtual bool supportsLightweightDelete() const { return false; }
+
+    /// Return true if storage can execute 'DELETE FROM' mutations. This is different from lightweight delete
+    /// because those are internally translated into 'ALTER UPDATE' mutations.
+    virtual bool supportsDelete() const { return false; }
+
     /// proton: starts. Need to ensure thread safety
     virtual bool isReady() const { return true; }
-    /// proton: ends.
+
+    virtual UInt32 schemaVersion() const { return getInMemoryMetadataPtr()->getVersion(); }
+
 
 private:
-
     StorageID storage_id;
 
     mutable std::mutex id_mutex;
@@ -280,7 +318,18 @@ private:
 
 protected:
     /// proton: starts.
+    virtual void onInMemoryMetadataUpdate(StorageMetadataPtr /*updated*/) { }
+
+    /// Sometimes (external table for example), sink will consume only part of the storage columns
+    /// and let target storage to compute the defaults for other columns.
+    /// This utility is used to get insert columns from INSERT query or MV select.
+    std::optional<Block> getWriteSampleBlock(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
+
     MultiVersionStorageCreateQueryPtr create_query;
+
+    mutable SharedMutex multi_metadata_mutex;
+    mutable std::unordered_map<UInt32, std::pair<StorageMetadataPtr, const Block>> multi_version_metadata;
+    mutable std::atomic_flag loaded_from_metastore;
     /// When storage is inited, init this data member
     mutable Streaming::DataStreamSemanticEx data_stream_semantic;
     /// proton: ends.
@@ -289,11 +338,15 @@ protected:
         const RWLock & rwlock, RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;
 
 public:
-    /// Lock table for share. This lock must be acuqired if you want to be sure,
+    /// Lock table for share. This lock must be acquired if you want to be sure,
     /// that table will be not dropped while you holding this lock. It's used in
     /// variety of cases starting from SELECT queries to background merges in
     /// MergeTree.
     TableLockHolder lockForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout);
+
+    /// Similar to lockForShare, but returns a nullptr if the table is dropped while
+    /// acquiring the lock instead of raising a TABLE_IS_DROPPED exception
+    TableLockHolder tryLockForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout);
 
     /// Lock table for alter. This lock must be acuqired in ALTER queries to be
     /// sure, that we execute only one simultaneous alter. Doesn't affect share lock.
@@ -322,7 +375,8 @@ public:
       * QueryProcessingStage::Enum required for Distributed over Distributed,
       * since it cannot return Complete for intermediate queries never.
       */
-    virtual QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const
+    virtual QueryProcessingStage::Enum
+    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const
     {
         return QueryProcessingStage::FetchColumns;
     }
@@ -388,6 +442,16 @@ private:
         size_t /*max_block_size*/,
         size_t /*num_streams*/);
 
+    /// Should we process blocks of data returned by the storage in parallel
+    /// even when the storage returned only one stream of data for reading?
+    /// It is beneficial, for example, when you read from a file quickly,
+    /// but then do heavy computations on returned blocks.
+    ///
+    /// This is enabled by default, but in some cases shouldn't be done (for
+    /// example it is disabled for all system tables, since it is pretty
+    /// useless).
+    virtual bool parallelizeOutputAfterReading(ContextPtr) const { return !isSystemStorage(); }
+
 public:
     /// Other version of read which adds reading step to query plan.
     /// Default implementation creates ReadFromStorageStep and uses usual read.
@@ -415,7 +479,7 @@ public:
         const StorageMetadataPtr & /*metadata_snapshot*/,
         ContextPtr /*context*/)
     {
-        throw Exception("Method write is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method write is not supported by storage {}", getName());
     }
 
     /** Writes the data to a table in distributed manner.
@@ -424,9 +488,7 @@ public:
       *
       * Returns query pipeline if distributed writing is possible, and nullptr otherwise.
       */
-    virtual std::optional<QueryPipeline> distributedWrite(
-        const ASTInsertQuery & /*query*/,
-        ContextPtr /*context*/);
+    virtual std::optional<QueryPipeline> distributedWrite(const ASTInsertQuery & /*query*/, ContextPtr /*context*/);
 
     /** Delete the table data. Called before deleting the directory with the data.
       * The method can be called only after detaching table from Context (when no queries are performed with table).
@@ -434,24 +496,36 @@ public:
       * If some queries may still use the table, then it must be called under exclusive lock.
       * If you do not need any action other than deleting the directory with data, you can leave this method blank.
       */
-    virtual void drop() {}
+    virtual void drop() { }
 
-    virtual void dropInnerTableIfAny(bool /* no_delay */, ContextPtr /* context */) {}
+    virtual void dropInnerTableIfAny(bool /* no_delay */, ContextPtr /* context */) { }
 
     /** Clear the table data and leave it empty.
       * Must be called under exclusive lock (lockExclusively).
       */
     virtual void truncate(
-        const ASTPtr & /*query*/,
-        const StorageMetadataPtr & /* metadata_snapshot */,
-        ContextPtr /* context */,
-        TableExclusiveLockHolder &)
+        const ASTPtr & /*query*/, const StorageMetadataPtr & /* metadata_snapshot */, ContextPtr /* context */, TableExclusiveLockHolder &)
     {
-        throw Exception("Truncate is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Truncate is not supported by storage {}", getName());
     }
 
     /// proton: starts. Add views dependencies check by default
     virtual void checkTableCanBeRenamed(ContextPtr context) const;
+    /// Local storage means private to the local node only
+    virtual bool isLocal() const { return true; }
+
+    /// Full snapshot data of the storage
+    struct SnapshotDataWithExpiration
+    {
+        ChunkList chunks;
+        /// Callback function to check if there are new data since last read
+        /// NOTE: This is only an approximate check.
+        std::function<bool()> snapshot_expired;
+    };
+    virtual SnapshotDataWithExpiration readSnapshot(const Names & /*required_columns*/, [[maybe_unused]] Int64 default_cache_expire_sec = 0)
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Get all rows are not supported by storage {}", getName());
+    }
     /// proton: ends.
 
     /** Rename the table.
@@ -460,10 +534,7 @@ public:
       * Called when the table structure is locked for write.
       * Table UUID must remain unchanged, unless table moved between Ordinary and Atomic databases.
       */
-    virtual void rename(const String & /*new_path_to_table_data*/, const StorageID & new_table_id)
-    {
-        renameInMemory(new_table_id);
-    }
+    virtual void rename(const String & /*new_path_to_table_data*/, const StorageID & new_table_id) { renameInMemory(new_table_id); }
 
     /**
      * Just updates names of database and table without moving any data on disk
@@ -475,6 +546,12 @@ public:
       * to Storage or its parameters. Executes under alter lock (lockForAlter).
       */
     virtual void alter(const AlterCommands & params, ContextPtr context, AlterLockHolder & alter_lock_holder);
+
+    /**
+     * Apply validated / prepared alter commands to all shards locally. Only called from MetadataUpdater. proton : added
+     */
+    virtual void
+    applyAlterCommandsToAllShards(const AlterCommands & /*commands*/, ContextPtr /*context_*/, AlterLockHolder & /*alter_lock_holder*/) { }
 
     /** Checks that alter commands can be applied to storage. For example, columns can be modified,
       * or primary key can be changes, etc.
@@ -489,13 +566,12 @@ public:
     /** ALTER tables with regard to its partitions.
       * Should handle locks for each command on its own.
       */
-    virtual Pipe alterPartition(
-        const StorageMetadataPtr & /* metadata_snapshot */,
-        const PartitionCommands & /* commands */,
-        ContextPtr /* context */);
+    virtual Pipe
+    alterPartition(const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */);
 
     /// Checks that partition commands can be applied to storage.
-    virtual void checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const;
+    virtual void checkAlterPartitionIsPossible(
+        const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const;
 
     /** Perform any background work. For example, combining parts in a MergeTree type table.
       * Returns whether any work has been done.
@@ -509,35 +585,35 @@ public:
         const Names & /* deduplicate_by_columns */,
         ContextPtr /*context*/)
     {
-        throw Exception("Method optimize is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method optimize is not supported by storage {}", getName());
     }
 
     /// Mutate the table contents
     virtual void mutate(const MutationCommands &, ContextPtr)
     {
-        throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mutations are not supported by storage {}", getName());
     }
 
     /// Cancel a mutation.
     virtual CancellationCode killMutation(const String & /*mutation_id*/)
     {
-        throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mutations are not supported by storage {}", getName());
     }
 
-    virtual void waitForMutation(const String & /*mutation_id*/)
+    virtual void waitForMutation(const String & /*mutation_id*/, bool /*wait_for_another_mutation*/)
     {
-        throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mutations are not supported by storage {}", getName());
     }
 
     virtual void setMutationCSN(const String & /*mutation_id*/, UInt64 /*csn*/)
     {
-        throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Mutations are not supported by storage {}", getName());
     }
 
     /// Cancel a part move to shard.
     virtual CancellationCode killPartMoveToShard(const UUID & /*task_uuid*/)
     {
-        throw Exception("Part moves between shards are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Part moves between shards are not supported by storage {}", getName());
     }
 
     /** If the table have to do some complicated work on startup,
@@ -548,7 +624,7 @@ public:
       * By default, does nothing.
       * Cannot be called simultaneously by multiple threads.
       */
-    virtual void startup() {}
+    virtual void startup() { }
 
     /**
       * If the storage requires some complicated work on destroying,
@@ -559,10 +635,10 @@ public:
       * @see shutdown()
       * @see flush()
       */
-    void flushAndShutdown()
+    void flushAndShutdown(bool dropping)
     {
-        flush();
-        shutdown();
+        flush(dropping);
+        shutdown(dropping);
     }
 
     /** If the table have to do some complicated work when destroying an object - do it in advance.
@@ -570,32 +646,34 @@ public:
       * By default, does nothing.
       * Can be called simultaneously from different threads, even after a call to drop().
       */
-    virtual void shutdown() {}
+    virtual void shutdown(bool /*dropping*/) { }
 
     /// Called before shutdown() to flush data to underlying storage
     /// Data in memory need to be persistent
-    virtual void flush() {}
+    virtual void flush(bool /*dropping*/) { }
 
     /// Asks table to stop executing some action identified by action_type
     /// If table does not support such type of lock, and empty lock is returned
-    virtual ActionLock getActionLock(StorageActionBlockType /* action_type */)
-    {
-        return {};
-    }
+    virtual ActionLock getActionLock(StorageActionBlockType /* action_type */) { return {}; }
 
     /// Call when lock from previous method removed
-    virtual void onActionLockRemove(StorageActionBlockType /* action_type */) {}
+    virtual void onActionLockRemove(StorageActionBlockType /* action_type */) { }
 
     std::atomic<bool> is_dropped{false};
+    std::atomic<bool> is_detached{false};
 
     /// Does table support index for IN sections
     virtual bool supportsIndexForIn() const { return false; }
 
     /// Provides a hint that the storage engine may evaluate the IN-condition by using an index.
-    virtual bool mayBenefitFromIndexForIn(const ASTPtr & /* left_in_operand */, ContextPtr /* query_context */, const StorageMetadataPtr & /* metadata_snapshot */) const { return false; }
+    virtual bool mayBenefitFromIndexForIn(
+        const ASTPtr & /* left_in_operand */, ContextPtr /* query_context */, const StorageMetadataPtr & /* metadata_snapshot */) const
+    {
+        return false;
+    }
 
     /// Checks validity of the data
-    virtual CheckResults checkData(const ASTPtr & /* query */, ContextPtr /* context */) { throw Exception("Check query is not supported for " + getName() + " storage", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual CheckResults checkData(const ASTPtr & /* query */, ContextPtr /* context */) { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Check query is not supported for {} storage", getName()); }
 
     /// Checks that table could be dropped right now
     /// Otherwise - throws an exception with detailed information.
@@ -606,7 +684,7 @@ public:
 
     /// Similar to above but checks for DETACH. It's only used for DICTIONARIES.
     /// proton: starts.
-    virtual void checkTableCanBeDetached(ContextPtr) const {}
+    virtual void checkTableCanBeDetached(ContextPtr) const { }
     /// proton: ends.
 
     /// Returns true if Storage may store some data on disk.
@@ -619,10 +697,9 @@ public:
     /// Returns storage policy if storage supports it.
     virtual StoragePolicyPtr getStoragePolicy() const { return {}; }
 
-    /// Returns true if all disks of storage are read-only.
+    /// Returns true if all disks of storage are read-only or write-once.
+    /// NOTE: write-once also does not support INSERTs/merges/... for MergeTree
     virtual bool isStaticStorage() const;
-
-    virtual bool isColumnOriented() const { return false; }
 
     /// If it is possible to quickly determine exact number of rows in the table at this moment of time, then return it.
     /// Used for:
@@ -660,16 +737,27 @@ public:
     /// Does not takes underlying Storage (if any) into account.
     virtual std::optional<UInt64> lifetimeBytes() const { return {}; }
 
-    /// Should table->drop be called at once or with delay (in case of atomic database engine).
-    /// Needed for integration engines, when there must be no delay for calling drop() method.
-    virtual bool dropTableImmediately() { return false; }
-
     /// proton: starts
-    virtual void preDrop() { }
+    /// Faster than totalRows() but returning approximate total
+    virtual std::optional<UInt64> approximateTotalRows(const Settings & settings) const { return totalRows(settings); }
 
     virtual void preRename(const StorageID & /*new_table_id*/) { }
 
     virtual Streaming::DataStreamSemanticEx dataStreamSemantic() const { return data_stream_semantic; }
+
+    /// If the stream doesn't have any backing storage on this node (just has the definition)
+    /// it acts like a proxy to remote stream. We call this kind of stream a virtual stream
+    virtual bool isVirtualStorage() const { return false; }
+
+    virtual UInt64 getStorageSize() const { return 0; }
+    virtual bool isInmemory() const { return false; }
+
+    virtual Int64 getMetricTime([[maybe_unused]] bool reset = true) { return 0; }
+    virtual UInt64 readBytes([[maybe_unused]] bool reset = true, [[maybe_unused]] bool external_ingress = false) { return 0; }
+    virtual UInt64 readRows([[maybe_unused]] bool reset = true, [[maybe_unused]] bool external_ingress = false) { return 0; }
+
+    virtual UInt64 writtenBytes([[maybe_unused]] bool reset = true, [[maybe_unused]] bool external_ingress = false) { return 0; }
+    virtual UInt64 writtenRows([[maybe_unused]] bool reset = true, [[maybe_unused]] bool external_ingress = false) { return 0; }
     /// proton: ends
 
     /// Creates a storage snapshot from given metadata.
@@ -679,7 +767,14 @@ public:
     }
 
     /// Creates a storage snapshot from given metadata and columns, which are used in query.
-    virtual StorageSnapshotPtr getStorageSnapshotForQuery(const StorageMetadataPtr & metadata_snapshot, const ASTPtr & /*query*/, ContextPtr query_context) const
+    virtual StorageSnapshotPtr
+    getStorageSnapshotForQuery(const StorageMetadataPtr & metadata_snapshot, const ASTPtr & /*query*/, ContextPtr query_context) const
+    {
+        return getStorageSnapshot(metadata_snapshot, query_context);
+    }
+
+    /// Creates a storage snapshot but without holding a data specific to storage.
+    virtual StorageSnapshotPtr getStorageSnapshotWithoutData(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
     {
         return getStorageSnapshot(metadata_snapshot, query_context);
     }

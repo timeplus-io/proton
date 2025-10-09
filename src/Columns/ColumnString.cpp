@@ -4,8 +4,8 @@
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnCompressed.h>
 #include <Columns/MaskOperations.h>
-#include <Processors/Transforms/ColumnGathererTransform.h>
 #include <Common/Arena.h>
+#include <Common/HashTable/StringHashSet.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/WeakHash.h>
 #include <Common/assert_cast.h>
@@ -14,6 +14,9 @@
 #include <base/unaligned.h>
 #include <base/scope_guard.h>
 
+/// proton: starts.
+#include <IO/WriteBuffer.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -27,18 +30,41 @@ namespace ErrorCodes
 
 
 ColumnString::ColumnString(const ColumnString & src)
-    : COWHelper<IColumn, ColumnString>(src),
+    : COWHelper<IColumnHelper<ColumnString>, ColumnString>(src),
     offsets(src.offsets.begin(), src.offsets.end()),
     chars(src.chars.begin(), src.chars.end())
 {
-    if (!offsets.empty())
-    {
-        Offset last_offset = offsets.back();
+    Offset last_offset = offsets.empty() ? 0 : offsets.back();
+    /// This will also prevent possible overflow in offset.
+    if (last_offset != chars.size())
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+            "String offsets has data inconsistent with chars array. Last offset: {}, array length: {}",
+            last_offset, chars.size());
+}
 
-        /// This will also prevent possible overflow in offset.
-        if (chars.size() != last_offset)
-            throw Exception("String offsets has data inconsistent with chars array", ErrorCodes::LOGICAL_ERROR);
-    }
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
+void ColumnString::insertManyFrom(const IColumn & src, size_t position, size_t length)
+#else
+void ColumnString::doInsertManyFrom(const IColumn & src, size_t position, size_t length)
+#endif
+{
+    const ColumnString & src_concrete = assert_cast<const ColumnString &>(src);
+    const UInt8 * src_buf = &src_concrete.chars[src_concrete.offsets[position - 1]];
+    const size_t src_buf_size
+        = src_concrete.offsets[position] - src_concrete.offsets[position - 1]; /// -1th index is Ok, see PaddedPODArray.
+
+    const size_t old_size = chars.size();
+    const size_t new_size = old_size + src_buf_size * length;
+    chars.resize(new_size);
+
+    const size_t old_rows = offsets.size();
+    offsets.resize(old_rows + length);
+
+    for (size_t current_offset = old_size; current_offset < new_size; current_offset += src_buf_size)
+        memcpySmallAllowReadWriteOverflow15(&chars[current_offset], src_buf, src_buf_size);
+
+    for (size_t i = 0, current_offset = old_size + src_buf_size; i < length; ++i, current_offset += src_buf_size)
+        offsets[old_rows + i] = current_offset;
 }
 
 
@@ -73,8 +99,8 @@ MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
         /// Empty strings are just zero terminating bytes.
 
         res->chars.resize_fill(res->chars.size() + to_size - from_size);
+        res->offsets.resize_exact(to_size);
 
-        res->offsets.resize(to_size);
         for (size_t i = from_size; i < to_size; ++i)
         {
             ++offset;
@@ -90,8 +116,8 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash) const
     auto s = offsets.size();
 
     if (hash.getData().size() != s)
-        throw Exception("Size of WeakHash32 does not match size of column: column size is " + std::to_string(s) +
-                        ", hash size is " + std::to_string(hash.getData().size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Size of WeakHash32 does not match size of column: "
+                        "column size is {}, hash size is {}", std::to_string(s), std::to_string(hash.getData().size()));
 
     const UInt8 * pos = chars.data();
     UInt32 * hash_data = hash.getData().data();
@@ -110,7 +136,11 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash) const
 }
 
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t length)
+#else
+void ColumnString::doInsertRangeFrom(const IColumn & src, size_t start, size_t length)
+#endif
 {
     if (length == 0)
         return;
@@ -118,8 +148,7 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
     const ColumnString & src_concrete = assert_cast<const ColumnString &>(src);
 
     if (start + length > src_concrete.offsets.size())
-        throw Exception("Parameter out of bound in IColumnString::insertRangeFrom method.",
-            ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(ErrorCodes::PARAMETER_OUT_OF_BOUND, "Parameter out of bound in IColumnString::insertRangeFrom method.");
 
     size_t nested_offset = src_concrete.offsetAt(start);
     size_t nested_length = src_concrete.offsets[start + length - 1] - nested_offset;
@@ -166,7 +195,7 @@ void ColumnString::expand(const IColumn::Filter & mask, bool inverted)
     auto & offsets_data = getOffsets();
     auto & chars_data = getChars();
     if (mask.size() < offsets_data.size())
-        throw Exception("Mask size should be no less than data size.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mask size should be no less than data size.");
 
     /// We cannot change only offsets, because each string should end with terminating zero byte.
     /// So, we will insert one zero byte when mask value is zero.
@@ -184,7 +213,7 @@ void ColumnString::expand(const IColumn::Filter & mask, bool inverted)
         if (!!mask[index] ^ inverted)
         {
             if (from < 0)
-                throw Exception("Too many bytes in mask", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Too many bytes in mask");
 
             size_t len = offsets_data[from] - offsets_data[from - 1];
 
@@ -205,13 +234,50 @@ void ColumnString::expand(const IColumn::Filter & mask, bool inverted)
     }
 
     if (from != -1)
-        throw Exception("Not enough bytes in mask", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Not enough bytes in mask");
 }
 
 
 ColumnPtr ColumnString::permute(const Permutation & perm, size_t limit) const
 {
     return permuteImpl(*this, perm, limit);
+}
+
+
+void ColumnString::collectSerializedValueSizes(PaddedPODArray<UInt64> & sizes, const UInt8 * is_null) const
+{
+    if (empty())
+        return;
+
+    size_t rows = size();
+    if (sizes.empty())
+        sizes.resize_fill(rows);
+    else if (sizes.size() != rows)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Size of sizes: {} doesn't match rows_num: {}. It is a bug", sizes.size(), rows);
+
+    if (is_null)
+    {
+        for (size_t i = 0; i < rows; ++i)
+        {
+            if (is_null[i])
+            {
+                ++sizes[i];
+            }
+            else
+            {
+                size_t string_size = sizeAt(i);
+                sizes[i] += sizeof(string_size) + string_size + 1 /* null byte */;
+            }
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < rows; ++i)
+        {
+            size_t string_size = sizeAt(i);
+            sizes[i] += sizeof(string_size) + string_size;
+        }
+    }
 }
 
 
@@ -228,6 +294,28 @@ StringRef ColumnString::serializeValueIntoArena(size_t n, Arena & arena, char co
     res.data = pos;
 
     return res;
+}
+
+/// proton: starts.
+void ColumnString::serializeValueIntoBuffer(size_t n, WriteBuffer & wb) const
+{
+    size_t string_size = sizeAt(n);
+    size_t offset = offsetAt(n);
+
+    wb.write(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+    wb.write(reinterpret_cast<const char *>(&chars[offset]), string_size);
+}
+/// proton: ends.
+
+char * ColumnString::serializeValueIntoMemory(size_t n, char * memory) const
+{
+    size_t string_size = sizeAt(n);
+    size_t offset = offsetAt(n);
+
+    memcpy(memory, &string_size, sizeof(string_size));
+    memory += sizeof(string_size);
+    memcpy(memory, &chars[offset], string_size);
+    return memory + string_size;
 }
 
 const char * ColumnString::deserializeAndInsertFromArena(const char * pos)
@@ -290,20 +378,6 @@ ColumnPtr ColumnString::indexImpl(const PaddedPODArray<Type> & indexes, size_t l
     }
 
     return res;
-}
-
-void ColumnString::compareColumn(
-    const IColumn & rhs, size_t rhs_row_num,
-    PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results,
-    int direction, int nan_direction_hint) const
-{
-    return doCompareColumn<ColumnString>(assert_cast<const ColumnString &>(rhs), rhs_row_num, row_indexes,
-                                         compare_results, direction, nan_direction_hint);
-}
-
-bool ColumnString::hasEqualValues() const
-{
-    return hasEqualValuesImpl<ColumnString>();
 }
 
 struct ColumnString::ComparatorBase
@@ -429,11 +503,29 @@ void ColumnString::updatePermutationWithCollation(const Collator & collator, Per
             DefaultPartialSort());
 }
 
+size_t ColumnString::estimateCardinalityInPermutedRange(const Permutation & permutation, const EqualRange & equal_range) const
+{
+    const size_t range_size = equal_range.size();
+    if (range_size <= 1)
+        return range_size;
+
+    /// TODO use sampling if the range is too large (e.g. 16k elements, but configurable)
+    StringHashSet elements;
+    bool inserted = false;
+    for (size_t i = equal_range.from; i < equal_range.to; ++i)
+    {
+        size_t permuted_i = permutation[i];
+        StringRef value = getDataAt(permuted_i);
+        elements.emplace(value, inserted);
+    }
+    return elements.size();
+}
+
 ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
 {
     size_t col_size = size();
     if (col_size != replicate_offsets.size())
-        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of offsets doesn't match size of column.");
 
     auto res = ColumnString::create();
 
@@ -471,18 +563,36 @@ ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
     return res;
 }
 
-
-void ColumnString::gather(ColumnGathererStream & gatherer)
-{
-    gatherer.gather(*this);
-}
-
-
 void ColumnString::reserve(size_t n)
 {
     offsets.reserve(n);
 }
 
+void ColumnString::prepareForSquashing(const Columns & source_columns)
+{
+    size_t new_size = size();
+    size_t new_chars_size = chars.size();
+    for (const auto & source_column : source_columns)
+    {
+        const auto & source_string_column = assert_cast<const ColumnString &>(*source_column);
+        new_size += source_string_column.size();
+        new_chars_size += source_string_column.chars.size();
+    }
+
+    offsets.reserve_exact(new_size);
+    chars.reserve_exact(new_chars_size);
+}
+
+size_t ColumnString::capacity() const
+{
+    return offsets.capacity();
+}
+
+void ColumnString::shrinkToFit()
+{
+    chars.shrink_to_fit();
+    offsets.shrink_to_fit();
+}
 
 void ColumnString::getExtremes(Field & min, Field & max) const
 {
@@ -573,7 +683,9 @@ void ColumnString::protect()
 void ColumnString::validate() const
 {
     if (!offsets.empty() && offsets.back() != chars.size())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "ColumnString validation failed: size mismatch (internal logical error) {} != {}", offsets.back(), chars.size());
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+                        "ColumnString validation failed: size mismatch (internal logical error) {} != {}",
+                        offsets.back(), chars.size());
 }
 
 }

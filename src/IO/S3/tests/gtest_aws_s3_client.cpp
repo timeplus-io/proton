@@ -11,24 +11,48 @@
 #include <boost/algorithm/string.hpp>
 
 #include <Poco/URI.h>
+#include <Poco/Util/MapConfiguration.h>
 
 #include <aws/core/client/AWSError.h>
 #include <aws/core/client/CoreErrors.h>
 #include <aws/core/client/RetryStrategy.h>
 #include <aws/core/http/URI.h>
 
-#include <Common/RemoteHostFilter.h>
+#include <IO/HTTPHeaderEntries.h>
 #include <IO/ReadBufferFromS3.h>
 #include <IO/ReadHelpers.h>
 #include <IO/ReadSettings.h>
-#include <IO/WriteBufferFromS3.h>
-#include <IO/S3Common.h>
 #include <IO/S3/Client.h>
-#include <IO/HTTPHeaderEntries.h>
+#include <IO/S3Common.h>
+#include <IO/WriteBufferFromS3.h>
 #include <Storages/StorageS3Settings.h>
+#include <Common/RemoteHostFilter.h>
+#include <Common/tests/gtest_global_context.h>
 
 #include "TestPocoHTTPServer.h"
 
+namespace
+{
+
+struct PrepareContextForS3Client
+{
+    DB::ContextMutablePtr context;
+    Poco::AutoPtr<Poco::Util::MapConfiguration> map_config;
+
+    static const PrepareContextForS3Client & instance()
+    {
+        static PrepareContextForS3Client instance;
+        return instance;
+    }
+
+private:
+    PrepareContextForS3Client() : context(DB::Context::createCopy(getContext().context)), map_config(new Poco::Util::MapConfiguration)
+    {
+        context->setConfig(map_config);
+    }
+};
+
+}
 
 class NoRetryStrategy : public Aws::Client::StandardRetryStrategy
 {
@@ -50,7 +74,7 @@ String getSSEAndSignedHeaders(const Poco::Net::MessageHeader & message_header)
         else if (header_name == "authorization")
         {
             std::vector<String> parts;
-            boost::split(parts, header_value, [](char c){ return c == ' '; });
+            boost::split(parts, header_value, [](char c) { return c == ' '; });
             for (const auto & part : parts)
             {
                 if (boost::algorithm::starts_with(part, "SignedHeaders="))
@@ -69,14 +93,7 @@ void doReadRequest(std::shared_ptr<const DB::S3::Client> client, const DB::S3::U
     DB::ReadSettings read_settings;
     DB::S3Settings::RequestSettings request_settings;
     request_settings.max_single_read_retries = max_single_read_retries;
-    DB::ReadBufferFromS3 read_buffer(
-        client,
-        uri.bucket,
-        uri.key,
-        version_id,
-        request_settings,
-        read_settings
-    );
+    DB::ReadBufferFromS3 read_buffer(client, uri.bucket, uri.key, version_id, request_settings, read_settings);
 
     String content;
     DB::readStringUntilEOF(content, read_buffer);
@@ -88,14 +105,7 @@ void doWriteRequest(std::shared_ptr<const DB::S3::Client> client, const DB::S3::
 
     DB::S3Settings::RequestSettings request_settings;
     request_settings.max_unexpected_write_error_retries = max_unexpected_write_error_retries;
-    DB::WriteBufferFromS3 write_buffer(
-        client,
-        uri.bucket,
-        uri.key,
-        DBMS_DEFAULT_BUFFER_SIZE,
-        request_settings,
-        {}
-    );
+    DB::WriteBufferFromS3 write_buffer(client, uri.bucket, uri.key, DBMS_DEFAULT_BUFFER_SIZE, request_settings, {});
 
     write_buffer.write('\0'); // doesn't matter what we write here, just needs to be something
     write_buffer.finalize();
@@ -109,6 +119,8 @@ void testServerSideEncryption(
     DB::S3::ServerSideEncryptionKMSConfig sse_kms_config,
     String expected_headers)
 {
+    [[maybe_unused]] const PrepareContextForS3Client & prepare_context = PrepareContextForS3Client::instance();
+
     TestPocoHTTPServer http;
 
     DB::RemoteHostFilter remote_host_filter;
@@ -125,8 +137,7 @@ void testServerSideEncryption(
         enable_s3_requests_logging,
         /* for_disk_s3 = */ false,
         /* get_request_throttler = */ {},
-        /* put_request_throttler = */ {}
-    );
+        /* put_request_throttler = */ {});
 
     client_configuration.endpointOverride = uri.endpoint;
     client_configuration.retryStrategy = std::make_shared<NoRetryStrategy>();
@@ -143,12 +154,8 @@ void testServerSideEncryption(
         server_side_encryption_customer_key_base64,
         sse_kms_config,
         headers,
-        DB::S3::CredentialsConfiguration
-        {
-            .use_environment_credentials = use_environment_credentials,
-            .use_insecure_imds_request = use_insecure_imds_request
-        }
-    );
+        DB::S3::CredentialsConfiguration{
+            .use_environment_credentials = use_environment_credentials, .use_insecure_imds_request = use_insecure_imds_request});
 
     ASSERT_TRUE(client);
 
@@ -167,9 +174,9 @@ TEST(IOTestAwsS3Client, AppendExtraSSECHeadersRead)
         "authorization: ... SignedHeaders="
         "amz-sdk-invocation-id;"
         "amz-sdk-request;"
-        "clickhouse-request;"
         "content-type;"
         "host;"
+        "timeplus-request;"
         "x-amz-api-version;"
         "x-amz-content-sha256;"
         "x-amz-date, ...\n"
@@ -213,9 +220,9 @@ TEST(IOTestAwsS3Client, AppendExtraSSEKMSHeadersRead)
         "authorization: ... SignedHeaders="
         "amz-sdk-invocation-id;"
         "amz-sdk-request;"
-        "clickhouse-request;"
         "content-type;"
         "host;"
+        "timeplus-request;"
         "x-amz-api-version;"
         "x-amz-content-sha256;"
         "x-amz-date, ...\n");

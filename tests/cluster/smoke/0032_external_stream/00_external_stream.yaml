@@ -1,0 +1,152 @@
+description: test external stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test33_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test33_external
+        (
+          int8_c int8,
+          int16_c int16,
+          int32_c int32,
+          int64_c int64,
+          uint8_c uint8,
+          uint16_c uint16,
+          uint32_c uint32,
+          uint64_c uint64,
+          uuid_c uuid,
+          string_c string,
+          float_c float,
+          decimal_c decimal32(3),
+          date_c date,
+          datetime_c datetime,
+          enum_c enum('a'=1, 'b'=2, 'z'=26),
+          tuple_c tuple(s string, i int),
+          ipv4_c ipv4,
+          ipv6_c ipv6,
+          map_c map(string, int),
+          array_c array(int)
+        )
+        settings type='kafka', brokers='k1:9092', topic='test', data_format='JSONEachRow';
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 3300
+    query: select * from test33_external
+    schema:
+      - name: int8_c
+        type: int8
+      - name: int16_c
+        type: int16
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint8_c
+        type: uint8
+      - name: uint16_c
+        type: uint16
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: uuid_c
+        type: uuid
+      - name: string_c
+        type: string
+      - name: float_c
+        type: float32
+      - name: decimal_c
+        type: decimal(9,3)
+      - name: date_c 
+        type: date
+      - name: datetime_c
+        type: datetime
+      - name: enum_c
+        type: enum8('a'=1, 'b'=2, 'z'=26)
+      - name: tuple_c
+        type: tuple(s string, i int32)
+      - name: ipv4_c
+        type: ipv4
+      - name: ipv6_c
+        type: ipv6
+      - name: map_c
+        type: map(string, int32)
+      - name: array_c
+        type: array(int32)
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - int8_c: 1
+        int16_c: 2
+        int32_c: 3
+        int64_c: 4 # "4" -> 4
+        uint8_c: 5
+        uint16_c: 6
+        uint32_c: 7
+        uint64_c: 8 # "8" -> 8
+        uuid_c: 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        string_c: "{@string}"
+        float_c: 12345.123
+        decimal_c: 123456.123
+        date_c: "2022-03-24"
+        datetime_c: "2022-03-24 17:17:17"
+        enum_c: a
+        tuple_c:
+          s: a
+          i: 0
+        ipv4_c: 192.168.168.168
+        ipv6_c: 2a02:aa08:e000:3100::20
+        map_c:
+          key1: 111
+        array_c:
+          - 1
+          - 2
+          - 3
+
+  - type: check
+    target_name: 3300
+    expected_result:
+      - - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string}"
+        - "12345.123046875"
+        - "123456.123"
+        - "2022-03-24"
+        - "2022-03-24 17:17:17"
+        - a
+        - {s: a, i: 0} # "('a', 0)" -> {s: a, i: 0}
+        - 192.168.168.168
+        - 2a02:aa08:e000:3100::20
+        - {'key1': 111}
+        - [1, 2, 3]

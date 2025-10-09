@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <base/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/DataPartStorageOnDiskFull.h>
 #include <Storages/System/StorageSystemPartsBase.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <QueryPipeline/Pipe.h>

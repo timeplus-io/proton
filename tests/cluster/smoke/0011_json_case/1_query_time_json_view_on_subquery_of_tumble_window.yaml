@@ -1,0 +1,74 @@
+tags:
+  - json
+description: create a table test_topmax, 1 column for 1 type and ingest data top_k on int
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists json_tumble_hop_v
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists json_hop_v
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create view json_hop_v as with transformed as (select a.json:data.id
+      as id, to_int64(a.json:data.value) as value, a.json:data.create_time::datetime
+      as created_at, b.location:location from test_json_str as a join table(test_json_d)
+      as b on a.json:data.id = b.location:id where value >0) select window_start as
+      ws, window_end as we, count() from hop(transformed, created_at, 3s, 5s) group
+      by window_start, window_end
+
+  - type: wait
+    time: 2
+
+  - name: '1201'
+    type: query
+    sql: create view json_tumble_hop_v as select window_start as w_s,
+      window_end as w_e, count() as cnt from tumble(json_hop_v, we, 5s) group by window_start,
+      window_end
+
+  - type: wait
+    time: 2
+
+  - name: '1202'
+    type: stream
+    query: select cnt from json_tumble_hop_v
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_json_str (json, timestamp) values('{"data":{"id":"dev1", "value":100,
+      "create_time":"2021-11-02 20:00:01"}, "tag":"building"}' ,'2021-11-02 20:00:01')('{"data":{"id":"dev1",
+      "value":100, "create_time":"2021-11-02 20:00:03"}, "tag":"temperature"}' ,'2021-11-02
+      20:00:03')('{"data":{"id":"dev2", "value":100, "create_time":"2021-11-02 20:00:02"},
+      "tag":"water"}' ,'2021-11-02 20:00:02')('{"data":{"id":"dev2", "value":100, "create_time":"2021-11-02
+      20:00:04"}, "tag":"building"}' ,'2021-11-02 20:00:04')('{"data":{"id":"dev3",
+      "value":100, "create_time":"2021-11-02 20:00:05"}, "tag":"water"}' ,'2021-11-02
+      20:00:05')('{"data":{"id":"dev3", "value":100, "create_time":"2021-11-02 20:00:06"},
+      "tag":"water"}' ,'2021-11-02 20:00:06')('{"data":{"id":"dev3", "value":100, "create_time":"2021-11-02
+      20:00:09"}, "tag":"water"}' ,'2021-11-02 20:00:09')('{"data":{"id":"dev3", "value":100,
+      "create_time":"2021-11-02 20:00:08"}, "tag":"water"}' ,'2021-11-02 20:00:08')('{"data":{"id":"dev3",
+      "value":100, "create_time":"2021-11-02 20:00:07"}, "tag":"water"}' ,'2021-11-02
+      20:00:07')('{"data":{"id":"dev3", "value":100, "create_time":"2021-11-02 20:00:09"},
+      "tag":"water"}' ,'2021-11-02 20:00:09')('{"data":{"id":"dev3", "value":100, "create_time":"2021-11-02
+      20:00:01"}, "tag":"water"}' ,'2021-11-02 20:00:01')('{"data":{"id":"dev3", "value":100,
+      "create_time":"2021-11-02 20:00:10"}, "tag":"water"}' ,'2021-11-02 20:00:10')
+
+  - type: check
+    target_name: '1202'
+    expected_result:
+      - [ '1' ]

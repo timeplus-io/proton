@@ -1,0 +1,4 @@
+name: changelogstream_join_table3
+description: Tests covering the changelog stream join tables.
+tags:
+- smoke

@@ -44,7 +44,7 @@ function(add_contrib cmake_folder)
     message(STATUS "Adding contrib module ${base_folders} (configuring with ${cmake_folder})")
     add_subdirectory (${cmake_folder})
 endfunction()
-
+add_contrib (openssl-cmake openssl)
 add_contrib (miniselect-cmake miniselect)
 add_contrib (pdqsort-cmake pdqsort)
 add_contrib (sparsehash-c11-cmake sparsehash-c11)
@@ -68,7 +68,6 @@ add_contrib (re2-cmake re2)
 add_contrib (xz-cmake xz)
 add_contrib (brotli-cmake brotli)
 add_contrib (double-conversion-cmake double-conversion)
-add_contrib (boringssl-cmake boringssl)
 add_contrib (croaring-cmake croaring)
 add_contrib (zstd-cmake zstd)
 add_contrib (zlib-ng-cmake zlib-ng)
@@ -93,6 +92,7 @@ add_contrib (cityhash102)
 add_contrib (libfarmhash)
 add_contrib (icu-cmake icu)
 add_contrib (h3-cmake h3)
+add_contrib (mariadb-connector-c-cmake mariadb-connector-c)
 
 if (ENABLE_TESTS)
     add_contrib (googletest-cmake googletest)
@@ -123,13 +123,18 @@ add_contrib (base64-cmake base64)
 add_contrib (simdjson-cmake simdjson)
 add_contrib (rapidjson-cmake rapidjson)
 add_contrib (fastops-cmake fastops)
+add_contrib (libuv-cmake libuv)
 add_contrib (liburing-cmake liburing)
 
+# proton: starts
+# pulsar requires curl
+add_contrib (curl-cmake curl)
 if (NOT OS_DARWIN)
-    add_contrib (curl-cmake curl)
-    add_contrib (azure-cmake azure)
+# proton: ends
+    # proton: starts - Disabled for single-instance mode
+    # add_contrib (azure-cmake azure)
+    # proton: ends
     add_contrib (sentry-native-cmake sentry-native) # requires: curl
-    add_contrib (pulsar-cmake) # requires: curl
 endif()
 
 add_contrib (fmtlib-cmake fmtlib)
@@ -137,13 +142,23 @@ add_contrib (krb5-cmake krb5)
 add_contrib (cyrus-sasl-cmake cyrus-sasl) # for krb5
 add_contrib (libgsasl-cmake libgsasl) # requires krb5
 add_contrib (libhdfs3-cmake libhdfs3) # requires: google-protobuf, krb5
-add_contrib (librdkafka-cmake librdkafka) # requires: libgsasl
-add_contrib (libpqxx-cmake libpqxx)
+add_contrib (librdkafka-cmake confluentinc-librdkafka) # requires: libgsasl
+
+option(ENABLE_LIBPQXX "Enable PostgreSQL" ${ENABLE_LIBRARIES})
+if (ENABLE_LIBPQXX)
+    add_contrib (libpqxx-cmake libpqxx)
+endif()
+
 add_contrib (libpq-cmake libpq)
-add_contrib (nuraft-cmake NuRaft)
 add_contrib (fast_float-cmake fast_float)
 add_contrib (datasketches-cpp-cmake datasketches-cpp)
 add_contrib (hashidsxx-cmake hashidsxx)
+
+option(USE_MONGODB "Enable MongoDB support" ${ENABLE_LIBRARIES})
+if (USE_MONGODB)
+    add_contrib (mongo-c-driver-cmake mongo-c-driver) # requires: zlib
+    add_contrib (mongo-cxx-driver-cmake mongo-cxx-driver) # requires: libmongoc, libbson
+endif()
 
 option(ENABLE_NLP "Enable NLP functions support" ${ENABLE_LIBRARIES})
 if (ENABLE_NLP)
@@ -154,7 +169,6 @@ if (ENABLE_NLP)
     add_contrib (cld2-cmake cld2)
 endif()
 
-# add_contrib (sqlite-cmake sqlite-amalgamation)
 add_contrib (s2geometry-cmake s2geometry)
 add_contrib (c-ares-cmake c-ares)
 add_contrib (morton-nd-cmake morton-nd)
@@ -164,13 +178,22 @@ add_contrib (xxHash-cmake xxHash)
 add_contrib (google-benchmark-cmake google-benchmark)
 
 # proton: starts
-option(ENABLE_MUDUO "Enable muduo lib" YES)
-add_contrib (muduo-cmake muduo)
-
 # enable v8 build by default to support UDA and UDF
 add_contrib(v8-cmake)
 
+if (ENABLE_PYTHON_UDF)
+    # add_contrib(numpy-cmake)
+    add_contrib(libffi-cmake)
+    add_contrib(cpython-cmake)
+    set (ENABLE_SQLITE 1)
+    add_contrib (sqlite-cmake sqlite-amalgamation)
+    message(STATUS "Enable Python UDF support")
+endif()
+
+add_contrib (pulsar-cmake)
 # proton: ends
+
+add_contrib (ulid-c-cmake ulid-c)
 
 # Put all targets defined here and in subdirectories under "contrib/<immediate-subdir>" folders in GUI-based IDEs.
 # Some of third-party projects may override CMAKE_FOLDER or FOLDER property of their targets, so they would not appear

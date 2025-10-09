@@ -1,0 +1,45 @@
+tags:
+  - tumble window
+description: stream tumble window query and send 3 inptus in the first batch, the window_start of the next window should be based on the minimal timestamp of the first batch
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select window_start, window_end, max(timestamp), min(timestamp) from tumble(test_smoke, timestamp, interval 3 second) where value > 50 group by  window_start, window_end emit stream
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: max(timestamp)
+        type: datetime64(3)
+      - name: min(timestamp)
+        type: datetime64(3)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:20']
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:23']
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:27']
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['2020-02-02 20:00:18', '2020-02-02 20:00:21', '2020-02-02 20:00:20', '2020-02-02 20:00:20']
+      - ['2020-02-02 20:00:21', '2020-02-02 20:00:24', '2020-02-02 20:00:23', '2020-02-02 20:00:23']

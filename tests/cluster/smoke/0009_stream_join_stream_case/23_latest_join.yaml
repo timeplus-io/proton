@@ -1,0 +1,60 @@
+tags:
+- stream_join_stream
+- to_support
+description: latest join emits changelog
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '1024'
+  type: stream
+  query: select sum(i) as total from test10_left_stream inner latest join test10_right_stream
+    on i=ii emit periodic 1s
+  schema: 
+    - name: total
+      type: int64
+      
+- type: wait
+  time: 1
+  
+- name: '1025'
+  type: stream
+  query: select sum(i) as total from test10_left_stream latest join test10_right_stream
+    on i=ii emit periodic 1s
+  schema:
+    - name: total
+      type: int64
+      
+- type: wait
+  time: 1
+  
+- type: query
+  sql: insert into test10_left_stream(i, s) values (1, 's')
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test10_right_stream(ii, ss) values (1, 's1')
+  
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test10_right_stream(ii, ss) values (1, 's2')
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test10_left_stream(i, s) values (1, 's3')
+
+- type: check
+  target_name: '1024'
+  expected_result:
+  - [1]
+
+- type: check
+  target_name: '1025'
+  expected_result:
+  - [1]

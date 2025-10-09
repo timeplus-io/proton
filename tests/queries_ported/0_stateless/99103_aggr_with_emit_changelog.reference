@@ -1,0 +1,31 @@
+=== Single shard aggr with emit changelog results ===
+>>> Pure memory aggr without key
+1	1
+1	-1
+3	1
+3	-1
+5	1
+>>> Pure memory aggr
+1	1	1
+2	2	1
+2	2	-1
+2	3	1
+3	1	1
+>>> Hybrid aggr without key
+1	1
+1	-1
+3	1
+3	-1
+5	1
+>>> Hybrid aggr
+1	1	1
+2	2	1
+2	2	-1
+2	3	1
+3	1	1
+
+=== Multi-shard aggr with emit changelog results ===
+>>> Pure memory aggr without key: ❌ (FIXME)
+>>> Pure memory aggr: ❌ (FIXME)
+>>> Hybrid aggr without key: ❌ (FIXME)
+>>> Hybrid aggr: ❌ (FIXME)

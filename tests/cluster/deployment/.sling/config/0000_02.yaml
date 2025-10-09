@@ -1,0 +1,16 @@
+source: TIMEPLUS
+target: TIMEPLUS
+
+defaults:
+  mode: incremental
+
+streams:
+  src:
+    update_key: _tp_time
+    object: tgt
+  src1:
+    update_key: _tp_time
+    object: tgt1
+  src2:
+    update_key: _tp_time
+    object: tgt

@@ -8,12 +8,12 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Storages/IStorage.h>
+#include <Storages/MemorySettings.h>
 
 #include <Common/MultiVersion.h>
 
 namespace DB
 {
-
 /** Implements storage in the RAM.
   * Suitable for temporary data.
   * It does not support keys.
@@ -25,6 +25,13 @@ friend class MemorySink;
 friend struct shared_ptr_helper<StorageMemory>;
 
 public:
+    StorageMemory(
+        const StorageID & table_id_,
+        ColumnsDescription columns_description_,
+        ConstraintsDescription constraints_,
+        const String & comment,
+        const MemorySettings & memory_settings_ = MemorySettings());
+
     String getName() const override { return "Memory"; }
 
     size_t getSize() const { return data.get()->size(); }
@@ -38,6 +45,8 @@ public:
 
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
+    const MemorySettings & getMemorySettingsRef() const { return memory_settings; }
+
     Pipe read(
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
@@ -47,8 +56,11 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    bool isInmemory() const override { return true; }
+
     bool supportsParallelInsert() const override { return true; }
     bool supportsSubcolumns() const override { return true; }
+    bool supportsDynamicSubcolumnsDeprecated() const override { return true; }
     bool supportsDynamicSubcolumns() const override { return true; }
 
     /// Smaller blocks (e.g. 64K rows) are better for CPU cache.
@@ -64,6 +76,9 @@ public:
     void mutate(const MutationCommands & commands, ContextPtr context) override;
 
     void truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr, TableExclusiveLockHolder &) override;
+
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
+    void alter(const AlterCommands & params, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
 
     std::optional<UInt64> totalRows(const Settings &) const override;
     std::optional<UInt64> totalBytes(const Settings &) const override;
@@ -117,15 +132,9 @@ private:
     std::atomic<size_t> total_size_bytes = 0;
     std::atomic<size_t> total_size_rows = 0;
 
-    bool compress;
+    MemorySettings memory_settings;
 
-protected:
-    StorageMemory(
-        const StorageID & table_id_,
-        ColumnsDescription columns_description_,
-        ConstraintsDescription constraints_,
-        const String & comment,
-        bool compress_ = false);
+    friend class ReadFromMemoryStorageStep;
 };
 
 }

@@ -141,9 +141,38 @@ Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             return bool(value);
         }
         case Field::Types::Decimal32:
+        {
+            Decimal32 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal32>(value, scale);
+        }
         case Field::Types::Decimal64:
+        {
+            Decimal64 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal64>(value, scale);
+        }
         case Field::Types::Decimal128:
+        {
+            Decimal128 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal128>(value, scale);
+        }
         case Field::Types::Decimal256:
+        {
+            Decimal256 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal256>(value, scale);
+        }
+        case Field::Types::CustomType:
             return Field();
     }
     throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown field type {}", std::to_string(type));
@@ -253,6 +282,17 @@ void writeText(const Object & x, WriteBuffer & buf)
     writeFieldText(Field(x), buf);
 }
 
+void writeBinary(const CustomType & x, WriteBuffer & buf)
+{
+    writeBinary(std::string_view(x.getTypeName()), buf);
+    writeBinary(x.toString(), buf);
+}
+
+void writeText(const CustomType & x, WriteBuffer & buf)
+{
+    writeFieldText(Field(x), buf);
+}
+
 template <typename T>
 void readQuoted(DecimalField<T> & x, ReadBuffer & buf)
 {
@@ -266,7 +306,7 @@ void readQuoted(DecimalField<T> & x, ReadBuffer & buf)
     {
         scale = 0;
         if (common::mulOverflow(value.value, DecimalUtils::scaleMultiplier<T>(exponent), value.value))
-            throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+            throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "the decimal math overflow");
     }
     else
         scale = -exponent;
@@ -289,6 +329,7 @@ void writeFieldBinary(const Field & x, WriteBuffer & buf)
 {
     const UInt8 type = x.getType();
     writeBinary(type, buf);
+
     Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, x);
 }
 
@@ -308,7 +349,7 @@ Field Field::restoreFromDump(std::string_view dump_)
 {
     auto show_error = [&dump_]
     {
-        throw Exception("Couldn't restore Field from dump: " + String{dump_}, ErrorCodes::CANNOT_RESTORE_FROM_FIELD_DUMP);
+        throw Exception(ErrorCodes::CANNOT_RESTORE_FROM_FIELD_DUMP, "Couldn't restore Field from dump: {}", String{dump_});
     };
 
     std::string_view dump = dump_;
@@ -603,6 +644,7 @@ std::string_view fieldTypeToString(Field::Types::Which type)
         case Field::Types::Which::UUID: return "uuid"sv;
         case Field::Types::Which::IPv4: return "ipv4"sv;
         case Field::Types::Which::IPv6: return "ipv6"sv;
+        case Field::Types::Which::CustomType: return "custom_type"sv;
     }
 }
 

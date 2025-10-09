@@ -1,0 +1,132 @@
+tags:
+  - message_headers
+  - message_properties
+description: Read/Write message properties via _tp_message_headers column.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_32_11
+
+  - type: pulsar
+    name: delete
+    topic: test_32_11_raw
+
+  - type: pulsar
+    name: create
+    topic: test_32_11
+
+  - type: pulsar
+    name: create
+    topic: test_32_11_raw
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists smoke_32_11
+
+  - type: query
+    sql: drop stream if exists smoke_32_11_raw
+
+  - type: query
+    sql: drop stream if exists smoke_32_11_raw_for_read
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream smoke_32_11
+        (
+          key string,
+          value int32,
+          _tp_message_headers map(string, string)
+        )
+        settings type='pulsar', service_url='pulsar://pulsar:6650', topic = 'test_32_11', one_message_per_row=true
+
+  - type: query
+    sql: create external stream smoke_32_11_raw
+        (
+          raw string,
+          _tp_message_headers map(string, string)
+        )
+        settings type='pulsar', service_url='pulsar://pulsar:6650', topic = 'test_32_11_raw'
+
+  - type: query
+    sql: create external stream smoke_32_11_raw_for_read
+        (
+          raw string
+        )
+        settings type='pulsar', service_url='pulsar://pulsar:6650', topic = 'test_32_11_raw'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |-
+      insert into smoke_32_11 (key, value, _tp_message_headers) values ('one', 1, {'test_id': 'smoke_test_32_11', 'idx': '1'})('two', 2, {'test_id': 'smoke_test_32_11', 'idx': '2'})('three', 3, {'test_id': 'smoke_test_32_11', 'idx': '3'})('four', 4, {'test_id': 'smoke_test_32_11', 'idx': '4'})('five', 5, {'test_id': 'smoke_test_32_11', 'idx': '5'})
+
+  - type: query
+    sql: |-
+      insert into smoke_32_11_raw (raw, _tp_message_headers) values ('one', {'test_id': 'smoke_test_32_11', 'idx': '1'})('two', {'test_id': 'smoke_test_32_11', 'idx': '2'})('three', {'test_id': 'smoke_test_32_11', 'idx': '3'})('four', {'test_id': 'smoke_test_32_11', 'idx': '4'})('five', {'test_id': 'smoke_test_32_11', 'idx': '5'})
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 32_11
+    query: select key, value, _tp_message_headers from table(smoke_32_11)
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+      - name: _tp_message_headers
+        type: map(string, string)
+
+  - type: stream
+    name: 32_11_raw
+    query: select raw, _tp_message_headers from table(smoke_32_11_raw)
+    schema:
+      - name: raw
+        type: string
+      - name: _tp_message_headers
+        type: map(string, string)
+
+  - type: stream
+    name: 32_11_raw_2
+    query: select raw, _tp_message_headers from table(smoke_32_11_raw_for_read)
+    schema:
+      - name: raw
+        type: string
+      - name: _tp_message_headers
+        type: map(string, string)
+
+  - type: check
+    target_name: 32_11
+    expected_result:
+      - ["one", 1, {"test_id": "smoke_test_32_11", "idx": "1"}]
+      - ["two", 2, {"test_id": "smoke_test_32_11", "idx": "2"}]
+      - ["three", 3, {"test_id": "smoke_test_32_11", "idx": "3"}]
+      - ["four", 4, {"test_id": "smoke_test_32_11", "idx": "4"}]
+      - ["five", 5, {"test_id": "smoke_test_32_11", "idx": "5"}]
+
+  - type: check
+    target_name: 32_11_raw
+    expected_result:
+      - ["one", {"test_id": "smoke_test_32_11", "idx": "1"}]
+      - ["two", {"test_id": "smoke_test_32_11", "idx": "2"}]
+      - ["three", {"test_id": "smoke_test_32_11", "idx": "3"}]
+      - ["four", {"test_id": "smoke_test_32_11", "idx": "4"}]
+      - ["five", {"test_id": "smoke_test_32_11", "idx": "5"}]
+
+  - type: check
+    target_name: 32_11_raw_2
+    expected_result:
+      - ["one", {"test_id": "smoke_test_32_11", "idx": "1"}]
+      - ["two", {"test_id": "smoke_test_32_11", "idx": "2"}]
+      - ["three", {"test_id": "smoke_test_32_11", "idx": "3"}]
+      - ["four", {"test_id": "smoke_test_32_11", "idx": "4"}]
+      - ["five", {"test_id": "smoke_test_32_11", "idx": "5"}]

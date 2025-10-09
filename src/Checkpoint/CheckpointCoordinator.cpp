@@ -1,125 +1,53 @@
-#include "CheckpointCoordinator.h"
-#include "CheckpointContext.h"
-#include "CheckpointStorageFactory.h"
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
+#include <Checkpoint/CheckpointStorageFactory.h>
+#include <Checkpoint/LocalFileSystemCheckpointStorage.h>
+#include <Checkpoint/LogStoreCheckpointContext.h>
 
+#include <Bootstrap/Globals.h>
+#include <Cluster/NativeLog/NativeLog.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/Context.h>
-#include <Processors/Executors/PipelineExecutor.h>
+#include <base/getFileSystemSpace.h>
+#include <Common/assert_cast.h>
+#include <Common/formatReadable.h>
+#include <Common/setThreadName.h>
 
-#include <Poco/Logger.h>
-#include <Poco/Util/AbstractConfiguration.h>
+namespace CurrentMetrics
+{
+extern const Metric CheckpointCoordinatorThread;
+extern const Metric CheckpointCoordinatorThreadActive;
+extern const Metric AsyncCheckpointThreads;
+extern const Metric AsyncCheckpointThreadsActive;
+}
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
-extern const int RESOURCE_NOT_FOUND;
+extern const int INVALID_DISK;
 }
 
-namespace
+CheckpointCoordinator::CheckpointCoordinator(CheckpointConfig config_)
+    : config(std::move(config_)), logger(getLogger("CheckpointCoordinator"))
 {
-const String QUERY_CKPT_FILE = "query";
+    local_ckpt_storage
+        = assert_cast<const LocalFileSystemCheckpointStorage *>(&getCheckpointStorage(CheckpointStorageType::LocalFileSystem));
 
-const UInt64 DEFAULT_CKPT_LAST_ACCESS_TTL = 7 * 81400; /// in seconds
-const UInt64 DEFAULT_CKPT_LAST_ACCESS_CHECK_INTERVAL = 7200; /// in seconds
-const UInt64 DEFAULT_CKPT_DELETE_GRACE_INTERVAL = 60; /// in seconds
-const UInt64 DEFAULT_CKPT_TEARDOWN_FLUSH_TIMEOUT = 60; /// in seconds
+    const auto & path_str = config.path;
 
-String formatNodeDescriptions(const std::vector<ExecutingGraph::NodeDescription> & node_descs)
-{
-    std::vector<String> desc;
-    desc.reserve(node_descs.size());
+    auto [total_space, free_space, available_space, used_space] = getFileSystemSpace(path_str);
 
-    for (const auto & node_desc : node_descs)
-        desc.emplace_back(node_desc.string());
-
-    return fmt::format("{}", fmt::join(desc, ", "));
-}
-}
-
-struct CheckpointableQuery
-{
-    /// Query DAG, maybe using std::weak_ptr makes more sense
-    std::weak_ptr<PipelineExecutor> executor;
-
-    absl::flat_hash_set<UInt32> ack_node_ids_readonly;
-    absl::flat_hash_set<UInt32> ack_node_ids;
-
-    Int64 current_epoch = 0;
-    Int64 last_epoch = 0;
-
-    /// Return true if all ack nodes acked
-    bool ack(UInt32 node_id)
-    {
-        ack_node_ids.erase(node_id);
-        return ack_node_ids.empty();
-    }
-
-    void prepareForNextEpoch()
-    {
-        last_epoch = current_epoch;
-        current_epoch = 0;
-        ack_node_ids = ack_node_ids_readonly;
-    }
-
-    String ackNodeDescriptions() const
-    {
-        auto exec = executor.lock();
-        assert(exec);
-        auto node_descs = exec->getExecGraph().nodeDescriptions(
-            ack_node_ids_readonly.begin(), ack_node_ids_readonly.end(), ack_node_ids_readonly.size());
-
-        return formatNodeDescriptions(node_descs);
-    }
-
-    String outstandingAckNodeDescriptions() const
-    {
-        auto exec = executor.lock();
-        assert(exec);
-        auto node_descs = exec->getExecGraph().nodeDescriptions(ack_node_ids.begin(), ack_node_ids.end(), ack_node_ids.size());
-
-        return formatNodeDescriptions(node_descs);
-    }
-
-    String sourceNodeDescriptions() const
-    {
-        auto exec = executor.lock();
-        assert(exec);
-        auto source_nodes = exec->getCheckpointSourceNodeIDs();
-        auto node_descs = exec->getExecGraph().nodeDescriptions(source_nodes.begin(), source_nodes.end(), source_nodes.size());
-
-        return formatNodeDescriptions(node_descs);
-    }
-
-    CheckpointableQuery(std::weak_ptr<PipelineExecutor> executor_, std::optional<Int64> recovered_epoch) : executor(std::move(executor_))
-    {
-        auto exec = executor.lock();
-        assert(exec);
-        auto node_ids{exec->getCheckpointAckNodeIDs()};
-
-        ack_node_ids_readonly.reserve(node_ids.size());
-        ack_node_ids_readonly.insert(node_ids.begin(), node_ids.end());
-
-        assert(!ack_node_ids_readonly.empty());
-
-        if (recovered_epoch)
-            current_epoch = *recovered_epoch;
-
-        prepareForNextEpoch();
-    }
-};
-
-CheckpointCoordinator::CheckpointCoordinator(DB::ContextPtr global_context) : logger(&Poco::Logger::get("CheckpointCoordinator"))
-{
-    const auto & config = global_context->getConfigRef();
-    ckpt = CheckpointStorageFactory::create(config);
-
-    last_access_ttl = config.getUInt64("checkpoint.last_access_ttl", DEFAULT_CKPT_LAST_ACCESS_TTL);
-    last_access_check_interval = config.getUInt64("checkpoint.last_access_check_interval", DEFAULT_CKPT_LAST_ACCESS_CHECK_INTERVAL);
-    grace_interval = config.getUInt64("checkpoint.delete_grace_interval", DEFAULT_CKPT_DELETE_GRACE_INTERVAL);
-    teardown_flush_timeout = config.getUInt64("checkpoint.teardown_flush_timeout", DEFAULT_CKPT_TEARDOWN_FLUSH_TIMEOUT);
+    LOG_INFO(
+        logger,
+        "The path of checkpoint is {}. The device where this path is located has total space: {}, free space: {}, available space: {}, "
+        "used space: {}.",
+        path_str,
+        formatReadableSizeWithBinarySuffix(total_space),
+        formatReadableSizeWithBinarySuffix(free_space),
+        formatReadableSizeWithBinarySuffix(available_space),
+        formatReadableSizeWithBinarySuffix(used_space));
 }
 
 CheckpointCoordinator::~CheckpointCoordinator()
@@ -132,10 +60,37 @@ void CheckpointCoordinator::startup()
     if (started.test_and_set())
         return;
 
-    pool.emplace(2);
+    /// first level range [1 sec, 1 sec * 8000 slots = 2.22 hours]
+    /// to save memory for last_access_check_interval_sec = 2 hours
+    timer_service = std::make_unique<cluster::TimerService>(
+        /*thread_pool_size=*/4, /*tick_ms=*/1000, /*wheel_size=*/8000, /*expired_timer_size=*/1000);
 
-    timer_service.startup();
-    pool->scheduleOrThrow([this] { removeExpiredCheckpoints(true); });
+    pool = std::make_unique<ThreadPool>(
+        CurrentMetrics::CheckpointCoordinatorThread,
+        CurrentMetrics::CheckpointCoordinatorThreadActive,
+        /*max_threads=*/4,
+        /*max_free_threads=*/4,
+        /*queue_size=*/1000,
+        /*shutdown_on_exception=*/false);
+
+    /// Every delete_grace_interval_sec (default 60 seconds), remove old checkpoints
+    [[maybe_unused]] auto timer1 = timer_service->add(
+        config.delete_grace_interval_sec * 1000,
+        [this]() {
+            pool->scheduleOrThrow([this] {
+                try
+                {
+                    setThreadName("CkptExpirer");
+                    removeOldOrExpiredCheckpoints();
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(logger, "Caught exception during removal of expired checkpoints");
+                }
+            });
+        },
+        /*repeat=*/true);
+    chassert(timer1);
 }
 
 void CheckpointCoordinator::shutdown()
@@ -143,22 +98,69 @@ void CheckpointCoordinator::shutdown()
     if (stopped.test_and_set())
         return;
 
-    timer_service.shutdown();
+    if (timer_service)
+    {
+        timer_service->shutdown();
+        /// Release the timer service resources (i.e. TimerTaskEntries) before the dtor() of global CheckpointCoordinator
+        timer_service.reset();
+    }
 
     if (pool)
+    {
         pool->wait();
+        pool.reset();
+    }
+}
+
+void CheckpointCoordinator::validateCheckpointSettings(
+    const CheckpointSettingsPtr & ckpt_settings, [[maybe_unused]] const CheckpointContextPtr & ckpt_ctx)
+{
+    if (ckpt_settings->storage_type != CheckpointStorageType::LocalFileSystem)
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only LocalFileSystem checkpoint storage is supported");
+    }
+}
+
+const CheckpointStorage & CheckpointCoordinator::getCheckpointStorage(CheckpointStorageType ckpt_storage_type) const
+{
+    std::scoped_lock lock(ckpt_storages_mutex);
+    auto iter = ckpt_storages.find(ckpt_storage_type);
+    if (iter != ckpt_storages.end())
+        return *iter->second;
+
+    auto ckpt_storage = CheckpointStorageFactory::create(ckpt_storage_type, config);
+    auto [it, inserted] = ckpt_storages.emplace(ckpt_storage_type, std::move(ckpt_storage));
+    chassert(inserted);
+    return *it->second;
 }
 
 void CheckpointCoordinator::registerQuery(
-    const String & qid,
+    CheckpointContextPtr ckpt_ctx,
     const String & query,
-    UInt64 ckpt_interval,
+    CheckpointSettingsPtr ckpt_settings,
     std::weak_ptr<PipelineExecutor> executor,
-    std::optional<Int64> recovered_epoch)
+    std::optional<Int64> recovered_ckpt_epoch)
 {
-    auto ckpt_query = std::make_unique<CheckpointableQuery>(executor, std::move(recovered_epoch));
-    auto ack_nodes_desc = ckpt_query->ackNodeDescriptions();
-    auto source_nodes_desc = ckpt_query->sourceNodeDescriptions();
+    chassert(ckpt_ctx->epoch == 0);
+    const auto & qid = ckpt_ctx->qid;
+    const auto & ckpt_storage = getCheckpointStorage(ckpt_settings->storage_type);
+    if (!ckpt_storage.isLocal() && !ckpt_ctx->extra_ctx)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Missing extra checkpoint context for non-local checkpoint storage '{}'",
+            ckpt_settings->storage_type);
+
+    ckpt_settings->storage_type = ckpt_storage.storageType(); /// Update storage type to the actual storage type (E.g. Auto -> NativeLog)
+
+    validateCheckpointSettings(ckpt_settings, ckpt_ctx);
+
+    /// Use the configured interval if the user does not specify
+    if (ckpt_settings->interval == 0)
+        ckpt_settings->interval = config.interval_sec;
+
+    auto ckpt_query = std::make_unique<CheckpointableQuery>(ckpt_storage, ckpt_settings, executor, recovered_ckpt_epoch, ckpt_ctx);
+    auto ack_node_descs = ckpt_query->checkpointAckNodeDescriptions();
+    auto ckpt_interval = ckpt_query->checkpointInterval(config);
 
     bool query_exists = false;
     {
@@ -175,164 +177,161 @@ void CheckpointCoordinator::registerQuery(
             ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING, "Failed to register query={} since the query id already exists", qid);
     }
 
-    auto ckpt_ctx = std::make_shared<CheckpointContext>(0, qid, this);
-
-    /// First persist the graph
+    if (!recovered_ckpt_epoch.has_value())
     {
-        auto exec = executor.lock();
-        assert(exec);
-        exec->serialize(ckpt_ctx);
+        preCheckpoint(ckpt_ctx);
+
+        /// First persist the graph in a file on \ckpt_storage.
+        {
+            auto exec = executor.lock();
+            chassert(exec);
+            checkpoint(exec->getVersion(), GRAPH_CKPT_FILE, ckpt_ctx, [&](WriteBuffer & wb) { exec->checkpointGraph(wb); });
+        }
+
+        /// Then persist the query in a different file on \ckpt_storage.
+        /// We choose to persist query here for easier to recover the query from the ckpt
+        checkpoint(1, QUERY_CKPT_FILE, ckpt_ctx, [&](WriteBuffer & wb) {
+            /// Query
+            DB::writeStringBinary(query, wb);
+        });
+
+        /// Persist the checkpoint settings in a different file on \ckpt_storage.
+        /// We choose to persist settings here for easier to recover the settings from the ckpt
+        checkpoint(CheckpointSettings::VERSION, SETTINGS_CKPT_FILE, ckpt_ctx, [&](WriteBuffer & wb) {
+            ckpt_settings->serialize(CheckpointSettings::VERSION, wb);
+        });
     }
-
-    /// Then persist the query in a different file.
-    /// We choose to persist query here for easier to recover the query from the ckpt
-    checkpoint(1, QUERY_CKPT_FILE, ckpt_ctx, [&](WriteBuffer & wb) {
-        /// Query
-        DB::writeStringBinary(query, wb);
-    });
-
-    auto interval = ckpt_interval ? ckpt_interval : ckpt->defaultInterval();
 
     LOG_INFO(
         logger,
-        "Register query={} with {} seconds checkpoint interval, source_node_descriptions={}, ack_node_descriptions={}",
+        "Register query={} with default_ckpt_interval={}, revised_ckpt_interval={}, ack_node_descriptions={{{}}}",
         qid,
-        interval,
-        source_nodes_desc,
-        ack_nodes_desc);
+        ckpt_settings->interval,
+        ckpt_interval,
+        ack_node_descs);
 
-    timer_service.runAfter(
-        interval, [query_id = qid, checkpoint_interval = interval, this]() { triggerCheckpoint(query_id, checkpoint_interval); });
+    triggerCheckpointAfter(ckpt_interval, qid);
 }
 
 void CheckpointCoordinator::deregisterQuery(const String & qid)
 {
-    size_t n = 0;
+    bool deregistered = false;
+    CheckpointableExecutorHolder executor;
+    CheckpointContextPtr ckpt_ctx;
+    std::shared_ptr<std::atomic_flag> async_replication_finished;
     {
         std::scoped_lock lock(mutex);
 
-        n = queries.erase(qid);
+        auto iter = queries.find(qid);
+        if (iter != queries.end())
+        {
+            if (iter->second->trigger_id)
+                iter->second->trigger_id->cancel();
+
+            async_replication_finished.swap(iter->second->async_replication_finished);
+            executor.swap(iter->second->executor);
+            ckpt_ctx = iter->second->ctx;
+
+            queries.erase(iter);
+            deregistered = true;
+        }
     }
 
-    if (n)
+    if (deregistered)
+    {
+        /// Wait for in-progress async checkpoint replication to complete before deregistering.
+        /// This prevents epoch conflicts during materialized view recovery.
+        if (async_replication_finished && !async_replication_finished->test())
+        {
+            LOG_INFO(logger, "Waiting for async replication finished for query={} ...", qid);
+            async_replication_finished->wait(false);
+        }
+
+        /// The query has been deregistered. Wait for executor's reference goes to 1.
+        /// Usually ongoing triggering tasks (i.e. `doTriggerCheckpoint()`) will ref executor (so wait for them to complete)
+        /// Doing this here because we must make sure pipeline executor is released before QueryStatus's dtor,
+        /// check issue https://github.com/timeplus-io/proton-enterprise/issues/5829
+        size_t retries = 0;
+        while (executor && !executor.unique())
+        {
+            /// Broken it if it takes too long greater than 30s, which is unlikely to happen
+            if (retries >= 3'000)
+            {
+                LOG_ERROR(logger, "Timeout while waiting executor's reference decreased to 1 for query={}", qid);
+                break;
+            }
+
+            ++retries;
+
+            /// Log a warning every 1s
+            if (retries % 100 == 0)
+                LOG_WARNING(logger, "Waiting for executor's reference decreased to 1 for query={} ...", qid);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+
+        resetHeavyCheckpointingInProgress(qid);
+
         LOG_INFO(logger, "Deregistered query={}", qid);
+    }
 }
 
-void CheckpointCoordinator::removeCheckpoint(const String & qid)
+void CheckpointCoordinator::removeCheckpoint(CheckpointContextPtr ckpt_ctx, bool sync)
 {
-    LOG_INFO(logger, "Going to clean checkpoints for query={}", qid);
+    LOG_INFO(logger, "Going to clean checkpoints for query={}", ckpt_ctx->qid);
 
-    std::weak_ptr<PipelineExecutor> executor;
+    CheckpointableExecutorHolder executor;
     {
         /// If query with qid is running, cancel it first
         std::scoped_lock lock(mutex);
-        auto iter = queries.find(qid);
+        auto iter = queries.find(ckpt_ctx->qid);
         if (iter != queries.end())
             executor = iter->second->executor;
     }
 
-    if (auto exec = executor.lock())
-        exec->cancel();
+    if (executor)
+        executor->cancel();
 
-    /// Mark the checkpoint to be removed and and schedule the checkpoint
-    /// deletion later
-    auto ckpt_ctx = std::make_shared<CheckpointContext>(0, qid, this);
-    if (ckpt->markRemove(ckpt_ctx))
-        timer_service.runAfter(grace_interval, [ckpt_ctx, this]() {
-            pool->scheduleOrThrow([ckpt_ctx, this]() {
-                ckpt->remove(ckpt_ctx);
-                LOG_INFO(logger, "Cleaned checkpoints for query={}", ckpt_ctx->qid);
-            });
-        });
-}
-
-void CheckpointCoordinator::triggerCheckpoint(const String & qid, UInt64 checkpoint_interval)
-{
-    std::weak_ptr<PipelineExecutor> executor;
-    CheckpointContextPtr ckpt_ctx;
+    if (sync)
     {
-        std::scoped_lock lock(mutex);
-
-        auto iter = queries.find(qid);
-        if (iter == queries.end())
-            /// Already canceled the query
-            return;
-
-        if (iter->second->current_epoch != 0)
-        {
-            ckpt_ctx = std::make_shared<CheckpointContext>(iter->second->current_epoch, qid, this);
-        }
-        else
-        {
-            /// Notify the source processor to start checkpoint in a new epoch
-            executor = iter->second->executor;
-            ckpt_ctx = std::make_shared<CheckpointContext>(iter->second->last_epoch + 1, qid, this);
-            iter->second->current_epoch = ckpt_ctx->epoch; /// new epoch in process
-        }
+        doRemoveCheckpoint(ckpt_ctx);
     }
-
-    if (doTriggerCheckpoint(executor, std::move(ckpt_ctx)))
-        timer_service.runAfter(
-            checkpoint_interval, [query_id = qid, interval = checkpoint_interval, this]() { triggerCheckpoint(query_id, interval); });
     else
-        /// Retry after interval - min(15s, checkpoint_interval)
-        timer_service.runAfter(std::min<double>(15, checkpoint_interval), [query_id = qid, interval = checkpoint_interval, this]() { triggerCheckpoint(query_id, interval); });
-}
-
-void CheckpointCoordinator::preCheckpoint(DB::CheckpointContextPtr ckpt_ctx)
-{
-    ckpt->preCheckpoint(std::move(ckpt_ctx));
-}
-
-void CheckpointCoordinator::checkpoint(
-    VersionType version, const String & key, CheckpointContextPtr ckpt_ctx, std::function<void(WriteBuffer &)> do_ckpt)
-{
-    ckpt->checkpoint(version, key, std::move(ckpt_ctx), std::move(do_ckpt));
-}
-
-void CheckpointCoordinator::checkpoint(
-    VersionType version, UInt32 node_id, CheckpointContextPtr ckpt_ctx, std::function<void(WriteBuffer &)> do_ckpt)
-{
-    ckpt->checkpoint(version, fmt::format("{}", node_id), ckpt_ctx, std::move(do_ckpt));
-
-    checkpointed(version, node_id, std::move(ckpt_ctx));
-}
-
-void CheckpointCoordinator::checkpointed(VersionType /*version*/, UInt32 node_id, CheckpointContextPtr ckpt_ctx)
-{
-    bool ckpt_epoch_done = false;
     {
-        std::scoped_lock lock(mutex);
-        auto iter = queries.find(ckpt_ctx->qid);
-        if (iter == queries.end())
-            /// Unregistered
-            return;
-
-        assert(ckpt_ctx->epoch == iter->second->current_epoch);
-
-        if (iter->second->ack(node_id))
-        {
-            /// All ack nodes in the DAG have acked
-            /// 1) Commit `committed` flag file to query ckpt directory for that epoch
-            ckpt->commit(ckpt_ctx);
-
-            /// 2) Prepare for next epoch
-            iter->second->prepareForNextEpoch();
-
-            ckpt_epoch_done = true;
-        }
+        pool->scheduleOrThrowOnError([this, ckpt_ctx] {
+            setThreadName("CkptCleaner");
+            doRemoveCheckpoint(ckpt_ctx);
+        });
     }
-
-    /// 3) Delete ckpts for prev epochs
-    if (ckpt_epoch_done)
-        ckpt->remove(std::move(ckpt_ctx));
 }
 
-String CheckpointCoordinator::getQuery(const String & qid)
+void CheckpointCoordinator::doRemoveCheckpoint(CheckpointContextPtr ckpt_ctx) noexcept
 {
-    auto ckpt_ctx = std::make_shared<CheckpointContext>(0, qid, this);
-    if (!ckpt->exists(QUERY_CKPT_FILE, ckpt_ctx))
-        throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "Can't find query={}", qid);
+    try
+    {
+        ckpt_ctx->storage.remove(ckpt_ctx);
+
+        if (!ckpt_ctx->storage.isLocal())
+            local_ckpt_storage->remove(ckpt_ctx);
+
+        if (ckpt_ctx->epoch == 0)
+            LOG_INFO(logger, "Cleaned checkpoints for query={}", ckpt_ctx->qid);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, fmt::format("Failed to remove checkpoints for query={}", ckpt_ctx->qid));
+    }
+}
+
+bool CheckpointCoordinator::exist(CheckpointContextPtr ckpt_ctx) const
+{
+    return local_ckpt_storage->exists(QUERY_CKPT_FILE, ckpt_ctx) || ckpt_ctx->storage.exists(QUERY_CKPT_FILE, ckpt_ctx);
+}
+
+String CheckpointCoordinator::getQuery(CheckpointContextPtr ckpt_ctx) const
+{
+    if (!ckpt_ctx->storage.exists(QUERY_CKPT_FILE, ckpt_ctx))
+        throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "Can't find query={}", ckpt_ctx->qid);
 
     String query;
     recover(QUERY_CKPT_FILE, std::move(ckpt_ctx), [&query](VersionType /*version*/, ReadBuffer & rb) { DB::readStringBinary(query, rb); });
@@ -340,187 +339,77 @@ String CheckpointCoordinator::getQuery(const String & qid)
     return query;
 }
 
-void CheckpointCoordinator::recover(const String & qid, std::function<void(CheckpointContextPtr)> do_recover)
+CheckpointSettingsPtr CheckpointCoordinator::tryGetCheckpointSettings(CheckpointContextPtr ckpt_ctx) const
 {
-    auto last_committed_epoch = ckpt->recover(qid);
-    do_recover(std::make_shared<CheckpointContext>(last_committed_epoch, qid, this));
-}
+    if (!ckpt_ctx)
+        return nullptr;
 
-void CheckpointCoordinator::recover(
-    const String & key, CheckpointContextPtr ckpt_ctx, std::function<void(VersionType version, ReadBuffer &)> do_recover)
-{
-    ckpt->recover(key, std::move(ckpt_ctx), std::move(do_recover));
-}
-
-void CheckpointCoordinator::recover(
-    UInt32 node_id, CheckpointContextPtr ckpt_ctx, std::function<void(VersionType version, ReadBuffer &)> do_recover)
-{
-    ckpt->recover(fmt::format("{}", node_id), std::move(ckpt_ctx), std::move(do_recover));
-}
-
-void CheckpointCoordinator::removeExpiredCheckpoints(bool delete_marked)
-{
-    try
-    {
-        ckpt->removeExpired(last_access_ttl, delete_marked, [this](const String & qid) {
-            std::scoped_lock lock(mutex);
-            return !queries.contains(qid);
-        });
-    }
-    catch (const Exception & e)
-    {
-        LOG_ERROR(logger, "Failed to remove expired checkpoints error={}", e.message());
-    }
-    catch (const std::exception & ex)
-    {
-        LOG_ERROR(logger, "Failed to remove expired checkpoints error={}", ex.what());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(logger, "Failed to remove expired checkpoints");
-    }
-
-    /// Every last_access_check_interval seconds, check if there are any expired checkpoints to delete
-    timer_service.runAfter(last_access_check_interval, [this]() { removeExpiredCheckpoints(false); });
-}
-
-bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExecutor> & executor, CheckpointContextPtr ckpt_ctx)
-{
-    /// Create directory before hand. Then all other processors don't need
-    /// check and create target epoch ckpt directory.
-    try
-    {
-        auto exec = executor.lock();
-        if (!exec)
-        {
-            LOG_ERROR(
-                logger,
-                "Failed to trigger checkpointing state for query={} epoch={}, since prev checkpoint is still in-progress or it was "
-                "already cancelled",
-                ckpt_ctx->qid,
-                ckpt_ctx->epoch);
-
-            /// Not reset current_epoch here, since the query may be still in progress
-            /// resetCurrentCheckpointEpoch(ckpt_ctx->qid);
-            return false;
-        }
-
-        if (!exec->hasProcessedNewDataSinceLastCheckpoint())
-        {
-            LOG_INFO(
-                logger,
-                "Skipped checkpointing state for query={} epoch={}, since there is no new data processed",
-                ckpt_ctx->qid,
-                ckpt_ctx->epoch);
-
-            resetCurrentCheckpointEpoch(ckpt_ctx->qid);
-            return false;
-        }
-
-        preCheckpoint(ckpt_ctx);
-
-        exec->triggerCheckpoint(ckpt_ctx);
-    
-        LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", ckpt_ctx->qid, ckpt_ctx->epoch);
-        return true;
-    }
-    catch (const Exception & e)
-    {
-        LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", ckpt_ctx->qid, ckpt_ctx->epoch, e.message());
-    }
-    catch (const std::exception & ex)
-    {
-        LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", ckpt_ctx->qid, ckpt_ctx->epoch, ex.what());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(logger, fmt::format("Failed to trigger checkpointing state for query={} epoch={}", ckpt_ctx->qid, ckpt_ctx->epoch));
-    }
-
-    resetCurrentCheckpointEpoch(ckpt_ctx->qid);
-    return false;
-}
-
-void CheckpointCoordinator::triggerLastCheckpointAndFlush()
-{
-    LOG_INFO(logger, "Trigger last checkpoint and flush begin");
-    Stopwatch stopwatch;
-
-    std::vector<std::weak_ptr<PipelineExecutor>> executors;
-    std::vector<CheckpointContextPtr> ckpt_ctxes;
-
+    /// Get from memory first
     {
         std::scoped_lock lock(mutex);
-
-        executors.reserve(queries.size());
-        ckpt_ctxes.reserve(queries.size());
-        for (auto & [qid, query] : queries)
-        {
-            if (query->current_epoch != 0)
-            {
-                executors.emplace_back();
-                ckpt_ctxes.emplace_back(std::make_shared<CheckpointContext>(query->current_epoch, qid, this));
-            }
-            else
-            {
-                /// Notify the source processor to start checkpoint in a new epoch
-                executors.emplace_back(query->executor);
-                ckpt_ctxes.emplace_back(std::make_shared<CheckpointContext>(query->last_epoch + 1, qid, this));
-                query->current_epoch = ckpt_ctxes.back()->epoch; /// new epoch in process
-            }
-        }
+        auto iter = queries.find(ckpt_ctx->qid);
+        if (iter != queries.end())
+            return iter->second->settings;
     }
 
-    assert(executors.size() == ckpt_ctxes.size());
+    /// Get from ckpt meta storage
+    /// Legacy checkpoints may not have the settings file
+    if (!ckpt_ctx->storage.exists(SETTINGS_CKPT_FILE, ckpt_ctx))
+        return nullptr;
 
-    /// <query_id, triggered_epoch>
-    std::vector<std::pair<std::string_view, Int64>> triggered_queries;
-    triggered_queries.reserve(executors.size());
-    for (size_t i = 0; i < executors.size(); ++i)
-    {
-        /// FIXME: So far we've only enforced a simple flush strategy by triggering new checkpoint once (regardless of success)
-        if (doTriggerCheckpoint(executors[i], ckpt_ctxes[i]))
-            triggered_queries.emplace_back(ckpt_ctxes[i]->qid, ckpt_ctxes[i]->epoch);
-    }
-
-    // Wait for last checkpoint flush completed
-    while (stopwatch.elapsedSeconds() < teardown_flush_timeout)
-    {
-        for (auto qid_iter = triggered_queries.begin(); qid_iter != triggered_queries.end();)
-        {
-            std::scoped_lock lock(mutex);
-            auto iter = queries.find(qid_iter->first);
-            if (iter == queries.end())
-                /// Unregistered
-                return;
-
-            /// Remove when triggerd epoch is commited
-            /// NOTE: `commited epoch > triggerd epoch` is possible, if there is new checkpoint triggered after triggered last checkpoint flush
-            if (iter->second->last_epoch >= qid_iter->second)
-                qid_iter = triggered_queries.erase(qid_iter);
-            else
-                ++qid_iter;
-        }
-
-        if (triggered_queries.empty())
-            break;
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-
-    stopwatch.stop();
-    LOG_INFO(logger, "Trigger last checkpoint and flush end (elapsed {} milliseconds)", stopwatch.elapsedMilliseconds());
+    /// Version + Properties ...
+    auto ckpt_settings = std::make_shared<CheckpointSettings>();
+    recover(
+        SETTINGS_CKPT_FILE,
+        std::move(ckpt_ctx),
+        [&](VersionType version, ReadBuffer & rb) { ckpt_settings->deserialize(version, rb); },
+        /*log=*/false);
+    return ckpt_settings;
 }
 
-void CheckpointCoordinator::resetCurrentCheckpointEpoch(const String & qid)
+bool CheckpointCoordinator::isRegistered(const String & qid) const
+{
+    std::scoped_lock lock(mutex);
+    return queries.contains(qid);
+}
+
+CheckpointableExecutorHolder CheckpointCoordinator::getExecutorHolder(const String & qid) const
 {
     std::scoped_lock lock(mutex);
     auto iter = queries.find(qid);
     if (iter == queries.end())
-        /// Already canceled the query
-        return;
+        return {};
 
-    iter->second->current_epoch = 0;
+    return iter->second->executor;
+}
+
+UInt64 CheckpointCoordinator::getStorageSize(CheckpointContextPtr ckpt_ctx) const
+{
+    if (!ckpt_ctx)
+        return 0;
+
+    return ckpt_ctx->storage.getStorageSize(ckpt_ctx);
+}
+
+PathSizes CheckpointCoordinator::getStorageStat(CheckpointContextPtr ckpt_ctx) const
+{
+    if (!ckpt_ctx)
+        return {};
+
+    return ckpt_ctx->storage.getStorageStat(ckpt_ctx);
+}
+
+CheckpointRequestMetricsPtr CheckpointCoordinator::getCheckpointRequestMetrics(CheckpointContextPtr ckpt_ctx) const
+{
+    if (!ckpt_ctx)
+        return nullptr;
+
+    std::scoped_lock lock(mutex);
+    auto iter = queries.find(ckpt_ctx->qid);
+    if (iter == queries.end())
+        return nullptr;
+
+    return iter->second->metrics;
 }
 
 }

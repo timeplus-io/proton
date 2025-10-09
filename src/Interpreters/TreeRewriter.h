@@ -37,6 +37,11 @@ struct TreeRewriterResult
     /// Same as above but also record alias columns which are expanded. This is for RBAC access check.
     Names required_source_columns_before_expanding_alias_columns;
 
+    /// Set of columns that object columns are not extended. This is for distinguishing JSON and Tuple type.
+    NamesAndTypesList source_columns_ordinary;
+
+    NameSet missed_subcolumns;
+
     /// Set of alias columns that are expanded to their alias expressions. We still need the original columns to check access permission.
     NameSet expanded_aliases;
 
@@ -44,6 +49,8 @@ struct TreeRewriterResult
     std::vector<const ASTFunction *> aggregates;
 
     std::vector<const ASTFunction *> window_function_asts;
+
+    std::vector<const ASTFunction *> expressions_with_window_function;
 
     /// Which column is needed to be ARRAY-JOIN'ed to get the specified.
     /// For example, for `SELECT s.v ... ARRAY JOIN a AS s` will get "s.v" -> "a.v".
@@ -88,6 +95,7 @@ struct TreeRewriterResult
 
     /// Results of scalar sub queries
     Scalars scalars;
+    Scalars local_scalars;
 
     explicit TreeRewriterResult(
         const NamesAndTypesList & source_columns_,
@@ -127,7 +135,8 @@ public:
         const StorageSnapshotPtr & storage_snapshot = {},
         bool allow_aggregations = false,
         bool allow_self_aliases = true,
-        bool execute_scalar_subqueries = true) const;
+        bool execute_scalar_subqueries = true,
+        bool is_create_parameterized_view = false) const;
 
     /// Analyze and rewrite select query
     TreeRewriterResultPtr analyzeSelect(
@@ -139,7 +148,7 @@ public:
         std::shared_ptr<TableJoin> table_join = {}) const;
 
 private:
-    static void normalize(ASTPtr & query, Aliases & aliases, const NameSet & source_columns_set, bool ignore_alias, const Settings & settings, bool allow_self_aliases);
+    static void normalize(ASTPtr & query, Aliases & aliases, const NameSet & source_columns_set, bool ignore_alias, const Settings & settings, bool allow_self_aliases, ContextPtr context_, bool is_create_parameterized_view = false);
 };
 
 }

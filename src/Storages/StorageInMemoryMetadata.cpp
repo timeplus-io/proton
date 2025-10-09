@@ -1,6 +1,5 @@
 #include <Storages/StorageInMemoryMetadata.h>
 
-#include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/quoteString.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -8,7 +7,6 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
 
 
@@ -41,6 +39,10 @@ StorageInMemoryMetadata::StorageInMemoryMetadata(const StorageInMemoryMetadata &
     , settings_changes(other.settings_changes ? other.settings_changes->clone() : nullptr)
     , select(other.select)
     , comment(other.comment)
+    , metadata_version(other.metadata_version)
+    /// proton: starts.
+    , version(other.version)
+    /// proton: ends.
 {
 }
 
@@ -69,6 +71,10 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
         settings_changes.reset();
     select = other.select;
     comment = other.comment;
+    metadata_version = other.metadata_version;
+    /// proton: starts.
+    version = other.version;
+    /// proton: ends.
     return *this;
 }
 
@@ -80,7 +86,7 @@ void StorageInMemoryMetadata::setComment(const String & comment_)
 void StorageInMemoryMetadata::setColumns(ColumnsDescription columns_)
 {
     if (columns_.getAllPhysical().empty())
-        throw Exception("Empty list of columns passed", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);
+        throw Exception(ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED, "Empty list of columns passed");
     columns = std::move(columns_);
 }
 
@@ -120,6 +126,18 @@ void StorageInMemoryMetadata::setSettingsChanges(const ASTPtr & settings_changes
 void StorageInMemoryMetadata::setSelectQuery(const SelectQueryDescription & select_)
 {
     select = select_;
+}
+
+void StorageInMemoryMetadata::setMetadataVersion(int32_t metadata_version_)
+{
+    metadata_version = metadata_version_;
+}
+
+StorageInMemoryMetadata StorageInMemoryMetadata::withMetadataVersion(int32_t metadata_version_) const
+{
+    StorageInMemoryMetadata copy(*this);
+    copy.setMetadataVersion(metadata_version_);
+    return copy;
 }
 
 const ColumnsDescription & StorageInMemoryMetadata::getColumns() const
@@ -222,7 +240,10 @@ bool StorageInMemoryMetadata::hasAnyGroupByTTL() const
     return !table_ttl.group_by_ttl.empty();
 }
 
-ColumnDependencies StorageInMemoryMetadata::getColumnDependencies(const NameSet & updated_columns, bool include_ttl_target) const
+ColumnDependencies StorageInMemoryMetadata::getColumnDependencies(
+    const NameSet & updated_columns,
+    bool include_ttl_target,
+    const std::function<bool(const String & file_name)> & has_indice_or_projection) const
 {
     if (updated_columns.empty())
         return {};
@@ -250,10 +271,16 @@ ColumnDependencies StorageInMemoryMetadata::getColumnDependencies(const NameSet 
     };
 
     for (const auto & index : getSecondaryIndices())
-        add_dependent_columns(index.expression, indices_columns);
+    {
+        if (has_indice_or_projection("skp_idx_" + index.name + ".idx") || has_indice_or_projection("skp_idx_" + index.name + ".idx2"))
+            add_dependent_columns(index.expression, indices_columns);
+    }
 
     for (const auto & projection : getProjections())
-        add_dependent_columns(&projection, projections_columns);
+    {
+        if (has_indice_or_projection(projection.getDirectoryName()))
+            add_dependent_columns(&projection, projections_columns);
+    }
 
     auto add_for_rows_ttl = [&](const auto & expression, auto & to_set)
     {
@@ -298,15 +325,19 @@ ColumnDependencies StorageInMemoryMetadata::getColumnDependencies(const NameSet 
         res.emplace(column, ColumnDependency::TTL_TARGET);
 
     return res;
-
 }
 
-Block StorageInMemoryMetadata::getSampleBlockNonMaterialized() const
+Block StorageInMemoryMetadata::getSampleBlockNonMaterialized(bool skip_tp_sn) const
 {
     Block res;
 
     for (const auto & column : getColumns().getOrdinary())
+    {
+        if (skip_tp_sn && column.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+            continue;
+
         res.insert({column.type->createColumn(), column.type, column.name});
+    }
 
     return res;
 }
@@ -516,8 +547,7 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns) 
 
         const auto * available_type = it->getMapped();
 
-        if (!available_type->hasDynamicSubcolumns()
-            && !column.type->equals(*available_type)
+        if (!column.type->equals(*available_type)
             && !isCompatibleEnumTypes(available_type, column.type.get()))
             throw Exception(
                 ErrorCodes::TYPE_MISMATCH,
@@ -542,9 +572,8 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
     const auto & provided_columns_map = getColumnsMap(provided_columns);
 
     if (column_names.empty())
-        throw Exception(
-            "Empty list of columns queried. There are columns: " + listOfColumns(available_columns),
-            ErrorCodes::EMPTY_LIST_OF_COLUMNS_QUERIED);
+        throw Exception(ErrorCodes::EMPTY_LIST_OF_COLUMNS_QUERIED, "Empty list of columns queried. There are columns: {}",
+            listOfColumns(available_columns));
 
     UniqueStrings unique_names;
 
@@ -565,8 +594,7 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
         const auto * provided_column_type = it->getMapped();
         const auto * available_column_type = jt->getMapped();
 
-        if (!provided_column_type->hasDynamicSubcolumns()
-            && !provided_column_type->equals(*available_column_type)
+        if (!provided_column_type->equals(*available_column_type)
             && !isCompatibleEnumTypes(available_column_type, provided_column_type))
             throw Exception(
                 ErrorCodes::TYPE_MISMATCH,
@@ -596,7 +624,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
     for (const auto & column : block)
     {
         if (names_in_block.contains(column.name))
-            throw Exception("Duplicate column " + column.name + " in block", ErrorCodes::DUPLICATE_COLUMN);
+            throw Exception(ErrorCodes::DUPLICATE_COLUMN, "Duplicate column {} in block", column.name);
 
         names_in_block.insert(column.name);
 
@@ -609,8 +637,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
                 listOfColumns(available_columns));
 
         const auto * available_type = it->getMapped();
-        if (!available_type->hasDynamicSubcolumns()
-            && !column.type->equals(*available_type)
+        if (!column.type->equals(*available_type)
             && !isCompatibleEnumTypes(available_type, column.type.get()))
             throw Exception(
                 ErrorCodes::TYPE_MISMATCH,
@@ -625,7 +652,7 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
         for (const auto & available_column : available_columns)
         {
             if (!names_in_block.contains(available_column.name))
-                throw Exception("Expected column " + available_column.name, ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+                throw Exception(ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK, "Expected column {}", available_column.name);
         }
     }
 }

@@ -39,7 +39,7 @@ struct fmt::formatter<DB::ASTPtr>
     }
 
     template<typename FormatContext>
-    auto format(const DB::ASTPtr & ast, FormatContext & context)
+    auto format(const DB::ASTPtr & ast, FormatContext & context) const
     {
         return fmt::format_to(context.out(), "{}", DB::serializeAST(*ast));
     }

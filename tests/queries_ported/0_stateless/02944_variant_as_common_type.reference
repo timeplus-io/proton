@@ -1,0 +1,103 @@
+array(uint8)	[1,2,3]
+array(uint8)	[1,2,3]
+string	str_1
+nullable(string)	str_1
+string	str_1
+nullable(string)	str_1
+variant(array(uint8), string)	str_1
+variant(array(uint8), string)	str_1
+array(uint8)	[1,2,3]
+array(uint8)	[1,2,3]
+string	str_1
+nullable(string)	str_1
+string	str_1
+nullable(string)	str_1
+variant(array(uint8), string)	str_1
+variant(array(uint8), string)	str_1
+array(uint8)	[1,2,3]
+array(uint8)	[1,2,3]
+string	str_1
+nullable(string)	str_1
+string	str_1
+nullable(string)	str_1
+variant(array(uint8), string)	str_1
+variant(array(uint8), string)	str_1
+string	str_0
+string	str_1
+string	str_2
+string	str_3
+nullable(string)	str_0
+nullable(string)	str_1
+nullable(string)	str_2
+nullable(string)	str_3
+array(uint64)	[0]
+array(uint64)	[0,1]
+array(uint64)	[0,1,2]
+array(uint64)	[0,1,2,3]
+array(uint64)	[0]
+array(uint64)	[0,1]
+array(uint64)	[0,1,2]
+array(uint64)	[0,1,2,3]
+string	str_0
+string	str_1
+string	str_2
+string	str_3
+nullable(string)	str_0
+nullable(string)	str_1
+nullable(string)	str_2
+nullable(string)	str_3
+variant(array(uint64), string)	str_0
+variant(array(uint64), string)	str_1
+variant(array(uint64), string)	str_2
+variant(array(uint64), string)	str_3
+variant(array(uint64), string)	str_0
+variant(array(uint64), string)	str_1
+variant(array(uint64), string)	str_2
+variant(array(uint64), string)	str_3
+variant(array(uint64), string)	str_0
+variant(array(uint64), string)	[0,1]
+variant(array(uint64), string)	str_2
+variant(array(uint64), string)	[0,1,2,3]
+variant(array(uint64), string)	str_0
+variant(array(uint64), string)	[0,1]
+variant(array(uint64), string)	str_2
+variant(array(uint64), string)	[0,1,2,3]
+variant(array(uint64), string)	str_0
+variant(array(uint64), string)	[0,1]
+variant(array(uint64), string)	str_2
+variant(array(uint64), string)	[0,1,2,3]
+variant(array(uint64), string)	str_0
+variant(array(uint64), string)	[0,1]
+variant(array(uint64), string)	str_2
+variant(array(uint64), string)	[0,1,2,3]
+variant(array(uint64), string, uint64)	[0]
+variant(array(uint64), string, uint64)	1
+variant(array(uint64), string, uint64)	str_2
+variant(array(uint64), string, uint64)	[0,1,2,3]
+variant(array(uint64), string, uint64)	4
+variant(array(uint64), string, uint64)	str_5
+variant(array(uint64), string, uint64)	[0]
+variant(array(uint64), string, uint64)	1
+variant(array(uint64), string, uint64)	str_2
+variant(array(uint64), string, uint64)	[0,1,2,3]
+variant(array(uint64), string, uint64)	4
+variant(array(uint64), string, uint64)	str_5
+variant(array(uint64), string, uint64)	[0]
+variant(array(uint64), string, uint64)	1
+variant(array(uint64), string, uint64)	str_2
+variant(array(uint64), string, uint64)	[0,1,2,3]
+variant(array(uint64), string, uint64)	4
+variant(array(uint64), string, uint64)	str_5
+variant(array(uint64), string, uint64)	[0]
+variant(array(uint64), string, uint64)	1
+variant(array(uint64), string, uint64)	str_2
+variant(array(uint64), string, uint64)	[0,1,2,3]
+variant(array(uint64), string, uint64)	4
+variant(array(uint64), string, uint64)	str_5
+array(variant(string, uint8))	[1,'str_1',2,'str_2']
+array(variant(array(string), array(uint8)))	[[1,2,3],['str_1','str_2','str_3']]
+array(variant(array(uint8), array(variant(array(string), array(uint8)))))	[[[1,2,3],['str_1','str_2','str_3']],[1,2,3]]
+array(variant(array(array(uint8)), array(uint8)))	[[1,2,3],[[1,2,3]]]
+map(string, variant(string, uint8))	{'a':1,'b':'str_1'}
+map(string, variant(map(string, variant(string, uint8)), uint8))	{'a':1,'b':{'c':2,'d':'str_1'}}
+map(string, variant(array(array(uint8)), array(uint8), uint8))	{'a':1,'b':[1,2,3],'c':[[4,5,6]]}

@@ -1,4 +1,4 @@
-#include "WatermarkStep.h"
+#include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 
 #include <Processors/Transforms/Streaming/WatermarkTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -17,25 +17,24 @@ DB::ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = true,
+            .preserves_substream = true,
         },
         {
             .preserves_number_of_rows = false,
         }};
 }
 }
-WatermarkStep::WatermarkStep(
-    const DataStream & input_stream_, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log_)
+WatermarkStep::WatermarkStep(const DataStream & input_stream_, EmitParamsPtr params_, bool skip_stamping_for_backfill_data_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
     , params(std::move(params_))
     , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
-    , log(log_)
 {
 }
 
 void WatermarkStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-        return std::make_shared<WatermarkTransform>(header, params, skip_stamping_for_backfill_data, log);
+        return std::make_shared<WatermarkTransform>(header, params, skip_stamping_for_backfill_data);
     });
 }
 }

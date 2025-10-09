@@ -13,7 +13,10 @@ bool ParserCreateFormatSchemaQuery::parseImpl(IParser::Pos & pos, ASTPtr & node,
     ParserKeyword s_format_schema("FORMAT SCHEMA");
     ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserKeyword s_on("ON");
+    /// proton: starts
+    /// ParserKeyword s_on("ON");
+    /// proton: ends
+
     ParserIdentifier schema_name_p;
     ParserKeyword s_as("AS");
     ParserStringLiteral schema_src_p;
@@ -42,11 +45,13 @@ bool ParserCreateFormatSchemaQuery::parseImpl(IParser::Pos & pos, ASTPtr & node,
     if (!schema_name_p.parse(pos, schema_name, expected))
         return false;
 
-    if (s_on.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// proton: starts
+    /// if (s_on.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+    /// proton: ends.
 
     if (!s_as.ignore(pos, expected))
         return false;

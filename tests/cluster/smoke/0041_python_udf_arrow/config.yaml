@@ -1,0 +1,30 @@
+name: python_udf_arrow
+description: Tests covering the python_udf arraw library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - arrow
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # arrow
+    - type: query
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'arrow';
+
+    - type: wait
+      time: 15
+
+    - type: command
+      name: python-udf7-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "arrow") | length > 0'
+    
+    - type: check
+      target_name: python-udf7-1
+      expected_result: ['true']

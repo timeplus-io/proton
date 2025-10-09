@@ -1,0 +1,50 @@
+Expression ((Projection + Before ORDER BY))
+  Aggregating
+    Expression (Before GROUP BY)
+      Filter (WHERE)
+        ReadFromMergeTree (default.user_events)
+        Indexes:
+          MinMax
+            Condition: true
+            Parts: 2/2
+            Granules: 2/2
+          Partition
+            Condition: true
+            Parts: 2/2
+            Granules: 2/2
+          PrimaryKey
+            Condition: true
+            Parts: 2/2
+            Granules: 2/2
+          Skip
+            Name: event_type_idx
+            Description: minmax GRANULARITY 4
+            Parts: 1/2
+            Granules: 1/2
+CREATE STREAM default.user_events\n(\n  `user_id` uint64,\n  `event_type` string,\n  `event_date` date,\n  `event_time` datetime,\n  `payload` string,\n  `_tp_time` datetime64(3, \'UTC\') DEFAULT now64(3, \'UTC\') CODEC(DoubleDelta, ZSTD(1)),\n  `_tp_sn` int64 CODEC(Delta(8), ZSTD(1)),\n  INDEX event_type_idx event_type TYPE minmax GRANULARITY 4,\n  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,\n  INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32\n)\nENGINE = Stream(1, rand())\nPARTITION BY to_YYYYMM(event_date)\nORDER BY (user_id, event_time)\nSETTINGS index_granularity = 8192
+Now rename the column `event_type` to `action_name`
+CREATE STREAM default.user_events\n(\n  `user_id` uint64,\n  `action_name` string,\n  `event_date` date,\n  `event_time` datetime,\n  `payload` string,\n  `_tp_time` datetime64(3, \'UTC\') DEFAULT now64(3, \'UTC\') CODEC(DoubleDelta, ZSTD(1)),\n  `_tp_sn` int64 CODEC(Delta(8), ZSTD(1)),\n  INDEX event_type_idx action_name TYPE minmax GRANULARITY 4,\n  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,\n  INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32\n)\nENGINE = Stream(1, rand())\nPARTITION BY to_YYYYMM(event_date)\nORDER BY (user_id, event_time)\nSETTINGS index_granularity = 8192
+Expression ((Projection + Before ORDER BY))
+  Aggregating
+    Expression (Before GROUP BY)
+      Filter (WHERE)
+        ReadFromMergeTree (default.user_events)
+        Indexes:
+          MinMax
+            Condition: true
+            Parts: 2/2
+            Granules: 2/2
+          Partition
+            Condition: true
+            Parts: 2/2
+            Granules: 2/2
+          PrimaryKey
+            Condition: true
+            Parts: 2/2
+            Granules: 2/2
+          Skip
+            Name: event_type_idx
+            Description: minmax GRANULARITY 4
+            Parts: 1/2
+            Granules: 1/2
+purchase	14	2025-04-11	2025-05-07

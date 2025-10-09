@@ -1,0 +1,79 @@
+tags:
+  - emit_version
+description: create a stream t_float_map with low_cardinality type and ingest, query,
+  but of proton-python-driver
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists emit_version_view
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists t_float_map
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream t_float_map (id string, value_str string)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create view emit_version_view as
+      select
+        emit_version(),
+        group_array_sorted(id, 10) as ids,
+        group_array_sorted(latest_value_str, 10) as latest_value_strs,
+        map_cast(ids, latest_value_strs) as id_value_strs,
+        id_value_strs['a'] as id_value_a,
+        to_float(id_value_a) as to_float_a
+      from (
+        select id, latest(value_str) as latest_value_str
+        from t_float_map
+        group by id
+        order by id
+      )
+
+  - type: wait
+    time: 2
+
+  - name: 801-1
+    type: stream
+    query: select * from emit_version_view limit 1
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: ids
+        type: array(string)
+      - name: latest_value_strs
+        type: array(string)
+      - name: id_value_strs
+        type: map(string, string)
+      - name: id_value_a
+        type: string
+      - name: to_float_a
+        type: float32
+
+  - type: wait
+    time: 4
+  
+  - type: query
+    sql: insert into t_float_map (id, value_str) values ('a', '100.1') ('b', '200.1')('c', '300.1')
+
+  - type: check
+    target_name: 801-1
+    expected_result:
+      - [ '0', [ 'a', 'b', 'c' ], [ '100.1', '200.1', '300.1' ], { 'a': '100.1', 'b': '200.1', 'c': '300.1' }, '100.1', 100.1 ]
+
+  - type: query
+    sql: drop view if exists emit_version_view

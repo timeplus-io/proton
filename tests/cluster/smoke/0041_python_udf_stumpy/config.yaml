@@ -1,0 +1,30 @@
+name: python_udf_stumpy
+description: Tests covering the python_udf stumpy library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - stumpy
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/7386
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # stumpy
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "stumpy"}'
+
+    - type: command
+      name: python-udf14-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "stumpy") | length > 0'
+    
+    - type: check
+      target_name: python-udf14-1
+      expected_result: ['true']

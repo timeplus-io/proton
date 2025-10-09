@@ -1,0 +1,71 @@
+tags:
+  - window function
+description: (#423) Covering window function with const event time column test. test
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists fixed_test_stream_99
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create random stream fixed_test_stream_99(raw string) settings eps=2
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9921
+    query: WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM fixed_test_stream_99 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM tumble(cte, 1s) GROUP BY window_start, window_end limit 2
+    schema:
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+  - type: wait
+    time: 5
+
+  - type: stream
+    name: 9922
+    query: WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM fixed_test_stream_99 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM hop(cte, 1s, 3s) GROUP BY window_start, window_end limit 3
+    schema:
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+  - type: wait
+    time: 5
+
+  - type: stream
+    name: 9923
+    query: WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM fixed_test_stream_99 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM session(cte, 1s, 3s) GROUP BY window_start, window_end limit 1
+    schema:
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: 9921
+    expected_result:
+      - ["any_value", "any_value", "any_value"]
+      - ["any_value", "any_value", "any_value"]
+
+  - type: check
+    target_name: 9922
+    expected_result:
+      - ["any_value", "any_value", "any_value"]
+      - ["any_value", "any_value", "any_value"]
+      - ["any_value", "any_value", "any_value"]
+
+  - type: check
+    target_name: 9923
+    expected_result:
+      - ["any_value", "any_value", "any_value"]

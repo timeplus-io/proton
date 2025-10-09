@@ -1,0 +1,63 @@
+tags:
+  - func
+  - cluster_table_bug
+description: convert uint, string to bool
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_bool1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_bool1(bool_s string, bool_i uint8, bool_f bool)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_bool1(bool_s, bool_i, bool_f) values('true', 0, true)('false',1, false)
+
+  - type: wait
+    time: 3
+
+  - name: '801'
+    type: stream
+    query: select to_bool('true') as a, to_bool('false') as b, to_bool(1) as c, to_bool(0) as d, to_bool(true) as e,to_bool(false) as f, to_bool(bool_s) as g, to_bool(bool_i) as h, to_bool(bool_f) as i from table(t_bool1)
+    schema:
+      - name: a
+        type: bool
+      - name: b
+        type: bool
+      - name: c
+        type: bool
+      - name: d
+        type: bool
+      - name: e
+        type: bool
+      - name: f
+        type: bool
+      - name: g
+        type: bool
+      - name: h
+        type: bool
+      - name: i
+        type: bool
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_bool1
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ 'True', 'False', 'True', 'False', 'True', 'False', 'True', 'False', 'True' ]
+      - [ 'True', 'False', 'True', 'False', 'True', 'False', 'False', 'True', 'False' ]

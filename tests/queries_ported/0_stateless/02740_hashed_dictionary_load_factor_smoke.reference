@@ -1,0 +1,12 @@
+CREATE DICTIONARY default.test_sparse_dictionary_load_factor\n(\n  `key` uint64,\n  `value` uint16\n)\nPRIMARY KEY key\nSOURCE(TIMEPLUS(STREAM test_table USER proton PASSWORD \'[HIDDEN]\'))\nLIFETIME(MIN 0 MAX 0)\nLAYOUT(SPARSE_HASHED(MAX_LOAD_FACTOR 0.9))
+100000
+0
+CREATE DICTIONARY default.test_dictionary_load_factor\n(\n  `key` uint64,\n  `value` uint16\n)\nPRIMARY KEY key\nSOURCE(TIMEPLUS(STREAM test_table USER proton PASSWORD \'[HIDDEN]\'))\nLIFETIME(MIN 0 MAX 0)\nLAYOUT(HASHED(MAX_LOAD_FACTOR 0.9))
+100000
+0
+CREATE DICTIONARY default.test_dictionary_load_factor_nullable\n(\n  `key` uint64,\n  `value` nullable(uint16)\n)\nPRIMARY KEY key\nSOURCE(TIMEPLUS(STREAM test_table_nullable USER proton PASSWORD \'[HIDDEN]\'))\nLIFETIME(MIN 0 MAX 0)\nLAYOUT(HASHED(MAX_LOAD_FACTOR 0.9))
+100000
+0
+CREATE DICTIONARY default.test_complex_dictionary_load_factor\n(\n  `key_1` uint64,\n  `key_2` uint64,\n  `value` uint16\n)\nPRIMARY KEY key_1, key_2\nSOURCE(TIMEPLUS(STREAM test_table_complex USER proton PASSWORD \'[HIDDEN]\'))\nLIFETIME(MIN 0 MAX 0)\nLAYOUT(COMPLEX_KEY_HASHED(MAX_LOAD_FACTOR 0.9))
+100000
+0

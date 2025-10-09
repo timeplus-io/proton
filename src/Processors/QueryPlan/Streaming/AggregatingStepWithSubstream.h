@@ -1,28 +1,25 @@
 #pragma once
 
-#include <Interpreters/Streaming/Aggregator.h>
+#include <Interpreters/Streaming/Aggregator/IAggregator.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
-namespace DB
+namespace DB::Streaming
 {
 
-namespace Streaming
-{
-struct AggregatingTransformParams;
-using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
+struct EmitParams;
 
 class AggregatingStepWithSubstream final : public ITransformingStep
 {
 public:
     AggregatingStepWithSubstream(
         const DataStream & input_stream_,
-        Aggregator::Params params_,
-        bool final_,
+        IAggregatorParamsPtr params_,
+        std::shared_ptr<const Streaming::EmitParams> emit_params_,
         bool emit_version_,
         bool emit_changelog_,
-        EmitMode emit_mode_);
+        bool aggregation_backfill_key_unique_);
 
-    String getName() const override { return "StreamingAggregatingWithSubstream"; }
+    String getName() const override { return "AggregatingWithSubstream"; }
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
 
@@ -31,16 +28,18 @@ public:
     void describeActions(FormatSettings &) const override;
     void describePipeline(FormatSettings & settings) const override;
 
-    const Aggregator::Params & getParams() const { return params; }
+    const IAggregatorParams & getParams() const { return *params; }
 
 private:
-    Aggregator::Params params;
-    bool final;
+    void updateOutputStream() override;
+
+    IAggregatorParamsPtr params;
+    std::shared_ptr<const Streaming::EmitParams> emit_params;
     bool emit_version;
     bool emit_changelog;
-    EmitMode emit_mode;
+    bool aggregation_backfill_key_unique;
 
     Processors aggregating;
 };
-}
+
 }

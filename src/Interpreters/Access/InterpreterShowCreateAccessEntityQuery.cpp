@@ -62,10 +62,7 @@ namespace
         }
 
         if (user.auth_data.getType() != AuthenticationType::NO_PASSWORD)
-        {
             query->auth_data = user.auth_data;
-            query->show_password = attach_mode; /// We don't show password unless it's an ATTACH statement.
-        }
 
         if (!user.settings.empty())
         {
@@ -230,7 +227,7 @@ namespace
             return getCreateQueryImpl(*quota, access_control, attach_mode);
         if (const SettingsProfile * profile = typeid_cast<const SettingsProfile *>(&entity))
             return getCreateQueryImpl(*profile, access_control, attach_mode);
-        throw Exception(entity.formatTypeWithName() + ": type is not supported by SHOW CREATE query", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: type is not supported by SHOW CREATE query", entity.formatTypeWithName());
     }
 }
 
@@ -256,19 +253,13 @@ QueryPipeline InterpreterShowCreateAccessEntityQuery::executeImpl()
 
     /// Build the result column.
     MutableColumnPtr column = ColumnString::create();
-    WriteBufferFromOwnString create_query_buf;
     for (const auto & create_query : create_queries)
-    {
-        formatAST(*create_query, create_query_buf, false, true);
-        column->insert(create_query_buf.str());
-        create_query_buf.restart();
-    }
+        column->insert(create_query->formatForErrorMessage());
 
     /// Prepare description of the result column.
-    WriteBufferFromOwnString desc_buf;
     const auto & show_query = query_ptr->as<const ASTShowCreateAccessEntityQuery &>();
-    formatAST(show_query, desc_buf, false, true);
-    String desc = desc_buf.str();
+    String desc = serializeAST(show_query);
+
     String prefix = "SHOW ";
     if (startsWith(desc, prefix))
         desc = desc.substr(prefix.length()); /// `desc` always starts with "SHOW ", so we can trim this prefix.
@@ -280,17 +271,17 @@ QueryPipeline InterpreterShowCreateAccessEntityQuery::executeImpl()
 std::vector<AccessEntityPtr> InterpreterShowCreateAccessEntityQuery::getEntities() const
 {
     auto & show_query = query_ptr->as<ASTShowCreateAccessEntityQuery &>();
-    const auto & access_control = getContext()->getAccessControl();
+    const auto access_control = getContext()->getAccessControl();
     getContext()->checkAccess(getRequiredAccess());
     show_query.replaceEmptyDatabase(getContext()->getCurrentDatabase());
     std::vector<AccessEntityPtr> entities;
 
     if (show_query.all)
     {
-        auto ids = access_control.findAll(show_query.type);
+        auto ids = access_control->findAll(show_query.type);
         for (const auto & id : ids)
         {
-            if (auto entity = access_control.tryRead(id))
+            if (auto entity = access_control->tryRead(id))
                 entities.push_back(entity);
         }
     }
@@ -302,21 +293,21 @@ std::vector<AccessEntityPtr> InterpreterShowCreateAccessEntityQuery::getEntities
     {
         auto usage = getContext()->getQuotaUsage();
         if (usage)
-            entities.push_back(access_control.read<Quota>(usage->quota_id));
+            entities.push_back(access_control->read<Quota>(usage->quota_id));
     }
     else if (show_query.type == AccessEntityType::ROW_POLICY)
     {
-        auto ids = access_control.findAll<RowPolicy>();
+        auto ids = access_control->findAll<RowPolicy>();
         if (show_query.row_policy_names)
         {
             for (const String & name : show_query.row_policy_names->toStrings())
-                entities.push_back(access_control.read<RowPolicy>(name));
+                entities.push_back(access_control->read<RowPolicy>(name));
         }
         else
         {
             for (const auto & id : ids)
             {
-                auto policy = access_control.tryRead<RowPolicy>(id);
+                auto policy = access_control->tryRead<RowPolicy>(id);
                 if (!policy)
                     continue;
                 if (!show_query.short_name.empty() && (policy->getShortName() != show_query.short_name))
@@ -337,7 +328,7 @@ std::vector<AccessEntityPtr> InterpreterShowCreateAccessEntityQuery::getEntities
     else
     {
         for (const String & name : show_query.names)
-            entities.push_back(access_control.read(access_control.getID(show_query.type, name)));
+            entities.push_back(access_control->read(access_control->getID(show_query.type, name)));
     }
 
     ::sort(entities.begin(), entities.end(), IAccessEntity::LessByName{});
@@ -350,9 +341,9 @@ ASTs InterpreterShowCreateAccessEntityQuery::getCreateQueries() const
     auto entities = getEntities();
 
     ASTs list;
-    const auto & access_control = getContext()->getAccessControl();
+    const auto access_control = getContext()->getAccessControl();
     for (const auto & entity : entities)
-        list.push_back(getCreateQuery(*entity, access_control));
+        list.push_back(getCreateQuery(*entity, *access_control));
 
     return list;
 }
@@ -383,6 +374,6 @@ AccessRightsElements InterpreterShowCreateAccessEntityQuery::getRequiredAccess()
         case AccessEntityType::QUOTA: res.emplace_back(AccessType::SHOW_QUOTAS); return res;
         case AccessEntityType::MAX: break;
     }
-    throw Exception(toString(show_query.type) + ": type is not supported by SHOW CREATE query", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: type is not supported by SHOW CREATE query", toString(show_query.type));
 }
 }

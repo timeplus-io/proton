@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string_view>
 #include <Core/NamesAndTypes.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/InDepthNodeVisitor.h>
@@ -7,7 +8,6 @@
 #include <Parsers/IAST.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/ColumnWithTypeAndName.h>
-
 
 namespace DB
 {
@@ -25,9 +25,8 @@ class IFunctionOverloadResolver;
 using FunctionOverloadResolverPtr = std::shared_ptr<IFunctionOverloadResolver>;
 
 /// The case of an explicit enumeration of values.
-SetPtr makeExplicitSet(
-    const ASTFunction * node, const ActionsDAG & actions, bool create_ordered_set,
-    ContextPtr context, const SizeLimits & limits, PreparedSets & prepared_sets);
+FutureSetPtr makeExplicitSet(
+    const ASTFunction * node, const ActionsDAG & actions, ContextPtr context, PreparedSets & prepared_sets);
 
 /** For ActionsVisitor
   * A stack of ExpressionActions corresponding to nested lambda expressions.
@@ -124,6 +123,12 @@ class ActionsMatcher
 public:
     using Visitor = ConstInDepthNodeVisitor<ActionsMatcher, true>;
 
+    enum class WindowDependancyState
+    {
+        NONE,
+        MAY_DEPEND,
+    };
+
     struct Data : public WithContext
     {
         SizeLimits set_size_limit;
@@ -137,6 +142,8 @@ public:
         size_t visit_depth;
         ScopeStack actions_stack;
         AggregationKeysInfo aggregation_keys_info;
+        bool build_expression_with_window_functions;
+        bool is_create_parameterized_view;
 
         /*
          * Remember the last unique column suffix to avoid quadratic behavior
@@ -144,6 +151,9 @@ public:
          * prefixes is good enough.
          */
         size_t next_unique_suffix;
+
+        WindowDependancyState window_dependancy_state = WindowDependancyState::NONE;
+        bool window_function_in_subtree = false;
 
         Data(
             ContextPtr context_,
@@ -156,7 +166,9 @@ public:
             bool no_makeset_,
             bool only_consts_,
             bool create_source_for_in_,
-            AggregationKeysInfo aggregation_keys_info_);
+            AggregationKeysInfo aggregation_keys_info_,
+            bool build_expression_with_window_functions_ = false,
+            bool is_create_parameterized_view_ = false);
 
         /// Does result of the calculation already exists in the block.
         bool hasColumn(const String & column_name) const;
@@ -226,7 +238,7 @@ private:
     static void visit(const ASTLiteral & literal, const ASTPtr & ast, Data & data);
     static void visit(ASTExpressionList & expression_list, const ASTPtr & ast, Data & data);
 
-    static SetPtr makeSet(const ASTFunction & node, Data & data, bool no_subqueries);
+    static FutureSetPtr makeSet(const ASTFunction & node, Data & data, bool no_subqueries);
     static ASTs doUntuple(const ASTFunction * function, ActionsMatcher::Data & data);
     static std::optional<NameAndTypePair> getNameAndTypeFromAST(const ASTPtr & ast, Data & data);
 };

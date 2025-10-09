@@ -1,0 +1,60 @@
+tags:
+  - sqlformat
+  - genge
+description: send a sqlformat request of subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '401'
+    type: rest
+    url: /proton/v1/sqlformat
+    method: POST
+    data:
+      query: with transformed as (select id, location, value, to_datetime64(json_extract_string(json,
+        'create_time'), 3, 'UTC') as transformed_timestamp from test_session) select
+        top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end,
+        __tp_session_id, id, location from session(transformed, transformed_timestamp,
+        2s, id, location) group by __tp_session_id, window_start, window_end, id, location
+
+  - type: check
+    target_name: '401'
+    expected_result:
+      - query: "WITH transformed AS\n  (\n    SELECT\n      id, location, value, to_datetime64(json_extract_string(json,\
+      \ 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM\n      test_session\n\
+      \  )\nSELECT\n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start,\
+      \ window_end, __tp_session_id, id, location\nFROM\n  session(transformed, transformed_timestamp,\
+      \ 2s, id, location)\nGROUP BY\n  __tp_session_id, window_start, window_end,\
+      \ id, location"
+        request_id: any_value
+
+
+  - name: '402'
+    type: rest
+    url: /proton/v1/sqlformat
+    method: POST
+    data:
+      query: insert into v(id) select * from t settings max_block=10;
+    
+  - type: check
+    target_name: '402'
+    expected_result:
+      - query: "INSERT INTO v (id)\nSETTINGS max_block = 10\nSELECT\n  *\nFROM\n  t\nSETTINGS\n  max_block = 10"
+        request_id: any_value
+
+
+  - name: '403'
+    type: rest
+    url: /proton/v1/sqlformat
+    method: POST
+    data:
+      query: insert into v(id) settings max_block_size=20 select * from t settings max_block_size=10;
+    
+  - type: check
+    target_name: '403'
+    expected_result:
+      - query: "INSERT INTO v (id)\nSETTINGS max_block_size = 20\nSELECT\n  *\nFROM\n  t\nSETTINGS\n  max_block_size = 10"
+        request_id: any_value
+
+
+  

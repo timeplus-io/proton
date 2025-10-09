@@ -1,0 +1,65 @@
+description: |
+  Test DDL dependency check for timeplus external streams:
+  * Create source stream and external stream pointing to it
+  * Verify cannot drop source stream before external stream
+  * Test with localhost(advertised host is dynamic)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists tp_01_external
+
+  - type: query
+    sql: drop stream if exists tp_01_source
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream tp_01_source
+      (
+        key string,
+        value int
+      )
+  - type: wait
+    time: 1
+
+  # Test with localhost
+  - type: query
+    sql: |
+      create external stream tp_01_external
+      settings type='timeplus', hosts='localhost:8463', stream='tp_01_source'
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream tp_01_external_2
+      settings type='timeplus', hosts='localhost:8463', stream='tp_01_source'
+  - type: wait
+    time: 1
+
+  # Try to drop source - should fail
+  - type: stream
+    name: '1022'
+    query: drop stream tp_01_source
+
+  - type: check
+    target_name: '1022'
+    expected_result:
+      - ['error_code:630']
+
+  # Clean up in correct order
+  - type: query
+    sql: drop stream tp_01_external
+
+  - type: query
+    sql: drop stream tp_01_external_2
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream tp_01_source

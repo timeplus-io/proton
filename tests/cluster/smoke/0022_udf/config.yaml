@@ -1,0 +1,36 @@
+name: udf
+description: Tests covering udf related cases
+tags:
+- smoke
+- restapi
+
+setup:
+  scope: suite
+  steps:
+  - type: rest
+    url: /proton/v1/ddl/streams
+    method: POST
+    data:
+      name: udf_types
+      type: table
+      columns:
+      - name: i
+        type: int
+      - name: i8
+        type: int8
+      - name: f32
+        type: float32
+      - name: s
+        type: string
+      - name: dt
+        type: datetime64(6)
+        default: now64(6)
+  - type: wait
+    time: 2
+
+teardown:
+    scope: suite
+    steps:
+      - type: rest
+        url: /proton/v1/ddl/streams/udf_types
+        method: DELETE

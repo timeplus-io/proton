@@ -1,0 +1,210 @@
+tags:
+  - clickhouse
+
+description: |
+  Test ddl dictionary with source CLICKHOUSE and layout complex_key_cache, complex_key_ssd_cache, complex_key_direct
+  Main steps:
+  1.Create table in CLICKHOUSE and ingest data
+  2.Create join stream
+  3.Create dictionary in Proton with source CLICKHOUSE and layout complex_key_cache, complex_key_ssd_cache, complex_key_direct
+  4.Verify dictionary connectivity via dict_get
+  5.Verify direct join stream query
+
+steps:
+  # CLICKHOUSE
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "DROP TABLE IF EXISTS products;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "CREATE TABLE products (id String, name String) ENGINE = Memory;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "INSERT INTO products (id, name) VALUES ('pid_0001', 'p000');"
+
+  # PROTON
+  - type: query
+    sql: DROP STREAM IF EXISTS orders;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS ch_products_dict_cached;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS ch_products_dict_ssd_cache;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS ch_products_dict_direct;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: CREATE STREAM orders(id string, product_id string, quantity uint32);
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY ch_products_dict_cached(id string, name string)
+      PRIMARY KEY id
+      SOURCE(CLICKHOUSE(DB 'default' TABLE 'products' HOST 'clickhouse' PORT 9000 USER 'chusr' PASSWORD 'chpwd'))
+      LIFETIME(MIN 1800 MAX 3600)
+      LAYOUT(complex_key_cache(size_in_cells 1000 allow_read_expired_keys 1 max_update_queue_size 1000 update_queue_push_timeout_milliseconds 100 query_wait_timeout_milliseconds 60000 max_threads_for_updates 4));
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY ch_products_dict_ssd_cache(id string, name string)
+      PRIMARY KEY id
+      SOURCE(CLICKHOUSE(DB 'default' TABLE 'products' HOST 'clickhouse' PORT 9000 USER 'chusr' PASSWORD 'chpwd'))
+      LIFETIME(MIN 1800 MAX 3600)
+      LAYOUT(complex_key_ssd_cache(block_size 4096 file_size 1073741824 read_buffer_size 131072 write_buffer_size 1048576 path '/var/lib/proton/user_files/products_dict'));
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY ch_products_dict_direct(id string, name string)
+      PRIMARY KEY id
+      SOURCE(CLICKHOUSE(DB 'default' TABLE 'products' HOST 'clickhouse' PORT 9000 USER 'chusr' PASSWORD 'chpwd'))
+      LAYOUT(complex_key_direct());
+
+  - type: wait
+    time: 1
+
+  # Test connectivity
+  - name: dict-11-1
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: stream
+    query: SELECT dict_get('ch_products_dict_cached', 'name', 'pid_0001');
+    schema:
+      - name: dict_get('ch_products_dict_cached', 'name', 'pid_0001')
+        type: string
+
+  - type: check
+    target_name: dict-11-1
+    expected_result:
+      - ['p000']
+
+  - type: wait
+    time: 1
+
+  - name: dict-11-2
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: stream
+    query: SELECT dict_get('ch_products_dict_ssd_cache', 'name', 'pid_0001');
+    schema:
+      - name: dict_get('ch_products_dict_ssd_cache', 'name', 'pid_0001')
+        type: string
+
+  - type: check
+    target_name: dict-11-2
+    expected_result:
+      - ['p000']
+
+  - type: wait
+    time: 1
+
+  - name: dict-11-3
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: stream
+    query: SELECT dict_get('ch_products_dict_direct', 'name', 'pid_0001');
+    schema:
+      - name: dict_get('ch_products_dict_direct', 'name', 'pid_0001')
+        type: string
+
+  - type: check
+    target_name: dict-11-3
+    expected_result:
+      - ['p000']
+
+  - type: wait
+    time: 1
+
+  # Direct Join
+  - name: dict-11-4
+    type: stream
+    query: |
+      SELECT * except (_tp_time) FROM orders JOIN ch_products_dict_cached AS products
+      ON orders.product_id = products.id
+      SETTINGS join_algorithm = 'direct';
+    schema:
+      - name: id
+        type: string
+      - name: product_id
+        type: string
+      - name: quantity
+        type: uint32
+      - name: products.id
+        type: string
+      - name: name
+        type: string
+
+  - name: dict-11-5
+    type: stream
+    query: |
+      SELECT * except (_tp_time) FROM orders JOIN ch_products_dict_ssd_cache AS products
+      ON orders.product_id = products.id
+      SETTINGS join_algorithm = 'direct';
+    schema:
+      - name: id
+        type: string
+      - name: product_id
+        type: string
+      - name: quantity
+        type: uint32
+      - name: products.id
+        type: string
+      - name: name
+        type: string
+
+  - name: dict-11-6
+    type: stream
+    query: |
+      SELECT * except (_tp_time) FROM orders JOIN ch_products_dict_direct AS products
+      ON orders.product_id = products.id
+      SETTINGS join_algorithm = 'direct';
+    schema:
+      - name: id
+        type: string
+      - name: product_id
+        type: string
+      - name: quantity
+        type: uint32
+      - name: products.id
+        type: string
+      - name: name
+        type: string
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: INSERT INTO orders(id, product_id, quantity) values ('p', 'pid_0001', 111);
+
+  - type: check
+    target_name: dict-11-4
+    expected_result:
+      - ['p', 'pid_0001', 111, 'pid_0001', 'p000']
+
+  - type: check
+    target_name: dict-11-5
+    expected_result:
+      - ['p', 'pid_0001', 111, 'pid_0001', 'p000']
+
+  - type: check
+    target_name: dict-11-6
+    expected_result:
+      - ['p', 'pid_0001', 111, 'pid_0001', 'p000']

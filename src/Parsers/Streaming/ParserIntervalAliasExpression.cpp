@@ -41,27 +41,27 @@ bool ParserIntervalAliasExpression::parseImpl(Pos & pos, ASTPtr & node, Expected
         /// in.count() = 2(number size)
         String kind_str(pos->begin + in.count(), pos->size() - in.count());
         if ("ns" == kind_str)
-            interval_kind = IntervalKind::Nanosecond;
+            interval_kind = IntervalKind::Kind::Nanosecond;
         else if ("us" == kind_str)
-            interval_kind = IntervalKind::Microsecond;
+            interval_kind = IntervalKind::Kind::Microsecond;
         else if ("ms" == kind_str)
-            interval_kind = IntervalKind::Millisecond;
+            interval_kind = IntervalKind::Kind::Millisecond;
         else if ("s" == kind_str)
-            interval_kind = IntervalKind::Second;
+            interval_kind = IntervalKind::Kind::Second;
         else if ("m" == kind_str)
-            interval_kind = IntervalKind::Minute;
+            interval_kind = IntervalKind::Kind::Minute;
         else if ("h" == kind_str)
-            interval_kind = IntervalKind::Hour;
+            interval_kind = IntervalKind::Kind::Hour;
         else if ("d" == kind_str)
-            interval_kind = IntervalKind::Day;
+            interval_kind = IntervalKind::Kind::Day;
         else if ("w" == kind_str)
-            interval_kind = IntervalKind::Week;
+            interval_kind = IntervalKind::Kind::Week;
         else if ("M" == kind_str)
-            interval_kind = IntervalKind::Month;
+            interval_kind = IntervalKind::Kind::Month;
         else if ("q" == kind_str)
-            interval_kind = IntervalKind::Quarter;
+            interval_kind = IntervalKind::Kind::Quarter;
         else if ("y" == kind_str)
-            interval_kind = IntervalKind::Year;
+            interval_kind = IntervalKind::Kind::Year;
         else
             return elem_parser ? elem_parser->parse(pos = pos_begin, node, expected) : false;
     }

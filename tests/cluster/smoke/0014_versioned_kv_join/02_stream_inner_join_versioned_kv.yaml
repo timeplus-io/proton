@@ -1,0 +1,131 @@
+tags:
+  - stream_join_versioned_kv
+description: stream to versioned_kv stream inner join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists test15_vk_left_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: drop stream if exists test15_vk_right_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: create stream test15_vk_left_stream (i int64, s string)
+  - type: wait
+    time: 2
+
+  - type: query
+    node: 
+      - p1
+    sql: create stream test15_vk_right_stream(ii int64, ss string) primary key ss settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: "1502"
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select i, ii, s from test15_vk_left_stream inner join test15_vk_right_stream on s=ss
+    schema:
+      - name: i
+        type: int64
+      - name: ii
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii, ss) values (1, 's1'), (2, 's1'), (3,'s3')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_left_stream(i, s) values (1, 's1'), (2, 's3')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1502"
+    expected_result:
+      - - 1
+        - 2
+        - s1
+      - - 2
+        - 3
+        - s3
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii, ss) values (4, 's1'), (5, 's3')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_left_stream(i, s) values (11, 's1'), (22, 's3')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1502"
+    expected_result:
+      - - 11
+        - 4
+        - s1
+      - - 22
+        - 5
+        - s3

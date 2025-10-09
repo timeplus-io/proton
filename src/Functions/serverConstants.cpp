@@ -2,9 +2,10 @@
 #include <base/getFQDNOrHostName.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
-#include <Core/ServerUUID.h>
+#include <Core/ServerMeta.h>
 #include <Common/SymbolIndex.h>
 #include <Common/DNSResolver.h>
 #include <Common/DateLUT.h>
@@ -12,7 +13,7 @@
 
 #include <Poco/Environment.h>
 
-#include "config_version.h"
+#include <Common/config_version.h>
 
 
 namespace DB
@@ -42,12 +43,30 @@ namespace
     };
 
 
+    class FunctionNodeID: public FunctionConstantBase<FunctionNodeID, UInt64, DataTypeUInt64>
+    {
+    public:
+        static constexpr auto name = "node_id";
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionNodeID>(context); }
+        explicit FunctionNodeID(ContextPtr context) : FunctionConstantBase(context->getNodeID(), context->isDistributed()) {}
+    };
+
+
+    class FunctionNodeEpoch: public FunctionConstantBase<FunctionNodeEpoch, UInt64, DataTypeUInt64>
+    {
+    public:
+        static constexpr auto name = "node_epoch";
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionNodeEpoch>(context); }
+        explicit FunctionNodeEpoch(ContextPtr context) : FunctionConstantBase(ServerMeta::getEpoch(), context->isDistributed()) {}
+    };
+
+
     class FunctionServerUUID : public FunctionConstantBase<FunctionServerUUID, UUID, DataTypeUUID>
     {
     public:
         static constexpr auto name = "server_uuid";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionServerUUID>(context); }
-        explicit FunctionServerUUID(ContextPtr context) : FunctionConstantBase(ServerUUID::get(), context->isDistributed()) {}
+        explicit FunctionServerUUID(ContextPtr context) : FunctionConstantBase(ServerMeta::getIdentity(), context->isDistributed()) {}
     };
 
 
@@ -56,7 +75,7 @@ namespace
     public:
         static constexpr auto name = "tcp_port";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionTcpPort>(context); }
-        explicit FunctionTcpPort(ContextPtr context) : FunctionConstantBase(context->getTCPPort(), context->isDistributed()) {}
+        explicit FunctionTcpPort(ContextPtr context) : FunctionConstantBase(context->getTCPPort().port, context->isDistributed()) {}
     };
 
 
@@ -79,6 +98,14 @@ namespace
         explicit FunctionUptime(ContextPtr context) : FunctionConstantBase(context->getUptimeSeconds(), context->isDistributed()) {}
     };
 
+    /// Returns server boot time.
+    class FunctionBootTime : public FunctionConstantBase<FunctionUptime, Decimal64, DataTypeDateTime64>
+    {
+    public:
+        static constexpr auto name = "boot_time";
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionBootTime>(context); }
+        explicit FunctionBootTime(ContextPtr context) : FunctionConstantBase(Decimal64(ServerMeta::getBootTimestamp()), context->isDistributed()) {}
+    };
 
     /// version() - returns the current version as a string.
     class FunctionVersion : public FunctionConstantBase<FunctionVersion, String, DataTypeString>
@@ -139,6 +166,7 @@ REGISTER_FUNCTION(HostName)
 REGISTER_FUNCTION(ServerUUID)
 {
     factory.registerFunction<FunctionServerUUID>();
+    factory.registerAlias("node_uuid", "server_uuid", FunctionFactory::CaseSensitive);
 }
 
 REGISTER_FUNCTION(TcpPort)
@@ -154,6 +182,11 @@ REGISTER_FUNCTION(Timezone)
 REGISTER_FUNCTION(Uptime)
 {
     factory.registerFunction<FunctionUptime>();
+}
+
+REGISTER_FUNCTION(BootTime)
+{
+    factory.registerFunction<FunctionBootTime>();
 }
 
 REGISTER_FUNCTION(Version)
@@ -176,6 +209,15 @@ REGISTER_FUNCTION(GetOSKernelVersion)
     factory.registerFunction<FunctionGetOSKernelVersion>();
 }
 
+REGISTER_FUNCTION(NodeID)
+{
+    factory.registerFunction<FunctionNodeID>();
+}
+
+REGISTER_FUNCTION(NodeEpoch)
+{
+    factory.registerFunction<FunctionNodeEpoch>();
+}
 
 REGISTER_FUNCTION(DisplayName)
 {
@@ -187,7 +229,7 @@ Returns the value of `display_name` from config or server FQDN if not set.
 [example:displayName]
 )",
             .examples{{"displayName", "SELECT display_name();", ""}},
-            .categories{"Constant", "Miscellaneous"}
+            .category{"Other"}
         },
         FunctionFactory::CaseSensitive);
 }

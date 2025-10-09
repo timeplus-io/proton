@@ -1,0 +1,49 @@
+tags:
+  - func
+  - skip # https://github.com/timeplus-io/proton-enterprise/issues/6729 (work on branch 2.5)
+
+description: array_avg function
+
+steps:
+  - type: query
+    sql: drop stream if exists bid;
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream bid (auction int64, price int64);
+
+  - type: wait
+    time: 2
+
+  - name: type-func1-22
+    type: stream
+    query: select array_avg(concat([price], lags(price, 1, 9, 0))) OVER (PARTITION BY auction) as avg_sell_price from bid;
+    schema:
+      - name: avg_sell_price
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into bid (auction, price) values 
+          (1, 11) (2, 22) (3, 33) (4, 44) (5, 55) (6, 66)
+          (7, 77) (8, 88) (9, 99) (10, 100) (11, 110) (12, 120);
+    
+  - type: check
+    target_name: type-func1-22
+    expected_result:
+      - [1.1]
+      - [3.3]
+      - [6.6]
+      - [11]
+      - [16.5]
+      - [23.1]
+      - [30.8]
+      - [39.6]
+      - [49.5]
+      - [59.5]
+      - [69.4]
+      - [79.2]

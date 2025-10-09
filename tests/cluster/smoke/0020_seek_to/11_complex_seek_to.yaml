@@ -1,0 +1,112 @@
+tags:
+- seek_to
+description: Complex cases for seek to (contains join, subquery, cte, view, materialized
+  view and union etc.)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists seek_to_mv
+- type: wait
+  time: 2
+
+- type: query
+  sql: drop view if exists seek_to_view
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view seek_to_mv as (select *, win_end as _tp_time from
+    (select window_start as win_start, window_end as win_end, sum(i) as i from tumble(test21_limit_by_stream,
+    2s) where _tp_time >= '2022-12-01 00:00:01.111' group by window_start, window_end))
+- type: wait
+  time: 8
+
+- type: query
+  sql: create view seek_to_view as (select i, _tp_time from test21_limit_by_stream
+    where _tp_time >= '2022-12-01 00:00:01.111' and _tp_time <= '2022-12-01 00:00:03.111')
+- type: wait
+  time: 8
+
+- name: '2100'
+  type: stream
+  query: |
+    with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view) 
+    select i, s from cte as a join test21_limit_by_stream as b 
+    using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:02.111'
+  schema:
+  - name: i
+    type: int64
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: |
+    with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view)
+    select i, s from test21_limit_by_stream as a join cte as b 
+    using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:03.111'
+  schema:
+  - name: i
+    type: int64
+  - name: s
+    type: string
+
+- name: '2102'
+  type: stream
+  query: |
+    with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view)
+    select count() from cte as a join test21_limit_by_stream as b
+    using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:02.111'
+  schema:
+  - name: count()
+    type: uint64
+
+- name: '2103'
+  type: stream
+  query: |
+    with cte as (select i, _tp_time from seek_to_mv union select i, _tp_time from seek_to_view)
+    select count() from test21_limit_by_stream as a join cte as b
+    using (i) where a._tp_time >= '2022-12-01 00:00:00.111' and b._tp_time <= '2022-12-01 00:00:03.111'
+  schema:
+  - name: count()
+    type: uint64
+- type: wait
+  time: 1
+
+- type: check
+  target_name: '2100'
+  mode: random
+  expected_result:
+  - [1, s1]
+  - [1, s1]
+  - [2, s2]
+
+- type: check
+  target_name: '2101'
+  mode: random
+  expected_result:
+  - [1, s1]
+  - [1, s1]
+  - [2, s2]
+  - [3, s3]
+
+- type: check
+  target_name: '2102'
+  expected_result:
+  - [3]
+
+- type: check
+  target_name: '2103'
+  expected_result:
+  - [4]
+
+- type: query
+  sql: drop view if exists seek_to_mv
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists seek_to_view

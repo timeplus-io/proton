@@ -2,6 +2,7 @@
 
 #include <Core/BackgroundSchedulePool.h>
 #include <Client/ConnectionPool.h>
+#include <Client/ConnectionPoolWithFailover.h>
 
 #include <atomic>
 #include <mutex>
@@ -36,13 +37,13 @@ public:
         StorageDistributed & storage_,
         const DiskPtr & disk_,
         const std::string & relative_path_,
-        ConnectionPoolPtr pool_,
+        ConnectionPoolWithFailoverPtr pool_,
         ActionBlocker & monitor_blocker_,
         BackgroundSchedulePool & bg_pool);
 
     ~StorageDistributedDirectoryMonitor();
 
-    static ConnectionPoolPtr createPool(const std::string & name, const StorageDistributed & storage);
+    static ConnectionPoolWithFailoverPtr createPool(const std::string & name, const StorageDistributed & storage);
 
     void updatePath(const std::string & new_relative_path);
 
@@ -52,7 +53,7 @@ public:
 
     static std::shared_ptr<ISource> createSourceFromFile(const String & file_name);
 
-    /// For scheduling via DistributedBlockOutputStream
+    /// For scheduling via DistributedSink.
     bool addAndSchedule(size_t file_size, size_t ms);
 
     struct InternalStatus
@@ -90,7 +91,7 @@ private:
     std::string getLoggerName() const;
 
     StorageDistributed & storage;
-    const ConnectionPoolPtr pool;
+    const ConnectionPoolWithFailoverPtr pool;
 
     DiskPtr disk;
     std::string relative_path;
@@ -115,15 +116,13 @@ private:
     std::chrono::time_point<std::chrono::system_clock> last_decrease_time {std::chrono::system_clock::now()};
     std::atomic<bool> quit {false};
     std::mutex mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
     ActionBlocker & monitor_blocker;
 
     BackgroundSchedulePoolTaskHolder task_handle;
 
     CurrentMetrics::Increment metric_pending_files;
     CurrentMetrics::Increment metric_broken_files;
-
-    friend class DirectoryMonitorBlockInputStream;
 };
 
 }

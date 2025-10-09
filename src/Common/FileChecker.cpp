@@ -1,4 +1,5 @@
 #include <base/JSON.h>
+#include <Common/logger_useful.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromString.h>
@@ -19,7 +20,9 @@ namespace ErrorCodes
 }
 
 
-FileChecker::FileChecker(DiskPtr disk_, const String & file_info_path_) : disk(std::move(disk_))
+FileChecker::FileChecker(DiskPtr disk_, const String & file_info_path_)
+    : disk(std::move(disk_))
+    , log(getLogger("FileChecker"))
 {
     setPath(file_info_path_);
     try
@@ -119,7 +122,7 @@ void FileChecker::save() const
     std::string tmp_files_info_path = parentPath(files_info_path) + "tmp_" + fileName(files_info_path);
 
     {
-        std::unique_ptr<WriteBuffer> out = disk->writeFile(tmp_files_info_path);
+        std::unique_ptr<WriteBufferFromFileBase> out = disk ? disk->writeFile(tmp_files_info_path) : std::make_unique<WriteBufferFromFile>(tmp_files_info_path);
 
         /// So complex JSON structure - for compatibility with the old format.
         writeCString("{\"clickhouse\":{", *out);
@@ -138,7 +141,9 @@ void FileChecker::save() const
         }
 
         writeCString("}}", *out);
-        out->next();
+
+        out->sync();
+        out->finalize();
     }
 
     disk->replaceFile(tmp_files_info_path, files_info_path);

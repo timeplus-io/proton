@@ -27,7 +27,7 @@ void TableFunctionWindow::doParseArguments(const ASTPtr & func_ast, ContextPtr c
     /// Please note logic here is actually tightly tailed for tumble/hop table function.
     /// This is not neat, but it is ok now.
     if (func_ast->children.size() != 1)
-        throw Exception(help_msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_msg);
 
     auto streaming_func_ast = func_ast->clone();
     auto * node = streaming_func_ast->as<ASTFunction>();
@@ -48,12 +48,12 @@ void TableFunctionWindow::doParseArguments(const ASTPtr & func_ast, ContextPtr c
     ASTPtr timestamp_expr_ast;
 
     //// [timestamp_column_expr]
-    /// The following logic is adding system default time column to tumble function if user doesn't specify one
+    /// The following logic is adding system default time column to window function if user doesn't specify one
     if (args[0])
     {
-        if (auto func_node = args[0]->as<ASTFunction>(); func_node)
+        if (auto * func_node = args[0]->as<ASTFunction>(); func_node)
         {
-            /// time column is a transformed one, for example, tumble(table, toDateTime32(t), INTERVAL 5 SECOND)
+            /// time column is a transformed one, for example, tumble(table, to_datetime(t), INTERVAL 5 SECOND)
             func_node->alias = ProtonConsts::STREAMING_TIMESTAMP_ALIAS;
             timestamp_expr_ast = args[0];
         }
@@ -120,13 +120,14 @@ void TableFunctionWindow::init(ContextPtr context, ASTPtr streaming_func_ast, AS
 NamesAndTypesList TableFunctionWindow::getAdditionalResultColumns(const ColumnsWithTypeAndName & arguments) const
 {
     assert(!arguments.empty());
-    /// If streaming table function is used, we will need project `wstart, wend ...` columns to metadata
+    /// If streaming table function is used, we will need project `window_start, window_end ...` columns to metadata
     return NamesAndTypesList{
         NameAndTypePair(ProtonConsts::STREAMING_WINDOW_START, arguments[0].type),
         NameAndTypePair(ProtonConsts::STREAMING_WINDOW_END, arguments[0].type)};
 }
 
-TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context)
+TimestampFunctionDescriptionMutablePtr
+TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_ast, ContextPtr context)
 {
     auto & timestamp_expr_func = timestamp_expr_ast->as<ASTFunction &>();
     bool is_now_func = false;
@@ -136,7 +137,9 @@ TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunct
         timestamp_expr_func.name = "__streaming_" + timestamp_expr_func.name; /// Replace to processing time
     }
     else if (timestamp_expr_func.name == "__streaming_now" || timestamp_expr_func.name == "__streaming_now64")
+    {
         is_now_func = true;
+    }
 
     auto syntax_analyzer_result = TreeRewriter(context).analyze(
         timestamp_expr_ast, columns.getAll(), nested_proxy_storage ? nested_proxy_storage : storage, underlying_storage_snapshot);
@@ -148,7 +151,7 @@ TimestampFunctionDescriptionMutablePtr TableFunctionWindow::createTimestampFunct
     const auto & time_column = timestamp_func_expr->getSampleBlock().getByPosition(0);
     assert(time_column.name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
     if (!isDateTime(time_column.type) && !isDateTime64(time_column.type))
-        throw Exception("The resulting type of time column expression shall be datetime or datetime64", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "The resulting type of time column expression shall be datetime or datetime64");
 
     return std::make_shared<TimestampFunctionDescription>(
         std::move(timestamp_expr_ast), std::move(timestamp_func_expr), syntax_analyzer_result->requiredSourceColumns(), is_now_func);

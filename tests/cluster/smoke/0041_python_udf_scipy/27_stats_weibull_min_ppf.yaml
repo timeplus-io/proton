@@ -1,0 +1,51 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_stats_weibull_min_ppf(value float64) RETURNS float64 LANGUAGE PYTHON AS
+      $$
+      import scipy.stats as stats
+
+      def test_stats_weibull_min_ppf(value):
+          alpha, beta = 0.6, 5
+          res = stats.weibull_min.ppf(value, alpha, scale=beta)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-27-1
+    type: stream
+    query: select test_stats_weibull_min_ppf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float64
+      - name: value
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (0.001)(0.5)(0.999);
+
+  - type: check
+    target_name: python-udf4-27-1
+    expected_result:
+      - [05.00417014e-05, 0.001]
+      - [2.71443287e+00, 0.5]
+      - [1.25275144e+02, 0.999]

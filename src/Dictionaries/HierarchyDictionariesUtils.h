@@ -26,14 +26,19 @@ public:
         UInt32 end_index;
     };
 
-    explicit DictionaryHierarchicalParentToChildIndex(const HashMap<UInt64, PaddedPODArray<UInt64>> & parent_to_children_map_)
+    /// By default we use initial_bytes=4096 in PodArray.
+    /// It might lead to really high memory consumption when arrays are almost empty but there are a lot of them.
+    using Array = PODArray<UInt64, 8 * sizeof(UInt64), Allocator<false>, PADDING_FOR_SIMD - 1, PADDING_FOR_SIMD>;
+    using ParentToChildIndex = HashMap<UInt64, Array>;
+
+    explicit DictionaryHierarchicalParentToChildIndex(const ParentToChildIndex & parent_to_children_map_)
     {
         size_t parent_to_children_map_size = parent_to_children_map_.size();
 
         keys.reserve(parent_to_children_map_size);
         parent_to_children_keys_range.reserve(parent_to_children_map_size);
 
-        for (auto & [parent, children] : parent_to_children_map_)
+        for (const auto & [parent, children] : parent_to_children_map_)
         {
             size_t keys_size = keys.size();
             UInt32 start_index = static_cast<UInt32>(keys_size);
@@ -97,7 +102,6 @@ namespace detail
     template <typename IsKeyValidFunc, typename GetParentKeyFunc>
     ElementsAndOffsets getHierarchy(
         const PaddedPODArray<UInt64> & keys,
-        const UInt64 & hierarchy_null_value,
         IsKeyValidFunc && is_key_valid_func,
         GetParentKeyFunc && get_parent_key_func)
     {
@@ -123,7 +127,7 @@ namespace detail
             auto hierarchy_key = keys[i];
             size_t current_hierarchy_depth = 0;
 
-            bool is_key_valid = std::forward<IsKeyValidFunc>(is_key_valid_func)(hierarchy_key);
+            bool is_key_valid = is_key_valid_func(hierarchy_key);
 
             if (!is_key_valid)
             {
@@ -156,14 +160,14 @@ namespace detail
                     break;
                 }
 
-                if (hierarchy_key == hierarchy_null_value || current_hierarchy_depth >= DBMS_HIERARCHICAL_DICTIONARY_MAX_DEPTH)
+                if (current_hierarchy_depth >= DBMS_HIERARCHICAL_DICTIONARY_MAX_DEPTH)
                     break;
 
                 already_processes_keys_to_offset[hierarchy_key] = {offsets.size(), current_hierarchy_depth};
                 elements.emplace_back(hierarchy_key);
                 ++current_hierarchy_depth;
 
-                std::optional<UInt64> parent_key = std::forward<GetParentKeyFunc>(get_parent_key_func)(hierarchy_key);
+                std::optional<UInt64> parent_key = get_parent_key_func(hierarchy_key);
 
                 if (!parent_key.has_value())
                     break;
@@ -181,7 +185,7 @@ namespace detail
 
     /** Returns array with UInt8 represent if key from in_keys array is in hierarchy of key from keys column.
       * If value in result array is 1 that means key from in_keys array is in hierarchy of key from
-      * keys array with same index, 0 therwise.
+      * keys array with same index, 0 otherwise.
       * For getting hierarchy implementation uses getKeysHierarchy function.
       *
       * Not: keys size must be equal to in_keys_size.
@@ -190,7 +194,6 @@ namespace detail
     PaddedPODArray<UInt8> getIsInHierarchy(
         const PaddedPODArray<UInt64> & keys,
         const PaddedPODArray<UInt64> & in_keys,
-        const UInt64 & hierarchy_null_value,
         IsKeyValidFunc && is_key_valid_func,
         GetParentKeyFunc && get_parent_func)
     {
@@ -201,7 +204,6 @@ namespace detail
 
         detail::ElementsAndOffsets hierarchy = detail::getHierarchy(
             keys,
-            hierarchy_null_value,
             std::forward<IsKeyValidFunc>(is_key_valid_func),
             std::forward<GetParentKeyFunc>(get_parent_func));
 
@@ -213,7 +215,7 @@ namespace detail
             size_t i_elements_start = i > 0 ? offsets[i - 1] : 0;
             size_t i_elements_end = offsets[i];
 
-            auto & key_to_find = in_keys[i];
+            const auto & key_to_find = in_keys[i];
 
             const auto * begin = elements.begin() + i_elements_start;
             const auto * end = elements.begin() + i_elements_end;
@@ -263,8 +265,8 @@ namespace detail
         Strategy strategy,
         size_t & valid_keys)
     {
-        auto & parent_to_children_keys_range = parent_to_child_index.parent_to_children_keys_range;
-        auto & children_keys = parent_to_child_index.keys;
+        const auto & parent_to_children_keys_range = parent_to_child_index.parent_to_children_keys_range;
+        const auto & children_keys = parent_to_child_index.keys;
 
         /// If strategy is GetAllDescendantsStrategy we try to cache and later reuse previously calculated descendants.
         /// If strategy is GetDescendantsAtSpecificLevelStrategy we does not use cache strategy.
@@ -436,13 +438,11 @@ namespace detail
 template <typename KeyType, typename IsKeyValidFunc, typename GetParentKeyFunc>
 ColumnPtr getKeysHierarchyArray(
     const PaddedPODArray<KeyType> & keys,
-    const KeyType & hierarchy_null_value,
     IsKeyValidFunc && is_key_valid_func,
     GetParentKeyFunc && get_parent_func)
 {
     auto elements_and_offsets = detail::getHierarchy(
         keys,
-        hierarchy_null_value,
         std::forward<IsKeyValidFunc>(is_key_valid_func),
         std::forward<GetParentKeyFunc>(get_parent_func));
 
@@ -454,14 +454,12 @@ template <typename KeyType, typename IsKeyValidFunc, typename GetParentKeyFunc>
 ColumnUInt8::Ptr getKeysIsInHierarchyColumn(
     const PaddedPODArray<KeyType> & hierarchy_keys,
     const PaddedPODArray<KeyType> & hierarchy_in_keys,
-    const KeyType & hierarchy_null_value,
     IsKeyValidFunc && is_key_valid_func,
     GetParentKeyFunc && get_parent_func)
 {
     auto is_in_hierarchy_data = detail::getIsInHierarchy(
         hierarchy_keys,
         hierarchy_in_keys,
-        hierarchy_null_value,
         std::forward<IsKeyValidFunc>(is_key_valid_func),
         std::forward<GetParentKeyFunc>(get_parent_func));
 

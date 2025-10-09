@@ -1,0 +1,71 @@
+tags:
+  - view
+description: global sum based on tail join table view
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_smoke1_join_v;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create view test_smoke1_join_v as select a.id, b.type, a.value, a.json, a.timestamp, to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, _tp_time from test_smoke1 as a join table(test_smoke1_d) as b on a.id =b.id
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: '101'
+    query: select type, count(value) from test_smoke1_join_v group by type order by type emit periodic 8s
+    schema:
+      - name: type
+        type: string
+      - name: count(value)
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev1', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03']
+      - ['dev2', 'ca', 30, '{"create_time":"2021-11-02 20:00:02"}', '2021-11-02 20:00:02']
+      - ['dev2', 'ca', 68, '{"create_time":"2021-11-02 20:00:04"}', '2021-11-02 20:00:04']
+      - ['dev8', 'ca', 67, '{"create_time":"2021-11-02 20:00:05"}', '2021-11-02 20:00:05']
+      - ['dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:06"}', '2021-11-02 20:00:06']
+      - ['dev3', 'ca', 58, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev3', 'ca', 66, '{"create_time":"2021-11-02 20:00:08"}', '2021-11-02 20:00:08']
+      - ['dev4', 'ca', 76, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+      - ['dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev4', 'ca', 67, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+      - ['dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:10"}', '2021-11-02 20:00:10']
+  - type: wait
+    time: 10
+
+  - type: query
+    sql: drop view if exists test_smoke1_join_v
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: '101'
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - ['field', 2]
+      - ['floor', 3]
+      - ['roof', 2]
+      - ['wall', 2]
+      - ['window', 3]

@@ -1,0 +1,32 @@
+dict	low_cardinality(nullable(string))					
+one
+two
+three
+one
+two
+dict	low_cardinality(nullable(string))					
+
+one
+two
+three
+
+one
+three
+dict	low_cardinality(nullable(string))					
+one
+two
+
+three
+one
+two
+three
+lc	low_cardinality(nullable(string))					
+OK
+dict	low_cardinality(nullable(string))					
+one
+two
+
+three
+one
+\N
+three

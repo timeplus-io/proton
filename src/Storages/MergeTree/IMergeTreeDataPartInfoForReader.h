@@ -1,6 +1,7 @@
 #pragma once
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/AlterConversions.h>
+#include <Storages/ColumnsDescription.h>
 #include <Core/NamesAndTypes.h>
 
 namespace DB
@@ -8,6 +9,7 @@ namespace DB
 
 class IDataPartStorage;
 using DataPartStoragePtr = std::shared_ptr<const IDataPartStorage>;
+
 class MergeTreeIndexGranularity;
 struct MergeTreeDataPartChecksums;
 struct MergeTreeIndexGranularityInfo;
@@ -40,13 +42,17 @@ public:
 
     virtual const NamesAndTypesList & getColumns() const = 0;
 
+    virtual const ColumnsDescription & getColumnsDescription() const = 0;
+
+    virtual const ColumnsDescription & getColumnsDescriptionWithCollectedNested() const = 0;
+
     virtual std::optional<size_t> getColumnPosition(const String & column_name) const = 0;
 
     virtual String getColumnNameWithMinimumCompressedSize(bool with_subcolumns) const = 0;
 
     virtual const MergeTreeDataPartChecksums & getChecksums() const = 0;
 
-    virtual AlterConversions getAlterConversions() const = 0;
+    virtual AlterConversionsPtr getAlterConversions() const = 0;
 
     virtual size_t getMarksCount() const = 0;
 
@@ -59,6 +65,8 @@ public:
     virtual SerializationPtr getSerialization(const NameAndTypePair & column) const = 0;
 
     virtual const SerializationInfoByName & getSerializationInfos() const = 0;
+
+    virtual String getTableName() const = 0;
 
     virtual void reportBroken() = 0;
 };

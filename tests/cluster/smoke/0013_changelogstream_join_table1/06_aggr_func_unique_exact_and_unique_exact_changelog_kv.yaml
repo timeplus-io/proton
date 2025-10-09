@@ -1,0 +1,64 @@
+tags:
+  - changelog_kv_aggr
+  - native_not_support
+description: aggregation function unique_exact and unique_exact changelog_kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_changelog_kv_stream
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream test14_changelog_kv_stream(id int, val float) primary key id settings mode='changelog_kv'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)
+  - type: wait
+    time: 2
+  
+  - name: "14109"
+    type: stream
+    query: select unique(id), unique_exact(val), unique_exact_if(val, val > 2) from test14_changelog_kv_stream emit periodic 1s
+    schema:
+      - name: unique(id)
+        type: uint64
+      - name: unique_exact(val)
+        type: uint64
+      - name: unique_exact_if(val, val > 2)
+        type: uint64
+  - type: wait
+    time: 2
+  
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5);
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, _tp_delta) values (2, -1);
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into test14_changelog_kv_stream(id, _tp_delta) values (3, -1);
+
+  - type: check
+    target_name: "14109"
+    expected_result:
+      - - "3"
+        - "3"
+        - "2"
+      - - "5"
+        - "5"
+        - "4"
+      - - "4"
+        - "5"
+        - "4"
+      - - "3"
+        - "5"
+        - "4"

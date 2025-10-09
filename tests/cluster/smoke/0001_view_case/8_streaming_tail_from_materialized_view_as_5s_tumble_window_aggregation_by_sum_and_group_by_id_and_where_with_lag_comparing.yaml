@@ -1,0 +1,91 @@
+tags:
+  - view
+  - tumble window
+description: 'create materialized view 5s tumble window aggregation by lag and group
+  by id, select id, sum_value from mv, timestamp designated as event_time_column when
+  creating table, bug due to where with lag where is wrong '
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_v_stream_tumble_v
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE VIEW test_v_stream_tumble_v AS
+      SELECT
+         id,
+         value,
+         lag(id) AS last_id,
+         lag(value) AS last_value,
+         to_datetime(window_start, 'UTC') AS win_start,
+         to_datetime(window_end, 'UTC') AS win_end
+      FROM
+         tumble(test1_mv, INTERVAL 5 SECOND)
+      GROUP BY
+         id, value, window_start, window_end
+      HAVING
+         last_value < value
+
+  - type: wait
+    time: 2
+
+  - name: '301'
+    type: stream
+    query: select id, count() from test_v_stream_tumble_v group by id limit 3
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00+00:00'),
+      ('dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01+00:00'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:02+00:00');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03+00:00'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02+00:00'),
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08+00:00');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev3', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00+00:00'),
+      ('dev3', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01+00:00'),
+      ('dev2', 'ca', 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05+00:00');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03+00:00'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02+00:00'),
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08+00:00');
+
+  <<if ne .aggregation_check_mode "random">>
+  - type: check
+    mode: random
+    target_name: '301'
+    expected_result:
+      - [ dev2, 2 ]
+      - [ dev8, 1 ]
+      - [ dev1, 1 ]
+  <<end>>

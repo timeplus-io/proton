@@ -1,0 +1,107 @@
+tags:
+  - join
+
+description: |
+  Test checkpoint interval strategy with min_interval=60 by default
+  Main Steps:
+    1.Create source stream, target stream and random stream
+    2.Create materialized from source stream
+    3.Create materialized view from random stream into source stream
+    4.Wait 120s (at least 2 lines log for check)
+    5.Check proton log interval on `Triggered checkpointing` around 60s
+
+cluster:
+  - p1k1
+
+steps:
+  - type: query
+    sql: drop view if exists mv;
+
+  - type: query
+    sql: drop view if exists rd_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists source settings force_drop_big_stream=true;
+
+  - type: query
+    sql: drop stream if exists target settings force_drop_big_stream=true;
+
+  - type: query
+    sql: drop stream if exists rd;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: 
+      CREATE RANDOM STREAM rd
+      (
+        id int32 default rand() % 4,
+        value string default to_string(rand() % 100)
+      );
+
+  - type: query
+    sql: CREATE STREAM source (id int32, value string);
+
+  - type: query
+    sql: |
+      CREATE STREAM target (
+        id int32,
+        value string,
+        bid int32,
+        bvalue string
+      );
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW mv INTO target AS
+      SELECT
+        id, value, b.id as bid, b.value as bvalue
+      FROM source AS a
+      INNER JOIN source AS b ON a.id = b.id;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW rd_mv INTO source AS
+      SELECT id, value FROM rd
+      SETTINGS eps=500;
+
+  - type: wait
+    time: 120
+
+  - name: mv-13-1
+    type: command
+    node: [p1]
+    shell: |
+      log_file=/var/log/proton-server/proton-server.log
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='mv'")
+      log_check=$(grep 'Triggered checkpointing' $log_file | grep $uuid | wc -l)
+      [ "$log_check" -ge 2 ] || { echo "##log 'Triggered checkpointing' less than 2 lines##"; exit 0; }
+
+      mapfile -t lines < <(grep 'Triggered checkpointing' $log_file | grep $uuid | tail -n 2 | awk '{print $2}')
+      time1="${lines[0]}"
+      time2="${lines[1]}"
+      timestamp1=$(date -d "$time1" +"%s")
+      timestamp2=$(date -d "$time2" +"%s")
+
+      interval=$((timestamp2 - timestamp1))
+      [ "$interval" -ge 60 ] && [ "$interval" -le 120 ] && echo "true" || echo "##checkpoint interval $interval not equal to 60##"
+
+  - type: check
+    target_name: mv-13-1
+    expected_result: ["true"]
+
+  - type: query
+    sql: drop view if exists mv;
+
+  - type: query
+    sql: drop view if exists rd_mv;

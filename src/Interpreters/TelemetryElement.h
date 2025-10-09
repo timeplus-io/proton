@@ -1,8 +1,8 @@
 #pragma once
 
-#include "config_version.h"
+#include <Common/config_version.h>
 
-#include <Core/ServerUUID.h>
+#include <Core/ServerMeta.h>
 
 #include <Poco/JSON/Object.h>
 
@@ -69,7 +69,7 @@ protected:
 
     void withServerUUID()
     {
-        DB::UUID server_uuid = DB::ServerUUID::get();
+        const auto & server_uuid = DB::ServerMeta::getIdentity();
         std::string server_uuid_str = server_uuid != DB::UUIDHelpers::Nil ? DB::toString(server_uuid) : "Unknown";
         setProperty("server_id", server_uuid_str);
     }
@@ -224,11 +224,6 @@ public:
         return *this;
     }
 
-    Self & withRepliactionFactor(uint32_t replication_factor)
-    {
-        setProperty("replication_factor", replication_factor);
-        return *this;
-    }
 
     Self & withStorageType(const std::string & storage_type)
     {
@@ -374,11 +369,6 @@ public:
         return *this;
     }
 
-    Self & withRepliactionFactor(uint32_t replication_factor)
-    {
-        setProperty("replication_factor", replication_factor);
-        return *this;
-    }
 
     Self & withTargetStorageType(const std::string & storage_type)
     {

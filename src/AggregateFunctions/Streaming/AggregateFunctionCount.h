@@ -40,11 +40,13 @@ struct AggregateFunctionCountData
 class AggregateFunctionCount final : public IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCount>
 {
 public:
-    AggregateFunctionCount(const DataTypes & argument_types_) : IAggregateFunctionDataHelper(argument_types_, {}) { }
+    explicit AggregateFunctionCount(const DataTypes & argument_types_)
+        : IAggregateFunctionDataHelper(argument_types_, {}, createResultType())
+    {}
 
     String getName() const override { return "__count_retract"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
+    static DataTypePtr createResultType() { return std::make_shared<DataTypeUInt64>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -55,7 +57,7 @@ public:
     void addBatchSinglePlace(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena *,
         ssize_t if_argument_pos,
@@ -92,7 +94,7 @@ public:
     void addBatchSinglePlaceNotNull(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena *,
@@ -177,7 +179,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
 
         auto * count_value_ptr = b.CreatePointerCast(aggregate_data_ptr, return_type->getPointerTo());
         auto * count_value = b.CreateLoad(return_type, count_value_ptr);
@@ -191,7 +193,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
 
         auto * count_value_dst_ptr = b.CreatePointerCast(aggregate_data_dst_ptr, return_type->getPointerTo());
         auto * count_value_dst = b.CreateLoad(return_type, count_value_dst_ptr);
@@ -208,7 +210,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, getResultType());
         auto * count_value_ptr = b.CreatePointerCast(aggregate_data_ptr, return_type->getPointerTo());
 
         return b.CreateLoad(return_type, count_value_ptr);
@@ -225,16 +227,16 @@ class AggregateFunctionCountNotNullUnary final
 {
 public:
     AggregateFunctionCountNotNullUnary(const DataTypePtr & argument, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullUnary>({argument}, params)
+        : IAggregateFunctionDataHelper<AggregateFunctionCountData, AggregateFunctionCountNotNullUnary>({argument}, params, createResultType())
     {
         if (!argument->isNullable())
             throw Exception(
-                "Logical error: not Nullable data type passed to AggregateFunctionCountNotNullUnary", ErrorCodes::LOGICAL_ERROR);
+                ErrorCodes::LOGICAL_ERROR, "Logical error: not Nullable data type passed to AggregateFunctionCountNotNullUnary");
     }
 
     String getName() const override { return "__count_retract"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
+    static DataTypePtr createResultType() { return std::make_shared<DataTypeUInt64>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -251,7 +253,7 @@ public:
     void addBatchSinglePlace(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena *,
         ssize_t if_argument_pos,
@@ -341,7 +343,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
 
         auto * is_null_value = b.CreateExtractValue(values[0], {1});
         auto * increment_value
@@ -359,7 +361,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
 
         auto * count_value_dst_ptr = b.CreatePointerCast(aggregate_data_dst_ptr, return_type->getPointerTo());
         auto * count_value_dst = b.CreateLoad(return_type, count_value_dst_ptr);
@@ -376,7 +378,7 @@ public:
     {
         llvm::IRBuilder<> & b = static_cast<llvm::IRBuilder<> &>(builder);
 
-        auto * return_type = toNativeType(b, getReturnType());
+        auto * return_type = toNativeType(b, this->getResultType());
         auto * count_value_ptr = b.CreatePointerCast(aggregate_data_ptr, return_type->getPointerTo());
 
         return b.CreateLoad(return_type, count_value_ptr);

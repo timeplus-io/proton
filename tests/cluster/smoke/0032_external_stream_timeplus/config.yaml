@@ -1,0 +1,6 @@
+name: tp_external_stream
+description: Smoke tests for Timeplus external streams
+tags:
+  - smoke
+  - timeplus
+  - external_stream

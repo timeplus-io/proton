@@ -29,6 +29,9 @@ struct SharedChunk : Chunk
     ColumnRawPtrs all_columns;
     ColumnRawPtrs sort_columns;
 
+    /// Used in ReplacingSortedAlgorithm when using skipping final
+    MutableColumnPtr replace_final_selection;
+
     using Chunk::Chunk;
     using Chunk::operator=;
 
@@ -66,8 +69,8 @@ public:
     SharedChunkPtr alloc(Chunk & chunk)
     {
         if (free_chunks.empty())
-            throw Exception("Not enough space in SharedChunkAllocator. "
-                            "Chunks allocated: " + std::to_string(chunks.size()), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Not enough space in SharedChunkAllocator. Chunks allocated: {}",
+                            chunks.size());
 
         auto pos = free_chunks.back();
         free_chunks.pop_back();
@@ -83,7 +86,7 @@ public:
     {
         if (free_chunks.size() != chunks.size())
         {
-            LOG_ERROR(&Poco::Logger::get("SharedChunkAllocator"), "SharedChunkAllocator was destroyed before RowRef was released. StackTrace: {}", StackTrace().toString());
+            LOG_ERROR(getLogger("SharedChunkAllocator"), "SharedChunkAllocator was destroyed before RowRef was released. StackTrace: {}", StackTrace().toString());
 
             return;
         }
@@ -100,7 +103,7 @@ private:
             /// This may happen if allocator was removed before chunks.
             /// Log message and exit, because we don't want to throw exception in destructor.
 
-            LOG_ERROR(&Poco::Logger::get("SharedChunkAllocator"), "SharedChunkAllocator was destroyed before RowRef was released. StackTrace: {}", StackTrace().toString());
+            LOG_ERROR(getLogger("SharedChunkAllocator"), "SharedChunkAllocator was destroyed before RowRef was released. StackTrace: {}", StackTrace().toString());
 
             return;
         }
@@ -183,12 +186,15 @@ struct RowRefWithOwnedChunk
     ColumnRawPtrs * sort_columns = nullptr;
     UInt64 row_num = 0;
 
+    const SortCursorImpl * current_cursor = nullptr;
+
     void swap(RowRefWithOwnedChunk & other)
     {
         owned_chunk.swap(other.owned_chunk);
         std::swap(all_columns, other.all_columns);
         std::swap(sort_columns, other.sort_columns);
         std::swap(row_num, other.row_num);
+        std::swap(current_cursor, other.current_cursor);
     }
 
     bool empty() const { return owned_chunk == nullptr; }
@@ -199,6 +205,7 @@ struct RowRefWithOwnedChunk
         all_columns = nullptr;
         sort_columns = nullptr;
         row_num = 0;
+        current_cursor = nullptr;
     }
 
     void set(SortCursor & cursor, SharedChunkPtr chunk)
@@ -207,6 +214,7 @@ struct RowRefWithOwnedChunk
         row_num = cursor.impl->getRow();
         all_columns = &owned_chunk->all_columns;
         sort_columns = &owned_chunk->sort_columns;
+        current_cursor = cursor.impl;
     }
 
     /// proton : starts. If version_column_pos is not -1, then skip comparing it

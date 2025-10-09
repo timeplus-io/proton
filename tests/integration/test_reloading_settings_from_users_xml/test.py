@@ -30,17 +30,20 @@ def reset_to_normal_settings_after_test():
 def test_force_reload():
     assert node.query("SELECT getSetting('max_memory_usage')") == "10000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "first_or_random\n"
-    
+    assert node.query("SELECT getSetting('alter_sync')") == "2\n"
+
     node.copy_file_to_container(os.path.join(SCRIPT_DIR, "configs/changed_settings.xml"), '/etc/clickhouse-server/users.d/z.xml')
     node.query("SYSTEM RELOAD CONFIG")
 
     assert node.query("SELECT getSetting('max_memory_usage')") == "20000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "nearest_hostname\n"
+    assert node.query("SELECT getSetting('alter_sync')") == "0\n"
 
 
 def test_reload_on_timeout():
     assert node.query("SELECT getSetting('max_memory_usage')") == "10000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "first_or_random\n"
+    assert node.query("SELECT getSetting('alter_sync')") == "2\n"
 
     time.sleep(1) # The modification time of the 'z.xml' file should be different,
                   # because config files are reload by timer only when the modification time is changed.
@@ -48,6 +51,7 @@ def test_reload_on_timeout():
 
     assert_eq_with_retry(node, "SELECT getSetting('max_memory_usage')", "20000000000")
     assert_eq_with_retry(node, "SELECT getSetting('load_balancing')", "nearest_hostname")
+    assert_eq_with_retry(node, "SELECT getSetting('alter_sync')", "0")
 
 
 def test_unknown_setting_force_reload():
@@ -58,6 +62,7 @@ def test_unknown_setting_force_reload():
 
     assert node.query("SELECT getSetting('max_memory_usage')") == "10000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "first_or_random\n"
+    assert node.query("SELECT getSetting('alter_sync')") == "2\n"
 
 
 def test_unknown_setting_reload_on_timeout():
@@ -70,6 +75,7 @@ def test_unknown_setting_reload_on_timeout():
 
     assert node.query("SELECT getSetting('max_memory_usage')") == "10000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "first_or_random\n"
+    assert node.query("SELECT getSetting('alter_sync')") == "2\n"
 
 
 def test_unexpected_setting_int():
@@ -79,6 +85,7 @@ def test_unexpected_setting_int():
 
     assert node.query("SELECT getSetting('max_memory_usage')") == "10000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "first_or_random\n"
+    assert node.query("SELECT getSetting('alter_sync')") == "2\n"
 
 
 def test_unexpected_setting_enum():
@@ -88,3 +95,4 @@ def test_unexpected_setting_enum():
 
     assert node.query("SELECT getSetting('max_memory_usage')") == "10000000000\n"
     assert node.query("SELECT getSetting('load_balancing')") == "first_or_random\n"
+    assert node.query("SELECT getSetting('alter_sync')") == "2\n"

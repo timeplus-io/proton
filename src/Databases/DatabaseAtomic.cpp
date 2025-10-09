@@ -1,11 +1,19 @@
+#include <filesystem>
+#include <base/isSharedPtrUnique.h>
 #include <Databases/DatabaseAtomic.h>
 #include <Databases/DatabaseOnDisk.h>
+#include <Databases/DatabaseFactory.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Parsers/formatAST.h>
-#include <Common/renameat2.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
-#include <filesystem>
+#include <Parsers/formatAST.h>
+#include <Common/renameat2.h>
+
+/// proton: starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+/// proton: ends
 
 namespace fs = std::filesystem;
 
@@ -13,22 +21,23 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_STREAM;
-    extern const int UNKNOWN_DATABASE;
-    extern const int STREAM_ALREADY_EXISTS;
-    extern const int CANNOT_ASSIGN_ALTER;
-    extern const int DATABASE_NOT_EMPTY;
-    extern const int NOT_IMPLEMENTED;
-    extern const int FILE_ALREADY_EXISTS;
-    extern const int INCORRECT_QUERY;
-    extern const int ABORTED;
+extern const int UNKNOWN_STREAM;
+extern const int UNKNOWN_DATABASE;
+extern const int STREAM_ALREADY_EXISTS;
+extern const int CANNOT_ASSIGN_ALTER;
+extern const int DATABASE_NOT_EMPTY;
+extern const int NOT_IMPLEMENTED;
+extern const int FILE_ALREADY_EXISTS;
+extern const int INCORRECT_QUERY;
+extern const int ABORTED;
 }
 
 class AtomicDatabaseTablesSnapshotIterator final : public DatabaseTablesSnapshotIterator
 {
 public:
-    explicit AtomicDatabaseTablesSnapshotIterator(DatabaseTablesSnapshotIterator && base)
-        : DatabaseTablesSnapshotIterator(std::move(base)) {}
+    explicit AtomicDatabaseTablesSnapshotIterator(DatabaseTablesSnapshotIterator && base) : DatabaseTablesSnapshotIterator(std::move(base))
+    {
+    }
     UUID uuid() const override { return table()->getStorageID().uuid; }
 };
 
@@ -54,9 +63,7 @@ String DatabaseAtomic::getTableDataPath(const String & table_name) const
     std::lock_guard lock(mutex);
     auto it = table_name_to_path.find(table_name);
     if (it == table_name_to_path.end())
-        /// proton: starts
-        throw Exception("Stream " + table_name + " not found in database " + database_name, ErrorCodes::UNKNOWN_STREAM);
-        /// proton: ends
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {} not found in database {}", table_name, database_name);
     assert(it->second != data_path && !it->second.empty());
     return it->second;
 }
@@ -78,12 +85,13 @@ void DatabaseAtomic::drop(ContextPtr)
     }
     catch (...)
     {
-        LOG_WARNING(log, fmt::runtime(getCurrentExceptionMessage(true)));
+        LOG_WARNING(log, getCurrentExceptionMessageAndPattern(/* with_stacktrace */ true));
     }
     fs::remove_all(getMetadataPath());
 }
 
-void DatabaseAtomic::attachTable(ContextPtr /* context_ */, const String & name, const StoragePtr & table, const String & relative_table_path)
+void DatabaseAtomic::attachTable(
+    ContextPtr /* context_ */, const String & name, const StoragePtr & table, const String & relative_table_path)
 {
     assert(relative_table_path != data_path && !relative_table_path.empty());
     DetachedTables not_in_use;
@@ -106,14 +114,61 @@ StoragePtr DatabaseAtomic::detachTable(ContextPtr /* context */, const String & 
     return table;
 }
 
-void DatabaseAtomic::dropTable(ContextPtr local_context, const String & table_name, bool no_delay)
+/// proton: starts.
+void DatabaseAtomic::createTable(ContextPtr local_context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
+{
+    /// proton : if it is not local table, commit the metadata to metastore
+    /// There are 2 types of streams / tables
+    /// 1. local streams like system.query_log etc system tables which are purely local to each node
+    /// 2. user created distributed streams
+    /// For `local` streams, use local file systems to persist the metadata
+    /// For `distributed` streams, use meta store to persist the metadata
+    
+    /// System tables (isLocal() == true) should always be created locally,
+    /// even in single-instance mode, because:
+    /// 1. They are node-local by nature (logs, metrics, etc.)
+    /// 2. They need to be available during bootstrap before MetaStore is ready
+    /// 3. They don't require MetaStore persistence for recovery
+    if (table->isLocal())
+        return createTableLocal(std::move(local_context), table_name, table, query);
+
+    /// User streams go through MetaStore in both single-instance and distributed modes
+    createTableInMetaStore(std::move(local_context), table_name, table, query);
+}
+
+void DatabaseAtomic::createTableLocal(const ContextPtr & local_context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
+{
+    return DatabaseOrdinary::createTable(local_context, table_name, table, query);
+}
+/// proton: ends.
+
+void DatabaseAtomic::dropTable(ContextPtr local_context, const String & table_name, bool sync, const ASTPtr & query)
 {
     auto storage = tryGetTable(table_name, local_context);
     /// Remove the inner table (if any) to avoid deadlock
     /// (due to attempt to execute DROP from the worker thread)
     if (storage)
-        storage->dropInnerTableIfAny(no_delay, local_context);
+        storage->dropInnerTableIfAny(sync, local_context);
+    else
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist", backQuote(getDatabaseName()), backQuote(table_name));
 
+    /// proton : if it is not local table, commit the metadata to metastore
+    /// There are 2 types of streams / tables
+    /// 1. local streams like system.query_log etc system tables which are purely local to each node
+    /// 2. user created distributed streams
+    /// For `local` streams, use local file systems to persist the metadata
+    /// For `distributed` streams, use meta store to persist the metadata
+    
+    /// System tables should always be dropped locally
+    if (storage->isLocal())
+        return dropTableLocal(local_context, table_name, sync);
+
+    /// User streams go through MetaStore
+    dropTableFromMetaStore(local_context, table_name, storage, sync, query);
+}
+
+void DatabaseAtomic::dropTableLocal(const ContextPtr & local_context, const String & table_name, bool sync)
+{
     String table_metadata_path = getObjectMetadataPath(table_name);
     String table_metadata_path_drop;
     StoragePtr table;
@@ -128,47 +183,103 @@ void DatabaseAtomic::dropTable(ContextPtr local_context, const String & table_na
         /// (it's more likely to lost connection, than to fail before applying local changes).
         /// TODO better detection and recovery
 
-        fs::rename(table_metadata_path, table_metadata_path_drop);  /// Mark table as dropped
-        DatabaseOrdinary::detachTableUnlocked(table_name, lock);  /// Should never throw
+        fs::rename(table_metadata_path, table_metadata_path_drop); /// Mark table as dropped
+        DatabaseOrdinary::detachTableUnlocked(table_name, lock); /// Should never throw
         table_name_to_path.erase(table_name);
     }
 
     if (table->storesDataOnDisk())
         tryRemoveSymlink(table_name);
 
-    table->preDrop();
-
-    if (table->dropTableImmediately())
-        table->drop();
-
     /// Notify DatabaseCatalog that table was dropped. It will remove table data in background.
     /// Cleanup is performed outside of database to allow easily DROP DATABASE without waiting for cleanup to complete.
-    DatabaseCatalog::instance().enqueueDroppedTableCleanup(table->getStorageID(), table, table_metadata_path_drop, no_delay);
+    DatabaseCatalog::instance().enqueueDroppedTableCleanup(table->getStorageID(), table, table_metadata_path_drop, sync);
 }
 
-void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_name, IDatabase & to_database,
-                                 const String & to_table_name, bool exchange, bool dictionary)
+void DatabaseAtomic::renameTable(
+    ContextPtr local_context,
+    const String & table_name,
+    IDatabase & to_database,
+    const String & to_table_name,
+    bool exchange,
+    bool dictionary)
 {
+    /// step 1. exit some cases early if we are not going to rename table.
     if (typeid(*this) != typeid(to_database))
     {
         if (!typeid_cast<DatabaseOrdinary *>(&to_database))
-            throw Exception("Moving tables between databases of different engines is not supported", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Moving tables between databases of different engines is not supported");
         /// Allow moving tables between Atomic and Ordinary (with table lock)
         DatabaseOnDisk::renameTable(local_context, table_name, to_database, to_table_name, exchange, dictionary);
         return;
     }
 
-    if (exchange && !supportsRenameat2())
+    /// proton: starts.
+    /// note: `exchange streams` is broken in proton@oss, also the official docs not mention this feature
+    /// I do not think we shall continue support this on cluster.
+    /// docs https://clickhouse.com/docs/en/engines/database-engines/atomic#exchange-tables
+    /// https://fiddle.clickhouse.com/46be5847-ed91-4443-ae85-bb0fd6ef673d
+    if (exchange)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "RENAME EXCHANGE is not supported");
+
+    if (dictionary)
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Use RENAME STREAM (instead of RENAME DICTIONARY)");
+    /// proton: ends.
 
     auto & other_db = dynamic_cast<DatabaseAtomic &>(to_database);
     bool inside_database = this == &other_db;
 
+    if (inside_database && table_name == to_table_name)
+        return;
+
+    /// proton: starts.
+    /// we do not support rename stream in different databases
+    /// https://github.com/timeplus-io/proton/blob/84c4aedbbebb653c407f797fe913fe6b614e77f8/src/Interpreters/InterpreterRenameQuery.cpp#L53
+    if (!inside_database)
+    {
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Cross-database stream renaming is not supported. Both {} and {} must be the same database.",
+            database_name,
+            to_database.getDatabaseName());
+    }
+    /// proton: ends.
+
+    /// step 2. call renameTableInMetaStore if the table's storage is not local mode
+    /// System tables should always be renamed locally
+    if (auto storage = tryGetTable(table_name, local_context); storage && !storage->isLocal())
+    {
+        if (tryGetTable(to_table_name, local_context))
+        {
+            throw DB::Exception(
+                ErrorCodes::STREAM_ALREADY_EXISTS,
+                "Cannot rename stream {}.{} to {}.{} because the target stream already exists",
+                database_name,
+                table_name,
+                database_name,
+                to_table_name);
+        }
+
+        return renameTableInMetaStore(local_context, storage, table_name, to_table_name, dictionary);
+    }
+
+    /// step 3. otherwise we do the normal renameTableLocal as original
+    renameTableLocal(local_context, table_name, to_database, to_table_name, exchange, dictionary, other_db);
+}
+
+void DatabaseAtomic::renameTableLocal(
+    const ContextPtr & local_context,
+    const String & table_name,
+    IDatabase & to_database,
+    const String & to_table_name,
+    bool exchange,
+    bool dictionary,
+    DatabaseAtomic & other_db)
+{
     String old_metadata_path = getObjectMetadataPath(table_name);
     String new_metadata_path = to_database.getObjectMetadataPath(to_table_name);
 
-    auto detach = [](DatabaseAtomic & db, const String & table_name_, bool has_symlink)
-    {
+    auto detach = [](DatabaseAtomic & db, const String & table_name_, bool has_symlink) {
         auto it = db.table_name_to_path.find(table_name_);
         String table_data_path_saved;
         /// Path can be not set for DDL dictionaries, but it does not matter for StorageDictionary.
@@ -182,8 +293,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
         return table_data_path_saved;
     };
 
-    auto attach = [](DatabaseAtomic & db, const String & table_name_, const String & table_data_path_, const StoragePtr & table_)
-    {
+    auto attach = [](DatabaseAtomic & db, const String & table_name_, const String & table_data_path_, const StoragePtr & table_) {
         db.tables.emplace(table_name_, table_);
         if (table_data_path_.empty())
             return;
@@ -195,8 +305,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
     String table_data_path;
     String other_table_data_path;
 
-    if (inside_database && table_name == to_table_name)
-        return;
+    bool inside_database = this == &other_db;
 
     std::unique_lock<std::mutex> db_lock;
     std::unique_lock<std::mutex> other_db_lock;
@@ -221,9 +330,7 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
     if (dictionary && !table->isDictionary())
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Use RENAME/EXCHANGE TABLE (instead of RENAME/EXCHANGE DICTIONARY) for tables");
 
-    /// proton: starts.
     table->checkTableCanBeRenamed(local_context);
-    /// proton: ends.
     StoragePtr other_table;
     if (exchange)
     {
@@ -283,9 +390,12 @@ void DatabaseAtomic::renameTable(ContextPtr local_context, const String & table_
         attach(*this, table_name, other_table_data_path, other_table);
 }
 
-void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const StoragePtr & table,
-                                       const String & table_metadata_tmp_path, const String & table_metadata_path,
-                                       ContextPtr /*query_context*/)
+void DatabaseAtomic::commitCreateTable(
+    const ASTCreateQuery & query,
+    const StoragePtr & table,
+    const String & table_metadata_tmp_path,
+    const String & table_metadata_path,
+    ContextPtr /*query_context*/)
 {
     DetachedTables not_in_use;
     auto table_data_path = getTableDataPath(query);
@@ -293,10 +403,11 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
     {
         std::unique_lock lock{mutex};
         if (query.getDatabase() != database_name)
-            /// proton: starts
-            throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create stream in `{}`",
-                            database_name, query.getDatabase());
-            /// proton: ends
+            throw Exception(
+                ErrorCodes::UNKNOWN_DATABASE,
+                "Database was renamed to `{}`, cannot create stream in `{}`",
+                database_name,
+                query.getDatabase());
         /// Do some checks before renaming file from .tmp to .sql
         not_in_use = cleanupDetachedTables();
         assertDetachedTableNotInUse(query.uuid);
@@ -306,8 +417,8 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
         /// TODO better detection and recovery
 
         /// It throws if `table_metadata_path` already exists (it's possible if table was detached)
-        renameNoReplace(table_metadata_tmp_path, table_metadata_path);  /// Commit point (a sort of)
-        attachTableUnlocked(query.getTable(), table, lock);   /// Should never throw
+        renameNoReplace(table_metadata_tmp_path, table_metadata_path); /// Commit point (a sort of)
+        attachTableUnlocked(query.getTable(), table, lock); /// Should never throw
         table_name_to_path.emplace(query.getTable(), table_data_path);
     }
     catch (...)
@@ -319,19 +430,25 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
         tryCreateSymlink(query.getTable(), table_data_path);
 }
 
-void DatabaseAtomic::commitAlterTable(const StorageID & table_id, const String & table_metadata_tmp_path, const String & table_metadata_path,
-                                      const String & /*statement*/, ContextPtr /*query_context*/)
+void DatabaseAtomic::commitAlterTable(
+    const StorageID & table_id,
+    const String & table_metadata_tmp_path,
+    const String & table_metadata_path,
+    const String & /*statement*/,
+    ContextPtr /*query_context*/)
 {
     bool check_file_exists = true;
-    SCOPE_EXIT({ std::error_code code; if (check_file_exists) std::filesystem::remove(table_metadata_tmp_path, code); });
+    SCOPE_EXIT({
+        std::error_code code;
+        if (check_file_exists)
+            std::filesystem::remove(table_metadata_tmp_path, code);
+    });
 
     std::unique_lock lock{mutex};
     auto actual_table_id = getTableUnlocked(table_id.table_name, lock)->getStorageID();
 
     if (table_id.uuid != actual_table_id.uuid)
-        /// proton: starts
-        throw Exception("Cannot alter stream because it was renamed", ErrorCodes::CANNOT_ASSIGN_ALTER);
-        /// proton: ends
+        throw Exception(ErrorCodes::CANNOT_ASSIGN_ALTER, "Cannot alter stream because it was renamed");
 
     /// NOTE: replica will be lost if server crashes before the following rename
     /// TODO better detection and recovery
@@ -350,10 +467,8 @@ void DatabaseAtomic::assertDetachedTableNotInUse(const UUID & uuid)
     /// 4. INSERT INTO table ...; (both Storage instances writes data without any synchronization)
     /// To avoid it, we remember UUIDs of detached tables and does not allow ATTACH table with such UUID until detached instance still in use.
     if (detached_tables.contains(uuid))
-        /// proton: starts
         throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Cannot attach stream with UUID {}, "
-                        "because it was detached but still used by some query. Retry later.", toString(uuid));
-        /// proton: ends
+                        "because it was detached but still used by some query. Retry later.", uuid);
 }
 
 void DatabaseAtomic::setDetachedTableNotInUseForce(const UUID & uuid)
@@ -368,7 +483,7 @@ DatabaseAtomic::DetachedTables DatabaseAtomic::cleanupDetachedTables()
     auto it = detached_tables.begin();
     while (it != detached_tables.end())
     {
-        if (it->second.unique())
+        if (isSharedPtrUnique(it->second))
         {
             not_in_use.emplace(it->first, it->second);
             it = detached_tables.erase(it);
@@ -392,8 +507,8 @@ void DatabaseAtomic::assertCanBeDetached(bool cleanup)
     }
     std::lock_guard lock(mutex);
     if (!detached_tables.empty())
-        throw Exception("Database " + backQuoteIfNeed(database_name) + " cannot be detached, "
-                        "because some tables are still in use. Retry later.", ErrorCodes::DATABASE_NOT_EMPTY);
+        throw Exception(ErrorCodes::DATABASE_NOT_EMPTY, "Database {} cannot be detached, because some tables are still in use. "
+                        "Retry later.", backQuoteIfNeed(database_name));
 }
 
 DatabaseTablesIteratorPtr
@@ -420,16 +535,17 @@ void DatabaseAtomic::beforeLoadingMetadata(ContextMutablePtr /*context*/, bool f
     {
         if (!fs::is_symlink(table_path))
         {
-            throw Exception(ErrorCodes::ABORTED,
-                "'{}' is not a symlink. Atomic database should contains only symlinks.", std::string(table_path.path()));
+            throw Exception(
+                ErrorCodes::ABORTED,
+                "'{}' is not a symlink. Atomic database should contains only symlinks.",
+                std::string(table_path.path()));
         }
 
         fs::remove(table_path);
     }
 }
 
-void DatabaseAtomic::loadStoredObjects(
-    ContextMutablePtr local_context, bool force_restore, bool force_attach, bool skip_startup_tables)
+void DatabaseAtomic::loadStoredObjects(ContextMutablePtr local_context, bool force_restore, bool force_attach, bool skip_startup_tables)
 {
     beforeLoadingMetadata(local_context, force_restore, force_attach);
     DatabaseOrdinary::loadStoredObjects(local_context, force_restore, force_attach, skip_startup_tables);
@@ -464,7 +580,7 @@ void DatabaseAtomic::tryCreateSymlink(const String & table_name, const String & 
     }
     catch (...)
     {
-        LOG_WARNING(log, fmt::runtime(getCurrentExceptionMessage(true)));
+        LOG_WARNING(log, getCurrentExceptionMessageAndPattern(/* with_stacktrace */ true));
     }
 }
 
@@ -477,7 +593,7 @@ void DatabaseAtomic::tryRemoveSymlink(const String & table_name)
     }
     catch (...)
     {
-        LOG_WARNING(log, fmt::runtime(getCurrentExceptionMessage(true)));
+        LOG_WARNING(log, getCurrentExceptionMessageAndPattern(/* with_stacktrace */ true));
     }
 }
 
@@ -508,12 +624,14 @@ void DatabaseAtomic::tryCreateMetadataSymlink()
 void DatabaseAtomic::renameDatabase(ContextPtr query_context, const String & new_name)
 {
     /// CREATE, ATTACH, DROP, DETACH and RENAME DATABASE must hold DDLGuard
+    bool check_view_deps = query_context->getSettingsRef().enable_dependency_check;
+    bool check_loading_deps = query_context->getSettingsRef().check_table_dependencies;
 
     if (query_context->getSettingsRef().check_table_dependencies)
     {
         std::lock_guard lock(mutex);
         for (auto & table : tables)
-            DatabaseCatalog::instance().checkTableCanBeRemovedOrRenamed({database_name, table.first});
+            DatabaseCatalog::instance().checkTableCanBeRemovedOrRenamed({database_name, table.first}, check_view_deps, check_loading_deps);
     }
 
     try
@@ -522,7 +640,7 @@ void DatabaseAtomic::renameDatabase(ContextPtr query_context, const String & new
     }
     catch (...)
     {
-        LOG_WARNING(log, fmt::runtime(getCurrentExceptionMessage(true)));
+        LOG_WARNING(log, getCurrentExceptionMessageAndPattern(/* with_stacktrace */ true));
     }
 
     auto new_name_escaped = escapeForFileName(new_name);
@@ -588,5 +706,52 @@ void DatabaseAtomic::checkDetachedTableNotInUse(const UUID & uuid)
     std::lock_guard lock{mutex};
     not_in_use = cleanupDetachedTables();
     assertDetachedTableNotInUse(uuid);
+}
+
+/// proton: starts
+void DatabaseAtomic::alterTable(
+    ContextPtr local_context,
+    const StorageID & table_id,
+    const StorageInMemoryMetadata & metadata,
+    String alter_command,
+    std::vector<String> alter_command_asts)
+{
+    auto storage = tryGetTable(table_id.getTableName(), local_context);
+    if (!storage)
+        throw Exception(
+            ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist", backQuote(getDatabaseName()), backQuote(table_id.getTableName()));
+
+    /// proton : if it is not local table, commit the metadata to metastore
+    /// There are 2 types of streams / tables
+    /// 1. local streams like system.query_log etc system tables which are purely local to each node
+    /// 2. user created distributed streams
+    /// For `local` streams, use local file systems to persist the metadata
+    /// For `distributed` streams, use meta store to persist the metadata
+    
+    /// System tables should always be altered locally
+    if (storage->isLocal())
+        return alterTableLocal(local_context, table_id, metadata);
+
+    /// User streams go through MetaStore
+    alterTableInMetaStore(local_context, std::move(storage), table_id, metadata, std::move(alter_command), std::move(alter_command_asts));
+}
+
+void DatabaseAtomic::alterTableLocal(const ContextPtr & local_context, const StorageID & table_id, const StorageInMemoryMetadata & metadata)
+{
+    return DatabaseOrdinary::alterTable(local_context, table_id, metadata, /*alter_command=*/{}, /*alter_command_asts=*/{});
+}
+/// proton: ends
+
+void registerDatabaseAtomic(DatabaseFactory & factory)
+{
+    auto create_fn = [](const DatabaseFactory::Arguments & args)
+    {
+        return make_shared<DatabaseAtomic>(
+            args.database_name,
+            args.metadata_path,
+            args.uuid,
+            args.context);
+    };
+    factory.registerDatabase("Atomic", create_fn);
 }
 }

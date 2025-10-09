@@ -6,13 +6,16 @@ import re
 import shutil
 import time
 from multiprocessing.dummy import Pool
+from pathlib import Path
+from typing import List, Union
 
 import boto3  # type: ignore
+import botocore  # type: ignore
 
 from env_helper import RUNNER_TEMP, CI
 from compress_files import compress_file_fast
 
-S3_BUCKET = "tp-internal"
+S3_BUCKET = "tp-internal2"
 
 def _md5(fname):
     hash_md5 = hashlib.md5()
@@ -35,7 +38,7 @@ def _flatten_list(lst):
 
 class S3Helper:
     def __init__(self, host):
-        self.session = boto3.session.Session(region_name='us-west-1')
+        self.session = boto3.session.Session(region_name='us-west-2')
         self.client = self.session.client('s3', endpoint_url=host)
 
     def _upload_file_to_s3(self, bucket_name, file_path, s3_path):
@@ -78,6 +81,38 @@ class S3Helper:
 
     def upload_build_file_to_s3(self, file_path, s3_path):
         return self._upload_file_to_s3(S3_BUCKET, file_path, s3_path)
+
+    def download_file(
+            self, bucket: str, s3_path: str, local_file_path: Union[Path, str]
+        ) -> None:
+            if Path(local_file_path).is_dir():
+                local_file_path = Path(local_file_path) / s3_path.split("/")[-1]
+            try:
+                self.client.download_file(bucket, s3_path, str(local_file_path))
+            except botocore.exceptions.ClientError as e:
+                if e.response and e.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
+                    assert False, f"No such object [s3://{S3_BUCKET}/{s3_path}]"
+
+    def download_files(
+        self,
+        bucket: str,
+        s3_path: str,
+        file_suffix: str,
+        local_directory: Union[Path, str],
+    ) -> List[str]:
+        logging.info(f"Download files with suffix '{file_suffix}' from bucket '{bucket}' of s3 folder '{s3_path}' to '{local_directory}'")
+
+        local_directory = Path(local_directory)
+        local_directory.mkdir(parents=True, exist_ok=True)
+        objects = self.list_prefix_non_recursive(s3_path)
+
+        res = []
+        for obj in objects:
+            if obj.endswith(file_suffix):
+                local_file_path = local_directory
+                self.download_file(bucket, obj, local_file_path)
+                res.append(obj.split("/")[-1])
+        return res
 
     def fast_parallel_upload_dir(self, dir_path, s3_dir_path, bucket_name):
         all_files = []
@@ -168,6 +203,9 @@ class S3Helper:
         return self._upload_folder_to_s3(folder_path, s3_folder_path, S3_BUCKET, keep_dirs_in_s3_path,
                                          upload_symlinks)
 
+    def download_test_dataset_from_s3(self, s3_folder_path, s3_file_suffix, folder_path):
+        return self.download_files(S3_BUCKET, s3_folder_path, s3_file_suffix, folder_path)
+
     def list_prefix(self, s3_prefix_path, bucket=S3_BUCKET):
         objects = self.client.list_objects_v2(Bucket=bucket, Prefix=s3_prefix_path)
         result = []
@@ -175,6 +213,24 @@ class S3Helper:
             for obj in objects['Contents']:
                 result.append(obj['Key'])
 
+        return result
+
+    def list_prefix_non_recursive(
+        self,
+        s3_prefix_path: str,
+        bucket: str = S3_BUCKET,
+        only_dirs: bool = False,
+    ) -> List[str]:
+        paginator = self.client.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=bucket, Prefix=s3_prefix_path, Delimiter="/")
+        result = []
+        for page in pages:
+            if not only_dirs and "Contents" in page:
+                for obj in page["Contents"]:
+                    result.append(obj["Key"])
+            if "CommonPrefixes" in page:
+                for obj in page["CommonPrefixes"]:
+                    result.append(obj["Prefix"])
         return result
 
     @staticmethod

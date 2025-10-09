@@ -10,7 +10,7 @@
 
         {
             "id": 0,
-            "tags": ["privilege"],
+            "tags": ["privilege", "todo"],
             "name": "create user_select_only, create role select_only, grant select_only role to user_select_only, create stream, drop stream fail and select success",
             "description": "create a table test_privilege, ingest columns same/difference as sequence of show create",
             "steps":[

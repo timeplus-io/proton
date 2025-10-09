@@ -1,0 +1,42 @@
+tags:
+  - local-run
+  - cte
+description: dedup table function shall work with CTE
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists cte
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream cte(i int)
+  
+  - type: wait
+    time: 1
+  
+  - name: '1100'
+    type: stream
+    query: with dedup_cte as (select * from cte) select i from dedup(dedup_cte, i)
+    schema:
+      - name: i
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into cte(i) values (1),(2),(3),(1),(2)
+
+  - type: check
+    target_name: '1100'
+    expected_result:
+      - [ 1 ]
+      - [ 2 ]
+      - [ 3 ]

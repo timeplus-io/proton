@@ -1,8 +1,10 @@
 #include <Formats/FormatFactory.h>
 #include <Formats/FormatSchemaFactory.h>
 #include <Formats/FormatSchemaInfo.h>
+#include <Formats/ProtobufSchemas.h>
 #include <IO/ReadBufferFromString.h>
 #include <Processors/Formats/ISchemaWriter.h>
+#include <Poco/String.h>
 
 #include <format>
 #include <fstream>
@@ -29,7 +31,8 @@ String basename(const std::filesystem::path & path)
 
 }
 
-void FormatSchemaFactory::registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context)
+void FormatSchemaFactory::registerSchema(
+    const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context)
 {
     assert(!schema_name.empty());
     assert(!format.empty());
@@ -60,7 +63,8 @@ void FormatSchemaFactory::registerSchema(const String & schema_name, const Strin
         throw Exception(ErrorCodes::FORMAT_SCHEMA_ALREADY_EXISTS, "Format schema {} of type {} already exists", schema_name, format);
 }
 
-void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context)
+String FormatSchemaFactory::unregisterSchema(
+    const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context)
 {
     assert(!schema_name.empty());
 
@@ -81,10 +85,18 @@ void FormatSchemaFactory::unregisterSchema(const String & schema_name, const Str
                 throw Exception(ErrorCodes::UNKNOWN_FORMAT_SCHEMA, "Format schema {} of type {} doesn't exists", schema_name, format);
         }
 
-        return;
+        return format;
     }
 
     std::filesystem::remove(schema_path);
+
+    /// Users might create the schema again using the same name. For protobuf schemas,
+    /// it requires to cleanup the cache, otherwise, it could report strange errors.
+    auto schema_format = format.empty() ? FormatFactory::instance().getFormatFromSchemaFileName(schema_path) : format;
+    if (schema_format.empty() || Poco::toLower(schema_format) == "protobuf")
+        ProtobufSchemas::instance().clear();
+
+    return schema_format;
 }
 
 std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasList(const String & format, const ContextPtr & context) const
@@ -110,7 +122,8 @@ std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasLis
     return ret;
 }
 
-FormatSchemaFactory::SchemaEntryWithBody FormatSchemaFactory::getSchema(const String & schema_name, const String & format, const ContextPtr & context) const
+FormatSchemaFactory::SchemaEntryWithBody
+FormatSchemaFactory::getSchema(const String & schema_name, const String & format, const ContextPtr & context) const
 {
     assert(!schema_name.empty());
 
@@ -130,7 +143,7 @@ FormatSchemaFactory::SchemaEntryWithBody FormatSchemaFactory::getSchema(const St
     std::stringstream content;
     content << schema_file.rdbuf();
 
-    return {{schema_name, FormatFactory::instance().getFormatFromSchemaFileName(schema_path)}, content.str()};
+    return {{.name = schema_name, .type = FormatFactory::instance().getFormatFromSchemaFileName(schema_path)}, content.str()};
 }
 
 String FormatSchemaFactory::findSchemaFile(const String & schema_name, const String & format, const ContextPtr & context) const
@@ -151,7 +164,10 @@ String FormatSchemaFactory::findSchemaFile(const String & schema_name, const Str
                 if (schema_path.empty())
                     schema_path = schema_entry.path();
                 else
-                    throw Exception(ErrorCodes::AMBIGUOUS_FORMAT_SCHEMA, "Multiple format schemas with name `{}` exists, please specify TYPE", schema_name);
+                    throw Exception(
+                        ErrorCodes::AMBIGUOUS_FORMAT_SCHEMA,
+                        "Multiple format schemas with name `{}` exists, please specify TYPE",
+                        schema_name);
             }
         }
     }

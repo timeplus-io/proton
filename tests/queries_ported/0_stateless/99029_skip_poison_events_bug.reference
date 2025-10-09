@@ -1,0 +1,6 @@
+recover_policy=best_effort This test is expected to skip poison events
+1	1
+2	3
+recover_policy=strict This test is expected to fail with a poison event
+1	1
+1	1

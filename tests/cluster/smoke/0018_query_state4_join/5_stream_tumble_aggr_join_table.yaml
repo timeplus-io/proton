@@ -1,0 +1,114 @@
+tags:
+  - query_state
+description: 'stream tumble aggregation join table state checkpoint '
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream4
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream4 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1984'
+    query_id: '1984'
+    type: stream
+    query: subscribe to select a.id, b.type, max(a.value), window_start, window_end
+      from tumble(test19_state_stream4, timestamp, interval 5 second) as a join table(test19_join)
+      as b on a.id = b.id group by a.id, b.type, window_start, window_end settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev1',
+      'ca', 66, '2020-02-02 20:00:02')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev2',
+      'ca', 80, '2020-02-02 20:00:05')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev4',
+      'ca', 59, '2020-02-02 20:00:06')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev8',
+      'ca', 67, '2020-02-02 20:00:07')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev8',
+      'ca', 77, '2020-02-02 20:00:08')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev6',
+      'ca', 66, '2020-02-02 20:00:11')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1984'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1984'
+
+  - type: check
+    target_name: '1984'
+    mode: random
+    expected_result:
+      - [ dev1, roof, '66', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ dev2, field, '58.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ dev2, field, '80', '2020-02-02 20:00:05', '2020-02-02 20:00:10' ]
+      - [ dev4, wall, '59', '2020-02-02 20:00:05', '2020-02-02 20:00:10' ]
+      - [ dev8, floor, '77', '2020-02-02 20:00:05', '2020-02-02 20:00:10' ]

@@ -1,0 +1,88 @@
+name: streaming_only1
+description: test_stream_only1 covering the steam query smoke cases for streaming only mode.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop stream if exists test6_stream_only1;
+
+    - type: query
+      sql: drop stream if exists test6_stream_only1_no_default_tp_time;
+
+    - type: query
+      sql: drop stream if exists test6_stream_only1_seek;
+
+    - type: query
+      sql: drop stream if exists test6_stream_only1_d;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: |
+        create stream test6_stream_only1 (
+          id string,
+          location string,
+          value float32,
+          json string,
+          timestamp datetime64(3) default now64(3)
+        ) settings event_time_column='timestamp', storage_type='streaming';
+
+    - type: query
+      sql: |
+        create stream test6_stream_only1_no_default_tp_time (
+          id string,
+          location string,
+          value float32,
+          json string,
+          timestamp datetime64(3) default now64(3)
+        );
+
+    - type: query
+      sql: |
+        create stream test6_stream_only1_seek (
+          id string,
+          location string,
+          value float32,
+          json string,
+          timestamp datetime64(3) default now64(3)
+        ) settings event_time_column='timestamp';
+
+    - type: query
+      sql: |
+        create stream test6_stream_only1_d (
+          id string,
+          type string
+        );
+    
+    - type: wait
+      time: 2
+  
+    - type: query
+      sql: |
+        insert into test6_stream_only1_d (id, type) values
+        ('dev1', 'roof')
+        ('dev2', 'field')
+        ('dev3', 'window')
+        ('dev4', 'wall')
+        ('dev5', 'roof')
+        ('dev6', 'window')
+        ('dev7', 'wall')
+        ('dev8', 'floor');
+
+teardown:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop stream test6_stream_only1
+
+    - type: query
+      sql: drop stream test6_stream_only1_no_default_tp_time
+
+    - type: query
+      sql: drop stream test6_stream_only1_d
+
+    - type: query
+      sql: drop stream test6_stream_only1_seek

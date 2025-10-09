@@ -24,6 +24,7 @@ using UInt32 = uint32_t;
 using UInt64 = uint64_t;
 
 using String = std::string;
+using VersionType = uint32_t;
 
 namespace DB
 {
@@ -42,6 +43,5 @@ using Float32 = float;
 using Float64 = double;
 
 using String = std::string;
-
-using VersionType = Int32;
+using VersionType = ::UInt32;
 }

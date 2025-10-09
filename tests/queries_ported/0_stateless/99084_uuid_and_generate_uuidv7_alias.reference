@@ -1,0 +1,12 @@
+---------- generate_uuidv4() Tests ----------
+true
+true
+true
+true
+false
+---------- uuid7() Tests ----------
+true
+true
+true
+true
+false

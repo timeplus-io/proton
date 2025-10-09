@@ -11,4 +11,5 @@ set(SRCS ${LIBRARY_DIR}/sqlite3.c)
 
 add_library(_sqlite ${SRCS})
 target_include_directories(_sqlite SYSTEM PUBLIC "${LIBRARY_DIR}")
+target_include_directories(_sqlite PUBLIC "${LIBRARY_DIR}")
 add_library(ch_contrib::sqlite ALIAS _sqlite)

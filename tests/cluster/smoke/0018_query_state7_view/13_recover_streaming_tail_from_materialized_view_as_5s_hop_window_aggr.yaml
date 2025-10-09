@@ -1,0 +1,100 @@
+tags:
+- query_state
+- materialized view
+description: recover streaming tail from materialized view as hop window aggregation
+  state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop view if exists test19_state_mv7
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream7
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream7 (id string, location string, value float,
+    timestamp datetime64(3) default now64(3))
+- type: wait
+  time: 1
+
+- type: query
+  sql: create materialized view test19_state_mv7 as (select id, sum(value) as sum_value
+    from test19_state_stream7 group by id union select id, sum(value) as sum_value
+    from test19_state_stream7 group by id)
+- type: wait
+  name: 1
+
+- name: '19177'
+  type: stream
+  query_id: '19177'
+  query: subscribe to select id, sum_value from test19_state_mv7 settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: string
+  - name: sum_value
+    type: float64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev1',
+    'ca', 57.3, '2020-02-02 20:00:00')('dev2', 'ca', 58.3, '2020-02-02 20:00:03')
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19177'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev2',
+    'ca', 69, '2020-02-02 20:00:06')('dev4', 'ca', 67, '2020-02-02 20:00:10')
+- type: wait
+  name: 1
+
+- name: 19177-1
+  type: stream
+  query: recover from '19177'
+  schema:
+  - name: id
+    type: string
+  - name: sum_value
+    type: float64
+- type: wait
+  time: 3
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: unsubscribe to '19177'
+
+- type: query
+  sql: drop view if exists test19_state_mv7
+
+- type: check
+  target_name: '19177'
+  mode: random
+  expected_result:
+  - [dev1, 57.29999923706055]
+  - [dev2, 58.29999923706055]
+  - [dev1, 57.29999923706055]
+  - [dev2, 58.29999923706055]
+
+- type: check
+  target_name: 19177-1
+  mode: random
+  expected_result:
+  - [dev1, 57.29999923706055]
+  - [dev2, 127.29999923706055]
+  - [dev4, 67]
+  - [dev1, 57.29999923706055]
+  - [dev2, 127.29999923706055]
+  - [dev4, 67]

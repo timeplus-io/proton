@@ -10,7 +10,6 @@
 namespace DB
 {
 
-
 std::string base64Encode(const std::string & decoded, bool url_encoding, bool no_padding)
 {
     /// proton: starts

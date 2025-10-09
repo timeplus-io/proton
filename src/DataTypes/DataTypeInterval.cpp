@@ -13,17 +13,17 @@ bool DataTypeInterval::equals(const IDataType & rhs) const
 
 void registerDataTypeInterval(DataTypeFactory & factory)
 {
-    factory.registerSimpleDataType("interval_nanosecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Nanosecond)); });
-    factory.registerSimpleDataType("interval_microsecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Microsecond)); });
-    factory.registerSimpleDataType("interval_millisecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Millisecond)); });
-    factory.registerSimpleDataType("interval_second", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Second)); });
-    factory.registerSimpleDataType("interval_minute", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Minute)); });
-    factory.registerSimpleDataType("interval_hour", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Hour)); });
-    factory.registerSimpleDataType("interval_day", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Day)); });
-    factory.registerSimpleDataType("interval_week", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Week)); });
-    factory.registerSimpleDataType("interval_month", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Month)); });
-    factory.registerSimpleDataType("interval_quarter", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Quarter)); });
-    factory.registerSimpleDataType("interval_year", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Year)); });
+    factory.registerSimpleDataType("interval_nanosecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Nanosecond)); });
+    factory.registerSimpleDataType("interval_microsecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Microsecond)); });
+    factory.registerSimpleDataType("interval_millisecond", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Millisecond)); });
+    factory.registerSimpleDataType("interval_second", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Second)); });
+    factory.registerSimpleDataType("interval_minute", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Minute)); });
+    factory.registerSimpleDataType("interval_hour", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Hour)); });
+    factory.registerSimpleDataType("interval_day", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Day)); });
+    factory.registerSimpleDataType("interval_week", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Week)); });
+    factory.registerSimpleDataType("interval_month", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Month)); });
+    factory.registerSimpleDataType("interval_quarter", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Quarter)); });
+    factory.registerSimpleDataType("interval_year", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Kind::Year)); });
 
     /// proton: starts
     factory.registerClickHouseAlias("IntervalNanosecond", "interval_nanosecond");

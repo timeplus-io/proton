@@ -1,0 +1,11 @@
+version: "3.7"
+services:
+  p1:
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/default_hash_table: memory/default_hash_table: hybrid/g' /etc/proton-server/config.yaml && sed -i'' 's/default_hash_join: memory/default_hash_join: hybrid/g' /etc/proton-server/config.yaml && sed -i'' 's/max_hot_keys: 100000/max_hot_keys: 2/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+  p2:
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/default_hash_table: memory/default_hash_table: hybrid/g' /etc/proton-server/config.yaml && sed -i'' 's/default_hash_join: memory/default_hash_join: hybrid/g' /etc/proton-server/config.yaml && sed -i'' 's/max_hot_keys: 100000/max_hot_keys: 2/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+  p3:
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/default_hash_table: memory/default_hash_table: hybrid/g' /etc/proton-server/config.yaml && sed -i'' 's/default_hash_join: memory/default_hash_join: hybrid/g' /etc/proton-server/config.yaml && sed -i'' 's/max_hot_keys: 100000/max_hot_keys: 2/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"

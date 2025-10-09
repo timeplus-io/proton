@@ -3,7 +3,7 @@
 #if USE_ARROW
 
 #include <Formats/FormatFactory.h>
-#include <Formats/ReadSchemaUtils.h>
+#include <Formats/SchemaInferenceUtils.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
@@ -24,7 +24,7 @@ namespace ErrorCodes
 }
 
 ArrowBlockInputFormat::ArrowBlockInputFormat(ReadBuffer & in_, const Block & header_, bool stream_, const FormatSettings & format_settings_)
-    : IInputFormat(header_, in_, ProcessorID::ArrowBlockInputFormatID), stream{stream_}, format_settings(format_settings_)
+    : IInputFormat(header_, &in_, ProcessorID::ArrowBlockInputFormatID), stream{stream_}, format_settings(format_settings_)
 {
 }
 
@@ -33,7 +33,7 @@ Chunk ArrowBlockInputFormat::generate()
     Chunk res;
     block_missing_values.clear();
     arrow::Result<std::shared_ptr<arrow::RecordBatch>> batch_result;
-
+    size_t batch_start = getDataOffsetMaybeCompressed(*in);
     if (stream)
     {
         if (!stream_reader)
@@ -71,14 +71,16 @@ Chunk ArrowBlockInputFormat::generate()
 
     ++record_batch_current;
 
-    arrow_column_to_ch_column->arrowTableToCHChunk(res, *table_result);
-
     /// If defaults_for_omitted_fields is true, calculate the default values from default expression for omitted fields.
     /// Otherwise fill the missing columns with zero values of its type.
-    if (format_settings.defaults_for_omitted_fields)
-        for (const auto & column_idx : missing_columns)
-            block_missing_values.setBits(column_idx, res.getNumRows());
+    BlockMissingValues * block_missing_values_ptr = format_settings.defaults_for_omitted_fields ? &block_missing_values : nullptr;
+    arrow_column_to_ch_column->arrowTableToCHChunk(res, *table_result, (*table_result)->num_rows(), block_missing_values_ptr);
 
+    /// There is no easy way to get original record batch size from Arrow metadata.
+    /// Let's just use the number of bytes read from read buffer.
+    auto batch_end = getDataOffsetMaybeCompressed(*in);
+    if (batch_end > batch_start)
+        approx_bytes_read_for_chunk = batch_end - batch_start;
     return res;
 }
 
@@ -110,7 +112,7 @@ static std::shared_ptr<arrow::RecordBatchReader> createStreamReader(ReadBuffer &
 
 static std::shared_ptr<arrow::ipc::RecordBatchFileReader> createFileReader(ReadBuffer & in, const FormatSettings & format_settings, std::atomic<int> & is_stopped)
 {
-    auto arrow_file = asArrowFile(in, format_settings, is_stopped);
+    auto arrow_file = asArrowFile(in, format_settings, is_stopped, "Arrow", ARROW_MAGIC_BYTES);
     if (is_stopped)
         return nullptr;
 
@@ -141,10 +143,9 @@ void ArrowBlockInputFormat::prepareReader()
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         getPort().getHeader(),
         "Arrow",
-        format_settings.arrow.import_nested,
         format_settings.arrow.allow_missing_columns,
+        format_settings.null_as_default,
         format_settings.arrow.case_insensitive_column_matching);
-    missing_columns = arrow_column_to_ch_column->getMissingColumns(*schema);
 
     if (stream)
         record_batch_total = -1;
@@ -173,7 +174,7 @@ NamesAndTypesList ArrowSchemaReader::readSchema()
 
     auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(
         *schema, stream ? "ArrowStream" : "Arrow", format_settings.arrow.skip_columns_with_unsupported_types_in_schema_inference);
-    return getNamesAndRecursivelyNullableTypes(header);
+    return getNamesAndRecursivelyNullableTypes(header, format_settings);
 }
 
 void registerInputFormatArrow(FormatFactory & factory)
@@ -187,7 +188,7 @@ void registerInputFormatArrow(FormatFactory & factory)
         {
             return std::make_shared<ArrowBlockInputFormat>(buf, sample, false, format_settings);
         });
-    factory.markFormatAsColumnOriented("Arrow");
+    factory.markFormatSupportsSubsetOfColumns("Arrow");
     factory.registerInputFormat(
         "ArrowStream",
         [](ReadBuffer & buf,

@@ -1,0 +1,127 @@
+version: "3.7"
+services:
+  probe:
+    image: timeplus/probe:0.1.13
+    container_name: p3k1_probe
+    stdin_open: true
+    environment:
+      - DATA_DIR=/dataset
+    volumes:
+      - ${GITHUB_WORKSPACE}/data/deployment:/deploy
+      - ${GITHUB_WORKSPACE}/data/compatibility:/compatibility
+      - ${GITHUB_WORKSPACE}/data/dataset:/dataset # For dataset
+      - ${GITHUB_WORKSPACE}/log/p3k1:/log
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p1:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: proton-server1
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=proton-server1
+      - METADATA_NODE_QUORUM="proton-server1:8464,proton-server2:8464,proton-server3:8464"
+    volumes:
+      - ${GITHUB_WORKSPACE}/data/proton-server1/datas:/var/lib/proton
+      - ${GITHUB_WORKSPACE}/data/proton-server1/log:/var/log/proton-server
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p2:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: proton-server2
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=proton-server2
+      - METADATA_NODE_QUORUM="proton-server1:8464,proton-server2:8464,proton-server3:8464"
+    volumes:
+      - ${GITHUB_WORKSPACE}/data/proton-server2/datas:/var/lib/proton
+      - ${GITHUB_WORKSPACE}/data/proton-server2/log:/var/log/proton-server
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  p3:
+    image: timeplus/proton-smoke-test:${PROTON_VERSION}
+    container_name: proton-server3
+    entrypoint: >
+      /bin/bash -c "sed -i'' 's/preallocate: true/preallocate: false/g' /etc/proton-server/config.yaml && sed -i'' 's/ level: information/ level: debug/g' /etc/proton-server/config.yaml && /entrypoint.sh"
+    environment:
+      - ADVERTISED_HOST=proton-server3
+      - METADATA_NODE_QUORUM="proton-server1:8464,proton-server2:8464,proton-server3:8464"
+    volumes:
+      - ${GITHUB_WORKSPACE}/data/proton-server3/datas:/var/lib/proton
+      - ${GITHUB_WORKSPACE}/data/proton-server3/log:/var/log/proton-server
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+  k1:
+    image: timeplus/redpanda-smoke-test:v24.2.12
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://stream-store,OUTSIDE://stream-store:9092
+      - --set
+      - "redpanda.auto_create_topics_enabled=false"
+      - --set
+      - "redpanda.enable_idempotence=true"
+      - --set
+      - "redpanda.log_retention_ms=31536000000" # set topic message 1 year retention (default 7 days)
+      - --check=false
+    container_name: p3k1_stream-store
+    networks:
+      mynetwork:
+        aliases:
+          - stream-store
+    volumes:
+      - ${GITHUB_WORKSPACE}/data/p3k1_redpanda:/var/lib/redpanda/data
+      - ${SSH_DIR}/smoke:/root/.ssh:ro
+    deploy:
+      restart_policy:
+        condition: on-failure
+  pulsar:
+    image: apachepulsar/pulsar:3.3.1
+    command:
+    - sh
+    - -c
+    - bin/apply-config-from-env.py conf/standalone.conf && bin/pulsar standalone
+    environment:
+    - PULSAR_STANDALONE_USE_ZOOKEEPER=1
+    - PULSAR_PREFIX_brokerEntryMetadataInterceptors=org.apache.pulsar.common.intercept.AppendIndexMetadataInterceptor
+    - PULSAR_PREFIX_exposingBrokerEntryMetadataToClientEnabled=true
+    - PULSAR_PREFIX_brokerDeleteInactiveTopicsEnabled=false # disable topic 60s auto-delete feature
+    networks:
+    - mynetwork
+    volumes:
+    - ${GITHUB_WORKSPACE}/data/p3k1_pulsar:/pulsar/data
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+networks:
+  mynetwork:
+    driver: bridge

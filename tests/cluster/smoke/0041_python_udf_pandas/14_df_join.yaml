@@ -1,0 +1,55 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(string), valueb array(string), valuec array(string), valued array(string));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_join(valuea array(string), valueb array(string), valuec array(string), valued array(string)) RETURNS array(array(string)) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_join(valuea, valueb, valuec, valued):
+          res = []
+          for a, b, c, d in zip(valuea, valueb, valuec, valued):
+              df1 = pd.DataFrame(zip(a,b), columns=['key','A'])
+              df2 = pd.DataFrame(zip(c,d), columns=['key','B'])
+              df_join = df1.join(df2, lsuffix='_caller', rsuffix='_other').values.tolist()
+              res.append(df_join)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-14-1
+    type: stream
+    query: select test_df_join(valuea, valueb, valuec, valued) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(string))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb, valuec, valued) values 
+          (['K0', 'K1', 'K2'], ['A0', 'A1', 'A2'], ['K0', 'K1', 'K2'], ['B0', 'B1', 'B2'])
+          (['Ka', 'Kb', 'Kc'], ['Aa', 'Ab', 'Ac'], ['Ka', 'Kb', 'Kc'], ['Ba', 'Bb', 'Bc']);
+  
+  - type: check
+    target_name: python-udf3-14-1
+    expected_result:
+      - [[['K0', 'A0', 'K0', 'B0'], ['K1', 'A1', 'K1', 'B1'], ['K2', 'A2', 'K2', 'B2']]]
+      - [[['Ka', 'Aa', 'Ka', 'Ba'], ['Kb', 'Ab', 'Kb', 'Bb'], ['Kc', 'Ac', 'Kc', 'Bc']]]

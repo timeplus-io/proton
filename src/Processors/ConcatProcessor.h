@@ -23,10 +23,6 @@ public:
     Status prepare() override;
 
     OutputPort & getOutputPort() { return outputs.front(); }
-  
-    /// proton: starts.
-    void recover(CheckpointContextPtr ckpt_ctx) override;
-    /// proton: ends.
 
 private:
     InputPorts::iterator current_input;

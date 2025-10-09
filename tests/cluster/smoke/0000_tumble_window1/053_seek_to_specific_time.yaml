@@ -1,0 +1,111 @@
+tags:
+  - seek to
+  - bug
+description: stream seek to specific time
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_smoke1;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_smoke1(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3));
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev1', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03']
+      - ['dev2', 'ca', 30, '{"create_time":"2021-11-02 20:00:02"}', '2021-11-02 20:00:02']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs: 
+      - ['dev2', 'ca', 68, '{"create_time":"2021-11-02 20:00:04"}', '2021-11-02 20:00:04']
+      - ['dev8', 'ca', 67, '{"create_time":"2021-11-02 20:00:05"}', '2021-11-02 20:00:05']
+      - ['dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:06"}', '2021-11-02 20:00:06']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 58, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev3', 'ca', 66, '{"create_time":"2021-11-02 20:00:08"}', '2021-11-02 20:00:08']
+      - ['dev4', 'ca', 76, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09']
+      - ['dev4', 'ca', 67, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+      - ['dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:10"}', '2021-11-02 20:00:10']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: '101'
+    query: select id, count(*), window_end from tumble(test_smoke1,timestamp, 5s) group by id, window_end settings seek_to='2021-11-02T20:00:05'
+    schema:
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: '101'
+    expected_result:
+      - ['dev3', 3, '2021-11-02 20:00:10']
+      - ['dev8', 4, '2021-11-02 20:00:10']
+      - ['dev4', 2, '2021-11-02 20:00:10']

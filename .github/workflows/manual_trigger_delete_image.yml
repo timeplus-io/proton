@@ -1,30 +1,170 @@
-name: manual_trigger_delete_image
+name: manual_trigger_delete_resource
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Docker image tag'
+        description: "Docker image tag to delete"
         required: true
-        type: string
-        default: 'manual'
+      repo:
+        description: "Docker repo to delete image"
+        required: false
+        default: "timeplus/proton"
+      resource:
+        description: "Resources to delete (image or runner)"
+        required: false
+        default: image
+        type: choice
+        options:
+          - image
+          - runner
+      instance:
+        description: "EC2 instance name (Not recommended set)"
+        required: false
+        default: "ec2-github-runner-"
+  schedule:
+    - cron: '30 */2 * * *'  # Every 2 hours
+
 jobs:
-  delete_image:
+  delete_tag:
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
+    if: ${{ github.event_name == 'schedule' || github.event.inputs.resource == 'image' }}
     steps:
       - uses: actions/checkout@v4.1.7
-      - name: Generate Python ENV
-        uses: actions/setup-python@v5.4.0
+
+      - name: Delete specified tag
+        run: |
+          pip3 install python-dateutil
+          python tests/proton_ci/delete_docker_tags.py
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_WRITE_TOKEN }}
+          TAG_TO_DELETE: ${{ github.event.inputs.tag }}
+          REPO_TO_DELETE: ${{ github.event.inputs.repo }}
+
+  find-instances:
+    name: Find self-hosted EC2 instances
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'schedule' || github.event.inputs.resource == 'runner' }}
+    outputs:
+      instance_ids: ${{ steps.get-instances.outputs.instance_ids }}
+      runner_names: ${{ steps.get-instances.outputs.runner_names }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
-          python-version: '3.10'
-      - name: pip install requests
-        run: pip install requests
-      - name: delete image
-        run: python tests/proton_ci/delete_image.py
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Get EC2 instance name prefix
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            INSTANCE_NAME_PREFIX="ec2-github-runner-"
+            echo "Running as scheduled job, using default prefix: $INSTANCE_NAME_PREFIX"
+          else
+            INSTANCE_NAME_PREFIX=${{ github.event.inputs.instance }}
+            echo "Running as manual trigger, using provided prefix: $INSTANCE_NAME_PREFIX"
+          fi
+          echo "instance_name_prefix=$INSTANCE_NAME_PREFIX" >> $GITHUB_ENV
+      - name: Get EC2 instances by Tag and Uptime
+        id: get-instances
+        run: |
+          INSTANCE_NAME_PREFIX=$instance_name_prefix
+          LAUNCH_TIME=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Get instances with the name prefix $INSTANCE_NAME_PREFIX that were launched since $LAUNCH_TIME."
+
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${INSTANCE_NAME_PREFIX}*" \
+                      "Name=tag:GitHubRepository,Values=timeplus-io/proton" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[?LaunchTime<=\`${LAUNCH_TIME}\`].InstanceId" \
+            --output json | jq -c '. | flatten')
+
+          RUNNER_NAMES=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${INSTANCE_NAME_PREFIX}*" \
+                      "Name=tag:GitHubRepository,Values=timeplus-io/proton" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[*].Instances[?LaunchTime<=\`${LAUNCH_TIME}\`].PrivateDnsName" \
+            --output json | jq -c '. | flatten | if length > 0 then map(sub("\\..*"; "")) else [] end')
+
+          echo "instance_ids=$INSTANCE_IDS" | tee -a "$GITHUB_OUTPUT"
+          echo "runner_names=$RUNNER_NAMES" | tee -a "$GITHUB_OUTPUT"
+
+          if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" == "[]" ]; then
+            echo "No instance IDs provided. Skipping print instance names."
+          else
+            INSTANCE_NAMES=$(aws ec2 describe-instances \
+              --instance-ids $(echo $INSTANCE_IDS | jq -r '.[]') \
+              --query "Reservations[*].Instances[*].[InstanceId, Tags[?Key=='Name'].Value | [0]]" \
+              --output json)
+            echo "instance_names=$INSTANCE_NAMES"
+          fi
+
+  stop-instances:
+    name: Stop self-hosted EC2 instances
+    needs: find-instances # required to get output from the find-instances job
+    if: ${{ needs.find-instances.outputs.instance_ids != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: 
+        instance_id: ${{ fromJson(needs.find-instances.outputs.instance_ids) }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Stop EC2 runner
+        uses: timeplus-io/ec2-github-runner@main
+        with:
+          mode: stop
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          label: 'none'
+          ec2-instance-id: ${{ matrix.instance_id }}
+
+  stop-runners:
+    name: Stop self-hosted EC2 runners
+    needs:
+      - find-instances  # required to get output from the find-instances job
+      - stop-instances  # required to run after stop-instances job due to online runner cannot be deleted
+    if: ${{ needs.find-instances.outputs.runner_names != '[]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Get and Remove runners
+        run: |
+          RUNNER_NAMES='${{ needs.find-instances.outputs.runner_names }}'
+          echo "RUNNER_NAMES: $RUNNER_NAMES"
+
+          RUNNERS=$(curl -L -H "Accept: application/vnd.github+json" \
+                        -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        https://api.github.com/repos/timeplus-io/proton/actions/runners)
+          echo "RUNNERS: $RUNNERS"
+
+          RUNNER_IDS=()
+          for dns in $(echo "$RUNNER_NAMES" | jq -r '.[]'); do
+              echo "dns: $dns"
+              ID=$(echo "$RUNNERS" | jq -r --arg DNS "$dns" '.runners[] | select(.name == $DNS) | .id')
+              if [[ -n "$ID" && "$ID" != "null" ]]; then
+                  RUNNER_IDS+=("$ID")
+              fi
+          done
+
+          for ID in "${RUNNER_IDS[@]}"; do
+              echo "Deleting Runner ID: $ID"
+              curl -X DELETE -s -L \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "https://api.github.com/repos/timeplus-io/proton/actions/runners/$ID"
+          done
+
+          echo "Deleted ${#RUNNER_IDS[@]} runners."
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          PROTON_VERSION: ${{ github.event.inputs.tag }}
-

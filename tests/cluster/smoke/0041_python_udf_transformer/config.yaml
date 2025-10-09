@@ -1,0 +1,95 @@
+name: python_udf_transformer
+description: |
+  Tests covering the python_udf transformers library 
+  Note: 
+    - Skip this suite due to model size large, no suitable to run in smoke.
+    - Already run manually and pass in local
+  Manual Steps:
+    1.Download model 'google-bert/bert-base-uncased' from HuggingFace 
+      (https://huggingface.co/google-bert/bert-base-uncased)
+    2.Copy to docker container `/var/lib/proton/user_files/bert-base-uncased`
+    3.Load model from above path
+
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - transformer
+  - skip
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    - type: command
+      node: [s1]
+      shell: |
+        docker cp bert-base-uncased/ proton-server1:/var/lib/proton/user_files/bert-base-uncased/
+        docker cp bert-base-uncased/ proton-server2:/var/lib/proton/user_files/bert-base-uncased/
+        docker cp bert-base-uncased/ proton-server3:/var/lib/proton/user_files/bert-base-uncased/
+
+    # transformers
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "transformers"}'
+
+    - type: command
+      name: python-udf16-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "transformers") | length > 0'
+    
+    - type: check
+      target_name: python-udf16-1
+      expected_result: ['true']
+    
+    # torch
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "torch"}'
+
+    - type: command
+      name: python-udf16-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "torch") | length > 0'
+    
+    - type: check
+      target_name: python-udf16-1
+      expected_result: ['true']
+
+    # # datasets
+    # - type: command
+    #   node: [p1]
+    #   shell: |
+    #     curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "datasets"}'
+
+    # - type: command
+    #   name: python-udf16-1
+    #   node: [p1]
+    #   shell: |
+    #     curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "datasets") | length > 0'
+    
+    # - type: check
+    #   target_name: python-udf16-1
+    #   expected_result: ['true']
+
+    # # evaluate
+    # - type: command
+    #   node: [p1]
+    #   shell: |
+    #     curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "evaluate"}'
+
+    # - type: command
+    #   name: python-udf16-1
+    #   node: [p1]
+    #   shell: |
+    #     curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "evaluate") | length > 0'
+    
+    # - type: check
+    #   target_name: python-udf16-1
+    #   expected_result: ['true']

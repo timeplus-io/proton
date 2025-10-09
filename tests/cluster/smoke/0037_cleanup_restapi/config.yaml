@@ -1,0 +1,32 @@
+name: cleanup_restapi
+description: Tests covering the cleanup rest api feature. Not support single instance scenario.
+tags:
+  - smoke
+  - restapi
+
+setup:
+  scope: case
+  steps:
+    - type: query
+      sql: drop view if exists test37_mv;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test37_stream;
+
+    - type: query
+      sql: drop stream if exists test37_target;
+
+    - type: query
+      sql: drop stream if exists test37_stream1;
+
+    - type: query
+      sql: drop stream if exists test37_stream2;
+
+    - type: query
+      sql: drop stream if exists test37_stream3;
+
+    - type: wait
+      time: 1

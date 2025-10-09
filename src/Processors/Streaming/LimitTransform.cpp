@@ -36,7 +36,7 @@ LimitTransform::LimitTransform(
     , description(std::move(description_))
 {
     if (num_streams != 1 && with_ties)
-        throw Exception("Cannot use LimitTransform with multiple ports and ties", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot use LimitTransform with multiple ports and ties");
 
     ports_data.resize(num_streams);
 
@@ -165,7 +165,7 @@ IProcessor::Status LimitTransform::prepare(const PortNumbers & updated_input_por
 LimitTransform::Status LimitTransform::prepare()
 {
     if (ports_data.size() != 1)
-        throw Exception("prepare without arguments is not supported for multi-port LimitTransform", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "prepare without arguments is not supported for multi-port LimitTransform");
 
     return prepare({0}, {0});
 }
@@ -436,6 +436,7 @@ void LimitTransform::work()
 
 void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
+    chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         bool has_previous_row_chunk = previous_row_chunk.operator bool();
         writeBoolText(has_previous_row_chunk, wb);

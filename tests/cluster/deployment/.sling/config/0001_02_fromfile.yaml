@@ -1,0 +1,14 @@
+source: LOCAL
+target: TIMEPLUS
+
+defaults:
+  mode: incremental
+  update_key: ts
+  target_options:
+    format: csv
+    delimiter: "~"
+    header: true
+
+streams:
+  migration_test/*.csv:
+    object: tgt

@@ -1,0 +1,64 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float);
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_api_tsa_acf(value float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      from statsmodels.tsa.seasonal import STL
+
+      def test_api_tsa_acf(value):
+          n = len(value)
+          trend = 6 * np.sin(np.linspace(0, 1, n) *  np.pi / 200)
+          seasonal = np.sin(np.pi / 6 * np.linspace(0, 1, n))
+          residual = np.array(value)
+          data = trend + seasonal + residual
+          stl = STL(data, period=12, seasonal=13)
+          result = stl.fit()
+          res = result.seasonal
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 5
+
+  - name: python-udf5-1-1
+    type: stream
+    query: select test_api_tsa_acf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: float32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream(value) values (-0.5)(-0.38888889)(-0.27777778)(-0.16666667)(-0.05555556)(0.05555556)(0.16666667)(0.27777778)(0.38888889)(0.5);
+
+  - type: check
+    target_name: python-udf5-1-1
+    timeout: 100 # address build need more time
+    expected_result:
+      - [-0.7993882239271975, -0.5]
+      - [-0.6196603148213321, -0.3888889]
+      - [-0.4401291813106255, -0.2777778]
+      - [-0.26099093327175016, -0.16666667]
+      - [-0.08244035139698846, -0.05555556]
+      - [0.09532978177413576, 0.05555556]
+      - [0.2721292940959454, 0.16666667]
+      - [0.4477713271234415, 0.2777778]
+      - [0.6220729283081355, 0.3888889]
+      - [0.7948556799437257, 0.5]

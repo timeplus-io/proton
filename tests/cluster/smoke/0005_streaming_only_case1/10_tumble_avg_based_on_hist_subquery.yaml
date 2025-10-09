@@ -1,0 +1,92 @@
+tags:
+  - subquery
+  - bug
+description: tumble avg based on hist subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test6_stream_only1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test6_stream_only1 (id string, location string, value float32,
+      json string, timestamp datetime64(3)) settings storage_type='streaming'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01')
+        ('dev1', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03')
+        ('dev2', 'ca', 30, '{"create_time":"2021-11-02 20:00:02"}', '2021-11-02 20:00:02')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev2', 'ca', 68, '{"create_time":"2021-11-02 20:00:04"}', '2021-11-02 20:00:04')
+        ('dev8', 'ca', 67, '{"create_time":"2021-11-02 20:00:05"}', '2021-11-02 20:00:05')
+        ('dev8', 'ca', 77, '{"create_time":"2021-11-02 20:00:06"}', '2021-11-02 20:00:06')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev3', 'ca', 58, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09')
+        ('dev3', 'ca', 66, '{"create_time":"2021-11-02 20:00:08"}', '2021-11-02 20:00:08')
+        ('dev4', 'ca', 76, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09"}', '2021-11-02 20:00:09')
+        ('dev4', 'ca', 67, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01')
+        ('dev9', 'ca', 77, '{"create_time":"2021-11-02 20:00:10"}', '2021-11-02 20:00:10')
+  
+  
+  - type: wait
+    time: 2
+
+  - name: 601-1
+    type: stream
+    query: |
+      with transformed as (
+        select 
+          id, 
+          value, 
+          to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp 
+        from 
+          table(test6_stream_only1)
+      ) 
+      select 
+        id, 
+        max(value), 
+        window_end 
+      from 
+        tumble(transformed, transformed_timestamp, interval 5 second) 
+      group by 
+        id, 
+        window_end
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_end
+        type: datetime
+
+  - type: check
+    target_name: 601-1
+    expected_result:
+      - [ dev1, 66, '2021-11-02 20:00:05' ]
+      - [ dev4, 67, '2021-11-02 20:00:05' ]
+      - [ dev2, 68, '2021-11-02 20:00:05' ]
+      - [ dev3, 80, '2021-11-02 20:00:10' ]
+      - [ dev4, 76, '2021-11-02 20:00:10' ]
+      - [ dev8, 77, '2021-11-02 20:00:10' ]
+      - [ dev9, 77, '2021-11-02 20:00:15' ]
+

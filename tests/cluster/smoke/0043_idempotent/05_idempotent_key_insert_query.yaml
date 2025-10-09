@@ -1,0 +1,87 @@
+tags:
+  - append_only
+
+description: Test insert query with idempotent id on append-only stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test43_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test43_stream (i int, v string) settings shards=3, sharding_expr='weak_hash32(i)';
+
+  - type: wait
+    time: 2
+
+  - name: idempotent-5-1
+    type: stream
+    query: select count() from test43_stream;
+    schema:
+      - name: count()
+        type: uint64
+
+  - name: idempotent-5-2
+    type: stream
+    query: select count() from test43_stream settings enable_idempotent_processing=true;
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test43_stream (i, v) settings idempotent_id = '1' values (1, 'a') (2, 'b')
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test43_stream (i, v) settings idempotent_id = '1' values (1, 'a') (2, 'b')
+
+  - type: check
+    target_name: idempotent-5-1
+    expected_result:
+      - [2]
+      - [4]
+
+  - type: check
+    target_name: idempotent-5-2
+    expected_result:
+      - [2]
+
+  - type: wait
+    time: 1
+
+  - name: idempotent-5-3
+    type: stream
+    query: select count() from table(test43_stream);
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: idempotent-5-3
+    expected_result:
+      - [2]
+
+  - type: wait
+    time: 1
+
+  - name: idempotent-5-4
+    type: stream
+    query: select count() from test43_stream settings enable_idempotent_processing=true;
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: idempotent-5-4
+    expected_result: []

@@ -2,6 +2,8 @@
 
 -- check ALTER MODIFY COLUMN with partitions
 
+SET show_uuid = 0;
+
 SET send_logs_level = 'fatal';
 
 DROP TABLE IF EXISTS alter_column;

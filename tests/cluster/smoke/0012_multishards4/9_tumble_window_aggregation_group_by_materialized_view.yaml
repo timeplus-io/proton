@@ -1,0 +1,186 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_aggregation
+- window_aggregation
+- tumble_window_aggregation
+- group_by
+- stateful_function
+description: tumble window aggregation group by, materialized view
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_4(i float, k int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create materialized view test13_view1_4 as
+      select i+2 as i,
+             k,
+             timestamp
+      from test13_multishard_4;
+  
+  - type: wait
+    time: 1
+
+  - name: '1339'
+    type: stream
+    query: |
+      select k,
+             max(i),
+             min(i),
+             avg(i),
+             count(i),
+             sum(i),
+             median(i),
+             window_start as s
+      from tumble(test13_view1_4,timestamp, 5s)
+      group by k,
+               window_start,
+               window_end
+      order by k;
+    schema:
+        - name: k
+          type: int32
+        - name: max(i)
+          type: float64
+        - name: min(i)
+          type: float64
+        - name: avg(i)
+          type: float64
+        - name: count(i)
+          type: uint64
+        - name: sum(i)
+          type: float64
+        - name: quantile(i)
+          type: float64
+        - name: s
+          type: datetime64(3)
+          
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(0, 0, '2021-11-02 20:00:01');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(1, 1, '2021-11-02 20:00:01');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(2, 0, '2021-11-02 20:00:03');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(3, 1, '2021-11-02 20:00:04');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(4, 0, '2021-11-02 20:00:05');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(5, 1, '2021-11-02 20:00:06');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(6, 0, '2021-11-02 20:00:07');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(7, 1, '2021-11-02 20:00:08');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(8, 0, '2021-11-02 20:00:09');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(9, 1, '2021-11-02 20:00:10');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_4(i, k, timestamp)
+      values(10, 0, '2021-11-02 20:00:11');
+
+  - type: check
+    target_name: '1339'
+    expected_result:
+    - [0, 4, 2, 3, 2, 6, 3, '2021-11-02 20:00:00']
+    - [1, 5, 3, 4, 2, 8, 4, '2021-11-02 20:00:00']
+    - [0, 10, 6, 8, 3, 24, 8, '2021-11-02 20:00:05']
+    - [1, 9, 7, 8, 2, 16, 8, '2021-11-02 20:00:05']

@@ -36,27 +36,32 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
-            throw Exception{"Number of arguments for function " + getName() + " doesn't match: passed "
-                + toString(arguments.size()) + ", should be at least 2.", ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+            throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Number of arguments for function {} doesn't match: "
+                "passed {}, should be at least 2.", getName(), arguments.size());
 
         const auto & first_arg = arguments.front();
 
         if (!isInteger(first_arg))
-            throw Exception{"Illegal type " + first_arg->getName() + " of first argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of first argument of function {}", first_arg->getName(), getName());
 
 
         for (const auto i : collections::range(1, arguments.size()))
         {
             const auto & pos_arg = arguments[i];
 
-            if (!isUnsignedInteger(pos_arg))
-                throw Exception{"Illegal type " + pos_arg->getName() + " of " + toString(i) + " argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+            if (!isUInt(pos_arg))
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of {} argument of function {}", pos_arg->getName(), i, getName());
         }
 
         return std::make_shared<DataTypeUInt8>();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
+        return std::make_shared<DataTypeUInt8>();
+    }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         const auto * value_col = arguments.front().column.get();
 
@@ -69,7 +74,7 @@ public:
             || (res = execute<Int16>(arguments, result_type, value_col))
             || (res = execute<Int32>(arguments, result_type, value_col))
             || (res = execute<Int64>(arguments, result_type, value_col))))
-            throw Exception{"Illegal column " + value_col->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}", value_col->getName(), getName());
 
         return res;
     }
@@ -170,7 +175,7 @@ private:
                 && !addToMaskImpl<UInt16>(mask, pos_col)
                 && !addToMaskImpl<UInt32>(mask, pos_col)
                 && !addToMaskImpl<UInt64>(mask, pos_col))
-                throw Exception{"Illegal column " + pos_col->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN};
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}", pos_col->getName(), getName());
         }
 
         return mask;

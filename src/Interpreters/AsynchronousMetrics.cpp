@@ -5,11 +5,10 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
-#include <Common/CurrentMetrics.h>
 #include <Common/filesystemHelpers.h>
+#include <Common/logger_useful.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
 #include <Interpreters/Cache/FileCache.h>
-#include <Server/ProtocolServerAdapter.h>
 #include <Storages/MarkCache.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/MergeTree/MergeTreeMetadataCache.h>
@@ -19,7 +18,6 @@
 #include <Databases/IDatabase.h>
 #include <chrono>
 
-
 #include "config.h"
 
 #if USE_JEMALLOC
@@ -27,7 +25,28 @@
 #endif
 
 /// proton: starts
-#include <Interpreters/DiskUtilChecker.h>
+
+#if defined(OS_DARWIN)
+#include <mach/mach.h>
+#endif
+
+
+namespace
+{
+#if defined(OS_DARWIN)
+uint64_t getAvailableMemoryAmountOrZeroOSX()
+{
+    static auto page_size = sysconf(_SC_PAGESIZE);
+
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    vm_statistics64_data_t vm_stats;
+    if (host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&vm_stats), &count) != KERN_SUCCESS)
+        return 0;
+
+    return vm_stats.free_count * page_size;
+}
+#endif
+}
 /// proton: ends
 
 namespace DB
@@ -72,7 +91,7 @@ AsynchronousMetrics::AsynchronousMetrics(
     , update_period(update_period_seconds)
     , protocol_server_metrics_func(protocol_server_metrics_func_)
     , settings(std::make_unique<Settings>(global_context_->getSettingsRef()))
-    , log(&Poco::Logger::get("AsynchronousMetrics"))
+    , log(getLogger("AsynchronousMetrics"))
 {
     /// proton : starts. totalRows(settings) for versioned-kv, changelog-kv
     settings->set("compact_kv_stream", false);
@@ -82,6 +101,7 @@ AsynchronousMetrics::AsynchronousMetrics(
     openFileIfExists("/proc/meminfo", meminfo);
     openFileIfExists("/proc/loadavg", loadavg);
     openFileIfExists("/proc/stat", proc_stat);
+    openFileIfExists("/proc/self/stat", proc_self_stat);
     openFileIfExists("/proc/cpuinfo", cpuinfo);
     openFileIfExists("/proc/sys/fs/file-nr", file_nr);
     openFileIfExists("/proc/uptime", uptime);
@@ -142,10 +162,10 @@ void AsynchronousMetrics::openSensors()
         catch (const ErrnoException & e)
         {
             LOG_WARNING(
-                &Poco::Logger::get("AsynchronousMetrics"),
-                "Thermal monitor '{}' exists but could not be read, error {}.",
+                getLogger("AsynchronousMetrics"),
+                "Thermal monitor '{}' exists but could not be read: {}.",
                 thermal_device_index,
-                e.getErrno());
+                errnoToString(e.getErrno()));
             continue;
         }
 
@@ -271,11 +291,11 @@ void AsynchronousMetrics::openSensorsChips()
             catch (const ErrnoException & e)
             {
                 LOG_WARNING(
-                    &Poco::Logger::get("AsynchronousMetrics"),
-                    "Hardware monitor '{}', sensor '{}' exists but could not be read, error {}.",
+                    getLogger("AsynchronousMetrics"),
+                    "Hardware monitor '{}', sensor '{}' exists but could not be read: {}.",
                     hwmon_name,
-                    sensor_name,
-                    e.getErrno());
+                    sensor_index,
+                    errnoToString(e.getErrno()));
                 continue;
             }
 
@@ -505,6 +525,93 @@ AsynchronousMetrics::ProcStatValuesOther::operator-(const AsynchronousMetrics::P
     return res;
 }
 
+/// proton: starts.
+void AsynchronousMetrics::SelfProcStats::read(ReadBuffer & in)
+{
+    auto skip_word = [](ReadBuffer & buf, int count) {
+        for (int i = 0; i < count; ++i)
+            skipToNextWhitespaceOrEOF(buf);
+    };
+
+    /// int pid;
+    /// String comm;
+    /// char state;
+    /// int ppid;
+    /// int pgrp;
+    /// int session;
+    /// int tty_nr;
+    /// int tpgid;
+    /// unsigned int flags;
+    /// uint64_t minflt;
+    /// uint64_t cminflt;
+    /// uint64_t majflt;
+    /// uint64_t cmajflt;
+    skip_word(in, 13);
+
+    readText(utime, in);
+    skipWhitespaceIfAny(in, true);
+
+    readText(stime, in);
+    skipWhitespaceIfAny(in, true);
+
+    readText(cutime, in);
+    skipWhitespaceIfAny(in, true);
+
+    readText(cstime, in);
+    skipWhitespaceIfAny(in, true);
+
+    /// int64_t priority;
+    /// int64_t nice;
+    /// int64_t num_threads;
+    /// int64_t itrealvalue;
+    /// uint64_t starttime;
+    /// uint64_t vsize;
+    /// int64_t rss;
+    /// uint64_t rsslim;
+    /// uint64_t startcode;
+    /// uint64_t endcode;
+    /// uint64_t startstack;
+    /// uint64_t kstkesp;
+    /// uint64_t kstkeip;
+    /// uint64_t signal;
+    /// uint64_t blocked;
+    /// uint64_t sigignore;
+    /// uint64_t sigcatch;
+    /// uint64_t wchan;
+    /// uint64_t nswap;
+    /// uint64_t cnswap;
+    /// int exit_signal;
+    /// int processor;
+    /// unsigned int rt_priority;
+    /// unsigned int policy;
+    /// uint64_t delayacct_blkio_ticks;
+    /// uint64_t guest_time;
+    /// int64_t cguest_time;
+    /// uint64_t start_data;
+    /// uint64_t end_data;
+    /// uint64_t start_brk;
+    /// uint64_t arg_start;
+    /// uint64_t arg_end;
+    /// uint64_t env_start;
+    /// uint64_t env_end;
+    /// int64_t exit_code;
+    skip_word(in, 35);
+
+    assert(in.eof());
+}
+
+AsynchronousMetrics::SelfProcStats
+AsynchronousMetrics::SelfProcStats::operator-(const AsynchronousMetrics::SelfProcStats & other) const
+{
+    SelfProcStats res{};
+    res.utime = utime - other.utime;
+    res.stime = stime - other.stime;
+    res.cutime = cutime - other.cutime;
+    res.cstime = cstime - other.cstime;
+    return res;
+}
+/// proton: ends.
+
 void AsynchronousMetrics::BlockDeviceStatValues::read(ReadBuffer & in)
 {
     skipWhitespaceIfAny(in, true);
@@ -585,6 +692,15 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
     AsynchronousMetricValues new_values;
 
+    /// proton : starts
+    auto locked_context = getContext();
+    auto * mutable_context = const_cast<Context *>(locked_context.get());
+
+#if defined(OS_DARWIN)
+    mutable_context->setOSMemoryFreeMB(static_cast<uint32_t>(getAvailableMemoryAmountOrZeroOSX() / 1024 / 1024));
+#endif
+    /// proton : ends
+
     auto current_time = std::chrono::system_clock::now();
     auto time_after_previous_update [[maybe_unused]] = current_time - previous_update_time;
     previous_update_time = update_time;
@@ -593,7 +709,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     new_values["Jitter"] = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - update_time).count() / 1e9;
 
     {
-        if (auto mark_cache = getContext()->getMarkCache())
+        if (auto mark_cache = locked_context->getMarkCache())
         {
             new_values["MarkCacheBytes"] = mark_cache->weight();
             new_values["MarkCacheFiles"] = mark_cache->count();
@@ -601,7 +717,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        if (auto uncompressed_cache = getContext()->getUncompressedCache())
+        if (auto uncompressed_cache = locked_context->getUncompressedCache())
         {
             new_values["UncompressedCacheBytes"] = uncompressed_cache->weight();
             new_values["UncompressedCacheCells"] = uncompressed_cache->count();
@@ -609,7 +725,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        if (auto index_mark_cache = getContext()->getIndexMarkCache())
+        if (auto index_mark_cache = locked_context->getIndexMarkCache())
         {
             new_values["IndexMarkCacheBytes"] = index_mark_cache->weight();
             new_values["IndexMarkCacheFiles"] = index_mark_cache->count();
@@ -617,7 +733,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        if (auto index_uncompressed_cache = getContext()->getIndexUncompressedCache())
+        if (auto index_uncompressed_cache = locked_context->getIndexUncompressedCache())
         {
             new_values["IndexUncompressedCacheBytes"] = index_uncompressed_cache->weight();
             new_values["IndexUncompressedCacheCells"] = index_uncompressed_cache->count();
@@ -625,7 +741,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        if (auto mmap_cache = getContext()->getMMappedFileCache())
+        if (auto mmap_cache = locked_context->getMMappedFileCache())
         {
             new_values["MMapCacheCells"] = mmap_cache->count();
         }
@@ -642,7 +758,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
 #if USE_ROCKSDB
     {
-        if (auto metadata_cache = getContext()->tryGetMergeTreeMetadataCache())
+        if (auto metadata_cache = locked_context->tryGetMergeTreeMetadataCache())
         {
             new_values["MergeTreeMetadataCacheSize"] = metadata_cache->getEstimateNumKeys();
         }
@@ -659,7 +775,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 #endif
 
-    new_values["Uptime"] = getContext()->getUptimeSeconds();
+    new_values["Uptime"] = locked_context->getUptimeSeconds();
 
     {
         if (const auto stats = getHashTablesCacheStatistics())
@@ -734,6 +850,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 #endif
 
             /// proton : starts
+            mutable_context->setMemoryUsedMB(static_cast<uint32_t>(data.resident / 1024 / 1024));
+
             new_values["MemoryTracker.Amount"] = amount;
             new_values["MemoryTracker.Peak"] = peak;
 
@@ -806,6 +924,44 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
     }
+
+    /// proton: starts.
+    if (proc_self_stat)
+    {
+        try
+        {
+            proc_self_stat->rewind();
+
+            int64_t hz = sysconf(_SC_CLK_TCK);
+            if (-1 == hz)
+                throwFromErrno("Cannot call 'sysconf' to obtain system HZ", ErrorCodes::CANNOT_SYSCONF);
+
+            double multiplier = 1.0 / hz / (std::chrono::duration_cast<std::chrono::nanoseconds>(time_after_previous_update).count() / 1e9);
+
+            SelfProcStats current_values{};
+            current_values.read(*proc_self_stat);
+
+            if (!first_run)
+            {
+                SelfProcStats delta_values = current_values - self_proc_stats;
+
+                new_values["ProtonUserTime"] = delta_values.utime * multiplier;
+                new_values["ProtonSystemTime"] = delta_values.stime * multiplier;
+                new_values["ProtonChildUserTime"] = delta_values.cutime * multiplier;
+                new_values["ProtonChildSystemTime"] = delta_values.cstime * multiplier;
+
+                mutable_context->setCPUUsage(
+                    new_values["ProtonUserTime"] + new_values["ProtonSystemTime"] + new_values["ProtonChildUserTime"]
+                    + new_values["ProtonChildSystemTime"]);
+            }
+            self_proc_stats = current_values;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+    /// proton: ends.
 
     if (proc_stat)
     {
@@ -933,6 +1089,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                     new_values["OSGuestTimeNormalized"] = delta_values_all_cpus.guest * multiplier / num_cpus;
                     new_values["OSGuestNiceTimeNormalized"] = delta_values_all_cpus.guest_nice * multiplier / num_cpus;
                 }
+
+                mutable_context->setOSCPUUsage(delta_values_all_cpus.user * multiplier + delta_values_all_cpus.system * multiplier);
             }
 
             proc_stat_values_other = current_other_values;
@@ -1097,6 +1255,29 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             }
 
             new_values["OSMemoryFreePlusCached"] = free_plus_cached_bytes;
+
+            /// proton: starts
+            if (cgroupmem_limit_in_bytes && cgroupmem_usage_in_bytes)
+            {
+                /// cgroup - container case
+                /// If max memory is not set for cgroup, it will be `max` which is not parsable, hence
+                /// it is possible new_values["CGroupMemoryTotal"] == 0. If this is the case, use host
+                /// total memory
+                auto cgroup_mem_total = new_values["CGroupMemoryTotal"];
+                if (cgroup_mem_total == 0 || cgroup_mem_total > new_values["OSMemoryTotal"])
+                {
+                    /// Correct the cgroup memory total, sometimes /sys/fs/cgroup/memory/memory.limit_in_bytes doens't have a right value
+                    new_values["CGroupMemoryTotal"] = new_values["OSMemoryTotal"];
+                    cgroup_mem_total = new_values["OSMemoryTotal"];
+                }
+
+                mutable_context->setOSMemoryFreeMB(static_cast<uint32_t>((cgroup_mem_total - new_values["CGroupMemoryUsed"]) / 1024 / 1024));
+            }
+            else
+            {
+                mutable_context->setOSMemoryFreeMB(static_cast<uint32_t>(free_plus_cached_bytes / 1024 / 1024));
+            }
+            /// proton : ends
         }
         catch (...)
         {
@@ -1225,7 +1406,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        LOG_DEBUG(log, "Cannot read statistics from block devices: {}", getCurrentExceptionMessage(false));
 
         /// Try to reopen block devices in case of error
         /// (i.e. ENOENT means that some disk had been replaced, and it may apperas with a new name)
@@ -1339,7 +1520,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
     catch (...)
     {
-        if (errno != ENODATA)   /// Ok for thermal sensors.
+        if (errno != ENODATA) /// Ok for thermal sensors.
             tryLogCurrentException(__PRETTY_FUNCTION__);
 
         /// Files maybe re-created on module load/unload
@@ -1367,7 +1548,12 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 }
                 catch (const ErrnoException & e)
                 {
-                    LOG_DEBUG(&Poco::Logger::get("AsynchronousMetrics"), "Hardware monitor '{}', sensor '{}' exists but could not be read, error {}.", hwmon_name, sensor_name, e.getErrno());
+                    LOG_DEBUG(
+                        log,
+                        "Hardware monitor '{}', sensor '{}' exists but could not be read, error {}.",
+                        hwmon_name,
+                        sensor_name,
+                        e.getErrno());
                 }
 
                 if (sensor_name.empty())
@@ -1379,7 +1565,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
     catch (...)
     {
-        if (errno != ENODATA)   /// Ok for thermal sensors.
+        if (errno != ENODATA) /// Ok for thermal sensors.
             tryLogCurrentException(__PRETTY_FUNCTION__);
 
         /// Files can be re-created on:
@@ -1438,36 +1624,49 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 #endif
 
+    /// proton: starts.
+    auto addFilesystemMetrics = [&](const String & name, const String & path) {
+        auto stat = getStatVFS(path);
+
+        new_values[fmt::format("Filesystem{}PathTotalBytes", name)] = stat.f_blocks * stat.f_frsize;
+        new_values[fmt::format("Filesystem{}PathAvailableBytes", name)] = stat.f_bavail * stat.f_frsize;
+        new_values[fmt::format("Filesystem{}PathUsedBytes", name)] = (stat.f_blocks - stat.f_bavail) * stat.f_frsize;
+        new_values[fmt::format("Filesystem{}PathTotalINodes", name)] = stat.f_files;
+        new_values[fmt::format("Filesystem{}PathAvailableINodes", name)] = stat.f_favail;
+        new_values[fmt::format("Filesystem{}PathUsedINodes", name)] = stat.f_files - stat.f_favail;
+    };
+
     /// Free space in filesystems at data path and logs path.
+    addFilesystemMetrics("Main", locked_context->getPath());
+
+    /// Current working directory of the server is the directory with logs.
+    addFilesystemMetrics("Logs", ".");
+
+    const auto & config = locked_context->getConfigRef();
+
+    std::map<String, String> filesystem_paths = {
+        {"Checkpoint", "query_state_checkpoint.path"},
+        {"Metastore", "metadata.metastore.data_dirs"},
+        {"Datastore", "data.datastore.data_dirs"},
+    };
+
+    for (const auto & [name, path_config] : filesystem_paths)
     {
-        auto stat = getStatVFS(getContext()->getPath());
+        String path = config.getString(path_config, "");
+        if (!std::filesystem::exists(path))
+            continue;
 
-        new_values["FilesystemMainPathTotalBytes"] = stat.f_blocks * stat.f_frsize;
-        new_values["FilesystemMainPathAvailableBytes"] = stat.f_bavail * stat.f_frsize;
-        new_values["FilesystemMainPathUsedBytes"] = (stat.f_blocks - stat.f_bavail) * stat.f_frsize;
-        new_values["FilesystemMainPathTotalINodes"] = stat.f_files;
-        new_values["FilesystemMainPathAvailableINodes"] = stat.f_favail;
-        new_values["FilesystemMainPathUsedINodes"] = stat.f_files - stat.f_favail;
+        auto p = std::filesystem::path(path);
+        if (p.is_relative())
+            path = std::filesystem::absolute(p).string();
+
+        addFilesystemMetrics(name, path);
     }
-
-    {
-        /// Current working directory of the server is the directory with logs.
-        auto stat = getStatVFS(".");
-
-        new_values["FilesystemLogsPathTotalBytes"] = stat.f_blocks * stat.f_frsize;
-        new_values["FilesystemLogsPathAvailableBytes"] = stat.f_bavail * stat.f_frsize;
-        new_values["FilesystemLogsPathUsedBytes"] = (stat.f_blocks - stat.f_bavail) * stat.f_frsize;
-        new_values["FilesystemLogsPathTotalINodes"] = stat.f_files;
-        new_values["FilesystemLogsPathAvailableINodes"] = stat.f_favail;
-        new_values["FilesystemLogsPathUsedINodes"] = stat.f_files - stat.f_favail;
-    }
+    /// proton: ends.
 
     /// Free and total space on every configured disk.
     {
-        DisksMap disks_map = getContext()->getDisksMap();
-        /// proton: starts. Update disk utilization
-        DiskUtilChecker::instance(nullptr).updateUtils(disks_map);
-        /// proton: ends
+        DisksMap disks_map = locked_context->getDisksMap();
 
         for (const auto & [name, disk] : disks_map)
         {
@@ -1484,6 +1683,11 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             new_values[fmt::format("DiskUsed_{}", name)] = total - available;
             new_values[fmt::format("DiskAvailable_{}", name)] = available;
             new_values[fmt::format("DiskUnreserved_{}", name)] = unreserved;
+
+            /// proton : start
+            if (!disk->isRemote())
+                mutable_context->updateDiskUsage(name, total, available, first_run);
+            /// proton : ends
         }
     }
 
@@ -1516,22 +1720,19 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             if (!db.second->canContainMergeTreeTables())
                 continue;
 
-            for (auto iterator = db.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
+            for (auto iterator = db.second->getTablesIterator(locked_context); iterator->isValid(); iterator->next())
             {
                 ++total_number_of_tables;
                 const auto & table = iterator->table();
                 if (!table)
                     continue;
 
-                if (MergeTreeData * table_merge_tree = dynamic_cast<MergeTreeData *>(table.get()))
+                if (MergeTreeData * table_merge_tree = dynamic_cast<MergeTreeData *>(table.get());
+                    table_merge_tree && table_merge_tree->isReady() && !table_merge_tree->isVirtualStorage())
                 {
-                    /// proton : starts
-                    if (table_merge_tree->isInmemory())
-                        continue;
-                    /// proton : ends
-
-                    calculateMax(max_part_count_for_partition, table_merge_tree->getMaxPartsCountForPartition());
-                    total_number_of_bytes += table_merge_tree->totalBytes(*settings).value();
+                    calculateMax(max_part_count_for_partition, table_merge_tree->getMaxPartsCountAndSizeForPartition().first);
+                    auto total_bytes = table_merge_tree->totalBytes(*settings);
+                    total_number_of_bytes += total_bytes ? total_bytes.value() : 0;
                     auto total_rows = table_merge_tree->totalRows(*settings);
                     total_number_of_rows += total_rows ? total_rows.value() : 0;
                     total_number_of_parts += table_merge_tree->getPartsCount();
@@ -1594,7 +1795,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     new_values["AsynchronousMetricsCalculationTimeSpent"] = watch.elapsedSeconds();
 
     /// Log the new metrics.
-    if (auto asynchronous_metric_log = getContext()->getAsynchronousMetricLog())
+    if (auto asynchronous_metric_log = locked_context->getAsynchronousMetricLog())
     {
         asynchronous_metric_log->addValues(new_values);
     }

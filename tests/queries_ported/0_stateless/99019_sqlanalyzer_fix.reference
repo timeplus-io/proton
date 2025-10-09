@@ -1,0 +1,104 @@
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "SHOW FORMAT SCHEMAS",
+  "query_type": "SHOW_FORMAT_SCHEMAS",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "SHOW FORMAT SCHEMAS"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "SHOW FUNCTIONS",
+  "query_type": "SHOW_FUNCTIONS",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "SHOW FUNCTIONS"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "SHOW CREATE FORMAT SCHEMA schema_test",
+  "query_type": "SHOW_CREATE_FORMAT_SCHEMA",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "SHOW CREATE FORMAT SCHEMA schema_test"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "SHOW CREATE FUNCTION determineSymbolStatus",
+  "query_type": "SHOW_CREATE_FUNCTION",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "SHOW CREATE FUNCTION determineSymbolStatus"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "CREATE ALERT test CALL some_udf AS SELECT * FROM some_stream",
+  "query_type": "CREATE_ALERT",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "CREATE ALERT test CALL some_udf AS SELECT * FROM some_stream"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "SHOW ALERTS",
+  "query_type": "SHOW_ALERTS",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "SHOW ALERTS"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "SHOW CREATE ALERT test",
+  "query_type": "SHOW_CREATE_ALERT",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "SHOW CREATE ALERT test"
+}
+{
+  "group_by_columns": [],
+  "has_aggr": false,
+  "has_subquery": false,
+  "has_table_join": false,
+  "has_union": false,
+  "is_streaming": true,
+  "original_query": "DROP ALERT test",
+  "query_type": "DROP_AERLT",
+  "required_columns": [],
+  "result_columns": [],
+  "rewritten_query": "DROP ALERT test"
+}

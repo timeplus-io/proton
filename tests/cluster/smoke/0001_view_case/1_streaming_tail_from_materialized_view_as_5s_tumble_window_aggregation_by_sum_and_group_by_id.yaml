@@ -1,0 +1,81 @@
+tags:
+  - materialized view
+  - tumble window
+description: 'create materialized view as materialized view as 5s tumble window aggregation
+  by sum and group by id, select id, sum_value from mv, timestamp designated as event_time_column
+  when creating table '
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test1_mv_stream_tumble_v AS
+      SELECT
+         id,
+         SUM(value) AS sum_value,
+         TO_DATETIME(window_start, 'UTC') AS win_start,
+         TO_DATETIME(window_end, 'UTC') AS win_end
+      FROM
+         tumble(test1_mv, INTERVAL 5 SECOND)
+      GROUP BY
+         id, window_start, window_end
+
+  - type: wait
+    time: 2
+
+  - name: '301'
+    type: stream
+    query: select id, sum_value, win_start, win_end from test1_mv_stream_tumble_v
+    schema:
+      - name: id
+        type: string
+      - name: sum_value
+        type: float64
+      - name: win_start
+        type: datetime('UTC')
+      - name: win_end
+        type: datetime('UTC')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:00+00:00'),
+      ('dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:01+00:00'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02T20:01:02+00:00');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:03+00:00'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:02+00:00'),
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02T20:01:08+00:00');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev3', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:00+00:00'),
+      ('dev3', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:01+00:00'),
+      ('dev2', 'ca', 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02T20:01:05+00:00');
+
+  - type: query
+    sql: |
+      insert into test1_mv (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:03+00:00'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02T20:01:02+00:00'),
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02T20:01:08+00:00');
+
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: '301'
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [ dev1, '123.3', '2020-02-02 20:01:00+00:00', '2020-02-02 20:01:05+00:00' ]
+      - [ dev2, '117.3', '2020-02-02 20:01:00+00:00', '2020-02-02 20:01:05+00:00' ]
+      - [ dev8, '67', '2020-02-02 20:01:00+00:00', '2020-02-02 20:01:05+00:00' ]
+

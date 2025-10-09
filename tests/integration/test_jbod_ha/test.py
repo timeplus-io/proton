@@ -95,8 +95,8 @@ def test_jbod_ha(start_cluster):
             privileged=True,
             user="root",
         )
-        node1.query("system restart disk jbod1")
 
+        node1.restart_clickhouse()
         time.sleep(5)
 
         assert (

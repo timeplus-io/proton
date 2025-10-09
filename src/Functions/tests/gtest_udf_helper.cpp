@@ -10,7 +10,7 @@
 
 using namespace DB;
 
-TEST(createUserDefinedExecutableFunction, ValidJSFunc)
+TEST(createUserDefinedFunctionRequest, ValidJSFunc)
 {
     String JS_FUNC1 = R"###(
 {
@@ -32,11 +32,16 @@ TEST(createUserDefinedExecutableFunction, ValidJSFunc)
     Poco::JSON::Parser parser;
 
     auto json_func = parser.parse(JS_FUNC1).extract<Poco::JSON::Object::Ptr>();
-    auto cfg = Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func));
+    auto cfg = Streaming::createUserDefinedFunctionRequest(
+        context,
+        "func1",
+        Poco::Util::JSONConfiguration(json_func),
+        cluster::protocol::ExistsOperation::Ignore,
+        nullptr);
     EXPECT_NE(cfg, nullptr);
 }
 
-TEST(createUserDefinedExecutableFunction, MissingType)
+TEST(createUserDefinedFunctionRequest, MissingType)
 {
     String JS_FUNC1 = R"###(
 {
@@ -57,10 +62,17 @@ TEST(createUserDefinedExecutableFunction, MissingType)
     Poco::JSON::Parser parser;
 
     auto json_func = parser.parse(JS_FUNC1).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }
 
-TEST(createUserDefinedExecutableFunction, MissingReturnType)
+TEST(createUserDefinedFunctionRequest, MissingReturnType)
 {
     String JS_FUNC1 = R"###(
 {
@@ -81,10 +93,17 @@ TEST(createUserDefinedExecutableFunction, MissingReturnType)
     Poco::JSON::Parser parser;
 
     auto json_func = parser.parse(JS_FUNC1).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }
 
-TEST(createUserDefinedExecutableFunction, InvalidArguments)
+TEST(createUserDefinedFunctionRequest, InvalidArguments)
 {
     String FUNC_NO_ARGS = R"###(
 {
@@ -126,16 +145,37 @@ TEST(createUserDefinedExecutableFunction, InvalidArguments)
     Poco::JSON::Parser parser;
 
     auto json_func = parser.parse(FUNC_NO_ARGS).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 
     json_func = parser.parse(FUNC_EMPTY_ARGS).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 
     json_func = parser.parse(FUNC_INVALID_ARG_TYPE).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }
 
-TEST(createUserDefinedExecutableFunction, MissingCommand)
+TEST(createUserDefinedFunctionRequest, MissingCommand)
 {
     String JS_FUNC1 = R"###(
 {
@@ -156,10 +196,17 @@ TEST(createUserDefinedExecutableFunction, MissingCommand)
     Poco::JSON::Parser parser;
     auto func = parser.parse(JS_FUNC1).extract<Poco::JSON::Object::Ptr>();
 
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }
 
-TEST(createUserDefinedExecutableFunction, MissingURL)
+TEST(createUserDefinedFunctionRequest, MissingURL)
 {
     String REMOTE_NO_URL = R"###(
 {
@@ -214,13 +261,27 @@ TEST(createUserDefinedExecutableFunction, MissingURL)
     Poco::JSON::Parser parser;
 
     auto json_func = parser.parse(REMOTE_NO_URL).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 
     json_func = parser.parse(REMOTE_INVALID_URL).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }
 
-TEST(createUserDefinedExecutableFunction, InvalidAuthMethod)
+TEST(createUserDefinedFunctionRequest, InvalidAuthMethod)
 {
     String REMOTE_MISSING_KEY = R"###(
 {
@@ -270,13 +331,27 @@ TEST(createUserDefinedExecutableFunction, InvalidAuthMethod)
     Poco::JSON::Parser parser;
 
     auto json_func = parser.parse(REMOTE_MISSING_KEY).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 
     json_func = parser.parse(REMOTE_MISSING_AUTH_CONTEXT).extract<Poco::JSON::Object::Ptr>();
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }
 
-TEST(createUserDefinedExecutableFunction, MissingSource)
+TEST(createUserDefinedFunctionRequest, MissingSource)
 {
     String JS_FUNC1 = R"###(
 {
@@ -297,5 +372,12 @@ TEST(createUserDefinedExecutableFunction, MissingSource)
     Poco::JSON::Parser parser;
     auto json_func = parser.parse(JS_FUNC1).extract<Poco::JSON::Object::Ptr>();
 
-    ASSERT_THROW(Streaming::createUserDefinedExecutableFunction(context, "func1", Poco::Util::JSONConfiguration(json_func)), Exception);
+    ASSERT_THROW(
+        Streaming::createUserDefinedFunctionRequest(
+            context,
+            "func1",
+            Poco::Util::JSONConfiguration(json_func),
+            cluster::protocol::ExistsOperation::Ignore,
+            nullptr),
+        Exception);
 }

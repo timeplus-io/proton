@@ -5,14 +5,13 @@
 #if USE_AWS_S3
 
 #include <TableFunctions/ITableFunction.h>
-#include <Storages/ExternalDataSourceConfiguration.h>
+#include <Storages/StorageS3.h>
 
 
 namespace DB
 {
 
 class Context;
-class TableFunctionS3Cluster;
 
 /* s3(source, [access_key_id, secret_access_key,] format, structure[, compression]) - creates a temporary storage for a file in S3
  */
@@ -20,6 +19,14 @@ class TableFunctionS3 : public ITableFunction
 {
 public:
     static constexpr auto name = "s3";
+    static constexpr auto signature = " - url\n"
+                                      " - url, format\n"
+                                      " - url, format, structure\n"
+                                      " - url, access_key_id, secret_access_key\n"
+                                      " - url, format, structure, compression_method\n"
+                                      " - url, access_key_id, secret_access_key, format\n"
+                                      " - url, access_key_id, secret_access_key, format, structure\n"
+                                      " - url, access_key_id, secret_access_key, format, structure, compression_method";
     std::string getName() const override
     {
         return name;
@@ -30,8 +37,23 @@ public:
 
     void setStructureHint(const ColumnsDescription & structure_hint_) override { structure_hint = structure_hint_; }
 
+    bool supportsReadingSubsetOfColumns(const ContextPtr & context) override;
+
+    std::unordered_set<String> getVirtualsToCheckBeforeUsingStructureHint() const override
+    {
+        return {"_path", "_file"};
+    }
+
+    static void parseArgumentsImpl(
+        const String & error_message,
+        ASTs & args,
+        ContextPtr context,
+        StorageS3::Configuration & configuration,
+        bool get_format_from_file = true);
+
+    static void addColumnsStructureToArguments(ASTs & args, const String & structure, const ContextPtr & context);
+
 protected:
-    friend class TableFunctionS3Cluster;
 
     StoragePtr executeImpl(
         const ASTPtr & ast_function,
@@ -44,9 +66,7 @@ protected:
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
     void parseArguments(const ASTPtr & ast_function, ContextPtr context) override;
 
-    static void parseArgumentsImpl(const String & error_message, ASTs & args, ContextPtr context, StorageS3Configuration & configuration);
-
-    StorageS3Configuration configuration;
+    mutable StorageS3::Configuration configuration;
     ColumnsDescription structure_hint;
 };
 

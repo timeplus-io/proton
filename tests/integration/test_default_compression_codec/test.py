@@ -7,10 +7,34 @@ from helpers.cluster import ClickHouseCluster
 
 cluster = ClickHouseCluster(__file__)
 
-node1 = cluster.add_instance('node1', main_configs=['configs/default_compression.xml', 'configs/wide_parts_only.xml'], with_zookeeper=True)
-node2 = cluster.add_instance('node2', main_configs=['configs/default_compression.xml', 'configs/wide_parts_only.xml'], with_zookeeper=True)
-node3 = cluster.add_instance('node3', main_configs=['configs/default_compression.xml', 'configs/wide_parts_only.xml'], image='yandex/clickhouse-server', tag='20.3.16', stay_alive=True, with_installed_binary=True)
-node4 = cluster.add_instance('node4')
+node1 = cluster.add_instance(
+    "node1",
+    main_configs=[
+        "configs/default_compression.xml",
+        "configs/wide_parts_only.xml",
+        "configs/long_names.xml",
+    ],
+    with_zookeeper=True,
+)
+node2 = cluster.add_instance(
+    "node2",
+    main_configs=[
+        "configs/default_compression.xml",
+        "configs/wide_parts_only.xml",
+        "configs/long_names.xml",
+    ],
+    with_zookeeper=True,
+)
+node3 = cluster.add_instance(
+    "node3",
+    main_configs=["configs/default_compression.xml", "configs/wide_parts_only.xml"],
+    image="yandex/clickhouse-server",
+    tag="20.3.16",
+    stay_alive=True,
+    with_installed_binary=True,
+)
+node4 = cluster.add_instance("node4")
+
 
 @pytest.fixture(scope="module")
 def start_cluster():

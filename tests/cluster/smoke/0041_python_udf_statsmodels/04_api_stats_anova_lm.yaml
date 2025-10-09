@@ -1,0 +1,72 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (score int, group string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getApiStatsAnovaLm(score int, group string) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+      import statsmodels.api as sm
+      from statsmodels.formula.api import ols
+
+      class getApiStatsAnovaLm:
+          def __init__(self):
+              self.anova = 0
+
+          def serialize(self):
+              data = {}
+              data['anova'] = self.anova
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.anova = data['anova']
+
+          def merge(self, other):
+              self.anova = self.anova
+
+          def process(self, scores, groups):
+              data = {'score': scores, 'group': groups}
+              df = pd.DataFrame(data)
+              model = ols('score ~ C(group)', data=df).fit()
+              anova_results = sm.stats.anova_lm(model)
+              tmp_anova = anova_results["PR(>F)"]["C(group)"]
+              self.anova = tmp_anova
+
+          def finalize(self):
+              return self.anova
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf5-4-1
+    type: stream
+    query: select getApiStatsAnovaLm(score, group) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(score, group) values (23, 'A')(21, 'A')(18, 'A')(25, 'B')(26, 'B')(20, 'B')(17, 'C')(28, 'C')(30, 'C')(22, 'D')(20, 'D')(19, 'D');
+
+  - type: check
+    target_name: python-udf5-4-1
+    expected_result:
+      - [0.47379084640894065]

@@ -44,11 +44,11 @@ void log(const v8::FunctionCallbackInfo<v8::Value> & args)
                 result[i] = from_v8<String>(isolate, args[i]->ToString(context).ToLocalChecked());
             }
         }
-        LOG_INFO(&Poco::Logger::get(from_v8<String>(isolate, args.Data())), "{}", fmt::join(result, " "));
+        LOG_INFO(getLogger(from_v8<String>(isolate, args.Data())), "{}", fmt::join(result, " "));
     }
     catch (DB::Exception & e)
     {
-        LOG_ERROR(&Poco::Logger::get(from_v8<String>(isolate, args.Data())), "Hit an udf/uda error : {}", e.what());
+        LOG_ERROR(getLogger(from_v8<String>(isolate, args.Data())), "Hit an udf/uda error : {}", e.what());
     }
     catch(...)
     {

@@ -1,0 +1,94 @@
+ok
+[INFO] Checking existing loggers...
+==================================================
+[INFO] SYSTEM SHOW LOGGERS command works
+ok
+
+
+[INFO] Testing REST API endpoints...
+==================================================
+[INFO] Getting current log levels via REST API
+ok
+
+[INFO] Setting global log level to debug via REST API
+ok
+
+[INFO] Setting DiskLocal logger to trace via REST API
+ok
+
+[INFO] Setting DNSResolver logger to information via REST API
+ok
+
+[INFO] Setting MemoryTracker logger to warning via REST API
+ok
+
+
+==================================================
+[INFO] Setting global log level to information via SQL
+ok
+[INFO] Setting DiskLocal logger to debug via SQL
+ok
+[INFO] Setting DNSResolver logger to trace via SQL
+ok
+[INFO] Setting MemoryTracker logger to warning via SQL
+ok
+[INFO] Testing expected failure: Testing invalid log level (expected to fail)
+ok
+[INFO] Testing expected failure: Testing non-existent logger (expected to fail)
+ok
+
+[INFO] Testing mixed scenarios...
+==================================================
+[INFO] Setting DiskLocal to error via REST API
+ok
+[INFO] Getting updated log levels
+ok
+
+[INFO] Resetting to default log level via SQL
+ok
+
+[INFO] Testing all available log levels...
+==================================================
+[INFO] Testing log level: trace
+ok
+[INFO] Testing log level: debug
+ok
+[INFO] Testing log level: information
+ok
+[INFO] Testing log level: warning
+ok
+[INFO] Testing log level: error
+ok
+[INFO] Testing log level: fatal
+ok
+
+[INFO] Testing various logger name patterns with existing loggers...
+==================================================
+[INFO] Testing existing logger: DiskLocal
+ok
+[INFO] Testing existing logger: DNSResolver
+ok
+[INFO] Testing existing logger: MemoryTracker
+ok
+[INFO] Testing potentially non-existent loggers (expected to fail)...
+[INFO] Testing expected failure: Testing potentially missing logger: non-existent-loggers
+ok
+[INFO] Testing expected failure: Testing potentially missing logger: BackgroundSchedulePool
+ok
+
+[INFO] Testing logger discovery and validation...
+==================================================
+[INFO] Discovering available loggers...
+[INFO] Testing common logger: MemoryTracker
+ok
+[INFO] Testing common logger: DiskLocal
+ok
+[INFO] Testing common logger: DNSResolver
+ok
+==================================================
+[INFO] All tests completed
+ok
+[INFO] Final log level status:
+[INFO] Final status check
+ok
+[INFO] Setting log level to trace for stateless tests

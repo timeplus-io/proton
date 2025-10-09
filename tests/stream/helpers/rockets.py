@@ -266,8 +266,14 @@ def rockets_context(config_file, tests_file_path, docker_compose_file):
         test_suite_timeout
     )  # put test_suite_timeout into config
     config["test_case_timeout"] = int(test_case_timeout)
-    config["proton_create_stream_shards"] = proton_create_stream_shards
-    config["proton_create_stream_replicas"] = proton_create_stream_replicas
+    if proton_create_stream_shards is not None:
+        config["proton_create_stream_shards"] = proton_create_stream_shards
+    if proton_create_stream_replicas is not None:
+        config["proton_create_stream_replicas"] = proton_create_stream_replicas
+    if "wait_sec_after_create" in config and len(config["wait_sec_after_create"]) > 0:
+        config["wait_sec_after_create"] = int(config["wait_sec_after_create"])
+    else:
+        config["wait_sec_after_create"] = 0
     if test_event_tag is not None:
         test_event_tag = json.loads(test_event_tag)
         config["test_event_tag"] = test_event_tag
@@ -822,7 +828,16 @@ class QueryClientPy(QueryClient):
                     else:
                         for item in act_target_list:
                             if act == "kill":
-                                res = cls.kill_query(pyclient, item)
+                                res = False
+                                for _ in range(10):
+                                    if pyclient is not None:
+                                        pyclient.disconnect()
+                                    pyclient = Client(
+                                        host=config.get("proton_server"),
+                                        port=config.get("proton_server_native_port"),
+                                        send_receive_timeout=60
+                                    )
+                                    res = cls.kill_query(pyclient, item, 1) or res
                             elif act == "drop_view":
                                 res = cls.drop_if_exist_py(pyclient, "view", item)
                                 time.sleep(1)
@@ -960,7 +975,7 @@ class QueryClientPy(QueryClient):
             raise drop_stream_exception
 
     @classmethod
-    def kill_query(cls, proton_client, query_2_kill, logging_level="INFO"):
+    def kill_query(cls, proton_client, query_2_kill, retry=100, logging_level="INFO"):
         logger = mp.get_logger()
         logger.debug(f"kill_query starts, query_2_kill = {query_2_kill}")
         try:
@@ -970,7 +985,6 @@ class QueryClientPy(QueryClient):
                 f"kill_query: datetime.now = {datetime.datetime.now()}, kill_sql = {kill_sql} to be called."
             )
             kill_res = proton_client.execute(kill_sql)
-            retry = 100  # kill_query retry 100 times
             while len(kill_res) and retry > 0:
                 time.sleep(0.2)
                 kill_res = proton_client.execute(kill_sql)
@@ -1263,8 +1277,10 @@ class QueryClientPy(QueryClient):
         proton_create_stream_shards = None
         proton_create_stream_replicas = None
         proton_server_container_name = None
+        proton_create_stream_sharding_expr = None
         rest_setting = None
         table_ddl_url = None
+        query_url = None
         test_suite_name = statement_2_run.get("test_suite_name")
         test_id = statement_2_run.get("test_id")
         query = statement_2_run.get("query")
@@ -1307,8 +1323,12 @@ class QueryClientPy(QueryClient):
                 proton_server_container_name = config.get(
                     "proton_server_container_name"
                 )
+                proton_create_stream_sharding_expr = config.get(
+                    "proton_create_stream_sharding_expr"
+                )
                 rest_setting = config.get("rest_setting")
                 table_ddl_url = rest_setting.get("table_ddl_url")
+                query_url = rest_setting.get("query_url")
                 if "cluster" not in proton_setting:
                     proton_server = config.get("proton_server")
                     proton_server_native_ports = config.get("proton_server_native_port")
@@ -1446,8 +1466,9 @@ class QueryClientPy(QueryClient):
                 )
                 depends_on_exists = False
                 depends_on_exists = QueryClientRest.query_exists(
-                    depends_on, client=pyclient
+                    depends_on, query_url=query_url
                 )
+
                 if not depends_on_exists:  # todo: error handling logic and error code
                     error_msg = f"QUERY_DEPENDS_ON_FAILED_TO_START FATAL exception: proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, depends_on = {depends_on} of query_id = {query_id} does not be found during 30s after {query_id} was started, query_states_dict = {query_states_dict}, raise Fatal Error, the depends_on query may failed to start in 30s or exits/ends unexpectedly."
                     logger.error(error_msg)
@@ -1464,30 +1485,39 @@ class QueryClientPy(QueryClient):
                 done_state_check_res = self.query_state_check(
                     query_states_dict, DONE_STATE, test_id, depends_on_done
                 )
-            if (
-                proton_create_stream_shards is not None
-                and len(proton_create_stream_shards) > 0
-                and ("create stream" in query or "CREATE STREAM" in query)
-            ):
-                q = query.split("settings ")
+            if "create stream" in query or "CREATE STREAM" in query:
+                if "SETTINGS " in query:
+                    query = query.replace("SETTINGS ", "settings ")
+                q = query.strip().strip(";").split("settings ")
+                query_setting = {}
                 if len(q) > 1:
-                    shards_str = q[-1] + "," + "shards=" + proton_create_stream_shards
-                else:
-                    shards_str = "shards=" + proton_create_stream_shards
-                query = q[0] + "settings " + shards_str
-            if (
-                proton_create_stream_replicas is not None
-                and len(proton_create_stream_replicas) > 0
-                and ("create stream" in query or "CREATE STREAM" in query)
-            ):
-                q = query.split("settings ")
-                if len(q) > 1:
-                    replicas_str = (
-                        q[-1] + "," + "replicas=" + proton_create_stream_replicas
-                    )
-                else:
-                    replicas_str = "replicas=" + proton_create_stream_replicas
-                query = q[0] + "settings " + replicas_str
+                    for expr in q[-1].split(","):
+                        k, v = expr.split("=")
+                        query_setting[k.strip()] = v.strip()
+                if "random stream" not in query and "RANDOM STREAM" not in query:
+                    if (
+                        proton_create_stream_shards is not None
+                        and len(proton_create_stream_shards) > 0
+                        and "shards" not in query_setting
+                    ):
+                        query_setting["shards"] = proton_create_stream_shards
+                    if (
+                        proton_create_stream_replicas is not None
+                        and len(proton_create_stream_replicas) > 0
+                        and "replication_factor" not in query_setting
+                    ):
+                        query_setting["replication_factor"] = proton_create_stream_replicas
+                    if (
+                        proton_create_stream_sharding_expr is not None
+                        and len(proton_create_stream_sharding_expr) > 0
+                        and "sharding_expr" not in query_setting
+                    ):
+                        query_setting["sharding_expr"] = proton_create_stream_sharding_expr
+
+                query = q[0]
+                if query_setting:
+                    query += "settings " + ", ".join([f"{k}={v}" for k, v in query_setting.items()])
+
             if wait != None:
                 wait = int(wait)
                 time.sleep(wait)
@@ -1517,37 +1547,62 @@ class QueryClientPy(QueryClient):
                 traceback.print_exc()
             if query_type == "table":
                 query_result_iter = []
-                if "cluster" in proton_setting and (
+                if ("cluster" in proton_setting or "replica" in proton_setting) and (
                     "kill query" in query or "KILL QUERY" in query
                 ):
                     if (
                         "kill query" in query or "KILL QUERY" in query
                     ):  # todo: better logic for the manual kill query in cluster
-                        res = None
-                        for item in proton_servers:
-                            proton_server = item.get("host")
-                            proton_server_native_port = item.get("port")
-                            if pyclient is not None:
-                                pyclient.disconnect()
-                            logger.debug(f"pyclient disonnected.")
-                            pyclient = Client(
-                                host=proton_server,
-                                port=proton_server_native_port,
-                                send_receive_timeout=60,
-                            )  # create python client
-                            logger.debug(
-                                f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
-                            )
-                            res = pyclient.execute(
-                                query,
-                                with_column_types=True,
-                                query_id=query_id,
-                                settings=settings,
-                            )
-                            query_result_iter.append(res[-1])
-                            if len(res[0]) > 0:
-                                for item in res[0]:
-                                    query_result_iter.append(item)
+                        if "cluster" in proton_setting:
+                            res = None
+                            for item in proton_servers:
+                                proton_server = item.get("host")
+                                proton_server_native_port = item.get("port")
+                                if pyclient is not None:
+                                    pyclient.disconnect()
+                                logger.debug(f"pyclient disonnected.")
+                                pyclient = Client(
+                                    host=proton_server,
+                                    port=proton_server_native_port,
+                                    send_receive_timeout=60,
+                                )  # create python client
+                                logger.debug(
+                                    f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
+                                )
+                                res = pyclient.execute(
+                                    query,
+                                    with_column_types=True,
+                                    query_id=query_id,
+                                    settings=settings,
+                                )
+                                query_result_iter.append(res[-1])
+                                if len(res[0]) > 0:
+                                    for item in res[0]:
+                                        query_result_iter.append(item)
+                        elif "replica" in proton_setting:
+                            res = None
+                            for i in range(10):
+                                if pyclient is not None:
+                                    pyclient.disconnect()
+                                logger.debug(f"pyclient disonnected.")
+                                pyclient = Client(
+                                    host=proton_server,
+                                    port=proton_server_native_port,
+                                    send_receive_timeout=60,
+                                )  # create python client
+                                logger.debug(
+                                    f"proton_setting = {proton_setting}, proton_server_container_name = {proton_server_container_name},test_suite_name = {test_suite_name}, test_id = {test_id}, query_id = {query_id}, query = {query} run on proton_server={proton_server}, proton_server_native_port = {proton_server_native_port}"
+                                )
+                                res = pyclient.execute(
+                                    query,
+                                    with_column_types=True,
+                                    query_id=query_id,
+                                    settings=settings,
+                                )
+                                query_result_iter.append(res[-1])
+                                if len(res[0]) > 0:
+                                    for item in res[0]:
+                                        query_result_iter.append(item)
                         logger.debug(
                             f"proton_setting = {proton_setting},test_suite_name = {test_suite_name}, test_id = {test_id}, proton_server_container_name = {proton_server_container_name},  query_id = {query_id}, query_type = {query_type}, res={res}, query_result_iter = {query_result_iter}"
                         )
@@ -1559,6 +1614,8 @@ class QueryClientPy(QueryClient):
                         query_id=query_id,
                         settings=settings,
                     )
+                    if ("create stream" in query or "CREATE STREAM" in query) and config["wait_sec_after_create"] > 0:
+                        time.sleep(config["wait_sec_after_create"])
                     query_result_iter.append(res[-1])
                     if len(res[0]) > 0:
                         for item in res[0]:
@@ -1800,7 +1857,7 @@ class QueryClientPy(QueryClient):
         finally:
             for act in ACTS_IN_FINAL:
                 scan_statement_act_res = QueryClientPy.scan_statement_and_act(
-                    statement_2_run, act, pyclient
+                    statement_2_run, act, pyclient, config
                 )
                 logger.debug(
                     f"watch: scan_statement_act_res = {scan_statement_act_res}"
@@ -2191,6 +2248,7 @@ class QueryClientRest(QueryClient):
         table_ddl_url = rest_setting.get("table_ddl_url")
         proton_create_stream_shards = config.get("proton_create_stream_shards")
         proton_create_stream_replicas = config.get("proton_create_stream_replicas")
+        proton_create_stream_sharding_expr = config.get("proton_create_stream_sharding_expr")
         exception_retry = retry  # set the retry times of exception catching
         table_name = table_schema.get("name")
         type = table_schema.get("type")
@@ -2210,14 +2268,28 @@ class QueryClientRest(QueryClient):
                 ttl_expression = table_schema.get("ttl_expression")
                 columns = table_schema.get("columns")
                 table_schema_for_rest = {"name": table_name, "columns": columns}
-                if proton_create_stream_shards is not None:
+                if table_schema.get("shards"):
+                    table_schema_for_rest["shards"] = int(
+                        table_schema.get("shards")
+                    )
+                elif proton_create_stream_shards is not None:
                     table_schema_for_rest["shards"] = int(
                         proton_create_stream_shards
                     )  # if proton_create_stream_shards is not None, put it into table_schema for rest api to create stream with shards setting
-                if proton_create_stream_replicas is not None:
+                if table_schema.get("replication_factor"):
+                    table_schema_for_rest["replication_factor"] = int(
+                        table_schema.get("replication_factor")
+                    )
+                elif proton_create_stream_replicas is not None:
                     table_schema_for_rest["replication_factor"] = int(
                         proton_create_stream_replicas
                     )
+                if table_schema.get("sharding_expr"):
+                    table_schema_for_rest["sharding_expr"] = int(
+                        table_schema.get("sharding_expr")
+                    )
+                elif proton_create_stream_sharding_expr is not None:
+                    table_schema_for_rest["sharding_expr"] = proton_create_stream_sharding_expr
                 if event_time_column is not None:
                     table_schema_for_rest["event_time_column"] = event_time_column
                 if ttl_expression is not None:
@@ -2927,15 +2999,21 @@ class QueryExecuter(object):
                                     i += 1
                                 # else:
                                 elif terminate in ("auto", "manual"):
+                                    if wait is not None:
+                                        time.sleep(wait)
                                     kill_query_exists_res = self.query_exists_cluster(
                                         self.config, proc, client
                                     )
-                                    if (
-                                        not kill_query_exists_res
-                                    ):  # sleep for another "wait" and retry 10 times as final try.
-                                        retry = 10
-                                        if wait is not None:
-                                            time.sleep(wait)
+                                    retry = 10
+                                    while not kill_query_exists_res and retry > 0:  # sleep for another "wait" and retry 10 times as final try.
+                                        if client is not None:
+                                            client.disconnect()
+                                            logger.debug(f"pyclient disconnect")
+                                        client = Client(
+                                            host=proton_server,
+                                            port=proton_server_native_port,
+                                            send_receive_timeout=60,
+                                        )
                                         kill_query_exists_res = (
                                             self.query_exists_cluster(
                                                 self.config, proc, client, 10
@@ -2958,7 +3036,18 @@ class QueryExecuter(object):
                                         f"query_end_timer sleep {query_end_timer} end start to call kill_query..."
                                     )
                                     if "cluster" not in proton_setting:
-                                        QueryClientPy.kill_query(client, query_id)
+                                        if "replica" in proton_setting:
+                                            for _ in range(10):
+                                                if client is not None:
+                                                    client.disconnect()
+                                                client = Client(
+                                                    host=proton_server,
+                                                    port=proton_server_native_port,
+                                                    send_receive_timeout=60,
+                                                )
+                                                QueryClientPy.kill_query(client, query_id, 1)
+                                        else:
+                                            QueryClientPy.kill_query(client, query_id)
                                         logger.debug(
                                             f"QueryClientPy.kill_query() was called, query_id={query_id}"
                                         )
@@ -3696,6 +3785,7 @@ class TestSuite(object):
                         QueryClientRest.create_table_rest(config, table_schema)
                     elif table_type == "view":
                         QueryClientPy.create_view_if_not_exit_py(client, table_schema)
+            time.sleep(config["wait_sec_after_create"])
             setup = test_suite_config.get("setup")
             logger.debug(f"setup = {setup}")
             if setup is not None:
@@ -3911,6 +4001,7 @@ class TestSuite(object):
                                             config, table_schema
                                         )
                                         tables_recreated.append(name)
+                                time.sleep(config["wait_sec_after_create"])  # wait 5s after stream created
             if len(tables_recreated) > 0:
                 logger.debug(f"tables: {tables_recreated} are dropted and recreated.")
             return tables_recreated
@@ -4059,7 +4150,7 @@ class TestSuite(object):
                 inputs_record.append(input_batch_record)
                 for act in ACTS_IN_FINAL:
                     scan_and_killres = QueryClientPy.scan_statement_and_act(
-                        batch, act, client
+                        batch, act, client, config
                     )
             if isinstance(sleep_after_inputs, int) and (
                 test_suite_timeout_hit is None or not test_suite_timeout_hit.is_set()
@@ -4110,9 +4201,9 @@ class TestSuite(object):
             test_suite_config = {}
         client = None
         test_run_list_len_total = 0
-        api_key = os.environ.get("TIMEPLUS_API_KEY2")
-        api_address = os.environ.get("TIMEPLUS_ADDRESS2", "")
-        work_space = os.environ.get("TIMEPLUS_WORKSPACE2")
+        api_key = os.environ.get("TIMEPLUS_API_KEY")
+        api_address = os.environ.get("TIMEPLUS_ADDRESS", "")
+        work_space = os.environ.get("TIMEPLUS_WORKSPACE")
         if work_space is not None and work_space != "":
             api_address = api_address + "/" + work_space
         timeplus_env = None
@@ -4578,7 +4669,7 @@ class TestSuite(object):
                                 logger.info(
                                     f"First run of the test suite done: proton_setting = {proton_setting}, test_suite_name = {test_suite_name}, test_id = {test_id}, there are {retry_cases_num} retry_cases, set case_retry_flag = {case_retry_flag}"
                                 )
-                                time.sleep(5)  # wait or 5 second to start the retry
+                                time.sleep(self.config["wait_sec_after_create"])  # wait or 5 second to start the retry
                     else:
                         j += 1
                         if j == len(retry_cases):

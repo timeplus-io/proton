@@ -47,7 +47,7 @@ std::pair<RanksArray, Float64> computeRanksAndTieCorrection(const Values & value
 
         /// Scipy implementation throws exception in this case too.
         if (count_equal == size)
-            throw Exception("All numbers in both samples are identical", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "All numbers in both samples are identical");
 
         tie_numenator += std::pow(count_equal, 3) - count_equal;
         for (size_t iter = left; iter < right; ++iter)
@@ -58,14 +58,16 @@ std::pair<RanksArray, Float64> computeRanksAndTieCorrection(const Values & value
 }
 
 
-template <typename X, typename Y>
+template <typename X, typename Y, bool use_arena>
 struct StatisticalSample
 {
     using AllocatorXSample = MixedAlignedArenaAllocator<alignof(X), 4096>;
-    using SampleX = PODArray<X, 32, AllocatorXSample>;
+    using SampleX = std::conditional_t<use_arena, PODArray<X, 32, AllocatorXSample>, std::vector<X>>;
 
     using AllocatorYSample = MixedAlignedArenaAllocator<alignof(Y), 4096>;
-    using SampleY = PODArray<Y, 32, AllocatorYSample>;
+    using SampleY = std::conditional_t<use_arena, PODArray<Y, 32, AllocatorYSample>, std::vector<Y>>;
+
+    static_assert(std::is_arithmetic_v<X> && std::is_arithmetic_v<Y>, "StatisticalSample supports only arithmetic types");
 
     SampleX x{};
     SampleY y{};
@@ -78,7 +80,11 @@ struct StatisticalSample
             return;
 
         ++size_x;
-        x.push_back(value, arena);
+
+        if constexpr (use_arena)
+            x.push_back(value, arena);
+        else
+            x.push_back(value);
     }
 
     void addY(Y value, Arena * arena)
@@ -87,15 +93,27 @@ struct StatisticalSample
             return;
 
         ++size_y;
-        y.push_back(value, arena);
+
+        if constexpr (use_arena)
+            y.push_back(value, arena);
+        else
+            y.push_back(value);
     }
 
     void merge(const StatisticalSample & rhs, Arena * arena)
     {
         size_x += rhs.size_x;
         size_y += rhs.size_y;
-        x.insert(rhs.x.begin(), rhs.x.end(), arena);
-        y.insert(rhs.y.begin(), rhs.y.end(), arena);
+        if constexpr (use_arena)
+        {
+            x.insert(rhs.x.begin(), rhs.x.end(), arena);
+            y.insert(rhs.y.begin(), rhs.y.end(), arena);
+        }
+        else
+        {
+            x.insert(x.end(), rhs.x.begin(), rhs.x.end());
+            y.insert(y.end(), rhs.y.begin(), rhs.y.end());
+        }
     }
 
     void write(WriteBuffer & buf) const
@@ -110,8 +128,16 @@ struct StatisticalSample
     {
         readVarUInt(size_x, buf);
         readVarUInt(size_y, buf);
-        x.resize(size_x, arena);
-        y.resize(size_y, arena);
+        if constexpr (use_arena)
+        {
+            x.resize(size_x, arena);
+            y.resize(size_y, arena);
+        }
+        else
+        {
+            x.resize(size_x);
+            y.resize(size_y);
+        }
         buf.readStrict(reinterpret_cast<char *>(x.data()), size_x * sizeof(x[0]));
         buf.readStrict(reinterpret_cast<char *>(y.data()), size_y * sizeof(y[0]));
     }

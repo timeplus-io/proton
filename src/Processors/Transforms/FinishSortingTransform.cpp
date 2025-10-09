@@ -25,13 +25,15 @@ FinishSortingTransform::FinishSortingTransform(
     const SortDescription & description_sorted_,
     const SortDescription & description_to_sort_,
     size_t max_merged_block_size_,
-    UInt64 limit_)
-    : SortingTransform(header, description_to_sort_, max_merged_block_size_, limit_, ProcessorID::FinishSortingTransformID)
+    UInt64 limit_,
+    bool increase_sort_description_compile_attempts)
+    : SortingTransform(header, description_to_sort_, max_merged_block_size_, limit_, increase_sort_description_compile_attempts, ProcessorID::FinishSortingTransformID)
 {
     /// Check for sanity non-modified descriptions
     if (!isPrefix(description_sorted_, description_to_sort_))
-        throw Exception("Can't finish sorting. SortDescription of already sorted stream is not prefix of "
-            "SortDescription needed to sort", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+                        "Can't finish sorting. SortDescription "
+                        "of already sorted stream is not prefix of SortDescription needed to sort");
 
     /// The target description is modified in SortingTransform constructor.
     /// To avoid doing the same actions with description_sorted just copy it from prefix of target description.

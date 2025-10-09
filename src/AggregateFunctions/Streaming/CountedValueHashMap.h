@@ -3,6 +3,7 @@
 #include <base/StringRef.h>
 #include <Common/ArenaUtils.h>
 #include <Common/ArenaWithFreeLists.h>
+#include <Common/HashTable/Hash.h>
 
 #include <absl/container/flat_hash_map.h>
 
@@ -46,25 +47,35 @@ private:
 };
 
 /// CountedValueHashMap maintain count for each key with no maximum capacity
-template <typename T, typename KeyCompare = void>
+template <typename T, typename KeyCompare = void, typename Hash = DefaultHash<T>>
 class CountedValueHashMap
 {
 public:
     using Compare = std::conditional_t<std::is_void_v<KeyCompare>, std::equal_to<T>, KeyCompare>;
-    using FlatHashMap = absl::flat_hash_map<T, uint32_t, DefaultHash<T>, Compare>;
-    using STDHashMap = std::unordered_map<T, uint32_t, DefaultHash<T>, Compare>;
+    using FlatHashMap = absl::flat_hash_map<T, uint32_t, Hash, Compare>;
+    using STDHashMap = std::unordered_map<T, uint32_t, Hash, Compare>;
     using Map = std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, FlatHashMap, STDHashMap>;
     using size_type = typename Map::size_type;
     using key_type = T;
 
-    CountedValueHashMap() = default;
+    CountedValueHashMap() : CountedValueHashMap(std::numeric_limits<size_t>::max()) { }
+    explicit CountedValueHashMap(size_t max_size_) : max_size(max_size_), arena(std::make_unique<CountedValueHashmapArena<T>>())
+    {
+        chassert(max_size > 0);
+    }
+
+    void reserve(size_t n) { m.reserve(n); }
 
     /// This interface is used during deserialization of the map
     /// Assume `v` is not in the map
+    /// If \preallocated is true means the value was already pre allocated in the arena
+    template <bool preallocated = false>
     bool insert(T v, uint32_t count)
     {
-        [[maybe_unused]] auto [_, inserted] = m.emplace(arena->emplace(std::move(v)), count);
-        return inserted;
+        if constexpr (preallocated)
+            return m.emplace(std::move(v), count).second;
+        else
+            return m.emplace(arena->emplace(std::move(v)), count).second;
     }
 
     /// Return the emplaced element iterator, if failed to emplace, return invalid iterator, `m.end()`
@@ -75,12 +86,16 @@ public:
             ++iter->second;
             return iter;
         }
-        else
+        else if (!atCapacity())
         {
             /// Didn't find v in the map
             auto [new_iter, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
             assert(inserted);
             return new_iter;
+        }
+        else
+        {
+            return m.end();
         }
     }
 
@@ -111,7 +126,7 @@ public:
     }
 
     /// Return true if the element exists in the map.
-    template<typename TT>
+    template <typename TT>
     bool contains(const TT & v) const
     {
         return m.find(v) != m.end();
@@ -131,6 +146,12 @@ public:
         m.clear();
         arena = std::make_unique<CountedValueHashmapArena<T>>();
     }
+
+    inline bool atCapacity() const { return m.size() == max_size; }
+
+    size_type capacity() const { return max_size; }
+
+    void setCapacity(size_type max_size_) { max_size = max_size_; }
 
     size_type size() const { return m.size(); }
 
@@ -216,6 +237,7 @@ private:
     }
 
 private:
+    size_t max_size;
     std::unique_ptr<CountedValueHashmapArena<T>> arena;
     Map m;
 };

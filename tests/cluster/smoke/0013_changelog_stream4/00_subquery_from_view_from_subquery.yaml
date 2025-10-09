@@ -1,0 +1,60 @@
+tags:
+  - local-run
+  - changelog(table)
+  - streaming_tailing
+  - subquery/view/materialized_view
+description: subquery from view from subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_subquery_4(i float, k1 int, k2 string);
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create view test14_view_4 as (
+        with cte as (select i, k1, k2, _tp_delta from changelog(test14_subquery_4, k2))
+        select * from cte
+      );
+  - type: wait
+    time: 1
+
+  - name: "1400"
+    type: stream
+    query: select * from test14_view_4;
+    schema:
+      - name: i
+        type: float32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (4, 3, 'a');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 3, 'a'); 
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 5, 'b');
+
+  - type: query
+    sql: insert into test14_subquery_4(i, k1, k2) values (2, 2, 'a');
+
+  - type: check
+    target_name: "1400"
+    expected_result:
+      - [4, 3, a, 1]
+      - [4, 3, a, -1]
+      - [2, 3, a, 1]
+      - [2, 5, b, 1]
+      - [2, 3, a, -1]
+      - [2, 2, a, 1]

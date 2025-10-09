@@ -1,7 +1,8 @@
 #include <Processors/Transforms/Streaming/AggregatingTransform.h>
 
+#include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
-#include <Interpreters/Streaming/AggregatedDataMetrics.h>
+#include <Interpreters/Streaming/Aggregator/AggregatedDataMetrics.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
@@ -9,42 +10,51 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
 {
-AggregatingTransform::AggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_)
-    : AggregatingTransform(std::move(header), std::move(params_), std::make_shared<ManyAggregatedData>(1), 0, 1, 1, log_name, pid_)
-{
-}
 
+std::atomic<UInt64> AggregatingTransform::next_id = 0;
+
+/// The life cycles of the following objects need to be maintained carefully for correct memory recycling during dtor.
+/// 1. AggregatingTransform
+/// 2. AggregatingTransformParams
+/// 3. IAggregator
+/// 4. ManyAggregateData
+/// 5. ManyIAggregatorDataVariants
+///
+/// The current references directions are
+///  AggregatingTransform -> AggregatingTransformParams -> IAggregator
+///                       -> ManyAggregatedData -> ManyIAggregatedDataVariants
+/// So the current dtor sequence is the reverse order of the above sequence which are good.
+/// Please note, during the dtor of ManyIAggregatorDataVariants, it may reference IAggregator
 AggregatingTransform::AggregatingTransform(
     Block header,
     AggregatingTransformParamsPtr params_,
     ManyAggregatedDataPtr many_data_,
     size_t current_variant_,
     size_t max_threads_,
-    size_t temporary_data_merge_threads_,
     const String & log_name,
     ProcessorID pid_)
     : IProcessor({std::move(header)}, {params_->getHeader()}, pid_)
     , params(std::move(params_))
-    , log(&Poco::Logger::get(log_name))
-    , key_columns(params->params.keys_size)
-    , aggregate_columns(params->params.aggregates_size)
+    , key_columns(params->params->keys_size)
+    , aggregate_columns(params->params->aggregates_size)
     , many_data(std::move(many_data_))
     , variants_mutex(*many_data->variants_mutexes[current_variant_])
     , variants(*many_data->variants[current_variant_])
     , watermark(many_data->watermarks[current_variant_])
     , current_variant(current_variant_)
     , max_threads(std::min(many_data->variants.size(), max_threads_))
-    , temporary_data_merge_threads(temporary_data_merge_threads_)
+    , logger(getLogger(log_name))
 {
-    (void)temporary_data_merge_threads;
-
     /// Register itself in the many aggregated data
     many_data->aggregating_transforms[current_variant] = this;
+
+    /// Register a rocks instance
+    if (params->aggregator->type() == AggregatorType::Hybrid)
+        installRocks();
 }
 
 AggregatingTransform::~AggregatingTransform() = default;
@@ -107,7 +117,7 @@ IProcessor::Status AggregatingTransform::prepare()
         return Status::NeedData;
     }
 
-    current_chunk = input.pull(/*set_not_needed = */ true);
+    current_chunk = input.pull(/*set_not_needed=*/true);
     read_current_chunk = true;
 
     return Status::Ready;
@@ -141,32 +151,51 @@ void AggregatingTransform::consume(Chunk chunk)
     bool should_abort = false, need_finalization = false, need_propagate_heartbeat = false;
 
     auto num_rows = chunk.getNumRows();
-    if (num_rows > 0)
+    if (num_rows == 0)
+    {
+        /// MarkSource is always generating the historical data start / end mark in a separate and empty chunk
+        if (!backfill_done)
+        {
+            if (!backfill_started)
+                backfill_started |= chunk.isHistoricalDataStart();
+            else
+                backfill_done |= chunk.isHistoricalDataEnd();
+        }
+
+        /// We cannot propagate them historical data start / end mark to downstream since they are not valid anymore after aggregating.
+        /// For example: `global aggregation over tumble window aggregation`
+        chunk.clearHistoricalDataStartAndEnd();
+        need_propagate_heartbeat = true;
+    }
+
+    if (params->emitOnExecute())
+    {
+        auto finalized_chunk = executeAndFinalizeColumns(chunk, num_rows);
+        if (finalized_chunk.hasRows())
+            setAggregatedResult(finalized_chunk);
+    }
+    else if (num_rows > 0)
     {
         /// There indeed has cases where num_rows of a chunk is greater than 0, but
         /// the columns are empty : select count() from stream where a != 0.
-        /// So `executeOrMergeColumns` accepts num_rows as parameter
-        if (std::tie(should_abort, need_finalization) = executeOrMergeColumns(chunk, num_rows); should_abort)
+        /// So `executeColumns` accepts num_rows as parameter
+        std::tie(should_abort, need_finalization) = executeColumns(chunk, num_rows);
+        if (should_abort)
             is_consume_finished = true;
     }
-    else
-        need_propagate_heartbeat = true;
 
     /// Watermark and need_finalization shall not be true at the same time
     /// since when UDA has user defined emit strategy, watermark is disabled
-    assert(!(chunk.hasWatermark() && need_finalization));
+    chassert(!(chunk.hasWatermark() && need_finalization));
 
     /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
     /// we handle watermark and checkpoint barrier separately
-    assert(!(chunk.hasWatermark() && chunk.requestCheckpoint()));
+    chassert(!(chunk.hasWatermark() && chunk.requestCheckpoint()));
 
     if (chunk.hasWatermark())
         finalizeAlignment(chunk.getChunkContext());
     else if (need_finalization)
-    {
         finalize(chunk.getChunkContext());
-        logAggregatingMetrics();
-    }
     else if (chunk.requestCheckpoint())
         checkpointAlignment(chunk.getCheckpointContext());
 
@@ -184,25 +213,76 @@ void AggregatingTransform::consume(Chunk chunk)
     /// Try propagate an empty rows chunk to downstream
     if (need_propagate_heartbeat)
         propagateHeartbeatChunk();
+
+    logAggregatingMetrics();
 }
 
-std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
+std::pair<bool, bool> AggregatingTransform::executeColumns(Chunk & chunk, size_t num_rows)
 {
     auto columns = chunk.detachColumns();
-    assert(!params->only_merge && !no_more_keys);
 
     /// Blocking finalization during execution on current variant
-    std::lock_guard lock(variants_mutex);
-    return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns);
+    std::lock_guard lock{variants_mutex};
+
+    /// A optimization for emit only updates/changes, caching processed key columns since last finalization (acquired \variants_mutex)
+    if (keysCacheEnabled())
+    {
+        auto keys = params->aggregator->materializeKeyColumns(columns, key_columns, variants.isLowCardinality());
+        chassert(many_data->processed_keys_columns.size() == many_data->variants.size());
+        many_data->processed_keys_columns[current_variant].emplace_back(std::move(keys));
+    }
+
+    if (retractEnabled())
+        return params->aggregator->executeAndRetractOnBlock(
+            std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, backfilling());
+    else
+        return params->aggregator->executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, backfilling());
+}
+
+Chunk AggregatingTransform::executeAndFinalizeColumns(Chunk & chunk, size_t num_rows)
+{
+    chassert(params->emitOnExecute());
+
+    auto columns = chunk.detachColumns();
+
+    Block finalized_block;
+    switch (params->emit_mode)
+    {
+        case EmitMode::AfterKeyExpire:
+        {
+            finalized_block = params->aggregator->executeAndFinalizeAfterKeyExpire(
+                std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, backfilling());
+            break;
+        }
+        case EmitMode::PerEvent:
+        {
+            finalized_block = params->aggregator->executeAndFinalizePerRow(
+                std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, backfilling());
+            break;
+        }
+        default:
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected emit mode '{}'", params->emit_mode);
+        }
+    }
+
+    num_rows = finalized_block.rows();
+    Chunk finalized_chunk{finalized_block.detachColumns(), num_rows, nullptr, chunk.getChunkContext()};
+
+    if (params->emit_version)
+        emitVersion(finalized_chunk);
+
+    return finalized_chunk;
 }
 
 void AggregatingTransform::emitVersion(Chunk & chunk)
 {
     size_t rows = chunk.rows();
-    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+    if (params->params->group_by == IAggregatorParams::GroupBy::UserDefined || params->emit_mode == EmitMode::PerEvent)
     {
-        /// For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
+        /// 1) For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
         /// each emit only has one result, therefore we can count emit times by row number
+        /// 2) For PerEvent emit, each row is a separate result, therefore we can count emit times by row number
         auto col = params->version_type->createColumn();
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
@@ -218,13 +298,14 @@ void AggregatingTransform::emitVersion(Chunk & chunk)
 
 void AggregatingTransform::emitVersion(ChunkList & chunks)
 {
-    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+    if (params->params->group_by == IAggregatorParams::GroupBy::UserDefined || params->emit_mode == EmitMode::PerEvent)
     {
         for (auto & chunk : chunks)
         {
             auto rows = chunk.rows();
-            /// For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
+            /// 1) For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
             /// each emit only has one result, therefore we can count emit times by row number
+            /// 2) For PerEvent emit, each row is a separate result, therefore we can count emit times by row number
             auto col = params->version_type->createColumn();
             col->reserve(rows);
             for (size_t i = 0; i < rows; i++)
@@ -243,7 +324,7 @@ void AggregatingTransform::emitVersion(ChunkList & chunks)
 void AggregatingTransform::setAggregatedResult(Chunk & chunk)
 {
     if (hasAggregatedResult())
-        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Aggregated chunks was already set.");
 
     aggregated_chunks.emplace_back(std::move(chunk));
 }
@@ -251,9 +332,18 @@ void AggregatingTransform::setAggregatedResult(Chunk & chunk)
 void AggregatingTransform::setAggregatedResult(ChunkList & chunks)
 {
     if (hasAggregatedResult())
-        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Aggregated chunks was already set.");
 
     aggregated_chunks.swap(chunks);
+}
+
+std::pair<size_t, size_t> AggregatingTransform::chunksAndRowsOfAggregateResults() const noexcept
+{
+    size_t rows = 0;
+    for (const auto & chunk : aggregated_chunks)
+        rows += chunk.rows();
+
+    return {aggregated_chunks.size(), rows};
 }
 
 IProcessor::Status AggregatingTransform::preparePushToOutput()
@@ -274,15 +364,9 @@ bool AggregatingTransform::propagateHeartbeatChunk()
     return true;
 }
 
-Int64 AggregatingTransform::updateAndAlignWatermark(Int64 new_watermark)
-{
-    std::lock_guard lock(many_data->watermarks_mutex);
-    watermark = new_watermark;
-    return std::ranges::min(many_data->watermarks);
-}
-
 void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
 {
+    Stopwatch stopwatch;
     if (chunk_ctx->hasWatermark())
     {
         /// Re-launch current watermark based on the finalized watermark
@@ -298,16 +382,46 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
 
         auto new_watermark = chunk_ctx->getWatermark();
         if (new_watermark > watermark)
-            /// Found min watermark to finalize
-            try_finalizing_watermark = updateAndAlignWatermark(new_watermark);
+        {
+            if (params->params->group_by == IAggregatorParams::GroupBy::Other)
+            {
+                /// Global aggregation don't need to align watermark
+                try_finalizing_watermark = new_watermark;
+                std::lock_guard lock(many_data->watermarks_mutex);
+                watermark = new_watermark;
+            }
+            else
+            {
+                /// Found min watermark to finalize
+                std::lock_guard lock(many_data->watermarks_mutex);
+                watermark = new_watermark;
+                try_finalizing_watermark = std::ranges::min(many_data->watermarks);
+            }
+        }
         else if (new_watermark < watermark) [[unlikely]]
-            LOG_ERROR(log, "Found outdated watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
+        {
+            LOG_ERROR(logger, "Found outdated watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
+        }
         else
-            try_finalizing_watermark = new_watermark; /// When received the same watermark (it may be a periodic watermark), so we still try finalize it
+        {
+            /// When received the same watermark (it may be a periodic watermark), so we still try finalize it
+            try_finalizing_watermark = new_watermark;
+        }
     }
 
     if (!try_finalizing_watermark.has_value())
         return;
+
+    /// Already finalized
+    if (hasAggregatedResult())
+    {
+        /// If the last chunk does not have a watermark, we need to set it to the finalized watermark
+        if (!aggregated_chunks.back().hasWatermark())
+            aggregated_chunks.back().setWatermark(*try_finalizing_watermark);
+
+        try_finalizing_watermark.reset();
+        return;
+    }
 
     /// Fastly check can finalize (without lock)
     if (!needFinalization(*try_finalizing_watermark))
@@ -327,7 +441,11 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         return;
     }
 
-    auto start = MonotonicMilliseconds::now();
+    /// In case when multiple shard windows aggregate with "emit on update" and only one shard is updated,
+    /// `finalize()` cannot proceed due to an invalid watermark.
+    /// To address this, the watermark is adjusted to `MIN_WATERMARK = INVALID_WATERMARK + 1`.
+    if (*try_finalizing_watermark == INVALID_WATERMARK)
+        try_finalizing_watermark = MIN_WATERMARK;
 
     /// Blocking all variants's processing of AggregatingTransform
     auto lock_holders = lockAllDataVariants();
@@ -339,13 +457,19 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
     finalize(std::move(mutate_chunk_ctx));
     try_finalizing_watermark.reset();
 
-    auto end = MonotonicMilliseconds::now();
-    LOG_INFO(
-        log,
-        "Took {} milliseconds to finalize {} shard aggregation, finalized watermark={}",
-        end - start,
-        many_data->variants.size(),
-        many_data->finalized_watermark.load(std::memory_order_relaxed));
+    if (auto elapsed_ms = stopwatch.elapsedMilliseconds(); elapsed_ms >= 300)
+    {
+        auto [aggr_chunks, aggr_rows] = chunksAndRowsOfAggregateResults();
+
+        LOG_INFO(
+            logger,
+            "Took {} milliseconds to finalize {} shard aggregation, finalized watermark={} aggregated_chunks={} aggregated_rows={}",
+            elapsed_ms,
+            many_data->variants.size(),
+            many_data->finalized_watermark.load(std::memory_order_relaxed),
+            aggr_chunks,
+            aggr_rows);
+    }
 
     if (MonotonicMilliseconds::now() - many_data->last_log_ts.load(std::memory_order_relaxed) > log_metrics_interval_ms)
         logAggregatingMetricsWithoutLock();
@@ -421,7 +545,7 @@ void AggregatingTransform::logAggregatingMetrics()
 
     std::unique_lock<std::mutex> lock(many_data->finalizing_mutex, std::try_to_lock);
     if (!lock.owns_lock())
-        return; /// Anothor thread is finalizing, so we try in next `work()`
+        return; /// Another thread is finalizing, so we try in next `work()`
 
     /// Check logged by other threads
     if (MonotonicMilliseconds::now() - many_data->last_log_ts.load(std::memory_order_relaxed) <= log_metrics_interval_ms)
@@ -438,14 +562,11 @@ void AggregatingTransform::logAggregatingMetricsWithoutLock(Int64 start_ts)
 {
     AggregatedDataMetrics aggregated_data_metrics;
     for (const auto & data_variants : many_data->variants)
-        params->aggregator.updateMetrics(*data_variants, aggregated_data_metrics);
+        data_variants->updateMetrics(aggregated_data_metrics, params->aggregator->totalSizeOfAggregatedStates());
 
     auto end_ts = MonotonicMilliseconds::now();
     LOG_INFO(
-        log,
-        "Took {} milliseconds to log metrics. Aggregated data metrics: {}",
-        end_ts - start_ts,
-        aggregated_data_metrics.string());
+        logger, "Took {} milliseconds to log metrics. Aggregated data metrics: {}", end_ts - start_ts, aggregated_data_metrics.string());
 
     many_data->last_log_ts.store(end_ts, std::memory_order_relaxed);
 }
@@ -476,100 +597,15 @@ std::vector<std::unique_lock<std::timed_mutex>> AggregatingTransform::lockAllDat
     return lock_holders;
 }
 
-void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void AggregatingTransform::enableKeysCache()
 {
-    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        bool is_last_checkpointing_transform = (this == many_data->last_checkpointing_transform.load());
-        DB::writeBoolText(is_last_checkpointing_transform, wb);
-
-        /// Serializing shared data (only do it on last checkpointing transform)
-        if (is_last_checkpointing_transform)
-        {
-            UInt16 num_variants = many_data->variants.size();
-            DB::writeIntBinary(num_variants, wb);
-
-            DB::writeIntBinary(many_data->finalized_watermark.load(), wb);
-            DB::writeIntBinary(many_data->finalized_window_end.load(), wb);
-            DB::writeIntBinary(many_data->emitted_version.load(), wb);
-
-            assert(num_variants == many_data->rows_since_last_finalizations.size());
-            for (const auto & last_row : many_data->rows_since_last_finalizations)
-                writeIntBinary<UInt64>(last_row->load(), wb);
-
-            bool has_field = many_data->hasField();
-            DB::writeBoolText(has_field, wb);
-            if (has_field)
-                many_data->any_field.serializer(many_data->any_field.field, wb, getVersion());
-        }
-
-        /// Serializing no shared data
-        variants.serialize(wb, params->aggregator);
-
-        DB::writeIntBinary(watermark, wb);
-
-        /// After the local checkpoint is processed, the `propagated_watermark` may still be updated,
-        /// because other transforms may have new finalizing processing.
-        /// But it doesn't matter, we will update according to the recovered `finalized_watermark` later
-        DB::writeIntBinary(propagated_watermark, wb);
-    });
+    if (params->params->enable_keys_cache && params->params->keys_size != 0 && params->aggregatorType() == AggregatorType::Memory)
+    {
+        keys_cache_enabled = true;
+        if (many_data->processed_keys_columns.empty())
+            many_data->processed_keys_columns.resize(many_data->variants.size());
+    }
+}
 }
 
-void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
-{
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
-        bool is_last_checkpointing_transform;
-        DB::readBoolText(is_last_checkpointing_transform, rb);
-
-        /// Serializing shared data
-        if (is_last_checkpointing_transform)
-        {
-            UInt16 num_variants = 0;
-            DB::readIntBinary(num_variants, rb);
-            if (num_variants != many_data->variants.size())
-                throw Exception(
-                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                    "Failed to recover aggregation checkpoint. Number of data variants are not the same, checkpointed={}, current={}",
-                    num_variants,
-                    variants.size());
-
-            Int64 last_finalized_watermark;
-            DB::readIntBinary(last_finalized_watermark, rb);
-            many_data->finalized_watermark = last_finalized_watermark;
-
-            Int64 last_finalized_window_end;
-            DB::readIntBinary(last_finalized_window_end, rb);
-            many_data->finalized_window_end = last_finalized_window_end;
-
-            Int64 last_version = 0;
-            DB::readIntBinary(last_version, rb);
-            many_data->emitted_version = last_version;
-
-            assert(num_variants == many_data->rows_since_last_finalizations.size());
-            for (auto & rows_since_last_finalization : many_data->rows_since_last_finalizations)
-            {
-                UInt64 last_rows = 0;
-                DB::readIntBinary<UInt64>(last_rows, rb);
-                /// In case when for we had global aggregated some data, but done checkpoint request before finializing
-                if (last_rows > 0) [[unlikely]]
-                    LOG_WARNING(log, "Last checkpoint state don't be finalized, rows_since_last_finalization={}", last_rows);
-
-                *rows_since_last_finalization = last_rows;
-            }
-
-            bool has_field;
-            DB::readBoolText(has_field, rb);
-            if (has_field)
-                many_data->any_field.deserializer(many_data->any_field.field, rb, version_);
-        }
-
-        /// Serializing local or stable data during checkpointing
-        variants.deserialize(rb, params->aggregator);
-
-        DB::readIntBinary(watermark, rb);
-
-        DB::readIntBinary(propagated_watermark, rb);
-    });
-}
-
-}
 }

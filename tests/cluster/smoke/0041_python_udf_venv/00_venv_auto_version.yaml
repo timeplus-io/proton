@@ -1,0 +1,49 @@
+tags:
+  - udf
+
+description: |
+  Test covering udf venv version
+
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_venv(value string) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import venv
+      import subprocess
+      from pathlib import Path
+
+      work_dir = Path("/var/lib/proton/python/coding")
+      work_dir.mkdir(exist_ok=True)
+  
+      venv_dir = work_dir / ".venv"
+      venv_builder = venv.EnvBuilder(with_pip=True)
+      venv_builder.create(venv_dir)
+      venv_python_dir = venv_dir / "bin/python"
+
+      def test_venv(value):
+          res = []
+          for d in value:
+              r = subprocess.run([venv_python_dir, "--version"], capture_output=True, text=True)
+              if r.returncode != 0:
+                  msg = f"Return Code: {r.returncode}, Stderr: {r.stderr.strip()}" 
+                  res.append(msg)
+              else:
+                  res.append(r.stdout.strip())
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-1
+    type: stream
+    query: select test_venv('a') as res;
+    schema:
+      - name: res
+        type: string
+
+  - type: check
+    target_name: python_udf-1
+    expected_result:
+      - ["Python 3.10.12"]

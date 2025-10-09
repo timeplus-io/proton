@@ -1,3 +1,5 @@
+SET allow_suspicious_low_cardinality_types=1;
+
 DROP STREAM IF EXISTS lc_nullable;
 
 CREATE STREAM lc_nullable (

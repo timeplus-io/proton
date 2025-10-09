@@ -17,6 +17,9 @@ namespace DB
 
 class ASTFunction;
 
+class ActionsDAG;
+using ActionsDAGPtr = std::shared_ptr<ActionsDAG>;
+
 struct WindowFunctionDescription
 {
     std::string column_name;
@@ -98,6 +101,9 @@ struct WindowDescription
     // To calculate the window function, we sort input data first by PARTITION BY,
     // then by ORDER BY. This field holds this combined sort order.
     SortDescription full_sort_description;
+
+    std::vector<ActionsDAGPtr> partition_by_actions;
+    std::vector<ActionsDAGPtr> order_by_actions;
 
     WindowFrame frame;
 

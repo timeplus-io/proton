@@ -39,20 +39,33 @@ public:
 
 private:
     ASTPtr query_ptr;
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
     StorageID table_id = StorageID::createEmpty();      /// Will be set up if query contains table name
     VolumePtr volume_ptr;
 
     /// proton: starts
-    bool executeDistributed(ASTSystemQuery & query);
-    /// start/stop maintenance mode for stream
-    void startStopMaintain(bool start);
-    /// exit maintenance mode and reload all data parts
-    void reloadStream();
+    void executePauseStream(const ASTSystemQuery & system);
+    void executeResumeStream(const ASTSystemQuery & system);
+    void executeRecoverStream(const ASTSystemQuery & system);
+    void doExecuteStreamAdmission(const ASTSystemQuery & system, std::string_view admission_action);
+    void executeMaterializedViewAdmission(const ASTSystemQuery & system);
+    void executeSetLogLevel(const ASTSystemQuery & system);
+    BlockIO executeShowLoggers(const ASTSystemQuery & system);
+    void executePauseTask(const ASTSystemQuery & system);
+    void executeResumeTask(const ASTSystemQuery & system);
+    void updateTaskStatus(String database, const String & task_name, uint32_t new_status);
+    #if !USE_PYTHON_UDF
+    [[noreturn]] void executeInstallPythonPackage(const ASTSystemQuery & system);
+    [[noreturn]] void executeUninstallPythonPackage(const ASTSystemQuery & system);
+    #else
+    void executeInstallPythonPackage(const ASTSystemQuery & system);
+    void executeUninstallPythonPackage(const ASTSystemQuery & system);
+    #endif
+    BlockIO executeListPythonPackages(const ASTSystemQuery & system);
     /// proton: ends
 
     void flushDistributed(ASTSystemQuery & query);
-    void restartDisk(String & name);
+    [[noreturn]] void restartDisk(String & name);
 
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     void startStopAction(StorageActionBlockType action_type, bool start);

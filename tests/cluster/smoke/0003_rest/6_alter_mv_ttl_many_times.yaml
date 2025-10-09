@@ -1,0 +1,89 @@
+tags:
+  - restapi
+  - alter
+description: |
+  - STEP: Creating a new materialized view
+  - STEP: Checking the view is updated
+  - STEP: Updating retention to unlimited
+  - STEP: Checking the view is updated
+
+cluster:
+  - p3k1
+  - p1k1
+steps:
+  - type: query
+    sql: drop view if exists mv_07240415;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists v_07240415;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream v_07240415(id int, val int);
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create materialized view mv_07240415 as select * from v_07240415;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into v_07240415 (id, val) values (12, 27)
+  - type: wait
+    time: 2
+
+
+  - name: update_view
+    type: command
+    node:
+      - p1
+    shell: |
+      curl -sS -X "PATCH" http://localhost:8123/proton/v1/ddl/streams/mv_07240415 -H "Content-Type: application/json" -d '{"logstore_retention_ms": 41886, "logstore_retention_bytes": 45648, "ttl_expression": "to_datetime(_tp_time) + INTERVAL 2 SECOND"}'
+  - type: wait
+    time: 2
+
+
+  - name: verify_view_after_update_ttl
+    type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    shell: |
+      curl -sS -X "GET" "http://localhost:8123/proton/v1/ddl/streams/default/mv_07240415" | jq '.data[0].ttl'
+
+  - type: check
+    target_name: verify_view_after_update_ttl
+    expected_result: 
+      - "\"to_datetime(_tp_time) + INTERVAL 2 SECOND\""
+
+
+  - name: update_view_to_unlimited
+    type: command
+    node:
+      - p1
+    shell: |
+      curl -X PATCH http://localhost:8123/proton/v1/ddl/streams/mv_07240415 -H "Content-Type: application/json" -d '{"logstore_retention_ms": 0, "logstore_retention_bytes": 0, "ttl": "",  "ttl_expression": ""}'
+  - type: wait
+    time: 2
+
+
+  - name: verify_view_after_remove_ttl
+    type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    shell: |
+      curl -sS -X "GET" "http://localhost:8123/proton/v1/ddl/streams/default/mv_07240415" | jq '.data[0].ttl'
+
+  - type: check
+    target_name: verify_view_after_remove_ttl
+    expected_result: 
+      - "null"

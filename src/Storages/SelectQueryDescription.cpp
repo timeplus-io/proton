@@ -26,6 +26,7 @@ extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
 SelectQueryDescription::SelectQueryDescription(const SelectQueryDescription & other)
     : select_table_ids(other.select_table_ids)
     , inner_query(other.inner_query ? other.inner_query->clone() : nullptr)
+    , settings_changes(other.settings_changes)
 {
 }
 
@@ -39,6 +40,8 @@ SelectQueryDescription & SelectQueryDescription::SelectQueryDescription::operato
         inner_query = other.inner_query->clone();
     else
         inner_query.reset();
+
+    settings_changes = other.settings_changes;
     return *this;
 }
 
@@ -131,7 +134,7 @@ void checkAllowedQueries(const ASTSelectWithUnionQuery & select_query)
     {
         auto & query = inner_query->as<ASTSelectQuery &>();
         if (query.prewhere() || query.final() || query.sampleSize())
-            throw Exception("MATERIALIZED VIEW cannot have PREWHERE, SAMPLE or FINAL.", DB::ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);
+            throw Exception(DB::ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW, "MATERIALIZED VIEW cannot have PREWHERE, SAMPLE or FINAL.");
 
         for (const ASTTableExpression * table_expression : getTableExpressions(query))
         {
@@ -161,6 +164,12 @@ SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForView(cons
 
     ExtractDependentTableVisitor::Data data{result.select_table_ids, context};
     ExtractDependentTableVisitor(data).visit(select_query.ptr());
+
+    assert(!select_query.list_of_selects->children.empty());
+    auto * select_ast = select_query.list_of_selects->children.back()->as<ASTSelectQuery>();
+    if (select_ast && select_ast->settings())
+        result.settings_changes = select_ast->settings()->as<ASTSetQuery &>().changes;
+
     return result;
 }
 /// proton: ends.

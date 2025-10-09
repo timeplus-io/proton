@@ -62,6 +62,19 @@ Message::Message(const std::string& source, const std::string& text, Priority pr
 }
 
 
+Message::Message(std::string && source, std::string && text, Priority prio, const char * file, int line, std::string_view fmt_str):
+    _source(std::move(source)),
+    _text(std::move(text)),
+    _prio(prio),
+    _tid(0),
+    _file(file),
+    _line(line),
+    _pMap(0),
+    _fmt_str(fmt_str)
+{
+    init();
+}
+
 Message::Message(const Message& msg):
 	_source(msg._source),
 	_text(msg._text),
@@ -157,6 +170,12 @@ void Message::setSource(const std::string& src)
 void Message::setText(const std::string& text)
 {
 	_text = text;
+}
+
+
+void Message::appendText(const std::string & text)
+{
+    _text.append(text);
 }
 
 

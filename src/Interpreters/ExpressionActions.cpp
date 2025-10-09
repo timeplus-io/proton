@@ -29,6 +29,10 @@
     #include <sanitizer/asan_interface.h>
 #endif
 
+/// proton: starts.
+#include <Functions/FunctionFactory.h>
+/// proton: ends.
+
 namespace ProfileEvents
 {
     extern const Event FunctionExecute;
@@ -67,7 +71,7 @@ ExpressionActions::ExpressionActions(ActionsDAGPtr actions_dag_, const Expressio
     if (settings.max_temporary_columns && num_columns > settings.max_temporary_columns)
         throw Exception(ErrorCodes::TOO_MANY_TEMPORARY_COLUMNS,
                         "Too many temporary columns: {}. Maximum: {}",
-                        actions_dag->dumpNames(), std::to_string(settings.max_temporary_columns));
+                        actions_dag->dumpNames(), settings.max_temporary_columns);
 }
 
 ExpressionActionsPtr ExpressionActions::clone() const
@@ -180,14 +184,17 @@ static void setLazyExecutionInfo(
                     indexes.insert(i);
             }
 
-            if (!short_circuit_nodes.at(parent).enable_lazy_execution_for_first_argument && node == parent->children[0])
+            for (auto idx : short_circuit_nodes.at(parent).arguments_with_disabled_lazy_execution)
             {
-                /// We shouldn't add 0 index in node info in this case.
-                indexes.erase(0);
-                /// Disable lazy execution for current node only if it's disabled for short-circuit node,
-                /// because we can have nested short-circuit nodes.
-                if (!lazy_execution_infos[parent].can_be_lazy_executed)
-                    lazy_execution_info.can_be_lazy_executed = false;
+                if (idx < parent->children.size() && node == parent->children[idx])
+                {
+                    /// We shouldn't add this index in node info in this case.
+                    indexes.erase(idx);
+                    /// Disable lazy execution for current node only if it's disabled for short-circuit node,
+                    /// because we can have nested short-circuit nodes.
+                    if (!lazy_execution_infos[parent].can_be_lazy_executed)
+                        lazy_execution_info.can_be_lazy_executed = false;
+                }
             }
 
             lazy_execution_info.short_circuit_ancestors_info[parent].insert(indexes.begin(), indexes.end());
@@ -536,9 +543,9 @@ void ExpressionActions::checkLimits(const ColumnsWithTypeAndName & columns) cons
                 if (column.column && !isColumnConst(*column.column))
                     list_of_non_const_columns << "\n" << column.name;
 
-            throw Exception("Too many temporary non-const columns:" + list_of_non_const_columns.str()
-                + ". Maximum: " + std::to_string(settings.max_temporary_non_const_columns),
-                ErrorCodes::TOO_MANY_TEMPORARY_NON_CONST_COLUMNS);
+            throw Exception(ErrorCodes::TOO_MANY_TEMPORARY_NON_CONST_COLUMNS,
+                "Too many temporary non-const columns:{}. Maximum: {}",
+                list_of_non_const_columns.str(), settings.max_temporary_non_const_columns);
         }
     }
 }
@@ -575,7 +582,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
         {
             auto & res_column = columns[action.result_position];
             if (res_column.type || res_column.column)
-                throw Exception("Result column is not empty", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Result column is not empty");
 
             res_column.type = action.node->result_type;
             res_column.name = action.node->result_name;
@@ -584,6 +591,12 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             {
                 /// Do not execute function if it's result is already known.
                 res_column.column = action.node->column->cloneResized(num_rows);
+                /// But still need to remove unused arguments.
+                for (const auto & argument : action.arguments)
+                {
+                    if (!argument.needed_later)
+                        columns[argument.pos] = {};
+                }
                 break;
             }
 
@@ -605,6 +618,13 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
                     ProfileEvents::increment(ProfileEvents::CompiledFunctionExecute);
 
                 res_column.column = action.node->function->execute(arguments, res_column.type, num_rows, dry_run);
+                if (res_column.column->getDataType() != res_column.type->getColumnType())
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "Unexpected return type from {}. Expected {}. Got {}",
+                        action.node->function->getName(),
+                        res_column.type->getColumnType(),
+                        res_column.column->getDataType());
             }
             break;
         }
@@ -620,9 +640,9 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
 
             array_join_key.column = array_join_key.column->convertToFullColumnIfConst();
 
-            const ColumnArray * array = typeid_cast<const ColumnArray *>(array_join_key.column.get());
+            const auto * array = getArrayJoinColumnRawPtr(array_join_key.column);
             if (!array)
-                throw Exception("ARRAY JOIN of not array: " + action.node->result_name, ErrorCodes::TYPE_MISMATCH);
+                throw Exception(ErrorCodes::TYPE_MISMATCH, "ARRAY JOIN of not array nor map: {}", action.node->result_name);
 
             for (auto & column : columns)
                 if (column.column)
@@ -635,7 +655,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             auto & res_column = columns[action.result_position];
 
             res_column.column = array->getDataPtr();
-            res_column.type = assert_cast<const DataTypeArray &>(*array_join_key.type).getNestedType();
+            res_column.type = getArrayJoinDataType(array_join_key.type)->getNestedType();
             res_column.name = action.node->result_name;
 
             num_rows = res_column.column->size();
@@ -812,7 +832,7 @@ std::string ExpressionActions::getSmallestColumn(const NamesAndTypesList & colum
     }
 
     if (!min_size)
-        throw Exception("No available columns", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No available columns");
 
     return res;
 }
@@ -913,14 +933,12 @@ bool ExpressionActions::checkColumnIsAlwaysFalse(const String & column_name) con
         for (const auto & action : actions)
         {
             if (action.node->type == ActionsDAG::ActionType::COLUMN && action.node->result_name == set_to_check)
-            {
                 // Constant ColumnSet cannot be empty, so we only need to check non-constant ones.
                 if (const auto * column_set = checkAndGetColumn<const ColumnSet>(action.node->column.get()))
-                {
-                    if (column_set->getData()->isCreated() && column_set->getData()->getTotalRowCount() == 0)
-                        return true;
-                }
-            }
+                    if (auto future_set = column_set->getData())
+                        if (auto set = future_set->get())
+                            if (set->getTotalRowCount() == 0)
+                                return true;
         }
     }
 
@@ -930,7 +948,7 @@ bool ExpressionActions::checkColumnIsAlwaysFalse(const String & column_name) con
 void ExpressionActionsChain::addStep(NameSet non_constant_inputs)
 {
     if (steps.empty())
-        throw Exception("Cannot add action to empty ExpressionActionsChain", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot add action to empty ExpressionActionsChain");
 
     ColumnsWithTypeAndName columns = steps.back()->getResultColumns();
     for (auto & column : columns)
@@ -1097,11 +1115,15 @@ const ActionsDAGPtr & ExpressionActionsChain::Step::actions() const
 }
 
 /// proton: starts.
+ExpressionActionsPtr ExpressionActions::deepClone() const
+{
+    return std::make_shared<ExpressionActions>(actions_dag->clone(/*deep_clone=*/true), settings);
+}
+
 std::vector<ExecutableFunctionPtr> ExpressionActions::getStatefulFunctions() const
 {
     std::vector<ExecutableFunctionPtr> stateful_functions;
-    const auto & nodes = getNodes();
-    for (auto & node : nodes)
+    for (const auto & node : getNodes())
     {
         if (node.type == ActionsDAG::ActionType::FUNCTION)
         {
@@ -1112,6 +1134,41 @@ std::vector<ExecutableFunctionPtr> ExpressionActions::getStatefulFunctions() con
     }
 
     return stateful_functions;
+}
+
+void ExpressionActions::replaceStatefulFunctions(const std::vector<ExecutableFunctionPtr> & new_funcs)
+{
+    size_t num = 0;
+    for (auto & node : getNodes())
+    {
+        auto & replaced_node = const_cast<ActionsDAG::Node &>(node);
+        if (replaced_node.type == ActionsDAG::ActionType::FUNCTION)
+        {
+            assert(replaced_node.function_base && replaced_node.function);
+            if (replaced_node.function_base->isStateful())
+                replaced_node.function = new_funcs.at(num++);
+        }
+    }
+
+    if (num != new_funcs.size())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Number of stateful functions doesn't match, expected {}, got {}", new_funcs.size(), num);
+}
+
+std::vector<std::function<ExecutableFunctionPtr()>> ExpressionActions::getStatefulFunctionBuilders() const
+{
+    std::vector<std::function<ExecutableFunctionPtr()>> stateful_function_builders;
+    for (const auto & node : getNodes())
+    {
+        if (node.type == ActionsDAG::ActionType::FUNCTION)
+        {
+            assert(node.function_base && node.function_builder);
+            if (node.function_base->isStateful())
+                stateful_function_builders.emplace_back(node.function_builder);
+        }
+    }
+
+    return stateful_function_builders;
 }
 /// proton: ends.
 

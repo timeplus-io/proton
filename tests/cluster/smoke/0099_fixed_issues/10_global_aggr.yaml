@@ -1,0 +1,39 @@
+tags:
+  - global aggr
+description: (#2900) global aggr group by window_start/window_end
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_2900
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_2900
+        (
+          auction int64,
+          bidder int64,
+          channel string,
+          price int64,
+          url string,
+          dateTime datetime64(3),
+          extra string,
+          _tp_time datetime64(3) default dateTime
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: with data as(select * from test_stream_2900 where _tp_time >= earliest_ts() limit 100000000) SELECT AuctionBids.auction, AuctionBids.num FROM (SELECT B1.auction, count(*) AS num, window_start, window_end FROM hop(data, _tp_time, INTERVAL 2 SECOND, INTERVAL 10 SECOND) as B1 GROUP BY B1.auction, window_start, window_end) AS AuctionBids JOIN (SELECT max(CountBids.num) AS maxn, CountBids.window_start, CountBids.window_end FROM ( SELECT count(*) AS num, window_start, window_end FROM hop(data, _tp_time, INTERVAL 2 SECOND, INTERVAL 10 SECOND) as B2 GROUP BY B2.auction, window_start, window_end) AS CountBids GROUP BY CountBids.window_start, CountBids.window_end) AS MaxBids ON AuctionBids.window_start = MaxBids.window_start AND AuctionBids.window_end = MaxBids.window_end where AuctionBids.num >= MaxBids.maxn
+    schema:
+      - name: auction
+        type: int64
+      - name: num
+        type: uint64
+
+  - type: check
+    target_name: 9900
+    expected_result: []

@@ -1,0 +1,5 @@
+proton_conn: 'proton://default@p1:8463/default'
+
+tables:
+  - trade1
+  - trade2

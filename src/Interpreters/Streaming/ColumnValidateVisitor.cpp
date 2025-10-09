@@ -3,6 +3,7 @@
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/ProtonCommon.h>
+#include "Parsers/ASTDataType.h"
 
 namespace DB
 {
@@ -47,13 +48,13 @@ void ColumnValidateMatcher::visit(ASTColumnDeclaration & column, ColumnValidateM
             return;
         }
 
-        auto * func = column.type->as<ASTFunction>();
-        if (data.is_stream && (!func || func->name.compare("datetime64")))
+        auto * type = column.type->as<ASTDataType>();
+        if (data.is_stream && (type == nullptr || type->name != "datetime64"))
             throw Exception(
                 ErrorCodes::ILLEGAL_COLUMN,
                 "The type of {} column must be datetime64, but got {}",
                 ProtonConsts::RESERVED_EVENT_TIME,
-                func->name);
+                type != nullptr ? type->name : "nullptr");
         else
             data.found_time = true;
     }

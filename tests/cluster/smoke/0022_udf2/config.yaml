@@ -1,0 +1,5 @@
+name: udf2
+description: Test SQL to create UDF/UDA.
+tags:
+- smoke
+- restapi

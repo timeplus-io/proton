@@ -1,0 +1,72 @@
+tags:
+  - local-run
+  - query_state
+description: stream tail join table state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream4
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream4 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1979'
+    query_id: '1979'
+    type: stream
+    query: subscribe to select a.id, b.type, a.value from test19_state_stream4 as a
+      join table(test19_join) as b on a.id = b.id settings checkpoint_interval=1
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: value
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev4',
+      'ca', 59, '2020-02-02 20:00:02')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream4(id, location, value, timestamp) values ('dev8',
+      'ca', 67, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1979'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1979'
+
+  - type: check
+    target_name: '1979'
+    expected_result:
+      - [ dev1, roof, 57.3 ]
+      - [ dev4, wall, 59 ]
+      - [ dev8, floor, 67 ]

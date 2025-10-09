@@ -1,0 +1,244 @@
+tags:
+  - hopping window
+  - aggr on continuous big integral columns
+description: aggr on continuous big integral columns
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_hop_890;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_hop_890(i128 int128, null_i128 nullable(int128), i64 int64, null_i64 nullable(int64), i32 int32, null_i32 nullable(int32), d datetime32);
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: '890'
+    query: select window_start, i128, count() as c FROM hop(test_hop_890, d, 1s, 2s) group by i128, window_start;
+    schema:
+      - name: window_start
+        type: datetime
+      - name: i128
+        type: int128
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '891'
+    query: select window_start, null_i128, count() as c FROM hop(test_hop_890, d, 1s, 2s) group by null_i128, window_start;
+    schema:
+      - name: window_start
+        type: datetime
+      - name: null_i128
+        type: nullable(int128)
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '892'
+    query: select window_start, i64, count() as c FROM hop(test_hop_890, d, 1s, 2s) group by i64, window_start;
+    schema:
+      - name: window_start
+        type: datetime
+      - name: i64
+        type: int64
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '893'
+    query: select window_start, null_i64, count() as c FROM hop(test_hop_890, d, 1s, 2s) group by null_i64, window_start;
+    schema:
+      - name: window_start
+        type: datetime
+      - name: null_i64
+        type: nullable(int64)
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '894'
+    query: select window_start, i32, count() as c FROM hop(test_hop_890, d, 1s, 2s) group by i32, window_start;
+    schema:
+      - name: window_start
+        type: datetime
+      - name: i32
+        type: int32
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '895'
+    query: select window_start, null_i32, count() as c FROM hop(test_hop_890, d, 1s, 2s) group by null_i32, window_start;
+    schema:
+      - name: window_start
+        type: datetime
+      - name: null_i32
+        type: nullable(int32)
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '896'
+    query: select window_start, i128, count() as c FROM hop(test_hop_890, 1s, 2s) group by i128, window_start;
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: i128
+        type: int128
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '897'
+    query: select window_start, null_i128, count() as c FROM hop(test_hop_890, 1s, 2s) group by null_i128, window_start;
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: null_i128
+        type: nullable(int128)
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '898'
+    query: select window_start, i64, count() as c FROM hop(test_hop_890, 1s, 2s) group by i64, window_start;
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: i64
+        type: int64
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '899'
+    query: select window_start, null_i64, count() as c FROM hop(test_hop_890, 1s, 2s) group by null_i64, window_start;
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: null_i64
+        type: nullable(int64)
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '900'
+    query: select window_start, i32, count() as c FROM hop(test_hop_890, 1s, 2s) group by i32, window_start;
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: i32
+        type: int32
+      - name: c
+        type: uint64
+
+  - type: stream
+    name: '901'
+    query: select window_start, null_i32, count() as c FROM hop(test_hop_890, 1s, 2s) group by null_i32, window_start;
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: null_i32
+        type: nullable(int32)
+      - name: c
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test_hop_890(i128, null_i128, i64, null_i64, i32, null_i32, d, _tp_time) values
+      (1, 1, 1, 1, 1, 1, '2015-07-01 00:00:00', '2015-07-01 00:00:00')
+      (1, 1, 1, 1, 1, 1, '2015-07-01 00:00:01', '2015-07-01 00:00:01')
+      (1, 1, 1, 1, 1, 1, '2015-07-01 00:00:02', '2015-07-01 00:00:02')
+      (1, 1, 1, 1, 1, 1, '2015-07-01 00:00:03', '2015-07-01 00:00:03');
+
+  - type: check
+    target_name: '890'
+    expected_result:
+      - ['2015-06-30 23:59:59', 1, 1]
+      - ['2015-07-01 00:00:00', 1, 2]
+      - ['2015-07-01 00:00:01', 1, 2]
+
+  - type: check
+    target_name: '891'
+    expected_result:
+      - ['2015-06-30 23:59:59', 1, 1]
+      - ['2015-07-01 00:00:00', 1, 2]
+      - ['2015-07-01 00:00:01', 1, 2]
+
+  - type: check
+    target_name: '892'
+    expected_result:
+      - ['2015-06-30 23:59:59', 1, 1]
+      - ['2015-07-01 00:00:00', 1, 2]
+      - ['2015-07-01 00:00:01', 1, 2]
+
+  - type: check
+    target_name: '893'
+    expected_result:
+      - ['2015-06-30 23:59:59', 1, 1]
+      - ['2015-07-01 00:00:00', 1, 2]
+      - ['2015-07-01 00:00:01', 1, 2]
+
+  - type: check
+    target_name: '894'
+    expected_result:
+      - ['2015-06-30 23:59:59', 1, 1]
+      - ['2015-07-01 00:00:00', 1, 2]
+      - ['2015-07-01 00:00:01', 1, 2]
+
+  - type: check
+    target_name: '895'
+    expected_result:
+      - ['2015-06-30 23:59:59', 1, 1]
+      - ['2015-07-01 00:00:00', 1, 2]
+      - ['2015-07-01 00:00:01', 1, 2]
+
+  - type: check
+    target_name: '896'
+    expected_result:
+      - ['2015-06-30 23:59:59.000', 1, 1]
+      - ['2015-07-01 00:00:00.000', 1, 2]
+      - ['2015-07-01 00:00:01.000', 1, 2]
+
+  - type: check
+    target_name: '897'
+    expected_result:
+      - ['2015-06-30 23:59:59.000', 1, 1]
+      - ['2015-07-01 00:00:00.000', 1, 2]
+      - ['2015-07-01 00:00:01.000', 1, 2]
+
+  - type: check
+    target_name: '898'
+    expected_result:
+      - ['2015-06-30 23:59:59.000', 1, 1]
+      - ['2015-07-01 00:00:00.000', 1, 2]
+      - ['2015-07-01 00:00:01.000', 1, 2]
+
+  - type: check
+    target_name: '899'
+    expected_result:
+      - ['2015-06-30 23:59:59.000', 1, 1]
+      - ['2015-07-01 00:00:00.000', 1, 2]
+      - ['2015-07-01 00:00:01.000', 1, 2]
+
+  - type: check
+    target_name: '900'
+    expected_result:
+      - ['2015-06-30 23:59:59.000', 1, 1]
+      - ['2015-07-01 00:00:00.000', 1, 2]
+      - ['2015-07-01 00:00:01.000', 1, 2]
+
+  - type: check
+    target_name: '901'
+    expected_result:
+      - ['2015-06-30 23:59:59.000', 1, 1]
+      - ['2015-07-01 00:00:00.000', 1, 2]
+      - ['2015-07-01 00:00:01.000', 1, 2]

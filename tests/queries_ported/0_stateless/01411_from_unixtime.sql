@@ -1,3 +1,4 @@
+SET formatdatetime_parsedatetime_m_is_month_name=true;
 SELECT format_datetime(FROM_UNIXTIME(123), '%Y-%m-%d %R:%S', 'UTC');
 SELECT format_datetime(FROM_UNIXTIME(123456789), '%Y-%m-%d %R:%S', 'UTC');
 SELECT format_datetime(FROM_UNIXTIME(6457477432), '%Y-%m-%d %R:%S', 'UTC');

@@ -29,7 +29,20 @@ public:
     void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
 
     /// proton: starts
-    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    void deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const override;
+
+    void serializeBinaryPrefixTree(const Field & field, String & encoded, const FormatSettings & settings, bool ascending) const override;
+
+    void serializeBinaryPrefixTree(
+        const IColumn & column, size_t row_num, String & encoded, const FormatSettings & settings, bool ascending) const override;
+
+    void deserializeBinaryPrefixTree(
+        IColumn & column, std::string_view & data, const DB::FormatSettings & settings, bool ascending) const override;
+
+    void deserializeBinaryPrefixTreeDiscard(std::string_view & data, const DB::FormatSettings & settings, bool ascending) const override;
+
+private:
+    T deserializeBinaryPrefixTree(std::string_view & data, const DB::FormatSettings & settings, bool ascending) const;
     /// proton: ends
 };
 

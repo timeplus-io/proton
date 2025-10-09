@@ -1,5 +1,5 @@
 #include <TableFunctions/ITableFunctionFileLike.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -20,8 +20,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int BAD_ARGUMENTS;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 namespace
@@ -35,17 +35,22 @@ namespace
             return;
         /// proton: starts
         throw Exception(
-            "Function '" + name
-                + "' allows automatic structure determination only for formats that support schema inference and for Distributed format in function "
-                  "'file'",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Function '{}' allows automatic structure determination only for formats that support schema inference and for Distributed "
+            "format in function 'file'",
+            name);
         /// proton: ends
     }
 }
 
 void ITableFunctionFileLike::parseFirstArguments(const ASTPtr & arg, const ContextPtr &)
 {
-        filename = checkAndGetLiteralArgument<String>(arg, "source");
+    filename = checkAndGetLiteralArgument<String>(arg, "source");
+}
+
+bool ITableFunctionFileLike::supportsReadingSubsetOfColumns(const ContextPtr & context)
+{
+    return FormatFactory::instance().checkIfFormatSupportsSubsetOfColumns(format, context);
 }
 
 void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, ContextPtr context)
@@ -55,14 +60,14 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
 
     if (args_func.size() != 1)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' must have arguments.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Function '{}' must have arguments.", getName());
         /// proton: ends
 
     ASTs & args = args_func.at(0)->children;
 
     if (args.empty())
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires at least 1 argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function '{}' requires at least 1 argument", getName());
         /// proton: ends
 
     for (auto & arg : args)
@@ -84,8 +89,10 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
 
     if (args.size() != 3 && args.size() != 4)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires 1, 2, 3 or 4 arguments: filename, format (default auto), structure (default auto) and compression method (default auto)",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Function '{}' requires 1, 2, 3 or 4 arguments: "
+            "filename, format (default auto), structure (default auto) and compression method (default auto)",
+            getName());
         /// proton: ends
 
     structure = checkAndGetLiteralArgument<String>(args[2], "structure");

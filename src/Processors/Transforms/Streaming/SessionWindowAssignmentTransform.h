@@ -13,7 +13,7 @@ public:
 
     ~SessionWindowAssignmentTransform() override = default;
 
-    String getName() const override { return "StreamingSessionWindowAssignmentTransform"; }
+    String getName() const override { return "SessionWindowAssignmentTransform"; }
 
 private:
     void assignWindow(Columns & columns) const override;

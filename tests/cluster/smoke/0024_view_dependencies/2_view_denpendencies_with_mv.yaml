@@ -1,0 +1,71 @@
+tags:
+- view_dependencies
+
+description: create a view or materialized view with source mv, then try drop/rename source mv
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 2
+
+- type: query
+  sql: create view source_mv as select * from stream0024
+- type: wait
+  time: 2
+
+- type: query
+  sql: create view view_with_source_mv as select * from source_mv
+- type: wait
+  time: 2
+
+- name: '2500'
+  type: stream
+  query: drop stream source_mv
+
+- name: '2501'
+  type: stream
+  query: rename stream source_mv to tmp
+- type: wait
+  time: 2
+
+- type: query
+  sql: drop view view_with_source_mv
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view mv_with_source_mv as select * from source_mv
+- type: wait
+  time: 2
+
+- name: '2502'
+  type: stream
+  query: drop stream source_mv
+
+- name: '2503'
+  type: stream
+  query: rename stream source_mv to tmp
+
+- type: query
+  sql: drop view mv_with_source_mv
+
+- type: check
+  target_name: '2500'
+  expected_result:
+  - ["error_code:630"]
+
+- type: check
+  target_name: '2501'
+  expected_result:
+  - ["error_code:630"]
+
+- type: check
+  target_name: '2502'
+  expected_result:
+  - ["error_code:630"]
+
+- type: check
+  target_name: '2503'
+  expected_result:
+  - ["error_code:630"]

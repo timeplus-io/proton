@@ -4,11 +4,14 @@
 #include <Common/Stopwatch.h>
 #include <Common/CurrentThread.h>
 #include <Common/logger_useful.h>
+#include <Common/ThreadPool.h>
 #include <chrono>
 
 
 namespace DB
 {
+
+namespace ErrorCodes { extern const int CANNOT_SCHEDULE_TASK; }
 
 
 class TaskNotification final : public Poco::Notification
@@ -109,7 +112,7 @@ void BackgroundSchedulePoolTaskInfo::execute()
     static const int32_t slow_execution_threshold_ms = 200;
 
     if (milliseconds >= slow_execution_threshold_ms)
-        LOG_TRACE(&Poco::Logger::get(log_name), "Execution took {} ms.", milliseconds);
+        LOG_TRACE(getLogger(log_name), "Execution took {} ms.", milliseconds);
 
     {
         std::lock_guard lock_schedule(schedule_mutex);
@@ -144,13 +147,28 @@ BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Met
     , tasks_metric(tasks_metric_)
     , thread_name(thread_name_)
 {
-    LOG_INFO(&Poco::Logger::get("BackgroundSchedulePool/" + thread_name), "Create BackgroundSchedulePool with {} threads", size);
+    LOG_INFO(getLogger("BackgroundSchedulePool/" + thread_name), "Create BackgroundSchedulePool with {} threads", size);
 
     threads.resize(size);
-    for (auto & thread : threads)
-        thread = ThreadFromGlobalPool([this] { threadFunction(); });
+    try
+    {
+        for (auto & thread : threads)
+            thread = ThreadFromGlobalPoolNoTracingContextPropagation([this] { threadFunction(); });
 
-    delayed_thread = ThreadFromGlobalPool([this] { delayExecutionThreadFunction(); });
+        delayed_thread = std::make_unique<ThreadFromGlobalPoolNoTracingContextPropagation>([this] { delayExecutionThreadFunction(); });
+    }
+    catch (...)
+    {
+        LOG_FATAL(
+            getLogger("BackgroundSchedulePool/" + thread_name),
+            "Couldn't get {} threads from global thread pool: {}",
+            size_,
+            getCurrentExceptionCode() == DB::ErrorCodes::CANNOT_SCHEDULE_TASK
+                ? "Not enough threads. Please make sure max_thread_pool_size is considerably "
+                  "bigger than background_schedule_pool_size."
+                : getCurrentExceptionMessage(/* with_stacktrace */ true));
+        abort();
+    }
 }
 
 
@@ -165,9 +183,9 @@ BackgroundSchedulePool::~BackgroundSchedulePool()
         }
 
         queue.wakeUpAll();
-        delayed_thread.join();
+        delayed_thread->join();
 
-        LOG_TRACE(&Poco::Logger::get("BackgroundSchedulePool/" + thread_name), "Waiting for threads to finish.");
+        LOG_TRACE(getLogger("BackgroundSchedulePool/" + thread_name), "Waiting for threads to finish.");
         for (auto & thread : threads)
             thread.join();
     }
@@ -214,35 +232,9 @@ void BackgroundSchedulePool::cancelDelayedTask(const TaskInfoPtr & task, std::lo
 }
 
 
-scope_guard BackgroundSchedulePool::attachToThreadGroup()
-{
-    scope_guard guard = [&]()
-        {
-            if (thread_group)
-                CurrentThread::detachQueryIfNotDetached();
-        };
-
-    std::lock_guard lock(delayed_tasks_mutex);
-
-    if (thread_group)
-    {
-        /// Put all threads to one thread pool
-        CurrentThread::attachTo(thread_group);
-    }
-    else
-    {
-        CurrentThread::initializeQuery();
-        thread_group = CurrentThread::getGroup();
-    }
-    return guard;
-}
-
-
 void BackgroundSchedulePool::threadFunction()
 {
     setThreadName(thread_name.c_str());
-
-    auto detach_thread_guard = attachToThreadGroup();
 
     while (!shutdown)
     {
@@ -267,8 +259,6 @@ void BackgroundSchedulePool::threadFunction()
 void BackgroundSchedulePool::delayExecutionThreadFunction()
 {
     setThreadName((thread_name + "/D").c_str());
-
-    auto detach_thread_guard = attachToThreadGroup();
 
     while (!shutdown)
     {

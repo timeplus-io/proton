@@ -23,11 +23,11 @@ inline void throwIfDivisionLeadsToFPE(A a, B b)
     /// Is it better to use siglongjmp instead of checks?
 
     if (unlikely(b == 0))
-        throw Exception("Division by zero", ErrorCodes::ILLEGAL_DIVISION);
+        throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Division by zero");
 
     /// http://avva.livejournal.com/2548306.html
     if (unlikely(is_signed_v<A> && is_signed_v<B> && a == std::numeric_limits<A>::min() && b == -1))
-        throw Exception("Division of minimal signed number by minus one", ErrorCodes::ILLEGAL_DIVISION);
+        throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Division of minimal signed number by minus one");
 }
 
 template <typename A, typename B>
@@ -88,20 +88,17 @@ struct DivideIntegralImpl
 
             if constexpr (std::is_floating_point_v<A>)
                 if (isNaN(a) || a >= std::numeric_limits<CastA>::max() || a <= std::numeric_limits<CastA>::lowest())
-                    throw Exception("Cannot perform integer division on infinite or too large floating point numbers",
-                        ErrorCodes::ILLEGAL_DIVISION);
+                    throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Cannot perform integer division on infinite or too large floating point numbers");
 
             if constexpr (std::is_floating_point_v<B>)
                 if (isNaN(b) || b >= std::numeric_limits<CastB>::max() || b <= std::numeric_limits<CastB>::lowest())
-                    throw Exception("Cannot perform integer division on infinite or too large floating point numbers",
-                        ErrorCodes::ILLEGAL_DIVISION);
+                    throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Cannot perform integer division on infinite or too large floating point numbers");
 
             auto res = checkedDivision(CastA(a), CastB(b));
 
             if constexpr (std::is_floating_point_v<decltype(res)>)
                 if (isNaN(res) || res >= static_cast<double>(std::numeric_limits<Result>::max()) || res <= std::numeric_limits<Result>::lowest())
-                    throw Exception("Cannot perform integer division, because it will produce infinite or too large number",
-                        ErrorCodes::ILLEGAL_DIVISION);
+                    throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Cannot perform integer division, because it will produce infinite or too large number");
 
             return static_cast<Result>(res);
         }
@@ -110,6 +107,21 @@ struct DivideIntegralImpl
 #if USE_EMBEDDED_COMPILER
     static constexpr bool compilable = false; /// don't know how to throw from LLVM IR
 #endif
+};
+
+template <typename A, typename B>
+struct DivideIntegralOrNullImpl : DivideIntegralImpl<A, B>
+{
+    using ResultType = typename NumberTraits::ResultOfIntegerDivision<A, B>::Type;
+
+    template <typename Result = ResultType>
+    static Result apply(A a, B b)
+    {
+        if (unlikely(divisionLeadsToFPE(a, b)))
+            return 0;
+        else
+            return DivideIntegralImpl<A, B>::apply(a, b);
+    }
 };
 
 template <typename A, typename B>
@@ -134,13 +146,11 @@ struct ModuloImpl
         {
             if constexpr (std::is_floating_point_v<A>)
                 if (isNaN(a) || a > std::numeric_limits<IntegerAType>::max() || a < std::numeric_limits<IntegerAType>::lowest())
-                    throw Exception("Cannot perform integer division on infinite or too large floating point numbers",
-                        ErrorCodes::ILLEGAL_DIVISION);
+                    throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Cannot perform integer division on infinite or too large floating point numbers");
 
             if constexpr (std::is_floating_point_v<B>)
                 if (isNaN(b) || b > std::numeric_limits<IntegerBType>::max() || b < std::numeric_limits<IntegerBType>::lowest())
-                    throw Exception("Cannot perform integer division on infinite or too large floating point numbers",
-                        ErrorCodes::ILLEGAL_DIVISION);
+                    throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Cannot perform integer division on infinite or too large floating point numbers");
 
             throwIfDivisionLeadsToFPE(IntegerAType(a), IntegerBType(b));
 
@@ -174,6 +184,21 @@ struct ModuloLegacyImpl : ModuloImpl<A, B>
 };
 
 template <typename A, typename B>
+struct ModuloOrNullImpl : ModuloImpl<A, B>
+{
+    using ResultType = typename NumberTraits::ResultOfModulo<A, B>::Type;
+
+    template <typename Result = ResultType>
+    static Result apply(A a, B b)
+    {
+        if (unlikely(divisionLeadsToFPE(a, b)))
+            return 0;
+        else
+            return ModuloImpl<A, B>::apply(a, b);
+    }
+};
+
+template <typename A, typename B>
 struct PositiveModuloImpl : ModuloImpl<A, B>
 {
     using OriginResultType = typename ModuloImpl<A, B>::ResultType;
@@ -192,7 +217,7 @@ struct PositiveModuloImpl : ModuloImpl<A, B>
                 else
                 {
                     if (b == std::numeric_limits<B>::lowest())
-                        throw Exception("Division by the most negative number", ErrorCodes::ILLEGAL_DIVISION);
+                        throw Exception(ErrorCodes::ILLEGAL_DIVISION, "Division by the most negative number");
                     res += b >= 0 ? static_cast<OriginResultType>(b) : static_cast<OriginResultType>(-b);
                 }
             }
@@ -201,4 +226,18 @@ struct PositiveModuloImpl : ModuloImpl<A, B>
     }
 };
 
+template <typename A, typename B>
+struct PositiveModuloOrNullImpl : PositiveModuloImpl<A, B>
+{
+    using ResultType = typename NumberTraits::ResultOfPositiveModulo<A, B>::Type;
+
+    template <typename Result = ResultType>
+    static Result apply(A a, B b)
+    {
+        if (unlikely(divisionLeadsToFPE(a, b)))
+            return 0;
+        else
+            return PositiveModuloImpl<A, B>::apply(a, b);
+    }
+};
 }

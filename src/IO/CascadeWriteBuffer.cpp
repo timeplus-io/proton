@@ -50,13 +50,17 @@ void CascadeWriteBuffer::nextImpl()
     }
 
     set(curr_buffer->position(), curr_buffer->buffer().end() - curr_buffer->position());
-//     std::cerr << "CascadeWriteBuffer a count=" << count() << " bytes=" << bytes << " offset=" << offset()
-//     << " bytes+size=" << bytes + buffer().size() << "\n";
 }
 
 
 void CascadeWriteBuffer::getResultBuffers(WriteBufferPtrs & res)
 {
+    if (!curr_buffer)
+    {
+        res.clear();
+        return;
+    }
+
     /// Sync position with underlying buffer before invalidating
     curr_buffer->position() = position();
 
@@ -66,8 +70,42 @@ void CascadeWriteBuffer::getResultBuffers(WriteBufferPtrs & res)
     curr_buffer_num = num_sources = 0;
     prepared_sources.clear();
     lazy_sources.clear();
+
+    // we do not need this object any more
+    cancel();
 }
 
+void CascadeWriteBuffer::finalizeImpl()
+{
+    WriteBuffer::finalizeImpl();
+
+    if (curr_buffer)
+        curr_buffer->position() = position();
+
+    for (auto & buf : prepared_sources)
+    {
+        if (buf)
+        {
+            buf->finalize();
+        }
+    }
+}
+
+void CascadeWriteBuffer::cancelImpl() noexcept
+{
+    WriteBuffer::cancelImpl();
+
+    if (curr_buffer)
+        curr_buffer->position() = position();
+
+    for (auto & buf : prepared_sources)
+    {
+        if (buf)
+        {
+            buf->cancel();
+        }
+    }
+}
 
 WriteBuffer * CascadeWriteBuffer::setNextBuffer()
 {
@@ -80,11 +118,11 @@ WriteBuffer * CascadeWriteBuffer::setNextBuffer()
         }
     }
     else if (curr_buffer_num >= num_sources)
-        throw Exception("There are no WriteBuffers to write result", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER);
+        throw Exception(ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER, "There are no WriteBuffers to write result");
 
     WriteBuffer * res = prepared_sources[curr_buffer_num].get();
     if (!res)
-        throw Exception("Required WriteBuffer is not created", ErrorCodes::CANNOT_CREATE_IO_BUFFER);
+        throw Exception(ErrorCodes::CANNOT_CREATE_IO_BUFFER, "Required WriteBuffer is not created");
 
     /// Check that returned buffer isn't empty
     if (!res->hasPendingData())
@@ -92,14 +130,5 @@ WriteBuffer * CascadeWriteBuffer::setNextBuffer()
 
     return res;
 }
-
-
-CascadeWriteBuffer::~CascadeWriteBuffer()
-{
-    /// Sync position with underlying buffer before exit
-    if (curr_buffer)
-        curr_buffer->position() = position();
-}
-
 
 }

@@ -1,0 +1,124 @@
+tags:
+- replay_stream
+- aggregation
+description: replay stream with aggragation
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test29_stream
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test29_stream (id int, value int)
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [1, 2]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [3, 2]
+  
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test29_stream(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [1, 1]
+  
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [9, 2]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [1, 10]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [3, 8]
+
+- type: wait
+  time: 1
+
+- name: 2902
+  type: stream
+  query: select max(value), min(value), id from test29_stream where _tp_time > earliest_timestamp() group by id settings replay_speed=1
+  schema:
+  - name: max(value)
+    type: int32
+  - name: min(value)
+    type: int32
+  - name: id
+    type: int32
+
+- type: check
+  target_name: 2902
+  mode: random
+  expected_result:
+  - [2, 2, 3]
+  - [2, 2, 1]
+  - [2, 2, 3]
+  - [2, 1, 1]
+  - [2, 2, 9]
+  - [2, 2, 3]
+  - [10, 1, 1]
+  - [2, 2, 9]
+  - [8, 2, 3]
+  - [10, 1, 1]
+  - [2, 2, 9]

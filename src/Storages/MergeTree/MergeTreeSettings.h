@@ -2,14 +2,14 @@
 
 #include <Core/Defines.h>
 #include <Core/BaseSettings.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 
 
 namespace Poco::Util
 {
-    class AbstractConfiguration;
+class AbstractConfiguration;
 }
-
 
 namespace DB
 {
@@ -21,7 +21,7 @@ struct Settings;
   * and should not be changed by the user without a reason.
   */
 
-#define LIST_OF_MERGE_TREE_SETTINGS(M) \
+#define LIST_OF_MERGE_TREE_SETTINGS(M, ALIAS) \
     M(UInt64, min_compress_block_size, 0, "When granule is written, compress the data in buffer if the size of pending uncompressed data is larger or equal than the specified threshold. If this setting is not set, the corresponding global setting is used.", 0) \
     M(UInt64, max_compress_block_size, 0, "Compress the pending uncompressed data in buffer if its size is larger or equal than the specified threshold. Block of data will be compressed even if the current granule is not finished. If this setting is not set, the corresponding global setting is used.", 0) \
     M(UInt64, index_granularity, 8192, "How many rows correspond to one primary key value.", 0) \
@@ -33,10 +33,20 @@ struct Settings;
     M(UInt64, min_rows_for_compact_part, 0, "Experimental. Minimal number of rows to create part in compact format instead of saving it in RAM", 0) \
     M(Bool, in_memory_parts_enable_wal, true, "Whether to write blocks in Native format to write-ahead-log before creation in-memory part", 0) \
     M(UInt64, write_ahead_log_max_bytes, 1024 * 1024 * 1024, "Rotate WAL, if it exceeds that amount of bytes", 0) \
-    M(Float, ratio_of_defaults_for_sparse_serialization, 1.0, "Minimal ratio of number of default values to number of all values in column to store it in sparse serializations. If >= 1, columns will be always written in full serialization.", 0) \
+    M(Float, ratio_of_defaults_for_sparse_serialization, 0.9375f, "Minimal ratio of number of default values to number of all values in column to store it in sparse serializations. If >= 1, columns will be always written in full serialization.", 0) \
+    M(Bool, replace_long_file_name_to_hash, false, "If the file name for column is too long (more than 'max_file_name_length' bytes) replace it to SipHash128", 0) \
+    M(UInt64, max_file_name_length, 127, "The maximal length of the file name to keep it as is without hashing", 0) \
+    M(UInt64, min_bytes_for_full_part_storage, 0, "Only available in ClickHouse Cloud", 0) \
+    M(UInt64, min_rows_for_full_part_storage, 0, "Only available in ClickHouse Cloud", 0) \
+    M(UInt64, compact_parts_max_bytes_to_buffer, 128 * 1024 * 1024, "Only available in ClickHouse Cloud", 0) \
+    M(UInt64, compact_parts_max_granules_to_buffer, 128, "Only available in ClickHouse Cloud", 0) \
+    M(UInt64, compact_parts_merge_max_bytes_to_prefetch_part, 16 * 1024 * 1024, "Only available in ClickHouse Cloud", 0) \
+    M(Bool, load_existing_rows_count_for_old_parts, false, "Whether to load existing_rows_count for existing parts. If false, existing_rows_count will be equal to rows_count for existing parts.", 0) \
+    M(Bool, use_compact_variant_discriminators_serialization, true, "Use compact version of Variant discriminators serialization.", 0) \
     \
     /** Merge settings. */ \
-    M(UInt64, merge_max_block_size, DEFAULT_MERGE_BLOCK_SIZE, "How many rows in blocks should be formed for merge operations.", 0) \
+    M(UInt64, merge_max_block_size, 8192, "How many rows in blocks should be formed for merge operations. By default has the same value as `index_granularity`.", 0) \
+    M(UInt64, merge_max_block_size_bytes, 10 * 1024 * 1024, "How many bytes in blocks should be formed for merge operations. By default has the same value as `index_granularity_bytes`.", 0) \
     M(UInt64, max_bytes_to_merge_at_max_space_in_pool, 150ULL * 1024 * 1024 * 1024, "Maximum in total size of parts to merge, when there are maximum free threads in background pool (or entries in replication queue).", 0) \
     M(UInt64, max_bytes_to_merge_at_min_space_in_pool, 1024 * 1024, "Maximum in total size of parts to merge, when there are minimum free threads in background pool (or entries in replication queue).", 0) \
     M(UInt64, max_replicated_merges_in_queue, 16, "How many tasks of merging and mutating parts are allowed simultaneously in ReplicatedMergeTree queue.", 0) \
@@ -59,19 +69,27 @@ struct Settings;
     M(UInt64, non_replicated_deduplication_window, 0, "How many last blocks of hashes should be kept on disk (0 - disabled).", 0) \
     M(UInt64, max_parts_to_merge_at_once, 100, "Max amount of parts which can be merged at once (0 - disabled). Doesn't affect OPTIMIZE FINAL query.", 0) \
     M(UInt64, merge_selecting_sleep_ms, 5000, "Sleep time for merge selecting when no part selected, a lower setting will trigger selecting tasks in background_schedule_pool frequently which result in large amount of requests to zookeeper in large-scale clusters", 0) \
+    M(UInt64, max_merge_selecting_sleep_ms, 60000, "Maximum time to wait before trying to select parts to merge again after no parts were selected. A lower setting will trigger selecting tasks in background_schedule_pool frequently which result in large amount of requests to zookeeper in large-scale clusters", 0) \
+    M(Float, merge_selecting_sleep_slowdown_factor, 1.2f, "The sleep time for merge selecting task is multiplied by this factor when there's nothing to merge and divided when a merge was assigned", 0) \
     M(UInt64, merge_tree_clear_old_temporary_directories_interval_seconds, 60, "The period of executing the clear old temporary directories operation in background.", 0) \
     M(UInt64, merge_tree_clear_old_parts_interval_seconds, 1, "The period of executing the clear old parts operation in background.", 0) \
     M(UInt64, merge_tree_clear_old_broken_detached_parts_ttl_timeout_seconds, 1ULL * 3600 * 24 * 30, "Remove old broken detached parts in the background if they remained intouched for a specified by this setting period of time.", 0) \
+    M(UInt64, min_age_to_force_merge_seconds, 0, "If all parts in a certain range are older than this value, range will be always eligible for merging. Set to 0 to disable.", 0) \
+    M(Bool, min_age_to_force_merge_on_partition_only, false, "Whether min_age_to_force_merge_seconds should be applied only on the entire partition and not on subset.", false) \
     M(UInt64, merge_tree_enable_clear_old_broken_detached, false, "Enable clearing old broken detached parts operation in background.", 0) \
     M(Bool, remove_rolled_back_parts_immediately, 1, "Setting for an incomplete experimental feature.", 0) \
     \
     /** Inserts settings. */ \
-    M(UInt64, parts_to_delay_insert, 150, "If table contains at least that many active parts in single partition, artificially slow down insert into table.", 0) \
+    M(UInt64, parts_to_delay_insert, 150, "If table contains at least that many active parts in single partition, artificially slow down insert into table. Disabled if set to 0", 0) \
     M(UInt64, inactive_parts_to_delay_insert, 0, "If table contains at least that many inactive parts in single partition, artificially slow down insert into table.", 0) \
     M(UInt64, parts_to_throw_insert, 300, "If more than this number active parts in single partition, throw 'Too many parts ...' exception.", 0) \
     M(UInt64, inactive_parts_to_throw_insert, 0, "If more than this number inactive parts in single partition, throw 'Too many inactive parts ...' exception.", 0) \
+    M(UInt64, max_avg_part_size_for_too_many_parts, 10ULL * 1024 * 1024 * 1024, "The 'too many parts' check according to 'parts_to_delay_insert' and 'parts_to_throw_insert' will be active only if the average part size (in the relevant partition) is not larger than the specified threshold. If it is larger than the specified threshold, the INSERTs will be neither delayed or rejected. This allows to have hundreds of terabytes in a single table on a single server if the parts are successfully merged to larger parts. This does not affect the thresholds on inactive parts or total parts.", 0) \
     M(UInt64, max_delay_to_insert, 1, "Max delay of inserting data into MergeTree table in seconds, if there are a lot of unmerged parts in single partition.", 0) \
+    M(UInt64, min_delay_to_insert_ms, 10, "Min delay of inserting data into MergeTree table in milliseconds, if there are a lot of unmerged parts in single partition.", 0) \
     M(UInt64, max_parts_in_total, 100000, "If more than this number active parts in all partitions in total, throw 'Too many parts ...' exception.", 0) \
+    M(Bool, use_adaptive_write_buffer_for_dynamic_subcolumns, true, "Allow to use adaptive writer buffers during writing dynamic subcolumns to reduce memory usage", 0) \
+    M(UInt64, adaptive_write_buffer_initial_size, 16 * 1024, "Initial size of an adaptive write buffer", 0) \
     \
     /** Replication settings. */ \
     M(UInt64, replicated_deduplication_window, 100, "How many last blocks of hashes should be kept in ZooKeeper (old blocks will be deleted).", 0) \
@@ -103,11 +121,13 @@ struct Settings;
     /** Check delay of replicas settings. */ \
     M(UInt64, min_relative_delay_to_measure, 120, "Calculate relative replica delay only if absolute delay is not less that this value.", 0) \
     M(UInt64, cleanup_delay_period, 30, "Period to clean old queue logs, blocks hashes and parts.", 0) \
+    M(UInt64, max_cleanup_delay_period, 300, "Maximum period to clean old queue logs, blocks hashes and parts.", 0) \
     M(UInt64, cleanup_delay_period_random_add, 10, "Add uniformly distributed value from 0 to x seconds to cleanup_delay_period to avoid thundering herd effect and subsequent DoS of ZooKeeper in case of very large number of tables.", 0) \
     M(UInt64, min_relative_delay_to_close, 300, "Minimal delay from other replicas to close, stop serving requests and not return Ok during status check.", 0) \
     M(UInt64, min_absolute_delay_to_close, 0, "Minimal absolute delay to close, stop serving requests and not return Ok during status check.", 0) \
     M(UInt64, enable_vertical_merge_algorithm, 1, "Enable usage of Vertical merge algorithm.", 0) \
-    M(UInt64, vertical_merge_algorithm_min_rows_to_activate, 16 * DEFAULT_MERGE_BLOCK_SIZE, "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", 0) \
+    M(UInt64, vertical_merge_algorithm_min_rows_to_activate, 16 * 8192, "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", 0) \
+    M(UInt64, vertical_merge_algorithm_min_bytes_to_activate, 0, "Minimal (approximate) uncompressed size in bytes in merging parts to activate Vertical merge algorithm.", 0) \
     M(UInt64, vertical_merge_algorithm_min_columns_to_activate, 11, "Minimal amount of non-PK columns to activate Vertical merge algorithm.", 0) \
     \
     /** Compatibility settings */ \
@@ -127,10 +147,8 @@ struct Settings;
     M(MaxThreads, max_part_removal_threads, 0, "The number of threads for concurrent removal of inactive data parts. One is usually enough, but in 'Google Compute Environment SSD Persistent Disks' file removal (unlink) operation is extraordinarily slow and you probably have to increase this number (recommended is up to 16).", 0) \
     M(UInt64, concurrent_part_removal_threshold, 100, "Activate concurrent part removal (see 'max_part_removal_threads') only if the number of inactive data parts is at least this.", 0) \
     M(String, storage_policy, "default", "Name of storage disk policy", 0) \
+    M(String, disk, "", "Name of storage disk. Can be specified instead of storage policy.", 0) \
     M(Bool, allow_nullable_key, false, "Allow Nullable types as primary keys.", 0) \
-    M(Bool, allow_remote_fs_zero_copy_replication, true, "Allow Zero-copy replication over remote fs.", 0) \
-    M(String, remote_fs_zero_copy_zookeeper_path, "/proton/zero_copy", "ZooKeeper path for Zero-copy table-independet info.", 0) \
-    M(Bool, remote_fs_zero_copy_path_compatible_mode, false, "Run zero-copy in compatible mode during conversion process.", 0) \
     M(Bool, remove_empty_parts, true, "Remove empty parts after they were pruned by TTL, mutation, or collapsing merge algorithm.", 0) \
     M(Bool, assign_part_uuids, false, "Generate UUIDs for parts. Before enabling check that all replicas support new format.", 0) \
     M(Int64, max_partitions_to_read, -1, "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited. This setting is the default that can be overridden by the query-level setting with the same name.", 0) \
@@ -143,6 +161,10 @@ struct Settings;
     M(UInt64, part_moves_between_shards_enable, 0, "Experimental/Incomplete feature to move parts between shards. Does not take into account sharding expressions.", 0) \
     M(UInt64, part_moves_between_shards_delay_seconds, 30, "Time to wait before/after moving parts between shards.", 0) \
     M(Bool, use_metadata_cache, false, "Experimental feature to speed up parts loading process by using MergeTree metadata cache", 0) \
+    M(Bool, allow_experimental_optimized_row_order, false, "Allow reshuffling of rows during part inserts and merges to improve the compressibility of the new part", 0) \
+    M(Bool, allow_remote_fs_zero_copy_replication, false, "Don't use this setting in production, because it is not ready.", 0) \
+    M(String, remote_fs_zero_copy_zookeeper_path, "/proton/zero_copy", "ZooKeeper path for Zero-copy table-independet info.", 0) \
+    M(Bool, remote_fs_zero_copy_path_compatible_mode, false, "Run zero-copy in compatible mode during conversion process.", 0) \
     M(Bool, compress_marks, false, "Marks support compression, reduce mark file size and speed up network transmission.", 0) \
     M(Bool, compress_primary_key, false, "Primary key support compression, reduce primary key file size and speed up network transmission.", 0) \
     M(String, marks_compression_codec, "ZSTD(3)", "Compression encoding used by marks, marks are small enough and cached, so the default compression is ZSTD(3).", 0) \
@@ -164,13 +186,11 @@ struct Settings;
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)
 
-#define STREAM_SETTINGS(M) \
+#define STREAM_SETTINGS(M, ALIAS) \
     /** Settings for Stream */ \
-    M(UInt64, shards, 1, "Shards number for Stream", 0) \
-    M(UInt64, replicas, 1, "Replicas number for Stream", 0) \
+    M(UInt64, shards, 0, "Number of shards for the current Stream", 0) \
     M(String, sharding_expr, "", "Sharding method of Stream. Empty string means `rand()` or `weak_hash32() if primary key set", 0) \
     M(String, event_time_column, "now64(3, 'UTC')", "Event time expression of Stream. Default is '_tp_time'.", 0) \
-    M(String, host_shards, "", "Stream shards the current proton instance is hosting", 0) \
     M(String, subtype, "tabular", "Engine subtype", 0) \
     M(String, version_column, "_tp_time", "Changelog kv or versioned kv stream version column", 0) \
     M(String, mode, "append", "Engine mode, 'append', 'changelog', 'changelog_kv' or 'versioned_kv'", 0) \
@@ -184,26 +204,27 @@ struct Settings;
     M(Int64, logstore_flush_ms, 120000, "Tell streaming storage to call fsync every flush_ms interval", 0) \
     M(Int64, flush_threshold_ms, 2000, "Time threshold for streaming storage to flush consumed data from write-ahead log", 0) \
     M(Int64, flush_threshold_count, 100000, "Row count threshold for streaming storage to flush consumed data from write-ahead log", 0) \
-    M(Int64, flush_threshold_bytes, 10 * 1024 * 1024, "Data size threshold for streaming storage to flush consumed data from write-ahead log", 0) \
+    M(Int64, flush_threshold_bytes, 16 * 1024 * 1024, "Data size threshold for streaming storage to flush consumed data from write-ahead log", 0) \
+    \
+
 // End of STREAM_SETTINGS
 
-#define CONFIGURABLE_STREAM_SETTINGS(M) \
+#define CONFIGURABLE_STREAM_SETTINGS(M, ALIAS) \
     M(UInt64, default_shards, 1, "Default shards number for Stream", 0) \
-    M(UInt64, default_replicas, 1, "Default replicas number for Stream", 0) \
     M(String, default_sharding_expr, "", "Default sharding method of Stream", 0) \
-    M(String, distributed_ingest_mode, "async", "Data ingestion mode for Stream", 0) \
+    M(String, ingest_mode, "async", "Data ingestion mode for Stream", 0) \
     M(String, logstore, "", "Backend streaming storage for write ahead log implementation", 1) \
-    M(Int64, logstore_replication_factor, 1, "Replication number of logstore", 0) \
-    M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store. `memory` means pure in-memory. No persitent historical store / streaming store", 0) \
+    M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store. `memory` means pure in-memory. No persistent historical store / streaming store", 0) \
     M(String, logstore_codec, "none", "Backend streaming storage compression mode. options `none` `lz4` `zstd`", 0) \
-    M(Int64, logstore_retention_bytes, -1, "When this threshold reaches, streaming storage deletes old data", 0) \
-    M(Int64, logstore_retention_ms, 86400000, "when this threshold reaches, streaming storage delete old data", 0) \
+    M(Int64, logstore_retention_bytes, 0, "When this threshold reaches, streaming storage deletes old data", 0) \
+    M(Int64, logstore_retention_ms, 0, "when this threshold reaches, streaming storage delete old data", 0) \
+    M(Bool, local, false, "In a distributed env, local=true means it is a stream which is local to that node only and is not visible to other nodes in the cluster", 0) \
 // End of CONFIGURABLE_STREAM_SETTINGS
 
-#define LIST_STREAM_SETTINGS(M) \
-    LIST_OF_MERGE_TREE_SETTINGS(M)  \
-    STREAM_SETTINGS(M)              \
-    CONFIGURABLE_STREAM_SETTINGS(M) \
+#define LIST_STREAM_SETTINGS(M, ALIAS) \
+    LIST_OF_MERGE_TREE_SETTINGS(M, ALIAS) \
+    STREAM_SETTINGS(M, ALIAS) \
+    CONFIGURABLE_STREAM_SETTINGS(M, ALIAS)
 
 DECLARE_SETTINGS_TRAITS(StreamSettingsTraits, LIST_STREAM_SETTINGS)
 DECLARE_SETTINGS_TRAITS(ConfigurableStreamSettingsTraits, CONFIGURABLE_STREAM_SETTINGS)
@@ -216,7 +237,7 @@ struct StreamSettings : public BaseSettings<StreamSettingsTraits>
     void loadFromConfig(const String & config_elem, const Poco::Util::AbstractConfiguration & config);
 
     /// NOTE: will rewrite the AST to add immutable settings.
-    void loadFromQuery(ASTStorage & storage_def);
+    void loadFromQuery(ASTStorage & storage_def, ContextPtr context);
 
     /// We check settings after storage creation
     static bool isReadonlySetting(const String & name)
@@ -235,6 +256,7 @@ struct StreamSettings : public BaseSettings<StreamSettingsTraits>
     void sanityCheck(const Settings & query_settings) const;
 };
 
+using StreamSettingsPtr = std::shared_ptr<const StreamSettings>;
 using MergeTreeSettings = StreamSettings;
 using MergeTreeSettingsPtr = std::shared_ptr<const MergeTreeSettings>;
 }

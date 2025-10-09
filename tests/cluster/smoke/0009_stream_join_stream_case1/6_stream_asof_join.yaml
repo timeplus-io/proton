@@ -1,0 +1,21 @@
+tags:
+  - stream_join_stream
+description: stream asof join is not supported yet
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: 1029-1
+    type: stream
+    query: select s, ss from test10_left_stream1 asof join test10_right_stream1 on i=ii
+      and s > ss
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: 1029-1
+    expected_result:
+      - [ error_code:169 ]

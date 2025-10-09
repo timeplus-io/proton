@@ -1,0 +1,53 @@
+tags:
+  - python_udf
+  - skip # Skip due to lack of test slack token and webhook
+
+description: |
+  Test create alert to send requests to slack channel
+  Main Steps:
+  1.Create stream
+  2.Create python udf send requests to slack channel
+  3.Create alert select stream call python udf 
+  4.Ingest data into stream to trigger alert
+  5.Check message from slack channel
+
+  This case currently manual run because need test slack webhook and public slack token.
+  If provided in the future, please remove skip tag and enable the case.
+
+steps:
+  - type: query
+    sql: CREATE STREAM monitor(value string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION requests_slack(value string) RETURNS string LANGUAGE PYTHON AS $$
+      import json
+      import requests
+
+      url = "https://hooks.slack.com/services/xxx/xxx"
+      def requests_slack(value):
+          for v in value:
+              requests.post(url, headers={'Content-Type': 'application/json'},
+              data=json.dumps({"text": f"[0047_03] smoke test alert: {v}"}))
+          return value
+      $$
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE ALERT test
+      BATCH 10 EVENTS WITH TIMEOUT 5s
+      LIMIT 1 ALERTS PER 15s
+      CALL requests_slack
+      AS SELECT value FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO monitor(value) values ('s1') ('s2') ('s3');

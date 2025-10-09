@@ -174,7 +174,6 @@ private:
     void initialize();
     void setUser(const UserPtr & user_) const;
     void setRolesInfo(const std::shared_ptr<const EnabledRolesInfo> & roles_info_) const;
-    void setSettingsAndConstraints() const;
     void calculateAccessRights() const;
 
     template <bool throw_if_denied, bool grant_option>
@@ -219,7 +218,7 @@ private:
     const AccessControl * access_control = nullptr;
     const Params params;
     bool is_full_access = false;
-    mutable Poco::Logger * trace_log = nullptr;
+    mutable LoggerPtr trace_log = nullptr;
     mutable UserPtr user;
     mutable String user_name;
     mutable bool user_was_dropped = false;

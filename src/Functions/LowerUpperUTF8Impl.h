@@ -99,7 +99,7 @@ struct LowerUpperUTF8Impl
 
     static void vectorFixed(const ColumnString::Chars &, size_t, ColumnString::Chars &)
     {
-        throw Exception("Functions lower_utf8 and upper_utf8 cannot work with fixed_string argument", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Functions lower_utf8 and upper_utf8 cannot work with fixed_string argument");
     }
 
     /** Converts a single code point starting at `src` to desired case, storing result starting at `dst`.

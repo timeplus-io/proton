@@ -1,0 +1,80 @@
+description: |
+  Test winning bids session
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q9
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q9
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+     CREATE EXTERNAL STREAM target(
+      ws datetime64, 
+      we datetime64,
+      wb array(tuple(int64, int64, string, int64))) 
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q9', 
+              data_format='JSONEachRow',
+              one_message_per_row=false;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      WITH Q AS
+        (
+          SELECT
+            id, itemName, description, initialBid, reserve, date_time, expires, seller, category, extra, auction, bidder, price, bid_dateTime, bid_extra
+          FROM
+            (
+              SELECT
+                A.*, B.auction, B.bidder, B.price, B.date_time AS bid_dateTime, B.extra AS bid_extra
+              FROM
+                auction AS A, bid AS B
+              WHERE
+                (A.id = B.auction) AND ((B.date_time >= A.date_time) AND (B.date_time <= A.expires))
+            )
+        )
+      SELECT
+        window_start as ws, window_end as we, max_k(price, 1, id, itemName, seller) as wb
+      FROM
+        session(Q, bid_dateTime, 2h, [bid_dateTime < expires,bid_dateTime >= expires])
+      PARTITION BY
+        id
+      GROUP BY
+        window_start, window_end
+      SETTINGS
+        seek_to = 'earliest';
+      
+  - type: wait
+    time: 180
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 25

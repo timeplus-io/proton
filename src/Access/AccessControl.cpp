@@ -14,7 +14,9 @@
 #include <Access/User.h>
 #include <Access/ExternalAuthenticators.h>
 #include <Access/AccessChangesNotifier.h>
+#include <Access/resolveSetting.h>
 #include <Core/Settings.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 #include <base/defines.h>
 #include <base/find_symbols.h>
 #include <Poco/AccessExpireCache.h>
@@ -24,6 +26,10 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <filesystem>
 #include <mutex>
+
+/// proton: starts
+#include <Access/MetaStoreAccessStorage.h>
+/// proton: ends
 
 
 namespace DB
@@ -35,14 +41,13 @@ namespace ErrorCodes
     extern const int AUTHENTICATION_FAILED;
 }
 
-
 namespace
 {
     void checkForUsersNotInMainConfig(
         const Poco::Util::AbstractConfiguration & config,
         const std::string & config_path,
         const std::string & users_config_path,
-        Poco::Logger * log)
+        LoggerPtr log)
     {
         if (config.getBool("skip_check_for_incorrect_settings", false))
             return;
@@ -100,7 +105,7 @@ public:
 
     bool isSettingNameAllowed(std::string_view setting_name) const
     {
-        if (Settings::hasBuiltin(setting_name))
+        if (settingIsBuiltin(setting_name))
             return true;
 
         std::lock_guard lock{mutex};
@@ -121,10 +126,10 @@ public:
         std::lock_guard lock{mutex};
         if (!registered_prefixes.empty())
         {
-            throw Exception(
-                "Setting " + String{setting_name} + " is neither a builtin setting nor started with the prefix '"
-                    + boost::algorithm::join(registered_prefixes, "' or '") + "' registered for user-defined settings",
-                ErrorCodes::UNKNOWN_SETTING);
+            throw Exception(ErrorCodes::UNKNOWN_SETTING,
+                            "Setting {} is neither a builtin setting nor started with the prefix '{}"
+                            "' registered for user-defined settings",
+                            String{setting_name}, boost::algorithm::join(registered_prefixes, "' or '"));
         }
         else
             BaseSettingsHelpers::throwSettingNotFound(setting_name);
@@ -163,6 +168,7 @@ void AccessControl::setUpFromMainConfig(const Poco::Util::AbstractConfiguration 
     setEnabledUsersWithoutRowPoliciesCanReadRows(config_.getBool(
         "access_control_improvements.users_without_row_policies_can_read_rows",
         false /* false because we need to be compatible with earlier access configurations */));
+    setSettingsConstraintsReplacePrevious(config_.getBool("access_control_improvements.settings_constraints_replace_previous", false));
 
     addStoragesFromMainConfig(config_, config_path_);
 }
@@ -322,7 +328,7 @@ void AccessControl::addStoragesFromUserDirectoriesConfig(
             addLDAPStorage(name, config, prefix);
         }
         else
-            throw Exception("Unknown storage type '" + type + "' at " + prefix + " in config", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+            throw Exception(ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG, "Unknown storage type '{}' at {} in config", type, prefix);
     }
 }
 
@@ -331,6 +337,11 @@ void AccessControl::addStoragesFromMainConfig(
     const Poco::Util::AbstractConfiguration & config,
     const String & config_path)
 {
+    /// proton: starts
+    /// Add MetaStoreAccessStorage as the first storage in AccessControl.
+    metastore_storage = std::make_shared<MetaStoreAccessStorage>("metastore", *changes_notifier);
+    addStorage(metastore_storage);
+    /// proton: ends
     String config_dir = std::filesystem::path{config_path}.remove_filename().string();
     String dbms_dir = config.getString("path", DBMS_DEFAULT_PATH);
     String include_from_path = config.getString("include_from", "/etc/metrika.xml");
@@ -386,26 +397,26 @@ scope_guard AccessControl::subscribeForChanges(const std::vector<UUID> & ids, co
 
 std::optional<UUID> AccessControl::insertImpl(const AccessEntityPtr & entity, bool replace_if_exists, bool throw_if_exists)
 {
-    auto id = MultipleAccessStorage::insertImpl(entity, replace_if_exists, throw_if_exists);
-    if (id)
-        changes_notifier->sendNotifications();
-    return id;
+    /// proton updated:
+    /// AccessEntity is stored in MetaDB of all cluster nodes.
+    /// Delegate to MetaStoreAccessStorage which handles cluster sync up.
+    return metastore_storage->insertImpl(entity, replace_if_exists, throw_if_exists);
 }
 
 bool AccessControl::removeImpl(const UUID & id, bool throw_if_not_exists)
 {
-    bool removed = MultipleAccessStorage::removeImpl(id, throw_if_not_exists);
-    if (removed)
-        changes_notifier->sendNotifications();
-    return removed;
+    /// proton updated:
+    /// AccessEntity is stored in MetaDB of all cluster nodes.
+    /// Delegate to MetaStoreAccessStorage which handles cluster sync up.
+    return metastore_storage->removeImpl(id, throw_if_not_exists);
 }
 
 bool AccessControl::updateImpl(const UUID & id, const UpdateFunc & update_func, bool throw_if_not_exists)
 {
-    bool updated = MultipleAccessStorage::updateImpl(id, update_func, throw_if_not_exists);
-    if (updated)
-        changes_notifier->sendNotifications();
-    return updated;
+    /// proton updated:
+    /// AccessEntity is stored in MetaDB of all cluster nodes.
+    /// Delegate to MetaStoreAccessStorage which handles cluster sync up.
+    return metastore_storage->updateImpl(id, update_func, throw_if_not_exists);
 }
 
 AccessChangesNotifier & AccessControl::getChangesNotifier()
@@ -427,7 +438,7 @@ UUID AccessControl::authenticate(const Credentials & credentials, const Poco::Ne
 
         /// We use the same message for all authentication failures because we don't want to give away any unnecessary information for security reasons,
         /// only the log will show the exact reason.
-        throw Exception(credentials.getUserName() + ": Authentication failed: password is incorrect or there is no user with such name", ErrorCodes::AUTHENTICATION_FAILED);
+        throw Exception(ErrorCodes::AUTHENTICATION_FAILED, "{}: Authentication failed: password is incorrect or there is no user with such name", credentials.getUserName());
     }
 }
 

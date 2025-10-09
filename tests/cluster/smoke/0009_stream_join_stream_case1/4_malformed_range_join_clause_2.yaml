@@ -1,0 +1,22 @@
+tags:
+  - stream_join_stream
+description: More than one range
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: 1027-1
+    type: stream
+    query: select s, ss from test10_left_stream1 join test10_right_stream1 on i=ii and
+      date_diff('second', ts, tts) > -200 and date_diff('second', ts, tts) < 100 and
+      date_diff('second', ts, tts) < 200
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: 1027-1
+    expected_result:
+      - [ error_code:62 ]

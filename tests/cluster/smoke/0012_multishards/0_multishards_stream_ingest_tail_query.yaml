@@ -1,0 +1,36 @@
+tags:
+  - local-run
+  - test13_multishards_stream
+description: multishards stream with ingestion with tail query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 3
+
+  - name: '1300'
+    type: stream
+    query: select i from test13_multishards_stream;
+    schema:
+      - name: i
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test13_multishards_stream(i) values (1)
+  
+  - type: query
+    sql: insert into test13_multishards_stream(i) values (2)
+
+  - type: query
+    sql: insert into test13_multishards_stream(i) values (3)
+
+  - type: check
+    target_name: '1300'
+    expected_result:
+      - [ 1 ]
+      - [ 2 ]
+      - [ 3 ]

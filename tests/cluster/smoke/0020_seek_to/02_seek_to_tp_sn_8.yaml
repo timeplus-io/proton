@@ -1,0 +1,33 @@
+tags:
+- local-run
+- seek_to
+description: seek to sequene number
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2102'
+  type: stream
+  query: select i, s from test21_limit_by_stream settings seek_to='8'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+
+- name: '2192'
+  type: stream
+  query: select i, s from test21_limit_by_stream where _tp_sn >= 8
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+
+- type: check
+  target_name: '2102'
+  expected_result: []
+
+- type: check
+  target_name: '2192'
+  expected_result: []

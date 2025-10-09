@@ -318,9 +318,14 @@ public:
             !which.isIPv4() &&
             !which.isIPv6() &&
             !which.isAggregateFunction())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}",
+                            arguments[0]->getName(), getName());
 
+        return std::make_shared<DataTypeString>();
+    }
+
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
         return std::make_shared<DataTypeString>();
     }
 
@@ -360,9 +365,8 @@ public:
             tryExecuteUUID(column, res_column))
             return res_column;
 
-        throw Exception("Illegal column " + arguments[0].column->getName()
-                        + " of argument of function " + getName(),
-                        ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}",
+                        arguments[0].column->getName(), getName());
     }
 
     template <typename T>
@@ -443,7 +447,7 @@ public:
                 prev_offset = new_offset;
             }
             if (!out_offsets.empty() && out_offsets.back() != out_vec.size())
-                throw Exception("Column size mismatch (internal logical error)", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Column size mismatch (internal logical error)");
 
             col_res = std::move(col_str);
             return true;
@@ -505,7 +509,7 @@ public:
             }
 
             if (!out_offsets.empty() && out_offsets.back() != out_vec.size())
-                throw Exception("Column size mismatch (internal logical error)", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Column size mismatch (internal logical error)");
 
             col_res = std::move(col_str);
             return true;
@@ -601,9 +605,14 @@ public:
     {
         WhichDataType which(arguments[0]);
         if (!which.isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}",
+                            arguments[0]->getName(), getName());
 
+        return std::make_shared<DataTypeString>();
+    }
+
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
         return std::make_shared<DataTypeString>();
     }
 
@@ -681,9 +690,8 @@ public:
         }
         else
         {
-            throw Exception("Illegal column " + arguments[0].column->getName()
-                            + " of argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}",
+                            arguments[0].column->getName(), getName());
         }
     }
 };

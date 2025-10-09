@@ -1,9 +1,8 @@
 -- Tags: no-fasttest
 
 set allow_experimental_object_type=0;
-select CAST('{"x" : 1}', 'JSON'); -- {serverError ILLEGAL_COLUMN}
-desc file(nonexist.json, JSONAsObject); -- {serverError ILLEGAL_COLUMN}
-desc file(nonexist.json, JSONEachRow, 'x JSON'); -- {serverError ILLEGAL_COLUMN}
+select CAST('{"x" : 1}', 'Object(''json'')'); -- {serverError ILLEGAL_COLUMN}
+desc file(nonexist.json, JSONEachRow, 'x Object(''json'')'); -- {serverError ILLEGAL_COLUMN}
 
 set allow_experimental_geo_types=0;
 select CAST([[(20, 20), (50, 20), (50, 50), (20, 50)], [(30, 30), (50, 50), (50, 30)]], 'Polygon'); -- {serverError ILLEGAL_COLUMN}

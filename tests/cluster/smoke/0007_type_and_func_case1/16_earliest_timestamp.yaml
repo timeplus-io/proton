@@ -1,0 +1,36 @@
+tags:
+- func
+- bug
+- probe_bug
+description: Tests covering function earliest_timestamp() and alias earliest_ts()
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '800'
+  type: stream
+  query: select earliest_timestamp('UTC') as a, earliest_ts('UTC') as b
+  schema:
+    - name: a
+      type: datetime
+    - name: b
+      type: datetime
+      
+- name: '801'
+  type: stream
+  query: select to_timezone(earliest_timestamp(), 'UTC') as a, to_timezone(earliest_ts(),
+    'Asia/Shanghai') as b
+  schema:
+    - name: a
+      type: datetime
+    - name: b
+      type: datetime
+
+- type: check
+  target_name: '800'
+  expected_result:
+  - ['1970-01-01 00:00:00+00:00', '1970-01-01 00:00:00+00:00']
+- type: check
+  target_name: '801'
+  expected_result:
+  - ['1970-01-01 00:00:00+00:00', '1970-01-01 08:00:00+08:00']

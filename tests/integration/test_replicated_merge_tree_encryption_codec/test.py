@@ -78,8 +78,8 @@ def test_different_keys():
     create_table()
 
     insert_data()
-    assert "BAD_DECRYPT" in node1.query_and_get_error("SELECT * FROM tbl")
-    assert "BAD_DECRYPT" in node2.query_and_get_error("SELECT * FROM tbl")
+    assert "OPENSSL_ERROR" in node1.query_and_get_error("SELECT * FROM tbl")
+    assert "OPENSSL_ERROR" in node2.query_and_get_error("SELECT * FROM tbl")
 
     # Hang?
     #optimize_table()

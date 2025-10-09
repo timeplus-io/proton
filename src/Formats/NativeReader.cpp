@@ -4,14 +4,17 @@
 #include <Compression/CompressedReadBufferFromFile.h>
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypesBinaryEncoding.h>
 #include <Common/typeid_cast.h>
 #include <base/range.h>
 
 #include <Formats/NativeReader.h>
+#include <Formats/insertNullAsDefaultIfNeeded.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
+#include <Interpreters/castColumn.h>
 
 namespace DB
 {
@@ -21,16 +24,26 @@ namespace ErrorCodes
     extern const int INCORRECT_INDEX;
     extern const int LOGICAL_ERROR;
     extern const int CANNOT_READ_ALL_DATA;
+    extern const int INCORRECT_DATA;
 }
 
 
-NativeReader::NativeReader(ReadBuffer & istr_, UInt64 server_revision_)
-    : istr(istr_), server_revision(server_revision_)
+NativeReader::NativeReader(ReadBuffer & istr_, UInt64 server_revision_, std::optional<FormatSettings> format_settings_)
+    : istr(istr_), server_revision(server_revision_), format_settings(format_settings_)
 {
 }
 
-NativeReader::NativeReader(ReadBuffer & istr_, const Block & header_, UInt64 server_revision_)
-    : istr(istr_), header(header_), server_revision(server_revision_)
+NativeReader::NativeReader(
+    ReadBuffer & istr_,
+    const Block & header_,
+    UInt64 server_revision_,
+    std::optional<FormatSettings> format_settings_,
+    BlockMissingValues * block_missing_values_)
+    : istr(istr_)
+    , header(header_)
+    , server_revision(server_revision_)
+    , format_settings(std::move(format_settings_))
+    , block_missing_values(block_missing_values_)
 {
 }
 
@@ -42,7 +55,7 @@ NativeReader::NativeReader(ReadBuffer & istr_, UInt64 server_revision_,
 {
     istr_concrete = typeid_cast<CompressedReadBufferFromFile *>(&istr);
     if (!istr_concrete)
-        throw Exception("When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "When need to use index for NativeReader, istr must be CompressedReadBufferFromFile.");
 
     if (index_block_it == index_block_end)
         return;
@@ -63,22 +76,23 @@ void NativeReader::resetParser()
     use_index = false;
 }
 
-void NativeReader::readData(const ISerialization & serialization, ColumnPtr & column, ReadBuffer & istr, size_t rows, double avg_value_size_hint)
+static void readData(const ISerialization & serialization, ColumnPtr & column, ReadBuffer & istr, const std::optional<FormatSettings> & format_settings, size_t rows, double avg_value_size_hint)
 {
     ISerialization::DeserializeBinaryBulkSettings settings;
     settings.getter = [&](ISerialization::SubstreamPath) -> ReadBuffer * { return &istr; };
     settings.avg_value_size_hint = avg_value_size_hint;
     settings.position_independent_encoding = false;
     settings.native_format = true;
+    settings.format_settings = format_settings ? &*format_settings : nullptr;
 
     ISerialization::DeserializeBinaryBulkStatePtr state;
 
-    serialization.deserializeBinaryBulkStatePrefix(settings, state);
+    serialization.deserializeBinaryBulkStatePrefix(settings, state, nullptr);
     serialization.deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
 
     if (column->size() != rows)
         throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
-            "Cannot read all data in NativeBlockInputStream. Rows read: {}. Rows expected: {}", column->size(), rows);
+            "Cannot read all data in NativeReader. Rows read: {}. Rows expected: {}", column->size(), rows);
 }
 
 
@@ -98,7 +112,7 @@ Block NativeReader::read()
     if (istr.eof())
     {
         if (use_index)
-            throw ParsingException("Input doesn't contain all data for index.", ErrorCodes::CANNOT_READ_ALL_DATA);
+            throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA, "Input doesn't contain all data for index.");
 
         return res;
     }
@@ -139,18 +153,21 @@ Block NativeReader::read()
 
         /// Type
         String type_name;
-        readStringBinary(type_name, istr);
-        column.type = data_type_factory.get(type_name/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
+        if (format_settings && format_settings->native.decode_types_in_binary_format)
+        {
+            column.type = decodeDataType(istr);
+            type_name = column.type->getName();
+        }
+        else
+        {
+            readBinary(type_name, istr);
+            column.type = data_type_factory.get(type_name);
+        }
 
         setVersionToAggregateFunctions(column.type, true, server_revision);
 
         SerializationPtr serialization;
-        /// proton: starts
-        /// Because our drivers does not support custom serialization, we can only check the serialization when `compatible_with_clickhouse` is `true`,
-        /// i.e. this reader is reading packets from clickhouse (for ClickHouse external tables).
-        if (compatible_with_clickhouse &&
-            /// proton: ends
-            server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
+        if (server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
         {
             auto info = column.type->createSerializationInfo({});
 
@@ -170,9 +187,9 @@ Block NativeReader::read()
         {
             /// Index allows to do more checks.
             if (index_column_it->name != column.name)
-                throw Exception("Index points to column with wrong name: corrupted index or data", ErrorCodes::INCORRECT_INDEX);
+                throw Exception(ErrorCodes::INCORRECT_INDEX, "Index points to column with wrong name: corrupted index or data");
             if (index_column_it->type != type_name)
-                throw Exception("Index points to column with wrong type: corrupted index or data", ErrorCodes::INCORRECT_INDEX);
+                throw Exception(ErrorCodes::INCORRECT_INDEX, "Index points to column with wrong type: corrupted index or data");
         }
 
         /// Data
@@ -180,11 +197,58 @@ Block NativeReader::read()
 
         double avg_value_size_hint = avg_value_size_hints.empty() ? 0 : avg_value_size_hints[i];
         if (rows)    /// If no rows, nothing to read.
-            readData(*serialization, read_column, istr, rows, avg_value_size_hint);
+            readData(*serialization, read_column, istr, format_settings, rows, avg_value_size_hint);
 
         column.column = std::move(read_column);
 
-        res.insert(std::move(column));
+        bool use_in_result = true;
+        if (header)
+        {
+            if (header.has(column.name))
+            {
+                auto & header_column = header.getByName(column.name);
+
+                if (format_settings && format_settings->null_as_default)
+                    insertNullAsDefaultIfNeeded(column, header_column, header.getPositionByName(column.name), block_missing_values);
+
+                /// Support insert from old clients without low cardinality type.
+                if (!header_column.type->equals(*column.type))
+                {
+                    if (format_settings && format_settings->native.allow_types_conversion)
+                    {
+                        try
+                        {
+                            column.column = castColumn(column, header_column.type);
+                        }
+                        catch (Exception & e)
+                        {
+                            e.addMessage(fmt::format(
+                                "while converting column \"{}\" from type {} to type {}",
+                                column.name,
+                                column.type->getName(),
+                                header_column.type->getName()));
+                            throw;
+                        }
+                    }
+                    else
+                    {
+                        /// Support insert from old clients without low cardinality type.
+                        column.column = recursiveLowCardinalityTypeConversion(column.column, column.type, header_column.type);
+                    }
+
+                    column.type = header_column.type;
+                }
+            }
+            else
+            {
+                if (format_settings && !format_settings->skip_unknown_fields)
+                    throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown column with name {} found while reading data in Native format", column.name);
+                use_in_result = false;
+            }
+        }
+
+        if (use_in_result)
+            res.insert(std::move(column));
 
         if (use_index)
             ++index_column_it;
@@ -193,7 +257,7 @@ Block NativeReader::read()
     if (use_index)
     {
         if (index_column_it != index_block_it->columns.end())
-            throw Exception("Inconsistent index: not all columns were read", ErrorCodes::INCORRECT_INDEX);
+            throw Exception(ErrorCodes::INCORRECT_INDEX, "Inconsistent index: not all columns were read");
 
         ++index_block_it;
         if (index_block_it != index_block_end)
@@ -205,12 +269,19 @@ Block NativeReader::read()
         /// Allow to skip columns. Fill them with default values.
         Block tmp_res;
 
-        for (auto & col : header)
+        for (size_t column_i = 0; column_i != header.columns(); ++column_i)
         {
+            auto & col = header.getByPosition(column_i);
             if (res.has(col.name))
+            {
                 tmp_res.insert(res.getByName(col.name));
+            }
             else
+            {
                 tmp_res.insert({col.type->createColumn()->cloneResized(rows), col.type, col.name});
+                if (block_missing_values)
+                    block_missing_values->setBits(column_i, rows);
+            }
         }
         tmp_res.info = res.info;
 

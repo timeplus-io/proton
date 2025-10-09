@@ -1,0 +1,18 @@
+tags:
+- topmax
+description: test whether top_k_exact is accurate with assigned memory
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '901'
+  type: stream
+  query: select top_k_exact(number,10,true,10*1024*1024) from numbers(10000000000)
+  schema:
+      - name: top_k_exact(number, 10, true, multiply(multiply(10, 1024), 1024))
+        type: array(tuple(uint64, uint64))
+
+- type: check
+  target_name: '901'
+  expected_result:
+  - [error_code:69]

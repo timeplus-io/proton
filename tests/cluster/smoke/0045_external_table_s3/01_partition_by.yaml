@@ -1,0 +1,57 @@
+description: test s3 external table with partition by
+
+steps:
+  # create minio bucket
+  - type: minio
+    name: delete
+    bucket: smoketest-01
+
+  - type: minio
+    name: create
+    bucket: smoketest-01
+
+  # create external stream
+  - type: query
+    sql: drop stream if exists ex_s3_01
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external table ex_s3_01 (
+        key string,
+        value int32
+      )
+      partition by key
+      settings
+        type='s3', endpoint='http://minio:9000', bucket='smoketest-01', access_key_id='minioroot', secret_access_key='minioroot',
+        write_to = '01_partition_by/{_partition_id}/data.json', s3_min_upload_file_size = 100, s3_max_upload_idle_seconds = 2;
+
+  - type: wait
+    time: 3
+
+  # insert data
+  - type: query
+    sql: |
+      insert into ex_s3_01 values ('one', 10000)('two', 20000)('one', 40000)('two', 40000)('one', 50000)('two', 60000)
+
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: s3-01-01
+    query: select replace_regex(_path, 'data.*\.json$', '') as prefix, unique(_file) as file_count from ex_s3_01 group by prefix order by prefix
+    schema:
+      - name: prefix
+        type: low_cardinality(string)
+      - name: file_count
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: s3-01-01
+    expected_result:
+      - ['smoketest-01/01_partition_by/one/', 1]
+      - ['smoketest-01/01_partition_by/two/', 1]

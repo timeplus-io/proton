@@ -1,0 +1,21 @@
+after delete, the historical data will filter out the deleted row during select
+1	Phone	599.99
+3	Tablet	399.99
+created after delete, the new tail query(select * from 99037_sales settings seek_to=earliest, enable_backfill_from_historical_store = false) will print the normal streaming store data
+1	Phone	599.99
+2	Laptop	1299.99
+3	Tablet	399.99
+created after delete, the new backfill query(select * from 99037_sales settings seek_to=earliest, enable_backfill_from_historical_store = true) will concat the filtered historical data and the original streaming data (dup data)
+1	Phone	599.99
+1	Phone	599.99
+2	Laptop	1299.99
+3	Tablet	399.99
+3	Tablet	399.99
+created before delete, the OLD tail query will not emit new data
+1	Phone	599.99
+2	Laptop	1299.99
+3	Tablet	399.99
+created before delete, the OLD seek_to_earliest query will not emit new data
+1	Phone	599.99
+2	Laptop	1299.99
+3	Tablet	399.99

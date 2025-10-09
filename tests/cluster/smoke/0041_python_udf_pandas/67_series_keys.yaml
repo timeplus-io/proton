@@ -1,0 +1,54 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value array(int));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_series_keys(value array(int)) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_series_keys(value):
+          res = []
+          for v in value:
+              if len(v) > 0:
+                  s = pd.Series(v, index=[0, 1, 2])
+                  series_keys = str(s.keys())
+                  res.append(series_keys)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-67-2
+    type: stream
+    query: select test_series_keys(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          ([1, 2, 4]) ([2, 6, 3]);
+
+  - type: check
+    target_name: python-udf3-67-2
+    expected_result:
+      - ["Index([0, 1, 2], dtype='int64')"]
+      - ["Index([0, 1, 2], dtype='int64')"]

@@ -1,0 +1,23 @@
+CREATE DICTIONARY test_99047.`99047_dict`\n(\n  `id` string,\n  `name` string\n)\nPRIMARY KEY id\nSOURCE(TIMEPLUS(USER \'proton\' PASSWORD \'[HIDDEN]\' DB \'test_99047\' STREAM \'99047_dict_source\'))\nLAYOUT(HYBRID_HASH_CACHE(TTL 3600 PATH \'test_99047_dict\' MAX_HOT_KEY_COUNT 33))
+Join empty cache - left
+1	a		
+2	b		
+Join empty cache - inner
+Join empty cache - anti
+1	a	1	
+2	b	2	
+Join hybrid hash cache - left
+1	a		
+2	b		
+3	c	3	three
+3	f	3	three
+4	d		
+4	e		
+Join hybrid hash cache - inner
+3	c	3	three
+3	f	3	three
+Join hybrid hash cache - anti
+1	a	1	
+2	b	2	
+4	d	4	
+4	e	4	

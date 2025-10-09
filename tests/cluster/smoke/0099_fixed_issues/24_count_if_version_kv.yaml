@@ -1,0 +1,172 @@
+tags:
+  - count_if(*)
+description: (#4245) fix count_if over versioned kv stream emit incorrect result
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_ag;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_stream_strategy;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_stream_rtdc;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_stream_ag (
+            id int32,
+            trading string,
+            PRIMARY KEY id 
+        )settings mode = 'versioned_kv';
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream test_stream_strategy (
+            id int32,
+            sname string,
+            PRIMARY KEY id
+        ) settings mode = 'versioned_kv';
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream test_stream_rtdc (
+            id int32,
+            orderid string,
+            primary key id 
+          )settings mode = 'versioned_kv';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_strategy (id, sname) values
+    schema:
+    - name: id
+      type: int32
+    - name: sname
+      type: string
+    inputs:
+    - [1, '1']
+    - [2, '2']
+    - [3, '3']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_stream_ag (id, trading) values
+    schema:
+    - name: id
+      type: int32
+    - name: trading
+      type: string
+    inputs:
+    - [1, 't1']
+    - [2, 't2']
+    - [3, 't3']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_stream_rtdc (id, orderid) values
+    schema:
+    - name: id
+      type: int32
+    - name: orderid
+      type: string
+    inputs:
+    - [1, '0']
+    - [2, '0']
+    - [1, '1']
+    - [2, '1']
+    - [3, '1']
+  - type: wait
+    time: 1
+  
+  - name: 1520
+    type: stream
+    query: with cte as (
+              with whitelist as (
+                select id, trading from table(test_stream_ag)
+              )
+              select a.id, a.orderid, b.trading
+              from (
+                    with stg_list as (
+                        select sname from table(test_stream_strategy)
+                    )
+                select id, orderid
+                    from test_stream_rtdc
+                    where orderid in stg_list
+              ) as a
+              join whitelist as b
+              on a.id = b.id
+            )
+            select id, trading, count_if(orderid, orderid='1') as cnt
+            from cte
+            group by id, trading;
+    schema:  
+      - name: id
+        type: int32
+      - name: trading
+        type: string
+      - name: cnt
+        type: uint64
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_stream_rtdc (id, orderid) values
+    schema:
+    - name: id
+      type: int32
+    - name: orderid
+      type: string
+    inputs:
+    - [1, '0']
+    - [2, '0']
+    - [1, '1']
+    - [2, '1']
+    - [3, '1']
+
+  - type: check
+    target_name: 1520
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+    - [1, 't1', 1]
+    - [2, 't2', 1]
+    - [3, 't3', 1]
+    - [1, 't1', 1]
+    - [2, 't2', 1]
+    - [3, 't3', 1]
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_rtdc (id, orderid) values
+    schema:
+    - name: id
+      type: int32
+    - name: orderid
+      type: string
+    inputs:
+    - [1, '0']
+    - [2, '0']
+    - [1, '1']
+    - [2, '1']
+    - [3, '1']
+
+  - type: check
+    target_name: 1520
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+    - [1, 't1', 1]
+    - [2, 't2', 1]
+    - [3, 't3', 1]

@@ -6,14 +6,18 @@
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
 
+#include <Cluster/Common/Nulls.h>
+#include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
+#include <Functions/FunctionsConversion.h>
 #include <IO/ReadBufferFromString.h>
-#include <Interpreters/IExternalLoadable.h>
 
 #include <gtest/gtest.h>
 #include <Poco/JSON/Parser.h>
+
+#include <chrono>
 
 using namespace DB;
 
@@ -145,13 +149,10 @@ v8::Local<v8::Value> createV8Array(v8::Isolate * isolate, bool is_empty_array)
     return scope.Escape(result);
 }
 
-JavaScriptUserDefinedFunctionConfigurationPtr
-createUDFConfig(const String & name, const String & arg_str, const String & return_type, const String & source)
+cluster::protocol::UserDefinedFunctionDescriptorPtr
+createUDFDescription(const String & name, const String & arg_str, const String & return_type, const String & source)
 {
-    DataTypePtr result_type = DataTypeFactory::instance().get(return_type);
-    ExternalLoadableLifetime lifetime;
-
-    std::vector<UserDefinedFunctionConfiguration::Argument> arguments;
+    std::vector<cluster::protocol::UserDefinedFunctionDescriptor::Argument> arguments;
     if (!arg_str.empty())
     {
         Poco::JSON::Parser parser;
@@ -160,27 +161,32 @@ createUDFConfig(const String & name, const String & arg_str, const String & retu
             auto json_arguments = parser.parse(arg_str).extract<Poco::JSON::Array::Ptr>();
             for (unsigned int i = 0; i < json_arguments->size(); i++)
             {
-                UserDefinedFunctionConfiguration::Argument argument;
+                cluster::protocol::UserDefinedFunctionDescriptor::Argument argument;
                 argument.name = json_arguments->getObject(i)->get("name").toString();
-                argument.type = DataTypeFactory::instance().get(json_arguments->getObject(i)->get("type").toString());
+                argument.type = json_arguments->getObject(i)->get("type").toString();
                 arguments.emplace_back(std::move(argument));
             }
         }
         catch (const std::exception &)
         {
-            throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid UDF config");
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid UDF Desciption");
         }
     }
 
-    auto function_configuration = std::make_shared<JavaScriptUserDefinedFunctionConfiguration>();
-    function_configuration->source = source;
-    function_configuration->is_aggregation = true;
-    function_configuration->name = name;
-    function_configuration->result_type = std::move(result_type);
-    function_configuration->type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
-    function_configuration->arguments = std::move(arguments);
+    auto javascript_udf_payload = std::make_shared<cluster::protocol::JavaScriptUserDefinedFunctionPayload>();
+    javascript_udf_payload->source = source;
+    javascript_udf_payload->is_aggregation = true;
 
-    return function_configuration;
+    return std::make_shared<cluster::protocol::UserDefinedFunctionDescriptor>(
+        std::move(arguments),
+        name,
+        return_type,
+        std::move(javascript_udf_payload),
+        0,
+        0,
+        "created_by",
+        "last_modified_by",
+        cluster::Nulls::NullVersion);
 };
 
 DataTypes getDataTypes(const String & arguments)
@@ -198,11 +204,11 @@ DataTypes getDataTypes(const String & arguments)
 
 TEST_F(UDATestCase, add)
 {
-    auto config = createUDFConfig("down", ARGS_CEP1, RETURN_CEP1, UDA_CEP1);
+    auto udf_desc = createUDFDescription("down", ARGS_CEP1, RETURN_CEP1, UDA_CEP1);
     DataTypes types = getDataTypes(ARGS_CEP1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, false, max_heap_size);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000);
 
     ASSERT_TRUE(aggr_function.hasUserDefinedEmit());
 
@@ -230,7 +236,7 @@ TEST_F(UDATestCase, add)
     aggr_function.add(data_ptr, columns.data(), 2, nullptr);
     ASSERT_EQ(aggr_function.flush(data_ptr), true);
 
-    auto result_col = aggr_function.getReturnType()->createColumn();
+    auto result_col = aggr_function.getResultType()->createColumn();
     result_col->reserve(1);
     aggr_function.insertResultInto(data_ptr, *result_col, nullptr);
     ASSERT_EQ(result_col->getUInt(0), 2);
@@ -238,11 +244,11 @@ TEST_F(UDATestCase, add)
 
 TEST_F(UDATestCase, CheckPoint)
 {
-    auto config = createUDFConfig("sec_large", ARGS_UDA1, RETURN_UDA1, UDA1);
+    auto udf_desc = createUDFDescription("sec_large", ARGS_UDA1, RETURN_UDA1, UDA1);
     DataTypes types = getDataTypes(ARGS_UDA1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, false, max_heap_size);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000);
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(aggr_function.sizeOfData())),
@@ -280,11 +286,11 @@ TEST_F(UDATestCase, CheckPoint)
 
 TEST_F(UDATestCase, Merge)
 {
-    auto config = createUDFConfig("sec_large", ARGS_UDA1, RETURN_UDA1, UDA1);
+    auto udf_desc = createUDFDescription("sec_large", ARGS_UDA1, RETURN_UDA1, UDA1);
     DataTypes types = getDataTypes(ARGS_UDA1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, false, max_heap_size);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000);
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(2 * aggr_function.sizeOfData())),
@@ -350,7 +356,7 @@ void checkV8ReturnResult(String type, bool is_result_array, CREATE_V8_DATA_FUNC 
 TEST_F(UDATestCase, IntArray)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
         v8::EscapableHandleScope scope(isolate);
         v8::Local<v8::Context> context = isolate->GetCurrentContext();
         v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
@@ -360,8 +366,7 @@ TEST_F(UDATestCase, IntArray)
         return scope.Escape(result);
     };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 1);
         Field result_elem1;
         col_ptr->get(0, result_elem1);
@@ -374,12 +379,9 @@ TEST_F(UDATestCase, IntArray)
 TEST_F(UDATestCase, ArrayInArray)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
-        return createV8Array(isolate, false);
-    };
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> { return createV8Array(isolate, false); };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 2);
         Field result_elem1;
         Field result_elem2;
@@ -395,12 +397,9 @@ TEST_F(UDATestCase, ArrayInArray)
 TEST_F(UDATestCase, EmptyArray)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
-        return createV8Array(isolate, true);
-    };
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> { return createV8Array(isolate, true); };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 2);
         Field result_elem1;
         Field result_elem2;
@@ -416,12 +415,9 @@ TEST_F(UDATestCase, EmptyArray)
 TEST_F(UDATestCase, NestedArray)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
-        return createV8Array(isolate, true);
-    };
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> { return createV8Array(isolate, true); };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 1);
         Field result_elem1;
         col_ptr->get(0, result_elem1);
@@ -434,12 +430,9 @@ TEST_F(UDATestCase, NestedArray)
 TEST_F(UDATestCase, Bool)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
-        return V8::to_v8(isolate, true);
-    };
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> { return V8::to_v8(isolate, true); };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 1);
         ASSERT_EQ(col_ptr->getBool(0), true);
     };
@@ -450,7 +443,7 @@ TEST_F(UDATestCase, Bool)
 TEST_F(UDATestCase, BoolArray)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
         v8::EscapableHandleScope scope(isolate);
         v8::Local<v8::Context> context = isolate->GetCurrentContext();
         v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
@@ -460,8 +453,7 @@ TEST_F(UDATestCase, BoolArray)
         return scope.Escape(result);
     };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 3);
         ASSERT_EQ(col_ptr->getBool(0), true);
         ASSERT_EQ(col_ptr->getBool(1), false);
@@ -474,12 +466,9 @@ TEST_F(UDATestCase, BoolArray)
 TEST_F(UDATestCase, returnNumberForBool)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
-        return V8::to_v8(isolate, 0);
-    };
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> { return V8::to_v8(isolate, 0); };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 1);
         ASSERT_EQ(col_ptr->getBool(0), false);
     };
@@ -490,7 +479,7 @@ TEST_F(UDATestCase, returnNumberForBool)
 TEST_F(UDATestCase, returnNumberForBoolArray)
 {
     /// prepare v8 data
-    auto create_fn =[](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
         v8::EscapableHandleScope scope(isolate);
         v8::Local<v8::Context> context = isolate->GetCurrentContext();
         v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
@@ -500,8 +489,7 @@ TEST_F(UDATestCase, returnNumberForBoolArray)
         return scope.Escape(result);
     };
 
-    auto check_fn = [](MutableColumnPtr & col_ptr)
-    {
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
         ASSERT_EQ(col_ptr->size(), 3);
         ASSERT_EQ(col_ptr->getBool(0), true);
         ASSERT_EQ(col_ptr->getBool(1), false);
@@ -530,7 +518,7 @@ void checkPrepareArguments(String type, CREATE_DATA_FUNC create_fn, CHECK_V8_DAT
 
     String arg_str = R"([{ "name": "value","type": ")" + type + "\"}]";
 
-    auto config = createUDFConfig(type, arg_str, RETURN_UDA1, UDA1);
+    auto udf_desc = createUDFDescription(type, arg_str, RETURN_UDA1, UDA1);
 
     v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
     v8::Context::Scope context_scope(local_ctx);
@@ -542,7 +530,7 @@ void checkPrepareArguments(String type, CREATE_DATA_FUNC create_fn, CHECK_V8_DAT
 
     MutableColumns columns;
     columns.emplace_back(std::move(col_ptr));
-    auto argv = V8::prepareArguments(isolate, config->arguments, columns);
+    auto argv = V8::prepareArguments(isolate, udf_desc->arguments, columns);
 
     ASSERT_EQ(argv.size(), 1);
     v8::Local<v8::Array> v8_arr = argv[0].As<v8::Array>();
@@ -559,8 +547,7 @@ TEST_F(UDATestCase, prepareArgumentsIntArray)
         column_array.insert(Array{3, 4, 5});
     };
 
-    auto check_int_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_int_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 2);
         v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
         v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
@@ -569,6 +556,413 @@ TEST_F(UDATestCase, prepareArgumentsIntArray)
     };
 
     checkPrepareArguments("array(int64)", create_int_arr, check_int_arr);
+}
+
+
+TEST_F(UDATestCase, NullableInt)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, 1)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, 3)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        ASSERT_EQ(col_ptr->size(), 3);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<int>(), 1);
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        col_ptr->get(2, result_elem1);
+        ASSERT_EQ(result_elem1.get<int>(), 3);
+        
+    };
+
+    checkV8ReturnResult("nullable(int)", false, create_fn, check_fn);
+}
+
+
+TEST_F(UDATestCase, NullableUInt8)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, 1)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, 3)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        ASSERT_EQ(col_ptr->size(), 3);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<unsigned char>(), 1);
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        col_ptr->get(2, result_elem1);
+        ASSERT_EQ(result_elem1.get<unsigned char>(), 3);
+        
+    };
+
+    checkV8ReturnResult("nullable(uint8)", false, create_fn, check_fn);
+}
+inline int64_t getTimestampfromDate(UInt16 value)
+{
+    std::chrono::system_clock::time_point date_time = 
+        std::chrono::system_clock::from_time_t(0) + std::chrono::hours(24 * value);
+    int64_t timestamp = std::chrono::duration_cast<std::chrono::seconds>(date_time.time_since_epoch()).count();
+    return timestamp;
+}
+TEST_F(UDATestCase, NullableDate)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        // need pay attention to the timezone and make code irrelative to a special timezone
+        const auto & datetime64_tmp = V8::toDateTime64(getTimestampfromDate(1), 0, 3).value;
+        result.As<v8::Array>()->Set(context, 0, V8::toV8Date(isolate, datetime64_tmp)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        const auto & datetime64_tmp1 = V8::toDateTime64(getTimestampfromDate(3), 0, 3).value;
+        result.As<v8::Array>()->Set(context, 2, V8::toV8Date(isolate, datetime64_tmp1)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        ASSERT_EQ(col_ptr->size(), 3);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<UInt16>(), 1);
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        col_ptr->get(2, result_elem1);
+        ASSERT_EQ(result_elem1.get<UInt16>(), 3);
+        
+    };
+
+    checkV8ReturnResult("nullable(date)", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, NullableDateTime)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::toV8Date(isolate, V8::toDateTime64(57600, 0, 3).value)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::toV8Date(isolate, V8::toDateTime64(230400, 0, 3).value)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        ASSERT_EQ(col_ptr->size(), 3);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<UInt64>(), 57600);
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        col_ptr->get(2, result_elem1);
+        ASSERT_EQ(result_elem1.get<UInt64>(), 230400);
+        
+    };
+
+    checkV8ReturnResult("nullable(datetime)", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, NullableDateTime64)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::toV8Date(isolate, V8::toDateTime64(57600, 0, 3).value)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::toV8Date(isolate, V8::toDateTime64(230400, 0, 3).value)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        ASSERT_EQ(col_ptr->size(), 3);
+        Field result_elem1;
+        col_ptr->get(0, result_elem1);
+        ASSERT_EQ(result_elem1.get<Decimal64>().getValue(), Decimal64(57600000));
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        col_ptr->get(2, result_elem1);
+        ASSERT_EQ(result_elem1.get<Decimal64>().getValue(), Decimal64(230400000));
+        
+    };
+
+    checkV8ReturnResult("nullable(datetime64(3))", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, NullableBool)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, true)).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, true)).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        ASSERT_EQ(col_ptr->size(), 3);
+        ASSERT_EQ(col_ptr->getBool(0), true);
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        ASSERT_EQ(col_ptr->getBool(2), true);
+    };
+
+    checkV8ReturnResult("nullable(bool)", false, create_fn, check_fn);
+}
+
+TEST_F(UDATestCase, NullableString)
+{
+    auto create_fn = [](v8::Isolate * isolate) -> v8::Local<v8::Value> {
+        v8::EscapableHandleScope scope(isolate);
+        v8::Local<v8::Context> context = isolate->GetCurrentContext();
+        v8::Local<v8::Value> result = v8::Array::New(isolate, 3);
+        result.As<v8::Array>()->Set(context, 0, V8::to_v8(isolate, "abc")).FromJust();
+        result.As<v8::Array>()->Set(context, 1, v8::Null(isolate)).FromJust();
+        result.As<v8::Array>()->Set(context, 2, V8::to_v8(isolate, "def")).FromJust();
+        return scope.Escape(result);
+    };
+
+    auto check_fn = [](MutableColumnPtr & col_ptr) {
+        Field res;
+        col_ptr->get(0, res);
+        ASSERT_EQ(res.get<String &>(), "abc");
+        ASSERT_EQ(col_ptr->isNullAt(1), true);
+        col_ptr->get(2, res);
+        ASSERT_EQ(res.get<String &>(), "def");
+    };
+
+    checkV8ReturnResult("nullable(string)", false, create_fn, check_fn);
+}
+
+
+TEST_F(UDATestCase, prepareArgumentsNullableBool)
+{
+    /// prepare input column
+    auto create_bool_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(true);
+        col_ptr->insert(false);
+        col_ptr->insert(true);
+        col_ptr->insert(Null());
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        ASSERT_EQ(v8_arr->Length(), 4);
+        std::vector<bool> expect = {true, false, true};
+        for (int i = 0; i < v8_arr->Length() - 1; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsBoolean(), true);
+            ASSERT_EQ(V8::from_v8<bool>(isolate, elem), expect[i]);
+        }
+        v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, 3).ToLocalChecked();
+        ASSERT_EQ(elem->IsNull(), true);
+    };
+
+    checkPrepareArguments("nullable(bool)", create_bool_arr, check_bool);
+}
+
+TEST_F(UDATestCase, prepareArgumentsNullableInt)
+{
+    /// prepare input column
+    auto create_int_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(1);
+        col_ptr->insert(2);
+        col_ptr->insert(3);
+        col_ptr->insert(Null());
+        col_ptr->insert(4);
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        const auto len = v8_arr->Length();
+        ASSERT_EQ(len, 5);
+        std::vector<std::optional<Int32>> expect = {1, 2, 3, std::nullopt, 4};
+        for (int i = 0; i < len; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsNull(), !expect[i].has_value());
+            if(expect[i].has_value())
+            {
+                ASSERT_EQ(elem->IsInt32(), true);
+                ASSERT_EQ(V8::from_v8<Int32>(isolate, elem), expect[i].value());
+            }
+        }
+    };
+
+    checkPrepareArguments("nullable(int)", create_int_arr, check_bool);
+}
+
+TEST_F(UDATestCase, prepareArgumentsNullableUInt8)
+{
+    /// prepare input column
+    auto create_int_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(1);
+        col_ptr->insert(2);
+        col_ptr->insert(3);
+        col_ptr->insert(Null());
+        col_ptr->insert(256);
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        const auto len = v8_arr->Length();
+        ASSERT_EQ(len, 5);
+        std::vector<std::optional<UInt8>> expect = {1, 2, 3, std::nullopt, 0};
+        for (int i = 0; i < len; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsNull(), !expect[i].has_value());
+            if(expect[i].has_value())
+            {
+                ASSERT_EQ(elem->IsUint32(), true);
+                ASSERT_EQ(V8::from_v8<Int32>(isolate, elem), expect[i].value());
+            }
+        }
+    };
+
+    checkPrepareArguments("nullable(uint8)", create_int_arr, check_bool);
+}
+TEST_F(UDATestCase, prepareArgumentsNullableDate)
+{
+    /// prepare input column
+    auto create_date_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(1);
+        col_ptr->insert(2);
+        col_ptr->insert(3);
+        col_ptr->insert(Null());
+        col_ptr->insert(112);
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        const auto len = v8_arr->Length();
+        ASSERT_EQ(len, 5);
+        std::vector<std::optional<int64_t>> expect_days = {1, 2, 3, std::nullopt, 112};
+        std::vector<std::optional<int64_t>> expect;
+        for (int i = 0; i < len; i++)
+        {
+            if(expect_days[i].has_value())
+            {
+                expect.emplace_back(V8::toDateTime64<UInt16>(expect_days[i].value()));
+            }
+            else
+            {
+                expect.emplace_back(std::nullopt);
+            }
+        }
+        for (int i = 0; i < len; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsNull(), !expect[i].has_value());
+            if(expect[i].has_value())
+            {
+                ASSERT_EQ(elem->IsDate(), true);
+                ASSERT_EQ(static_cast<int64_t>(elem.As<v8::Date>()->NumberValue(local_ctx).ToChecked()), expect[i].value());
+            }
+        }
+    };
+
+    checkPrepareArguments("nullable(date)", create_date_arr, check_bool);
+}
+
+TEST_F(UDATestCase, prepareArgumentsNullableDateTime)
+{
+    /// prepare input column
+    auto create_date_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert(1);
+        col_ptr->insert(2);
+        col_ptr->insert(3);
+        col_ptr->insert(Null());
+        col_ptr->insert(112);
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        const auto len = v8_arr->Length();
+        ASSERT_EQ(len, 5);
+        std::vector<std::optional<int64_t>> expect = {1, 2, 3, std::nullopt, 112};
+        for (int i = 0; i < len; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsNull(), !expect[i].has_value());
+            if(expect[i].has_value())
+            {
+                ASSERT_EQ(elem->IsDate(), true);
+                
+                ASSERT_EQ(V8::toDateTime64(static_cast<int64_t>(elem.As<v8::Date>()->NumberValue(local_ctx).ToChecked()), 3, 0), expect[i].value());
+            }
+        }
+    };
+
+    checkPrepareArguments("nullable(datetime)", create_date_arr, check_bool);
+}
+
+TEST_F(UDATestCase, prepareArgumentsNullableDateTime64)
+{
+    /// prepare input column
+    auto create_date_arr = [](MutableColumnPtr & col_ptr) {
+        Decimal64 v = 1u;
+        col_ptr->insert(v);
+        v = 2u;
+        col_ptr->insert(v);
+        v = 3u;
+        col_ptr->insert(v);
+        col_ptr->insert(Null());
+        v = 112u;
+        col_ptr->insert(v);
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        const auto len = v8_arr->Length();
+        ASSERT_EQ(len, 5);
+        std::vector<std::optional<int64_t>> expect = {1, 2, 3, std::nullopt, 112};
+        for (int i = 0; i < len; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsNull(), !expect[i].has_value());
+            if(expect[i].has_value())
+            {
+                ASSERT_EQ(elem->IsDate(), true);
+                
+                ASSERT_EQ(V8::toDateTime64(static_cast<int64_t>(elem.As<v8::Date>()->NumberValue(local_ctx).ToChecked()), 3, 3), expect[i].value());
+            }
+        }
+    };
+
+    checkPrepareArguments("nullable(datetime64(3))", create_date_arr, check_bool);
+}
+
+TEST_F(UDATestCase, prepareArgumentsNullableString)
+{
+    /// prepare input column
+    auto create_string_arr = [](MutableColumnPtr & col_ptr) {
+        col_ptr->insert("abc");
+        col_ptr->insert("def");
+        col_ptr->insert("ghl");
+        col_ptr->insert(Null());
+    };
+
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+        ASSERT_EQ(v8_arr->Length(), 4);
+        std::vector<String> expect = {"abc", "def", "ghl"};
+        for (int i = 0; i < v8_arr->Length() - 1; i++)
+        {
+            v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, i).ToLocalChecked();
+            ASSERT_EQ(elem->IsString(), true);
+            ASSERT_EQ(V8::from_v8<String>(isolate, elem), expect[i]);
+        }
+        v8::Local<v8::Value> elem = v8_arr->Get(local_ctx, 3).ToLocalChecked();
+        ASSERT_EQ(elem->IsNull(), true);
+    };
+
+    checkPrepareArguments("nullable(string)", create_string_arr, check_bool);
 }
 
 TEST_F(UDATestCase, prepareArgumentsBoolArray)
@@ -580,8 +974,7 @@ TEST_F(UDATestCase, prepareArgumentsBoolArray)
         column_array.insert(Array{true, true, true});
     };
 
-    auto check_bool_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_bool_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 2);
         v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
         v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
@@ -601,8 +994,7 @@ TEST_F(UDATestCase, prepareArgumentsStrArray)
         column_array.insert(Array{"ccc", "ddd", "eee"});
     };
 
-    auto check_str_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_str_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 2);
         v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
         v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
@@ -622,8 +1014,7 @@ TEST_F(UDATestCase, prepareArgumentsEmptyArray)
         column_array.insert(Array{3, 4, 5});
     };
 
-    auto check_int_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_int_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 2);
         v8::Local<v8::Value> elem1 = v8_arr->Get(local_ctx, 0).ToLocalChecked();
         v8::Local<v8::Value> elem2 = v8_arr->Get(local_ctx, 1).ToLocalChecked();
@@ -645,8 +1036,7 @@ TEST_F(UDATestCase, prepareArgumentsNestedArray)
         column_array.insert(nested2);
     };
 
-    auto check_nested_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_nested_arr = [](v8::Isolate *, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 2);
         v8::Local<v8::Array> v8_nested1 = v8_arr->Get(local_ctx, 0).ToLocalChecked().As<v8::Array>();
         v8::Local<v8::Array> v8_nested2 = v8_arr->Get(local_ctx, 1).ToLocalChecked().As<v8::Array>();
@@ -675,8 +1065,7 @@ TEST_F(UDATestCase, prepareArgumentsBool)
         col_ptr->insert(0);
     };
 
-    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 5);
         std::vector<bool> expect = {true, false, true, true, false};
         for (int i = 0; i < v8_arr->Length(); i++)
@@ -701,8 +1090,7 @@ TEST_F(UDATestCase, prepareArgumentsUInt8)
         col_ptr->insert(4);
     };
 
-    auto check_uint8 = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr)
-    {
+    auto check_uint8 = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 5);
         for (uint i = 0; i < v8_arr->Length(); i++)
         {
@@ -712,4 +1100,30 @@ TEST_F(UDATestCase, prepareArgumentsUInt8)
     };
 
     checkPrepareArguments("uint8", create_uint8_arr, check_uint8);
+}
+
+TEST_F(UDATestCase, consoleModule)
+{
+    v8::Isolate::CreateParams isolate_params;
+    isolate_params.array_buffer_allocator_shared
+        = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+    v8::Isolate * isolate = v8::Isolate::New(isolate_params);
+    SCOPE_EXIT({ isolate->Dispose(); });
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+
+    auto check
+        = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> & blueprint) {
+              v8::Local<v8::Value> console_val;
+              ASSERT_EQ(local_ctx->Global()->Get(local_ctx, V8::to_v8(isolate, "console")).ToLocal(&console_val), true);
+              ASSERT_EQ(console_val->IsObject(), true);
+
+              auto obj = console_val.As<v8::Object>();
+              v8::Local<v8::Value> function_val;
+              ASSERT_EQ(obj->Get(local_ctx, V8::to_v8(isolate_, "log")).ToLocal(&function_val), true);
+              ASSERT_EQ(function_val->IsFunction(), true);
+          };
+
+    V8::compileSource(isolate, "empty_fun", "var a=1;", check);
 }

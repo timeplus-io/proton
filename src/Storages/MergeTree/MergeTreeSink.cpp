@@ -24,14 +24,25 @@ struct MergeTreeSink::DelayedChunk
         MergeTreeDataWriter::TemporaryPart temp_part;
         UInt64 elapsed_ns;
         String block_dedup_token;
-        ProfileEvents::Counters part_counters;
+        ProfileEvents::Counters part_counters = {}; /// fixme(yokofly): we need clickhouse/clickhouse#38614
     };
 
     std::vector<Partition> partitions;
 };
 
 
-MergeTreeSink::~MergeTreeSink() = default;
+MergeTreeSink::~MergeTreeSink()
+{
+    if (!delayed_chunk)
+        return;
+
+    for (auto & partition : delayed_chunk->partitions)
+    {
+        partition.temp_part.cancel();
+    }
+
+    delayed_chunk.reset();
+}
 
 MergeTreeSink::MergeTreeSink(
     StorageMergeTree & storage_,
@@ -43,7 +54,7 @@ MergeTreeSink::MergeTreeSink(
     , metadata_snapshot(metadata_snapshot_)
     , max_parts_per_block(max_parts_per_block_)
     , context(context_)
-    , storage_snapshot(storage.getStorageSnapshot(metadata_snapshot, context))
+    , storage_snapshot(storage.getStorageSnapshotWithoutData(metadata_snapshot, context_))
 {
 }
 
@@ -51,21 +62,20 @@ void MergeTreeSink::onStart()
 {
     /// Only check "too many parts" before write,
     /// because interrupting long-running INSERT query in the middle is not convenient for users.
-    storage.delayInsertOrThrowIfNeeded();
+    storage.delayInsertOrThrowIfNeeded(nullptr, context);
 }
 
 void MergeTreeSink::onFinish()
 {
+    chassert(!isCancelled());
     finishDelayedChunk();
 }
 
 void MergeTreeSink::consume(Chunk chunk)
 {
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    if (!storage_snapshot->object_columns.get()->empty())
-        convertDynamicColumnsToTuples(block, storage_snapshot);
 
-    auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
+    auto part_blocks = storage.writer->splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
 
     using DelayedPartitions = std::vector<MergeTreeSink::DelayedChunk::Partition>;
     DelayedPartitions partitions;
@@ -93,7 +103,7 @@ void MergeTreeSink::consume(Chunk chunk)
         if (seq_info)
             part_seq = seq_info->shallowClone(part_index, parts);
 
-        auto temp_part = storage.writer.writeTempPart(current_block, metadata_snapshot, part_seq, context);
+        auto temp_part = storage.writer->writeTempPart(current_block, metadata_snapshot, part_seq, context);
 
         part_index++;
         /// proton: ends
@@ -179,7 +189,7 @@ void MergeTreeSink::finishDelayedChunk()
                 if (!res.second)
                 {
                     /// ProfileEvents::increment(ProfileEvents::DuplicatedInsertedBlocks);
-                    LOG_INFO(storage.log, "Block with ID {} already exists as part {}; ignoring it", block_id, res.first.getPartName());
+                    LOG_INFO(storage.log, "Block with ID {} already exists as part {}; ignoring it", block_id, res.first.getPartNameForLogs());
                     continue;
                 }
             }
@@ -192,10 +202,10 @@ void MergeTreeSink::finishDelayedChunk()
         if (added)
         {
             PartLog::addNewPart(storage.getContext(), part, partition.elapsed_ns);
-            /// storage.incrementInsertedPartsProfileEvent(part->getType());
+            StorageMergeTree::incrementInsertedPartsProfileEvent(part->getType());
 
             /// Initiate async merge - it will be done if it's good time for merge and if there are space in 'background_pool'.
-            storage.background_operations_assignee.trigger();
+            storage.background_operations_assignee->trigger();
         }
     }
 

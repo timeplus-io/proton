@@ -58,7 +58,7 @@ struct ExternalQueryBuilder
         CASSANDRA_SEPARATE_PARTITION_KEY,
     };
 
-    std::string composeLoadKeysQuery(const Columns & key_columns, const std::vector<size_t> & requested_rows, LoadKeysMethod method, size_t partition_key_prefix = 0) const;
+    std::string composeLoadKeysQuery(const Columns & key_columns, const std::vector<size_t> & requested_rows, LoadKeysMethod method, size_t partition_key_prefix = 0, bool clickhouse_final = false) const;
 
 
 private:

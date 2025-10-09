@@ -1,0 +1,93 @@
+tags:
+- materialized_view
+description: Test using Pulsar external streams in MVs and make sure it works with best-effort recovery policy.
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists ex_pulsar_07_mv
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists ex_pulsar_07_source
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists ex_pulsar_07_sink
+
+- type: wait
+  time: 1
+
+- type: pulsar
+  name: delete
+  topic: test_07_input
+
+- type: pulsar
+  name: delete
+  topic: test_07_output
+
+- type: pulsar
+  name: create
+  topic: test_07_input
+
+- type: pulsar
+  name: create
+  topic: test_07_output
+
+- type: query
+  sql: create external stream ex_pulsar_07_source (raw string) settings type='pulsar', service_url='pulsar://pulsar:6650', topic = 'test_07_input'
+
+- type: query
+  sql: create external stream ex_pulsar_07_sink (key string, value int32) settings type='pulsar', service_url='pulsar://pulsar:6650', topic = 'test_07_output'
+
+- type: query
+  sql: |-
+    create materialized view ex_pulsar_07_mv into ex_pulsar_07_sink as
+    select raw:a::string as key, raw:b::int32 as value from ex_pulsar_07_source
+    settings checkpoint_interval=3, recovery_policy='best_effort'
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: pulsar-07
+  query: select key, value from ex_pulsar_07_sink
+  schema:
+    - name: key
+      type: string
+    - name: value
+      type: int32
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: |-
+    insert into ex_pulsar_07_source values ('{"a": "one", "b": 1}')('{"a": "two", "b": 2}')
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |-
+    insert into ex_pulsar_07_source values ('{"a": "three", "b": "bad value"}')('{"a": "four", "b": 4}')
+
+- type: wait
+  time: 10 # recover_interval can't be customized
+
+- type: query
+  sql: |-
+    insert into ex_pulsar_07_source values ('{"a": "five", "b": 5}')('{"a": "six", "b": 6}')
+
+- type: check
+  target_name: pulsar-07
+  expected_result:
+  - ["one", 1]
+  - ["two", 2]
+  - ["five", 5]
+  - ["six", 6]

@@ -1,0 +1,87 @@
+tags:
+  - clickhouse
+
+description: |
+  Test ddl dictionary with source Clickhouse
+  Main steps:
+  1.Create table in Clickhouse and ingest data
+  2.Create dictionary in Proton with source Clickhouse
+  3.Verify dictionary data with stream query
+  4.Verify dictionary connectivity via dict_get
+  5.Drop dictionary
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "DROP TABLE IF EXISTS products;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "CREATE TABLE products (id UInt64, name String) ENGINE = Memory;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "INSERT INTO products (id, name) VALUES (1, 'p111');"
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS ch_products_flat;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY ch_products_flat(id uint64, name string)
+      PRIMARY KEY id
+      SOURCE(CLICKHOUSE(DB 'default' TABLE 'products' HOST 'clickhouse' PORT 9000 USER 'chusr' PASSWORD 'chpwd'))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: wait
+    time: 1
+
+  - name: dict-1-1
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: stream
+    query: SELECT dict_get('ch_products_flat', 'name', 1);
+    schema:
+      - name: dict_get('ch_products_flat', 'name', 1)
+        type: string
+
+  - type: check
+    target_name: dict-1-1
+    expected_result:
+      - ['p111']
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: DROP DICTIONARY ch_products_flat;
+
+  - type: wait
+    time: 1
+
+  - name: dict-1-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('ch_products_flat', 'name', 1);
+    schema:
+      - name: dict_get('ch_products_flat', 'name', 1)
+        type: string
+
+  - type: check
+    target_name: dict-1-2
+    expected_result:
+      - ['error_code:36']

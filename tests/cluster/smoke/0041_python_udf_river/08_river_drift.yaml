@@ -1,0 +1,62 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_drift(value int) RETURNS bool LANGUAGE PYTHON AS
+      $$
+      import random
+      from river import drift
+
+      def test_drift(value):
+          rng = random.Random(12345)
+          adwin = drift.ADWIN()
+          res = []
+          for v in value:
+              detected = False
+              data_stream = rng.choices([0, 1], k=v) + rng.choices(range(4, 8), k=v)
+              for i, val in enumerate(data_stream):
+                  adwin.update(val)
+                  if adwin.drift_detected:
+                      detected = True
+              res.append(detected)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-8-1
+    type: stream
+    query: select test_drift(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: bool
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream(value) values (10)(100)(1000);
+
+  - type: check
+    target_name: python-udf13-8-1
+    expected_result:
+      - [False, 10]
+      - [True, 100]
+      - [True, 1000]

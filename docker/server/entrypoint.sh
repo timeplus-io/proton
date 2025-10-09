@@ -3,167 +3,39 @@
 set -eo pipefail
 shopt -s nullglob
 
-DO_CHOWN=1
-if [ "${PROTON_DO_NOT_CHOWN:-0}" = "1" ]; then
-    DO_CHOWN=0
-fi
-
-PROTON_UID="${PROTON_UID:-"$(id -u timeplus)"}"
-PROTON_GID="${PROTON_GID:-"$(id -g timeplus)"}"
-
-# support --user
-if [ "$(id -u)" = "0" ]; then
-    USER=$PROTON_UID
-    GROUP=$PROTON_GID
-    if command -v gosu &> /dev/null; then
-        gosu="gosu $USER:$GROUP"
-    elif command -v su-exec &> /dev/null; then
-        gosu="su-exec $USER:$GROUP"
-    else
-        echo "No gosu/su-exec detected!"
-        exit 1
-    fi
-else
-    USER="$(id -u)"
-    GROUP="$(id -g)"
-    gosu=""
-    DO_CHOWN=0
-fi
-
 # set some vars
 PROTON_CONFIG="${PROTON_CONFIG:-/etc/proton-server/config.yaml}"
 
-if ! $gosu test -f "$PROTON_CONFIG" -a -r "$PROTON_CONFIG"; then
-    echo "Configuration file '$PROTON_CONFIG' isn't readable by user with id '$USER'"
+if ! test -f "$PROTON_CONFIG" -a -r "$PROTON_CONFIG"; then
+    echo "Error: Cannot read configuration file '$PROTON_CONFIG'"
+    echo "This file is only accessible by the 'timeplus' user (UID 101)."
+    echo "This container is designed to run as UID 101 by default."
+    echo "If you're using '--user' flag or 'runAsUser' in Kubernetes, please ensure it's set to 101."
     exit 1
 fi
 
 # get `proton` directories locations
-DATA_DIR=/var/lib/proton/
-TMP_DIR=/var/lib/proton/tmp/
-USER_PATH=/var/lib/proton/user_files/
-LOG_PATH=/var/log/proton-server/proton-server.log
-LOG_DIR="$(dirname "$LOG_PATH")"
-ERROR_LOG_PATH=/var/log/proton-server/proton-server.err.log
-ERROR_LOG_DIR="$(dirname "$ERROR_LOG_PATH")"
-FORMAT_SCHEMA_PATH=/var/lib/proton/format_schemas/
+PYTHON_SITE_PACKAGE_PATH=/var/lib/proton/python/lib/python3.10/site-packages/
 
 PROTON_USER="${PROTON_USER:-default}"
 PROTON_PASSWORD="${PROTON_PASSWORD:-}"
-PROTON_DB="${PROTON_DB:-}"
 PROTON_ACCESS_MANAGEMENT="${PROTON_DEFAULT_ACCESS_MANAGEMENT:-0}"
 
-for dir in "$DATA_DIR" \
-  "$ERROR_LOG_DIR" \
-  "$LOG_DIR" \
-  "$TMP_DIR" \
-  "$USER_PATH" \
-  "$FORMAT_SCHEMA_PATH"
+for dir in "$PYTHON_SITE_PACKAGE_PATH"
 do
     # check if variable not empty
     [ -z "$dir" ] && continue
     # ensure directories exist
-    if [ "$DO_CHOWN" = "1" ]; then
-      mkdir="mkdir"
-    else
-      mkdir="$gosu mkdir"
-    fi
-    if ! $mkdir -p "$dir"; then
+    if ! mkdir -p "$dir"; then
         echo "Couldn't create necessary directory: $dir"
         exit 1
     fi
 
-    if [ "$DO_CHOWN" = "1" ]; then
-        # ensure proper directories permissions
-        # but skip it for if directory already has proper premissions, cause recursive chown may be slow
-        if [ "$(stat -c %u "$dir")" != "$USER" ] || [ "$(stat -c %g "$dir")" != "$GROUP" ]; then
-            chown -R "$USER:$GROUP" "$dir"
-        fi
-    elif ! $gosu test -d "$dir" -a -w "$dir" -a -r "$dir"; then
-        echo "Necessary directory '$dir' isn't accessible by user with id '$USER'"
+    if ! test -d "$dir" -a -w "$dir" -a -r "$dir"; then
+        echo "Necessary directory '$dir' isn't accessible current user"
         exit 1
     fi
 done
-
-# if proton user is defined - create it (user "default" already exists out of box)
-if [ -n "$PROTON_USER" ] && [ "$PROTON_USER" != "default" ]; then
-    echo "$0: create new user '$PROTON_USER' instead 'default'"
-    cat <<EOT > /etc/proton-server/users.d/default-user.xml
-<?xml version="1.0"?>
-<proton>
-  <users>
-    <!-- Remove default user -->
-    <default remove="remove">
-    </default>
-
-    <${PROTON_USER}>
-      <password>${PROTON_PASSWORD}</password>
-      <networks>
-        <ip>::/0</ip>
-      </networks>
-      <profile>default</profile>
-      <quota>default</quota>
-      <access_management>${PROTON_ACCESS_MANAGEMENT}</access_management>
-    </${PROTON_USER}>
-  </users>
-</proton>
-EOT
-fi
-
-if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$PROTON_DB" ]; then
-    # port is needed to check if proton-server is ready for connections
-    HTTP_PORT=8123
-
-    # Listen only on localhost until the initialization is done
-    $gosu /usr/bin/proton-server --config-file="$PROTON_CONFIG" -- --listen_host=127.0.0.1 &
-    pid="$!"
-
-    # check if proton is ready to accept connections
-    # will try to send ping proton via http_port (max 12 retries by default, with 1 sec timeout and 1 sec delay between retries)
-    tries=${PROTON_INIT_TIMEOUT:-12}
-    while ! wget -q -O /dev/null -T 1 "http://127.0.0.1:$HTTP_PORT/timeplusd/ping" 2>/dev/null; do
-        if [ "$tries" -le "0" ]; then
-            echo >&2 'Proton init process failed.'
-            exit 1
-        fi
-        tries=$(( tries-1 ))
-        sleep 1
-    done
-
-    protonclient=( proton-client --multiquery --host "127.0.0.1" -u "$PROTON_USER" --password "$PROTON_PASSWORD" )
-
-    echo
-
-    # create default database, if defined
-    if [ -n "$PROTON_DB" ]; then
-        echo "$0: create database '$PROTON_DB'"
-        "${protonclient[@]}" -q "CREATE DATABASE IF NOT EXISTS $PROTON_DB";
-    fi
-
-    for f in /docker-entrypoint-initdb.d/*; do
-        case "$f" in
-            *.sh)
-                if [ -x "$f" ]; then
-                    echo "$0: running $f"
-                    "$f"
-                else
-                    echo "$0: sourcing $f"
-                    # shellcheck source=/dev/null
-                    . "$f"
-                fi
-                ;;
-            *.sql)    echo "$0: running $f"; "${protonclient[@]}" < "$f" ; echo ;;
-            *.sql.gz) echo "$0: running $f"; gunzip -c "$f" | "${protonclient[@]}"; echo ;;
-            *)        echo "$0: ignoring $f" ;;
-        esac
-        echo
-    done
-
-    if ! kill -s TERM "$pid" || ! wait "$pid"; then
-        echo >&2 'Finishing of proton init process failed.'
-        exit 1
-    fi
-fi
 
 if [ -n "$STREAM_STORAGE_BROKERS" ]; then
     # Replace `brokers: localhost:9092` in config.yaml with customized one
@@ -336,7 +208,7 @@ if [[ $# -lt 1 ]] || [[ "$1" == "--"* ]]; then
     # so the container can't be finished by ctrl+c
     PROTON_WATCHDOG_ENABLE=${PROTON_WATCHDOG_ENABLE:-0}
     export PROTON_WATCHDOG_ENABLE
-    exec $gosu /usr/bin/proton-server --config-file="$PROTON_CONFIG" "$@"
+    exec /usr/bin/proton-server --config-file="$PROTON_CONFIG" "$@"
 fi
 
 # Otherwise, we assume the user want to run his own process, for example a `bash` shell to explore this image

@@ -17,7 +17,7 @@ namespace ErrorCodes
 BlockIO InterpreterDropAccessEntityQuery::execute()
 {
     auto & query = query_ptr->as<ASTDropAccessEntityQuery &>();
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     getContext()->checkAccess(getRequiredAccess());
 
     query.replaceEmptyDatabase(getContext()->getCurrentDatabase());
@@ -25,9 +25,9 @@ BlockIO InterpreterDropAccessEntityQuery::execute()
     auto do_drop = [&](const Strings & names)
     {
         if (query.if_exists)
-            access_control.tryRemove(access_control.find(query.type, names));
+            access_control->tryRemove(access_control->find(query.type, names));
         else
-            access_control.remove(access_control.getIDs(query.type, names));
+            access_control->remove(access_control->getIDs(query.type, names));
     };
 
     if (query.type == AccessEntityType::ROW_POLICY)
@@ -52,8 +52,7 @@ AccessRightsElements InterpreterDropAccessEntityQuery::getRequiredAccess() const
         case AccessEntityType::QUOTA: res.emplace_back(AccessType::DROP_QUOTA); return res;
         case AccessEntityType::MAX: break;
     }
-    throw Exception(
-        toString(query.type) + ": type is not supported by DROP query", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: type is not supported by DROP query", toString(query.type));
 }
 
 }

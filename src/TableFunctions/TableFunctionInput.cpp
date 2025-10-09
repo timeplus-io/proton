@@ -1,6 +1,6 @@
 #include <TableFunctions/TableFunctionInput.h>
 #include <TableFunctions/TableFunctionFactory.h>
-#include <TableFunctions/parseColumnsListForTableFunction.h>
+#include <Interpreters/parseColumnsListForTableFunction.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Common/Exception.h>
@@ -28,15 +28,15 @@ void TableFunctionInput::parseArguments(const ASTPtr & ast_function, ContextPtr 
 
     if (!function->arguments)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' must have arguments", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Function '{}' must have arguments", getName());
         /// proton: ends
 
     auto args = function->arguments->children;
 
     if (args.size() != 1)
         /// proton: starts
-        throw Exception("Function '" + getName() + "' requires exactly 1 argument: structure",
-            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Function '{}' requires exactly 1 argument: structure", getName());
         /// proton: ends
 
     structure = checkAndGetLiteralArgument<String>(evaluateConstantExpressionOrIdentifierAsLiteral(args[0], context), "structure");

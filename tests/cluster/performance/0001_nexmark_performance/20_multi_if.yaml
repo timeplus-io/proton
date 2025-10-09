@@ -1,0 +1,70 @@
+description: |
+  Test multi_if(lower(channel) = 'apple', '0', lower(channel) = 'google', '1', lower(channel) = 'facebook', '2', lower(channel) = 'baidu', '3', extract(url, '.*channel_id=([^&]*)'))
+
+tags:
+  - skip # skip temproraliy
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q20
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q20
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      CREATE EXTERNAL STREAM target(
+      auction int64,
+      bidder int64,
+      price int64,
+      channel string,
+      channel_id string)
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q20', 
+              data_format='JSONEachRow',
+              one_message_per_row=false;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT
+        auction, bidder, price, channel, 
+        multi_if(lower(channel) = 'apple', '0', lower(channel) = 'google', '1', lower(channel) = 'facebook', '2', lower(channel) = 'baidu', '3', extract(url, '.*channel_id=([^&]*)')) AS channel_id
+      FROM
+        bid
+      WHERE
+        (extract(url, '.*channel_id=([^&]*)') IS NOT NULL) OR (lower(channel) IN ('apple', 'google', 'facebook', 'baidu'))
+      SETTINGS
+        seek_to = 'earliest'
+      
+  - type: wait
+    time: 170
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 40

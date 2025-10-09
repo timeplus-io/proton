@@ -19,6 +19,7 @@ DB::ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = true,
+            .preserves_substream = true,
         },
         {
             .preserves_number_of_rows = true,
@@ -45,6 +46,13 @@ void WindowAssignmentStep::transformPipeline(QueryPipelineBuilder & pipeline, co
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(window_params->type));
     });
+}
+
+void WindowAssignmentStep::updateOutputStream()
+{
+    auto & output_header = output_stream->header;
+    output_stream = createOutputStream(
+        input_streams.front(), std::move(output_header), getDataStreamTraits());
 }
 }
 }

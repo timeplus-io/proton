@@ -1,0 +1,8 @@
+name: python_udf_python_gramma
+description: Tests covering the python udf built-in function
+tags:
+  - smoke
+  - python_udf
+  - python_gramma
+arch:
+  - x86_64

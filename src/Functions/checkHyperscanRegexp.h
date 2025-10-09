@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/re2.h>
 #include <string_view>
 #include <vector>
 

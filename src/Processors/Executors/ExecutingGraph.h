@@ -1,4 +1,5 @@
 #pragma once
+
 #include <Processors/Port.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Executors/UpgradableLock.h>
@@ -123,8 +124,9 @@ public:
     {
         uint32_t logic_pid;
         String name;
+        String description;
 
-        String string() const { return fmt::format("{}-{}", logic_pid, name); }
+        String string() const { return fmt::format("{}-{}({})", logic_pid, name, description); }
     };
     /// proton : ends
 
@@ -136,7 +138,7 @@ public:
     /// proton : starts
     /// Indcies of processors which need to serialize/deserialize
     std::vector<UInt16> processors_indices_to_serde;
-    //// Trigger nodes are source nodes which emit checkpoint barriers
+    /// Trigger nodes are source nodes which emit checkpoint barriers
     std::vector<Node *> checkpoint_trigger_nodes;
     /// Ack nodes are sink nodes which ack completion of a checkpoint
     std::vector<Node *> checkpoint_ack_nodes;
@@ -146,9 +148,9 @@ public:
     using ProcessorsMap = std::unordered_map<const IProcessor *, uint64_t>;
     ProcessorsMap processors_map;
 
-    explicit ExecutingGraph(Processors & processors_, bool profile_processors_);
+    explicit ExecutingGraph(std::shared_ptr<Processors> processors_, bool profile_processors_);
 
-    const Processors & getProcessors() const { return processors; }
+    const Processors & getProcessors() const { return *processors; }
 
     /// Traverse graph the first time to update all the childless nodes.
     void initializeExecution(Queue & queue);
@@ -177,17 +179,12 @@ public:
 
     void triggerCheckpoint(CheckpointContextPtr ckpt_ctx);
 
-    template<typename Iterator>
-    std::vector<NodeDescription> nodeDescriptions(Iterator begin_id_iter, Iterator end_id_iter, size_t size)
-    {
-        std::vector<NodeDescription> descs;
-        descs.reserve(size);
+    /// Return stateful node descriptions
+    std::vector<NodeDescription> statefulNodeDescriptions() const;
+    static std::vector<NodeDescription> statefulNodeDescriptions(const Processors & processors_);
 
-        for (; begin_id_iter != end_id_iter; ++begin_id_iter)
-            descs.emplace_back(NodeDescription{*begin_id_iter, nodes[processors_indices_to_serde[*begin_id_iter]]->processor->getName()});
-
-        return descs;
-    }
+    /// Return ack node descriptions in the graph
+    std::vector<ExecutingGraph::NodeDescription> checkpointAckNodeDescriptions() const;
     /// proton: ends.
 
 private:
@@ -202,7 +199,7 @@ private:
     /// All new nodes and nodes with updated ports are pushed into stack.
     bool expandPipeline(std::stack<uint64_t> & stack, uint64_t pid);
 
-    Processors & processors;
+    std::shared_ptr<Processors> processors;
     std::mutex processors_mutex;
 
     UpgradableMutex nodes_mutex;
@@ -210,4 +207,7 @@ private:
     const bool profile_processors;
 };
 
+/// proton: starts.
+String formatNodeDescriptions(const std::vector<ExecutingGraph::NodeDescription> & node_descs);
+/// proton: ends.
 }

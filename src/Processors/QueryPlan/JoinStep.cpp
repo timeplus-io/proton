@@ -27,6 +27,7 @@ JoinStep::JoinStep(
         .header = JoiningTransform::transformHeader(left_stream_.header, join),
         /// proton: starts. Propagate streaming flag to output stream
         .is_streaming = left_stream_.is_streaming || right_stream_.is_streaming,
+        .with_substream = left_stream_.with_substream,
         /// proton: ends.
     };
 }
@@ -37,10 +38,12 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
         throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input steps");
 
     if (join->pipelineType() == JoinPipelineType::YShaped)
-        return QueryPipelineBuilder::joinPipelinesYShaped(
-            std::move(pipelines[0]), std::move(pipelines[1]),
-            join, output_stream->header,
-            max_block_size, &processors);
+    {
+        auto joined_pipeline = QueryPipelineBuilder::joinPipelinesYShaped(
+            std::move(pipelines[0]), std::move(pipelines[1]), join, output_stream->header, max_block_size, &processors);
+        joined_pipeline->resize(max_streams);
+        return joined_pipeline;
+    }
 
     return QueryPipelineBuilder::joinPipelinesRightLeft(
             std::move(pipelines[0]),
@@ -53,9 +56,37 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
             &processors);
 }
 
+bool JoinStep::allowPushDownToRight() const
+{
+    return join->pipelineType() == JoinPipelineType::YShaped || join->pipelineType() == JoinPipelineType::FillRightFirst;
+}
+
 void JoinStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(processors, settings);
+}
+
+void JoinStep::updateInputStream(const DataStream & new_input_stream_, size_t idx)
+{
+    if (idx == 0)
+    {
+        input_streams = {new_input_stream_, input_streams.at(1)};
+        output_stream = DataStream
+            {
+                .header = JoiningTransform::transformHeader(new_input_stream_.header, join),
+                /// proton: starts. Propagate streaming flag to output stream
+                .is_streaming = new_input_stream_.is_streaming,
+                .with_substream = new_input_stream_.with_substream,
+                /// proton: ends.
+            };
+    }
+    else
+    {
+        /// proton: starts. Right side of the join is always a non-streaming input
+        assert(!new_input_stream_.is_streaming);
+        /// proton: ends.
+        input_streams = {input_streams.at(0), new_input_stream_};
+    }
 }
 
 static ITransformingStep::Traits getStorageJoinTraits()
@@ -67,6 +98,9 @@ static ITransformingStep::Traits getStorageJoinTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = false,
+            /// proton: starts.
+            .preserves_substream = false,
+            /// proton: ends.
         },
         {
             .preserves_number_of_rows = false,
@@ -104,5 +138,12 @@ void FilledJoinStep::transformPipeline(QueryPipelineBuilder & pipeline, const Bu
         return std::make_shared<JoiningTransform>(header, output_stream->header, join, max_block_size, on_totals, default_totals, counter);
     });
 }
+
+void FilledJoinStep::updateOutputStream()
+{
+    output_stream = createOutputStream(
+        input_streams.front(), JoiningTransform::transformHeader(input_streams.front().header, join), getDataStreamTraits());
+}
+
 
 }

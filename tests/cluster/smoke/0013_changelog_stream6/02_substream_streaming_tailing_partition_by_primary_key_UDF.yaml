@@ -1,0 +1,88 @@
+tags:
+  - subquery/view/materialized_view/
+  - tumble(table)
+  - group_by
+  - primary_key
+  - UDF
+
+description: substream streaming tailing partition by primary key, UDF
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_14_6_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        function test_14_6_add_five(value) {
+            for (let i = 0; i < value.length; i++) {
+                value[i] = value[i] + 5;
+            }
+            return value;
+        }
+      $$;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_substream_6(val int, id int, name string);
+  - type: wait
+    time: 2
+
+  - name: "1426"
+    type: stream
+    query:
+      select val, id, test_14_6_add_five(val), _tp_delta from changelog(test14_substream_6, id) partition by id;
+    schema:
+      - name: val
+        type: int32
+      - name: id
+        type: int32
+      - name: test_14_6_add_five(val)
+        type: float32
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+  - type: check
+    target_name: "1426"
+    expected_result:
+      - [1, 2, 6, 1]
+      - [3, 3, 8, 1]
+      - [5, 1, 10, 1]
+      - [1, 2, 6, -1]
+      - [8, 2, 13, 1]
+      - [3, 3, 8, -1]
+      - [9, 3, 14, 1]
+      - [8, 2, 13, -1]
+      - [11, 2, 16, 1]
+      - [5, 1, 10, -1]
+      - [10, 1, 15, 1]
+      - [11, 2, 16, -1]
+      - [14, 2, 19, 1]

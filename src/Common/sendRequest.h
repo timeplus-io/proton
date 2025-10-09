@@ -26,5 +26,5 @@ std::pair<String, Int32> sendRequest(
     const String & payload,
     const std::vector<std::pair<String, String>> & headers,
     ConnectionTimeouts timeouts,
-    Poco::Logger * log);
+    LoggerPtr log);
 }

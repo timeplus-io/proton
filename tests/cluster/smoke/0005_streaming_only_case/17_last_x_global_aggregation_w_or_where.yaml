@@ -1,0 +1,58 @@
+tags:
+  - last x
+  - native_not_support
+description: last 5s global aggregation count *
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+#  - type: rest
+#    url: /proton/v1/ingest/streams/test6_stream_only_no_default_tp_time
+#    method: POST
+#    data:
+#      columns:
+#        - id
+#        - location
+#        - value
+#        - json
+#        - timestamp
+#      data:
+#        - [ dev1, ca, 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00' ]
+#        - [ dev1, ca, 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01' ]
+#        - [ dev2, ca, 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05' ]
+#        - [ dev2, ca, 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03' ]
+#        - [ dev8, ca, 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02' ]
+#        - [ dev8, ca, 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08' ]
+#        - [ dev3, ca, 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00' ]
+#        - [ dev3, ca, 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01' ]
+#        - [ dev2, ca, 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05' ]
+#        - [ dev2, ca, 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03' ]
+#        - [ dev8, ca, 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02' ]
+#        - [ dev8, ca, 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08' ]
+#
+#  - type: wait
+#    time: 5
+#
+#  - name: '601'
+#    type: stream
+#    query: |
+#      select count(*)
+#      from test6_stream_only_no_default_tp_time
+#      where value > 60
+#      limit 5
+#      emit last 5s
+#    schema:
+#      - name: count()
+#        type: uint64
+#
+#  - type: check
+#    target_name: '601'
+#    expected_result:
+#      - [ '8' ]
+#      - [ '8' ]
+#      - [ '8' ]
+#      - [ '8' ]
+#      - [ '8' ]
+

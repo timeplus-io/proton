@@ -1,0 +1,80 @@
+tags:
+- versioned_kv
+- multi_shard
+- substream
+- partition_by_primary_key
+- streaming_tailing
+- stateless_function
+description: partition by primary key, streaming tailing, stateless function, add
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: create stream test14_multishard_12(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv', shards=3;
+
+- type: wait
+  time: 2
+
+- name: '1497'
+  type: stream
+  query: select pow(10, i),
+                k1,
+                k2
+        from test14_multishard_12 partition by k2;
+  schema:
+  - name: pow(10, i)
+    type: float64
+  - name: k1
+    type: int32
+  - name: k2
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values
+  schema:
+  - name: i
+    type: float32
+  - name: k1
+    type: int32
+  - name: k2
+    type: string
+  inputs:
+  - [1, 1, 'a']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values
+  schema:
+  - name: i
+    type: float32
+  - name: k1
+    type: int32
+  - name: k2
+    type: string
+  inputs:
+  - [2, 1, 'b']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_12(i, k1, k2) values
+  schema:
+  - name: i
+    type: float32
+  - name: k1
+    type: int32
+  - name: k2
+    type: string
+  inputs:
+  - [3, 1, 'c']
+
+- type: check
+  target_name: '1497'
+  expected_result:
+  - [10, 1, 'a']
+  - [100, 1, 'b']
+  - [1000, 1, 'c']

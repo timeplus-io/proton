@@ -1,0 +1,113 @@
+tags:
+- local-run
+
+description: |
+  Test cover SQL UDF basic scalar
+  Main Steps:
+    1.Create sql udf
+    2.Show functions
+    3.Show create function
+    4.Describe function
+    5.Select function
+    6.Drop function
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: DROP FUNCTION IF EXISTS test_add_five;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_add_five AS (value) -> value + 5
+
+- type: wait
+  time: 1
+
+- name: udf-0-1
+  type: stream
+  query: SHOW FUNCTIONS WHERE name in ('test_add_five');
+  schema:
+  - name: name
+    type: string
+  - name: type
+    type: string
+  - name: language
+    type: string
+
+- name: udf-0-2
+  type: stream
+  query: SHOW CREATE FUNCTION test_add_five;
+  schema:
+  - name: statement
+    type: string
+
+- name: udf-0-3
+  type: stream
+  query: DESCRIBE (SELECT test_add_five(1) AS a);
+  schema:
+  - name: name
+    type: string
+  - name: type
+    type: string
+  - name: default_type
+    type: string
+  - name: default_expression
+    type: string
+  - name: comment
+    type: string
+  - name: codec_expression
+    type: string
+  - name: ttl_expression
+    type: string
+
+- name: udf-0-4
+  type: stream
+  query: SELECT test_add_five(2) as res;
+  schema:
+  - name: res
+    type: uint16
+
+- type: wait
+  time: 1
+
+- type: check
+  target_name: udf-0-1
+  expected_result:
+  - ['test_add_five', 'Function', 'SQL']
+
+- type: check
+  target_name: udf-0-2
+  expected_result:
+  - ['CREATE FUNCTION test_add_five AS value -> (value + 5)']
+
+- type: check
+  target_name: udf-0-3
+  expected_result:
+  - ['a', 'uint16', '', '', '', '', '']
+
+- type: check
+  target_name: udf-0-4
+  expected_result:
+  - [7]
+
+- type: query
+  sql: DROP FUNCTION test_add_five;
+- type: wait
+  time: 2
+
+- name: udf-0-5
+  type: stream
+  query: SELECT test_add_five(3) as res;
+  schema:
+  - name: res
+    type: uint16
+
+- type: check
+  target_name: udf-0-5
+  expected_result:
+  - ["error_code:46"]

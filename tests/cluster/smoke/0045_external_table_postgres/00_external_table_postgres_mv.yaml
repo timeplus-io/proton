@@ -1,0 +1,87 @@
+tags:
+  - materialized view
+
+description: |
+  Test PostgreSQL external table with materialized view
+  Main Steps:
+    1.Create postgres table and ingest data
+    2.Create postgresql external table
+    3.Create materialized view into external table from source stream
+    4.Ingest data into exteranal table
+    5.Ingest data into source stream
+    6.Ingest data into postgres table
+    7.Check external table data
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "DROP TABLE IF EXISTS products;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "CREATE TABLE products (product_id varchar NOT NULL, price float8, PRIMARY KEY (product_id));"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "INSERT INTO products (product_id, price) VALUES ('1', '10.99'), ('2', '19.99'), ('3', '29.99');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE pg_ext
+      SETTINGS type='postgresql', address='postgres:5432', user='postgres', password='postgres', database='postgres', table='products';
+
+  - type: query
+    sql: CREATE STREAM source (product_id string, price float64);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW pg_mv INTO pg_ext
+      (product_id string, price float64) AS
+      SELECT product_id, price FROM source;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: INSERT INTO pg_ext(product_id, price) VALUES ('4', 39.99);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO source(product_id, price) VALUES ('5', 49.99);
+
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "INSERT INTO products (product_id, price) VALUES ('6', '59.99');"
+
+  - type: wait
+    time: 2
+
+  - name: pg-0-1
+    type: stream
+    query: SELECT product_id, price FROM pg_ext;
+    schema:
+      - name: product_id
+        type: string
+      - name: price
+        type: nullable(float64)
+
+  - type: check
+    target_name: pg-0-1
+    expected_result:
+      - ['1', 10.99]
+      - ['2', 19.99]
+      - ['3', 29.99]
+      - ['4', 39.99]
+      - ['5', 49.99]
+      - ['6', 59.99]

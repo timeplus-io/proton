@@ -1,11 +1,9 @@
 #include <Processors/Transforms/Streaming/JoinTransform.h>
 
 #include <Checkpoint/CheckpointContext.h>
-#include <Checkpoint/CheckpointCoordinator.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Interpreters/Streaming/joinKind.h>
+#include <Interpreters/Streaming/HashJoin/joinKind.h>
 #include <Interpreters/TableJoin.h>
+#include <base/ClockUtils.h>
 
 namespace DB
 {
@@ -22,13 +20,15 @@ JoinTransform::JoinTransform(
     Block right_input_header,
     Block output_header,
     HashJoinPtr join_,
+    size_t transform_id_,
     size_t max_block_size_,
     UInt64 join_max_cached_bytes)
     : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformID)
     , join(std::move(join_))
+    , transform_id(transform_id_)
     , max_block_size(max_block_size_)
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
-    , logger(&Poco::Logger::get("StreamingJoinTransform"))
+    , logger(getLogger("StreamingJoinTransform"))
     , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
     , last_log_ts(MonotonicSeconds::now())
 {
@@ -311,25 +311,27 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
     }
 }
 
-void JoinTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void JoinTransform::onCancel() noexcept
 {
-    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        join->serialize(wb, getVersion());
-        DB::writeIntBinary(watermark, wb);
-    });
+    try
+    {
+        join->cancel();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Error occurs on cancellation.");
+    }
 }
 
-void JoinTransform::recover(CheckpointContextPtr ckpt_ctx)
+String JoinTransform::getName() const
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
-        join->deserialize(rb, version_);
-        DB::readIntBinary(watermark, rb);
-    });
-}
-
-void JoinTransform::onCancel()
-{
-    join->cancel();
+    switch (join->type())
+    {
+        case HashJoinType::Memory:
+            return "StreamingJoinTransform";
+        case HashJoinType::Hybrid:
+            return "HybridStreamingJoinTransform";
+    }
 }
 
 }

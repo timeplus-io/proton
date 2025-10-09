@@ -4,7 +4,7 @@
 #include <cctz/time_zone.h>
 #include <cctz/zone_info_source.h>
 #include <Common/getResource.h>
-#include <Poco/Exception.h>
+#include <Common/Exception.h>
 
 #include <algorithm>
 #include <cassert>
@@ -12,6 +12,14 @@
 #include <cstring>
 #include <memory>
 
+
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int BAD_ARGUMENTS;
+}
+}
 
 namespace
 {
@@ -47,8 +55,30 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
 
     cctz::time_zone cctz_time_zone;
     if (!cctz::load_time_zone(time_zone, &cctz_time_zone))
-        throw Poco::Exception("Cannot load time zone " + time_zone_);
+        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Cannot load time zone {}", time_zone_);
 
+    /// proton: starts.
+    init(cctz_time_zone);
+    /// proton: ends.
+}
+
+/// proton: starts.
+DateLUTImpl::DateLUTImpl(int64_t offset)
+{
+    /// DateLUT should not be initialized in global constructors for the following reasons:
+    /// 1. It is too heavy.
+    if (&inside_main)
+        assert(inside_main);
+
+    cctz::time_zone cctz_time_zone = cctz::fixed_time_zone(std::chrono::seconds(offset));
+
+    init(cctz_time_zone);
+}
+/// proton: ends.
+
+/// proton: starts.
+void DateLUTImpl::init(const cctz::time_zone & cctz_time_zone)
+{
     constexpr cctz::civil_day epoch{1970, 1, 1};
     constexpr cctz::civil_day lut_start{DATE_LUT_MIN_YEAR, 1, 1};
     time_t start_of_day;
@@ -188,7 +218,7 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
             lut_saturated[day] = lut_saturated[day + 1];
     }
 }
-
+/// proton: ends.
 
 /// Prefer to load timezones from blobs linked to the binary.
 /// The blobs are provided by "tzdata" library.

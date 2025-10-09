@@ -1,0 +1,4 @@
+name: window_interval
+description: Tests covering seek_to by sequence number
+tags:
+- smoke

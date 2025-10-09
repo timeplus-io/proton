@@ -165,6 +165,10 @@ bool areTypesEqual(const DataTypePtr & lhs, const DataTypePtr & rhs);
   */
 ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count);
 
+/** Return ColumnNullable of src, with input null mapAdd commentMore actions
+  * Or ColumnConst(ColumnNullable) if the result is always NULL or if the result is constant and always not NULL.
+  */
+ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnPtr & null_map);
 struct NullPresence
 {
     bool has_nullable = false;
@@ -174,4 +178,6 @@ struct NullPresence
 NullPresence getNullPresense(const ColumnsWithTypeAndName & args);
 
 bool isDecimalOrNullableDecimal(const DataTypePtr & type);
+
+void checkFunctionArgumentSizes(const ColumnsWithTypeAndName & arguments, size_t input_rows_count);
 }

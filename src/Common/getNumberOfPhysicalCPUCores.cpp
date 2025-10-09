@@ -198,6 +198,18 @@ unsigned getNumberOfPhysicalCPUCoresImpl()
     return cpu_count;
 }
 
+/// proton: starts.
+unsigned getNumberOfLogicalCPUCoresImpl()
+{
+    unsigned cpu_count = std::thread::hardware_concurrency();
+
+#if defined(OS_LINUX)
+    cpu_count = getCGroupLimitedCPUCores(cpu_count);
+#endif
+
+    return cpu_count;
+}
+/// proton: ends.
 }
 
 unsigned getNumberOfPhysicalCPUCores()
@@ -206,3 +218,11 @@ unsigned getNumberOfPhysicalCPUCores()
     static auto res = getNumberOfPhysicalCPUCoresImpl();
     return res;
 }
+
+/// proton: starts.
+unsigned getNumberOfLogicalCPUCores()
+{
+    static auto res = getNumberOfLogicalCPUCoresImpl();
+    return res;
+}
+/// proton: ends.

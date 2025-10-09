@@ -23,7 +23,7 @@ private:
 
 public:
     AggregateFunctionCategoricalIV(const DataTypes & arguments_, const Array & params_) :
-        IAggregateFunctionHelper<AggregateFunctionCategoricalIV<T>> {arguments_, params_},
+        IAggregateFunctionHelper<AggregateFunctionCategoricalIV<T>> {arguments_, params_, createResultType()},
         category_count {arguments_.size() - 1}
     {
         // notice: argument types has been checked before
@@ -61,7 +61,7 @@ public:
         return alignof(T);
     }
 
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         const auto * y_col = static_cast<const ColumnUInt8 *>(columns[category_count]);
         bool y = y_col->getData()[row_num];
@@ -78,7 +78,7 @@ public:
         reinterpret_cast<T *>(place)[category_count * 2 + size_t(y)] += 1;
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         for (size_t i : collections::range(0, category_count + 1))
         {
@@ -87,17 +87,17 @@ public:
         }
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
         buf.write(place, sizeOfData());
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
     {
         buf.read(place, sizeOfData());
     }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeArray>(
             std::make_shared<DataTypeNumber<Float64>>()

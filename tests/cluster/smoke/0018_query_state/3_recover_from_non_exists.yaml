@@ -1,0 +1,19 @@
+tags:
+  - tail
+description: recover from a non-exists query shall fail
+cluster:
+  - p1k1
+#- p3k1
+steps:
+  - name: '1903'
+    query_id: '1903'
+    type: stream
+    query: recover from '19000'
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: '1903'
+    expected_result:
+      - [ error_code:674 ]

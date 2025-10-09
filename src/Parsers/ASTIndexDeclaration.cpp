@@ -19,6 +19,7 @@ ASTPtr ASTIndexDeclaration::clone() const
         res->set(res->expr, expr->clone());
     if (type)
         res->set(res->type, type->clone());
+
     return res;
 }
 

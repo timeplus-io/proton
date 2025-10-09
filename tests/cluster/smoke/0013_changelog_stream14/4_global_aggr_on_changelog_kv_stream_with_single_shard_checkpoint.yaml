@@ -1,0 +1,116 @@
+tags:
+- group_uniq_array
+- group_array
+- group_array_sorted
+- changelog_kv
+- single shard
+- emit on update
+- checkpoint
+description: group array funcs on changelog_kv stream with single shard, checkpoint
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists test_changelog_14_mv
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test_changelog_14
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test_changelog_14(id int, val int) primary key id settings mode='changelog_kv';
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view test_changelog_14_mv as
+    select group_array(val) as v1, group_array(to_string(val)) as s1,
+           group_array(val, 3) as v2, group_array(to_string(val), 3) as s2,
+           group_uniq_array(val) as v3, group_uniq_array(to_string(val)) as s3,
+           group_uniq_array(val, 3) as v4, group_uniq_array(to_string(val), 3) as s4,
+           group_array_sorted(val, 3) as v5, group_array_sorted(to_string(val), 3) as s5,
+           group_array(to_ipv4(to_uint32(val))) as ipv4_v1, group_uniq_array(to_ipv4(to_uint32(val))) as ipv4_v2, group_array_sorted(to_ipv4(to_uint32(val)), 3) as ipv4_v3
+    from test_changelog_14 emit on update settings checkpoint_interval=1;
+
+- type: wait
+  time: 1
+
+- name: 15113
+  type: stream
+  query: select * except _tp_time from test_changelog_14_mv
+  schema:
+    - name: v1
+      type: array(int32)
+    - name: s1
+      type: array(string)
+    - name: v2
+      type: array(int32)
+    - name: s2
+      type: array(string)
+    - name: v3
+      type: array(int32)
+    - name: s3
+      type: array(string)
+    - name: v4
+      type: array(int32)
+    - name: s4
+      type: array(string)
+    - name: v5
+      type: array(int32)
+    - name: s5
+      type: array(string)
+    - name: ipv4_v1
+      type: array(ipv4)
+    - name: ipv4_v2
+      type: array(ipv4)
+    - name: ipv4_v3
+      type: array(ipv4)
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_changelog_14(id, val) values (1, 1) (2, 2)
+
+- type: query
+  sql: insert into test_changelog_14(id, val, _tp_delta) values (3, 3, 1) (2, 2, -1)
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: system pause materialized view test_changelog_14_mv
+
+- type: query
+  sql: system resume materialized view test_changelog_14_mv
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_changelog_14(id, val) values(4, 4)(5, 4)
+
+- type: query
+  sql: insert into test_changelog_14(id, val, _tp_delta) values (3, 3, -1) (1, 1, -1)
+
+- type: query
+  sql: insert into test_changelog_14(id, val, _tp_delta) values(4, 4, -1)
+
+- type: check
+  target_name: '15113'
+  expected_result:
+  ### Use `any_value` here since the array contents are out of order
+  - [[any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [1, 2], ['1', '2'], [any_value, any_value], [any_value, any_value], ['0.0.0.1', '0.0.0.2']]
+  - [[any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [any_value, any_value], [1, 3], ['1', '3'], [any_value, any_value], [any_value, any_value], ['0.0.0.1', '0.0.0.3']]
+  - [[any_value, any_value, any_value, any_value], [any_value, any_value, any_value, any_value], [any_value, any_value, any_value], [any_value, any_value, any_value], [any_value, any_value, any_value], [any_value, any_value, any_value], [any_value, any_value, any_value], [any_value, any_value, any_value], [1, 3, 4], ['1', '3', '4'], [any_value, any_value, any_value, any_value], [any_value, any_value, any_value], ['0.0.0.1', '0.0.0.3', '0.0.0.4']]
+  - [[4, 4], ['4', '4'], [4, 4], ['4', '4'], [4], ['4'], [4], ['4'], [4, 4], ['4', '4'], ['0.0.0.4', '0.0.0.4'], ['0.0.0.4'], ['0.0.0.4', '0.0.0.4']]
+  - [[4], ['4'], [4], ['4'], [4], ['4'], [4], ['4'], [4], ['4'], ['0.0.0.4'], ['0.0.0.4'], ['0.0.0.4']]
+
+- type: query
+  sql: drop view if exists test_changelog_14_mv

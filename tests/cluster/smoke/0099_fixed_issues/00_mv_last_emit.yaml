@@ -1,0 +1,97 @@
+tags:
+  - local-run
+  - materialized view
+description: (#1288) create materialized view over materialized view with last emit
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists mv_2
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists mv_1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists mv_truck_track
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists ttp_truck_track
+  - type: wait
+    time: 2
+
+  - type: query
+    name: 9900
+    sql: create stream ttp_truck_track
+        (
+          `lpn` string, 
+          `vno` string, 
+          `drc` string, 
+          `drcCode` int32, 
+          `wgs84Lat` float32, 
+          `wgs84Lon` float32, 
+          `gcj02Lat` float32, 
+          `gcj02Lon` float32, 
+          `province` nullable(string), 
+          `city` nullable(string), 
+          `country` nullable(string), 
+          `spd` float32, 
+          `mil` float32, 
+          `time` string, 
+          `adr` string
+        )
+  - type: wait
+    time: 2
+
+  - type: query
+    name: 9901
+    sql: create materialized view mv_truck_track as (select * from ttp_truck_track where date_diff('second', _tp_time, now()) < 30)
+  - type: wait
+    time: 5
+
+  - type: query
+    name: 9902
+    sql: create materialized view mv_1 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m)
+  - type: wait
+    time: 5
+
+  - type: query
+    name: 9903
+    sql: create materialized view mv_2 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m)
+
+  - type: check
+    target_name: 9900
+    expected_result: []
+
+  - type: check
+    target_name: 9901
+    expected_result: []
+
+  - type: check
+    target_name: 9902
+    expected_result: []
+
+  - type: check
+    target_name: 9903
+    expected_result: []
+
+  - type: query
+    sql: drop view if exists mv_2
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists mv_1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists mv_truck_track
+  - type: wait
+    time: 2

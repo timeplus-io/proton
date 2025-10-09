@@ -1,0 +1,49 @@
+tags:
+  - window function over table function query
+description: (#3004) disable hop and session window function for historical data, tumble currently support table() style
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_3004
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_3004
+        (
+          id int
+        )
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9900
+    query: select * from hop(table(test_stream_3004), 1m, 2m)
+    schema:
+      - name: id
+        type: int32
+      - name: _tp_time
+        type: datetime64(3)
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9901
+    query: select * from session(table(test_stream_3004), 1m)
+    schema:
+      - name: id
+        type: int32
+      - name: _tp_time
+        type: datetime64(3)
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - ["error_code:997"]
+
+  - type: check
+    target_name: 9901
+    expected_result:
+      - ["error_code:997"]

@@ -11,6 +11,7 @@ set (SRCS
     coverage.cpp
     demangle.cpp
     getAvailableMemoryAmount.cpp
+    getFileSystemSpace.cpp
     getFQDNOrHostName.cpp
     getMemoryAmount.cpp
     getPageSize.cpp

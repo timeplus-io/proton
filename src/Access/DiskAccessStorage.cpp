@@ -8,13 +8,16 @@
 #include <Interpreters/Access/InterpreterCreateUserQuery.h>
 #include <Interpreters/Access/InterpreterShowGrantsQuery.h>
 #include <Common/logger_useful.h>
+#include <Common/ThreadPool.h>
 #include <Poco/JSON/JSON.h>
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Stringifier.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/range/adaptor/map.hpp>
+#include <base/range.h>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 
 
 namespace DB
@@ -41,7 +44,7 @@ namespace
     }
 
 
-    AccessEntityPtr tryReadEntityFile(const String & file_path, Poco::Logger & log)
+    AccessEntityPtr tryReadEntityFile(const String & file_path, LoggerPtr log)
     {
         try
         {
@@ -49,7 +52,7 @@ namespace
         }
         catch (...)
         {
-            tryLogCurrentException(&log, "Could not parse " + file_path);
+            tryLogCurrentException(log, "Could not parse " + file_path);
             return nullptr;
         }
     }
@@ -167,7 +170,8 @@ DiskAccessStorage::DiskAccessStorage(const String & storage_name_, const String 
     std::filesystem::create_directories(directory_path, create_dir_error_code);
 
     if (!std::filesystem::exists(directory_path) || !std::filesystem::is_directory(directory_path) || create_dir_error_code)
-        throw Exception("Couldn't create directory " + directory_path + " reason: '" + create_dir_error_code.message() + "'", ErrorCodes::DIRECTORY_DOESNT_EXIST);
+        throw Exception(ErrorCodes::DIRECTORY_DOESNT_EXIST, "Couldn't create directory {} reason: '{}'",
+                        directory_path, create_dir_error_code.message());
 
     bool should_rebuild_lists = std::filesystem::exists(getNeedRebuildListsMarkFilePath(directory_path));
     if (!should_rebuild_lists)
@@ -318,15 +322,15 @@ void DiskAccessStorage::scheduleWriteLists(AccessEntityType type)
         return; /// If the lists' writing thread is still waiting we can update `types_of_lists_to_write` easily,
                 /// without restarting that thread.
 
-    if (lists_writing_thread.joinable())
-        lists_writing_thread.join();
+    if (lists_writing_thread && lists_writing_thread->joinable())
+        lists_writing_thread->join();
 
     /// Create the 'need_rebuild_lists.mark' file.
     /// This file will be used later to find out if writing lists is successful or not.
     std::ofstream out{getNeedRebuildListsMarkFilePath(directory_path)};
     out.close();
 
-    lists_writing_thread = ThreadFromGlobalPool{&DiskAccessStorage::listsWritingThreadFunc, this};
+    lists_writing_thread = std::make_unique<ThreadFromGlobalPool>(&DiskAccessStorage::listsWritingThreadFunc, this);
     lists_writing_thread_is_waiting = true;
 }
 
@@ -350,10 +354,10 @@ void DiskAccessStorage::listsWritingThreadFunc()
 
 void DiskAccessStorage::stopListsWritingThread()
 {
-    if (lists_writing_thread.joinable())
+    if (lists_writing_thread && lists_writing_thread->joinable())
     {
         lists_writing_thread_should_exit.notify_one();
-        lists_writing_thread.join();
+        lists_writing_thread->join();
     }
 }
 
@@ -378,7 +382,7 @@ bool DiskAccessStorage::rebuildLists()
             continue;
 
         const auto access_entity_file_path = getEntityFilePath(directory_path, id);
-        auto entity = tryReadEntityFile(access_entity_file_path, *getLogger());
+        auto entity = tryReadEntityFile(access_entity_file_path, getLogger());
         if (!entity)
             continue;
 
@@ -638,7 +642,7 @@ void DiskAccessStorage::deleteAccessEntityOnDisk(const UUID & id) const
 {
     auto file_path = getEntityFilePath(directory_path, id);
     if (!std::filesystem::remove(file_path))
-        throw Exception("Couldn't delete " + file_path, ErrorCodes::FILE_DOESNT_EXIST);
+        throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Couldn't delete {}", file_path);
 }
 
 }

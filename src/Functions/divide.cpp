@@ -27,9 +27,17 @@ struct DivideFloatingImpl
     static inline llvm::Value * compile(llvm::IRBuilder<> & b, llvm::Value * left, llvm::Value * right, bool)
     {
         if (left->getType()->isIntegerTy())
-            throw Exception("DivideFloatingImpl expected a floating-point type", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "DivideFloatingImpl expected a floating-point type");
         return b.CreateFDiv(left, right);
     }
+#endif
+};
+
+template <typename A, typename B>
+struct DivideFloatingOrNullImpl : DivideFloatingImpl<A, B>
+{
+#if USE_EMBEDDED_COMPILER
+    static constexpr bool compilable = false;
 #endif
 };
 
@@ -41,4 +49,14 @@ REGISTER_FUNCTION(Divide)
     factory.registerFunction<FunctionDivide>();
 }
 
+struct NameDivideOrNull
+{
+    static constexpr auto name = "divide_or_null";
+};
+using FunctionDivideOrNull = BinaryArithmeticOverloadResolver<DivideFloatingOrNullImpl, NameDivideOrNull>;
+
+REGISTER_FUNCTION(DivideOrNull)
+{
+    factory.registerFunction<FunctionDivideOrNull>();
+}
 }

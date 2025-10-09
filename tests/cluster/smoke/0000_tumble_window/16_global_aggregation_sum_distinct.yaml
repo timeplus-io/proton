@@ -1,0 +1,55 @@
+tags:
+  - global
+description: global aggregation sum distinct and group by id, execute query, end query after 5 second
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select id, sum(distinct value), count(distinct value) from test_smoke group by id limit 4 emit periodic 5s
+    schema:
+      - name: id
+        type: string
+      - name: sum_distinct(value)
+        type: float64
+      - name: count_distinct(value)
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:00']
+      - ['dev1', 'ca', 66, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:05']
+      - ['dev2', 'ca', 59, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:02']
+      - ['dev8', 'ca', 77, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:08']
+      - ['dev3', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:00']
+      - ['dev3', 'ca', 66, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 76, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:05']
+      - ['dev2', 'ca', 80, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:02']
+      - ['dev8', 'ca', 77, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:08']
+
+  - type: check
+    target_name: 101
+    mode: random
+    expected_result:
+      - ['dev2', '273.3', '4']
+      - ['dev8', '144', '2']
+      - ['dev1', '123.3', '2']
+      - ['dev3', '123.3', '2']

@@ -1,7 +1,5 @@
 #include <Processors/Transforms/Streaming/TumbleWindowAssignmentTransform.h>
 
-#include <Columns/ColumnTuple.h>
-
 namespace DB
 {
 namespace Streaming
@@ -15,10 +13,10 @@ TumbleWindowAssignmentTransform::TumbleWindowAssignmentTransform(
 
 void TumbleWindowAssignmentTransform::assignWindow(Columns & columns) const
 {
-    ::DB::Streaming::assignWindow(
+    Streaming::assignWindow(
         columns,
         WindowInterval{params.window_interval, params.interval_kind},
-        /*time_col_pos*/ 0,
+        timestamp_col_position,
         params.time_col_is_datetime64,
         *params.time_zone);
 }

@@ -1,0 +1,150 @@
+tags:
+- join watermark alignment
+- changelog join changelog
+- query state
+description: streaming changelog all join changelog with watermark alignment (right
+  lag behind left)
+cluster:
+- p1k1
+# - p3k1 # subscribe to no support for cluster
+steps:
+- type: query
+  sql: drop stream if exists test_32_stream
+
+- type: query
+  sql: create stream test_32_stream(i int, v string)
+- type: wait
+  time: 1
+
+- type: stream
+  name: 3206
+  query_id: '3206'
+  query: subscribe to with r1 as (select i % 5 as id, v, _tp_time as time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time as time from test_32_stream where i >= 50)
+            select checked, count() from (select r1.v, r2.v, r1.time >= r2.time as checked from changelog(r1, id) as r1 join changelog(r2, id) as r2 on r1.id = r2.id and lag_behind(1ms, r2.time, r1.time))
+            group by checked emit periodic 3s settings checkpoint_interval=1,join_quiesce_threshold_ms=20000
+  schema:
+    - name: checked
+      type: bool
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 't1', '2023-01-01 00:00:04']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [51, 't2', '2023-01-01 00:00:06']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tt1', '2023-01-01 00:00:06']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'ttt1', '2023-01-01 00:00:07']
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '3206'
+- type: wait
+  time: 3
+
+- type: stream
+  name: 3206-1
+  query: recover from '3206'
+  schema:
+    - name: checked
+      type: bool
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [51, 'tt2', '2023-01-01 00:00:07']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [1, 'tttt1', '2023-01-01 00:00:09']
+
+- type: query
+  sql: insert into test_32_stream(i, v, _tp_time) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+    - name: _tp_time
+      type: datetime64(3)
+  inputs:
+    - [51, 'ttt2', '2023-01-01 00:00:09']
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '3206'
+- type: wait
+  time: 3
+
+- type: check
+  target_name: 3206
+  expected_result:
+    - ["True", 1]
+
+- type: check
+  target_name: 3206-1
+  expected_result:
+    - ["True", 1]

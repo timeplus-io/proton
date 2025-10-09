@@ -6,14 +6,20 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {
 namespace Streaming
 {
+
+/// Calculate the hash value of the columns, do filtering if the columns (their hash value) have been seen before
+/// otherwise update the hash set with the new hash keys. Prune `expired` hash keys if max key limit or timeout limit whichever
+/// reaches
 IColumn::Filter KeySet::populateKeySetsAndCalculateResults(const ColumnsWithTypeAndName & arguments, size_t & rows)
 {
-    size_t nargs = arguments.size() - limit_args;
+    size_t nargs = arguments.size();
 
     std::vector<UInt128> hash_keys;
     hash_keys.reserve(rows);
@@ -37,17 +43,23 @@ IColumn::Filter KeySet::populateKeySetsAndCalculateResults(const ColumnsWithType
     std::scoped_lock lock(mutex);
 
     /// Remove keys which reach limits
-    while (keys.size() > max_entries)
+    if (max_entries > 0)
     {
-        key_set.erase(keys.front().key);
-        keys.pop_front();
+        while (keys.size() > max_entries)
+        {
+            key_set.erase(keys.front().key);
+            keys.pop_front();
+        }
     }
 
     /// Remove keys which reach timeout
-    while (!keys.empty() && keys.front().timedOut(timeout_interval_ms))
+    if (timeout_interval_ms > 0)
     {
-        key_set.erase(keys.front().key);
-        keys.pop_front();
+        while (!keys.empty() && keys.front().timedOut(timeout_interval_ms))
+        {
+            key_set.erase(keys.front().key);
+            keys.pop_front();
+        }
     }
 
     IColumn::Filter filter;
@@ -103,7 +115,7 @@ DedupTransform::DedupTransform(const Block & input_header, const Block & output_
     , dedup_func_desc(std::move(dedup_func_desc_))
     , chunk_header(output_header.getColumns(), 0)
 {
-    assert(dedup_func_desc);
+    chassert(dedup_func_desc);
 
     init(input_header, output_header);
 }
@@ -128,7 +140,7 @@ void DedupTransform::transform(Chunk & chunk)
 
     dedup_func_desc->expr_before_table_function->execute(transformed_block);
 
-    assert(transformed_block);
+    chassert(transformed_block);
 
     auto filtered_rows = transformed_block.rows();
     auto filter = key_set->populateKeySetsAndCalculateResults(transformed_block.getColumnsWithTypeAndName(), filtered_rows);
@@ -169,58 +181,61 @@ void DedupTransform::init(const Block & input_header, const Block & output_heade
             output_column_positions.push_back(input_header.getPositionByName(col_with_type.name));
     }
 
-    initKeySet(transformed_header);
+    initKeySet();
 }
 
-void DedupTransform::initKeySet(const Block & transformed_header)
+void DedupTransform::initKeySet()
 {
-    UInt32 limit = 10000;
-    Int32 limit_sec = -1;
-    UInt32 limit_args = 0;
+    UInt64 limit = 10000;
+    Int64 limit_sec = -1;
 
     /// dedup(column1, column2, ..., [timeout, [limit]])
 
-    auto check_limit = [&](const auto & name) {
-        const auto & column_with_type = transformed_header.getByName(name);
-        const auto * limit_col = checkAndGetColumn<ColumnConst>(column_with_type.column.get());
-        if (limit_col && isInteger(column_with_type.type))
+    const auto & args = dedup_func_desc->func_ast->as<ASTFunction>()->arguments->children;
+    chassert(!args.empty());
+
+    auto check_timeout = [&](size_t pos) {
+        /// Check if last argument is interval literal
+        if (const auto * func = args[pos]->as<ASTFunction>(); func)
         {
-            limit = static_cast<UInt32>(limit_col->getUInt(0));
-            ++limit_args;
-            return true;
+            if (func->name == "to_interval_second" && args.size() >= 2)
+            {
+                if (auto * lit = func->arguments->children.front()->as<ASTLiteral>(); lit)
+                    limit_sec = lit->value.get<Int64>();
+            }
+        }
+    };
+
+    auto check_limit = [&](size_t pos) {
+        if (auto * lit = args[pos]->as<ASTLiteral>(); lit)
+        {
+            if (isInt64OrUInt64FieldType(lit->value.getType()) && args.size() >= 3)
+            {
+                limit = lit->value.get<UInt64>();
+                return true;
+            }
         }
         return false;
     };
 
-    auto check_timeout = [&](const auto & name) {
-        const auto & column_with_type = transformed_header.getByName(name);
-        const auto * limit_col = checkAndGetColumn<ColumnConst>(column_with_type.column.get());
-        if (limit_col && isInterval(column_with_type.type))
-        {
-            limit_sec = static_cast<Int32>(limit_col->getInt(0));
-            ++limit_args;
-        }
-    };
-
-    const auto & argument_names = dedup_func_desc->argument_names;
-    auto arguments_size = argument_names.size();
-    if (arguments_size > 2)
+    if (args.size() > 2)
     {
-        /// Check if last parameter is interval
-        if (check_limit(argument_names[arguments_size - 1]))
-            /// Check if the second last is number limit
-            check_timeout(argument_names[arguments_size - 2]);
+        if (check_limit(args.size() - 1))
+            check_timeout(args.size() - 2);
+        else
+            check_timeout(args.size() - 1);
     }
-    else if (arguments_size == 2)
+    else if (args.size() == 2)
     {
-        check_timeout(argument_names[arguments_size - 1]);
+        check_timeout(args.size() - 1);
     }
 
-    key_set = std::make_unique<KeySet>(limit, limit_sec, limit_args);
+    key_set = std::make_unique<KeySet>(limit, limit_sec);
 }
 
 void DedupTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
+    chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { key_set->serialize(wb); });
 }
 

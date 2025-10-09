@@ -154,7 +154,7 @@ private:
 
     static void visit(const ASTQualifiedAsterisk & node, const ASTPtr &, Data & data)
     {
-        auto & identifier = node.children[0]->as<ASTTableIdentifier &>();
+        auto & identifier = node.qualifier->as<ASTIdentifier &>();
         bool rewritten = false;
         for (const auto & table : data)
         {
@@ -173,12 +173,14 @@ using RenameQualifiedIdentifiersVisitor = InDepthNodeVisitor<RenameQualifiedIden
 
 }
 
-JoinedTables::JoinedTables(ContextPtr context_, const ASTSelectQuery & select_query, bool include_all_columns_)
+JoinedTables::JoinedTables(ContextPtr context_, const ASTSelectQuery & select_query_, bool include_all_columns_, bool is_create_parameterized_view_)
     : context(context_)
-    , table_expressions(getTableExpressions(select_query))
+    , table_expressions(getTableExpressions(select_query_))
     , include_all_columns(include_all_columns_)
-    , left_table_expression(extractTableExpression(select_query, 0))
-    , left_db_and_table(getDatabaseAndTable(select_query, 0))
+    , left_table_expression(extractTableExpression(select_query_, 0))
+    , left_db_and_table(getDatabaseAndTable(select_query_, 0))
+    , select_query(select_query_)
+    , is_create_parameterized_view(is_create_parameterized_view_)
 {}
 
 bool JoinedTables::isLeftTableSubquery() const
@@ -206,7 +208,7 @@ StoragePtr JoinedTables::getLeftTableStorage()
         return {};
 
     if (isLeftTableFunction())
-        return context->getQueryContext()->executeTableFunction(left_table_expression);
+        return context->getQueryContext()->executeTableFunction(left_table_expression, &select_query);
 
     StorageID table_id = StorageID::createEmpty();
     if (left_db_and_table)
@@ -238,7 +240,7 @@ bool JoinedTables::resolveTables()
     const auto & settings = context->getSettingsRef();
     bool include_alias_cols = include_all_columns || settings.asterisk_include_alias_columns;
     bool include_materialized_cols = include_all_columns || settings.asterisk_include_materialized_columns;
-    tables_with_columns = getDatabaseAndTablesWithColumns(table_expressions, context, include_alias_cols, include_materialized_cols);
+    tables_with_columns = getDatabaseAndTablesWithColumns(table_expressions, context, include_alias_cols, include_materialized_cols, is_create_parameterized_view);
     if (tables_with_columns.size() != table_expressions.size())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected tables count");
 
@@ -299,16 +301,15 @@ void JoinedTables::rewriteDistributedInAndJoins(ASTPtr & query)
     }
 }
 
-std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & select_query)
+std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & select_query_)
 {
     if (tables_with_columns.size() < 2)
         return {};
 
     auto settings = context->getSettingsRef();
-    MultiEnum<JoinAlgorithm> join_algorithm = settings.join_algorithm;
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
 
-    const ASTTablesInSelectQueryElement * ast_join = select_query.join();
+    const ASTTablesInSelectQueryElement * ast_join = select_query_.join();
     const auto & table_to_join = ast_join->table_expression->as<ASTTableExpression &>();
 
     /// TODO This syntax does not support specifying a database name.
@@ -324,7 +325,7 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
             }
 
             if (auto storage_dict = std::dynamic_pointer_cast<StorageDictionary>(storage);
-                storage_dict && join_algorithm.isSet(JoinAlgorithm::DIRECT))
+                storage_dict && table_join->isEnabledAlgorithm(JoinAlgorithm::DIRECT))
             {
                 FunctionDictHelper dictionary_helper(context);
 
@@ -332,7 +333,7 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
                 auto dictionary = dictionary_helper.getDictionary(dictionary_name);
                 if (!dictionary)
                 {
-                    LOG_TRACE(&Poco::Logger::get("JoinedTables"), "Can't use dictionary join: dictionary '{}' was not found", dictionary_name);
+                    LOG_TRACE(getLogger("JoinedTables"), "Can't use dictionary join: dictionary '{}' was not found", dictionary_name);
                     return nullptr;
                 }
 
@@ -341,25 +342,31 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
             }
 
             if (auto storage_kv = std::dynamic_pointer_cast<IKeyValueEntity>(storage);
-                storage_kv && join_algorithm.isSet(JoinAlgorithm::DIRECT))
+                storage_kv && table_join->isEnabledAlgorithm(JoinAlgorithm::DIRECT))
             {
                 table_join->setStorageJoin(storage_kv);
             }
+
+            /// proton: starts.
+            if (isCrossOrComma(ast_join->table_join->as<ASTTableJoin &>().kind) && table_join->isEnabledAlgorithm(JoinAlgorithm::DIRECT))
+                table_join->setCrossJoinStorage(storage);
+            /// proton: ends.
         }
     }
+    /// proton ends
 
     if ((!table_join->isSpecialStorage() &&
         settings.enable_optimize_predicate_expression))
-        replaceJoinedTable(select_query);
+        replaceJoinedTable(select_query_);
 
     return table_join;
 }
 
-void JoinedTables::reset(const ASTSelectQuery & select_query)
+void JoinedTables::reset(const ASTSelectQuery & select_query_)
 {
-    table_expressions = getTableExpressions(select_query);
-    left_table_expression = extractTableExpression(select_query, 0);
-    left_db_and_table = getDatabaseAndTable(select_query, 0);
+    table_expressions = getTableExpressions(select_query_);
+    left_table_expression = extractTableExpression(select_query_, 0);
+    left_db_and_table = getDatabaseAndTable(select_query_, 0);
 }
 
 }

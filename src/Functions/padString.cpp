@@ -1,5 +1,7 @@
 #include <Columns/ColumnFixedString.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Columns/ColumnString.h>
+#include <DataTypes/DataTypeString.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/GatherUtils/Algorithms.h>
@@ -164,7 +166,7 @@ namespace
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                     "Number of arguments for function {} doesn't match: passed {}, should be 2 or 3",
                     getName(),
-                    std::to_string(number_of_arguments));
+                    number_of_arguments);
 
             if (!isStringOrFixedString(arguments[0]))
                 throw Exception(
@@ -173,7 +175,7 @@ namespace
                     arguments[0]->getName(),
                     getName());
 
-            if (!isUnsignedInteger(arguments[1]))
+            if (!isUInt(arguments[1]))
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                     "Illegal type {} of the second argument of function {}, should be unsigned integer",
@@ -188,6 +190,11 @@ namespace
                     getName());
 
             return arguments[0];
+        }
+
+        DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+        {
+            return std::make_shared<DataTypeString>();
         }
 
         ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -271,9 +278,8 @@ namespace
                     new_length = new_length_slice.elements->getUInt(new_length_slice.position);
                     if (new_length > MAX_NEW_LENGTH)
                     {
-                        throw Exception(
-                            "New padded length (" + std::to_string(new_length) + ") is too big, maximum is: " + std::to_string(MAX_NEW_LENGTH),
-                            ErrorCodes::TOO_LARGE_STRING_SIZE);
+                        throw Exception(ErrorCodes::TOO_LARGE_STRING_SIZE, "New padded length ({}) is too big, maximum is: {}",
+                            std::to_string(new_length), std::to_string(MAX_NEW_LENGTH));
                     }
                     if (is_const_new_length)
                     {

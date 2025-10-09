@@ -1,0 +1,7 @@
+name: external_stream
+description: Tests covering the streaming join query with join alignment smoke cases,
+  covering watermark alignment and processing time alignment
+tags:
+  - smoke
+  - kafka
+  - external_stream

@@ -47,6 +47,11 @@ public:
         return params;
     }
 
+    std::string getRegionOverride() const
+    {
+        return region_override;
+    }
+
     void overrideRegion(std::string region) const
     {
         region_override = std::move(region);

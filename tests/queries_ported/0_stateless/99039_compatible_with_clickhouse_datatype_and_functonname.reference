@@ -1,0 +1,97 @@
+id	name	created_at	is_active	value	tags	metadata	options	addresses	preferences
+UInt32	String	DateTime	Bool	Float64	Array(String)	Map(String, String)	Enum8(\'small\' = 1, \'medium\' = 2, \'large\' = 3)	Array(Tuple(String, String))	Map(String, Array(Int32))
+1	Alice	2025-03-10 14:43:21	true	99.5	['tag1','tag2']	{'key1':'value1','key2':'value2'}	medium	[('New York','5th Ave'),('Los Angeles','Sunset Blvd')]	{'movies':[1,2,3],'books':[4,5]}
+2	Bob	2025-03-10 14:43:21	false	45.3	['tag3']	{'key3':'value3'}	small	[('Chicago','State St')]	{'movies':[6,7],'books':[8,9]}
+3	Charlie	2025-03-10 14:43:21	true	78.2	['tag4','tag5','tag6']	{'key4':'value4','key5':'value5'}	large	[('Miami','Ocean Dr')]	{'movies':[10],'books':[11,12]}
+id	lower(name)
+UInt32	String
+1	alice
+2	bob
+3	charlie
+1	Alice	1	99	[\'tag1\',\'tag2\']
+2	Bob	0	45	[\'tag3\']
+3	Charlie	1	78	[\'tag4\',\'tag5\',\'tag6\']
+1	Alice	2025-03-10	2025-03-01	170379
+2	Bob	2025-03-10	2025-03-01	170379
+3	Charlie	2025-03-10	2025-03-01	170379
+2025-03-10	3	74.33333333333333
+1	[('tag1',4),('tag2',4)]
+2	[('tag3',4)]
+3	[('tag4',4),('tag5',4),('tag6',4)]
+1	(2,'Alice')
+2	(2,'Bob')
+3	(2,'Charlie')
+1	1_Alice
+2	2_Bob
+3	3_Charlie
+1	Alice	[('tag1',0),('tag2',0)]
+2	Bob	[('tag3',0)]
+3	Charlie	[('tag4',0),('tag5',0),('tag6',0)]
+1	Alice	99.5
+3	Charlie	78.2
+1	Alice	6
+3	Charlie	10
+medium	Admin	1	99.5	tag1	1	2025-03-10 14:43:21
+medium	Admin	1	99.5	tag2	1	2025-03-10 14:43:21
+large	Member	1	78.2	tag4	1	2025-03-10 14:43:21
+large	Member	1	78.2	tag5	1	2025-03-10 14:43:21
+large	Member	1	78.2	tag6	1	2025-03-10 14:43:21
+1	Alice	medium	99.5	2025-03-10 14:43:21.000	true	Admin
+2	Bob	small	45.3	2025-03-10 14:43:21.000	false	Guest
+3	Charlie	large	78.2	2025-03-10 14:43:21.000	true	Member
+3	Charlie	78.2	2025-03-10
+3	Charlie	78.2	large	14
+1	Alice	99.5	medium	14
+3	Charlie	78.2	2025-03-10	2025-03-17
+1	Alice	99.5	2025-03-10	2025-03-17
+id	lower(name)
+UInt32	String
+1	alice
+2	bob
+3	charlie
+1	Alice	1	99	[\'tag1\',\'tag2\']
+2	Bob	0	45	[\'tag3\']
+3	Charlie	1	78	[\'tag4\',\'tag5\',\'tag6\']
+1	Alice	2025-03-10	2025-03-01	170379
+2	Bob	2025-03-10	2025-03-01	170379
+3	Charlie	2025-03-10	2025-03-01	170379
+2025-03-10	3	74.33333333333333
+1	[('tag1',4),('tag2',4)]
+2	[('tag3',4)]
+3	[('tag4',4),('tag5',4),('tag6',4)]
+1	(2,'Alice')
+2	(2,'Bob')
+3	(2,'Charlie')
+1	1_Alice
+2	2_Bob
+3	3_Charlie
+1	Alice	[('tag1',0),('tag2',0)]
+2	Bob	[('tag3',0)]
+3	Charlie	[('tag4',0),('tag5',0),('tag6',0)]
+1	Alice	99.5
+3	Charlie	78.2
+medium	Admin	1	99.5	tag1	1	2025-03-10 14:43:21
+medium	Admin	1	99.5	tag2	1	2025-03-10 14:43:21
+large	Member	1	78.2	tag4	1	2025-03-10 14:43:21
+large	Member	1	78.2	tag5	1	2025-03-10 14:43:21
+large	Member	1	78.2	tag6	1	2025-03-10 14:43:21
+1	Alice	medium	99.5	2025-03-10 14:43:21.000	true	Admin
+2	Bob	small	45.3	2025-03-10 14:43:21.000	false	Guest
+3	Charlie	large	78.2	2025-03-10 14:43:21.000	true	Member
+3	Charlie	78.2	2025-03-10
+3	Charlie	78.2	large	14
+1	Alice	99.5	medium	14
+3	Charlie	78.2	2025-03-10	2025-03-17
+1	Alice	99.5	2025-03-10	2025-03-17
+127.0.0.1	127.0.0.1
+192.168.1.1	192.168.1.1
+::1	::1
+2001:db8:85a3::8a2e:370:7334	2001:db8:85a3::8a2e:370:7334
+::1	1
+2001:db8:85a3::8a2e:370:7334	1
+127.0.0.1	127.0.0.1
+192.168.1.1	192.168.1.1
+::1	::1
+2001:db8:85a3::8a2e:370:7334	2001:db8:85a3::8a2e:370:7334
+::1	1
+2001:db8:85a3::8a2e:370:7334	1

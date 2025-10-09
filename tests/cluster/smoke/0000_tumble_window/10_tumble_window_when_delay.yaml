@@ -1,0 +1,63 @@
+tags:
+  - tumble window
+  - delay
+description: stream query tumble window w/delay:no aggregation to be emit when delay gate, steram query with 5sec window and delay 3 sec w/late events within 2 sec delay
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after window close with delay interval 3 second
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - type: stream
+    name: 101-1
+    query: select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark with delay interval 3 second
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:00']
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:05']
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:03']
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:02']
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:08']
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['2020-02-02 20:01:00', '2020-02-02 20:01:05', 4]
+
+  - type: check
+    target_name: 101-1
+    expected_result:
+      - ['2020-02-02 20:01:00', '2020-02-02 20:01:05', 4]

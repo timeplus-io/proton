@@ -1,0 +1,39 @@
+{# vi: ft=sql #}
+
+{% for layout in ["hashed", "sparse_hashed"] %}
+DROP DICTIONARY IF EXISTS test_dictionary_{{layout}};
+DROP DICTIONARY IF EXISTS test_dictionary_{{layout}}_load_factor;
+DROP STREAM IF EXISTS test_table;
+
+CREATE STREAM test_table
+(
+    key uint64,
+    value uint16
+) ENGINE=Memory() AS SELECT number, number FROM numbers(1e6);
+
+CREATE DICTIONARY test_dictionary_{{layout}}
+(
+    key uint64,
+    value uint16
+) PRIMARY KEY key
+SOURCE(TIMEPLUS(STREAM test_table USER proton PASSWORD 'proton@t+'))
+LAYOUT({{layout}}())
+LIFETIME(0);
+
+CREATE DICTIONARY test_dictionary_{{layout}}_load_factor
+(
+    key uint64,
+    value uint16
+) PRIMARY KEY key
+SOURCE(TIMEPLUS(STREAM test_table USER proton PASSWORD 'proton@t+'))
+LAYOUT({{layout}}(MAX_LOAD_FACTOR 0.98))
+LIFETIME(0);
+
+SYSTEM RELOAD DICTIONARY test_dictionary_{{layout}};
+SYSTEM RELOAD DICTIONARY test_dictionary_{{layout}}_load_factor;
+SELECT name, element_count, round(load_factor, 4), round(bytes_allocated, -6) FROM system.dictionaries WHERE database = current_database() ORDER BY name;
+
+DROP DICTIONARY IF EXISTS test_dictionary_{{layout}};
+DROP DICTIONARY IF EXISTS test_dictionary_{{layout}}_load_factor;
+DROP STREAM test_table;
+{% endfor %}

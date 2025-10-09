@@ -1,0 +1,103 @@
+JSONColumns
+{
+	"a": [0, 1, 2, 3, 4],
+	"b": ["string", "string", "string", "string", "string"],
+	"c": [[[[],"string"],[[],"gnirtS"]], [[[0],"string"],[[0],"gnirtS"]], [[[0,1],"string"],[[0,1],"gnirtS"]], [[[],"string"],[[0,1,2],"gnirtS"]], [[[0],"string"],[[],"gnirtS"]]]
+}
+a	nullable(int64)					
+b	nullable(string)					
+c	array(tuple(array(nullable(int64)), nullable(string)))					
+0	string	[([],'string'),([],'gnirtS')]
+1	string	[([0],'string'),([0],'gnirtS')]
+2	string	[([0,1],'string'),([0,1],'gnirtS')]
+3	string	[([],'string'),([0,1,2],'gnirtS')]
+4	string	[([0],'string'),([],'gnirtS')]
+JSONCompactColumns
+[
+	[0, 1, 2, 3, 4],
+	["string", "string", "string", "string", "string"],
+	[[[[],"string"],[[],"gnirtS"]], [[[0],"string"],[[0],"gnirtS"]], [[[0,1],"string"],[[0,1],"gnirtS"]], [[[],"string"],[[0,1,2],"gnirtS"]], [[[0],"string"],[[],"gnirtS"]]]
+]
+c1	nullable(int64)					
+c2	nullable(string)					
+c3	array(tuple(array(nullable(int64)), nullable(string)))					
+0	string	[([],'string'),([],'gnirtS')]
+1	string	[([0],'string'),([0],'gnirtS')]
+2	string	[([0,1],'string'),([0,1],'gnirtS')]
+3	string	[([],'string'),([0,1,2],'gnirtS')]
+4	string	[([0],'string'),([],'gnirtS')]
+JSONColumnsWithMetadata
+{
+	"meta":
+	[
+		{
+			"name": "sum",
+			"type": "uint64"
+		},
+		{
+			"name": "avg",
+			"type": "float64"
+		}
+	],
+
+	"data":
+	{
+		"sum": ["1", "2", "3", "4"],
+		"avg": [1, 2, 3, 2]
+	},
+
+	"totals":
+	{
+		"sum": "10",
+		"avg": 2
+	},
+
+	"extremes":
+	{
+		"min":
+		{
+			"sum": "1",
+			"avg": 1
+		},
+		"max":
+		{
+			"sum": "4",
+			"avg": 3
+		}
+	},
+
+	"rows": 4,
+
+	"statistics":
+	{
+		"rows_read": 5,
+		"bytes_read": 20
+	}
+}
+b	nullable(int64)					
+a	nullable(int64)					
+c	nullable(int64)					
+d	nullable(string)					
+1	3	\N	\N
+2	2	\N	\N
+3	1	\N	\N
+\N	\N	1	\N
+\N	\N	2	\N
+\N	\N	3	\N
+\N	\N	\N	string
+OK
+1	
+2	
+3	
+c1	nullable(int64)					
+c2	nullable(int64)					
+c3	nullable(string)					
+1	1	\N
+1	2	string
+1	\N	\N
+2	2	\N
+2	\N	\N
+3	3	\N
+3	\N	\N
+OK
+OK

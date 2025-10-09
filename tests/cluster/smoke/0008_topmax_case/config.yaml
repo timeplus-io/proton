@@ -1,0 +1,4 @@
+name: topmax
+description: Tests covering the steam query smoke cases.
+tags:
+- smoke

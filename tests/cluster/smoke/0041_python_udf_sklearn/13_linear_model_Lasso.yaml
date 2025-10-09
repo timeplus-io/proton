@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, xx int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getLasso(x int, xx int, y int) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      from sklearn import linear_model
+
+      class getLasso:
+          def __init__(self):
+              self.lasso = 0
+
+          def serialize(self):
+              data = {}
+              data['lasso'] = self.lasso
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.lasso = data['lasso']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, xxs, ys):
+              X = np.stack((xs, xxs), axis=1)
+              y = np.array(ys)
+              clf = linear_model.Lasso(alpha=0.1)
+              clf.fit(X, y)
+              self.lasso = clf.intercept_
+
+          def finalize(self):
+              return self.lasso
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf6-13-1
+    type: stream
+    query: select getLasso(x, xx, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into uda_stream(x, xx, y) values
+          (0, 0, 0)(1, 1, 1)(2, 2, 2);
+
+  - type: check
+    target_name: python-udf6-13-1
+    expected_result:
+      - [0.15000000000000002]

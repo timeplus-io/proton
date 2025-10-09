@@ -42,7 +42,6 @@ void perf(std::string_view map_name)
     }
 }
 
-
 template<typename Key, bool Flag>
 using CountedValueMap = DB::Streaming::CountedValueMap<Key, Flag, void>;
 }

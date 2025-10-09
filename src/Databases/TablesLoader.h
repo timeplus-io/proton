@@ -20,7 +20,7 @@ class AtomicStopwatch;
 namespace DB
 {
 
-void logAboutProgress(Poco::Logger * log, size_t processed, size_t total, AtomicStopwatch & watch);
+void logAboutProgress(LoggerPtr log, size_t processed, size_t total, AtomicStopwatch & watch);
 
 
 class IDatabase;
@@ -30,6 +30,10 @@ struct ParsedTableMetadata
 {
     String path;
     ASTPtr ast;
+
+    /// proton : starts
+    UInt32 schema_version;
+    /// proton : ends
 };
 
 using ParsedMetadata = std::map<QualifiedTableName, ParsedTableMetadata>;
@@ -92,7 +96,7 @@ private:
 
     Strings databases_to_load;
     ParsedTablesMetadata metadata;
-    Poco::Logger * log;
+    LoggerPtr log;
     std::atomic<size_t> tables_processed{0};
     AtomicStopwatch stopwatch;
 

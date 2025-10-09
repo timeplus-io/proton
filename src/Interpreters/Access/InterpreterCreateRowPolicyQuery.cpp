@@ -43,13 +43,13 @@ namespace
 BlockIO InterpreterCreateRowPolicyQuery::execute()
 {
     auto & query = query_ptr->as<ASTCreateRowPolicyQuery &>();
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     getContext()->checkAccess(query.alter ? AccessType::ALTER_ROW_POLICY : AccessType::CREATE_ROW_POLICY);
 
     assert(query.names->cluster.empty());
     std::optional<RolesOrUsersSet> roles_from_query;
     if (query.roles)
-        roles_from_query = RolesOrUsersSet{*query.roles, access_control, getContext()->getUserID()};
+        roles_from_query = RolesOrUsersSet{*query.roles, *access_control, getContext()->getUserID()};
 
     query.replaceEmptyDatabase(getContext()->getCurrentDatabase());
 
@@ -64,11 +64,11 @@ BlockIO InterpreterCreateRowPolicyQuery::execute()
         Strings names = query.names->toStrings();
         if (query.if_exists)
         {
-            auto ids = access_control.find<RowPolicy>(names);
-            access_control.tryUpdate(ids, update_func);
+            auto ids = access_control->find<RowPolicy>(names);
+            access_control->tryUpdate(ids, update_func);
         }
         else
-            access_control.update(access_control.getIDs<RowPolicy>(names), update_func);
+            access_control->update(access_control->getIDs<RowPolicy>(names), update_func);
     }
     else
     {
@@ -81,11 +81,11 @@ BlockIO InterpreterCreateRowPolicyQuery::execute()
         }
 
         if (query.if_not_exists)
-            access_control.tryInsert(new_policies);
+            access_control->tryInsert(new_policies);
         else if (query.or_replace)
-            access_control.insertOrReplace(new_policies);
+            access_control->insertOrReplace(new_policies);
         else
-            access_control.insert(new_policies);
+            access_control->insert(new_policies);
     }
 
     return {};

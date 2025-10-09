@@ -44,7 +44,7 @@ namespace
                 boost::to_upper(uppercased_keyword);
                 it = keyword_to_flags_map.find(uppercased_keyword);
                 if (it == keyword_to_flags_map.end())
-                    throw Exception("Unknown access type: " + String(keyword), ErrorCodes::UNKNOWN_ACCESS_TYPE);
+                    throw Exception(ErrorCodes::UNKNOWN_ACCESS_TYPE, "Unknown access type: {}", String(keyword));
             }
             return it->second;
         }
@@ -110,12 +110,15 @@ namespace
         {
             UNKNOWN = -2,
             GROUP = -1,
-            GLOBAL,
-            DATABASE,
-            TABLE,
+            GLOBAL = 0,
+            DATABASE = 1,
+            TABLE = 2,
             VIEW = TABLE,
-            COLUMN,
-            DICTIONARY,
+            COLUMN = 3,
+            DICTIONARY = 4,
+            NAMED_COLLECTION = 5,
+            USER_NAME = 6,
+            TABLE_ENGINE = 7,
         };
 
         struct Node;
@@ -179,7 +182,7 @@ namespace
             else
             {
                 if (nodes.contains(keyword))
-                    throw Exception(keyword + " declared twice", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "{} declared twice", keyword);
                 node = std::make_unique<Node>(keyword, node_type);
                 nodes[node->keyword] = node.get();
             }
@@ -225,9 +228,9 @@ namespace
 #           undef MAKE_ACCESS_FLAGS_NODE
 
             if (!owned_nodes.contains("NONE"))
-                throw Exception("'NONE' not declared", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "'NONE' not declared");
             if (!owned_nodes.contains("ALL"))
-                throw Exception("'ALL' not declared", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "'ALL' not declared");
 
             all_node = std::move(owned_nodes["ALL"]);
             none_node = std::move(owned_nodes["NONE"]);
@@ -238,9 +241,8 @@ namespace
             {
                 const auto & unused_node = *(owned_nodes.begin()->second);
                 if (unused_node.node_type == UNKNOWN)
-                    throw Exception("Parent group '" + unused_node.keyword + "' not found", ErrorCodes::LOGICAL_ERROR);
-                else
-                    throw Exception("Access type '" + unused_node.keyword + "' should have parent group", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Parent group '{}' not found", unused_node.keyword);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Access type '{}' should have parent group", unused_node.keyword);
             }
         }
 
@@ -345,7 +347,7 @@ namespace
         std::unordered_map<std::string_view, Flags> keyword_to_flags_map;
         std::vector<Flags> access_type_to_flags_mapping;
         Flags all_flags;
-        Flags all_flags_for_target[static_cast<size_t>(DICTIONARY) + 1];
+        Flags all_flags_for_target[static_cast<size_t>(TABLE_ENGINE) + 1];
         Flags all_flags_grantable_on_database_level;
         Flags all_flags_grantable_on_table_level;
     };

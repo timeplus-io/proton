@@ -1,11 +1,13 @@
 #include <Columns/ColumnSparse.h>
-#include <Columns/ColumnsCommon.h>
+
 #include <Columns/ColumnCompressed.h>
 #include <Columns/ColumnTuple.h>
-#include <Common/WeakHash.h>
-#include <Common/SipHash.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnsCommon.h>
+#include <Columns/ColumnTuple.h>
 #include <Common/HashTable/Hash.h>
-#include <Processors/Transforms/ColumnGathererTransform.h>
+#include <Common/SipHash.h>
+#include <Common/WeakHash.h>
 
 #include <algorithm>
 #include <bit>
@@ -23,7 +25,7 @@ ColumnSparse::ColumnSparse(MutableColumnPtr && values_)
     : values(std::move(values_)), _size(0)
 {
     if (!values->empty())
-        throw Exception("Not empty values passed to ColumnSparse, but no offsets passed", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Not empty values passed to ColumnSparse, but no offsets passed");
 
     values->insertDefault();
     offsets = ColumnUInt64::create();
@@ -129,7 +131,7 @@ StringRef ColumnSparse::getDataAt(size_t n) const
 
 ColumnPtr ColumnSparse::convertToFullColumnIfSparse() const
 {
-    return values->createWithOffsets(getOffsetsData(), (*values)[0], _size, /*shift=*/ 1);
+    return values->createWithOffsets(getOffsetsData(), *createColumnConst(values, 0), _size, /*shift=*/ 1);
 }
 
 void ColumnSparse::insertSingleValue(const Inserter & inserter)
@@ -155,6 +157,18 @@ StringRef ColumnSparse::serializeValueIntoArena(size_t n, Arena & arena, char co
     return values->serializeValueIntoArena(getValueIndex(n), arena, begin);
 }
 
+/// proton: starts.
+void ColumnSparse::serializeValueIntoBuffer(size_t n, WriteBuffer & wb) const
+{
+    values->serializeValueIntoBuffer(getValueIndex(n), wb);
+}
+/// proton: ends.
+
+char * ColumnSparse::serializeValueIntoMemory(size_t n, char * memory) const
+{
+    return values->serializeValueIntoMemory(getValueIndex(n), memory);
+}
+
 const char * ColumnSparse::deserializeAndInsertFromArena(const char * pos)
 {
     const char * res = nullptr;
@@ -167,14 +181,17 @@ const char * ColumnSparse::skipSerializedInArena(const char * pos) const
     return values->skipSerializedInArena(pos);
 }
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 void ColumnSparse::insertRangeFrom(const IColumn & src, size_t start, size_t length)
+#else
+void ColumnSparse::doInsertRangeFrom(const IColumn & src, size_t start, size_t length)
+#endif
 {
     if (length == 0)
         return;
 
     if (start + length > src.size())
-        throw Exception("Parameter out of bound in IColumnString::insertRangeFrom method.",
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Parameter out of bound in IColumnString::insertRangeFrom method.");
 
     auto & offsets_data = getOffsetsData();
 
@@ -233,7 +250,20 @@ void ColumnSparse::insert(const Field & x)
     insertSingleValue([&](IColumn & column) { column.insert(x); });
 }
 
+bool ColumnSparse::tryInsert(const Field & x)
+{
+    if (!values->tryInsert(x))
+        return false;
+
+    insertSingleValue([&](IColumn &) {}); /// Value already inserted, use no-op inserter.
+    return true;
+}
+
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 void ColumnSparse::insertFrom(const IColumn & src, size_t n)
+#else
+void ColumnSparse::doInsertFrom(const IColumn & src, size_t n)
+#endif
 {
     if (const auto * src_sparse = typeid_cast<const ColumnSparse *>(&src))
     {
@@ -336,7 +366,7 @@ ColumnPtr ColumnSparse::filter(const Filter & filt, ssize_t) const
 void ColumnSparse::expand(const Filter & mask, bool inverted)
 {
     if (mask.size() < _size)
-        throw Exception("Mask size should be no less than data size.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mask size should be no less than data size.");
 
     auto res_offsets = offsets->cloneEmpty();
     auto & res_offsets_data = assert_cast<ColumnUInt64 &>(*res_offsets).getData();
@@ -347,7 +377,7 @@ void ColumnSparse::expand(const Filter & mask, bool inverted)
         if (!!mask[i] ^ inverted)
         {
             if (it.getCurrentRow() == _size)
-                throw Exception("Too many bytes in mask", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Too many bytes in mask");
 
             if (!it.isDefault())
                 res_offsets_data[it.getCurrentOffset()] = i;
@@ -428,12 +458,29 @@ ColumnPtr ColumnSparse::indexImpl(const PaddedPODArray<Type> & indexes, size_t l
     return ColumnSparse::create(std::move(res_values), std::move(res_offsets), limit);
 }
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 int ColumnSparse::compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
+#else
+int ColumnSparse::doCompareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
+#endif
 {
     if (const auto * rhs_sparse = typeid_cast<const ColumnSparse *>(&rhs_))
         return values->compareAt(getValueIndex(n), rhs_sparse->getValueIndex(m), rhs_sparse->getValuesColumn(), null_direction_hint);
 
     return values->compareAt(getValueIndex(n), m, rhs_, null_direction_hint);
+}
+
+bool ColumnSparse::equal(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const
+{
+    if (const auto * rhs_sparse = typeid_cast<const ColumnSparse *>(&rhs_))
+        return values->equal(getValueIndex(n), rhs_sparse->getValueIndex(m), rhs_sparse->getValuesColumn(), null_direction_hint);
+
+    return values->equal(getValueIndex(n), m, rhs_, null_direction_hint);
+}
+
+bool ColumnSparse::equal(size_t n, const Field & rhs_, int null_direction_hint) const
+{
+    return values->equal(getValueIndex(n), rhs_, null_direction_hint);
 }
 
 void ColumnSparse::compareColumn(const IColumn & rhs, size_t rhs_row_num,
@@ -455,7 +502,8 @@ void ColumnSparse::compareColumn(const IColumn & rhs, size_t rhs_row_num,
             nullptr, nested_result, direction, nan_direction_hint);
 
         const auto & offsets_data = getOffsetsData();
-        compare_results.resize_fill(_size, nested_result[0]);
+        compare_results.resize(size());
+        std::fill(compare_results.begin(), compare_results.end(), nested_result[0]);
         for (size_t i = 0; i < offsets_data.size(); ++i)
             compare_results[offsets_data[i]] = nested_result[i + 1];
     }
@@ -471,7 +519,7 @@ int ColumnSparse::compareAtWithCollation(size_t n, size_t m, const IColumn & rhs
 
 bool ColumnSparse::hasEqualValues() const
 {
-    size_t num_defaults = getNumberOfDefaults();
+    size_t num_defaults = getNumberOfDefaultRows();
     if (num_defaults == _size)
         return true;
 
@@ -513,7 +561,7 @@ void ColumnSparse::getPermutationImpl(IColumn::PermutationSortDirection directio
     else
         values->getPermutation(direction, stability, limit + 1, null_direction_hint, perm);
 
-    size_t num_of_defaults = getNumberOfDefaults();
+    size_t num_of_defaults = getNumberOfDefaultRows();
     size_t row = 0;
 
     const auto & offsets_data = getOffsetsData();
@@ -621,7 +669,7 @@ ColumnPtr ColumnSparse::replicate(const Offsets & replicate_offsets) const
 {
     /// TODO: implement specializations.
     if (_size != replicate_offsets.size())
-        throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of offsets doesn't match size of column.");
 
     if (_size == 0)
         return ColumnSparse::create(values->cloneEmpty());
@@ -686,7 +734,7 @@ void ColumnSparse::getExtremes(Field & min, Field & max) const
         return;
     }
 
-    if (getNumberOfDefaults() == 0)
+    if (getNumberOfDefaultRows() == 0)
     {
         size_t min_idx = 1;
         size_t max_idx = 1;
@@ -718,17 +766,12 @@ void ColumnSparse::getIndicesOfNonDefaultRows(IColumn::Offsets & indices, size_t
 
 double ColumnSparse::getRatioOfDefaultRows(double) const
 {
-    return static_cast<double>(getNumberOfDefaults()) / _size;
+    return static_cast<double>(getNumberOfDefaultRows()) / _size;
 }
 
-MutableColumns ColumnSparse::scatter(ColumnIndex num_columns, const Selector & selector) const
+UInt64 ColumnSparse::getNumberOfDefaultRows() const
 {
-    return scatterImpl<ColumnSparse>(num_columns, selector);
-}
-
-void ColumnSparse::gather(ColumnGathererStream & gatherer_stream)
-{
-    gatherer_stream.gather(*this);
+    return _size - offsets->size();
 }
 
 ColumnPtr ColumnSparse::compress() const
@@ -750,6 +793,20 @@ bool ColumnSparse::structureEquals(const IColumn & rhs) const
     if (const auto * rhs_sparse = typeid_cast<const ColumnSparse *>(&rhs))
         return values->structureEquals(*rhs_sparse->values);
     return false;
+}
+
+void ColumnSparse::forEachMutableSubcolumn(MutableColumnCallback callback)
+{
+    callback(values);
+    callback(offsets);
+}
+
+void ColumnSparse::forEachMutableSubcolumnRecursively(RecursiveMutableColumnCallback callback)
+{
+    callback(*values);
+    values->forEachMutableSubcolumnRecursively(callback);
+    callback(*offsets);
+    offsets->forEachMutableSubcolumnRecursively(callback);
 }
 
 void ColumnSparse::forEachSubcolumn(ColumnCallback callback) const
@@ -794,6 +851,15 @@ ColumnSparse::Iterator ColumnSparse::getIterator(size_t n) const
     const auto * it = std::lower_bound(offsets_data.begin(), offsets_data.end(), n);
     size_t current_offset = it - offsets_data.begin();
     return Iterator(offsets_data, _size, current_offset, n);
+}
+
+void ColumnSparse::takeDynamicStructureFromSourceColumns(const Columns & source_columns)
+{
+    Columns values_source_columns;
+    values_source_columns.reserve(source_columns.size());
+    for (const auto & source_column : source_columns)
+        values_source_columns.push_back(assert_cast<const ColumnSparse &>(*source_column).getValuesPtr());
+    values->takeDynamicStructureFromSourceColumns(values_source_columns);
 }
 
 ColumnPtr recursiveRemoveSparse(const ColumnPtr & column)

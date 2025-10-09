@@ -1,0 +1,38 @@
+tags:
+  - prepare
+  - validate
+
+description: basic tests
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: example-1-1
+    type: stream
+    query: select x from example where _tp_time > earliest_ts() limit 3;
+    schema:
+      - name: x
+        type: int32
+
+  - name: example-1-2
+    type: stream
+    query: select x from example_external limit 3 settings seek_to='earliest';
+    schema:
+      - name: x
+        type: int32
+
+  - type: check
+    target_name: example-1-1
+    expected_result:
+      - [1]
+      - [2]
+      - [3]
+
+  - type: check
+    target_name: example-1-2
+    expected_result:
+      - [2]
+      - [4]
+      - [6]  

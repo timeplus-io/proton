@@ -1,11 +1,13 @@
-#include "AggregateFunctionJavaScriptAdapter.h"
+#include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
 
+#include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
+#include <base/getMemoryAmount.h>
 #include <Common/logger_useful.h>
+
 #include <span>
 
 namespace DB
@@ -23,14 +25,28 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 {
     /// FIXME, create isolate from V8::V8 global isolates pool
     v8::Isolate::CreateParams isolate_params;
+    size_t max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+    size_t max_old_gen_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+
+    LoggerPtr logger = getLogger("JavaScriptAggregateFunction");
+
+    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
+    isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
+
+    LOG_INFO(logger, "JavaScript User Defined Aggregate Function '{}' memory usage details: hard limit {} bytes.", name, isolate_params.constraints.max_old_generation_size_in_bytes());
+
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
 
-    auto * logger = &Poco::Logger::get("JavaScriptAggregateFunction");
+    isolate.get()->AddNearHeapLimitCallback(V8::nearHeapLimitCallback, isolate.get());
+    isolate.get()->SetFatalErrorHandler(V8::fatalErrorHandle);
 
     /// Analyze if this UDA's definition to initialize the blueprint
-    auto init_and_validate = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> & blueprint) {
+    auto init_and_validate = [&](v8::Isolate * isolate_,
+                                 v8::Local<v8::Context> & local_ctx,
+                                 v8::TryCatch & try_catch,
+                                 v8::Local<v8::Value> & blueprint) {
         if (!blueprint->IsObject())
         {
             LOG_ERROR(logger, "Missing UDA object definition or the variable '{}' is not an object.", name);
@@ -42,8 +58,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
         /// Validate functions / properties defined in JavaScript UDA code
         {
             v8::Local<v8::Value> function_val;
-            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "initialize")).ToLocal(&function_val)
-                || !function_val->IsFunction())
+            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "initialize")).ToLocal(&function_val) || !function_val->IsFunction())
                 LOG_DEBUG(logger, "'initialize' function is not defined in JavaScript UDA");
         }
 
@@ -55,8 +70,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
         {
             v8::Local<v8::Value> function_val;
-            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "finalize")).ToLocal(&function_val)
-                || !function_val->IsFunction())
+            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "finalize")).ToLocal(&function_val) || !function_val->IsFunction())
                 throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "'finalize' function is required in JavaScript UDA");
         }
 
@@ -68,8 +82,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
         {
             v8::Local<v8::Value> function_val;
-            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "serialize")).ToLocal(&function_val)
-                || !function_val->IsFunction())
+            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "serialize")).ToLocal(&function_val) || !function_val->IsFunction())
                 LOG_WARNING(
                     logger,
                     "'serialize' function is not defined in JavaScript UDA. Multiple shard processing or checkpoint may be not supported");
@@ -77,8 +90,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
         {
             v8::Local<v8::Value> function_val;
-            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "deserialize")).ToLocal(&function_val)
-                || !function_val->IsFunction())
+            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "deserialize")).ToLocal(&function_val) || !function_val->IsFunction())
                 LOG_WARNING(
                     logger,
                     "'deserialize' function is not defined in JavaScript UDA. Multiple shard processing or checkpoint may be not "
@@ -92,7 +104,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
                 has_user_defined_emit_strategy = V8::from_v8<bool>(isolate_, val);
                 if (has_user_defined_emit_strategy)
                     LOG_INFO(
-                        &Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
+                        getLogger("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
             }
         }
 
@@ -114,21 +126,23 @@ JavaScriptBlueprint::~JavaScriptBlueprint() noexcept
 
 JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
     const JavaScriptBlueprint & blueprint,
-    const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments,
+    const std::vector<cluster::protocol::UserDefinedFunctionDescriptor::Argument> & arguments,
     const bool is_changelog_input_)
     : is_changelog_input(is_changelog_input_)
 {
     columns.reserve(arguments.size());
 
     /// check _tp_delta column
-    if (unlikely(arguments.back().type->getTypeId() != TypeIndex::Int8))
+    auto last_arg_type = DataTypeFactory::instance().get(arguments.back().type);
+    if (unlikely(last_arg_type->getTypeId() != TypeIndex::Int8))
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "Tha last argument of JavaScript UDA is '_tp_delta' column, which should be 'int8'. Invalid type.");
 
     for (const auto & arg : arguments)
     {
-        auto col = arg.type->createColumn();
+        auto arg_type = DataTypeFactory::instance().get(arg.type);
+        auto col = arg_type->createColumn();
         col->reserve(8);
         columns.emplace_back(std::move(col));
     }
@@ -144,8 +158,7 @@ JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
         /// get functions defined in JavaScript UDA code
         {
             v8::Local<v8::Value> function_val;
-            if (obj->Get(local_ctx, V8::to_v8(isolate_, "initialize")).ToLocal(&function_val)
-                && function_val->IsFunction())
+            if (obj->Get(local_ctx, V8::to_v8(isolate_, "initialize")).ToLocal(&function_val) && function_val->IsFunction())
                 initialize_func.Reset(isolate_, function_val.As<v8::Function>());
         }
 
@@ -181,8 +194,7 @@ JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
 
         {
             v8::Local<v8::Value> function_val;
-            if (obj->Get(local_ctx, V8::to_v8(isolate_, "deserialize")).ToLocal(&function_val)
-                && function_val->IsFunction())
+            if (obj->Get(local_ctx, V8::to_v8(isolate_, "deserialize")).ToLocal(&function_val) && function_val->IsFunction())
                 deserialize_func.Reset(isolate_, function_val.As<v8::Function>());
         }
 
@@ -194,7 +206,7 @@ JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
             v8::Local<v8::Value> res;
             if (!local_func->Call(local_ctx, obj, 0, nullptr).ToLocal(&res))
             {
-                LOG_ERROR(&Poco::Logger::get("JavaScriptAggregateFunction"), "Failed to initialize UDA");
+                LOG_ERROR(getLogger("JavaScriptAggregateFunction"), "Failed to initialize UDA");
 
                 V8::throwException(
                     isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "Failed to invoke 'initialize' function of JavaScript UDA");
@@ -264,35 +276,35 @@ void JavaScriptAggrFunctionState::reinitCache()
 }
 
 AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
-    JavaScriptUserDefinedFunctionConfigurationPtr config_,
+    cluster::protocol::UserDefinedFunctionDescriptorPtr && udf_desc_,
     const DataTypes & types,
     const Array & params_,
     bool is_changelog_input_,
-    size_t max_v8_heap_size_in_bytes_)
-    : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_)
-    , config(config_)
+    size_t max_v8_heap_size_in_bytes_,
+    int64_t log_interval_ms_)
+    : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_, DataTypeFactory::instance().get(udf_desc_->return_type))
+    , udf_desc(std::move(udf_desc_))
     , num_arguments(types.size())
     , is_changelog_input(is_changelog_input_)
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
-    , blueprint(config->name, config->source)
+    , log_interval_ms(log_interval_ms_)
+    , blueprint(
+          udf_desc->name, std::dynamic_pointer_cast<cluster::protocol::JavaScriptUserDefinedFunctionPayload>(udf_desc->payload)->source)
+    , logger(getLogger("JavaScriptAggregateFunction"))
 {
+    LOG_INFO(logger, "udf name={}, javascript_max_memory_bytes={}", udf_desc->name, max_v8_heap_size_in_bytes);
 }
 
 String AggregateFunctionJavaScriptAdapter::getName() const
 {
-    return config->name;
-}
-
-DataTypePtr AggregateFunctionJavaScriptAdapter::getReturnType() const
-{
-    return config->result_type;
+    return udf_desc->name;
 }
 
 /// create instance of UDF via function_builder
 void AggregateFunctionJavaScriptAdapter::create(AggregateDataPtr __restrict place) const
 {
-    V8::checkHeapLimit(blueprint.isolate.get(), max_v8_heap_size_in_bytes);
-    new (place) Data(blueprint, config->arguments, is_changelog_input);
+    V8::checkHeapLimit(blueprint.isolate.get(), max_v8_heap_size_in_bytes, canLogV8Memory(), logger);
+    new (place) Data(blueprint, udf_desc->arguments, is_changelog_input);
 }
 
 /// destroy instance of UDF
@@ -386,13 +398,12 @@ void AggregateFunctionJavaScriptAdapter::merge(AggregateDataPtr __restrict place
 
         v8::Local<v8::Value> res;
         if (!local_func->Call(ctx, local_obj, static_cast<int>(argv.size()), argv.data()).ToLocal(&res))
-            V8::throwException(
-                isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "Failed to invoke 'merge' function of JavaScript UDA");
+            V8::throwException(isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "Failed to invoke 'merge' function of JavaScript UDA");
     };
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(merge_func));
 }
 
-size_t AggregateFunctionJavaScriptAdapter::getEmitTimes(AggregateDataPtr __restrict place) const
+size_t AggregateFunctionJavaScriptAdapter::getEmitTimes(ConstAggregateDataPtr __restrict place) const
 {
     /// Only when UDA has its own emit strategy, it then make sense to check `emit_times`
     return blueprint.has_user_defined_emit_strategy ? this->data(place).emit_times : 0;
@@ -408,14 +419,16 @@ size_t AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict pla
     if (data.columns.empty() || data.columns[0]->empty())
         return emit_times;
 
+    V8::checkHeapLimit(blueprint.isolate.get(), max_v8_heap_size_in_bytes, canLogV8Memory(), logger);
+
     auto process_func = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & ctx, v8::TryCatch & try_catch) {
         v8::Local<v8::Object> local_obj = v8::Local<v8::Object>::New(isolate_, data.uda_instance);
         v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, data.process_func);
 
         /// Second, convert the input column into the corresponding object used by UDF
         /// remove the _tp_delta column if the input stream is not changelog
-        auto column_size = is_changelog_input ? config->arguments.size() : config->arguments.size() - 1;
-        auto argv = V8::prepareArguments(isolate_, std::span(config->arguments.begin(), column_size), data.columns);
+        auto column_size = is_changelog_input ? udf_desc->arguments.size() : udf_desc->arguments.size() - 1;
+        auto argv = V8::prepareArguments(isolate_, std::span(udf_desc->arguments.begin(), column_size), data.columns);
 
         /// Third, execute the UDF and get aggregate state (only support the final state now, intermediate state is not supported
         v8::Local<v8::Value> res;
@@ -425,7 +438,7 @@ size_t AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict pla
                 try_catch,
                 ErrorCodes::AGGREGATE_FUNCTION_THROW,
                 "Failed to invoke JavaScript user defined aggregation function : {}",
-                config->name);
+                udf_desc->name);
 
         /// Forth, check if the UDA should emit only it has emit strategy
         if (blueprint.has_user_defined_emit_strategy && !res->IsUndefined())
@@ -491,10 +504,7 @@ void AggregateFunctionJavaScriptAdapter::deserialize(
         v8::Local<v8::Value> res;
         if (!local_func->Call(ctx, local_obj, static_cast<int>(argv.size()), argv.data()).ToLocal(&res))
             V8::throwException(
-                isolate_,
-                try_catch,
-                ErrorCodes::UDF_INTERNAL_ERROR,
-                "Failed to invoke 'deserialize' function of JavaScript UDA");
+                isolate_, try_catch, ErrorCodes::UDF_INTERNAL_ERROR, "Failed to invoke 'deserialize' function of JavaScript UDA");
     };
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(deserialize_func));
 }
@@ -540,10 +550,24 @@ void AggregateFunctionJavaScriptAdapter::insertResultInto(AggregateDataPtr __res
                     num_of_results);
         }
 
-        V8::insertResult(isolate_, to, config->result_type, res, hasUserDefinedEmit());
+        V8::insertResult(isolate_, to, DataTypeFactory::instance().get(udf_desc->return_type), res, hasUserDefinedEmit());
     };
 
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(finalize_func));
     data.emit_times = 0;
+}
+
+bool AggregateFunctionJavaScriptAdapter::canLogV8Memory() const
+{
+    auto now = MonotonicMilliseconds::now();
+    auto last_time = last_log_time.load(std::memory_order_relaxed);
+
+    if (now - last_time > log_interval_ms)
+    {
+        if (last_log_time.compare_exchange_weak(last_time, now, std::memory_order_release))
+            return true;
+    }
+
+    return false;
 }
 }

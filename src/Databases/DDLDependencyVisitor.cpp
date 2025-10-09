@@ -6,11 +6,15 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Poco/String.h>
+
 /// proton: starts
-#include <Common/parseRemoteDescription.h>
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
+#include <Common/parseRemoteDescription.h>
 /// proton: ends
+
+#include <Poco/String.h>
 
 namespace DB
 {
@@ -92,12 +96,21 @@ namespace
 {
 bool hasLocalAddress(const String & hosts, bool secure)
 {
+    if (!Globals::isMetaStoreInited())
+        return false;
+
     auto global_context = Context::getGlobalContextInstance();
-    UInt16 default_port = secure ? global_context->getTCPPortSecure().value_or(0) : global_context->getTCPPort();
-    auto addresses = parseRemoteDescriptionForExternalDatabase(hosts, /*max_addresses=*/ 10, /*default_port=*/ default_port);
+    auto fqdn_name = global_context->getHostFQDN();
+
+    auto & meta_store = Globals::getMetaStore();
+    auto default_port = secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT;
+    auto addresses = parseRemoteDescriptionForExternalDatabase(hosts, /*max_addresses=*/10, /*default_port=*/default_port);
+
     for (const auto & addr : addresses)
-        if (isLocalAddress({addr.first, addr.second}, default_port))
+    {
+        if (meta_store.isLocalNode(addr.first, addr.second, fqdn_name))
             return true;
+    }
 
     return false;
 }
@@ -117,7 +130,7 @@ void DDLDependencyVisitor::visit(const ASTStorage & storage, Data & data)
     if (storage.engine->name == "ExternalStream")
     {
         ExternalStreamSettings settings;
-        settings.loadFromQuery(const_cast<ASTStorage &>(storage));
+        settings.loadFromQuery(const_cast<ASTStorage &>(storage), /*throw_on_unknown=*/ false);
         if (settings.type.value == "timeplus" && hasLocalAddress(settings.hosts, settings.secure))
         {
             QualifiedTableName name{settings.db, settings.stream};

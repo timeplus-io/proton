@@ -1,0 +1,59 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (text string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_preprocess_pt(text string) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import torch
+      from transformers import AutoTokenizer
+
+      tokenizer = AutoTokenizer.from_pretrained('/var/lib/proton/user_files/bert-base-uncased')
+
+      def test_preprocess_pt(text):
+          encoded_input = tokenizer(text, padding=True, truncation=True, return_tensors='pt')
+          res = [tokenizer.decode(id) for id in encoded_input['input_ids']]
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf16-2-1
+    type: stream
+    query: select test_preprocess_pt(text) as res, text from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: text
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(text) values
+      ('But what about second breakfast?')
+      ('Do not think he knows about second breakfast, Pip.')
+      ('What about elevensies?');
+
+  - type: check
+    target_name: python-udf16-2-1
+    expected_result:
+      - ['[CLS] but what about second breakfast? [SEP] [PAD] [PAD] [PAD] [PAD] [PAD]', 'But what about second breakfast?']
+      - ['[CLS] do not think he knows about second breakfast, pip. [SEP]', 'Do not think he knows about second breakfast, Pip.']
+      - ['[CLS] what about elevensies? [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]', 'What about elevensies?']

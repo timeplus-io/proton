@@ -1,0 +1,36 @@
+tags:
+  - prepare
+  - validate
+  - join
+
+description: basic tests on view
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: view-0-1
+    type: stream
+    query: select * except (_tp_time) from v settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+      - name: transformed_timestamp
+        type: datetime
+
+  - type: check
+    target_name: view-0-1
+    expected_result:
+      - ['dev1', 'roof', 60, '{"create_time":"2024-01-01 00:00:01"}', '2024-01-01 00:00:11.001', '2024-01-01 00:00:01']
+      - ['dev2', 'field', 31, '{"create_time":"2024-01-01 00:00:02"}', '2024-01-01 00:00:12.002', '2024-01-01 00:00:02']
+      - ['dev3', 'window', 58, '{"create_time":"2024-01-01 00:00:03"}', '2024-01-01 00:00:13.003', '2024-01-01 00:00:03']
+      - ['dev8', 'floor', 77, '{"create_time":"2024-01-01 00:00:08"}', '2024-01-01 00:00:18.008', '2024-01-01 00:00:08']

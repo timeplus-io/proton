@@ -116,6 +116,13 @@ public:
     constexpr operator double() const noexcept;
     constexpr operator float() const noexcept;
 
+    /// proton : starts
+    constexpr std::string_view string_view() const noexcept
+    {
+        return std::string_view{reinterpret_cast<const char *>(items), _impl::item_count * sizeof(base_type)};
+    }
+    /// proton : ends
+
     struct _impl;
 
     base_type items[_impl::item_count];

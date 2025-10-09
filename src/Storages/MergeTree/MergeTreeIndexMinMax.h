@@ -4,8 +4,6 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/KeyCondition.h>
 
-#include <memory>
-
 
 namespace DB
 {
@@ -25,8 +23,9 @@ struct MergeTreeIndexGranuleMinMax final : public IMergeTreeIndexGranule
 
     bool empty() const override { return hyperrectangle.empty(); }
 
-    String index_name;
-    Block index_sample_block;
+    const String & index_name;
+    const Block & index_sample_block;
+
     std::vector<Range> hyperrectangle;
 };
 
@@ -51,7 +50,7 @@ class MergeTreeIndexConditionMinMax final : public IMergeTreeIndexCondition
 public:
     MergeTreeIndexConditionMinMax(
         const IndexDescription & index,
-        const SelectQueryInfo & query,
+        const ActionsDAGPtr & filter_actions_dag,
         ContextPtr context);
 
     bool alwaysUnknownOrTrue() const override;
@@ -78,7 +77,7 @@ public:
     MergeTreeIndexAggregatorPtr createIndexAggregator() const override;
 
     MergeTreeIndexConditionPtr createIndexCondition(
-        const SelectQueryInfo & query, ContextPtr context) const override;
+        const ActionsDAGPtr & filter_actions_dag, ContextPtr context) const override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & node) const override;
 

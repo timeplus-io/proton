@@ -1,0 +1,27 @@
+name: two_level_global_aggr
+description: Tests covering the historical/streaming query with two level global aggregation
+  smoke cases.
+tags:
+- smoke
+- two level
+- global aggr
+
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS test_31_rstream;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: CREATE RANDOM STREAM test_31_rstream
+        (
+          `i` int DEFAULT (rand() % 100000) + 1,
+          `v` string
+        )
+        SETTINGS eps = 5000, interval_time = 100;
+
+  - type: wait
+    time: 2

@@ -23,29 +23,16 @@ public:
         const MutableDataPartStoragePtr & data_part_storage_,
         const IMergeTreeDataPart * parent_part_ = nullptr);
 
-    MergeTreeDataPartWide(
-        MergeTreeData & storage_,
-        const String & name_,
-        const MutableDataPartStoragePtr & data_part_storage_,
-        const IMergeTreeDataPart * parent_part_ = nullptr);
-
     MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns,
-        const StorageMetadataPtr & metadata_snapshot,
+        const StorageSnapshotPtr & storage_snapshot,
         const MarkRanges & mark_ranges,
         UncompressedCache * uncompressed_cache,
         MarkCache * mark_cache,
+        const AlterConversionsPtr & alter_conversions,
         const MergeTreeReaderSettings & reader_settings_,
         const ValueSizeMap & avg_value_size_hints,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback) const override;
-
-    MergeTreeWriterPtr getWriter(
-        const NamesAndTypesList & columns_list,
-        const StorageMetadataPtr & metadata_snapshot,
-        const std::vector<MergeTreeIndexPtr> & indices_to_recalc,
-        const CompressionCodecPtr & default_codec_,
-        const MergeTreeWriterSettings & writer_settings,
-        const MergeTreeIndexGranularity & computed_index_granularity) override;
 
     bool isStoredOnDisk() const override { return true; }
 
@@ -53,9 +40,7 @@ public:
 
     bool isStoredOnRemoteDiskWithZeroCopySupport() const override;
 
-    bool supportsVerticalMerge() const override { return true; }
-
-    String getFileNameForColumn(const NameAndTypePair & column) const override;
+    std::optional<String> getFileNameForColumn(const NameAndTypePair & column) const override;
 
     ~MergeTreeDataPartWide() override;
 

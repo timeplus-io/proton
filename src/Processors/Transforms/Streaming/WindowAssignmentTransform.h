@@ -37,6 +37,8 @@ protected:
 
     WindowParamsPtr window_params;
 
+    size_t timestamp_col_position;
+
     std::vector<size_t> expr_column_positions;
     std::vector<ssize_t> output_column_positions;
 };

@@ -1,0 +1,28 @@
+name: changelog_stream
+description: Tests covering the single shard changelog stream query smoke cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop stream if exists changelog_stream
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: create stream changelog_stream(i int) settings mode='changelog'
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists test14_changelog_kv_stream
+    - type: wait
+      time: 1
+
+    - type: query
+      sql:
+        create stream test14_changelog_kv_stream(i int, s string) primary
+        key s settings mode='changelog_kv'
+    - type: wait
+      time: 2

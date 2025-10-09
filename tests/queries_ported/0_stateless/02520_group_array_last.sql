@@ -19,12 +19,12 @@ select group_array_last_array(['1','2','3','4','5','6'], 3);
 -- [10,8,9] + [10,8,9]     => [10,10,9] => [10,10,8] => [9,10,8]
 --     ^          ^                  ^      ^^
 -- (position to insert at)
-select group_array_last(number+1, 3) from (select * from numbers(10));
-select group_array_last((number+1)::string, 3) from (select * from numbers(10));
-select group_array_last([number+1], 3) from (select * from numbers(10));
-select group_array_last(number+1, 100) from (select * from numbers(10));
-select group_array_last((number+1)::string, 100) from (select * from numbers(10));
-select group_array_last([number+1], 100) from (select * from numbers(10));
+select group_array_last(number+1, 3) state from (select * from numbers(10));
+select group_array_last((number+1)::string, 3) state from (select * from numbers(10));
+select group_array_last([number+1], 3) state from (select * from numbers(10));
+select group_array_last(number+1, 100) state from (select * from numbers(10));
+select group_array_last((number+1)::string, 100) state from (select * from numbers(10));
+select group_array_last([number+1], 100) state from (select * from numbers(10));
 -- SimpleAggregateFunction
 create stream simple_agg_group_array_last_array (key int, value simple_aggregate_function(group_array_last_array(5), array(uint64))) engine=MergeTree() order by key;
 insert into simple_agg_group_array_last_array (key, value) values (1, [1,2,3]), (1, [4,5,6]), (2, [4,5,6]), (2, [1,2,3]);

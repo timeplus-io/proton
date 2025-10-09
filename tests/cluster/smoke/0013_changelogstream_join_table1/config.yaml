@@ -1,0 +1,55 @@
+name: changelogstream_join_table1
+description: Tests covering the changelog stream join tables.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      node:
+        - p1
+      sql: drop stream if exists changelog_stream
+      
+    - type: query
+      node:
+        - p1
+      sql: drop stream if exists test14_changelog_kv_stream
+      
+    - type: wait
+      time: 2
+
+    - type: query
+      <<if eq .nodes "1">>
+      node: [p1]
+      <<else>>
+      node: [p2]
+      <<end>>
+      sql: create stream changelog_stream(i int64) settings mode='changelog'
+
+    - type: query
+      node:
+        - p1
+      sql: create stream test14_changelog_kv_stream(i int64, s string) primary key s settings mode='changelog_kv'
+    - type: wait
+      time: 2
+
+teardown:
+  scope: suite
+  steps:
+    - type: query
+      <<if eq .nodes "1">>
+      node: [p1]
+      <<else>>
+      node: [p3]
+      <<end>>
+      sql: drop stream if exists changelog_stream
+      
+    - type: query
+      node:
+        - p1
+      sql: drop stream if exists test14_changelog_kv_stream
+      
+    - type: wait
+      time: 2
+
+

@@ -1,0 +1,31 @@
+name: mv
+description: Test suite covering the materialized view with target stream smoke cases.
+tags:
+- smoke
+- materialized view
+setup:
+  scope: suite
+  steps:
+  # clean mv
+  - type: query
+    sql: drop view if exists mv_with_target_stream
+  - type: query
+    sql: drop view if exists mv_with_target_stream_1
+  - type: query
+    sql: drop view if exists mv_with_target_stream_2
+  - type: query
+    sql: drop view if exists mv_with_inner_stream
+
+  - type: wait
+    time: 1
+
+  # clean stream
+  - type: query
+    sql: drop stream if exists source_mv_stream
+  - type: query
+    sql: drop stream if exists target_mv_stream
+  - type: query
+    sql: drop stream if exists source_mv_versioned_kv
+
+  - type: wait
+    time: 2

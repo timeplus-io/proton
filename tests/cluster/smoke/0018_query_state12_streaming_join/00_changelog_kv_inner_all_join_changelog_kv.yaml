@@ -1,0 +1,106 @@
+tags:
+- query_state
+- bidirectional_join
+- inner-join
+description: changelog-kv INNER ALL JOIN changelog-kv state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_test19_changelog_kv_stream1;
+- type: query
+  sql: drop stream if exists test19_test19_changelog_kv_stream2;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_test19_changelog_kv_stream1(i int, s string)
+    primary key s settings mode='changelog_kv';
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_test19_changelog_kv_stream2(ii int, ss string)
+    primary key ss settings mode='changelog_kv';
+- type: wait
+  time: 1
+
+- name: '19350'
+  type: stream
+  query_id: '19350'
+  query: subscribe to select i, s, ii, ss from test19_test19_changelog_kv_stream1
+    inner join test19_test19_changelog_kv_stream2 on i == ii settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test19_test19_changelog_kv_stream1 (i, s) values (1, 's1')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_test19_changelog_kv_stream2 (ii, ss) values (1, 'ss1')
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19350'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_test19_changelog_kv_stream1 (i, s) values (1, 's2')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_test19_changelog_kv_stream1 (i, s, _tp_delta) values (1, 's1', -1)
+- type: wait
+  time: 1
+
+- name: 19350-1
+  type: stream
+  query: recover from '19350'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_test19_changelog_kv_stream2 (ii, ss) values (1, 'ss2')
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19350' sync
+
+- type: query
+  sql: unsubscribe to '19350'
+
+- type: check
+  target_name: '19350'
+  expected_result:
+  - [1, s1, 1, ss1]
+
+- type: check
+  target_name: 19350-1
+  expected_result:
+  - [1, s2, 1, ss1]
+  - [1, s2, 1, ss2]

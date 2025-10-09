@@ -13,6 +13,7 @@
 #include <Common/DateLUT.h>
 #include <Common/LocalDate.h>
 #include <Common/LocalDateTime.h>
+#include <Common/transformEndianness.h>
 #include <base/find_symbols.h>
 #include <base/StringRef.h>
 #include <base/DecomposedFloat.h>
@@ -45,7 +46,6 @@
 #endif
 
 #include <Formats/FormatSettings.h>
-
 
 namespace DB
 {
@@ -161,7 +161,7 @@ inline size_t writeFloatTextFastPath(T x, char * buffer)
     }
 
     if (result <= 0)
-        throw Exception("Cannot print floating point number", ErrorCodes::CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER);
+        throw Exception(ErrorCodes::CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER, "Cannot print floating point number");
     return result;
 }
 
@@ -294,9 +294,10 @@ inline void writeJSONString(const char * begin, const char * end, WriteBuffer & 
 /** Will escape quote_character and a list of special characters('\b', '\f', '\n', '\r', '\t', '\0', '\\').
  *   - when escape_quote_with_quote is true, use backslash to escape list of special characters,
  *      and use quote_character to escape quote_character. such as: 'hello''world'
- *   - otherwise use backslash to escape list of special characters and quote_character
+ *     otherwise use backslash to escape list of special characters and quote_character
+ *   - when escape_backslash_with_backslash is true, backslash is escaped with another backslash
  */
-template <char quote_character, bool escape_quote_with_quote = false>
+template <char quote_character, bool escape_quote_with_quote = false, bool escape_backslash_with_backslash = true>
 void writeAnyEscapedString(const char * begin, const char * end, WriteBuffer & buf)
 {
     const char * pos = begin;
@@ -305,6 +306,7 @@ void writeAnyEscapedString(const char * begin, const char * end, WriteBuffer & b
         /// On purpose we will escape more characters than minimally necessary.
         const char * next_pos = find_first_symbols<'\b', '\f', '\n', '\r', '\t', '\0', '\\', quote_character>(pos, end);
 
+        /// NOLINTBEGIN(readability-else-after-return)
         if (next_pos == end)
         {
             buf.write(pos, next_pos - pos);
@@ -316,6 +318,15 @@ void writeAnyEscapedString(const char * begin, const char * end, WriteBuffer & b
             pos = next_pos;
             switch (*pos)
             {
+                case quote_character:
+                {
+                    if constexpr (escape_quote_with_quote)
+                        writeChar(quote_character, buf);
+                    else
+                        writeChar('\\', buf);
+                    writeChar(quote_character, buf);
+                    break;
+                }
                 case '\b':
                     writeChar('\\', buf);
                     writeChar('b', buf);
@@ -341,26 +352,159 @@ void writeAnyEscapedString(const char * begin, const char * end, WriteBuffer & b
                     writeChar('0', buf);
                     break;
                 case '\\':
-                    writeChar('\\', buf);
-                    writeChar('\\', buf);
-                    break;
-                case quote_character:
-                {
-                    if constexpr (escape_quote_with_quote)
-                        writeChar(quote_character, buf);
-                    else
+                    if constexpr (escape_backslash_with_backslash)
                         writeChar('\\', buf);
-                    writeChar(quote_character, buf);
+                    writeChar('\\', buf);
                     break;
-                }
                 default:
                     writeChar(*pos, buf);
             }
             ++pos;
         }
+        /// NOLINTEND(readability-else-after-return)
     }
 }
 
+/// Define special characters in Markdown according to the standards specified by CommonMark.
+inline void writeAnyMarkdownEscapedString(const char * begin, const char * end, WriteBuffer & buf)
+{
+    for (const char * it = begin; it != end; ++it)
+    {
+        switch (*it)
+        {
+            case '!':
+                writeChar('\\', buf);
+                writeChar('!', buf);
+                break;
+            case '"':
+                writeChar('\\', buf);
+                writeChar('"', buf);
+                break;
+            case '#':
+                writeChar('\\', buf);
+                writeChar('#', buf);
+                break;
+            case '$':
+                writeChar('\\', buf);
+                writeChar('$', buf);
+                break;
+            case '%':
+                writeChar('\\', buf);
+                writeChar('%', buf);
+                break;
+            case '&':
+                writeChar('\\', buf);
+                writeChar('&', buf);
+                break;
+            case '\'':
+                writeChar('\\', buf);
+                writeChar('\'', buf);
+                break;
+            case '(':
+                writeChar('\\', buf);
+                writeChar('(', buf);
+                break;
+            case ')':
+                writeChar('\\', buf);
+                writeChar(')', buf);
+                break;
+            case '*':
+                writeChar('\\', buf);
+                writeChar('*', buf);
+                break;
+            case '+':
+                writeChar('\\', buf);
+                writeChar('+', buf);
+                break;
+            case ',':
+                writeChar('\\', buf);
+                writeChar(',', buf);
+                break;
+            case '-':
+                writeChar('\\', buf);
+                writeChar('-', buf);
+                break;
+            case '.':
+                writeChar('\\', buf);
+                writeChar('.', buf);
+                break;
+            case '/':
+                writeChar('\\', buf);
+                writeChar('/', buf);
+                break;
+            case ':':
+                writeChar('\\', buf);
+                writeChar(':', buf);
+                break;
+            case ';':
+                writeChar('\\', buf);
+                writeChar(';', buf);
+                break;
+            case '<':
+                writeChar('\\', buf);
+                writeChar('<', buf);
+                break;
+            case '=':
+                writeChar('\\', buf);
+                writeChar('=', buf);
+                break;
+            case '>':
+                writeChar('\\', buf);
+                writeChar('>', buf);
+                break;
+            case '?':
+                writeChar('\\', buf);
+                writeChar('?', buf);
+                break;
+            case '@':
+                writeChar('\\', buf);
+                writeChar('@', buf);
+                break;
+            case '[':
+                writeChar('\\', buf);
+                writeChar('[', buf);
+                break;
+            case '\\':
+                writeChar('\\', buf);
+                writeChar('\\', buf);
+                break;
+            case ']':
+                writeChar('\\', buf);
+                writeChar(']', buf);
+                break;
+            case '^':
+                writeChar('\\', buf);
+                writeChar('^', buf);
+                break;
+            case '_':
+                writeChar('\\', buf);
+                writeChar('_', buf);
+                break;
+            case '`':
+                writeChar('\\', buf);
+                writeChar('`', buf);
+                break;
+            case '{':
+                writeChar('\\', buf);
+                writeChar('{', buf);
+                break;
+            case '|':
+                writeChar('\\', buf);
+                writeChar('|', buf);
+                break;
+            case '}':
+                writeChar('\\', buf);
+                writeChar('}', buf);
+                break;
+            case '~':
+                writeChar('\\', buf);
+                writeChar('~', buf);
+                break;
+            default:
+                writeChar(*it, buf);
+        }
+    }
+}
 
 inline void writeJSONString(std::string_view s, WriteBuffer & buf, const FormatSettings & settings)
 {
@@ -425,6 +569,16 @@ inline void writeEscapedString(std::string_view ref, WriteBuffer & buf)
     writeEscapedString(ref.data(), ref.size(), buf);
 }
 
+inline void writeMarkdownEscapedString(const char * str, size_t size, WriteBuffer & buf)
+{
+    writeAnyMarkdownEscapedString(str, str + size, buf);
+}
+
+inline void writeMarkdownEscapedString(std::string_view ref, WriteBuffer & buf)
+{
+    writeMarkdownEscapedString(ref.data(), ref.size(), buf);
+}
+
 template <char quote_character>
 void writeAnyQuotedString(const char * begin, const char * end, WriteBuffer & buf)
 {
@@ -454,6 +608,13 @@ inline void writeQuotedString(StringRef ref, WriteBuffer & buf)
 inline void writeQuotedString(std::string_view ref, WriteBuffer & buf)
 {
     writeAnyQuotedString<'\''>(ref.data(), ref.data() + ref.size(), buf);
+}
+
+inline void writeQuotedStringPostgreSQL(std::string_view ref, WriteBuffer & buf)
+{
+    writeChar('\'', buf);
+    writeAnyEscapedString<'\'', true, false>(ref.data(), ref.data() + ref.size(), buf);
+    writeChar('\'', buf);
 }
 
 inline void writeDoubleQuotedString(const String & s, WriteBuffer & buf)
@@ -694,15 +855,15 @@ inline void writeDateText(const LocalDate & date, WriteBuffer & buf)
 }
 
 template <char delimiter = '-'>
-inline void writeDateText(DayNum date, WriteBuffer & buf)
+inline void writeDateText(DayNum date, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
 {
-    writeDateText<delimiter>(LocalDate(date), buf);
+    writeDateText<delimiter>(LocalDate(date, time_zone), buf);
 }
 
 template <char delimiter = '-'>
-inline void writeDateText(ExtendedDayNum date, WriteBuffer & buf)
+inline void writeDateText(ExtendedDayNum date, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
 {
-    writeDateText<delimiter>(LocalDate(date), buf);
+    writeDateText<delimiter>(LocalDate(date, time_zone), buf);
 }
 
 /// In the format YYYY-MM-DD HH:MM:SS
@@ -760,30 +921,6 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(datetime, time_zone), buf);
 }
 
-/// proton: starts
-/// In the format YYYY-MM-DD HH:MM:SS+time zone, according to the specified time zone.
-template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
-inline void writeDateTimeTextWithTimeZone(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
-{
-    writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(datetime, buf,  time_zone);
-    auto offset = time_zone.timezoneOffset(std::abs(datetime));
-    /// Special UTC format 
-    if (offset == 0)
-    {
-        buf.write('Z');
-        return;
-    }
-
-    auto asb_offset = std::abs(offset);
-    auto hours = asb_offset / 3600;
-    auto minutes = asb_offset % 3600 / 60;
-    buf.write(offset >= 0 ? '+' : '-');
-    buf.write(&digits100[hours * 2], 2);
-    buf.write(':');
-    buf.write(&digits100[minutes * 2], 2);
-}
-/// proton: ends
-
 /// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' ', char fractional_time_delimiter = '.'>
 inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
@@ -817,35 +954,6 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
         writeDateTime64FractionalText<DateTime64>(components.fractional, scale, buf);
     }
 }
-
-/// proton: starts
-/// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN+time zone, according to the specified time zone.
-template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
-inline void writeDateTimeTextWithTimeZone(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
-{
-    writeDateTimeText(datetime64, scale, buf, time_zone);
-    static constexpr UInt32 MaxScale = DecimalUtils::max_precision<DateTime64>;
-    scale = scale > MaxScale ? MaxScale : scale;
-
-    auto components = DecimalUtils::split(datetime64, scale);
-
-    auto offset = time_zone.timezoneOffset(std::abs(components.whole));
-    /// Special UTC format 
-    if (offset == 0)
-    {
-        buf.write('Z');
-        return;
-    }
-
-    auto asb_offset = std::abs(offset);
-    auto hours = asb_offset / 3600;
-    auto minutes = asb_offset % 3600 / 60;
-    buf.write(offset >= 0 ? '+' : '-');
-    buf.write(&digits100[hours * 2], 2);
-    buf.write(':');
-    buf.write(&digits100[minutes * 2], 2);
-}
-/// proton: ends
 
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
 /// This is needed for HTTP requests.
@@ -902,7 +1010,7 @@ inline void writeDateTimeUnixTimestamp(DateTime64 datetime64, UInt32 scale, Writ
 
 /// Methods for output in binary format.
 template <typename T>
-requires is_arithmetic_v<T>
+requires is_arithmetic_v<T> || (std::is_standard_layout_v<T> && std::is_trivial_v<T>)
 inline void writeBinary(const T & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 
 inline void writeBinary(const String & x, WriteBuffer & buf) { writeStringBinary(x, buf); }
@@ -1202,31 +1310,23 @@ inline void writeNullTerminatedString(const String & s, WriteBuffer & buffer)
     buffer.write(s.c_str(), s.size() + 1);
 }
 
-template <typename T>
-requires is_arithmetic_v<T> && (sizeof(T) <= 8)
-inline void writeBinaryBigEndian(T x, WriteBuffer & buf)    /// Assuming little endian architecture.
+template <std::endian endian, typename T>
+inline void writeBinaryEndian(T x, WriteBuffer & buf)
 {
-    if constexpr (std::endian::native == std::endian::little)
-    {
-        if constexpr (sizeof(x) == 2)
-            x = __builtin_bswap16(x);
-        else if constexpr (sizeof(x) == 4)
-            x = __builtin_bswap32(x);
-        else if constexpr (sizeof(x) == 8)
-            x = __builtin_bswap64(x);
-    }
-    writePODBinary(x, buf);
+    transformEndianness<endian>(x);
+    writeBinary(x, buf);
 }
 
 template <typename T>
-requires is_big_int_v<T>
-inline void writeBinaryBigEndian(const T & x, WriteBuffer & buf)    /// Assuming little endian architecture.
+inline void writeBinaryLittleEndian(T x, WriteBuffer & buf)
 {
-    for (size_t i = 0; i != std::size(x.items); ++i)
-    {
-        const auto & item = x.items[std::size(x.items) - i - 1];
-        writeBinaryBigEndian(item, buf);
-    }
+    writeBinaryEndian<std::endian::little>(x, buf);
+}
+
+template <typename T>
+inline void writeBinaryBigEndian(T x, WriteBuffer & buf)
+{
+    writeBinaryEndian<std::endian::big>(x, buf);
 }
 
 struct PcgSerializer
@@ -1243,6 +1343,8 @@ struct PcgSerializer
 
 void writePointerHex(const void * ptr, WriteBuffer & buf);
 
+String fourSpaceIndent(size_t indent);
+
 }
 
 template<>
@@ -1255,7 +1357,7 @@ struct fmt::formatter<DB::UUID>
     }
 
     template<typename FormatContext>
-    auto format(const DB::UUID & uuid, FormatContext & context)
+    auto format(const DB::UUID & uuid, FormatContext & context) const
     {
         return fmt::format_to(context.out(), "{}", toString(uuid));
     }

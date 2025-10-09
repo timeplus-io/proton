@@ -1,0 +1,84 @@
+description: |
+  Test sling data transfer from db to db with timezone
+  Main steps:
+    1.Create source and target stream with 'Asia/Shanghai' timezone
+    2.Ingest data
+    3.Migration data with incremental mode and update-key _tp_time
+    4.Repeat step 2-3
+    5.Check target stream table query
+
+cluster:
+  - p1s1
+  - p3s1
+
+steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS src;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS tgt;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM src
+      (
+        id int64,
+        _tp_time datetime64(3, 'Asia/Shanghai') DEFAULT now64(3, 'Asia/Shanghai') CODEC(DoubleDelta, LZ4)
+      );
+
+  - type: query
+    sql: |
+      CREATE STREAM tgt
+      (
+        id int64,
+        _tp_time datetime64(3, 'Asia/Shanghai') DEFAULT now64(3, 'Asia/Shanghai') CODEC(DoubleDelta, LZ4)
+      );
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: INSERT INTO src(id, _tp_time) VALUES(1, '2025-07-18 22:00:00');
+
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn TIMEPLUS --src-stream "src" --tgt-conn TIMEPLUS --tgt-object "tgt" --mode incremental --update-key _tp_time -d
+
+  - type: query
+    sql: INSERT INTO src(id, _tp_time) VALUES(2, '2025-07-19 05:00:00');
+
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn TIMEPLUS --src-stream "src" --tgt-conn TIMEPLUS --tgt-object "tgt" --mode incremental --update-key _tp_time -d
+
+  - type: wait
+    time: 1
+
+  - name: sling-4-1
+    type: stream
+    query: SELECT * FROM table(tgt);
+    schema:
+      - name: id
+        type: int64
+      - name: _tp_time
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: sling-4-1
+    mode: random
+    expected_result:
+      - [ 1, '2025-07-18 14:00:00' ]
+      - [ 2, '2025-07-18 21:00:00' ]
+

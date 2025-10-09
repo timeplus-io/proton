@@ -363,15 +363,15 @@ private:
 
 public:
     explicit AggregateFunctionUniq(const DataTypes & argument_types_)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionUniq<T, Data>>(argument_types_, {})
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionUniq<T, Data>>(argument_types_, {}, createResultType())
     {
     }
 
     String getName() const override { return Data::getName(); }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
+    static DataTypePtr createResultType() 
+    { 
+        return std::make_shared<DataTypeUInt64>(); 
     }
 
     bool allocatesMemoryInArena() const override { return false; }
@@ -434,7 +434,7 @@ public:
 
     bool isAbleToParallelizeMerge() const override { return is_able_to_parallelize_merge; }
 
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena *) const override
     {
         this->data(place).set.merge(this->data(rhs).set);
     }
@@ -461,6 +461,7 @@ public:
         if (set_size > UNIQUES_HASH_MAX_SIZE)
             throw Poco::Exception("Cannot read UniquesHashSet: too large size_degree.");
 
+        set.reserve(set_size);
         using SetType = std::decay_t<decltype(set)>;
         using KeyType = typename SetType::key_type;
         for (size_t i = 0; i < set_size; ++i)
@@ -497,7 +498,7 @@ private:
 
 public:
     explicit AggregateFunctionUniqVariadic(const DataTypes & arguments)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data>>(arguments, {})
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionUniqVariadic<Data>>(arguments, {}, createResultType())
     {
         if (argument_is_tuple)
             num_args = typeid_cast<const DataTypeTuple &>(*arguments[0]).getElements().size();
@@ -507,9 +508,9 @@ public:
 
     String getName() const override { return Data::getName(); }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeUInt64>();
+    static DataTypePtr createResultType() 
+    { 
+        return std::make_shared<DataTypeUInt64>(); 
     }
 
     bool allocatesMemoryInArena() const override { return false; }
@@ -561,7 +562,7 @@ public:
 
     bool isAbleToParallelizeMerge() const override { return is_able_to_parallelize_merge; }
 
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena *) const override
     {
         this->data(place).set.merge(this->data(rhs).set);
     }
@@ -588,6 +589,7 @@ public:
         if (set_size > UNIQUES_HASH_MAX_SIZE)
             throw Poco::Exception("Cannot read UniquesHashSet: too large size_degree.");
 
+        set.reserve(set_size);
         using SetType = std::decay_t<decltype(set)>;
         using KeyType = typename SetType::key_type;
         for (size_t i = 0; i < set_size; ++i)

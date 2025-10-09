@@ -1,17 +1,19 @@
 #include <Access/Common/AccessRightsElement.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/QueryLog.h>
 #include <Parsers/ASTDropQuery.h>
-#include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
 
-#include "config.h"
+/// proton : starts
+#include <Storages/Stream/storageUtil.h>
+/// proton : ends
 
 namespace DB
 {
@@ -20,11 +22,13 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int SYNTAX_ERROR;
+    extern const int UNSUPPORTED;
     extern const int UNKNOWN_STREAM;
     extern const int UNKNOWN_DATABASE;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
     extern const int STREAM_IS_READ_ONLY;
+    extern const int DATABASE_NOT_EMPTY;
 }
 
 
@@ -34,7 +38,8 @@ static DatabasePtr tryGetDatabase(const String & database_name, bool if_exists)
 }
 
 
-InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) : WithMutableContext(context_), query_ptr(query_ptr_)
+InterpreterDropQuery::InterpreterDropQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
+    : WithMutableContext(context_), query_ptr(query_ptr_)
 {
 }
 
@@ -43,19 +48,33 @@ BlockIO InterpreterDropQuery::execute()
 {
     auto & drop = query_ptr->as<ASTDropQuery &>();
 
-    if (getContext()->getSettingsRef().database_atomic_wait_for_drop_and_detach_synchronously)
+    auto local_context = getContext();
+    /// Single-instance: Always enable synchronous wait for drop operations
+    if (local_context->getSettingsRef().database_atomic_wait_for_drop_and_detach_synchronously)
         drop.no_delay = true;
 
     if (drop.table)
         return executeToTable(drop);
     else if (drop.database)
-        return executeToDatabase(drop);
+    {
+        /// proton : starts
+        /// First try to remove all streams in the database from cluster
+        executeToDatabase(drop);
+        const bool execute_on_local = getContext()->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY;
+
+        /// Then remove the empty database from cluster
+        if (!execute_on_local)
+            executeToDatabaseOnCluster(drop);
+        /// proton : ends
+    }
     else
-        throw Exception("Nothing to drop, both names are empty", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Nothing to drop, both names are empty");
+
+    return {};
 }
 
-
-void InterpreterDropQuery::waitForTableToBeActuallyDroppedOrDetached(const ASTDropQuery & query, const DatabasePtr & db, const UUID & uuid_to_wait)
+void InterpreterDropQuery::waitForTableToBeActuallyDroppedOrDetached(
+    const ASTDropQuery & query, const DatabasePtr & db, const UUID & uuid_to_wait)
 {
     if (uuid_to_wait == UUIDHelpers::Nil)
         return;
@@ -93,11 +112,7 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
     {
         if (query.if_exists)
             return {};
-
-        /// proton: starts
-        throw Exception("Temporary stream " + backQuoteIfNeed(table_id.table_name) + " doesn't exist",
-                        ErrorCodes::UNKNOWN_STREAM);
-        /// proton: ends
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Temporary stream {} doesn't exist", backQuoteIfNeed(table_id.table_name));
     }
 
     auto ddl_guard = (!query.no_ddl_lock ? DatabaseCatalog::instance().getDDLGuard(table_id.database_name, table_id.table_name) : nullptr);
@@ -106,19 +121,17 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
     auto [database, table] = query.if_exists ? DatabaseCatalog::instance().tryGetDatabaseAndTable(table_id, context_)
                                              : DatabaseCatalog::instance().getDatabaseAndTable(table_id, context_);
 
+    checkStorageSupportsTransactionsIfNeeded(table, context_);
+
     if (database && table)
     {
         auto & ast_drop_query = query.as<ASTDropQuery &>();
 
         if (ast_drop_query.is_view && !table->isView())
-            /// proton: starts
             throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not a View", table_id.getNameForLogs());
-            /// proton: ends
 
         if (ast_drop_query.is_dictionary && !table->isDictionary())
-            /// proton: starts
             throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not a Dictionary", table_id.getNameForLogs());
-            /// proton: ends
 
         /// proton: starts
         if (ast_drop_query.is_external_table && !table->isExternalTable())
@@ -143,8 +156,14 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
         if (query.kind == ASTDropQuery::Kind::Detach)
         {
             /// proton: starts
+            if (isStreamingStorage(table, context_))
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "DETACH STREAM is not supported");
+
             if (table->isExternalTable())
-                throw Exception("Cannot DETACH external table", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot DETACH external table");
+
+            if (table->isDictionary())
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "DETACH DICTIONARY");
             /// proton: ends
 
             context_->checkAccess(drop_storage, table_id);
@@ -153,16 +172,12 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             {
                 /// If DROP DICTIONARY query is not used, check if Dictionary can be dropped with DROP TABLE query
                 if (!query.is_dictionary)
-                    /// proton: starts.
                     table->checkTableCanBeDetached(context_);
-                    /// proton: ends.
             }
             else
-                /// proton: starts.
                 table->checkTableCanBeDetached(context_);
-                /// proton: ends.
 
-            table->flushAndShutdown();
+            table->flushAndShutdown(/*dropping=*/false);
             TableExclusiveLockHolder table_lock;
 
             if (database->getUUID() == UUIDHelpers::Nil)
@@ -171,8 +186,8 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             if (query.permanently)
             {
                 /// Server may fail to restart of DETACH PERMANENTLY if table has dependent ones
-                DatabaseCatalog::instance().tryRemoveLoadingDependencies(table_id, getContext()->getSettingsRef().check_table_dependencies,
-                                                                         is_drop_or_detach_database);
+                DatabaseCatalog::instance().tryRemoveLoadingDependencies(
+                    table_id, getContext()->getSettingsRef().check_table_dependencies, is_drop_or_detach_database);
                 /// Drop table from memory, don't touch data, metadata file renamed and will be skipped during server restart
                 database->detachTablePermanently(context_, table_id.table_name);
             }
@@ -185,27 +200,31 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
         else if (query.kind == ASTDropQuery::Kind::Truncate)
         {
             /// proton: starts
+            if (isStreamingStorage(table, context_) && (table->getName() != "Stream"))
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "TRUNCATE STREAM is not supported");
+
             if (table->isExternalTable())
-                throw Exception("Cannot TRUNCATE external table", ErrorCodes::SYNTAX_ERROR);
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "Cannot TRUNCATE external table");
             /// proton: ends
 
             if (table->isDictionary())
-                throw Exception("Cannot TRUNCATE dictionary", ErrorCodes::SYNTAX_ERROR);
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "Cannot TRUNCATE dictionary");
 
             context_->checkAccess(AccessType::TRUNCATE, table_id);
             if (table->isStaticStorage())
-                /// proton: starts
                 throw Exception(ErrorCodes::STREAM_IS_READ_ONLY, "Stream is read-only");
-                /// proton: ends
 
-            /// proton: starts.
             table->checkTableCanBeDropped(context_);
-            /// proton: ends.
 
-            auto table_lock = table->lockExclusively(context_->getCurrentQueryId(), context_->getSettingsRef().lock_acquire_timeout);
+            TableExclusiveLockHolder table_excl_lock;
+            /// We don't need any lock for ReplicatedMergeTree and for simple MergeTree
+            /// For the rest of tables types exclusive lock is needed
+            if (!std::dynamic_pointer_cast<MergeTreeData>(table))
+                table_excl_lock = table->lockExclusively(context_->getCurrentQueryId(), context_->getSettingsRef().lock_acquire_timeout);
+
             auto metadata_snapshot = table->getInMemoryMetadataPtr();
             /// Drop table data, don't touch metadata
-            table->truncate(query_ptr, metadata_snapshot, context_, table_lock);
+            table->truncate(query_ptr, metadata_snapshot, context_, table_excl_lock);
         }
         else if (query.kind == ASTDropQuery::Kind::Drop)
         {
@@ -215,24 +234,30 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             {
                 /// If DROP DICTIONARY query is not used, check if Dictionary can be dropped with DROP TABLE query
                 if (!query.is_dictionary)
-                    /// proton: starts.
                     table->checkTableCanBeDropped(context_);
-                    /// proton: ends.
             }
-            else
-                /// proton: starts.
+            else if (!is_drop_or_detach_database) /// proton updates: skip check in DROP DATABASE
                 table->checkTableCanBeDropped(context_);
-                /// proton: ends.
 
-            table->flushAndShutdown();
+            /// Check dependencies before shutting table down
+            bool check_view_deps = getContext()->getSettingsRef().enable_dependency_check;
+            bool check_loading_deps = getContext()->getSettingsRef().check_table_dependencies;
+            DatabaseCatalog::instance().checkTableCanBeRemovedOrRenamed(
+                table_id, check_view_deps, check_loading_deps, is_drop_or_detach_database);
+
+            /// proton : starts. FIXME, generalizing single / cluster case
+            if (table->isLocal())
+                table->flushAndShutdown(/*dropping=*/true);
 
             TableExclusiveLockHolder table_lock;
             if (database->getUUID() == UUIDHelpers::Nil)
                 table_lock = table->lockExclusively(context_->getCurrentQueryId(), context_->getSettingsRef().lock_acquire_timeout);
 
-            DatabaseCatalog::instance().tryRemoveLoadingDependencies(table_id, getContext()->getSettingsRef().check_table_dependencies,
-                                                                     is_drop_or_detach_database);
-            database->dropTable(context_, table_id.table_name, query.no_delay);
+            DatabaseCatalog::instance().tryRemoveLoadingDependencies(
+                table_id, getContext()->getSettingsRef().check_table_dependencies, is_drop_or_detach_database);
+
+            database->dropTable(context_, table_id.table_name, query.no_delay, query_ptr);
+            /// proton : ends
         }
 
         db = database;
@@ -245,7 +270,7 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
 BlockIO InterpreterDropQuery::executeToTemporaryTable(const String & table_name, ASTDropQuery::Kind kind)
 {
     if (kind == ASTDropQuery::Kind::Detach)
-        throw Exception("Unable to detach temporary table.", ErrorCodes::SYNTAX_ERROR);
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "Unable to detach temporary table.");
     else
     {
         auto context_handle = getContext()->hasSessionContext() ? getContext()->getSessionContext() : getContext();
@@ -264,8 +289,9 @@ BlockIO InterpreterDropQuery::executeToTemporaryTable(const String & table_name,
             else if (kind == ASTDropQuery::Kind::Drop)
             {
                 context_handle->removeExternalTable(table_name);
-                table->flushAndShutdown();
-                auto table_lock = table->lockExclusively(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+                table->flushAndShutdown(/*dropping=*/true);
+                auto table_lock
+                    = table->lockExclusively(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
                 /// Delete table data
                 table->drop();
                 table->is_dropped = true;
@@ -313,15 +339,26 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
     {
         if (query.kind == ASTDropQuery::Kind::Truncate)
         {
-            throw Exception("Unable to truncate database", ErrorCodes::SYNTAX_ERROR);
+            throw Exception(ErrorCodes::SYNTAX_ERROR, "Unable to truncate database");
         }
         else if (query.kind == ASTDropQuery::Kind::Detach || query.kind == ASTDropQuery::Kind::Drop)
         {
             bool drop = query.kind == ASTDropQuery::Kind::Drop;
             getContext()->checkAccess(AccessType::DROP_DATABASE, database_name);
 
+            /// proton: starts
+            /// Do not drop streams in the database without CASCADE
+            /// Note: We only do the check for Atomic database since dropping other database engine (such as Postgres)
+            ///       should not be restricted by this. For the external database, checking database->empty() 
+            //        and dropping database may fail due to the invalid configuration.
+            if (drop && !query.cascade && database->getEngineName() == "Atomic" && !database->empty())
+                throw Exception(
+                    ErrorCodes::DATABASE_NOT_EMPTY,
+                    "Cannot DROP non-empty database. Add CASCADE parameter to also drop all associated streams");
+            /// proton: ends
+
             if (query.kind == ASTDropQuery::Kind::Detach && query.permanently)
-                throw Exception("DETACH PERMANENTLY is not implemented for databases", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "DETACH PERMANENTLY is not implemented for databases");
 
             if (database->hasReplicationThread())
                 database->stopReplication();
@@ -339,7 +376,7 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
                 /// see DatabaseMaterializedMySQL::getTablesIterator()
                 for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
                 {
-                    iterator->table()->flush();
+                    iterator->table()->flush(drop);
                 }
 
                 auto table_context = Context::createCopy(getContext());
@@ -369,7 +406,11 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
                 database->assertCanBeDetached(true);
 
             /// DETACH or DROP database itself
-            DatabaseCatalog::instance().detachDatabase(getContext(), database_name, drop, database->shouldBeEmptyOnDetach());
+            /// proton: start
+            const bool execute_on_local = getContext()->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY;
+            if (execute_on_local)
+                DatabaseCatalog::instance().detachDatabase(getContext(), database_name, drop, database->shouldBeEmptyOnDetach());
+            /// proton: end
         }
     }
 
@@ -415,7 +456,8 @@ void InterpreterDropQuery::extendQueryLogElemImpl(QueryLogElement & elem, const 
     elem.query_kind = "Drop";
 }
 
-void InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind kind, ContextPtr global_context, ContextPtr current_context, const StorageID & target_table_id, bool no_delay)
+void InterpreterDropQuery::executeDropQuery(
+    ASTDropQuery::Kind kind, ContextPtr global_context, ContextPtr current_context, const StorageID & target_table_id, bool no_delay)
 {
     if (DatabaseCatalog::instance().tryGetTable(target_table_id, current_context))
     {
@@ -439,6 +481,15 @@ void InterpreterDropQuery::executeDropQuery(ASTDropQuery::Kind kind, ContextPtr 
         InterpreterDropQuery drop_interpreter(ast_drop_query, drop_context);
         drop_interpreter.execute();
     }
+}
+
+bool InterpreterDropQuery::supportsTransactions() const
+{
+    /// Enable only for truncate table with MergeTreeData engine
+
+    auto & drop = query_ptr->as<ASTDropQuery &>();
+
+    return drop.cluster.empty() && !drop.temporary && drop.kind == ASTDropQuery::Kind::Truncate && drop.table;
 }
 
 }

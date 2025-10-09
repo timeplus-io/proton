@@ -210,12 +210,14 @@ private:
     {
         if (parameter_number >= arguments.size())
             throw Exception(
-                ErrorCodes::LOGICAL_ERROR, "Parameter number ({}) is greater than the size of arguments ({}). This is a bug", parameter_number, arguments.size());
+                            ErrorCodes::LOGICAL_ERROR,
+                            "Parameter number ({}) is greater than the size of arguments ({}). This is a bug",
+                            parameter_number, arguments.size());
 
         const IColumn * col = arguments[parameter_number].column.get();
 
         if (!isColumnConst(*col))
-            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Parameter number {} of function must be constant.", parameter_number, getName());
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Parameter number {} of function {} must be constant.", parameter_number, getName());
 
         auto parameter = applyVisitor(FieldVisitorConvertToNumber<ResultType>(), assert_cast<const ColumnConst &>(*col).getField());
 
@@ -243,7 +245,9 @@ public:
     {
         auto desired = Distribution::getNumberOfArguments();
         if (arguments.size() != desired && arguments.size() != desired + 1)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Wrong number of arguments for function {}. Should be {} or {}", getName(), desired, desired + 1);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                            "Wrong number of arguments for function {}. Should be {} or {}",
+                            getName(), desired, desired + 1);
 
         for (size_t i = 0; i < Distribution::getNumberOfArguments(); ++i)
         {
@@ -316,7 +320,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_uniform(0, 1) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
     factory.registerFunction<FunctionRandomDistribution<NormalDistribution>>(
@@ -330,7 +334,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_normal(0, 5) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -345,7 +349,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_log_normal(0, 5) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -360,7 +364,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_exponential(0, 5) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -375,7 +379,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_chi_squared(5) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
     factory.registerFunction<FunctionRandomDistribution<StudentTDistribution>>(
@@ -389,7 +393,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_student_t(5) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -405,7 +409,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_fisher_f(5) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -420,7 +424,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_bernoulli(0.1) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -435,7 +439,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_binomial(10, 0.1) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -450,7 +454,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_negative_binomial(10, 0.1) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 
 
@@ -465,7 +469,7 @@ Typical usage:
 )",
     .examples{
         {"typical", "SELECT rand_poisson(3) FROM numbers(100000);", ""}},
-    .categories{"Distribution"}
+    .category{"Distribution"}
     });
 }
 

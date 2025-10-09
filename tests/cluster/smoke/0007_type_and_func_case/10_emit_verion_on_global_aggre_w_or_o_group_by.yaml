@@ -1,0 +1,54 @@
+tags:
+  - emit_version
+description: 'create a stream t_timeout, and create a view as a global query with
+  emit timeout and check emit by timeout '
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists t_emit_version
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream t_emit_version(id int, value int, time datetime64(3,'UTC'))
+
+  - type: wait
+    time: 1
+
+  - name: 801-1
+    type: stream
+    query: |
+      select emit_version(), count()
+      from t_emit_version
+      limit 1
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into t_emit_version(id, value, time) values
+      (1, 10, '2020-01-01 00:00:00'),
+      (2, 10, '2020-01-01 00:00:00'),
+      (3, 10, '2020-01-01 00:00:00'),
+      (1, 20, '2020-01-01 00:00:00'),
+      (2, 20, '2020-01-01 00:00:00'),
+      (3, 20, '2020-01-01 00:00:00'),
+      (1, 30, '2020-01-01 00:00:05'),
+      (1, 10, '2020-01-01 00:00:06')
+
+  - type: check
+    target_name: 801-1
+    expected_result:
+      - [ '0', 8 ]

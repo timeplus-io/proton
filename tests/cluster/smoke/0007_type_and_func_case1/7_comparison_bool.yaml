@@ -1,0 +1,77 @@
+tags:
+  - bool
+  - cluster_table_bug
+description: comparison operations == != > < >= <=  return bool result
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: drop stream if exists t_bool1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream t_bool1(id int, value int, bool_f bool, time datetime64(3))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_bool1(id, value, bool_f,time) values(1, -1000, true, '2020-01-02
+      00:00:01')(1, 0,true, '2020-01-03 09:01:02')(1, 1, false, '2020-01-05 09:01:03')(1,
+      2, false, '2020-01-18 09:01:04')
+
+  - type: wait
+    time: 3
+
+  - name: '801'
+    type: stream
+    query: select if(1<2,'a','b'), 0 as v1, 'true' as v2, v1>0 as a, v2='true' as b, v1=true as c,
+      v2=true as d, value=1 as e, value!=1 as f, value>1 as g, value<=1 as h, value<1 as i, value>=1 as j from table(t_bool1)
+      where id = 1 and id != 0 and to_uint8(id)
+    schema:
+      - name: if(less(1, 2), 'a', 'b')
+        type: string
+      - name: v1
+        type: uint8
+      - name: v2
+        type: string
+      - name: a
+        type: bool
+      - name: b
+        type: bool
+      - name: c
+        type: bool
+      - name: d
+        type: bool
+      - name: e
+        type: bool
+      - name: f
+        type: bool
+      - name: g
+        type: bool
+      - name: h
+        type: bool
+      - name: i
+        type: bool
+      - name: j
+        type: bool
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_bool1
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ a, 0, 'true', 'False', 'True', 'False', 'True', 'False', 'True', 'False', 'True', 'True', 'False' ]
+      - [ a, 0, 'true', 'False', 'True', 'False', 'True', 'False', 'True', 'False', 'True', 'True', 'False' ]
+      - [ a, 0, 'true', 'False', 'True', 'False', 'True', 'True', 'False', 'False', 'True', 'False', 'True' ]
+      - [ a, 0, 'true', 'False', 'True', 'False', 'True', 'False', 'True', 'True', 'False', 'False', 'True' ]

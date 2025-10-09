@@ -1,0 +1,122 @@
+tags:
+- seek_to
+description: seek to earliest
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2100'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time > earliest_timestamp()
+  schema:
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time >= earliest_ts()
+  schema:
+  - name: s
+    type: string
+
+- name: '2102'
+  type: stream
+  query: select a.i, count() from test21_limit_by_stream as a join test21_limit_by_stream
+    as b on a.i = b.i join test21_limit_by_stream as c on b.i = c.i where a._tp_time
+    >= earliest_ts() and b._tp_time >= '2022-12-01 00:00:02.111' and c._tp_time >=
+    '2022-12-01 00:00:03.111' group by a.i emit periodic 1s
+  schema:
+  - name: a.i
+    type: int32
+  - name: count()
+    type: uint64
+
+- name: '2103'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time = earliest_ts()
+  schema:
+  - name: s
+    type: string
+
+- name: '2104'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time != earliest_ts()
+  schema:
+  - name: s
+    type: string
+
+- name: '2105'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time < earliest_ts()
+  schema:
+  - name: s
+    type: string
+
+- name: '2106'
+  type: stream
+  query: select s from test21_limit_by_stream where _tp_time <= earliest_ts()
+  schema:
+  - name: s
+    type: string
+
+- name: '2107'
+  type: stream
+  query: select s from test21_limit_by_stream as a inner join test21_limit_by_stream
+    as b using (i) where a._tp_time >= earliest_ts() and b._tp_time >= earliest_ts()
+  schema:
+  - name: s
+    type: string
+
+- type: check
+  target_name: '2100'
+  mode: random
+  expected_result:
+  - [s1]
+  - [s2]
+  - [s3]
+  - [s4]
+
+- type: check
+  target_name: '2101'
+  mode: random
+  expected_result:
+  - [s1]
+  - [s2]
+  - [s3]
+  - [s4]
+
+- type: check
+  target_name: '2102'
+  mode: random
+  expected_result:
+  - [3, 1]
+  - [4, 1]
+
+- type: check
+  target_name: '2103'
+  expected_result:
+  - ["error_code:183"]
+
+- type: check
+  target_name: '2104'
+  expected_result:
+  - ["error_code:183"]
+
+- type: check
+  target_name: '2105'
+  expected_result:
+  - ["error_code:183"]
+
+- type: check
+  target_name: '2106'
+  expected_result:
+  - ["error_code:183"]
+
+- type: check
+  target_name: '2107'
+  mode: random
+  expected_result:
+  - [s1]
+  - [s2]
+  - [s3]
+  - [s4]

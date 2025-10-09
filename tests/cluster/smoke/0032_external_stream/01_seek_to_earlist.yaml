@@ -1,0 +1,80 @@
+tags:
+  - local-run
+description: test external stream seek_to earilest
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test33_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test33_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow'
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 1
+        value: sometext
+  - type: wait
+    time: 3
+  
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 2
+        value: sometext2
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: 3301
+    query: select * from test33_external settings seek_to = 'earliest'
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 3
+        value: sometext3
+
+  - type: check
+    target_name: 3301
+    expected_result:
+      - - "1"
+        - sometext
+      - - "2"
+        - sometext2
+      - - "3"
+        - sometext3

@@ -1,0 +1,104 @@
+tags:
+- versioned_kv
+description: tail query from versioned_kv state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_vk_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_vk_stream(i int, s string) primary key s
+    settings mode='versioned_kv'
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_stream(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 'a']
+  - [2, 'b']
+  - [3, 'a']
+- type: wait
+  time: 1
+
+- name: '19250'
+  type: stream
+  query_id: '19250'
+  query: subscribe to select i, s from test19_vk_stream settings checkpoint_interval=1
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_stream(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [4, 'c']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19250'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_vk_stream(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [5, 'd']
+  - [6, 'c']
+- type: wait
+  time: 3
+
+- name: 19250-1
+  type: stream
+  query: recover from '19250'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19250' sync
+
+- type: query
+  sql: unsubscribe to '19250'
+
+- type: check
+  target_name: '19250'
+  mode: random
+  expected_result:
+  - [2, b]
+  - [3, a]
+  - [4, c]
+
+- type: check
+  target_name: 19250-1
+  expected_result:
+  - [5, d]
+  - [6, c]

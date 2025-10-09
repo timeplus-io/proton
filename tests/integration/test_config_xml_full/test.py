@@ -36,5 +36,19 @@ def test_xml_full_conf():
         assert(node.query("select value from system.settings where name = 'max_memory_usage'") == "10000000000\n")
         assert(node.query("select value from system.settings where name = 'max_block_size'") == "64999\n")
 
+        assert (
+            node.query(
+                "select value from system.server_settings where name = 'max_connections'"
+            )
+            == "4096\n"
+        )
+
+        assert (
+            node.query(
+                "select changed from system.server_settings where name = 'max_connections'"
+            )
+            == "1\n"
+        )
+
     finally:
         cluster.shutdown()

@@ -1,0 +1,83 @@
+tags:
+  - local-run
+  - query_state
+description: global aggregation in substream state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream5
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream5 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '19100'
+    query_id: '19100'
+    type: stream
+    query: subscribe to select id, count(*), min(value), max(value) from test19_state_stream5 partition by id
+      settings checkpoint_interval=1
+    schema:
+        - name: id
+          type: string
+        - name: count()
+          type: uint64
+        - name: min(value)
+          type: float32
+        - name: max(value)
+          type: float32
+          
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:02')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev1',
+      'ca', 68, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream5(id, location, value, timestamp) values ('dev2',
+      'ca', 70, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '19100'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '19100'
+
+  - type: check
+    target_name: '19100'
+    mode: random
+    expected_result:
+      - [ dev1, 1, 57.3, 57.3 ]
+      - [ dev2, 1, 58.3, 58.3 ]
+      - [ dev1, 2, 57.3, 68 ]
+      - [ dev2, 2, 58.3, 70 ]

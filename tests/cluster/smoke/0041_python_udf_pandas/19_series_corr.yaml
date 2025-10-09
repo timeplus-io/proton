@@ -1,0 +1,56 @@
+tags:
+  - uda
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/6768
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (valuea array(float), valueb array(float));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_series_corr(valuea array(float), valueb array(float)) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_series_corr(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              series_a = pd.Series(a)
+              series_b = pd.Series(b)
+              series_corr = series_a.corr(series_b, method='kendall')
+              res.append(float(series_corr))
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-1-1
+    type: stream
+    query: select test_series_corr(valuea, valueb) as res from udf_stream;
+    schema:
+      - name: res
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(valuea, valueb) values 
+          ([1, 2, 3, 4], [1, 1, 2, 2])
+          ([5, 6, 7, 8], [3, 4, 3, 4]);
+
+  - type: check
+    target_name: python-udf3-1-1
+    expected_result:
+      - [0.8164965809277261]
+      - [0.4082482904638631]

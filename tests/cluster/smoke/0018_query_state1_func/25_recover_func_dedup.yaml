@@ -1,0 +1,82 @@
+tags:
+  - query_state
+description: recover function dedup from a state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream1(i int, s string)
+
+  - type: wait
+    time: 1
+
+  - name: '1945'
+    query_id: '1945'
+    type: stream
+    query: subscribe to select i, s from dedup(test19_state_stream1, s) settings checkpoint_interval=1
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(i, s) values (1, 's1'), (2, 's2'), (3, 's3')
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id = '1945'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(i, s) values (2, 's2'), (3, 's3'), (4, 's4')
+
+  - type: wait
+    time: 3
+
+  - name: 1945-1
+    query_id: 1945-1
+    type: stream
+    query: recover from '1945'
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id='1945' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1945'
+
+  - type: check
+    target_name: '1945'
+    expected_result:
+      - [ 1, s1 ]
+      - [ 2, s2 ]
+      - [ 3, s3 ]
+    
+  - type: check
+    target_name: 1945-1
+    expected_result:
+      - [ 4, s4 ]

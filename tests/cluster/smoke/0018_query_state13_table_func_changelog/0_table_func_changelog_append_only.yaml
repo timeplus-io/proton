@@ -1,0 +1,89 @@
+tags:
+- table_func_changelog
+description: table func changelog append-only state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream4;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream4 (i int, k string);
+- type: wait
+  time: 1
+
+- name: '19400'
+  query_id: '19400'
+  type: stream
+  query: subscribe to select i, k, _tp_delta from changelog(test19_left_stream4, k) settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream4(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'k1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19400'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_left_stream4(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [2, 'k1']
+- type: wait
+  time: 2
+
+- name: 19400-1
+  type: stream
+  query: recover from '19400'
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19400' sync
+
+- type: query
+  sql: unsubscribe to '19400'
+
+- type: check
+  target_name: '19400'
+  expected_result:
+  - [1, k1, 1]
+
+- type: check
+  target_name: 19400-1
+  expected_result:
+  - [1, k1, -1]
+  - [2, k1, 1]

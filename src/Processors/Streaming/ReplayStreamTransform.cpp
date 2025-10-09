@@ -11,7 +11,6 @@
 #include <base/types.h>
 #include <Common/DateLUT.h>
 #include <Common/IntervalKind.h>
-#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/assert_cast.h>
 
@@ -27,14 +26,13 @@ constexpr Int64 MAX_WAIT_INTERVAL_US = 500000;
 constexpr Int64 LOG_INTERVAL_US = 30000000;
 constexpr Int64 MAX_WAIT_OUTPUT_INTERVAL_US = 60000000;
 
-ReplayStreamTransform::ReplayStreamTransform(
-    const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time_, std::optional<String> end_time_)
+ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time_, std::optional<String> end_time_)
     : IProcessor({std::move(header)}, {std::move(header)}, ProcessorID::ReplayStreamTransformID)
     , replay_time_col(replay_time_col_)
     , replay_speed(replay_speed_)
     , last_sn(last_sn_)
     , replay_finished(false)
-    , logger(&Poco::Logger::get("ReplayStreamTransform"))
+    , logger(getLogger("ReplayStreamTransform"))
 {
     time_index = header.getPositionByName(replay_time_col);
     /// user defined replay_time_col must be DateTime64
@@ -48,7 +46,7 @@ ReplayStreamTransform::ReplayStreamTransform(
 
     if (replay_time_col == ProtonConsts::RESERVED_APPEND_TIME || replay_time_col == ProtonConsts::RESERVED_INGEST_TIME
         || replay_time_col == ProtonConsts::RESERVED_PROCESS_TIME)
-    {    
+    {
         time_scale = 3;
     }
     else
@@ -157,13 +155,20 @@ void ReplayStreamTransform::work()
 {
     auto start_ns = MonotonicNanoseconds::now();
     metrics.processed_bytes += input_chunk.bytes();
-    if (input_chunk.hasRows())
+    if (input_chunk)
     {
-        chassert(chunks_to_replay.empty());
-        chunks_to_replay = splitChunkByTime(); ///process input_chunk
+        if (input_chunk.hasRows())
+        {
+            chassert(chunks_to_replay.empty());
+            chunks_to_replay = splitChunkByTime(); /// process input_chunk
+        }
+        else
+        {
+            output_chunk = std::move(input_chunk); /// propagate the empty chunk as heartbeat chunk
+        }
     }
 
-    if (!chunks_to_replay.empty())
+    if (!output_chunk && !chunks_to_replay.empty())
         output_chunk = replayOneChunk();
 
     metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
@@ -277,9 +282,11 @@ Chunk ReplayStreamTransform::replayOneChunk()
             continue;
         }
 
+
         last_batch_time = this_batch_time;
         break;
-    } while (!chunks_to_replay.empty());
+    }
+    while (!chunks_to_replay.empty());
 
     if (end_time.has_value() && last_batch_time.value() >= end_time.value())
     {

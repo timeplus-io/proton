@@ -31,8 +31,8 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
-
-struct MannWhitneyData : public StatisticalSample<Float64, Float64>
+template <bool use_arena>
+struct MannWhitneyData : public StatisticalSample<Float64, Float64, use_arena>
 {
     /*Since null hypothesis is "for randomly selected values X and Y from two populations,
      *the probability of X being greater than Y is equal to the probability of Y being greater than X".
@@ -96,7 +96,7 @@ struct MannWhitneyData : public StatisticalSample<Float64, Float64>
     }
 
 private:
-    using Sample = typename StatisticalSample<Float64, Float64>::SampleX;
+    using Sample = typename StatisticalSample<Float64, Float64, use_arena>::SampleX;
 
     /// We need to compute ranks according to all samples. Use this class to avoid extra copy and memory allocation.
     class ConcatenatedSamples
@@ -123,20 +123,21 @@ private:
     };
 };
 
+template <bool use_arena>
 class AggregateFunctionMannWhitney final:
-    public IAggregateFunctionDataHelper<MannWhitneyData, AggregateFunctionMannWhitney>
+    public IAggregateFunctionDataHelper<MannWhitneyData<use_arena>, AggregateFunctionMannWhitney<use_arena>>
 {
 private:
-    using Alternative = typename MannWhitneyData::Alternative;
+    using Alternative = typename MannWhitneyData<use_arena>::Alternative;
     Alternative alternative;
     bool continuity_correction{true};
 
 public:
     explicit AggregateFunctionMannWhitney(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<MannWhitneyData, AggregateFunctionMannWhitney> ({arguments}, {})
+        : IAggregateFunctionDataHelper<MannWhitneyData<use_arena>, AggregateFunctionMannWhitney> ({arguments}, {}, createResultType())
     {
         if (params.size() > 2)
-            throw Exception("Aggregate function " + getName() + " require two parameter or less", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} require two parameter or less", getName());
 
         if (params.empty())
         {
@@ -145,7 +146,7 @@ public:
         }
 
         if (params[0].getType() != Field::Types::String)
-            throw Exception("Aggregate function " + getName() + " require first parameter to be a string", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} require first parameter to be a string", getName());
 
         const auto & param = params[0].get<String>();
         if (param == "two-sided")
@@ -155,14 +156,14 @@ public:
         else if (param == "greater")
             alternative = Alternative::Greater;
         else
-            throw Exception("Unknown parameter in aggregate function " + getName() +
-                    ". It must be one of: 'two-sided', 'less', 'greater'", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown parameter in aggregate function {}. "
+                    "It must be one of: 'two-sided', 'less', 'greater'", getName());
 
         if (params.size() != 2)
             return;
 
         if (params[1].getType() != Field::Types::UInt64)
-                throw Exception("Aggregate function " + getName() + " require second parameter to be a uint64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} require second parameter to be a uint64", getName());
 
         continuity_correction = static_cast<bool>(params[1].get<UInt64>());
     }
@@ -172,9 +173,9 @@ public:
         return "mann_whitney_utest";
     }
 
-    bool allocatesMemoryInArena() const override { return true; }
+    bool allocatesMemoryInArena() const override { return use_arena; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         DataTypes types
         {
@@ -226,7 +227,7 @@ public:
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         if (!this->data(place).size_x || !this->data(place).size_y)
-            throw Exception("Aggregate function " + getName() + " require both samples to be non empty", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Aggregate function {} require both samples to be non empty", getName());
 
         auto [u_statistic, p_value] = this->data(place).getResult(alternative, continuity_correction);
 

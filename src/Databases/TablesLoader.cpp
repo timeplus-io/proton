@@ -7,7 +7,14 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/logger_useful.h>
 #include <Common/ThreadPool.h>
+#include <Common/CurrentMetrics.h>
 #include <numeric>
+
+namespace CurrentMetrics
+{
+    extern const Metric TablesLoaderThreads;
+    extern const Metric TablesLoaderThreadsActive;
+}
 
 namespace DB
 {
@@ -38,7 +45,7 @@ void mergeDependenciesGraphs(DependenciesInfos & main_dependencies_info, const D
             else if (maybe_existing_info.dependencies != dependencies)
             {
                 /// Can happen on DatabaseReplicated recovery
-                LOG_WARNING(&Poco::Logger::get("TablesLoader"), "Replacing outdated dependencies ({}) of {} with: {}",
+                LOG_WARNING(getLogger("TablesLoader"), "Replacing outdated dependencies ({}) of {} with: {}",
                             fmt::join(maybe_existing_info.dependencies, ", "),
                             table,
                             fmt::join(dependencies, ", "));
@@ -53,23 +60,24 @@ void mergeDependenciesGraphs(DependenciesInfos & main_dependencies_info, const D
     }
 }
 
-void logAboutProgress(Poco::Logger * log, size_t processed, size_t total, AtomicStopwatch & watch)
+void logAboutProgress(LoggerPtr log, size_t processed, size_t total, AtomicStopwatch & watch)
 {
-    if (processed % PRINT_MESSAGE_EACH_N_OBJECTS == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
+    if (total && (processed % PRINT_MESSAGE_EACH_N_OBJECTS == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS)))
     {
-        LOG_INFO(log, "{}%", processed * 100.0 / total);
+        LOG_INFO(log, "Processed: {:.1f}%", static_cast<double>(processed) * 100.0 / total);
         watch.restart();
     }
 }
 
 TablesLoader::TablesLoader(ContextMutablePtr global_context_, Databases databases_, bool force_restore_, bool force_attach_)
-: global_context(global_context_)
-, databases(std::move(databases_))
-, force_restore(force_restore_)
-, force_attach(force_attach_)
+    : global_context(global_context_)
+    , databases(std::move(databases_))
+    , force_restore(force_restore_)
+    , force_attach(force_attach_)
+    , pool(CurrentMetrics::TablesLoaderThreads, CurrentMetrics::TablesLoaderThreadsActive)
 {
     metadata.default_database = global_context->getCurrentDatabase();
-    log = &Poco::Logger::get("TablesLoader");
+    log = getLogger("TablesLoader");
 }
 
 
@@ -249,7 +257,7 @@ void TablesLoader::startLoadingIndependentTables(ThreadPool & pool_, size_t leve
         pool_.scheduleOrThrowOnError([this, total_tables, &table_name]()
         {
             const auto & path_and_query = metadata.parsed_tables[table_name];
-            databases[table_name.database]->loadTableFromMetadata(global_context, path_and_query.path, table_name, path_and_query.ast, force_restore);
+            databases[table_name.database]->loadTableFromMetadata(global_context, table_name, path_and_query, force_restore);
             logAboutProgress(log, ++tables_processed, total_tables, stopwatch);
         });
     }

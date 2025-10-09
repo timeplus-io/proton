@@ -1,0 +1,30 @@
+tags:
+- ipv4 data type
+description: random stream supports native ipv4 and ipv6 data type
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id int, ipv4 ipv4, ipv6 ipv6)
+- type: wait
+  time: 2
+
+- name: '2235'
+  type: stream
+  query: select ipv4, ipv6 from test22_create_random settings max_events=1
+  schema:
+  - name: ipv4
+    type: ipv4
+  - name: ipv6
+    type: ipv6
+
+- type: check
+  target_name: '2235'
+  expected_result:
+  - [any_value, any_value]

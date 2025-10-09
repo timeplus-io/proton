@@ -1,0 +1,79 @@
+description: Test covering asyncio future, low-level awaitable object
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (id int, value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_future(id int, value string) RETURNS string LANGUAGE PYTHON AS $$
+      import time
+      import asyncio
+
+      async def set_after(fut, delay, value):
+          await asyncio.sleep(delay)
+          fut.set_result(value)
+
+      async def multi_set_after(delay, value):
+          loop = asyncio.get_running_loop()
+          fut = loop.create_future()
+          task1 = asyncio.create_task(set_after(fut, delay, value))
+          await1 = await fut
+          return f"{await1}"
+
+      def test_async_future(id, value):
+          results = []
+          for i, v in zip(id, value):
+              try:
+                  result = asyncio.run(multi_set_after(i,v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-7-1
+    type: stream
+    query: select test_async_future(id, value) as res, id, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(id, value) values (0, 'hello0') (1, 'hello1') (2, 'hello2');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test41_stream(id, value) values (-1, 'hello3') (0, ''); # Python < 3.11：asyncio.sleep(-1) no exception
+
+  - type: check
+    target_name: python-udf-7-1
+    expected_result:
+      - ['hello0', 0, 'hello0']
+      - ['hello1', 1, 'hello1']
+      - ['hello2', 2, 'hello2']
+      - ['hello3', -1, 'hello3']
+      - ['', 0, '']

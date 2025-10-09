@@ -1,0 +1,78 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.periods function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (ds date, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getPeriods(ds date, y float) RETURNS array(tuple(string, float, float, float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+      from prophet import Prophet
+
+      class getPeriods:
+          def __init__(self):
+              self.periods = [()]
+
+          def serialize(self):
+              data = {}
+              data['periods'] = self.periods
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.periods = data['periods']
+
+          def merge(self, other):
+              pass
+
+          def process(self, dss, ys):
+              if len(dss) < 2:
+                  return
+              df = pd.DataFrame(zip(dss,ys), columns=['ds', 'y'])
+              m = Prophet()
+              m.fit(df)
+              future = m.make_future_dataframe(periods=3)
+              forecast = m.predict(future)
+              forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail()
+              forecast[forecast.columns[0]] = forecast[forecast.columns[0]].astype('string')
+              self.periods = [tuple(r) for r in forecast.values.tolist()]
+
+          def finalize(self):
+              return [self.periods]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf15-0-1
+    type: stream
+    query: select getPeriods(ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(tuple(string, float32, float32, float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(ds, y) values
+          ('2007-12-10', 9.590761) ('2007-12-11', 8.519590)
+          ('2007-12-12', 8.183677) ('2007-12-13', 8.072467)
+          ('2007-12-14', 7.893572);
+
+  - type: check
+    target_name: python-udf15-0-1
+    expected_result:
+      - [[['2007-12-12', 8.347031217228096, 8.029942631973956, 8.645199929501024], ['2007-12-13', 7.858008008340539, 7.526392817096741, 8.167579060827535], ['2007-12-14', 7.368984799452983, 7.045494153084855, 7.665904284092654], ['2007-12-15', 6.879961590565426, 6.5585510233400806, 7.2010192312883285], ['2007-12-16', 6.39093838167787, 6.098311364521766, 6.680390283899347]]]

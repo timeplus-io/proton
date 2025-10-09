@@ -1,0 +1,103 @@
+tags:
+  - udf
+  - python_udf_library
+
+description: |
+  Test covering udf venv autogen
+  Main Steps:
+    1.Install autogen-core and autogen-ext
+    2.Create python udf on venv
+    3.Query python udf
+
+steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d $'{"packages": [{"name": "autogen-core"}]}'
+
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d $'{"packages": [{"name": "autogen-ext"}]}'
+
+  - type: command
+    name: python-udf-1
+    node: [p1]
+    shell: |
+      curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "autogen-core") | length > 0'
+  
+  - type: check
+    target_name: python-udf-1
+    expected_result: ['true']
+
+  - type: command
+    name: python-udf-2
+    node: [p1]
+    shell: |
+      curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "autogen-ext") | length > 0'
+  
+  - type: check
+    target_name: python-udf-2
+    expected_result: ['true']
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_venv_pip(value int32) RETURNS int32 LANGUAGE PYTHON AS $$
+
+      import venv
+      import subprocess
+      import asyncio
+
+      from pathlib import Path
+      from autogen import ConversableAgent
+      from autogen_core import CancellationToken
+      from autogen_core.code_executor import CodeBlock, CodeExecutor
+      from autogen_ext.code_executors.local import LocalCommandLineCodeExecutor
+
+      work_dir = Path("/var/lib/proton/python/coding")
+      work_dir.mkdir(exist_ok=True)
+
+      venv_dir = work_dir / ".venv"
+      venv_builder = venv.EnvBuilder(with_pip=True)
+      venv_builder.create(venv_dir)
+      venv_context = venv_builder.ensure_directories(venv_dir)
+
+      local_executor = LocalCommandLineCodeExecutor(work_dir=work_dir, virtual_env_context=venv_context)
+
+      async def pip_install():
+          execution_result = await local_executor.execute_code_blocks(
+              code_blocks=[CodeBlock(language="bash", code="pip install numpy")],
+              cancellation_token=CancellationToken(),
+          )
+
+      asyncio.run(pip_install())
+
+      import numpy as np
+
+      def test_venv_pip(value):
+          res = np.clip(value, 2, 8)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-1
+    type: stream
+    query: select test_venv_pip(1) as res;
+    schema:
+      - name: res
+        type: int32
+
+  - type: check
+    target_name: python_udf-1
+    expected_result:
+      - [2]

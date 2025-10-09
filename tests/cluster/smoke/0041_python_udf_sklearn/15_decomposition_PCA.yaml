@@ -1,0 +1,72 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getPCA(x int, y int) RETURNS array(float64) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      from sklearn.decomposition import PCA
+
+      class getPCA:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.pca = 0
+
+          def serialize(self):
+              data = {}
+              data['pca'] = self.pca
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.pca = data['pca']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              X = np.stack((xs, ys), axis=1)
+              if len(X) > 1:
+                  pca = PCA(n_components=2)
+                  pca.fit(X)
+                  self.pca = pca.explained_variance_ratio_.tolist()
+
+          def finalize(self):
+              return self.pca
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf6-15-1
+    type: stream
+    query: select getPCA(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float64)
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into uda_stream(x, y) values
+          (-1, -1)(-2, -1)(-3, -2)(1, 1)(2, 1)(3, 2);
+
+  - type: check
+    target_name: python-udf6-15-1
+    expected_result:
+      - [[0.9924428900898052, 0.007557109910194766]]

@@ -1,10 +1,10 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionTopKExact.h>
-#include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/FactoryHelpers.h>
-#include <Common/FieldVisitorConvertToNumber.h>
+#include <AggregateFunctions/Helpers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <Common/FieldVisitorConvertToNumber.h>
 
 
 namespace DB
@@ -19,15 +19,28 @@ namespace
 template <bool is_weighted>
 class AggregateFunctionTopKExactDate : public AggregateFunctionTopKExact<DataTypeDate::FieldType, is_weighted>
 {
-    using AggregateFunctionTopKExact<DataTypeDate::FieldType, is_weighted>::AggregateFunctionTopKExact;
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDate>()); }
+public:
+    AggregateFunctionTopKExactDate(UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
+        : AggregateFunctionTopKExact<DataTypeDate::FieldType, is_weighted>(
+              threshold_, memory_limit_bytes_, argument_types_, params, createResultType())
+    {
+    }
+
+    static DataTypePtr createResultType() { return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDate>()); }
 };
 
 template <bool is_weighted>
 class AggregateFunctionTopKExactDateTime : public AggregateFunctionTopKExact<DataTypeDateTime::FieldType, is_weighted>
 {
-    using AggregateFunctionTopKExact<DataTypeDateTime::FieldType, is_weighted>::AggregateFunctionTopKExact;
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>()); }
+public:
+    AggregateFunctionTopKExactDateTime(
+        UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
+        : AggregateFunctionTopKExact<DataTypeDateTime::FieldType, is_weighted>(
+              threshold_, memory_limit_bytes_, argument_types_, params, createResultType())
+    {
+    }
+
+    static DataTypePtr createResultType() { return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>()); }
 };
 
 /// proton: starts. Extended with count
@@ -35,8 +48,15 @@ class AggregateFunctionTopKExactDateTime : public AggregateFunctionTopKExact<Dat
 template <bool is_weighted>
 class AggregateFunctionTopKExactDateWithCount : public AggregateFunctionTopKExactWithCount<DataTypeDate::FieldType, is_weighted>
 {
-    using AggregateFunctionTopKExactWithCount<DataTypeDate::FieldType, is_weighted>::AggregateFunctionTopKExactWithCount;
-    DataTypePtr getReturnType() const override
+public:
+    AggregateFunctionTopKExactDateWithCount(
+        UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
+        : AggregateFunctionTopKExactWithCount<DataTypeDate::FieldType, is_weighted>(
+              threshold_, memory_limit_bytes_, argument_types_, params, createResultType())
+    {
+    }
+
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeArray>(
             std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeDate>(), std::make_shared<DataTypeUInt64>()}));
@@ -46,8 +66,15 @@ class AggregateFunctionTopKExactDateWithCount : public AggregateFunctionTopKExac
 template <bool is_weighted>
 class AggregateFunctionTopKExactDateTimeWithCount : public AggregateFunctionTopKExactWithCount<DataTypeDateTime::FieldType, is_weighted>
 {
-    using AggregateFunctionTopKExactWithCount<DataTypeDateTime::FieldType, is_weighted>::AggregateFunctionTopKExactWithCount;
-    DataTypePtr getReturnType() const override
+public:
+    AggregateFunctionTopKExactDateTimeWithCount(
+        UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
+        : AggregateFunctionTopKExactWithCount<DataTypeDateTime::FieldType, is_weighted>(
+              threshold_, memory_limit_bytes_, argument_types_, params, createResultType())
+    {
+    }
+
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeArray>(
             std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeDateTime>(), std::make_shared<DataTypeUInt64>()}));
@@ -55,8 +82,7 @@ class AggregateFunctionTopKExactDateTimeWithCount : public AggregateFunctionTopK
 };
 
 template <bool is_weighted, bool with_count>
-IAggregateFunction *
-createWithExtraTypes(const DataTypes & argument_types, UInt64 threshold, UInt64 memory_size, const Array & params)
+IAggregateFunction * createWithExtraTypes(const DataTypes & argument_types, UInt64 threshold, UInt64 memory_size, const Array & params)
 {
     if (argument_types.empty())
         throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "Got empty arguments list");
@@ -104,14 +130,14 @@ createAggregateFunctionTopKExact(const std::string & name, const DataTypes & arg
         assertBinary(name, argument_types);
         if (!isInteger(argument_types[1]))
             throw Exception(
-                "The second argument for aggregate function 'top_k_weighted' must have integer type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The second argument for aggregate function 'top_k_weighted' must have integer type");
     }
 
     /// Synatx: top_k_exact(key, k [, with_count = true][, limit_memory_size=100*1024*1024 byte]
     /// Synatx: top_k_exact_weighted(key, weighted, k[, with_count = true][, limit_memory_size=100*1024*1024 byte]
     UInt64 threshold = 10; /// default values
     bool with_count = true;
-    UInt64 memory_size = 100*1024*1024; //default reserved memory for top_k_exact is 100M
+    UInt64 memory_size = 100 * 1024 * 1024; //default reserved memory for top_k_exact is 100M
 
     if (!params.empty())
     {
@@ -162,7 +188,7 @@ createAggregateFunctionTopKExact(const std::string & name, const DataTypes & arg
 void registerAggregateFunctionTopKExact(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = {.returns_default_when_only_null = false, .is_order_dependent = true};
-    
+
     factory.registerFunction("top_k_exact", {createAggregateFunctionTopKExact<false>, properties});
     factory.registerFunction("top_k_exact_weighted", {createAggregateFunctionTopKExact<true>, properties});
 }

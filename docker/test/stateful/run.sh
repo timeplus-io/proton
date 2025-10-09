@@ -21,6 +21,15 @@ ln -s /usr/share/clickhouse-test/clickhouse-test /usr/bin/clickhouse-test
 azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --debug /azurite_log &
 ./setup_minio.sh
 
+if [[ -n "$USE_S3_STORAGE_FOR_MERGE_TREE" ]] && [[ "$USE_S3_STORAGE_FOR_MERGE_TREE" -eq 1 ]]; then
+    # It is not needed, we will explicitly create tables on s3.
+    # We do not have statefull tests with s3 storage run in public repository, but this is needed for another repository.
+    rm /etc/clickhouse-server/config.d/s3_storage_policy_for_merge_tree_by_default.xml
+
+    rm /etc/clickhouse-server/config.d/storage_metadata_with_full_object_key.xml
+    rm /etc/clickhouse-server/config.d/s3_storage_policy_with_template_object_key.xml
+fi
+
 function start()
 {
     if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
@@ -117,13 +126,16 @@ function run_tests()
     fi
 
     set +e
-    clickhouse-test -j 2 --testname --shard --zookeeper --check-zookeeper-session --no-stateless --hung-check --print-time \
-        --skip 00168_parallel_processing_on_replicas "${ADDITIONAL_OPTIONS[@]}" \
+
+    if [[ -n "$USE_PARALLEL_REPLICAS" ]] && [[ "$USE_PARALLEL_REPLICAS" -eq 1 ]]; then
+        clickhouse-test --client="clickhouse-client --use_hedged_requests=0  --allow_experimental_parallel_reading_from_replicas=1 \
+            --max_parallel_replicas=100 --cluster_for_parallel_replicas='parallel_replicas'" \
+            -j 2 --testname --shard --zookeeper --check-zookeeper-session --no-stateless --no-parallel-replicas --hung-check --print-time "${ADDITIONAL_OPTIONS[@]}" \
         "$SKIP_TESTS_OPTION" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee test_output/test_result.txt
-
-    clickhouse-test --timeout 1200 --testname --shard --zookeeper --check-zookeeper-session --no-stateless --hung-check --print-time \
-    00168_parallel_processing_on_replicas "${ADDITIONAL_OPTIONS[@]}" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
-
+    else
+        clickhouse-test -j 2 --testname --shard --zookeeper --check-zookeeper-session --no-stateless --hung-check --print-time "${ADDITIONAL_OPTIONS[@]}" \
+        "$SKIP_TESTS_OPTION" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee test_output/test_result.txt
+    fi
     set -e
 }
 

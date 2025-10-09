@@ -1,0 +1,35 @@
+name: external_stream
+description: Tests covering the performance benchmark cases with json/protobuf format.
+tags:
+  - perf
+  - external_stream
+
+setup:
+  scope: suite
+  steps:
+    - type: kafka
+      name: delete
+      topic: test
+
+    - type: query
+      sql: DROP VIEW IF EXISTS INIPFlowmsstream_mv; # materialized view
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: DROP STREAM IF EXISTS ipfix_mstream settings force_drop_big_stream=true; # target stream
+
+    - type: query
+      sql: DROP STREAM IF EXISTS INIPFlow_ext; # external stream
+
+    - type: query
+      sql: DROP FORMAT SCHEMA IF EXISTS schema_name;
+
+    - type: kafka
+      name: create
+      topic: test
+      settings:
+        partitions: 3
+        replication: 1
+    - type: wait
+      time: 2

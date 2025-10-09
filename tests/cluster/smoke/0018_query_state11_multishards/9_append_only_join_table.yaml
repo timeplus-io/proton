@@ -1,0 +1,163 @@
+tags:
+- join
+- multishards
+description: append-only_join_table with multishards state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists multishards_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream multishards_stream (id int, name string, val float, ts datetime)
+    settings shards=3
+- type: wait
+  time: 1
+
+- name: '19309'
+  type: stream
+  query_id: '19309'
+  query: subscribe to select a.id, b.name, a.val, a.ts, b.type from multishards_stream
+    as a join table(multishard_join) as b on a.name = b.name settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: int32
+  - name: b.name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  - name: type
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's2', 22.2, '2020-02-02 20:00:02']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 's3', 33.3, '2020-02-02 20:00:03']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19309'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [4, 's4', 44.4, '2020-02-02 20:00:04']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [5, 's5', 55.5, '2020-02-02 20:00:05']
+- type: wait
+  time: 3
+
+- name: 19309-1
+  type: stream
+  query: recover from '19309'
+  schema:
+  - name: id
+    type: int32
+  - name: b.name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  - name: type
+    type: string
+- type: wait
+  time: 2
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19309' sync
+
+- type: query
+  sql: unsubscribe to '19309'
+
+- type: check
+  target_name: '19309'
+  mode: random
+  expected_result:
+  - [1, s1, 11.1, '2020-02-02 20:00:01', roof]
+  - [2, s2, 22.2, '2020-02-02 20:00:02', field]
+  - [3, s3, 33.3, '2020-02-02 20:00:03', window]
+
+- type: check
+  target_name: 19309-1
+  mode: random
+  expected_result:
+  - [4, s4, 44.4, '2020-02-02 20:00:04', wall]
+  - [5, s5, 55.5, '2020-02-02 20:00:05', roof]

@@ -1,0 +1,72 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (tillamook float64, newport float64, petersburg float64, magadan float64, tvarminne float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getFOneway(tillamook float64, newport float64, petersburg float64, magadan float64, tvarminne float64) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy.stats import f_oneway
+
+      class getFOneway:
+          def __init__(self):
+              self.f_oneway = 0
+
+          def serialize(self):
+              data = {}
+              data['f_oneway'] = self.f_oneway
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.f_oneway = data['f_oneway']
+
+          def merge(self, other):
+              pass
+
+          def process(self, tillamooks, newports, petersburgs, magadans, tvarminnes):
+              res = f_oneway(tillamooks, newports, petersburgs, magadans, tvarminnes)
+              self.f_oneway = res.pvalue
+
+          def finalize(self):
+              return float(self.f_oneway)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-29-1
+    type: stream
+    query: select getFOneway(tillamook, newport, petersburg, magadan, tvarminne) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(tillamook, newport, petersburg, magadan, tvarminne) values 
+          (0.0571, 0.0873, 0.0974, 0.1033, 0.0703)
+          (0.0813, 0.0662, 0.1352, 0.0915, 0.1026)
+          (0.0831, 0.0672, 0.0817, 0.0781, 0.0956)
+          (0.0976, 0.0819, 0.1016, 0.0685, 0.0973)
+          (0.0817, 0.0749, 0.0968, 0.0677, 0.1039)
+          (0.0859, 0.0649, 0.1064, 0.0697, 0.1045);
+
+  - type: check
+    target_name: python-udf4-29-1
+    expected_result:
+      - [0.005766601819149336]

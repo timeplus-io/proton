@@ -1,0 +1,52 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_stats_logistic_ppf(value float64) RETURNS float64 LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      import scipy.stats as stats
+
+      def test_stats_logistic_ppf(value):
+          mean, scale = 100, 1
+          res = stats.logistic.ppf(value, loc=mean,scale=scale)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-22-1
+    type: stream
+    query: select test_stats_logistic_ppf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float64
+      - name: value
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (0.001)(0.5)(0.999);
+
+  - type: check
+    target_name: python-udf4-22-1
+    expected_result:
+      - [93.09324522, 0.001]
+      - [100.0, 0.5]
+      - [106.90675478, 0.999]

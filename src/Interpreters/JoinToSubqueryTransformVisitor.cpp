@@ -46,14 +46,15 @@ ASTPtr makeSubqueryTemplate()
     ParserTablesInSelectQueryElement parser(true);
     ASTPtr subquery_template = parseQuery(parser, "(select * from _t) as `--.s`", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
     if (!subquery_template)
-        throw Exception("Cannot parse subquery template", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot parse subquery template");
     return subquery_template;
 }
 
 ASTPtr makeSubqueryQualifiedAsterisk()
 {
     auto asterisk = std::make_shared<ASTQualifiedAsterisk>();
-    asterisk->children.emplace_back(std::make_shared<ASTTableIdentifier>("--.s"));
+    asterisk->qualifier = std::make_shared<ASTIdentifier>("--.s");
+    asterisk->children.push_back(asterisk->qualifier);
     return asterisk;
 }
 
@@ -67,10 +68,10 @@ public:
         std::vector<String> tables_order;
         std::shared_ptr<ASTExpressionList> new_select_expression_list;
         /// proton: starts.
-        bool is_join_result_changelog = false;
-        /// proton: ends.
+        bool join_result_emit_changelog = false;
 
-        explicit Data(const std::vector<TableWithColumnNamesAndTypes> & tables)
+        Data(const std::vector<TableWithColumnNamesAndTypes> & tables, bool join_result_emit_changelog_) : join_result_emit_changelog(join_result_emit_changelog_)
+        /// proton: ends.
         {
             tables_order.reserve(tables.size());
             for (const auto & table : tables)
@@ -80,17 +81,6 @@ public:
                 tables_order.push_back(table_name);
                 table_columns.emplace(std::move(table_name), std::move(columns));
             }
-
-            /// proton: starts.
-            auto left_joined_result = tables[0].output_data_stream_semantic;
-            for (size_t i = 1; i < tables.size(); ++i)
-            {
-                is_join_result_changelog = Streaming::isJoinResultChangelog(left_joined_result, tables[i].output_data_stream_semantic);
-                left_joined_result.semantic
-                    = is_join_result_changelog ? Streaming::DataStreamSemantic::Changelog : Streaming::DataStreamSemantic::Append;
-                left_joined_result.storage_semantic.reset();
-            }
-            /// proton: ends.
         }
 
         using ShouldAddColumnPredicate = std::function<bool (const String&)>;
@@ -105,7 +95,7 @@ public:
         {
             auto it = table_columns.find(table_name);
             if (it == table_columns.end())
-                throw Exception("Unknown qualified identifier: " + table_name, ErrorCodes::UNKNOWN_IDENTIFIER);
+                throw Exception(ErrorCodes::UNKNOWN_IDENTIFIER, "Unknown qualified identifier: {}", table_name);
 
             for (const auto & column : it->second)
             {
@@ -159,29 +149,40 @@ private:
                     data.addTableColumns(table_name, columns, [&](const String & column_name) { return column_name != ProtonConsts::RESERVED_DELTA_FLAG; });
 
                 /// For join query emit changelog, expand `_tp_delta` for `*`
-                if (data.is_join_result_changelog)
+                if (data.join_result_emit_changelog)
                     columns.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
                 /// proton: ends.
 
-                for (const auto & transformer : asterisk->children)
-                    IASTColumnsTransformer::transform(transformer, columns);
+                if (asterisk->transformers)
+                {
+                    for (const auto & transformer : asterisk->transformers->children)
+                        IASTColumnsTransformer::transform(transformer, columns);
+                }
             }
             else if (const auto * qualified_asterisk = child->as<ASTQualifiedAsterisk>())
             {
                 has_asterisks = true;
 
-                if (child->children.size() != 1)
-                    throw Exception("Logical error: qualified asterisk must have exactly one child", ErrorCodes::LOGICAL_ERROR);
-                auto & identifier = child->children[0]->as<ASTTableIdentifier &>();
+                if (!qualified_asterisk->qualifier)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Qualified asterisk must have a qualifier");
+
+                auto & identifier = qualified_asterisk->qualifier->as<ASTIdentifier &>();
 
                 /// proton: starts. For join query, the `t.*` didn't include `_tp_delta` of any stream, so skip it
                 data.addTableColumns(identifier.name(), columns, [&](const String & column_name) { return column_name != ProtonConsts::RESERVED_DELTA_FLAG; });
                 /// proton: ends.
 
-                // QualifiedAsterisk's transformers start to appear at child 1
-                for (auto it = qualified_asterisk->children.begin() + 1; it != qualified_asterisk->children.end(); ++it)
+                if (qualified_asterisk->transformers)
                 {
-                    IASTColumnsTransformer::transform(*it, columns);
+                    for (const auto & transformer : qualified_asterisk->transformers->children)
+                    {
+                        if (transformer->as<ASTColumnsApplyTransformer>() ||
+                            transformer->as<ASTColumnsExceptTransformer>() ||
+                            transformer->as<ASTColumnsReplaceTransformer>())
+                            IASTColumnsTransformer::transform(transformer, columns);
+                        else
+                            throw Exception(ErrorCodes::LOGICAL_ERROR, "Qualified asterisk must only have children of IASTColumnsTransformer type");
+                    }
                 }
             }
             else if (const auto * columns_list_matcher = child->as<ASTColumnsListMatcher>())
@@ -191,8 +192,11 @@ private:
                 for (const auto & ident : columns_list_matcher->column_list->children)
                     columns.emplace_back(ident->clone());
 
-                for (const auto & transformer : columns_list_matcher->children)
-                    IASTColumnsTransformer::transform(transformer, columns);
+                if (columns_list_matcher->transformers)
+                {
+                    for (const auto & transformer : columns_list_matcher->transformers->children)
+                        IASTColumnsTransformer::transform(transformer, columns);
+                }
             }
             else if (const auto * columns_regexp_matcher = child->as<ASTColumnsRegexpMatcher>())
             {
@@ -204,8 +208,11 @@ private:
                         columns,
                         [&](const String & column_name) { return columns_regexp_matcher->isColumnMatching(column_name); });
 
-                for (const auto & transformer : columns_regexp_matcher->children)
-                    IASTColumnsTransformer::transform(transformer, columns);
+                if (columns_regexp_matcher->transformers)
+                {
+                    for (const auto & transformer : columns_regexp_matcher->transformers->children)
+                        IASTColumnsTransformer::transform(transformer, columns);
+                }
             }
             else
                 data.new_select_expression_list->children.push_back(child);
@@ -263,7 +270,7 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
     {
         const auto * table = tables->children[i]->as<ASTTablesInSelectQueryElement>();
         if (!table)
-            throw Exception("Stream expected", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream expected");
 
         if (table->table_expression)
             if (const auto * expression = table->table_expression->as<ASTTableExpression>())
@@ -272,7 +279,7 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
             continue;
 
         if (!table->table_join && !table->array_join)
-            throw Exception("Joined stream expected", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Joined table expected");
 
         if (table->array_join)
         {
@@ -282,7 +289,7 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
 
         const auto & join = table->table_join->as<ASTTableJoin &>();
         if (join.kind == JoinKind::Comma)
-            throw Exception("COMMA to CROSS JOIN rewriter is not enabled or cannot rewrite query", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "COMMA to CROSS JOIN rewriter is not enabled or cannot rewrite query");
 
         if (join.using_expression_list)
             ++num_using;
@@ -293,9 +300,9 @@ bool needRewrite(ASTSelectQuery & select, std::vector<const ASTTableExpression *
 
     /// it's not trivial to support mix of JOIN ON & JOIN USING cause of short names
     if (num_using && version <= 1)
-        throw Exception("Multiple JOIN does not support USING", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Multiple JOIN does not support USING");
     if (num_array_join)
-        throw Exception("Multiple JOIN does not support mix with ARRAY JOINs", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Multiple JOIN does not support mix with ARRAY JOINs");
     return true;
 }
 
@@ -580,7 +587,7 @@ std::vector<TableNeededColumns> normalizeColumnNamesExtractNeeded(
                         alias_ident->as<ASTIdentifier>()->restoreTable();
                         bool alias_equals_column_name = alias_ident->getColumnNameWithoutAlias() == ident->getColumnNameWithoutAlias();
                         if (!alias_equals_column_name)
-                            throw Exception("Alias clashes with qualified column '" + ident->name() + "'", ErrorCodes::AMBIGUOUS_COLUMN_NAME);
+                            throw Exception(ErrorCodes::AMBIGUOUS_COLUMN_NAME, "Alias clashes with qualified column '{}'", ident->name());
                     }
                 }
                 String short_name = ident->shortName();
@@ -679,11 +686,13 @@ void JoinToSubqueryTransformMatcher::visit(ASTSelectQuery & select, ASTPtr & ast
 
     if (table_expressions.size() != data.tables.size() ||
         tables_count != data.tables.size())
-        throw Exception("Inconsistent tables count in JOIN rewriter", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Inconsistent tables count in JOIN rewriter");
 
     /// Replace * and t.* with columns in select expression list.
     {
-        ExtractAsterisksVisitor::Data asterisks_data(data.tables);
+        /// proton: starts.
+        ExtractAsterisksVisitor::Data asterisks_data(data.tables, data.join_result_emit_changelog);
+        /// proton: ends.
         ExtractAsterisksVisitor(asterisks_data).visit(select.select());
         if (asterisks_data.new_select_expression_list)
             select.setExpression(ASTSelectQuery::Expression::SELECT, std::move(asterisks_data.new_select_expression_list));
@@ -742,15 +751,15 @@ void JoinToSubqueryTransformMatcher::visit(ASTSelectQuery & select, ASTPtr & ast
         CheckAliasDependencyVisitor::Data check{data.aliases};
         CheckAliasDependencyVisitor(check).visit(expr.second);
         if (check.dependency)
-            throw Exception("Cannot rewrite JOINs. Alias '" + expr.first +
-                            "' used in ON section depends on another alias '" + check.dependency->name() + "'",
-                            ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot rewrite JOINs. "
+                            "Alias '{}' used in ON section depends on another alias '{}'",
+                            expr.first, check.dependency->name());
     }
 
     /// Check same name in aliases, USING and ON sections. Cannot push down alias to ON through USING cause of name masquerading.
     for (auto * ident : using_identifiers)
         if (on_aliases.contains(ident->name()))
-            throw Exception("Cannot rewrite JOINs. Alias '" + ident->name() + "' appears both in ON and USING", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot rewrite JOINs. Alias '{}' appears both in ON and USING", ident->name());
     using_identifiers.clear();
 
     /// Replace pushdowned expressions with aliases names in original expression lists.
@@ -795,10 +804,10 @@ ASTPtr JoinToSubqueryTransformMatcher::replaceJoin(ASTPtr ast_left, ASTPtr ast_r
     const auto * left = ast_left->as<ASTTablesInSelectQueryElement>();
     const auto * right = ast_right->as<ASTTablesInSelectQueryElement>();
     if (!left || !right)
-        throw Exception("Two TablesInSelectQueryElements expected", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Two TablesInSelectQueryElements expected");
 
     if (!right->table_join)
-        throw Exception("Stream join expected", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Stream join expected");
 
     /// replace '_t' with pair of joined tables
     RewriteVisitor::Data visitor_data{ast_left, ast_right};

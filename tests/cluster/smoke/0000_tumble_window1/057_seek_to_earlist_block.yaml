@@ -1,0 +1,83 @@
+tags:
+  - seek to
+  - order by per block
+description: stream seek to earliest w/order by per block, no command could clear stream storage so not stable, so use test_smoke1_seek table created during setup to avoid stream storage impact, will introduce topic clean function in test_smoke1 automation later
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_smoke1_join_v;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test_smoke1;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_smoke1(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3));
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev2', 'ca', 60, '{"create_time":"2021-11-02 20:00:01"}', '2021-11-02 20:00:01']
+      - ['dev1', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03']
+      - ['dev2', 'ca', 66, '{"create_time":"2021-11-02 20:00:03"}', '2021-11-02 20:00:03']
+      - ['dev2', 'ca', 30, '{"create_time":"2021-11-02 20:00:02"}', '2021-11-02 20:00:02']
+
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev2', 'ca', 68, '{"create_time":"2021-11-02 20:00:04"}', '2021-11-02 20:00:04']
+      - ['dev8', 'ca', 67, '{"create_time":"2021-11-02 20:00:05"}', '2021-11-02 20:00:05']
+      - ['dev1', 'ca', 67, '{"create_time":"2021-11-02 20:00:07"}', '2021-11-02 20:00:07']
+      - ['dev1', 'ca', 77, '{"create_time":"2021-11-02 20:00:10"}', '2021-11-02 20:00:10']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: '101'
+    query: select emit_version() as emit_version, id, count(*) from tumble(test_smoke1, timestamp, 5s)  group by id, window_end order by emit_version, id settings seek_to = 'earliest'
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: '101'
+    expected_result:
+      - [0, 'dev1', 2]
+      - [0, 'dev2', 4]
+      - [1, 'dev1', 1]
+      - [1, 'dev8', 1]

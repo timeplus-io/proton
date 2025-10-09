@@ -18,7 +18,7 @@ public:
 private:
     const char * getStorageTypeName() const override { return "dedup"; }
     void parseArguments(const ASTPtr & func_ast, ContextPtr context) override;
-    ASTs checkAndExtractArguments(ASTFunction * node) const;
+    size_t checkAndExtractArguments(ASTFunction * node) const;
 
 private:
     String help_message;

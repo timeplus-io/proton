@@ -1,0 +1,6 @@
+\nENGINE = Join(ANY, LEFT, key)	0	true
+\nENGINE = Join(ANY, LEFT, key)	1	true
+\nENGINE = Join(ANY, LEFT, key)	1	true
+true
+true
+true

@@ -1,4 +1,4 @@
-<clickhouse>
+<proton>
     <profiles>
         <default></default>
     </profiles>
@@ -19,4 +19,4 @@
     <top_level_domains_lists>
         <public_suffix_list>02110_clickhouse_local_custom_tld.tld.dat</public_suffix_list>
     </top_level_domains_lists>
-</clickhouse>
+</proton>

@@ -1,0 +1,5 @@
+name: stream
+description: Test covers the stream query compatibility cases.
+tags:
+  - compatibility
+  - stream

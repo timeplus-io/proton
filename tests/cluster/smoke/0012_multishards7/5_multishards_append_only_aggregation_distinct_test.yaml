@@ -1,0 +1,171 @@
+tags:
+  - multishards
+  - append_only
+  - distinct_aggr
+  - streaming_tailing
+
+description: |
+  Test distinct aggregation function in multishards situation
+  fix incorrect result on distinct aggr
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_7;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream if not exists test13_multishard_7(id int, val int) settings shards=3, sharding_expr='to_int(id)';
+
+  - type: wait
+    time: 1
+
+  - name: '1364'
+    type: stream
+    query: |
+      select sum_distinct(val), sum(val) from test13_multishard_7 emit periodic 900ms;
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values(1, 30), (1, 40)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values(2, 30), (2, 50), (1, 40)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values(3, 50), (3, 60), (4, 70)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: '1364'
+    expected_result:
+      - [ 70, 70 ]
+      - [ 120, 190 ]
+      - [ 250, 370 ]
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_7;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream if not exists test13_multishard_7(id int, val int) settings shards=3, sharding_expr='to_int(id)';
+
+  - type: wait
+    time: 1
+
+  - name: '1365'
+    type: stream
+    query: |
+      select sum_distinct(val), sum(val) from test13_multishard_7 emit periodic 900ms;
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values(1, 30), (1, 40)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values(1, 300), (2, 400)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values(1, 30), (2, 40)
+
+  - type: check
+    target_name: '1365'
+    expected_result:
+      - [ 70, 70 ]
+      - [ 770, 770 ]
+      - [ 770, 840 ]
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_7;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream if not exists test13_multishard_7(id int, val int) settings shards=3, sharding_expr='to_int(id)';
+
+  - type: wait
+    time: 1
+
+  - name: '1366'
+    type: stream
+    query: |
+      select sum_distinct(val), sum(val) from test13_multishard_7 emit periodic 900ms;
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values (1, 40), (1, 30)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7(id, val) values (1, 30), (1, 50), (2, 50), (3, 50)
+
+  - type: check
+    target_name: '1366'
+    expected_result:
+      - [ 70, 70 ]
+      - [ 120, 250 ]

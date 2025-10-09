@@ -35,7 +35,7 @@ String DataTypeNestedCustomName::getName() const
 static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.empty())
-        throw Exception("The nested cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
+        throw Exception(ErrorCodes::EMPTY_DATA_PASSED, "the nested cannot be empty");
 
     DataTypes nested_types;
     Strings nested_names;

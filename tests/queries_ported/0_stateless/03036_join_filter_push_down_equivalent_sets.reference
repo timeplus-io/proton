@@ -1,0 +1,610 @@
+-- { echoOn }
+
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs INNER JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: equals(id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             FUNCTION equals(id : 0, 5 :: 2) -> equals(id, 5) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_table_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: equals(rhs.id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION equals(rhs.id : 3, 5 :: 2) -> equals(rhs.id, 5) bool : 1
+    Positions: 1 3 0
+      ReadFromMergeTree (default.test_table_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs INNER JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs INNER JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: equals(id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             FUNCTION equals(id : 0, 5 :: 2) -> equals(id, 5) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_table_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: equals(rhs.id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION equals(rhs.id : 3, 5 :: 2) -> equals(rhs.id, 5) bool : 1
+    Positions: 1 3 0
+      ReadFromMergeTree (default.test_table_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs INNER JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs INNER JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5 AND rhs.id = 6;
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: and(equals(id, 5), equals(id, 6)) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 6 uint8 : 2
+             COLUMN const(uint8) -> 5 uint8 : 3
+             FUNCTION equals(id : 0, 6 :: 2) -> equals(id, 6) bool : 4
+             FUNCTION equals(id : 0, 5 :: 3) -> equals(id, 5) bool : 2
+             FUNCTION and(equals(id, 5) :: 2, equals(id, 6) :: 4) -> and(equals(id, 5), equals(id, 6)) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_table_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: and(equals(rhs.id, 6), equals(rhs.id, 5)) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             COLUMN const(uint8) -> 6 uint8 : 3
+             ALIAS id :: 0 -> rhs.id uint64 : 4
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION equals(rhs.id : 4, 5 :: 2) -> equals(rhs.id, 5) bool : 1
+             FUNCTION equals(rhs.id : 4, 6 :: 3) -> equals(rhs.id, 6) bool : 2
+             FUNCTION and(equals(rhs.id, 6) :: 2, equals(rhs.id, 5) :: 1) -> and(equals(rhs.id, 6), equals(rhs.id, 5)) bool : 3
+    Positions: 3 4 0
+      ReadFromMergeTree (default.test_table_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs INNER JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5 AND rhs.id = 6;
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs LEFT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: equals(id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             FUNCTION equals(id : 0, 5 :: 2) -> equals(id, 5) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_table_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: equals(rhs.id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION equals(rhs.id : 3, 5 :: 2) -> equals(rhs.id, 5) bool : 1
+    Positions: 1 3 0
+      ReadFromMergeTree (default.test_table_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs LEFT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs LEFT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+Expression ((Projection + Before ORDER BY))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Filter (WHERE)
+  Header: id uint64
+          value string
+          rhs.id uint64
+          rhs.value string
+  Filter column: equals(rhs.id, 5) (removed)
+  Actions: INPUT :: 0 -> id uint64 : 0
+           INPUT :: 1 -> value string : 1
+           INPUT : 2 -> rhs.id uint64 : 2
+           INPUT :: 3 -> rhs.value string : 3
+           COLUMN const(uint8) -> 5 uint8 : 4
+           FUNCTION equals(rhs.id : 2, 5 :: 4) -> equals(rhs.id, 5) bool : 5
+  Positions: 0 1 2 3 5
+    Join (JOIN FillRightFirst)
+    Header: id uint64
+            value string
+            rhs.value string
+            rhs.id uint64
+      Expression (Before JOIN)
+      Header: id uint64
+              value string
+      Actions: INPUT :: 0 -> id uint64 : 0
+               INPUT :: 1 -> value string : 1
+      Positions: 0 1
+        ReadFromMergeTree (default.test_table_1)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+      Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+      Header: rhs.id uint64
+              rhs.value string
+      Actions: INPUT : 0 -> id uint64 : 0
+               INPUT : 1 -> value string : 1
+               ALIAS id :: 0 -> rhs.id uint64 : 2
+               ALIAS value :: 1 -> rhs.value string : 0
+      Positions: 2 0
+        ReadFromMergeTree (default.test_table_2)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs LEFT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs RIGHT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+Expression ((Projection + Before ORDER BY))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Filter (WHERE)
+  Header: id uint64
+          value string
+          rhs.id uint64
+          rhs.value string
+  Filter column: equals(id, 5) (removed)
+  Actions: INPUT : 0 -> id uint64 : 0
+           INPUT :: 1 -> value string : 1
+           INPUT :: 2 -> rhs.id uint64 : 2
+           INPUT :: 3 -> rhs.value string : 3
+           COLUMN const(uint8) -> 5 uint8 : 4
+           FUNCTION equals(id : 0, 5 :: 4) -> equals(id, 5) bool : 5
+  Positions: 0 1 2 3 5
+    Join (JOIN FillRightFirst)
+    Header: id uint64
+            value string
+            rhs.value string
+            rhs.id uint64
+      Expression (Before JOIN)
+      Header: id uint64
+              value string
+      Actions: INPUT :: 0 -> id uint64 : 0
+               INPUT :: 1 -> value string : 1
+      Positions: 0 1
+        ReadFromMergeTree (default.test_table_1)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+      Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+      Header: rhs.id uint64
+              rhs.value string
+      Actions: INPUT : 0 -> id uint64 : 0
+               INPUT : 1 -> value string : 1
+               ALIAS id :: 0 -> rhs.id uint64 : 2
+               ALIAS value :: 1 -> rhs.value string : 0
+      Positions: 2 0
+        ReadFromMergeTree (default.test_table_2)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs RIGHT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs RIGHT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Join (JOIN FillRightFirst)
+  Header: id uint64
+          value string
+          rhs.value string
+          rhs.id uint64
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: equals(id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             FUNCTION equals(id : 0, 5 :: 2) -> equals(id, 5) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_table_1)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+    Filter (( + (Joined actions + (Rename joined columns + (Projection + Before ORDER BY)))))
+    Header: rhs.id uint64
+            rhs.value string
+    Filter column: equals(rhs.id, 5) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT : 1 -> value string : 1
+             COLUMN const(uint8) -> 5 uint8 : 2
+             ALIAS id :: 0 -> rhs.id uint64 : 3
+             ALIAS value :: 1 -> rhs.value string : 0
+             FUNCTION equals(rhs.id : 3, 5 :: 2) -> equals(rhs.id, 5) bool : 1
+    Positions: 1 3 0
+      ReadFromMergeTree (default.test_table_2)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs RIGHT JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs FULL JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+Expression ((Projection + Before ORDER BY))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Filter (WHERE)
+  Header: id uint64
+          value string
+          rhs.id uint64
+          rhs.value string
+  Filter column: equals(id, 5) (removed)
+  Actions: INPUT : 0 -> id uint64 : 0
+           INPUT :: 1 -> value string : 1
+           INPUT :: 2 -> rhs.id uint64 : 2
+           INPUT :: 3 -> rhs.value string : 3
+           COLUMN const(uint8) -> 5 uint8 : 4
+           FUNCTION equals(id : 0, 5 :: 4) -> equals(id, 5) bool : 5
+  Positions: 0 1 2 3 5
+    Join (JOIN FillRightFirst)
+    Header: id uint64
+            value string
+            rhs.value string
+            rhs.id uint64
+      Expression (Before JOIN)
+      Header: id uint64
+              value string
+      Actions: INPUT :: 0 -> id uint64 : 0
+               INPUT :: 1 -> value string : 1
+      Positions: 0 1
+        ReadFromMergeTree (default.test_table_1)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+      Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+      Header: rhs.id uint64
+              rhs.value string
+      Actions: INPUT : 0 -> id uint64 : 0
+               INPUT : 1 -> value string : 1
+               ALIAS id :: 0 -> rhs.id uint64 : 2
+               ALIAS value :: 1 -> rhs.value string : 0
+      Positions: 2 0
+        ReadFromMergeTree (default.test_table_2)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs FULL JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs FULL JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+Expression ((Projection + Before ORDER BY))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Filter (WHERE)
+  Header: id uint64
+          value string
+          rhs.id uint64
+          rhs.value string
+  Filter column: equals(rhs.id, 5) (removed)
+  Actions: INPUT :: 0 -> id uint64 : 0
+           INPUT :: 1 -> value string : 1
+           INPUT : 2 -> rhs.id uint64 : 2
+           INPUT :: 3 -> rhs.value string : 3
+           COLUMN const(uint8) -> 5 uint8 : 4
+           FUNCTION equals(rhs.id : 2, 5 :: 4) -> equals(rhs.id, 5) bool : 5
+  Positions: 0 1 2 3 5
+    Join (JOIN FillRightFirst)
+    Header: id uint64
+            value string
+            rhs.value string
+            rhs.id uint64
+      Expression (Before JOIN)
+      Header: id uint64
+              value string
+      Actions: INPUT :: 0 -> id uint64 : 0
+               INPUT :: 1 -> value string : 1
+      Positions: 0 1
+        ReadFromMergeTree (default.test_table_1)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+      Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+      Header: rhs.id uint64
+              rhs.value string
+      Actions: INPUT : 0 -> id uint64 : 0
+               INPUT : 1 -> value string : 1
+               ALIAS id :: 0 -> rhs.id uint64 : 2
+               ALIAS value :: 1 -> rhs.value string : 0
+      Positions: 2 0
+        ReadFromMergeTree (default.test_table_2)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs FULL JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE rhs.id = 5;
+5	5	5	5
+SELECT '--';
+--
+EXPLAIN header = 1, actions = 1
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs FULL JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5 AND rhs.id = 6;
+Expression ((Projection + Before ORDER BY))
+Header: id uint64
+        rhs.id uint64
+        value string
+        rhs.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> rhs.id uint64 : 2
+         INPUT :: 3 -> rhs.value string : 3
+Positions: 0 2 1 3
+  Filter (WHERE)
+  Header: id uint64
+          value string
+          rhs.id uint64
+          rhs.value string
+  Filter column: and(equals(id, 5), equals(rhs.id, 6)) (removed)
+  Actions: INPUT : 0 -> id uint64 : 0
+           INPUT :: 1 -> value string : 1
+           INPUT : 2 -> rhs.id uint64 : 2
+           INPUT :: 3 -> rhs.value string : 3
+           COLUMN const(uint8) -> 5 uint8 : 4
+           COLUMN const(uint8) -> 6 uint8 : 5
+           FUNCTION equals(id : 0, 5 :: 4) -> equals(id, 5) bool : 6
+           FUNCTION equals(rhs.id : 2, 6 :: 5) -> equals(rhs.id, 6) bool : 4
+           FUNCTION and(equals(id, 5) :: 6, equals(rhs.id, 6) :: 4) -> and(equals(id, 5), equals(rhs.id, 6)) bool : 5
+  Positions: 0 1 2 3 5
+    Join (JOIN FillRightFirst)
+    Header: id uint64
+            value string
+            rhs.value string
+            rhs.id uint64
+      Expression (Before JOIN)
+      Header: id uint64
+              value string
+      Actions: INPUT :: 0 -> id uint64 : 0
+               INPUT :: 1 -> value string : 1
+      Positions: 0 1
+        ReadFromMergeTree (default.test_table_1)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+      Expression ((Joined actions + (Rename joined columns + (Projection + Before ORDER BY))))
+      Header: rhs.id uint64
+              rhs.value string
+      Actions: INPUT : 0 -> id uint64 : 0
+               INPUT : 1 -> value string : 1
+               ALIAS id :: 0 -> rhs.id uint64 : 2
+               ALIAS value :: 1 -> rhs.value string : 0
+      Positions: 2 0
+        ReadFromMergeTree (default.test_table_2)
+        Header: id uint64
+                value string
+        ReadType: Default
+        Parts: 1
+        Granules: 1
+SELECT '--';
+--
+SELECT lhs.id, rhs.id, lhs.value, rhs.value FROM test_table_1 AS lhs FULL JOIN test_table_2 AS rhs ON lhs.id = rhs.id
+WHERE lhs.id = 5 AND rhs.id = 6;

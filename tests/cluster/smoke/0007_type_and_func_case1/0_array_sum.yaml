@@ -1,0 +1,35 @@
+tags:
+  - local-run
+  - func
+description: calculate array_sum for integer & float
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '802'
+    type: stream
+    query: SELECT [1, 1, 1] AS a, array_sum(a) as array_sum
+    schema:
+      - name: a
+        type: array(uint8)
+      - name: array_sum
+        type: uint64
+
+  - name: '803'
+    type: stream
+    query: SELECT [1.5, 2.2, 3] AS a, array_sum(a) as array_sum
+    schema:
+      - name: a
+        type: array(float64)
+      - name: array_sum
+        type: float64
+
+  - type: check
+    target_name: '802'
+    expected_result:
+      - [ [ 1, 1, 1 ], 3 ]
+
+  - type: check
+    target_name: '803'
+    expected_result:
+      - [ [ 1.5, 2.2, 3.0 ], 6.7 ]

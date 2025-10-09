@@ -177,10 +177,10 @@ void assignWindow(
     if (unlikely(num_rows == 0))
         return;
 
-    /// FIXME: Better to handle ColumnConst.
-    auto time_column = columns[time_col_pos]->convertToFullColumnIfConst();
-    auto session_start_column = columns[session_start_col_pos]->convertToFullColumnIfConst();
-    auto session_end_column = columns[session_end_col_pos]->convertToFullColumnIfConst();
+    /// FIXME: Better to handle ColumnConst/ColumnSparse.
+    auto time_column = columns[time_col_pos]->convertToFullColumnIfSparse()->convertToFullColumnIfConst();
+    auto session_start_column = columns[session_start_col_pos]->convertToFullColumnIfSparse()->convertToFullColumnIfConst();
+    auto session_end_column = columns[session_end_col_pos]->convertToFullColumnIfSparse()->convertToFullColumnIfConst();
 
     MutableColumnPtr session_id_col;
 
@@ -221,7 +221,7 @@ void assignWindow(
     auto & session_id_offsets = session_id_array.getOffsets();
 
     /// NOTE: Assign window start/end as session_id
-    /// Then the window start/end will be rewrited by session_id later
+    /// Then the window start/end will be rewritten by session_id later
     for (size_t pos = 0; auto & column : columns)
     {
         if (pos == static_cast<size_t>(wstart_col_pos))
@@ -246,7 +246,7 @@ SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions)
 
 SessionID removeExpiredSessions(SessionInfoQueue & sessions, Int64 finalized_watermark)
 {
-    auto last_expired_session_id = -1;
+    int64_t last_expired_session_id = -1;
     while (!sessions.empty())
     {
         auto & session = sessions.front();

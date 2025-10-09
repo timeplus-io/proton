@@ -26,6 +26,7 @@ namespace DB
 
 class ProtocolServerAdapter;
 class ReadBuffer;
+struct Settings;
 
 using AsynchronousMetricValue = double;
 using AsynchronousMetricValues = std::unordered_map<std::string, AsynchronousMetricValue>;
@@ -62,6 +63,20 @@ public:
     /// Returns copy of all values.
     AsynchronousMetricValues getValues() const;
 
+#if defined(OS_LINUX)
+    /// https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html
+    struct SelfProcStats
+    {
+        uint64_t utime;
+        uint64_t stime;
+        int64_t cutime;
+        int64_t cstime;
+
+        void read(ReadBuffer & in);
+        SelfProcStats operator-(const SelfProcStats & other) const;
+    };
+#endif
+
 private:
     const std::chrono::seconds update_period;
     ProtocolServerMetricsFunc protocol_server_metrics_func;
@@ -84,6 +99,7 @@ private:
     std::optional<ReadBufferFromFilePRead> meminfo;
     std::optional<ReadBufferFromFilePRead> loadavg;
     std::optional<ReadBufferFromFilePRead> proc_stat;
+    std::optional<ReadBufferFromFilePRead> proc_self_stat;
     std::optional<ReadBufferFromFilePRead> cpuinfo;
     std::optional<ReadBufferFromFilePRead> file_nr;
     std::optional<ReadBufferFromFilePRead> uptime;
@@ -139,6 +155,10 @@ private:
     ProcStatValuesOther proc_stat_values_other{};
     std::vector<ProcStatValuesCPU> proc_stat_values_per_cpu;
 
+    /// proton: starts.
+    SelfProcStats self_proc_stats{};
+    /// proton: ends.
+
     /// https://www.kernel.org/doc/Documentation/block/stat.txt
     struct BlockDeviceStatValues
     {
@@ -193,7 +213,7 @@ private:
     void run();
     void update(std::chrono::system_clock::time_point update_time);
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

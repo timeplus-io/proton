@@ -2,19 +2,21 @@
 
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
+#include <base/scope_guard.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
 namespace Streaming
 {
 WindowAggregatingTransformWithSubstream::WindowAggregatingTransformWithSubstream(
-    Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_)
-    : AggregatingTransformWithSubstream(std::move(header), std::move(params_), log_name, pid_)
+    Block header, AggregatingTransformParamsPtr params_, size_t id, const String & log_name, ProcessorID pid_)
+    : AggregatingTransformWithSubstream(std::move(header), std::move(params_), id, log_name, pid_)
 {
-    assert(params->params.window_params);
+    assert(params->params->window_params);
     assert(
-        params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-        || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+        params->params->group_by == IAggregatorParams::GroupBy::WindowStart
+        || params->params->group_by == IAggregatorParams::GroupBy::WindowEnd);
 
     const auto & output_header = getOutputs().front().getHeader();
     if (output_header.has(ProtonConsts::STREAMING_WINDOW_START))
@@ -29,46 +31,51 @@ WindowAggregatingTransformWithSubstream::WindowAggregatingTransformWithSubstream
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
+void WindowAggregatingTransformWithSubstream::finalize(const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
     assert(substream_ctx);
 
-    SCOPE_EXIT({
-        substream_ctx->resetRowCounts();
-    });
+    SCOPE_EXIT({ substream_ctx->resetRowCounts(); });
 
-    if ((params->emit_mode == Streaming::EmitMode::PeriodicWatermark || params->emit_mode == Streaming::EmitMode::PeriodicWatermarkOnUpdate) && !substream_ctx->hasNewData())
+    if ((params->emit_mode == Streaming::EmitMode::Periodic || params->emit_mode == EmitMode::OnUpdateWithBatchInterval)
+        && !(params->repeatEmit() || substream_ctx->hasNewData()))
         return;
 
     /// Finalize current watermark
-    auto start = MonotonicMilliseconds::now();
+    Stopwatch stopwatch;
     doFinalize(chunk_ctx->getWatermark(), substream_ctx, chunk_ctx);
-    auto end = MonotonicMilliseconds::now();
 
-    LOG_INFO(
-        log,
-        "Took {} milliseconds to finalize aggregation in substream id={}. finalized_watermark={}",
-        end - start,
-        substream_ctx->id,
-        substream_ctx->finalized_watermark);
+    if (auto elapsed_ms = stopwatch.elapsedMilliseconds(); elapsed_ms >= 100)
+    {
+        auto [aggr_chunks, aggr_rows] = chunksAndRowsOfAggregateResults();
+        LOG_INFO(
+            logger,
+            "Took {} milliseconds to finalize aggregation in substream_id={}, finalized_watermark={} transform_id={} aggregated_chunks={} "
+            "aggregated_rows={}",
+            elapsed_ms,
+            substream_ctx->id,
+            substream_ctx->finalized_watermark,
+            transform_id,
+            aggr_chunks,
+            aggr_rows);
+    }
 }
 
 void WindowAggregatingTransformWithSubstream::doFinalize(
-    Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
+    Int64 watermark, const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
     assert(substream_ctx);
 
     auto & data_variant = substream_ctx->variants;
-    if (data_variant.empty())
+    if (data_variant->empty())
         return;
 
-    assert(data_variant.isTwoLevel());
-
-    Chunk chunk;
+    chassert(data_variant->isTwoLevel());
 
     const auto & last_finalized_windows = getLastFinalizedWindow(substream_ctx);
     const auto & windows_with_buckets = getWindowsWithBuckets(substream_ctx);
 
+    Chunk chunk;
     ChunkList res_chunks;
     for (const auto & window_with_buckets : windows_with_buckets)
     {
@@ -80,9 +87,9 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             continue;
 
         if (only_emit_updates)
-            chunk = AggregatingHelper::spliceAndConvertUpdatesToChunk(data_variant, *params, window_with_buckets.buckets);
+            chunk = AggregatingHelper::spliceAndConvertUpdatesToChunk(*data_variant, *params, window_with_buckets.buckets);
         else
-            chunk = AggregatingHelper::spliceAndConvertToChunk(data_variant, *params, window_with_buckets.buckets);
+            chunk = AggregatingHelper::spliceAndConvertToChunk(*data_variant, *params, window_with_buckets.buckets);
 
         if (!chunk)
             continue;
@@ -91,11 +98,11 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             reassignWindow(
                 chunk,
                 window_with_buckets.window,
-                params->params.window_params->time_col_is_datetime64,
+                params->params->window_params->time_col_is_datetime64,
                 window_start_col_pos,
                 window_end_col_pos);
 
-        if (params->emit_version && params->final)
+        if (params->emit_version)
             emitVersion(chunk, substream_ctx);
 
         res_chunks.emplace_back(std::move(chunk));
@@ -106,7 +113,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     if (only_emit_updates)
     {
         for (const auto & window_with_buckets : windows_with_buckets)
-            params->aggregator.resetUpdatedForBuckets(data_variant, window_with_buckets.buckets);
+            params->aggregator->resetUpdatedForBuckets(*data_variant, window_with_buckets.buckets);
     }
 
     if (res_chunks.empty()) [[unlikely]]
@@ -126,10 +133,15 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     setAggregatedResult(res_chunks);
 }
 
-void WindowAggregatingTransformWithSubstream::clearExpiredState(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx)
+void WindowAggregatingTransformWithSubstream::clearExpiredState(Int64 finalized_watermark, const SubstreamAggregatedDataPtr & substream_ctx)
 {
     removeBucketsImpl(finalized_watermark, substream_ctx);
+
+    /// If no any windows, we can remove the substream context, it's possible for TIMEOUT_WATERMARK
+    if (auto windows = getWindowsWithBuckets(substream_ctx); windows.empty())
+        removeSubstreamContext(substream_ctx->id);
 }
 
 }
+
 }

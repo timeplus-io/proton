@@ -12,7 +12,7 @@ namespace DB
 namespace ExternalStream
 {
 
-PulsarLogger::PulsarLogger(const std::string & file_name_, Poco::Logger * logger_) : file_name(file_name_), logger(logger_)
+PulsarLogger::PulsarLogger(const std::string & file_name_, LoggerPtr logger_) : file_name(file_name_), logger(logger_)
 {
 }
 
@@ -49,7 +49,7 @@ void PulsarLogger::log(Level level, int line, const std::string & message)
     }
 }
 
-PulsarLoggerFactory::PulsarLoggerFactory(Poco::Logger * logger_) : logger(logger_)
+PulsarLoggerFactory::PulsarLoggerFactory(LoggerPtr logger_) : logger(logger_)
 {
 }
 

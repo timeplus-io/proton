@@ -5,8 +5,6 @@
 #include <list>
 #include <unordered_map>
 
-#include <Common/logger_useful.h>
-
 namespace DB
 {
 /// Cache policy LRU evicts entries which are not used for a long time.
@@ -154,7 +152,7 @@ protected:
             auto it = cells.find(key);
             if (it == cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+                // Queue became inconsistent
                 abort();
             }
 
@@ -172,7 +170,7 @@ protected:
 
         if (current_size > (1ull << 63))
         {
-            LOG_ERROR(&Poco::Logger::get("LRUCache"), "LRUCache became inconsistent. There must be a bug in it.");
+            // Queue became inconsistent
             abort();
         }
     }

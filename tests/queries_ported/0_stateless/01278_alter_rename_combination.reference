@@ -1,0 +1,15 @@
+CREATE STREAM default.rename_table\n(\n  `key` int32,\n  `old_value1` int32,\n  `value1` int32,\n  `_tp_time` datetime64(3, \'UTC\') DEFAULT now64(3, \'UTC\') CODEC(DoubleDelta, ZSTD(1)),\n  `_tp_sn` int64 CODEC(Delta(8), ZSTD(1)),\n  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,\n  INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32\n)\nENGINE = Stream(1, rand())\nPARTITION BY to_YYYYMM(_tp_time)\nORDER BY tuple_cast()\nSETTINGS min_bytes_for_wide_part = 0, index_granularity = 8192
+key	old_value1	value1
+1	2	3
+CREATE STREAM default.rename_table\n(\n  `k` int32,\n  `v1` int32,\n  `v2` int32,\n  `_tp_time` datetime64(3, \'UTC\') DEFAULT now64(3, \'UTC\') CODEC(DoubleDelta, ZSTD(1)),\n  `_tp_sn` int64 CODEC(Delta(8), ZSTD(1)),\n  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,\n  INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32\n)\nENGINE = Stream(1, rand())\nPARTITION BY to_YYYYMM(_tp_time)\nORDER BY tuple_cast()\nSETTINGS min_bytes_for_wide_part = 0, index_granularity = 8192
+k	v1	v2
+1	2	3
+4	5	6
+---polymorphic---
+CREATE STREAM default.rename_table_polymorphic\n(\n  `key` int32,\n  `old_value1` int32,\n  `value1` int32,\n  `_tp_time` datetime64(3, \'UTC\') DEFAULT now64(3, \'UTC\') CODEC(DoubleDelta, ZSTD(1)),\n  `_tp_sn` int64 CODEC(Delta(8), ZSTD(1)),\n  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,\n  INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32\n)\nENGINE = Stream(1, rand())\nPARTITION BY to_YYYYMM(_tp_time)\nORDER BY tuple_cast()\nSETTINGS min_rows_for_wide_part = 10000, index_granularity = 8192
+key	old_value1	value1
+1	2	3
+CREATE STREAM default.rename_table_polymorphic\n(\n  `k` int32,\n  `v1` int32,\n  `v2` int32,\n  `_tp_time` datetime64(3, \'UTC\') DEFAULT now64(3, \'UTC\') CODEC(DoubleDelta, ZSTD(1)),\n  `_tp_sn` int64 CODEC(Delta(8), ZSTD(1)),\n  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,\n  INDEX _tp_sn_index _tp_sn TYPE minmax GRANULARITY 32\n)\nENGINE = Stream(1, rand())\nPARTITION BY to_YYYYMM(_tp_time)\nORDER BY tuple_cast()\nSETTINGS min_rows_for_wide_part = 10000, index_granularity = 8192
+k	v1	v2
+1	2	3
+4	5	6

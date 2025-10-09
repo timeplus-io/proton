@@ -1,0 +1,8 @@
+name: python_udf_asyncio
+description: Tests covering the python_udf asyncio standard library
+tags:
+  - smoke
+  - python_udf
+  - asyncio
+arch:
+  - x86_64

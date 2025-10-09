@@ -12,6 +12,7 @@
 
 #include <Common/MultiVersion.h>
 
+
 namespace DB
 {
 
@@ -50,12 +51,25 @@ struct StorageInMemoryMetadata
 
     String comment;
 
+    /// Version of metadata. Managed properly by ReplicatedMergeTree only
+    /// (zero-initialization is important)
+    int32_t metadata_version = 0;
+    
+    /// proton: starts. Version of this metadata / schema
+    void setVersion(UInt32 version_) { version = version_; }
+    UInt32 getVersion() const noexcept { return version; }
+    UInt32 version = 1; /// Default version is 1.
+    /// proton: ends
+
     StorageInMemoryMetadata() = default;
 
     StorageInMemoryMetadata(const StorageInMemoryMetadata & other);
     StorageInMemoryMetadata & operator=(const StorageInMemoryMetadata & other);
 
-    /// NOTE: Thread unsafe part. You should modify same StorageInMemoryMetadata
+    StorageInMemoryMetadata(StorageInMemoryMetadata && other) = default; /// NOLINT
+    StorageInMemoryMetadata & operator=(StorageInMemoryMetadata && other) = default; /// NOLINT
+
+    /// NOTE: Thread unsafe part. You should not modify same StorageInMemoryMetadata
     /// structure from different threads. It should be used as MultiVersion
     /// object. See example in IStorage.
 
@@ -95,6 +109,11 @@ struct StorageInMemoryMetadata
 
     /// Set SELECT query for (Materialized)View
     void setSelectQuery(const SelectQueryDescription & select_);
+
+    /// Set version of metadata.
+    void setMetadataVersion(int32_t metadata_version_);
+    /// Get copy of current metadata with metadata_version_
+    StorageInMemoryMetadata withMetadataVersion(int32_t metadata_version_) const;
 
     /// Returns combined set of columns
     const ColumnsDescription & getColumns() const;
@@ -144,15 +163,18 @@ struct StorageInMemoryMetadata
     TTLDescriptions getGroupByTTLs() const;
     bool hasAnyGroupByTTL() const;
 
-    /// Returns columns, which will be needed to calculate dependencies (skip
-    /// indices, TTL expressions) if we update @updated_columns set of columns.
-    ColumnDependencies getColumnDependencies(const NameSet & updated_columns, bool include_ttl_target) const;
+    /// Returns columns, which will be needed to calculate dependencies (skip indices, projections,
+    /// TTL expressions) if we update @updated_columns set of columns.
+    ColumnDependencies getColumnDependencies(
+        const NameSet & updated_columns,
+        bool include_ttl_target,
+        const std::function<bool(const String & file_name)> & has_indice_or_projection) const;
 
     /// Block with ordinary + materialized columns.
     Block getSampleBlock() const;
 
     /// Block with ordinary columns.
-    Block getSampleBlockNonMaterialized() const;
+    Block getSampleBlockNonMaterialized(bool skip_tp_sn = false) const;
 
     /// Block with ordinary + materialized + virtuals. Virtuals have to be
     /// explicitly specified, because they are part of Storage type, not
@@ -221,6 +243,9 @@ struct StorageInMemoryMetadata
     const SelectQueryDescription & getSelectQuery() const;
     bool hasSelectQuery() const;
 
+    /// Get version of metadata
+    int32_t getMetadataVersion() const { return metadata_version; }
+
     /// Check that all the requested names are in the table and have the correct types.
     void check(const NamesAndTypesList & columns) const;
 
@@ -231,10 +256,6 @@ struct StorageInMemoryMetadata
     /// contains only the columns of the table, and all the columns are different.
     /// If |need_all| is set, then checks that all the columns of the table are in the block.
     void check(const Block & block, bool need_all = false) const;
-
-    /// proton: starts. Version of this metadata
-    UInt16 version = 0;
-    /// proton: ends
 };
 
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
@@ -245,8 +266,8 @@ using MultiVersionStorageMetadataPtr = MultiVersion<StorageInMemoryMetadata>;
 /// query from all storages.
 struct StorageInMemoryCreateQuery
 {
-    String query;  /// if show_table_uuid_in_table_create_query_if_not_nil = 0
-    String query_uuid;  /// if show_table_uuid_in_table_create_query_if_not_nil = 1
+    String query;  /// if show_uuid = 0
+    String query_uuid;  /// if show_uuid = 1
     String engine_full;
     String mode;
 

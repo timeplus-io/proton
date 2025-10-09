@@ -1,0 +1,165 @@
+tags:
+  - no_primary_key_join
+description: append-only join versioned_kv with no primary key join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node: 
+      - p1
+    sql: drop stream if exists test15_left_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: drop stream if exists test15_vk_right_stream
+  - type: wait
+    time: 1
+  
+  - type: query
+    node: 
+      - p1
+    sql: create stream test15_left_stream (i1 int64, i2 int64, s string)
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: create stream test15_vk_right_stream (ii1 int64, ii2 int64, ss string) primary key (ii1, ii2) settings mode='versioned_kv'
+  - type: wait
+    time: 1
+
+  - name: "1517"
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: select i1, i2, ii1, ii2, s, ss from test15_left_stream inner join test15_vk_right_stream on s = ss
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: ii1
+        type: int64
+      - name: ii2
+        type: int64
+      - name: s
+        type: string
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_right_stream(ii1, ii2, ss) values (1, 1, 's1')
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 1
+  
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_left_stream(i1, i2, s) values (1, 1, 's1')
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1517"
+    expected_result:
+      - - 1
+        - 1
+        - 1
+        - 1
+        - s1
+        - s1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii1, ii2, ss) values (1, 1, 's2')
+    schema:
+      - name: ii1
+        type: int64
+      - name: ii2
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+  
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_right_stream(ii1, ii2, ss) values (1, 2, 's1'), (1, 3, 's1')
+    schema:
+      - name: ii1
+        type: int64
+      - name: ii2
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_left_stream(i1, i2, s) values (1, 2, 's1')
+    schema:
+      - name: i1
+        type: int64
+      - name: i2
+        type: int64
+      - name: s
+        type: string
+  
+  - type: check
+    target_name: "1517"
+    expected_result:
+      - - 1
+        - 2
+        - 1
+        - 2
+        - s1
+        - s1
+      - - 1
+        - 2
+        - 1
+        - 3
+        - s1
+        - s1

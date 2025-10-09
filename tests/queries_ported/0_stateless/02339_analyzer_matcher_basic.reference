@@ -1,0 +1,97 @@
+Matchers without FROM section
+dummy	uint8					
+0
+--
+dummy	uint8					
+0
+--
+dummy	uint8					
+0
+Unqualified matchers
+id	uint64					
+value	string					
+0	Value
+--
+id	uint64					
+0
+--
+id	uint64					
+value	string					
+0	Value
+--
+id	uint64					
+value	string					
+0	Value
+Table qualified matchers
+id	uint64					
+value	string					
+0	Value
+--
+--
+--
+Database and table qualified matchers
+--
+id	uint64					
+value	string					
+0	Value
+--
+--
+--
+APPLY transformer
+--
+to_string(id)	string					
+to_string(value)	string					
+0	Value
+--
+to_string(id)	string					
+to_string(value)	string					
+0	Value
+--
+length(to_string(id))	uint64					
+length(to_string(value))	uint64					
+1	5
+--
+length(to_string(id))	uint64					
+length(to_string(value))	uint64					
+1	5
+--
+id	uint64					
+value	string					
+0	Value
+EXCEPT transformer
+--
+value	string					
+Value
+--
+value	string					
+Value
+--
+to_string(value)	string					
+Value
+--
+to_string(value)	string					
+Value
+REPLACE transformer
+--
+id	uint8					
+value	string					
+5	Value
+--
+id	uint8					
+value	string					
+5	Value
+--
+id	uint8					
+value	uint8					
+5	6
+--
+id	uint8					
+value	uint8					
+5	6
+Combine EXCEPT, REPLACE, APPLY transformers
+--
+to_string(6)	string					
+6
+--
+to_string(6)	string					
+6

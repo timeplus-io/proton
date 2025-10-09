@@ -1,0 +1,41 @@
+tags:
+- seek_to
+- bug
+description: seek to sequene number
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2100'
+  type: stream
+  query: select i, s from test21_limit_by_stream settings seek_to='3'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+
+- name: '2190'
+  type: stream
+  query: select i, s from test21_limit_by_stream where _tp_sn >= 3
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+
+- type: check
+  target_name: '2100'
+  expected_result:
+  - [1, s1]
+  - [2, s2]
+  - [3, s3]
+  - [4, s4]
+
+- type: check
+  target_name: '2190'
+  expected_result:
+  - [1, s1]
+  - [2, s2]
+  - [3, s3]
+  - [4, s4]

@@ -1,0 +1,130 @@
+tags:
+  - query_state
+description: 'tumble window aggregation with delay interval state checkpoint '
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream3
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream3 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1967'
+    query_id: '1967'
+    type: stream
+    query: subscribe to select emit_version() as emit_version, id, count(*), window_start,
+      window_end from tumble(test19_state_stream3, timestamp, interval 5 second) group
+      by id, window_start, window_end emit stream after window close with delay interval
+      2 second settings checkpoint_interval=1
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - name: '19671'
+    query_id: '19671'
+    type: stream
+    query: subscribe to select emit_version() as emit_version, id, count(*), window_start,
+      window_end from tumble(test19_state_stream3, timestamp, interval 5 second) group
+      by id, window_start, window_end emit stream after watermark with delay interval
+      2 second settings checkpoint_interval=1
+    schema:
+      - name: emit_version
+        type: int64
+      - name: id
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 66, '2020-02-02 20:00:01')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:02')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev8',
+      'ca', 67, '2020-02-02 20:00:06')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev8',
+      'ca', 67, '2020-02-02 20:00:08')
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id = '1967'
+
+  - type: query
+    sql: kill query where query_id = '19671'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1967'
+  
+  - type: query
+    sql: unsubscribe to '19671'
+  
+  - type: check
+    target_name: '1967'
+    mode: random
+    expected_result:
+      - [ '0', dev1, '2', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '0', dev2, '2', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+  
+  - type: check
+    target_name: '19671'
+    mode: random
+    expected_result:
+      - [ '0', dev1, '2', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '0', dev2, '2', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]

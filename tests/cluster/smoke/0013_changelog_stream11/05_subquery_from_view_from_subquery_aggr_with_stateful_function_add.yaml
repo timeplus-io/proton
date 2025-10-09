@@ -1,0 +1,116 @@
+tags:
+- versioned_kv
+- multi_shard
+- subquery
+- subquery/view/materialized_view
+- tail/aggr
+- no_group_by
+- stateful_function
+description: subquery from view from subquery aggr with stateful function, add
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: create stream test14_multishard_11(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv', shards=3;
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create view test14_view1_11 as
+          (select i,
+                  k1,
+                  k2
+            from
+              (select i,
+                      k1,
+                      k2
+              from test14_multishard_11
+              where k1 <> 0 )
+            where k2 <> 'd' );
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view test14_view2_11 as
+          (select max(i) as max_i,
+                  min(i) as min_i,
+                  avg(i) as avg_i,
+                  count(i) as cnt
+            from test14_view1_11 emit periodic 200ms);
+- type: wait
+  time: 2
+
+- name: '1489'
+  type: stream
+  query: select max_i,
+                min_i,
+                avg_i,
+                cnt
+        from test14_view2_11;
+  schema:
+  - name: max_i
+    type: float32
+  - name: min_i
+    type: float32
+  - name: avg_i
+    type: float64
+  - name: cnt
+    type: uint64
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (1, 1, 'a');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (2, 1, 'b');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (3, 0, 'c');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (4, 1, 'd');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (5, 0, 'e');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (6, 2, 'f');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (7, 2, 'g');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (8, 1, 'h');
+
+- type: check
+  target_name: '1489'
+  expected_result:
+  - [1, 1, 1, 1]
+  - [2, 1, 1.5, 2]
+  - [6, 1, 3, 3]
+  - [7, 1, 4, 4]
+  - [8, 1, 4.8, 5]

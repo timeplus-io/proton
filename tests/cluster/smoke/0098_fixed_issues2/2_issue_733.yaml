@@ -1,0 +1,57 @@
+tags:
+  - watermark
+  - tumble window
+description: emit watermark for tumble window with backfill empty data
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists fixed_issues2_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream fixed_issues2_stream(i int, v string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into fixed_issues2_stream(i, v, _tp_time) values(1, 't1', '2024-05-16 21:28:00');
+
+  - type: wait
+    time: 2
+
+  - name: fixed-issues2-1
+    query_id: fixed-issues2-1
+    type: stream
+    query: with cte as (select * from fixed_issues2_stream where v != 't1' settings
+      seek_to='earliest') select i, window_end, count() from tumble(cte, 2m) group by
+      i, window_end;
+    schema:
+      - name: i
+        type: int32
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into fixed_issues2_stream(i, v, _tp_time) values (2, 't2', '2024-05-16
+      21:30:00') (2, 't3', '2024-05-16 21:32:00');
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = 'fixed-issues2-1'
+
+  - type: check
+    target_name: fixed-issues2-1
+    expected_result:
+      - [ 2, '2024-05-16 21:32:00+00:00', 1 ]

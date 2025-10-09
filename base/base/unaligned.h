@@ -62,3 +62,38 @@ inline void unalignedStore(void * address,
     static_assert(std::is_trivially_copyable_v<T>);
     memcpy(address, &src, sizeof(src));
 }
+
+template <std::endian endian, typename T>
+inline T unalignedLoadEndian(const void * address)
+{
+    T res {};
+    if constexpr (std::endian::native == endian)
+        memcpy(&res, address, sizeof(res));
+    else
+        reverseMemcpy(&res, address, sizeof(res));
+    return res;
+}
+
+template <std::endian endian, typename T>
+inline void unalignedStoreEndian(void * address, T & src)
+{
+    static_assert(std::is_trivially_copyable_v<T>);
+    if constexpr (std::endian::native == endian)
+        memcpy(address, &src, sizeof(src));
+    else
+        reverseMemcpy(address, &src, sizeof(src));
+}
+
+
+template <typename T>
+inline T unalignedLoadBigEndian(const void * address)
+{
+    return unalignedLoadEndian<std::endian::big, T>(address);
+}
+
+template <typename T>
+inline void unalignedStoreBigEndian(void * address,
+    const typename std::enable_if<true, T>::type & src)
+{
+    unalignedStoreEndian<std::endian::big>(address, src);
+}

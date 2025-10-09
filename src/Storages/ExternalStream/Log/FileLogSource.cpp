@@ -1,6 +1,5 @@
-#include <Storages/ExternalStream/Log/FileLogSource.h>
-
 #include <Storages/ExternalStream/Log/FileLog.h>
+#include <Storages/ExternalStream/Log/FileLogSource.h>
 #include <Storages/ExternalStream/Log/fileLastModifiedTime.h>
 
 #include <Storages/ExternalStream/BreakLines.h>
@@ -29,24 +28,56 @@ FileLogSource::FileLogSource(
     size_t max_block_size_,
     Int64 start_timestamp_,
     FileLogSource::FileContainer files_,
-    Poco::Logger * logger_)
-    : Streaming::ISource(header_, true, ProcessorID::FileLogSourceID)
+    bool streaming_query_,
+    LoggerPtr logger_)
+    : Streaming::ISource(header_, true, logger_, ProcessorID::FileLogSourceID)
     , file_log(file_log_)
     , query_context(query_context_)
-    , column_type(header_.getByPosition(0).type)
     , head_chunk(header_.getColumns(), 0)
     , max_block_size(max_block_size_)
     , start_timestamp(start_timestamp_)
     , files(std::move(files_))
-    , logger(logger_)
 {
+    setStreaming(streaming_query_);
+
     iter = files.begin();
+
+    initVirtualColumnValueFunctions(header_);
 
     last_flush_ms = MonotonicMilliseconds::now();
     last_check = last_flush_ms;
 
     (void)max_block_size;
     (void)start_timestamp;
+}
+
+void FileLogSource::initVirtualColumnValueFunctions(const Block & header_)
+{
+    virtual_col_value_functions.resize(header_.columns());
+
+    for (size_t i = 0; const auto & column : header_)
+    {
+        if (column.name == "_filename")
+        {
+            virtual_col_value_functions[i] = [this]() -> String {
+                if (current_fd >= 0 && iter != files.end())
+                    return iter->second.filename().string();
+                else
+                    return "";
+            };
+        }
+        else if (column.name == "_filepath")
+        {
+            virtual_col_value_functions[i] = [this]() -> String {
+                if (current_fd >= 0 && iter != files.end())
+                    return iter->second.parent_path().string();
+                else
+                    return "";
+            };
+        }
+
+        ++i;
+    }
 }
 
 FileLogSource::~FileLogSource()
@@ -61,18 +92,18 @@ Chunk FileLogSource::generate()
     {
         if (current_fd < 0)
         {
-            current_fd = ::open(iter->second.c_str(), O_RDONLY);
-            if (current_fd < 0)
+            auto new_file_fd = ::open(iter->second.c_str(), O_RDONLY);
+            if (new_file_fd < 0)
                 throwFromErrnoWithPath(
                     "Cannot open file ",
                     iter->second.string(),
                     errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE,
                     errno);
 
-            current_offset = 0;
+            setCurrentFile(new_file_fd);
 
             if (buffer.empty())
-                buffer.resize(4 * 1024 * 1024);
+                buffer.resize(8 * 1024 * 1024);
 
             if (!handleCurrentFile())
                 return head_chunk.clone();
@@ -80,19 +111,23 @@ Chunk FileLogSource::generate()
 
         return readAndProcess();
     }
-    else
+    else if (isStreaming())
     {
         checkNewFiles();
     }
 
-    return head_chunk.clone();
+    if (isStreaming())
+        return head_chunk.clone();
+    else
+        return {};
 }
 
 Chunk FileLogSource::readAndProcess()
 {
     assert(current_fd >= 0);
 
-    auto n = ::pread(current_fd, buffer.data() + buffer_offset, buffer.size() - buffer_offset, current_offset);
+    auto max_to_read = std::min<UInt64>(buffer.size() - buffer_offset, current_file_size - current_offset);
+    auto n = ::pread(current_fd, buffer.data() + buffer_offset, max_to_read, current_offset);
     if (n > 0)
     {
         current_offset += n;
@@ -109,8 +144,16 @@ Chunk FileLogSource::readAndProcess()
         /// EOF
         if (files.size() == 1)
         {
-            checkNewFiles();
-            return head_chunk.clone();
+            /// The last file
+            if (isStreaming())
+            {
+                checkNewFiles();
+                return head_chunk.clone();
+            }
+            else
+            {
+                return flushBuffer();
+            }
         }
         else
         {
@@ -132,24 +175,48 @@ Chunk FileLogSource::readAndProcess()
     return head_chunk.clone();
 }
 
+Chunk FileLogSource::createChunkFor(const std::vector<std::string_view> & lines) const
+{
+    auto columns = head_chunk.cloneEmptyColumns();
+    for (size_t i = 0; const auto & virtual_col_func : virtual_col_value_functions)
+    {
+        if (!virtual_col_func)
+        {
+            /// Required physical column
+            for (const auto & line : lines)
+            {
+                if (line.ends_with('\n'))
+                    columns[i]->insertData(line.data(), line.size() - 1); /// Remove carriage return to make console visualization easier
+                else
+                    columns[i]->insertData(line.data(), line.size());
+            }
+        }
+        else
+        {
+            columns[i]->insertMany(virtual_col_func(), lines.size());
+        }
+
+        ++i;
+    }
+
+    return Chunk(std::move(columns), lines.size());
+}
+
 Chunk FileLogSource::process()
 {
     assert(buffer_offset >= remaining);
     auto left = remaining;
-    auto lines{breakLines(buffer.data() + (buffer_offset - left), left, file_log->linebreakerRegex(), 4096)};
-
+    auto lines{breakLines(buffer.data() + (buffer_offset - left), left, file_log->linebreakerRegex(), 512 * 1024)};
     if (!lines.empty())
     {
-        auto col = column_type->createColumn();
-        for (const auto & line : lines)
-            col->insertData(line.data(), line.size());
+        auto chunk = createChunkFor(lines);
 
         /// Move the remaining bytes to the start of buffer
         std::memmove(buffer.data(), buffer.data() + (buffer_offset - left), left);
         remaining = left;
         buffer_offset = left;
 
-        return Chunk(Columns(1, std::move(col)), lines.size());
+        return chunk;
     }
     else
     {
@@ -162,21 +229,27 @@ Chunk FileLogSource::flushBuffer()
 {
     if (remaining > 0)
     {
-        auto col = column_type->createColumn();
-        col->insertData(buffer.data() + buffer_offset, remaining);
+        chassert(buffer_offset >= remaining);
+
+        auto chunk = createChunkFor(std::vector{std::string_view{buffer.data() + (buffer_offset - remaining), remaining}});
+
         remaining = 0;
         buffer_offset = 0;
-        return Chunk(Columns{1, std::move(col)}, 1);
+
+        return chunk;
     }
 
-    return head_chunk.clone();
+    if (isStreaming() || files.size() > 1)
+        return head_chunk.clone();
+    else
+        return {};
 }
 
 void FileLogSource::checkNewFiles()
 {
     if (MonotonicMilliseconds::now() - last_check <= check_interval_ms)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
         return;
     }
 
@@ -186,7 +259,7 @@ void FileLogSource::checkNewFiles()
     if (new_files.empty())
     {
         /// FIXME, notification
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
     else
     {
@@ -233,8 +306,7 @@ void FileLogSource::checkNewFiles()
 
             ::close(current_fd);
             assert(first_new_fd >= 0);
-            current_fd = first_new_fd;
-            current_offset = 0;
+            setCurrentFile(first_new_fd);
 
             files.swap(new_files);
             iter = files.begin();
@@ -293,5 +365,20 @@ size_t FileLogSource::calculateFileHash(int fd, std::vector<char> & read_buf, si
     }
 
     return std::hash<std::string_view>{}(std::string_view(read_buf.data(), read_bytes));
+}
+
+void FileLogSource::setCurrentFile(int new_file_fd)
+{
+    current_fd = new_file_fd;
+    current_offset = 0;
+
+    if (!isStreaming())
+    {
+        struct stat stat;
+        if (auto ret = ::fstat(current_fd, &stat); ret < 0)
+            throwFromErrnoWithPath("Cannot read file size ", iter->second.string(), ErrorCodes::CANNOT_FSTAT, errno);
+
+        current_file_size = stat.st_size;
+    }
 }
 }

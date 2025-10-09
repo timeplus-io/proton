@@ -19,6 +19,7 @@ using ProcessorPtr = std::shared_ptr<IProcessor>;
 using Processors = std::vector<ProcessorPtr>;
 
 class QueryStatus;
+using QueryStatusPtr = std::shared_ptr<QueryStatus>;
 
 struct Progress;
 using ProgressCallback = std::function<void(const Progress & progress)>;
@@ -67,23 +68,23 @@ public:
     /// completed
     QueryPipeline(
         QueryPlanResourceHolder resources_,
-        Processors processors_);
+        std::shared_ptr<Processors> processors_);
 
     /// pushing
     QueryPipeline(
         QueryPlanResourceHolder resources_,
-        Processors processors_,
+        std::shared_ptr<Processors> processors_,
         InputPort * input_);
 
     /// pulling
     QueryPipeline(
         QueryPlanResourceHolder resources_,
-        Processors processors_,
+        std::shared_ptr<Processors> processors_,
         OutputPort * output_,
         OutputPort * totals_ = nullptr,
         OutputPort * extremes_ = nullptr);
 
-    bool initialized() const { return !processors.empty(); }
+    bool initialized() const { return !processors->empty(); }
     /// When initialized, exactly one of the following is true.
     /// Use PullingPipelineExecutor or PullingAsyncPipelineExecutor.
     bool pulling() const { return output != nullptr; }
@@ -106,7 +107,7 @@ public:
     size_t getNumThreads() const { return num_threads; }
     void setNumThreads(size_t num_threads_) { num_threads = num_threads_; }
 
-    void setProcessListElement(QueryStatus * elem);
+    void setProcessListElement(QueryStatusPtr elem);
     void setProgressCallback(const ProgressCallback & callback);
     void setLimitsAndQuota(const StreamLocalLimits & limits, std::shared_ptr<const EnabledQuota> quota_);
     bool tryGetResultRowsAndBytes(UInt64 & result_rows, UInt64 & result_bytes) const;
@@ -128,7 +129,7 @@ public:
     /// Add processors and resources from other pipeline. Other pipeline should be completed.
     void addCompletedPipeline(QueryPipeline other);
 
-    const Processors & getProcessors() const { return processors; }
+    const Processors & getProcessors() const { return *processors; }
 
     /// For pulling pipeline, convert structure to expected.
     /// Trash, need to remove later.
@@ -149,7 +150,7 @@ private:
     std::shared_ptr<const EnabledQuota> quota;
     bool update_profile_events = true;
 
-    Processors processors;
+    std::shared_ptr<Processors> processors;
 
     InputPort * input = nullptr;
 
@@ -157,14 +158,14 @@ private:
     OutputPort * totals = nullptr;
     OutputPort * extremes = nullptr;
 
-    QueryStatus * process_list_element = nullptr;
+    QueryStatusPtr process_list_element;
 
     IOutputFormat * output_format = nullptr;
 
     size_t num_threads = 0;
 
     /// proton : starts
-    ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    ExecuteMode exec_mode = ExecuteMode::Normal;
     /// proton : ends
 
     friend class PushingPipelineExecutor;

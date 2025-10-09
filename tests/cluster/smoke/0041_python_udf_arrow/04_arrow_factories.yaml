@@ -1,0 +1,57 @@
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value datetime);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_factory(value datetime) RETURNS int LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      class CustomArrow(arrow.Arrow):
+        def days_till_xmas(self):
+            xmas = arrow.Arrow(self.year, 12, 25)
+            if self > xmas:
+                xmas = xmas.shift(years=1)
+            return (xmas - self).days
+ 
+      def test_factory(value):
+          factory = arrow.ArrowFactory(CustomArrow)
+          res = []
+          for v in value:
+              custom = factory.get(v)
+              res.append(custom.days_till_xmas())
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf7-4-1
+    type: stream
+    query: select test_factory(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: datetime
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (parse_datetime32_best_effort('2025-01-01T01:11:11Z'));
+
+  - type: check
+    target_name: python-udf7-4-1
+    expected_result:
+      - [357, '2025-01-01 01:11:11']

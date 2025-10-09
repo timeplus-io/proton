@@ -3,6 +3,7 @@ include(${proton_SOURCE_DIR}/cmake/embed_binary.cmake)
 set(CLICKHOUSE_SERVER_SOURCES
     MetricsTransmitter.cpp
     Server.cpp
+    Server_Python.cpp
 )
 
 set (LINK_RESOURCE_LIB INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:clickhouse_server_configs> -Wl,${NO_WHOLE_ARCHIVE}")
@@ -31,6 +32,11 @@ endif()
 if (TARGET ch_contrib::azure_sdk)
     list(APPEND CLICKHOUSE_SERVER_LINK PRIVATE ch_contrib::azure_sdk)
 endif()
+
+if (ENABLE_PYTHON_UDF)
+    set(CLICKHOUSE_SERVER_DEFINITIONS Py_BUILD_CORE=1)
+endif ()
+
 
 proton_program_add(server)
 

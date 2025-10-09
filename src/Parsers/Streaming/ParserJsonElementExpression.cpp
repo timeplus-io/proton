@@ -37,7 +37,7 @@ bool ParserJsonElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
             func->code_name.append(iter->begin, iter->size());
     }
 
-    return parsed;
+    return parsed && is_json_elem;
 }
 
 bool ParserJsonElementName::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)

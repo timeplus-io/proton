@@ -1,0 +1,43 @@
+description: no matching records in right stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: stream
+    name: 3200
+    query_id: '3200'
+    query: |
+      SELECT A.id, A.name, B.value FROM left_Stream A LEFT JOIN right_Stream B ON A.id = B.id;
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: string
+      - name: value
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO right_Stream (id, value, department_id, type) VALUES 
+      (3, 'X', 3, 'C'),
+      (4, 'Y', 4, 'D');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO left_Stream (id, name, department_id, manager_id, type) VALUES 
+      (1, 'Alice', 1, NULL, 'A'),
+      (2, 'Bob', 2, NULL, 'B');
+
+  - type: check
+    target_name: 3200
+    expected_result:
+      - [1, 'Alice', '']
+      - [2, 'Bob', '']

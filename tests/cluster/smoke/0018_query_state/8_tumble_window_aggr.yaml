@@ -1,0 +1,62 @@
+tags:
+  - query_state
+description: tumble window aggregation state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream(i int, s string)
+
+  - type: wait
+    time: 1
+
+  - name: '1908'
+    query_id: '1908'
+    type: stream
+    query: subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s)
+      from tumble(test19_state_stream, 2s) group by window_start settings checkpoint_interval=1
+    schema:
+      - name: count()
+        type: uint64
+      - name: sum(i)
+        type: int64
+      - name: avg(i)
+        type: float64
+      - name: min(i)
+        type: int32
+      - name: max(i)
+        type: int32
+      - name: min(s)
+        type: string
+      - name: max(s)
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s, _tp_time) values (1, 's1', '2022-01-01
+      00:00:00'), (3, 's2', '2022-01-01 00:00:01'), (4, 's3', '2022-01-01 00:00:02')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1908'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1908'
+  
+  - type: check
+    target_name: '1908'
+    expected_result:
+      - [ 2, 4, 2, 1, 3, s1, s2 ]

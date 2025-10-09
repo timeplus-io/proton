@@ -2,14 +2,16 @@
 
 #if USE_EMBEDDED_COMPILER
 
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/IRBuilder.h>
+#    include <Columns/ColumnNullable.h>
+#    include <DataTypes/DataTypeNullable.h>
+#    include <DataTypes/Native.h>
+#    include <Interpreters/JIT/CHJIT.h>
+#    include <Common/ProfileEvents.h>
+#    include <Common/Stopwatch.h>
 
-#include <Common/Stopwatch.h>
-#include <Common/ProfileEvents.h>
-#include <DataTypes/Native.h>
-#include <Interpreters/JIT/CHJIT.h>
+#    include <llvm/IR/BasicBlock.h>
+#    include <llvm/IR/Function.h>
+#    include <llvm/IR/IRBuilder.h>
 
 namespace
 {
@@ -67,7 +69,7 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
 
     llvm::IRBuilder<> b(module.getContext());
     auto * size_type = b.getIntNTy(sizeof(size_t) * 8);
-    auto * data_type = llvm::StructType::get(b.getInt8PtrTy(), b.getInt8PtrTy());
+    auto * data_type = llvm::StructType::get(b.getInt8Ty()->getPointerTo(), b.getInt8Ty()->getPointerTo());
     auto * func_type = llvm::FunctionType::get(b.getVoidTy(), { size_type, data_type->getPointerTo() }, /*isVarArg=*/false);
 
     /// Create function in module
@@ -107,7 +109,7 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
 
     /// Initialize column row values
 
-    Values arguments;
+    ValuesWithType arguments;
     arguments.reserve(function_argument_types.size());
 
     for (size_t i = 0; i < function_argument_types.size(); ++i)
@@ -116,30 +118,30 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
         const auto & type = function_argument_types[i];
 
         auto * column_data_ptr = column.data_ptr;
-        auto * column_element_value = b.CreateLoad(column.data_element_type, b.CreateGEP(column.data_element_type, column_data_ptr, counter_phi));
+        auto * column_element_value = b.CreateLoad(column.data_element_type, b.CreateInBoundsGEP(column.data_element_type, column_data_ptr, counter_phi));
 
         if (!type->isNullable())
         {
-            arguments.emplace_back(column_element_value);
+            arguments.emplace_back(column_element_value, type);
             continue;
         }
 
-        auto * column_is_null_element_value = b.CreateLoad(b.getInt8Ty(), b.CreateGEP(b.getInt8Ty(), column.null_data_ptr, counter_phi));
+        auto * column_is_null_element_value = b.CreateLoad(b.getInt8Ty(), b.CreateInBoundsGEP(b.getInt8Ty(), column.null_data_ptr, counter_phi));
         auto * is_null = b.CreateICmpNE(column_is_null_element_value, b.getInt8(0));
         auto * nullable_unitialized = llvm::Constant::getNullValue(toNullableType(b, column.data_element_type));
         auto * nullable_value = b.CreateInsertValue(b.CreateInsertValue(nullable_unitialized, column_element_value, {0}), is_null, {1});
-        arguments.emplace_back(nullable_value);
+        arguments.emplace_back(nullable_value, type);
     }
 
     /// Compile values for column rows and store compiled value in result column
 
-    auto * result = function.compile(b, std::move(arguments));
-    auto * result_column_element_ptr = b.CreateGEP(columns.back().data_element_type, columns.back().data_ptr, counter_phi);
+    auto * result = function.compile(b, arguments);
+    auto * result_column_element_ptr = b.CreateInBoundsGEP(columns.back().data_element_type, columns.back().data_ptr, counter_phi);
 
     if (columns.back().null_data_ptr)
     {
         b.CreateStore(b.CreateExtractValue(result, {0}), result_column_element_ptr);
-        auto * result_column_is_null_element_ptr = b.CreateGEP(b.getInt8Ty(), columns.back().null_data_ptr, counter_phi);
+        auto * result_column_is_null_element_ptr = b.CreateInBoundsGEP(b.getInt8Ty(), columns.back().null_data_ptr, counter_phi);
         auto * is_result_column_element_null = b.CreateSelect(b.CreateExtractValue(result, {1}), b.getInt8(1), b.getInt8(0));
         b.CreateStore(is_result_column_element_null, result_column_is_null_element_ptr);
     }
@@ -212,7 +214,7 @@ static void compileCreateAggregateStatesFunctions(llvm::Module & module, const s
     b.CreateRetVoid();
 }
 
-enum class AddIntoAggregateStatesPlacesArgumentType
+enum class AddIntoAggregateStatesPlacesArgumentType : uint8_t
 {
     SinglePlace,
     MultiplePlaces,
@@ -234,7 +236,7 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
     else
         places_type = b.getInt8Ty()->getPointerTo();
 
-    auto * column_type = llvm::StructType::get(b.getInt8PtrTy(), b.getInt8PtrTy());
+    auto * column_type = llvm::StructType::get(b.getInt8Ty()->getPointerTo(), b.getInt8Ty()->getPointerTo());
 
     auto * add_into_aggregate_states_func_declaration = llvm::FunctionType::get(b.getVoidTy(), { size_type, size_type, column_type->getPointerTo(), places_type }, false);
     auto * add_into_aggregate_states_func = llvm::Function::Create(add_into_aggregate_states_func_declaration, llvm::Function::ExternalLinkage, name, module);
@@ -298,24 +300,24 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
     else
         aggregation_place = places_arg;
 
-    std::vector<llvm::Value *> function_arguments_values;
+    ValuesWithType function_arguments;
     previous_columns_size = 0;
 
     for (const auto & function : functions)
     {
-        auto arguments_types = function.function->getArgumentTypes();
+        const auto & arguments_types = function.function->getArgumentTypes();
         size_t function_arguments_size = arguments_types.size();
 
         for (size_t column_argument_index = 0; column_argument_index < function_arguments_size; ++column_argument_index)
         {
             auto & column = columns[previous_columns_size + column_argument_index];
-            auto & argument_type = arguments_types[column_argument_index];
+            const auto & argument_type = arguments_types[column_argument_index];
 
             auto * column_data_element = b.CreateLoad(column.data_element_type, b.CreateGEP(column.data_element_type, column.data_ptr, counter_phi));
 
             if (!argument_type->isNullable())
             {
-                function_arguments_values.push_back(column_data_element);
+                function_arguments.emplace_back(column_data_element, argument_type);
                 continue;
             }
 
@@ -324,16 +326,16 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
             auto * nullable_unitialized = llvm::Constant::getNullValue(toNullableType(b, column.data_element_type));
             auto * first_insert = b.CreateInsertValue(nullable_unitialized, column_data_element, {0});
             auto * nullable_value = b.CreateInsertValue(first_insert, is_null, {1});
-            function_arguments_values.push_back(nullable_value);
+            function_arguments.emplace_back(nullable_value, argument_type);
         }
 
         size_t aggregate_function_offset = function.aggregate_data_offset;
         auto * aggregation_place_with_offset = b.CreateConstInBoundsGEP1_64(b.getInt8Ty(), aggregation_place, aggregate_function_offset);
 
         const auto * aggregate_function_ptr = function.function;
-        aggregate_function_ptr->compileAdd(b, aggregation_place_with_offset, arguments_types, function_arguments_values);
+        aggregate_function_ptr->compileAdd(b, aggregation_place_with_offset, function_arguments);
 
-        function_arguments_values.clear();
+        function_arguments.clear();
 
         previous_columns_size += function_arguments_size;
     }
@@ -419,7 +421,7 @@ static void compileInsertAggregatesIntoResultColumns(llvm::Module & module, cons
 
     auto * size_type = b.getIntNTy(sizeof(size_t) * 8);
 
-    auto * column_type = llvm::StructType::get(b.getInt8PtrTy(), b.getInt8PtrTy());
+    auto * column_type = llvm::StructType::get(b.getInt8Ty()->getPointerTo(), b.getInt8Ty()->getPointerTo());
     auto * aggregate_data_places_type = b.getInt8Ty()->getPointerTo()->getPointerTo();
     auto * insert_aggregates_into_result_func_declaration = llvm::FunctionType::get(b.getVoidTy(), { size_type, size_type, column_type->getPointerTo(), aggregate_data_places_type }, false);
     auto * insert_aggregates_into_result_func = llvm::Function::Create(insert_aggregates_into_result_func_declaration, llvm::Function::ExternalLinkage, name, module);
@@ -436,7 +438,7 @@ static void compileInsertAggregatesIntoResultColumns(llvm::Module & module, cons
     std::vector<ColumnDataPlaceholder> columns(functions.size());
     for (size_t i = 0; i < functions.size(); ++i)
     {
-        auto return_type = functions[i].function->getReturnType();
+        auto return_type = functions[i].function->getResultType();
         auto * data = b.CreateLoad(column_type, b.CreateConstInBoundsGEP1_64(column_type, columns_arg, i));
 
         auto * column_data_type = toNativeType(b, removeNullable(return_type));
@@ -541,6 +543,148 @@ CompiledAggregateFunctions compileAggregateFunctions(CHJIT & jit, const std::vec
     };
 
     return compiled_aggregate_functions;
+}
+
+static void compileSortDescription(llvm::Module & module,
+    SortDescription & description,
+    const DataTypes & sort_description_types,
+    const std::string & sort_description_dump)
+{
+    llvm::IRBuilder<> b(module.getContext());
+
+    auto * size_type = b.getIntNTy(sizeof(size_t) * 8);
+
+    auto * column_data_type = llvm::StructType::get(b.getInt8Ty()->getPointerTo(), b.getInt8Ty()->getPointerTo());
+
+    std::vector<llvm::Type *> function_argument_types = {size_type, size_type, column_data_type->getPointerTo(), column_data_type->getPointerTo()};
+    auto * comparator_func_declaration = llvm::FunctionType::get(b.getInt8Ty(), function_argument_types, false);
+    auto * comparator_func = llvm::Function::Create(comparator_func_declaration, llvm::Function::ExternalLinkage, sort_description_dump, module);
+
+    auto * arguments = comparator_func->args().begin();
+    llvm::Value * lhs_index_arg = arguments++;
+    llvm::Value * rhs_index_arg = arguments++;
+    llvm::Value * columns_lhs_arg = arguments++;
+    llvm::Value * columns_rhs_arg = arguments++;
+
+    size_t columns_size = description.size();
+
+    std::vector<std::pair<llvm::BasicBlock *, llvm::Value *>> comparator_steps_and_results;
+    for (size_t i = 0; i < columns_size; ++i)
+    {
+        auto * step = llvm::BasicBlock::Create(b.getContext(), "step_" + std::to_string(i), comparator_func);
+        comparator_steps_and_results.emplace_back(step, nullptr);
+    }
+
+    auto * lhs_equals_rhs_result = llvm::ConstantInt::getSigned(b.getInt8Ty(), 0);
+
+    auto * comparator_join = llvm::BasicBlock::Create(b.getContext(), "comparator_join", comparator_func);
+
+    for (size_t i = 0; i < columns_size; ++i)
+    {
+        b.SetInsertPoint(comparator_steps_and_results[i].first);
+
+        const auto & sort_description = description[i];
+        const auto & column_type = sort_description_types[i];
+
+        auto dummy_column = column_type->createColumn();
+
+        auto * column_native_type = toNativeType(b, removeNullable(column_type));
+        if (!column_native_type)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "No native type for column type {}", column_type->getName());
+
+        bool column_type_is_nullable = column_type->isNullable();
+
+        auto * nullable_unitialized = llvm::Constant::getNullValue(toNullableType(b, column_native_type));
+
+        auto * lhs_column = b.CreateLoad(column_data_type, b.CreateConstInBoundsGEP1_64(column_data_type, columns_lhs_arg, i));
+        auto * lhs_column_data = b.CreateExtractValue(lhs_column, {0});
+        auto * lhs_column_null_data = column_type_is_nullable ? b.CreateExtractValue(lhs_column, {1}) : nullptr;
+
+        llvm::Value * lhs_column_element_offset = b.CreateInBoundsGEP(column_native_type, lhs_column_data, lhs_index_arg);
+        llvm::Value * lhs_value = b.CreateLoad(column_native_type, lhs_column_element_offset);
+
+        if (lhs_column_null_data)
+        {
+            auto * is_null_value_pointer = b.CreateInBoundsGEP(b.getInt8Ty(), lhs_column_null_data, lhs_index_arg);
+            auto * is_null = b.CreateICmpNE(b.CreateLoad(b.getInt8Ty(), is_null_value_pointer), b.getInt8(0));
+            auto * lhs_nullable_value = b.CreateInsertValue(b.CreateInsertValue(nullable_unitialized, lhs_value, {0}), is_null, {1});
+            lhs_value = lhs_nullable_value;
+        }
+
+        auto * rhs_column = b.CreateLoad(column_data_type, b.CreateConstInBoundsGEP1_64(column_data_type, columns_rhs_arg, i));
+        auto * rhs_column_data = b.CreateExtractValue(rhs_column, {0});
+        auto * rhs_column_null_data = column_type_is_nullable ? b.CreateExtractValue(rhs_column, {1}) : nullptr;
+
+        llvm::Value * rhs_column_element_offset = b.CreateInBoundsGEP(column_native_type, rhs_column_data, rhs_index_arg);
+        llvm::Value * rhs_value = b.CreateLoad(column_native_type, rhs_column_element_offset);
+
+        if (rhs_column_null_data)
+        {
+            auto * is_null_value_pointer = b.CreateInBoundsGEP(b.getInt8Ty(), rhs_column_null_data, rhs_index_arg);
+            auto * is_null = b.CreateICmpNE(b.CreateLoad(b.getInt8Ty(), is_null_value_pointer), b.getInt8(0));
+            auto * rhs_nullable_value = b.CreateInsertValue(b.CreateInsertValue(nullable_unitialized, rhs_value, {0}), is_null, {1});
+            rhs_value = rhs_nullable_value;
+        }
+
+        llvm::Value * direction = llvm::ConstantInt::getSigned(b.getInt8Ty(), sort_description.direction);
+        llvm::Value * nan_direction_hint = llvm::ConstantInt::getSigned(b.getInt8Ty(), sort_description.nulls_direction);
+        llvm::Value * compare_result = dummy_column->compileComparator(b, lhs_value, rhs_value, nan_direction_hint);
+        llvm::Value * result = b.CreateMul(direction, compare_result);
+
+        comparator_steps_and_results[i].first = b.GetInsertBlock();
+        comparator_steps_and_results[i].second = result;
+
+        /** 1. If it is last condition block move to join block.
+          * 2. If column elements are not equal move to join block.
+          * 3. If column elements are equal move to next column condition.
+          */
+        if (i == columns_size - 1)
+            b.CreateBr(comparator_join);
+        else
+            b.CreateCondBr(b.CreateICmpEQ(result, lhs_equals_rhs_result), comparator_steps_and_results[i + 1].first, comparator_join);
+    }
+
+    b.SetInsertPoint(comparator_join);
+
+    /** Join results from all comparator steps.
+      * Result of columns comparison equals to first compare block where lhs is not equal to lhs or last compare block.
+      */
+    auto * compare_result_phi = b.CreatePHI(b.getInt8Ty(), static_cast<unsigned>(comparator_steps_and_results.size()));
+
+    for (const auto & [block, result_value] : comparator_steps_and_results)
+        compare_result_phi->addIncoming(result_value, block);
+
+    b.CreateRet(compare_result_phi);
+}
+
+CompiledSortDescriptionFunction compileSortDescription(
+    CHJIT & jit,
+    SortDescription & description,
+    const DataTypes & sort_description_types,
+    const std::string & sort_description_dump)
+{
+    Stopwatch watch;
+
+    auto compiled_module = jit.compileModule([&](llvm::Module & module)
+    {
+        compileSortDescription(module, description, sort_description_types, sort_description_dump);
+    });
+
+    ProfileEvents::increment(ProfileEvents::CompileExpressionsMicroseconds, watch.elapsedMicroseconds());
+    ProfileEvents::increment(ProfileEvents::CompileExpressionsBytes, compiled_module.size);
+    ProfileEvents::increment(ProfileEvents::CompileFunction);
+
+    auto comparator_function = reinterpret_cast<JITSortDescriptionFunc>(compiled_module.function_name_to_symbol[sort_description_dump]);
+    assert(comparator_function);
+
+    CompiledSortDescriptionFunction compiled_sort_descriptor_function
+    {
+        .comparator_function = comparator_function,
+
+        .compiled_module = std::move(compiled_module)
+    };
+
+    return compiled_sort_descriptor_function;
 }
 
 }

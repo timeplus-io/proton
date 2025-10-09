@@ -22,6 +22,9 @@ DataStream ITransformingStep::createOutputStream(
 
     /// proton: starts. Propagate streaming flag to output stream
     output_stream.is_streaming = input_stream.is_streaming;
+
+    if (stream_traits.preserves_substream)
+        output_stream.with_substream = input_stream.with_substream;
     /// proton: ends.
 
     if (stream_traits.preserves_distinct_columns)
@@ -72,11 +75,6 @@ void ITransformingStep::updateDistinctColumns(const Block & res_header, NameSet 
 void ITransformingStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(processors, settings);
-}
-
-void ITransformingStep::appendExtraProcessors(const Processors & extra_processors)
-{
-    processors.insert(processors.end(), extra_processors.begin(), extra_processors.end());
 }
 
 }

@@ -26,8 +26,9 @@ namespace
         {
             if (arguments.empty())
                 throw Exception(
-                    "Incorrect number of arguments for aggregate function with " + getName() + " suffix",
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Incorrect number of arguments for aggregate function with {} suffix",
+                    getName());
 
             return arguments;
         }

@@ -1,0 +1,109 @@
+tags:
+  - materialized view
+
+description: |
+  Test cover etl checkpoint interval light_state_interval=5 by default
+  Main Steps:
+    1.Create external stream, target stream, random stream
+    2.Create materialized view from external stream
+    3.Create materialized view from random stream into external stream
+    4.Wait 10s (at least 2 lines log for check)
+    5.Check proton log interval on `Triggered checkpointing` around 5s
+
+cluster:
+  - p1k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists test32_mv;
+
+  - type: query
+    sql: drop view if exists test32_rdmv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test32_stream settings force_drop_big_stream=true;
+
+  - type: query
+    sql: drop stream if exists test32_ext;
+
+  - type: query
+    sql: drop stream if exists test32_rd;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE RANDOM STREAM test32_rd
+      (
+        id int32 default rand() % 4,
+        value string default to_string(rand() % 100)
+      );
+
+  - type: query
+    sql: create stream test32_stream (id int32, value string);
+
+  - type: query
+    sql: |
+      create external stream test32_ext(id int32, value string)
+      settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test32_mv INTO test32_stream AS
+      SELECT id, value, _tp_time FROM test32_ext
+      SETTINGS seek_to = 'earliest';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test32_rdmv INTO test32_ext AS
+      SELECT id, value FROM test32_rd
+      SETTINGS eps=500;
+
+  - type: wait
+    time: 10
+
+  - name: ext-36-1
+    type: command
+    node: [p1]
+    shell: |
+      log_file=/var/log/proton-server/proton-server.log
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test32_mv'")
+      log_check=$(grep 'Triggered checkpointing' $log_file | grep $uuid | wc -l)
+      [ "$log_check" -ge 2 ] || { echo "##log 'Triggered checkpointing' less than 2 lines##"; exit 0; }
+
+      mapfile -t lines < <(grep 'Triggered checkpointing' $log_file | grep $uuid | tail -n 2 | awk '{print $2}')
+      time1="${lines[0]}"
+      time2="${lines[1]}"
+      timestamp1=$(date -d "$time1" +"%s")
+      timestamp2=$(date -d "$time2" +"%s")
+
+      interval=$((timestamp2 - timestamp1))
+      [ "$interval" -ge 4 ] && [ "$interval" -le 7 ] && echo "true" || echo "##checkpoint interval $interval not equal to 5##"
+
+  - type: check
+    target_name: ext-36-1
+    expected_result: ["true"]

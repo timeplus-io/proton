@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_abs(value int) RETURNS int LANGUAGE PYTHON AS
+      $$
+      def test_abs(value):
+          res = [abs(x) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-5-1
+    type: stream
+    query: select test_abs(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (-2)(-3)(4);
+
+  - type: check
+    target_name: python-udf1-5-1
+    expected_result:
+      - [2, -2]
+      - [3, -3]
+      - [4, 4]

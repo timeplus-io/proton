@@ -1,0 +1,30 @@
+tags:
+  - probe_not_supported_now
+  - skip
+
+description: Test covering scalar 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: python_udf-8
+    type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_add_five2(value uint16) RETURNS uint16 LANGUAGE PYTHON AS $$
+      def test_add_five2(value):
+          for i in range(len(value)):
+              if value[i] > 10:
+                  raise Exception("value is greater than 10")
+              value[i] = value[i] + 5
+          return [value]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-8
+    expected_result:
+    - ["error_code:2625"]

@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_int(value string) RETURNS int LANGUAGE PYTHON AS
+      $$
+      def test_int(value):
+          res = [int(x, 16) for x in value if len(x) > 0]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-12-1
+    type: stream
+    query: select test_int(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values('12')('13')('14');
+
+  - type: check
+    target_name: python-udf1-12-1
+    expected_result:
+      - [18, '12']
+      - [19, '13']
+      - [20, '14']

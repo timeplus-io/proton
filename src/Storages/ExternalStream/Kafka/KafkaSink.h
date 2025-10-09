@@ -1,25 +1,24 @@
 #pragma once
 
-#include <Base/ByteVector.h>
+#include <Cluster/Base/ByteVector.h>
 #include <Core/BlockWithShard.h>
 #include <Formats/FormatFactory.h>
+#include <Processors/Executors/MessageQueueFormatExecutor.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
-#include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ThreadPool.h>
 
+#include <rdkafka.h>
+
 namespace CurrentMetrics
 {
-    extern const Metric LocalThread;
-    extern const Metric LocalThreadActive;
+extern const Metric LocalThread;
+extern const Metric LocalThreadActive;
 }
 
-namespace DB
-{
-
-namespace ExternalStream
+namespace DB::ExternalStream
 {
 
 /// Shard Chunk's to shards (or partitions in Kafka's term) by the sharding expression.
@@ -32,26 +31,7 @@ public:
     BlocksWithShard shard(Block block, UInt32 shard_cnt);
 
 private:
-    /// We could simply return `RD_KAFKA_PARTITION_UA` for next shard ID, which means letting librdkafka to calculate the partition ID. However, there is an issue, details:
-    ///
-    /// We use rd_kafka_produce_batch with RD_KAFKA_MSG_F_FREE flag to send messages, which means if a message's err is empty, librdkafka will free the message's payload, otherwise, the application is responsible for freeing it.
-    /// However, the implementation of rd_kafka_produce_batch does not work in that way exactly. There is one case that, if RD_KAFKA_PARTITION_UA is used, then when it fails to call the partitioner, rd_kafka_produce_batch will still free the message payload, which violates the promise. Reference:
-    /// https://github.com/confluentinc/librdkafka/blob/c96878a32bdc668287cf9b11c7b32e810f762376/src/rdkafka_msg.c#L797.
-    ///
-    /// There is one known situation can trigger this issue:
-    /// * create a kafka topic and make sure that topic has more than 1 partitions (not sure why it requires more than 1 partitions)
-    /// * create an external stream
-    /// * start inserting data to that stream in a streaming way
-    /// * delete the kafka topic
-    /// * then double-free error happens
-    ///
-    /// Also, with this simple logic, it will be much faster than using `RD_KAFKA_PARTITION_UA`.
-    UInt32 getNextShardIndex(UInt32 shard_cnt) noexcept
-    {
-        if (next_shard >= shard_cnt)
-            next_shard = 0;
-        return next_shard++;
-    }
+    UInt32 getNextShardIndex([[maybe_unused]] UInt32 shard_cnt) noexcept { return RD_KAFKA_PARTITION_UA; }
 
     BlocksWithShard doSharding(Block block, UInt32 shard_cnt) const;
 
@@ -60,7 +40,7 @@ private:
     ExpressionActionsPtr sharding_expr;
     String sharding_key_column_name;
     bool random_sharding = false;
-    UInt32 next_shard = 0;
+    [[maybe_unused]] UInt32 next_shard = 0;
 };
 
 class KafkaSink final : public SinkToStorage
@@ -72,10 +52,11 @@ public:
     KafkaSink(
         Kafka & kafka,
         const Block & header,
-        const ASTPtr & message_key,
-        const DB::Kafka::ProducerPtr & producer_,
+        DB::Kafka::ProducerPtr producer_,
+        UInt64 connection_timeout_ms_,
+        bool refresh_topic_partitions,
         ExternalStreamCounterPtr external_stream_counter_,
-        Poco::Logger * logger_,
+        LoggerPtr logger_,
         ContextPtr context);
     ~KafkaSink() override;
 
@@ -87,8 +68,7 @@ public:
 
 private:
     void onMessageDelivery(rd_kafka_resp_err_t err);
-    void addMessageToBatch(char * pos, size_t len, size_t total_len);
-    void tryCarryOverPendingData();
+    void sendMessage(const String & message, ColumnPtr ts_column, ColumnPtr headers_column, ColumnPtr key_column);
 
     /// the number of acknowledgement has been received so far for the current checkpoint period
     size_t acked() const noexcept { return state.acked; }
@@ -104,26 +84,24 @@ private:
 
     DB::Kafka::ProducerPtr producer;
 
+    UInt64 connection_timeout_ms{0};
+    UInt64 checkpoint_timeout_ms{0};
     Int32 partition_cnt{0};
     bool one_message_per_row{false};
-    Int32 topic_refresh_interval_ms = 0;
+    Int32 topic_refresh_interval_ms{0};
 
-    ThreadPool background_jobs{CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, 1};
+    std::optional<ThreadPool> background_jobs;
     std::atomic_flag is_finished{false};
 
-    std::unique_ptr<WriteBufferFromKafkaSink> wb;
-    OutputFormatPtr writer;
+    std::unique_ptr<MessageQueueFormatExecutor> format_executor;
     std::unique_ptr<ChunkSharder> partitioner;
 
-    ExpressionActionsPtr message_key_expr;
-    String message_key_column_name;
+    std::optional<size_t> ts_column_pos;
+    std::optional<size_t> msg_key_column_pos;
+    std::optional<size_t> headers_column_pos;
 
     /// For constructing the message batch
-    UInt64 rows_in_current_message{0};
-    nlog::ByteVector pending_data;
-    std::vector<rd_kafka_message_t> current_batch;
-    std::vector<nlog::ByteVector> batch_payload;
-    std::vector<StringRef> keys_for_current_batch;
+    [[maybe_unused]] UInt64 rows_in_current_message{0};
     size_t current_batch_row{0};
     Int32 next_partition{0};
 
@@ -141,9 +119,7 @@ private:
     State state;
 
     ExternalStreamCounterPtr external_stream_counter;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
-
-}
 
 }

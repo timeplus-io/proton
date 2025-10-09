@@ -12,17 +12,32 @@ namespace ErrorCodes
 
 MergeTreeDataPartWriterInMemory::MergeTreeDataPartWriterInMemory(
     const MutableDataPartInMemoryPtr & part_,
+    const String & data_part_name_,
+    const SerializationByName & serializations_,
+    MutableDataPartStoragePtr data_part_storage_,
+    const MergeTreeIndexGranularityInfo & index_granularity_info_,
+    const MergeTreeSettingsPtr & storage_settings_,
     const NamesAndTypesList & columns_list_,
     const StorageMetadataPtr & metadata_snapshot_,
-    const MergeTreeWriterSettings & settings_)
-    : IMergeTreeDataPartWriter(part_, columns_list_, metadata_snapshot_, settings_)
+    const MergeTreeWriterSettings & settings_,
+    const MergeTreeIndexGranularity & index_granularity_)
+    : IMergeTreeDataPartWriter(
+          data_part_name_,
+          serializations_,
+          data_part_storage_,
+          index_granularity_info_,
+          storage_settings_,
+          columns_list_,
+          metadata_snapshot_,
+          settings_,
+          index_granularity_)
     , part_in_memory(part_) {}
 
 void MergeTreeDataPartWriterInMemory::write(
     const Block & block, const IColumn::Permutation * permutation)
 {
     if (part_in_memory->block)
-        throw Exception("DataPartWriterInMemory supports only one write", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "DataPartWriterInMemory supports only one write");
 
     Block primary_key_block;
     if (settings.rewrite_primary_key)
@@ -76,7 +91,7 @@ void MergeTreeDataPartWriterInMemory::calculateAndSerializePrimaryIndex(const Bl
     }
 }
 
-void MergeTreeDataPartWriterInMemory::fillChecksums(IMergeTreeDataPart::Checksums & checksums)
+void MergeTreeDataPartWriterInMemory::fillChecksums(MergeTreeDataPartChecksums & checksums, NameSet & /*checksums_to_remove*/)
 {
     /// If part is empty we still need to initialize block by empty columns.
     if (!part_in_memory->block)

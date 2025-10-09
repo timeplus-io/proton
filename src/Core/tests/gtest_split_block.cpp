@@ -140,8 +140,8 @@ void testCommon(std::vector<V> values, UInt64 range = 10)
             ++col_pos;
         }
 
-        ASSERT_EQ(bucket_info.min, bucket_block.second.info.watermark_lower_bound);
-        ASSERT_EQ(bucket_info.max, bucket_block.second.info.watermark);
+        ASSERT_EQ(bucket_info.min, bucket_block.second.info.minTimestamp());
+        ASSERT_EQ(bucket_info.max, bucket_block.second.info.maxTimestamp());
     }
 }
 }

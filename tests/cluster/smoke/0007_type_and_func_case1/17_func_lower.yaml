@@ -1,0 +1,40 @@
+tags:
+  - func
+  - process-text
+description: process text with function lower
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists lower_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream lower_stream (id int, location string)
+
+  - type: wait
+    time: 2
+
+  - name: '800'
+    type: stream
+    query: select id, lower(location) from lower_stream
+    schema:
+      - name: id
+        type: int32
+      - name: lower(location)
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into lower_stream(id, location) values (1, 'S'), (2, 'SS')
+
+  - type: check
+    target_name: '800'
+    expected_result:
+      - [ '1', s ]
+      - [ '2', ss ]

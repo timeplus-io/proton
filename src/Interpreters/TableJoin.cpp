@@ -10,6 +10,8 @@
 
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -137,12 +139,14 @@ void TableJoin::addDisjunct()
     clauses.emplace_back();
 
     if (getStorageJoin() && clauses.size() > 1)
-        throw Exception("StorageJoin with ORs is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "StorageJoin with ORs is not supported");
 }
 
 void TableJoin::addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast)
 {
     addKey(left_table_ast->getColumnName(), right_table_ast->getAliasOrColumnName(), left_table_ast, right_table_ast);
+    right_key_aliases[right_table_ast->getColumnName()] = right_table_ast->getAliasOrColumnName();
+    reversed_right_key_aliases[right_table_ast->getAliasOrColumnName()] = right_table_ast->getColumnName();
 }
 
 /// @return how many times right key appears in ON section.
@@ -446,12 +450,12 @@ TableJoin::createConvertingActions(
                 for (const auto & col : dag->getResultColumns())
                     output_cols.push_back(col.name + ": " + col.type->getName());
 
-                LOG_DEBUG(&Poco::Logger::get("TableJoin"), "{} JOIN converting actions: [{}] -> [{}]",
+                LOG_DEBUG(getLogger("TableJoin"), "{} JOIN converting actions: [{}] -> [{}]",
                     side, fmt::join(input_cols, ", "), fmt::join(output_cols, ", "));
             }
             else
             {
-                LOG_DEBUG(&Poco::Logger::get("TableJoin"), "{} JOIN converting actions: empty", side);
+                LOG_DEBUG(getLogger("TableJoin"), "{} JOIN converting actions: empty", side);
                 return;
             }
             auto format_cols = [](const auto & cols) -> std::string
@@ -462,7 +466,7 @@ TableJoin::createConvertingActions(
                     str_cols.push_back(fmt::format("'{}': {}", col.name, col.type->getName()));
                 return fmt::format("[{}]", fmt::join(str_cols, ", "));
             };
-            LOG_DEBUG(&Poco::Logger::get("TableJoin"), "{} JOIN converting actions: {} -> {}",
+            LOG_DEBUG(getLogger("TableJoin"), "{} JOIN converting actions: {} -> {}",
                 side, format_cols(dag->getRequiredColumns()), format_cols(dag->getResultColumns()));
         };
         log_actions("Left", left_converting_actions);
@@ -496,11 +500,7 @@ void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const Rig
     if (strictness() == JoinStrictness::Asof)
     {
         if (clauses.size() != 1)
-            throw DB::Exception("ASOF join over multiple keys is not supported", ErrorCodes::NOT_IMPLEMENTED);
-
-        auto asof_key_type = right_types.find(clauses.back().key_names_right.back());
-        if (asof_key_type != right_types.end() && asof_key_type->second->isNullable())
-            throw DB::Exception("ASOF join over right table Nullable column is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+            throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "ASOF join over multiple keys is not supported");
     }
 
     forAllKeys(clauses, [&](const auto & left_key_name, const auto & right_key_name)
@@ -550,7 +550,7 @@ void TableJoin::inferJoinKeyCommonType(const LeftNamesAndTypes & left, const Rig
     if (!left_type_map.empty() || !right_type_map.empty())
     {
         LOG_TRACE(
-            &Poco::Logger::get("TableJoin"),
+            getLogger("TableJoin"),
             "Infer supertype for joined columns. Left: [{}], Right: [{}]",
             formatTypeMap(left_type_map, left_types),
             formatTypeMap(right_type_map, right_types));
@@ -651,6 +651,13 @@ void TableJoin::setStorageJoin(std::shared_ptr<StorageJoin> storage)
     right_storage_join = storage;
 }
 
+/// proton : starts
+void TableJoin::setCrossJoinStorage(std::shared_ptr<IStorage> storage)
+{
+    right_cross_join_storage = storage;
+}
+/// proton: ends.
+
 void TableJoin::setRightStorageName(const std::string & storage_name)
 {
     right_storage_name = storage_name;
@@ -666,6 +673,21 @@ String TableJoin::renamedRightColumnName(const String & name) const
     if (const auto it = renames.find(name); it != renames.end())
         return it->second;
     return name;
+}
+
+String TableJoin::renamedRightColumnNameWithAlias(const String & name) const
+{
+    auto renamed = renamedRightColumnName(name);
+    if (const auto it = right_key_aliases.find(renamed); it != right_key_aliases.end())
+        return it->second;
+    return renamed;
+}
+
+String TableJoin::restoreRightColumnNameForAlias(const String & alias) const
+{
+    if (const auto it = reversed_right_key_aliases.find(alias); it != reversed_right_key_aliases.end())
+        return it->second;
+    return alias;
 }
 
 void TableJoin::addKey(const String & left_name, const String & right_name, const ASTPtr & left_ast, const ASTPtr & right_ast)
@@ -693,7 +715,7 @@ static void addJoinConditionWithAnd(ASTPtr & current_cond, const ASTPtr & new_co
 void TableJoin::addJoinCondition(const ASTPtr & ast, bool is_left)
 {
     auto & cond_ast = is_left ? clauses.back().on_filter_condition_left : clauses.back().on_filter_condition_right;
-    LOG_TRACE(&Poco::Logger::get("TableJoin"), "Adding join condition for {} table: {} -> {}",
+    LOG_TRACE(getLogger("TableJoin"), "Adding join condition for {} table: {} -> {}",
               (is_left ? "left" : "right"), ast ? queryToString(ast) : "NULL", cond_ast ? queryToString(cond_ast) : "NULL");
     addJoinConditionWithAnd(cond_ast, ast);
 }
@@ -754,6 +776,13 @@ bool TableJoin::allowParallelHashJoin() const
     if (isSpecialStorage() || !oneDisjunct())
         return false;
     return true;
+}
+
+ActionsDAGPtr TableJoin::createJoinedBlockActions(ContextPtr context) const
+{
+    ASTPtr expression_list = rightKeysList();
+    auto syntax_result = TreeRewriter(context).analyze(expression_list, columnsFromJoinedTable());
+    return ExpressionAnalyzer(expression_list, syntax_result, context).getActionsDAG(true, false);
 }
 
 /// proton : starts

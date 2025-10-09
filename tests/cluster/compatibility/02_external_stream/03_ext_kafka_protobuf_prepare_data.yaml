@@ -1,0 +1,81 @@
+tags:
+  - prepare
+  - kafka
+  - protobuf
+  - format_schema
+
+description: prepare data for kafka external stream with protobuf format
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: kafka_proto_topic
+
+  - type: kafka
+    name: create
+    topic: kafka_proto_topic
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: query
+    sql: drop stream if exists ex_kafka_proto;
+
+  - type: query
+    sql: drop format schema if exists kproto_schema;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA kproto_schema AS
+      $$
+        syntax = "proto3";
+        message Sch0 {
+          int32 int32_c = 1;
+          int64 int64_c = 2;
+          uint32 uint32_c = 3;
+          uint64 uint64_c = 4;
+          bool bool_c = 5;
+          string string_c = 6;
+          map<string, int32> map_c = 7;
+          enum EnumType {a = 0; b = 1; z = 26;}
+          EnumType enum_c = 8;
+          repeated int32 array_c = 9;
+        }
+      $$
+      TYPE Protobuf;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_kafka_proto
+      (
+        int32_c int32,
+        int64_c int64,
+        uint32_c uint32,
+        uint64_c uint64,
+        bool_c bool,
+        string_c string,
+        map_c map(string,int32),
+        enum_c enum8('a'=0,'b'=1,'z'=26),
+        array_c array(int32)
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'kafka_proto_topic',
+          data_format = 'Protobuf',
+          format_schema = 'kproto_schema:Sch0';
+  - type: wait
+    time: 2
+
+
+  - type: query
+    sql: |
+      insert into ex_kafka_proto (int32_c, int64_c, uint32_c, uint64_c, bool_c, string_c, map_c, enum_c, array_c) values 
+      (-2147483647, -9223372036854775807, 4294967295, 18446744073709551615,  true, 'aaaa', {'key1': 111}, 'a', [1, 2, 3])

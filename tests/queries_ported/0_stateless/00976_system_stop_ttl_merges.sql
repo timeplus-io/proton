@@ -8,11 +8,11 @@ insert into ttl values (to_datetime('2000-10-10 00:00:00'), 1), (to_datetime('20
 insert into ttl values (to_datetime('2100-10-10 00:00:00'), 3), (to_datetime('2100-10-10 00:00:00'), 4);
 
 select sleep(1) format Null; -- wait if very fast merge happen
-optimize table ttl partition 10 final;
+optimize stream ttl partition 10 final;
 select * from ttl order by d, a;
 
 system start ttl merges ttl;
-optimize table ttl partition 10 final;
+optimize stream ttl partition 10 final;
 select * from ttl order by d, a;
 
 drop stream if exists ttl;

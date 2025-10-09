@@ -1,0 +1,32 @@
+0	1	1	20
+0	1	1	200
+0	1	2	20
+0	1	2	200
+Expression ((Projection + Before ORDER BY))
+Sorting (None)
+Actions: INPUT :: 0 -> a int32 : 0
+         INPUT :: 1 -> c int32 : 1
+         INPUT :: 2 -> d int32 : 2
+         INPUT :: 3 -> any(b) int32 : 3
+Positions: 0 3 1 2
+  Aggregating
+  Sorting (None)
+  Keys: a, c, d
+  Aggregates:
+      any(b)
+        Function: any(int32) → int32
+        Arguments: b
+  Order: a ASC, c ASC
+  Skip merging: 0
+    Expression (Before GROUP BY)
+    Sorting (Chunk): a ASC, b ASC, c ASC
+    Actions: INPUT :: 0 -> b int32 : 0
+             INPUT :: 1 -> a int32 : 1
+             INPUT :: 2 -> c int32 : 2
+             INPUT :: 3 -> d int32 : 3
+    Positions: 0 1 2 3
+      ReadFromMergeTree (default.tab)
+      Sorting (Stream): a ASC, b ASC, c ASC
+      ReadType: InOrder
+      Parts: 2
+      Granules: 2

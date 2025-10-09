@@ -41,32 +41,36 @@ void TimestampTransform::transform(Chunk & chunk)
                 transformTimestamp(chunk); /// No backfill, then switch common transform
         }
         else
+        {
             transformTimestamp(chunk);
+        }
     }
     else
+    {
         /// The downstream header is different than the output of this transform
         /// We need use the current output header
         chunk.setColumns(chunk_header.cloneEmptyColumns(), 0);
+    }
 }
 
 void TimestampTransform::transformTimestamp(Chunk & chunk)
 {
-    auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
+    auto input_block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 
     Block expr_block;
 
     /// Most of the time, we copied only one column
     for (auto pos : expr_column_positions)
-        expr_block.insert(block.getByPosition(pos));
+        expr_block.insert(input_block.getByPosition(pos));
 
     /// In case `__streaming_now()`, the expr_block is empty, so we must pass in rows
-    auto num_rows = block.rows();
+    auto num_rows = input_block.rows();
     timestamp_func_desc->expr->execute(expr_block, num_rows);
     expr_block.getByPosition(0).column = expr_block.getByPosition(0).column->convertToFullColumnIfConst();
 
     /// auto * col_with_type = expr_block.findByName(STREAMING_WINDOW_FUNC_ALIAS);
     /// So far we assume, the streaming function produces only one column
-    assert(expr_block);
+    chassert(expr_block);
 
     /// Only select columns required by output
     /// For example, inputs: col1, col2, col3, col4. col3 and col4 are used to calculate timestamp
@@ -75,14 +79,14 @@ void TimestampTransform::transformTimestamp(Chunk & chunk)
 
     /// Insert columns before timestamp column
     for (size_t col_pos = 0; col_pos < timestamp_col_pos; ++col_pos)
-        result.getByPosition(col_pos) = std::move(block.getByPosition(input_column_positions[col_pos]));
+        result.getByPosition(col_pos) = std::move(input_block.getByPosition(input_column_positions[col_pos]));
 
     /// Insert timestamp column
     result.getByPosition(timestamp_col_pos) = std::move(expr_block.getByPosition(0));
 
     /// Insert columns after timestamp column
     for (size_t col_pos = timestamp_col_pos + 1, num_cols = chunk_header.getNumColumns(); col_pos < num_cols; ++col_pos)
-        result.getByPosition(col_pos) = std::move(block.getByPosition(input_column_positions[col_pos - 1]));
+        result.getByPosition(col_pos) = std::move(input_block.getByPosition(input_column_positions[col_pos - 1]));
 
     chunk.setColumns(result.getColumns(), result.rows());
 }
@@ -124,12 +128,16 @@ bool TimestampTransform::backfillProcTimestamp(Chunk & chunk)
                         num_rows, DecimalField(DecimalUtils::decimalFromComponents<DateTime64>(components, scale), scale));
                 }
                 else
+                {
                     column = timestamp_col_data_type->createColumnConst(num_rows, static_cast<UInt64>(seconds));
+                }
             }
         }
         else
+        {
             /// if no append time, disable backfill mode immediately
             backfill = false;
+        }
     }
 
     if (!column)
@@ -142,8 +150,10 @@ bool TimestampTransform::backfillProcTimestamp(Chunk & chunk)
     /// Add time_column to timestamp_col_pos in chunk
 
     if (timestamp_col_pos == chunk.getNumColumns())
+    {
         /// ___ts is the last column
         chunk.addColumn(std::move(time_column));
+    }
     else
     {
         Columns columns(chunk.detachColumns());
@@ -201,7 +211,7 @@ void TimestampTransform::handleProcessingTimeFunc()
             timezone = literal->value.safeGet<String>();
         else
             throw Exception(
-                "Only support literal timezone argument for now/now64() transformed timestamp column", ErrorCodes::BAD_ARGUMENTS);
+                ErrorCodes::BAD_ARGUMENTS, "Only support literal timezone argument for now/now64() transformed timestamp column");
     };
 
     /// Parse function arguments
@@ -246,8 +256,8 @@ void TimestampTransform::handleProcessingTimeFunc()
                         scale = static_cast<Int32>(literal->value.safeGet<UInt64>());
                     else
                         throw Exception(
-                            "Only support integral literal scale argument for now64() transformed timestamp column",
-                            ErrorCodes::BAD_ARGUMENTS);
+                            ErrorCodes::BAD_ARGUMENTS,
+                            "Only support integral literal scale argument for now64() transformed timestamp column");
                 };
 
                 /// arguments is an ASTExpressionList
@@ -261,7 +271,9 @@ void TimestampTransform::handleProcessingTimeFunc()
                     get_timezone(1);
                 }
                 else
+                {
                     scale = 3;
+                }
             }
         }
     }

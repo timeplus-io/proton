@@ -1,0 +1,30 @@
+name: alert
+description: Smoke tests covering the alert use cases.
+tags:
+  - smoke
+  - alert
+arch:
+  - x86_64
+setup:
+  scope: case
+  steps:
+    - type: query
+      sql: DROP VIEW IF EXISTS mv;
+
+    - type: query
+      sql: DROP ALERT IF EXISTS test;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: DROP STREAM IF EXISTS source;
+
+    - type: query
+      sql: DROP STREAM IF EXISTS monitor;
+
+    - type: query
+      sql: DROP STREAM IF EXISTS action;
+
+    - type: wait
+      time: 1

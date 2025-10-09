@@ -110,19 +110,36 @@ struct ConservativeHashTableGrowerWithPrecalculation : public HashTableGrowerWit
     void increaseSize() { this->increaseSizeDegree(this->sizeDegree() >= 20 ? 1 : 2); }
 };
 
+template <typename Key, typename Mapped, typename Hash>
+using HashMapExt
+    = HashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, ConservativeHashTableGrowerWithPrecalculation<>, HashTableAllocator>;
+
+template <typename Key, typename Mapped>
+using FixedHashMapExt
+    = FixedHashMap<Key, Mapped, FixedHashMapCell<Key, Mapped>, FixedHashTableStoredSize<FixedHashMapCell<Key, Mapped>>, HashTableAllocator>;
+
 template <typename Mapped>
+using StringHashMapExt = HashMapTable<
+    StringRef,
+    HashMapCellWithSavedHash<StringRef, Mapped, DefaultHash<StringRef>>,
+    DefaultHash<StringRef>,
+    StringHashTableGrower<>,
+    HashTableAllocator>;
+
+/// \param skip_dtor_on_destroy - If explicitly set to true, the caller needs to ensure that there are no memory leaks or other problems
+template <typename Mapped, bool skip_dtor_on_destroy = std::is_trivially_destructible_v<Mapped>>
 struct HashMapsTemplate
 {
     using MappedType = Mapped;
-    std::unique_ptr<FixedHashMap<UInt8, Mapped>> key8;
-    std::unique_ptr<FixedHashMap<UInt16, Mapped>> key16;
-    std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>, ConservativeHashTableGrowerWithPrecalculation<>>> key32;
-    std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>, ConservativeHashTableGrowerWithPrecalculation<>>> key64;
-    std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped, DefaultHash<StringRef>, StringHashTableGrower<>>> key_string;
-    std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped, DefaultHash<StringRef>, StringHashTableGrower<>>> key_fixed_string;
-    std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32, ConservativeHashTableGrowerWithPrecalculation<>>> keys128;
-    std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32, ConservativeHashTableGrowerWithPrecalculation<>>> keys256;
-    std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash, ConservativeHashTableGrowerWithPrecalculation<>>> hashed;
+    std::unique_ptr<FixedHashMapExt<UInt8, Mapped>> key8;
+    std::unique_ptr<FixedHashMapExt<UInt16, Mapped>> key16;
+    std::unique_ptr<HashMapExt<UInt32, Mapped, HashCRC32<UInt32>>> key32;
+    std::unique_ptr<HashMapExt<UInt64, Mapped, HashCRC32<UInt64>>> key64;
+    std::unique_ptr<StringHashMapExt<Mapped>> key_string;
+    std::unique_ptr<StringHashMapExt<Mapped>> key_fixed_string;
+    std::unique_ptr<HashMapExt<UInt128, Mapped, UInt128HashCRC32>> keys128;
+    std::unique_ptr<HashMapExt<UInt256, Mapped, UInt256HashCRC32>> keys256;
+    std::unique_ptr<HashMapExt<UInt128, Mapped, UInt128TrivialHash>> hashed;
 
     void create(HashType which)
     {
@@ -130,7 +147,7 @@ struct HashMapsTemplate
         {
 #define M(NAME) \
     case HashType::NAME: \
-        NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
+        NAME = std::make_unique<typename decltype(NAME)::element_type>(skip_dtor_on_destroy); \
         break;
             APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
@@ -187,7 +204,8 @@ struct HashMapsTemplate
         switch (type)
         {
 #define M(NAME) \
-    case HashType::NAME: { \
+    case HashType::NAME: \
+    { \
         assert(NAME); \
         serializeHashMap(*NAME, mapped_serializer, wb); \
         return; \
@@ -205,7 +223,8 @@ struct HashMapsTemplate
         switch (type)
         {
 #define M(NAME) \
-    case HashType::NAME: { \
+    case HashType::NAME: \
+    { \
         assert(NAME); \
         deserializeHashMap(*NAME, mapped_deserializer, pool, rb); \
         return; \
@@ -304,4 +323,5 @@ struct KeyGetterForType
     using Mapped = std::conditional_t<std::is_const_v<Data>, const Mapped_t, Mapped_t>;
     using Type = typename KeyGetterForTypeImpl<type, Value, Mapped>::Type;
 };
+
 }

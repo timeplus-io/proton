@@ -1,0 +1,47 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_zfill(value string) RETURNS string LANGUAGE PYTHON AS
+      $$
+      def test_zfill(value):
+          res = [x.zfill(5) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-22-1
+    type: stream
+    query: select test_zfill(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values ('42')('aaa');
+
+  - type: check
+    target_name: python-udf1-22-1
+    expected_result:
+      - ['00042', '42']
+      - ['00aaa', 'aaa']

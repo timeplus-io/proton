@@ -1,0 +1,32 @@
+tags:
+- random_in_type
+description: create random stream with random_in_type function
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id string default random_in_type('string'))
+- type: wait
+  time: 2
+
+- name: '2208'
+  type: stream
+  query: select id from test22_create_random limit 5
+  schema:
+  - name: id
+    type: string
+
+- type: check
+  target_name: '2208'
+  expected_result:
+  - [any_value]
+  - [any_value]
+  - [any_value]
+  - [any_value]
+  - [any_value]

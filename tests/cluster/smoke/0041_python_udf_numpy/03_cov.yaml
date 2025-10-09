@@ -1,0 +1,76 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.cov function - cocoviance matrix
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x float, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getCov(x float, y float) RETURNS array(array(float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+
+      class getCov:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.cov = [[]]
+
+          def serialize(self):
+              data = {}
+              data['cov'] = self.cov
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.cov = data['cov']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              arr = np.stack((xs, ys))
+              tmp_cov = np.cov(arr)
+              self.cov = tmp_cov.tolist()
+
+          def finalize(self):
+              return self.cov
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-3-1
+    type: stream
+    query: select getCov(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(float32))
+  
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (0, 2) (1, 1) (2, 0);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (-2.1, 3) (-1, 1.1) (4.3, 0.12);
+
+  - type: check
+    target_name: python-udf2-3-1
+    expected_result:
+      - [[[1.0, -1.0], [-1.0, 1.0]]]
+      - [[[11.71, -4.286], [-4.286,  2.14413333]]]

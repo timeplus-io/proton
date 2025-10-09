@@ -1,0 +1,54 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(float64), valueb array(float64), valuec array(float64));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_std(valuea array(float64), valueb array(float64), valuec array(float64)) RETURNS array(float64) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_std(valuea, valueb, valuec):
+          res = []
+          for a, b,c in zip(valuea, valueb, valuec):
+              df = pd.DataFrame(zip(a,b,c), columns=['person_id', 'age', 'height']).set_index('person_id')
+              df_std = df.std().tolist()
+              res.append(df_std)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-20-1
+    type: stream
+    query: select test_df_std(valuea, valueb, valuec) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float64)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb, valuec) values 
+          ([0, 1, 2, 3], [21, 25, 62, 43], [1.61, 1.87, 1.49, 2.01])
+          ([4, 5, 6, 7], [11, 12, 13, 14], [1.55, 1.65, 1.75, 1.85]);
+
+  - type: check
+    target_name: python-udf3-20-1
+    expected_result:
+      - [[18.786076404259266, 0.23741665204165152]]
+      - [[1.2909944487358056, 0.12909944487358058]]

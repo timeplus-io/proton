@@ -1,0 +1,101 @@
+tags:
+  - subquery/view/materialized_view/
+  - tumble(table)
+  - group_by
+  - primary_key
+  - substream
+  - to_support
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+
+description: substream window aggreagtion  partition by primary key, tumble window,
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: create stream test14_substream_6(val float, id int, name string, ts datetime);
+  - type: wait
+    time: 2
+
+  - name: "1433"
+    type: stream
+    query: |
+      with cte as (select * from tumble(test14_substream_6, ts, 3s))
+      select max(val), min(val), avg(val), id from changelog(cte, id) partition by id, window_start, window_end
+      group by id, window_start, window_end;
+    schema:
+      - name: max(val)
+        type: float32
+      - name: min(val)
+        type: float32
+      - name: avg(val)
+        type: float64
+      - name: id
+        type: int32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (1, 2, 'a', '2020-02-02 20:00:01');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (3, 3, 'b', '2020-02-02 20:00:02');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (5, 1, 'c', '2020-02-02 20:00:04');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (8, 2, 'a', '2020-02-02 20:00:06');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (9, 3, 'b', '2020-02-02 20:00:07');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (11, 2, 'b', '2020-02-02 20:00:08');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (10, 1, 'c', '2020-02-02 20:00:09');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name, ts) values (14, 2, 'b', '2020-02-02 20:00:20');
+
+  - type: check
+    target_name: "1433"
+    mode: random
+    expected_result:
+      - [1, 1, 1, 2]
+      - [3, 3, 3, 3]
+      - [5, 5, 5, 1]
+      - [8, 8, 8, 2]
+      - [0, 0, nan, 2]
+      - [9, 9, 9, 3]
+      - [0, 0, nan, 3]
+      - [11, 11, 11, 2]
+      - [0, 0, nan, 2]
+      - [10, 10, 10, 1]
+      - [0, 0, nan, 1]
+      - [14, 14, 14, 2]
+  

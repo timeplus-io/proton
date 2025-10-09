@@ -1,0 +1,127 @@
+tags:
+  - http_snap_shot
+description: http_snap_shot create, insert, select, drop
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_rest
+
+  - type: wait
+    time: 1
+
+  - type: rest
+    url: /
+    method: POST
+    data: create stream test_rest (id string, location string, value float, timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test_rest (id, location, value, timestamp) values 
+      ('dev1', 'ca', 100, '2020-01-01 11:11:11');
+
+  - type: query
+    sql: |
+      insert into test_rest (id, value, location, timestamp) values 
+      ('dev2', 100, 'ca', '2020-01-01 11:11:11');
+
+  - type: query
+    sql: |
+      insert into test_rest (id, value, timestamp) values 
+      ('dev3', 100, '2020-01-01 11:11:11');
+
+  - name: '401'
+    type: rest
+    url: /?query=show streams where name = 'test_rest'
+    method: GET
+
+  - type: rest
+    url: /
+    method: POST
+    data: |
+      insert into test_rest (id, value, timestamp) values 
+      ('dev777', 100, '2020-01-01 11:11:11')
+  
+  - type: wait
+    time: 3
+
+  - name: '402'
+    type: rest
+    url: /
+    method: POST
+    data: select id, location, value, timestamp from test_rest order by id format JSON
+
+  - name: '403'
+    type: rest
+    url: /
+    method: POST
+    data: select id, location, value, value, timestamp from test_rest order by id
+
+  - name: '404'
+    type: rest
+    url: /?query=select id, location, value, value, timestamp from test_rest order by id
+    method: GET
+
+  - type: check
+    target_name: '401'
+    expected_result: ["test_rest\n"]
+
+  - type: check
+    target_name: '402'
+    expected_result:
+      - meta:
+          - name: id
+            type: string
+          - name: location
+            type: string
+          - name: value
+            type: float32
+          - name: timestamp
+            type: datetime64(3)
+        data:
+          - id: dev1
+            location: ca
+            value: 100
+            timestamp: '2020-01-01 11:11:11.000'
+          - id: dev2
+            location: ca
+            value: 100
+            timestamp: '2020-01-01 11:11:11.000'
+          - id: dev3
+            location: ''
+            value: 100
+            timestamp: '2020-01-01 11:11:11.000'
+          - id: dev777
+            location: ''
+            value: 100
+            timestamp: '2020-01-01 11:11:11.000'
+        rows: 4
+        statistics: any_value
+
+  - type: check
+    target_name: '403'
+    expected_result:
+      - "dev1\tca\t100\t100\t2020-01-01 11:11:11.000\ndev2\tca\t100\t100\t2020-01-01 11:11:11.000\ndev3\t\t100\t100\t2020-01-01 11:11:11.000\ndev777\t\t100\t100\t2020-01-01 11:11:11.000\n"
+
+  - type: check
+    target_name: '404'
+    expected_result:
+      - "dev1\tca\t100\t100\t2020-01-01 11:11:11.000\ndev2\tca\t100\t100\t2020-01-01 11:11:11.000\ndev3\t\t100\t100\t2020-01-01 11:11:11.000\ndev777\t\t100\t100\t2020-01-01 11:11:11.000\n"
+
+  - type: rest
+    url: /
+    method: POST
+    data: drop stream if exists test_rest
+
+  - name: '405'
+    type: rest
+    url: /?query=show streams where name in ('test_rest')
+    method: GET
+
+  - type: check
+    target_name: '405'
+    expected_result: [""]

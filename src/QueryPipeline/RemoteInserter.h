@@ -37,6 +37,8 @@ public:
     const Block & getHeader() const { return header; }
 
 private:
+    void receiveLogsAndProfileEvents(); /// proton: added
+
     Connection & connection;
     String query;
     Block header;

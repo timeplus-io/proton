@@ -1,0 +1,21 @@
+tags:
+  - geo
+description: point in polygon
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - name: '801'
+    type: stream
+    query: SELECT point_in_polygon((3., 3.), [(6, 0), (8, 4), (5, 8), (0, 2)]) AS res
+    schema:
+      - name: res
+        type: bool
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ 'True' ]

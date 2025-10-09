@@ -16,6 +16,8 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataTypes/DataTypeVariant.h>
+#include <DataTypes/DataTypeDynamic.h>
 
 #include <Core/AccurateComparison.h>
 
@@ -87,7 +89,7 @@ Field convertIntToDecimalType(const Field & from, const DataTypeDecimal<T> & typ
 {
     From value = from.get<From>();
     if (!type.canStoreWhole(value))
-        throw Exception("Number is too big to place in " + type.getName(), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Number is too big to place in {}", type.getName());
 
     T scaled_value = type.getScaleMultiplier() * T(static_cast<typename T::NativeType>(value));
     return DecimalField<T>(scaled_value, type.getScale());
@@ -115,7 +117,7 @@ Field convertFloatToDecimalType(const Field & from, const DataTypeDecimal<T> & t
 {
     From value = from.get<From>();
     if (!type.canStoreWhole(value))
-        throw Exception("Number is too big to place in " + type.getName(), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Number is too big to place in {}", type.getName());
 
     //String sValue = convertFieldToString(from);
     //int fromScale = sValue.length()- sValue.find('.') - 1;
@@ -327,8 +329,8 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
             size_t dst_tuple_size = type_tuple->getElements().size();
 
             if (dst_tuple_size != src_tuple_size)
-                throw Exception("Bad size of tuple in IN or VALUES section. Expected size: "
-                    + toString(dst_tuple_size) + ", actual size: " + toString(src_tuple_size), ErrorCodes::TYPE_MISMATCH);
+                throw Exception(ErrorCodes::TYPE_MISMATCH, "Bad size of tuple in IN or VALUES section. "
+                    "Expected size: {}, actual size: {}", dst_tuple_size, src_tuple_size);
 
             Tuple res(dst_tuple_size);
             bool have_unconvertible_element = false;
@@ -407,8 +409,25 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
 
         const auto & name = src.get<AggregateFunctionStateData>().name;
         if (agg_func_type->getName() != name)
-            throw Exception("Cannot convert " + name + " to " + agg_func_type->getName(), ErrorCodes::TYPE_MISMATCH);
+            throw Exception(ErrorCodes::TYPE_MISMATCH, "Cannot convert {} to {}", name, agg_func_type->getName());
 
+        return src;
+    }
+    else if (const DataTypeVariant * type_variant = typeid_cast<const DataTypeVariant *>(&type))
+    {
+        /// If we have type hint and Variant contains such type, no need to convert field.
+        if (from_type_hint && type_variant->tryGetVariantDiscriminator(from_type_hint->getName()))
+            return src;
+
+        /// Create temporary column and check if we can insert this field to the variant.
+        /// If we can insert, no need to convert anything.
+        auto col = type_variant->createColumn();
+        if (col->tryInsert(src))
+            return src;
+    }
+    else if (isDynamic(type))
+    {
+        /// We can insert any field to Dynamic column.
         return src;
     }
     else if (isObject(type))
@@ -416,43 +435,7 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         if (src.getType() == Field::Types::Object)
             return src;  /// Already in needed type.
 
-        const auto * from_type_tuple = typeid_cast<const DataTypeTuple *>(from_type_hint);
-        if (src.getType() == Field::Types::Tuple && from_type_tuple && from_type_tuple->haveExplicitNames())
-        {
-            const auto & names = from_type_tuple->getElementNames();
-            const auto & tuple = src.get<const Tuple &>();
-
-            if (names.size() != tuple.size())
-                throw Exception(ErrorCodes::TYPE_MISMATCH,
-                    "Bad size of tuple in IN or VALUES section (while converting to Object). Expected size: {}, actual size: {}",
-                        names.size(), tuple.size());
-
-            Object object;
-            for (size_t i = 0; i < names.size(); ++i)
-                object[names[i]] = tuple[i];
-
-            return object;
-        }
-
-        if (src.getType() == Field::Types::Map)
-        {
-            Object object;
-            const auto & map = src.get<const Map &>();
-            for (const auto & element : map)
-            {
-                const auto & map_entry = element.get<Tuple>();
-                const auto & key = map_entry[0];
-                const auto & value = map_entry[1];
-
-                if (key.getType() != Field::Types::String)
-                    throw Exception(ErrorCodes::TYPE_MISMATCH,
-                        "Cannot convert from Map with key of type {} to Object", key.getTypeName());
-
-                object[key.get<const String &>()] = value;
-            }
-
-            return object;
-        }
+        /// TODO: add conversion from Map/Tuple to Object.
     }
 
     /// Conversion from string by parsing.
@@ -475,7 +458,9 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         try
         {
             /// proton : starts. Best effort parsing
-            type_to_parse->getDefaultSerialization()->deserializeWholeText(*col, in_buffer, FormatSettings{.date_time_input_format = FormatSettings::DateTimeInputFormat::BestEffortUS});
+            FormatSettings formatsetting;
+            formatsetting.date_time_input_format = FormatSettings::DateTimeInputFormat::BestEffortUS;
+            type_to_parse->getDefaultSerialization()->deserializeWholeText(*col, in_buffer, formatsetting);
             /// proton : ends
         }
         catch (Exception & e)

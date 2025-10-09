@@ -1,0 +1,66 @@
+tags:
+- udf
+description: test_23_sec_large - uda without emit strategy
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_sec_large
+    arguments:
+    - name: value
+      type: float32
+    is_aggregation: true
+    return_type: float32
+    source: '{ initialize: function() { this.max = -1.0; this.sec = -1.0; }, process:
+      function(values) { for (let i=0; i<values.length; i++) { if (values[i] > this.max)
+      { this.sec=this.max; this.max=values[i]; } if (values[i]<this.max && values[i]>this.sec)
+      this.sec=values[i]; } }, finalize:function() { return this.sec; }, serialize:
+      function() { let s = {''max'':this.max,''sec'':this.sec}; return JSON.stringify(s);},
+      deserialize: function (state_str) { let s=JSON.parse(state_str); this.max=s[''max''];
+      this.sec=s[''sec'']; }, merge: function (state_str) { let s=JSON.parse(state_str);
+      if(s[''sec'']>=this.max) { this.max=s[''max'']; this.sec=s[''sec''];} else if(s[''max'']>=this.max)
+      { this.sec=this.max; this.max=s[''max''];} else if(s[''max'']>this.sec) { this.sec=s[''max''];
+      } } }'
+- type: wait
+  time: 5
+
+- name: udf-1
+  type: stream
+  query: select s, max(f32), test_23_sec_large(f32) from udf_types group by s order by s
+  schema:
+  - name: s
+    type: string
+  - name: max(f32)
+    type: float32
+  - name: test_23_sec_large(f32)
+    type: float32
+- type: wait
+  time: 2
+
+- type: rest
+  url: /proton/v1/ingest/streams/udf_types
+  method: POST
+  data:
+    columns:
+    - i
+    - i8
+    - f32
+    - s
+    - dt
+    data:
+    - [1, 1, 1.0, 's1', '2020-02-02 20:00:00']
+    - [2, 2, 2.0, 's2', '2020-02-02 20:00:00']
+    - [3, 3, 3.0, 's1', '2020-02-02 20:00:00']
+    - [4, 2, 4.0, 's2', '2020-02-02 20:00:00']
+
+- type: check
+  target_name: udf-1
+  expected_result:
+  - ['s1', 3.0, 1.0]
+  - ['s2', 4.0, 2.0]

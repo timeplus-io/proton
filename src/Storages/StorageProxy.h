@@ -1,8 +1,8 @@
 #pragma once
 
+#include <QueryPipeline/Pipe.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include <QueryPipeline/Pipe.h>
 
 
 namespace DB
@@ -11,8 +11,7 @@ namespace DB
 class StorageProxy : public IStorage
 {
 public:
-
-    explicit StorageProxy(const StorageID & table_id_) : IStorage(table_id_) {}
+    explicit StorageProxy(const StorageID & table_id_) : IStorage(table_id_) { }
 
     virtual StoragePtr getNested() const = 0;
 
@@ -32,10 +31,7 @@ public:
     NamesAndTypesList getVirtuals() const override { return getNested()->getVirtuals(); }
 
     QueryProcessingStage::Enum getQueryProcessingStage(
-        ContextPtr context,
-        QueryProcessingStage::Enum to_stage,
-        const StorageSnapshotPtr &,
-        SelectQueryInfo & info) const override
+        ContextPtr context, QueryProcessingStage::Enum to_stage, const StorageSnapshotPtr &, SelectQueryInfo & info) const override
     {
         /// TODO: Find a way to support projections for StorageProxy
         info.ignore_projections = true;
@@ -64,7 +60,8 @@ public:
         size_t max_block_size,
         size_t num_streams) override
     {
-        return getNested()->read(query_plan, column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+        return getNested()->read(
+            query_plan, column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
     }
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override
@@ -75,10 +72,7 @@ public:
     void drop() override { getNested()->drop(); }
 
     void truncate(
-        const ASTPtr & query,
-        const StorageMetadataPtr & metadata_snapshot,
-        ContextPtr context,
-        TableExclusiveLockHolder & lock) override
+        const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, TableExclusiveLockHolder & lock) override
     {
         getNested()->truncate(query, metadata_snapshot, context, lock);
     }
@@ -106,27 +100,25 @@ public:
         getNested()->checkAlterIsPossible(commands, context);
     }
 
-    Pipe alterPartition(
-            const StorageMetadataPtr & metadata_snapshot,
-            const PartitionCommands & commands,
-            ContextPtr context) override
+    Pipe alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr context) override
     {
         return getNested()->alterPartition(metadata_snapshot, commands, context);
     }
 
-    void checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override
+    void checkAlterPartitionIsPossible(
+        const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override
     {
         getNested()->checkAlterPartitionIsPossible(commands, metadata_snapshot, settings);
     }
 
     bool optimize(
-            const ASTPtr & query,
-            const StorageMetadataPtr & metadata_snapshot,
-            const ASTPtr & partition,
-            bool final,
-            bool deduplicate,
-            const Names & deduplicate_by_columns,
-            ContextPtr context) override
+        const ASTPtr & query,
+        const StorageMetadataPtr & metadata_snapshot,
+        const ASTPtr & partition,
+        bool final,
+        bool deduplicate,
+        const Names & deduplicate_by_columns,
+        ContextPtr context) override
     {
         return getNested()->optimize(query, metadata_snapshot, partition, final, deduplicate, deduplicate_by_columns, context);
     }
@@ -136,29 +128,29 @@ public:
     CancellationCode killMutation(const String & mutation_id) override { return getNested()->killMutation(mutation_id); }
 
     void startup() override { getNested()->startup(); }
-    void shutdown() override { getNested()->shutdown(); }
-    void flush() override { getNested()->flush(); }
+    void shutdown(bool dropping) override { getNested()->shutdown(dropping); }
+    void flush(bool dropping) override { getNested()->flush(dropping); }
 
     ActionLock getActionLock(StorageActionBlockType action_type) override { return getNested()->getActionLock(action_type); }
 
     bool supportsIndexForIn() const override { return getNested()->supportsIndexForIn(); }
-    bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand, ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override
+    bool mayBenefitFromIndexForIn(
+        const ASTPtr & left_in_operand, ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override
     {
         return getNested()->mayBenefitFromIndexForIn(left_in_operand, query_context, metadata_snapshot);
     }
 
-    CheckResults checkData(const ASTPtr & query , ContextPtr context) override { return getNested()->checkData(query, context); }
+    CheckResults checkData(const ASTPtr & query, ContextPtr context) override { return getNested()->checkData(query, context); }
     void checkTableCanBeDropped(ContextPtr context) const override { getNested()->checkTableCanBeDropped(context); }
     bool storesDataOnDisk() const override { return getNested()->storesDataOnDisk(); }
     Strings getDataPaths() const override { return getNested()->getDataPaths(); }
     StoragePolicyPtr getStoragePolicy() const override { return getNested()->getStoragePolicy(); }
+    std::optional<String> preferredColumn() const override { return getNested()->preferredColumn(); }
     std::optional<UInt64> totalRows(const Settings & settings) const override { return getNested()->totalRows(settings); }
     std::optional<UInt64> totalBytes(const Settings & settings) const override { return getNested()->totalBytes(settings); }
     std::optional<UInt64> lifetimeRows() const override { return getNested()->lifetimeRows(); }
     std::optional<UInt64> lifetimeBytes() const override { return getNested()->lifetimeBytes(); }
-
 };
 
 
 }
-

@@ -1,7 +1,7 @@
 #include <Processors/QueryPlan/Streaming/JoinStep.h>
 
 #include <Interpreters/IJoin.h>
-#include <Interpreters/Streaming/IHashJoin.h>
+#include <Interpreters/Streaming/HashJoin/IHashJoin.h>
 #include <Processors/Transforms/Streaming/JoinTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
@@ -21,10 +21,7 @@ JoinStep::JoinStep(
     size_t max_block_size_,
     size_t max_streams_,
     size_t join_max_cached_bytes_)
-    : join(std::move(join_))
-    , max_block_size(max_block_size_)
-    , max_streams(max_streams_)
-    , join_max_cached_bytes(join_max_cached_bytes_)
+    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), join_max_cached_bytes(join_max_cached_bytes_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -55,5 +52,18 @@ void JoinStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(processors, settings);
 }
+
+String JoinStep::getName() const
+{
+    auto hash_join = std::dynamic_pointer_cast<IHashJoin>(join);
+    switch (hash_join->type())
+    {
+        case HashJoinType::Memory:
+            return "StreamingJoin";
+        case HashJoinType::Hybrid:
+            return "HybridStreamingJoin";
+    }
+}
+
 }
 }

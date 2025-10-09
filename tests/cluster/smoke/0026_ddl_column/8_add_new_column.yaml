@@ -1,0 +1,302 @@
+tags:
+- append_only
+- materialized view
+- probe_bug
+
+description: |
+  Test append-only stream streaming query and mv query after add a column to the existing schema
+  Main Steps:
+    1.Create append-only stream
+    2.Create materialized view on stream
+    3.Add single column
+    4.Add another single column
+    5.Add multi columns
+    6.Add another multi columns
+    7.Check stream query on stream and mv
+    8.Check table query on stream
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: drop stream if exists add_new_column_view;
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists add_new_column_stream;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream add_new_column_stream (id int, name string);
+- type: wait
+  time: 2
+
+- type: query
+  sql: create materialized view add_new_column_view as select (* except _tp_time) from add_new_column_stream;
+- type: wait
+  time: 1
+
+- name: ddl-column-8-1
+  type: stream
+  query: select id, name from add_new_column_stream;
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+- type: wait
+  time: 1
+
+- name: ddl-column-8-1-mv
+  type: stream
+  query: select id, name from add_new_column_view;
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into add_new_column_stream (id, name) values (1, 's1');
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_int int;
+
+- type: wait
+  time: 1
+
+- name: ddl-column-8-2
+  type: stream
+  query: select (* except _tp_time) from add_new_column_stream;
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+    - name: add_int
+      type: int32
+- type: wait
+  time: 1
+
+- name: ddl-column-8-2-mv
+  type: stream
+  query: select (* except _tp_time) from add_new_column_view;
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into add_new_column_stream (* except (_tp_time, _tp_sn)) values
+    (2, 's2', 2) (3, 's3', 3);
+
+- type: check
+  target_name: ddl-column-8-1
+  expected_result:
+    - [1, 's1']
+    - [2, 's2']
+    - [3, 's3']
+
+- type: check
+  target_name: ddl-column-8-1-mv
+  expected_result:
+    - [1, 's1']
+    - [2, 's2']
+    - [3, 's3']
+
+- type: check
+  target_name: ddl-column-8-2
+  expected_result:
+    - [2, 's2', 2]
+    - [3, 's3', 3]
+
+- type: check
+  target_name: ddl-column-8-2-mv
+  expected_result:
+    - [2, 's2']
+    - [3, 's3']
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_float float;
+
+- type: wait
+  time: 1
+
+- name: ddl-column-8-3
+  type: stream
+  query: select (* except _tp_time) from add_new_column_stream settings seek_to='earliest';
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+    - name: add_int
+      type: int32
+    - name: add_float
+      type: float32
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into add_new_column_stream (* except (_tp_time, _tp_sn)) values 
+    (4, 's4', 4, 44.4)
+    (5, 's5', 5, 55.5);
+
+- type: check
+  target_name: ddl-column-8-3
+  mode: random
+  expected_result:
+    - [1, 's1', 0, 0]
+    - [2, 's2', 2, 0]
+    - [3, 's3', 3, 0]
+    - [4, 's4', 4, 44.4]
+    - [5, 's5', 5, 55.5]
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_bool bool, ADD COLUMN add_str string;
+
+- type: wait
+  time: 1
+
+- name: ddl-column-8-4
+  type: stream
+  query: select (* except _tp_time) from add_new_column_stream settings seek_to='earliest';
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+    - name: add_int
+      type: int32
+    - name: add_float
+      type: float32
+    - name: add_bool
+      type: bool
+    - name: add_str
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into add_new_column_stream (* except (_tp_time, _tp_sn)) values 
+    (6, 's6', 6, 66.6, true, 's6')
+    (7, 's7', 7, 77.7, false, 's7');
+
+
+- type: check
+  target_name: ddl-column-8-4
+  mode: random
+  expected_result:
+    - [1, 's1', 0, 0, false, '']
+    - [2, 's2', 2, 0, false, '']
+    - [3, 's3', 3, 0, false, '']
+    - [4, 's4', 4, 44.4, false, '']
+    - [5, 's5', 5, 55.5, false, '']
+    - [6, 's6', 6, 66.6, true, 's6']
+    - [7, 's7', 7, 77.7, false, 's7']
+
+
+- type: query
+  sql: ALTER STREAM add_new_column_stream ADD COLUMN add_dt datetime, ADD COLUMN add_null nullable(int);
+
+- type: wait
+  time: 1
+
+- name: ddl-column-8-5
+  type: stream
+  query: select (* except _tp_time) from add_new_column_stream settings seek_to='earliest';
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+    - name: add_int
+      type: int32
+    - name: add_float
+      type: float32
+    - name: add_bool
+      type: bool
+    - name: add_str
+      type: string
+    - name: add_dt
+      type: datetime
+    - name: add_null
+      type: nullable(int32)
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into add_new_column_stream (* except (_tp_time, _tp_sn)) values 
+    (8, 's8', 8, 88.8, true, 's8', '2024-01-01 00:00:08', 8)
+    (9, 's9', 9, 99.9, false, 's9', '2024-01-01 00:00:09', null);
+
+- type: check
+  target_name: ddl-column-8-5
+  mode: random
+  expected_result:
+    - [1, 's1', 0, 0, false, '', '0001-01-01 00:00:00', null]
+    - [2, 's2', 2, 0, false, '', '0001-01-01 00:00:00', null]
+    - [3, 's3', 3, 0, false, '', '0001-01-01 00:00:00', null]
+    - [4, 's4', 4, 44.4, false, '', '0001-01-01 00:00:00', null]
+    - [5, 's5', 5, 55.5, false, '', '0001-01-01 00:00:00', null]
+    - [6, 's6', 6, 66.6, true, 's6', '0001-01-01 00:00:00', null]
+    - [7, 's7', 7, 77.7, false, 's7', '0001-01-01 00:00:00', null]
+    - [8, 's8', 8, 88.8, true, 's8', '2024-01-01 00:00:08', 8]
+    - [9, 's9', 9, 99.9, false, 's9', '2024-01-01 00:00:09', null]
+
+- type: wait
+  time: 1
+
+- name: ddl-column-8-6
+  type: stream
+  query: select (* except _tp_time) from table(add_new_column_stream);
+  schema:
+    - name: id
+      type: int32
+    - name: name
+      type: string
+    - name: add_int
+      type: int32
+    - name: add_float
+      type: float32
+    - name: add_bool
+      type: bool
+    - name: add_str
+      type: string
+    - name: add_dt
+      type: datetime
+    - name: add_null
+      type: nullable(int32)
+
+- type: check
+  target_name: ddl-column-8-6
+  mode: random
+  expected_result:
+    - [1, 's1', 0, 0, false, '', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [2, 's2', 2, 0, false, '', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [3, 's3', 3, 0, false, '', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [4, 's4', 4, 44.4, false, '', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [5, 's5', 5, 55.5, false, '', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [6, 's6', 6, 66.6, true, 's6', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [7, 's7', 7, 77.7, false, 's7', '0001-01-01 00:00:00', null] # 1970-01-01 00:00:00
+    - [8, 's8', 8, 88.8, true, 's8', '2024-01-01 00:00:08', 8] # 1970-01-01 00:00:00
+    - [9, 's9', 9, 99.9, false, 's9', '2024-01-01 00:00:09', null] # 1970-01-01 00:00:00

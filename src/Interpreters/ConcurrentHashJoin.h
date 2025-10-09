@@ -2,8 +2,6 @@
 
 #include <condition_variable>
 #include <optional>
-#include <Core/BackgroundSchedulePool.h>
-#include <Functions/FunctionsLogical.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/HashJoin.h>
@@ -33,7 +31,12 @@ class ConcurrentHashJoin : public IJoin
 {
 
 public:
-    explicit ConcurrentHashJoin(ContextPtr context_, std::shared_ptr<TableJoin> table_join_, size_t slots_, const Block & right_sample_block, bool any_take_last_row_ = false);
+    explicit ConcurrentHashJoin(
+        ContextPtr context_,
+        std::shared_ptr<TableJoin> table_join_,
+        size_t slots_,
+        const Block & right_sample_block,
+        bool any_take_last_row_ = false);
     ~ConcurrentHashJoin() override = default;
 
     const TableJoin & getTableJoin() const override { return *table_join; }
@@ -46,7 +49,7 @@ public:
     size_t getTotalByteCount() const override;
     bool alwaysReturnsEmptySet() const override;
     bool supportParallelJoin() const override { return true; }
-    std::shared_ptr<NotJoinedBlocks>
+    IBlocksStreamPtr
     getNonJoinedBlocks(const Block & left_sample_block, const Block & result_sample_block, UInt64 max_block_size) const override;
 
 private:
@@ -66,7 +69,6 @@ private:
 
     IColumn::Selector selectDispatchBlock(const Strings & key_columns_names, const Block & from_block);
     Blocks dispatchBlock(const Strings & key_columns_names, const Block & from_block);
-
 };
 
 }

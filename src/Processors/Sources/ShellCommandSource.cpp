@@ -14,7 +14,6 @@
 #include <Interpreters/Context.h>
 
 /// proton: starts
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <Processors/Formats/IRowInputFormat.h>
 /// proton: ends
 
@@ -564,11 +563,11 @@ Pipe ShellCommandSourceCoordinator::createPipe(
             CompletedPipelineExecutor executor(*pipeline);
             executor.execute();
 
+            timeout_write_buffer->finalize();
+            timeout_write_buffer->reset();
+
             if (!is_executable_pool)
             {
-                timeout_write_buffer->next();
-                timeout_write_buffer->reset();
-
                 write_buffer->close();
             }
         };
@@ -708,7 +707,7 @@ void ShellCommandSourceCoordinator::sendData(UDFExecutionContextPtr & ctx, const
     if (ctx)
     {
         ctx->input_block_queue.add(block);
-        LOG_TRACE(&Poco::Logger::get("ShellCommandSourceCoordinator"), "send {} rows to UDF", block.rows());
+        LOG_TRACE(getLogger("ShellCommandSourceCoordinator"), "send {} rows to UDF", block.rows());
     }
 }
 

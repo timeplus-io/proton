@@ -1,0 +1,65 @@
+tags:
+  - ingest
+  - restapi
+description: create a table test_ingest, ingest infer json field from number to string
+  of show create
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_infer_json_number
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream test_infer_json_number (
+          id string,
+          location string,
+          value string,
+          content string,
+          timestamp datetime64(3) default now64(3)
+      )
+
+  - type: wait
+    time: 2
+
+  - type: rest
+    url: /proton/v1/ingest/streams/test_infer_json_number
+    method: POST
+    data:
+      columns:
+        - id
+        - location
+        - value
+        - content
+        - timestamp
+      data:
+        - [ 'dev1', 'ca', 100, '"create_time":"2021-11-02 20:00:01"', '2020-01-01 11:11:11' ]
+        - [ 'dev2', 'ca', 100, '"create_time":"2021-11-02 20:00:01"', '2020-01-01 11:11:11' ]
+        - [ 'dev3', 'ca', 100, '"create_time":"2021-11-02 20:00:10"', '2020-01-01 11:11:11' ]
+
+  - type: wait
+    time: 2
+
+  - name: '201'
+    type: stream
+    query: select id, location, value, timestamp from test_infer_json_number settings seek_to= 'earliest'
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+  
+  - type: check
+    target_name: '201'
+    expected_result:
+      - [ dev1, ca, '100', '2020-01-01 11:11:11' ]
+      - [ dev2, ca, '100', '2020-01-01 11:11:11' ]
+      - [ dev3, ca, '100', '2020-01-01 11:11:11' ]

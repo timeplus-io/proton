@@ -1,0 +1,272 @@
+order by d1 nulls first
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,4]	array(int64)	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-02	date	true
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+43	int64	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abd	string	false
+order by d1 nulls last
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,4]	array(int64)	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-02	date	true
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+43	int64	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abd	string	false
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+order by d2 nulls first
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,4]	array(int64)	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-02	date	true
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+43	int64	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abd	string	false
+order by d2 nulls last
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,3]	array(int64)	true
+[1,2,4]	array(int64)	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-01	date	true
+2020-01-02	date	true
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+42	int64	false
+43	int64	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abc	string	false
+abd	string	false
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+\N	none	false
+order by d1, d2 nulls first
+[1,2,3]	\N	array(int64)	true	none	false
+[1,2,3]	[1,2,3]	array(int64)	true	array(int64)	true
+[1,2,3]	[1,2,4]	array(int64)	true	array(int64)	true
+[1,2,3]	2020-01-01	array(int64)	true	date	true
+[1,2,3]	42	array(int64)	true	int64	false
+[1,2,3]	abc	array(int64)	true	string	false
+[1,2,4]	[1,2,3]	array(int64)	true	array(int64)	true
+2020-01-01	\N	date	true	none	false
+2020-01-01	[1,2,3]	date	true	array(int64)	true
+2020-01-01	2020-01-01	date	true	date	true
+2020-01-01	2020-01-02	date	true	date	true
+2020-01-01	42	date	true	int64	false
+2020-01-01	abc	date	true	string	false
+2020-01-02	2020-01-01	date	true	date	true
+42	\N	int64	false	none	false
+42	[1,2,3]	int64	false	array(int64)	true
+42	2020-01-01	int64	false	date	true
+42	42	int64	false	int64	false
+42	43	int64	false	int64	false
+42	abc	int64	false	string	false
+43	42	int64	false	int64	false
+abc	\N	string	false	none	false
+abc	[1,2,3]	string	false	array(int64)	true
+abc	2020-01-01	string	false	date	true
+abc	42	string	false	int64	false
+abc	abc	string	false	string	false
+abc	abd	string	false	string	false
+abd	abc	string	false	string	false
+\N	\N	none	false	none	false
+\N	[1,2,3]	none	false	array(int64)	true
+\N	2020-01-01	none	false	date	true
+\N	42	none	false	int64	false
+\N	abc	none	false	string	false
+order by d1, d2 nulls last
+[1,2,3]	[1,2,3]	array(int64)	true	array(int64)	true
+[1,2,3]	[1,2,4]	array(int64)	true	array(int64)	true
+[1,2,3]	2020-01-01	array(int64)	true	date	true
+[1,2,3]	42	array(int64)	true	int64	false
+[1,2,3]	abc	array(int64)	true	string	false
+[1,2,3]	\N	array(int64)	true	none	false
+[1,2,4]	[1,2,3]	array(int64)	true	array(int64)	true
+2020-01-01	[1,2,3]	date	true	array(int64)	true
+2020-01-01	2020-01-01	date	true	date	true
+2020-01-01	2020-01-02	date	true	date	true
+2020-01-01	42	date	true	int64	false
+2020-01-01	abc	date	true	string	false
+2020-01-01	\N	date	true	none	false
+2020-01-02	2020-01-01	date	true	date	true
+42	[1,2,3]	int64	false	array(int64)	true
+42	2020-01-01	int64	false	date	true
+42	42	int64	false	int64	false
+42	43	int64	false	int64	false
+42	abc	int64	false	string	false
+42	\N	int64	false	none	false
+43	42	int64	false	int64	false
+abc	[1,2,3]	string	false	array(int64)	true
+abc	2020-01-01	string	false	date	true
+abc	42	string	false	int64	false
+abc	abc	string	false	string	false
+abc	abd	string	false	string	false
+abc	\N	string	false	none	false
+abd	abc	string	false	string	false
+\N	[1,2,3]	none	false	array(int64)	true
+\N	2020-01-01	none	false	date	true
+\N	42	none	false	int64	false
+\N	abc	none	false	string	false
+\N	\N	none	false	none	false
+order by d2, d1 nulls first
+\N	[1,2,3]	none	false	array(int64)	true
+[1,2,3]	[1,2,3]	array(int64)	true	array(int64)	true
+[1,2,4]	[1,2,3]	array(int64)	true	array(int64)	true
+2020-01-01	[1,2,3]	date	true	array(int64)	true
+42	[1,2,3]	int64	false	array(int64)	true
+abc	[1,2,3]	string	false	array(int64)	true
+[1,2,3]	[1,2,4]	array(int64)	true	array(int64)	true
+\N	2020-01-01	none	false	date	true
+[1,2,3]	2020-01-01	array(int64)	true	date	true
+2020-01-01	2020-01-01	date	true	date	true
+2020-01-02	2020-01-01	date	true	date	true
+42	2020-01-01	int64	false	date	true
+abc	2020-01-01	string	false	date	true
+2020-01-01	2020-01-02	date	true	date	true
+\N	42	none	false	int64	false
+[1,2,3]	42	array(int64)	true	int64	false
+2020-01-01	42	date	true	int64	false
+42	42	int64	false	int64	false
+43	42	int64	false	int64	false
+abc	42	string	false	int64	false
+42	43	int64	false	int64	false
+\N	abc	none	false	string	false
+[1,2,3]	abc	array(int64)	true	string	false
+2020-01-01	abc	date	true	string	false
+42	abc	int64	false	string	false
+abc	abc	string	false	string	false
+abd	abc	string	false	string	false
+abc	abd	string	false	string	false
+\N	\N	none	false	none	false
+[1,2,3]	\N	array(int64)	true	none	false
+2020-01-01	\N	date	true	none	false
+42	\N	int64	false	none	false
+abc	\N	string	false	none	false
+order by d2, d1 nulls last
+[1,2,3]	[1,2,3]	array(int64)	true	array(int64)	true
+[1,2,4]	[1,2,3]	array(int64)	true	array(int64)	true
+2020-01-01	[1,2,3]	date	true	array(int64)	true
+42	[1,2,3]	int64	false	array(int64)	true
+abc	[1,2,3]	string	false	array(int64)	true
+\N	[1,2,3]	none	false	array(int64)	true
+[1,2,3]	[1,2,4]	array(int64)	true	array(int64)	true
+[1,2,3]	2020-01-01	array(int64)	true	date	true
+2020-01-01	2020-01-01	date	true	date	true
+2020-01-02	2020-01-01	date	true	date	true
+42	2020-01-01	int64	false	date	true
+abc	2020-01-01	string	false	date	true
+\N	2020-01-01	none	false	date	true
+2020-01-01	2020-01-02	date	true	date	true
+[1,2,3]	42	array(int64)	true	int64	false
+2020-01-01	42	date	true	int64	false
+42	42	int64	false	int64	false
+43	42	int64	false	int64	false
+abc	42	string	false	int64	false
+\N	42	none	false	int64	false
+42	43	int64	false	int64	false
+[1,2,3]	abc	array(int64)	true	string	false
+2020-01-01	abc	date	true	string	false
+42	abc	int64	false	string	false
+abc	abc	string	false	string	false
+abd	abc	string	false	string	false
+\N	abc	none	false	string	false
+abc	abd	string	false	string	false
+[1,2,3]	\N	array(int64)	true	none	false
+2020-01-01	\N	date	true	none	false
+42	\N	int64	false	none	false
+abc	\N	string	false	none	false
+\N	\N	none	false	none	false

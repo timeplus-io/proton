@@ -1,0 +1,59 @@
+tags:
+  - input
+  - sample
+description: ingest data into test_stream_only1 w/full columes and values
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test6_stream_only1
+  
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test6_stream_only1 (id string, location string, value float32,
+      json string, timestamp datetime64(3))
+
+  - type: wait
+    time: 2
+
+  - name: 601-1
+    type: query
+    sql: insert into test6_stream_only1 (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 370, 'jsonstring', '1999-01-01 11:11:11')
+
+  - type: wait
+    time: 1
+
+  - name: 602-1
+    type: query
+    sql: insert into test6_stream_only1 (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 380, 'jsonstring', '1999-01-01 11:11:11')
+
+  - type: wait
+    time: 2
+
+  - name: 603-1
+    type: stream
+    query: select id, location, value,json, timestamp from table(test6_stream_only1)
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+
+  - type: check
+    target_name: 603-1
+    mode: random
+    expected_result:
+      - [ dev1, ca, 370, jsonstring, '1999-01-01 11:11:11' ]
+      - [ dev2, ca, 380, jsonstring, '1999-01-01 11:11:11' ]
+

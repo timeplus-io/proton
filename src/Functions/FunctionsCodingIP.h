@@ -37,7 +37,9 @@ namespace detail
     ColumnPtr convertToIPv6(const StringColumnType & string_column, const PaddedPODArray<UInt8> * null_map = nullptr)
     {
         if constexpr (!std::is_same_v<ToColumn, ColumnFixedString> && !std::is_same_v<ToColumn, ColumnIPv6>)
-            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal return column type {}. Expected IPv6 or FixedString", TypeName<typename ToColumn::ValueType>);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN,
+                            "Illegal return column type {}. Expected IPv6 or FixedString",
+                            TypeName<typename ToColumn::ValueType>);
 
 
         size_t column_size = string_column.size();
@@ -192,7 +194,7 @@ namespace detail
             if (!parse_result)
             {
                 if constexpr (exception_mode == IPStringToNumExceptionMode::Throw)
-                    throw Exception("Invalid ipv6 value", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
+                    throw Exception(ErrorCodes::CANNOT_PARSE_IPV6, "Invalid ipv6 value");
                 else if constexpr (exception_mode == IPStringToNumExceptionMode::Default)
                     vec_res[i] = 0;
                 else if constexpr (exception_mode == IPStringToNumExceptionMode::Null)
@@ -273,7 +275,7 @@ ColumnPtr convertToIPv4(ColumnPtr column, const PaddedPODArray<UInt8> * null_map
         {
             if constexpr (exception_mode == IPStringToNumExceptionMode::Throw)
             {
-                throw Exception("Invalid ipv4 value", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
+                throw Exception(ErrorCodes::CANNOT_PARSE_IPV4, "Invalid ipv4 value");
             }
             else if constexpr (exception_mode == IPStringToNumExceptionMode::Default)
             {

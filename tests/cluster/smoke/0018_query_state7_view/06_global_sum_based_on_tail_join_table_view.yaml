@@ -1,0 +1,79 @@
+tags:
+- query_state
+- view
+- dedup
+description: global sum based on tail join table view state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists test19_state_view7
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream7
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream7 (id string, location string, value float,
+    timestamp datetime64(3) default now64(3))
+- type: wait
+  time: 1
+
+- type: query
+  sql: create view if not exists test19_state_view7 as select a.id, b.type, a.value,
+    a.timestamp from test19_state_stream7 as a join table(view_join) as b on a.id
+    = b.id
+- type: wait
+  name: 1
+
+- name: '19170'
+  type: stream
+  query_id: '19170'
+  query: subscribe to select id, type, count(value) from test19_state_view7 group
+    by id, type order by id, type settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: string
+  - name: type
+    type: string
+  - name: count(value)
+    type: uint64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream7(id, location, value, timestamp) values ('dev1',
+    'ca', 58.3, '2020-02-02 20:00:01') ('dev1', 'ca', 59, '2020-02-02 20:00:02') ('dev2',
+    'ca', 66, '2020-02-02 20:00:03') ('dev1', 'ca', 77, '2020-02-02 20:00:04')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 58.3, '2020-02-02 20:00:01']
+  - [dev1, 'ca', 59, '2020-02-02 20:00:02']
+  - [dev2, 'ca', 66, '2020-02-02 20:00:03']
+  - [dev1, 'ca', 77, '2020-02-02 20:00:04']
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '19170'
+
+- type: check
+  target_name: '19170'
+  expected_result:
+  - [dev1, roof, 3]
+  - [dev2, field, 1]

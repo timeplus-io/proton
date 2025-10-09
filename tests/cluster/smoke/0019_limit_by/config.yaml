@@ -1,0 +1,17 @@
+name: limit_by
+description: Tests covering limit by
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists test20_limit_by_stream
+
+  - type: wait
+    time: 2
+  - type: query
+    sql: create stream test20_limit_by_stream(i int, s string)
+  
+  - type: wait
+    time: 1

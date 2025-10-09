@@ -1,0 +1,87 @@
+description: check virtual columns of pulsar external stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_06
+
+  - type: pulsar
+    name: create
+    topic: test_06
+    partitions: 1
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_06
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_06 (data string)
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='test_06';
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_06 values ('one')('two')('three')
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-06
+    query: select _tp_shard, _tp_sn, to_type_name(_pulsar_message_id), to_type_name(_tp_time), to_type_name(_tp_append_time), to_type_name(_tp_process_time), to_type_name(_tp_message_key), to_type_name(_tp_message_headers), data from table(ex_pulsar_06)
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: _tp_sn
+        type: int64
+      - name: to_type_name(_pulsar_message_id)
+        type: string
+      - name: to_type_name(_tp_time)
+        type: string
+      - name: to_type_name(_tp_append_time)
+        type: string
+      - name: to_type_name(_tp_process_time)
+        type: string
+      - name: to_type_name(_tp_message_key)
+        type: string
+      - name: to_type_name(_tp_message_headers)
+        type: string
+      - name: data
+        type: string
+
+  - type: check
+    target_name: pulsar-06
+    expected_result:
+      - - 0
+        - 0
+        - array(int64)
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - string
+        - map(string, string)
+        - one
+      - - 0
+        - 1
+        - array(int64)
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - string
+        - map(string, string)
+        - two
+      - - 0
+        - 2
+        - array(int64)
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - string
+        - map(string, string)
+        - three

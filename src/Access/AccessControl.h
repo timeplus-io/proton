@@ -42,6 +42,9 @@ class ExternalAuthenticators;
 class AccessChangesNotifier;
 struct Settings;
 
+/// proton: starts
+class MetaStoreAccessStorage;
+/// proton: ends
 
 /// Manages access control entities.
 class AccessControl : public MultipleAccessStorage
@@ -127,11 +130,11 @@ public:
     void checkSettingNameIsAllowed(std::string_view name) const;
 
     /// Allows users without password (by default it's allowed).
-    void setNoPasswordAllowed(const bool allow_no_password_);
+    void setNoPasswordAllowed(bool allow_no_password_);
     bool isNoPasswordAllowed() const;
 
     /// Allows users with plaintext password (by default it's allowed).
-    void setPlaintextPasswordAllowed(const bool allow_plaintext_password_);
+    void setPlaintextPasswordAllowed(bool allow_plaintext_password_);
     bool isPlaintextPasswordAllowed() const;
 
     /// Enables logic that users without permissive row policies can still read rows using a SELECT query.
@@ -140,6 +143,9 @@ public:
     void setEnabledUsersWithoutRowPoliciesCanReadRows(bool enable) { users_without_row_policies_can_read_rows = enable; }
     bool isEnabledUsersWithoutRowPoliciesCanReadRows() const { return users_without_row_policies_can_read_rows; }
 
+
+    void setSettingsConstraintsReplacePrevious(bool enable) { settings_constraints_replace_previous = enable; }
+    bool doesSettingsConstraintsReplacePrevious() const { return settings_constraints_replace_previous; }
 
     std::shared_ptr<const ContextAccess> getContextAccess(
         const UUID & user_id,
@@ -184,6 +190,11 @@ public:
     /// Gets manager of notifications.
     AccessChangesNotifier & getChangesNotifier();
 
+    /// proton: starts
+    /// \return the wrapped MetaStoreAccessStorage. This is used by MetaDataUpdater to do the MetaDB write.
+    std::shared_ptr<MetaStoreAccessStorage> getMetaStoreStorage() const { return metastore_storage; }
+    /// proton: ends;
+
 private:
     class ContextAccessCache;
     class CustomSettingsPrefixes;
@@ -203,6 +214,9 @@ private:
     std::atomic_bool allow_plaintext_password = true;
     std::atomic_bool allow_no_password = true;
     std::atomic_bool users_without_row_policies_can_read_rows = false;
+    std::atomic_bool settings_constraints_replace_previous = false;
+
+    std::shared_ptr<MetaStoreAccessStorage> metastore_storage;
 };
 
 }

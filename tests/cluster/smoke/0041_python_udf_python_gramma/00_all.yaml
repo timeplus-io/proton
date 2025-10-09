@@ -1,0 +1,72 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value int64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getAll(value int64) RETURNS int64 LANGUAGE PYTHON AS $$
+      import pickle
+      class getAll:
+          def __init__(self):
+              self.all = -1
+
+          def serialize(self):
+              data = {}
+              data['all'] = self.all
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.all = data['all']
+
+          def merge(self, other):
+              if other.all == 0:
+                  self.all = other.all
+
+          def process(self, values):
+              tmp_all = all(values)
+              if self.all != 0:
+                  self.all = tmp_all
+
+          def finalize(self):
+              return self.all
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-0-1
+    type: stream
+    query: select getAll(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: int64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values (1)(2)(3);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(value) values (0)(1)(2);
+
+  - type: check
+    target_name: python-udf1-0-1
+    expected_result:
+      - [1]
+      - [0]

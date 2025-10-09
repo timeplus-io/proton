@@ -82,12 +82,14 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 1)
-            throw Exception("Function " + getName() + " requires 1 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} requires 1 arguments", getName());
 
         if (!isInteger(arguments[0].type))
             throw Exception(
-                fmt::format("Function {} requires integer argumengt but given {}", getName(), arguments[0].type->getFamilyName()),
-                ErrorCodes::BAD_ARGUMENTS);
+                ErrorCodes::BAD_ARGUMENTS,
+                "Function {} requires integer argumengt but given {}",
+                getName(),
+                arguments[0].type->getFamilyName());
 
         return std::make_unique<DataTypeInt64>();
     }
@@ -95,11 +97,11 @@ public:
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
     {
         if (!isColumnConst(*arguments[0].column))
-            throw Exception("Function " + getName() + " requires constant argument", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function {} requires constant argument", getName());
 
         auto start_num = assert_cast<const ColumnConst &>(*arguments[0].column).getInt(0);
         return std::make_unique<FunctionToFunctionBaseAdaptor>(
-            std::make_unique<FuntionMonotonic>(start_num),
+            /*stateful_func_creator=*/[start_num]() { return std::make_shared<FuntionMonotonic>(start_num); },
             collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
             return_type);
     }

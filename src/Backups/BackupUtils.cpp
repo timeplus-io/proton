@@ -181,8 +181,10 @@ namespace
                         else
                         {
                             throw Exception(
-                                "Table " + backQuote(element.name.first) + "." + backQuote(element.name.second) + " was specified twice",
-                                ErrorCodes::BACKUP_ELEMENT_DUPLICATE);
+                                ErrorCodes::BACKUP_ELEMENT_DUPLICATE,
+                                "Table {}.{} was specified twice",
+                                backQuote(element.name.first),
+                                backQuote(element.name.second));
                         }
                     }
                     break;
@@ -211,7 +213,8 @@ namespace
                         }
                         else
                         {
-                            throw Exception("Database " + backQuote(element.name.first) + " was specified twice", ErrorCodes::BACKUP_ELEMENT_DUPLICATE);
+                            throw Exception(
+                                ErrorCodes::BACKUP_ELEMENT_DUPLICATE, "Database {} was specified twice", backQuote(element.name.first));
                         }
 
                     }
@@ -230,14 +233,14 @@ namespace
                         if (elements[i].except_list == elements[prev_index].except_list)
                             skip_indices.emplace(i);
                         else
-                            throw Exception("The tag ALL DATABASES was specified twice", ErrorCodes::BACKUP_ELEMENT_DUPLICATE);
+                            throw Exception(ErrorCodes::BACKUP_ELEMENT_DUPLICATE, "The tag ALL DATABASES was specified twice");
                     }
                     break;
                 }
 
                 default:
                     /// replaceElementTypesWithBaseElementTypes() and replaceTemporaryTablesWithTemporaryDatabase() should have removed all other element types.
-                    throw Exception("Unexpected element type: " + std::to_string(static_cast<int>(element.type)), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected element type: {}", element.type);
             }
         }
 
@@ -496,7 +499,7 @@ namespace
                                     : ("Stream " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
                                        + " already exists");
                                 /// proton: ends
-                                throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_STREAM);
+                                throw Exception::createDeprecated(error_message, ErrorCodes::CANNOT_RESTORE_STREAM);
                             }
                         }
                     }
@@ -524,7 +527,7 @@ namespace
                     : ("Could not create stream " + backQuoteIfNeed(new_table_name.first) + "." + backQuoteIfNeed(new_table_name.second)
                        + " for restoring");
                 /// proton: ends
-                throw Exception(error_message, ErrorCodes::CANNOT_RESTORE_STREAM);
+                throw Exception::createDeprecated(error_message, ErrorCodes::CANNOT_RESTORE_STREAM);
             }
 
             String data_path_in_backup = getDataPathInBackup(table_name);
@@ -632,13 +635,13 @@ BackupEntries makeBackupEntries(const Elements & elements, const ContextPtr & co
             }
 
             default:
-                throw Exception("Unexpected element type", ErrorCodes::LOGICAL_ERROR); /// other element types have been removed in deduplicateElements()
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected element type"); /// other element types have been removed in deduplicateElements()
         }
     }
 
     /// A backup cannot be empty.
     if (backup_entries.empty())
-        throw Exception("Backup must not be empty", ErrorCodes::BACKUP_IS_EMPTY);
+        throw Exception(ErrorCodes::BACKUP_IS_EMPTY, "Backup must not be empty");
 
     /// Check that all backup entries are unique.
     ::sort(
@@ -650,7 +653,7 @@ BackupEntries makeBackupEntries(const Elements & elements, const ContextPtr & co
         });
     auto adjacent = std::adjacent_find(backup_entries.begin(), backup_entries.end());
     if (adjacent != backup_entries.end())
-        throw Exception("Cannot write multiple entries with the same name " + quoteString(adjacent->first), ErrorCodes::BACKUP_ELEMENT_DUPLICATE);
+        throw Exception(ErrorCodes::BACKUP_ELEMENT_DUPLICATE, "Cannot write multiple entries with the same name {}", quoteString(adjacent->first));
 
     return backup_entries;
 }
@@ -771,7 +774,7 @@ RestoreObjectsTasks makeRestoreTasks(const Elements & elements, ContextMutablePt
             }
 
             default:
-                throw Exception("Unexpected element type", ErrorCodes::LOGICAL_ERROR); /// other element types have been removed in deduplicateElements()
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected element type"); /// other element types have been removed in deduplicateElements()
         }
     }
 

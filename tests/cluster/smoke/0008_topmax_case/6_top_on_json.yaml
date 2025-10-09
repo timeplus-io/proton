@@ -1,0 +1,37 @@
+tags:
+  - topmax
+description: create a table t_lowcard with low_cardinality type and ingest, query,
+  but of proton-python-driver
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists t_lowcard
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_lowcard (lowcard low_cardinality(string))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_lowcard (lowcard) values ('{@lowcardinalitystring}')
+
+  - type: wait
+    time: 1
+
+  - name: '801'
+    type: stream
+    query: select lowcard from t_lowcard settings seek_to = 'earliest'
+    schema:
+      - name: lowcard
+        type: low_cardinality(string)
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ '{@lowcardinalitystring}' ]

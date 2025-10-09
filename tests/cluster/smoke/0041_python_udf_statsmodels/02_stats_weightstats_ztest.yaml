@@ -1,0 +1,73 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getTsaSeasonalStl(value float64) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from statsmodels.stats.weightstats import ztest
+
+      class getTsaSeasonalStl:
+          def __init__(self):
+              self.stl = 0
+
+          def serialize(self):
+              data = {}
+              data['stl'] = self.stl
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.stl = data['stl']
+
+          def merge(self, other):
+              pass
+
+          def process(self, values):
+              z_stat, p_value = ztest(values)
+              self.stl = p_value
+
+          def finalize(self):
+              return self.stl
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf5-2-1
+    type: stream
+    query: select getTsaSeasonalStl(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values (0.0)(0.11111111)(0.22222222)(0.33333333)(0.44444444)(0.55555556)(0.66666667)(0.77777778)(0.88888889)(1.0);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(value) values (0.1)(0.18888889)(0.27777778)(0.36666667)(0.45555556)(0.54444444)(0.63333333)(0.72222222)(0.81111111)(0.9);
+
+  - type: check
+    target_name: python-udf5-2-1
+    expected_result:
+      - [2.6003831259784736e-06]
+      - [4.225348890133218e-09]

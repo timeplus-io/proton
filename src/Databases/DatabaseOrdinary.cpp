@@ -1,6 +1,7 @@
 #include <filesystem>
 
 #include <Core/Settings.h>
+#include <Databases/DatabaseFactory.h>
 #include <Databases/DatabaseOnDisk.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabasesCommon.h>
@@ -24,8 +25,17 @@
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
 #include <Common/logger_useful.h>
+#include <Common/CurrentMetrics.h>
+
+#include <Interpreters/MetadataHelper.h>
 
 namespace fs = std::filesystem;
+
+namespace CurrentMetrics
+{
+    extern const Metric DatabaseOrdinaryThreads;
+    extern const Metric DatabaseOrdinaryThreadsActive;
+}
 
 namespace DB
 {
@@ -33,6 +43,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int UNKNOWN_DATABASE_ENGINE;
 }
 
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
@@ -45,7 +56,8 @@ namespace
         DatabaseOrdinary & database,
         const String & database_name,
         const String & metadata_path,
-        bool force_restore)
+        bool force_restore,
+        Int32 schema_version)
     {
         try
         {
@@ -54,7 +66,8 @@ namespace
                 database_name,
                 database.getTableDataPath(query),
                 context,
-                force_restore);
+                force_restore,
+                schema_version);
 
             /// proton: starts. issue-739, first change the in memory create query to avoid race
             const auto & new_create_query = parseCreateQueryFromAST(&query, database_name, table_name);
@@ -65,11 +78,9 @@ namespace
         }
         catch (Exception & e)
         {
-            /// proton: starts
             e.addMessage(
                 "Cannot attach stream " + backQuote(database_name) + "." + backQuote(query.getTable()) + " from metadata file " + metadata_path
                 + " from query " + serializeAST(query));
-            /// proton: ends
             throw;
         }
     }
@@ -104,7 +115,7 @@ void DatabaseOrdinary::loadStoredObjects(
     std::atomic<size_t> dictionaries_processed{0};
     std::atomic<size_t> tables_processed{0};
 
-    ThreadPool pool;
+    ThreadPool pool(CurrentMetrics::DatabaseOrdinaryThreads, CurrentMetrics::DatabaseOrdinaryThreadsActive);
 
     /// We must attach dictionaries before attaching tables
     /// because while we're attaching tables we may need to have some dictionaries attached
@@ -117,15 +128,14 @@ void DatabaseOrdinary::loadStoredObjects(
     for (const auto & name_with_path_and_query : metadata.parsed_tables)
     {
         const auto & name = name_with_path_and_query.first;
-        const auto & path = name_with_path_and_query.second.path;
         const auto & ast = name_with_path_and_query.second.ast;
         const auto & create_query = ast->as<const ASTCreateQuery &>();
 
-        if (create_query.is_dictionary)
+        if (create_query.isDictionary())
         {
             pool.scheduleOrThrowOnError([&]()
             {
-                loadTableFromMetadata(local_context, path, name, ast, force_restore);
+                loadTableFromMetadata(local_context, name, name_with_path_and_query.second, force_restore);
 
                 /// Messages, so that it's not boring to wait for the server to load for a long time.
                 logAboutProgress(log, ++dictionaries_processed, metadata.total_dictionaries, watch);
@@ -139,15 +149,14 @@ void DatabaseOrdinary::loadStoredObjects(
     for (const auto & name_with_path_and_query : metadata.parsed_tables)
     {
         const auto & name = name_with_path_and_query.first;
-        const auto & path = name_with_path_and_query.second.path;
         const auto & ast = name_with_path_and_query.second.ast;
         const auto & create_query = ast->as<const ASTCreateQuery &>();
 
-        if (!create_query.is_dictionary)
+        if (!create_query.isDictionary())
         {
             pool.scheduleOrThrowOnError([&]()
             {
-                loadTableFromMetadata(local_context, path, name, ast, force_restore);
+                loadTableFromMetadata(local_context, name, name_with_path_and_query.second, force_restore);
 
                 /// Messages, so that it's not boring to wait for the server to load for a long time.
                 logAboutProgress(log, ++tables_processed, total_tables, watch);
@@ -204,9 +213,7 @@ void DatabaseOrdinary::loadTablesMetadata(ContextPtr local_context, ParsedTables
                 if (fs::exists(full_path.string() + detached_suffix))
                 {
                     const std::string table_name = unescapeForFileName(file_name.substr(0, file_name.size() - 4));
-                    /// proton: starts
                     LOG_DEBUG(log, "Skipping permanently detached stream {}.", backQuote(table_name));
-                    /// proton: ends
                     return;
                 }
 
@@ -214,7 +221,10 @@ void DatabaseOrdinary::loadTablesMetadata(ContextPtr local_context, ParsedTables
                 TableNamesSet loading_dependencies = getDependenciesSetFromCreateQuery(getContext(), qualified_name, ast);
 
                 std::lock_guard lock{metadata.mutex};
-                metadata.parsed_tables[qualified_name] = ParsedTableMetadata{full_path.string(), ast};
+
+                /// proton: starts For pure local system tables assign local placements
+                metadata.parsed_tables[qualified_name] = ParsedTableMetadata{full_path.string(), ast, 1};
+                /// proton: ends
                 if (loading_dependencies.empty())
                 {
                     metadata.independent_database_objects.emplace_back(std::move(qualified_name));
@@ -226,7 +236,7 @@ void DatabaseOrdinary::loadTablesMetadata(ContextPtr local_context, ParsedTables
                     assert(metadata.dependencies_info[qualified_name].dependencies.empty());
                     metadata.dependencies_info[qualified_name].dependencies = std::move(loading_dependencies);
                 }
-                metadata.total_dictionaries += create_query->is_dictionary;
+                metadata.total_dictionaries += create_query->isDictionary();
             }
         }
         catch (Exception & e)
@@ -242,22 +252,58 @@ void DatabaseOrdinary::loadTablesMetadata(ContextPtr local_context, ParsedTables
     size_t dictionaries_in_database = metadata.total_dictionaries - prev_total_dictionaries;
     size_t tables_in_database = objects_in_database - dictionaries_in_database;
 
-    LOG_INFO(log, "Metadata processed, database {} has {} tables and {} dictionaries in total.",
+    LOG_INFO(log, "local Metadata processed, database {} has {} local tables and {} dictionaries in total.",
              database_name, tables_in_database, dictionaries_in_database);
+
+    /// proton : starts. A database can contain different type of tables
+    /// 1) local tables which are private only to that node (for example, system database most of the time contains these kind of tables)
+    /// 2) distributed tables which are visible to all nodes (for example, default database most of the time contains these kind of tables)
+    ///
+    /// The above logic loads the metadata for private tables which are defined in plain text files on file systems
+    /// Then following logic loads metadata for distributed tables which are persisted in metastore
+    loadTablesMetadataFromMetaStore(local_context, metadata);
+
+    loadAlertsMetadata(local_context, metadata);
+    /// proton: ends
 }
 
-void DatabaseOrdinary::loadTableFromMetadata(ContextMutablePtr local_context, const String & file_path, const QualifiedTableName & name, const ASTPtr & ast, bool force_restore)
+void DatabaseOrdinary::loadTableFromMetadata(ContextMutablePtr local_context, const QualifiedTableName & name, const ParsedTableMetadata & parsed_meta_data, bool force_restore)
 {
     assert(name.database == database_name);
-    const auto & create_query = ast->as<const ASTCreateQuery &>();
 
-    tryAttachTable(
-        local_context,
-        create_query,
-        *this,
-        name.database,
-        file_path,
-        force_restore);
+    /// proton: starts
+    if (parsed_meta_data.ast == nullptr)
+    {
+        chassert(alert_descriptors.contains(name.table));
+        try
+        {
+            loadAlert(name, local_context);
+        }
+        catch (const Exception & ex)
+        {
+            LOG_ERROR(log, "Failed to load alert {}, error={}", name, ex.message());
+        }
+        return;
+    }
+    /// proton: ends
+
+    const auto & create_query = parsed_meta_data.ast->as<const ASTCreateQuery &>();
+
+    try
+    {
+        tryAttachTable(
+            local_context,
+            create_query,
+            *this,
+            name.database,
+            parsed_meta_data.path,
+            force_restore,
+            parsed_meta_data.schema_version);
+    }
+    catch (const Exception & ex)
+    {
+        LOG_INFO(log, "Failed to load table, error={} ddl={}", ex.message(), queryToString(create_query, true));
+    }
 }
 
 void DatabaseOrdinary::startupTables(ThreadPool & thread_pool, bool /*force_restore*/, bool /*force_attach*/)
@@ -292,14 +338,24 @@ void DatabaseOrdinary::startupTables(ThreadPool & thread_pool, bool /*force_rest
     thread_pool.wait();
 }
 
-void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & table_id, const StorageInMemoryMetadata & metadata)
+void DatabaseOrdinary::alterTable(
+    ContextPtr local_context,
+    const StorageID & table_id,
+    const StorageInMemoryMetadata & metadata,
+    String /*alter_command*/,
+    std::vector<String> /*alter_command_ast*/)
 {
     String table_name = table_id.table_name;
     /// Read the definition of the table and replace the necessary parts with new ones.
-    String table_metadata_path = getObjectMetadataPath(table_name);
-    String table_metadata_tmp_path = table_metadata_path + ".tmp";
+    String table_metadata_path;
+    String table_metadata_tmp_path;
     String statement;
 
+    StoragePtr table = tryGetTable(table_name, local_context);
+    if (!table)
+        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist", backQuote(database_name), backQuote(table_name));
+
+    table_metadata_path = getObjectMetadataPath(table_name);
     {
         ReadBufferFromFile in(table_metadata_path, METADATA_FILE_BUFFER_SIZE);
         readStringUntilEOF(statement, in);
@@ -317,6 +373,8 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
     applyMetadataChangesToCreateQuery(ast, metadata);
 
     statement = getObjectDefinitionFromCreateQuery(ast);
+
+    table_metadata_tmp_path = table_metadata_path + ".tmp";
     {
         WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
         writeString(statement, out);
@@ -332,10 +390,6 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
     commitAlterTable(table_id, table_metadata_tmp_path, table_metadata_path, statement, local_context);
 
     /// proton: starts.
-    StoragePtr table = tryGetTable(table_name, local_context);
-    if (!table)
-        throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist",
-                    backQuote(database_name), backQuote(table_name));
     const auto & new_create_query = parseCreateQueryFromAST(ast, database_name, table_id.table_name);
     table->setInMemoryCreateQuery(new_create_query);
     /// proton: ends.
@@ -355,4 +409,19 @@ void DatabaseOrdinary::commitAlterTable(const StorageID &, const String & table_
     }
 }
 
+void registerDatabaseOrdinary(DatabaseFactory & factory)
+{
+    auto create_fn = [](const DatabaseFactory::Arguments & args)
+    {
+        if (!args.create_query.attach && !args.context->getSettingsRef().allow_deprecated_database_ordinary)
+            throw Exception(
+                ErrorCodes::UNKNOWN_DATABASE_ENGINE,
+                "Ordinary database engine is deprecated (see also allow_deprecated_database_ordinary setting)");
+        return make_shared<DatabaseOrdinary>(
+            args.database_name,
+            args.metadata_path,
+            args.context);
+    };
+    factory.registerDatabase("Ordinary", create_fn);
+}
 }

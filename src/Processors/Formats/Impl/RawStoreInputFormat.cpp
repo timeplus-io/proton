@@ -63,8 +63,9 @@ RawStoreInputFormat::RawStoreInputFormat(
 
     if (!time_extraction_type.empty() && time_extraction_type != "json_path" && time_extraction_type != "regex")
         throw Exception(
-            "time_extraction_type should be either 'json' or 'regex' " + time_extraction_type + " is not supported.",
-            ErrorCodes::UNRECOGNIZED_ARGUMENTS);
+            ErrorCodes::UNRECOGNIZED_ARGUMENTS,
+            "time_extraction_type should be either 'json' or 'regex' {} is not supported.",
+            time_extraction_type);
 
     if (time_extraction_type == "regex")
     {
@@ -91,7 +92,7 @@ RawStoreInputFormat::RawStoreInputFormat(
                 time_extraction_rule);
     }
     else if (time_extraction_type == "json_path" && time_extraction_rule.empty())
-        throw Exception("'time_extraction_rule' is empty", ErrorCodes::UNRECOGNIZED_ARGUMENTS);
+        throw Exception(ErrorCodes::UNRECOGNIZED_ARGUMENTS, "'time_extraction_rule' is empty");
 
     prev_positions.resize(num_columns);
     raw_col_idx = columnIndex("_raw", 0);
@@ -167,15 +168,15 @@ static inline void skipColonDelimeter(ReadBuffer & istr)
 void RawStoreInputFormat::skipUnknownField(StringRef name_ref)
 {
     if (!format_settings.skip_unknown_fields)
-        throw Exception("Unknown field found while parsing JSONEachRow format: " + name_ref.toString(), ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown field found while parsing JSONEachRow format: {}", name_ref);
 
-    skipJSONField(*in, name_ref);
+    skipJSONField(*in, std::string_view(name_ref.data, name_ref.size), format_settings.json);
 }
 
 void RawStoreInputFormat::readField(size_t index, MutableColumns & columns)
 {
     if (seen_columns[index])
-        throw Exception("Duplicate field found while parsing JSONEachRow format: " + columnName(index), ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Duplicate field found while parsing JSONEachRow format: {}", columnName(index));
 
     try
     {
@@ -186,19 +187,19 @@ void RawStoreInputFormat::readField(size_t index, MutableColumns & columns)
         if (yield_strings)
         {
             String str;
-            readJSONString(str, *in);
+            readJSONString(str, *in, format_settings.json);
 
             ReadBufferFromString buf(str);
 
             if (format_settings.null_as_default && !type->isNullable())
-                read_columns[index] = SerializationNullable::deserializeWholeTextImpl(*columns[index], buf, format_settings, serialization);
+                read_columns[index] = SerializationNullable::deserializeNullAsDefaultOrNestedWholeText(*columns[index], buf, format_settings, serialization);
             else
                 serialization->deserializeWholeText(*columns[index], buf, format_settings);
         }
         else
         {
             if (format_settings.null_as_default && !type->isNullable())
-                read_columns[index] = SerializationNullable::deserializeTextJSONImpl(*columns[index], *in, format_settings, serialization);
+                read_columns[index] = SerializationNullable::deserializeNullAsDefaultOrNestedTextJSON(*columns[index], *in, format_settings, serialization);
             else
                 serialization->deserializeTextJSON(*columns[index], *in, format_settings);
         }
@@ -215,7 +216,7 @@ inline bool RawStoreInputFormat::advanceToNextKey(size_t key_index)
     skipWhitespaceIfAny(*in);
 
     if (in->eof())
-        throw ParsingException("Unexpected end of stream while parsing JSONEachRow format", ErrorCodes::CANNOT_READ_ALL_DATA);
+        throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA, "Unexpected end of stream while parsing JSONEachRow format");
     else if (*in->position() == '}')
     {
         ++in->position();
@@ -253,7 +254,7 @@ void RawStoreInputFormat::readJSONObject(MutableColumns & columns)
             if (column_index == UNKNOWN_FIELD)
                 skipUnknownField(name_ref);
             else
-                throw Exception("Logical error: illegal value of column_index", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: illegal value of column_index");
         }
         else
         {
@@ -268,7 +269,7 @@ void RawStoreInputFormat::readJSONObject(MutableColumns & columns)
 
     if (!seen_columns[raw_col_idx] || !read_columns[raw_col_idx])
     {
-        throw Exception("Logical error: no _raw column in the input data", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: no _raw column in the input data");
     }
 
     if (format_settings.rawstore.rawstore_time_extraction_type == "json_path")
@@ -288,7 +289,7 @@ void RawStoreInputFormat::extractTimeFromRawByJSON(IColumn & time_col, IColumn &
     if (raw_col.getDataType() == TypeIndex::String)
         raw = raw_col.getDataAt(raw_col.size() - 1);
     else
-        throw Exception("_raw column is not String type", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "_raw column is not String type");
 
     /// To avoid extra memory copy,
     struct Membuf : std::streambuf
@@ -306,7 +307,7 @@ void RawStoreInputFormat::extractTimeFromRawByJSON(IColumn & time_col, IColumn &
     catch (Poco::JSON::JSONException & exception)
     {
         std::cout << exception.message() << std::endl;
-        throw Exception("parse _raw field as JSON failed, inner exception is: " + exception.message(), ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "parse _raw field as JSON failed, inner exception is: {}", exception.message());
     }
 
     Poco::JSON::Query query(result);
@@ -314,8 +315,9 @@ void RawStoreInputFormat::extractTimeFromRawByJSON(IColumn & time_col, IColumn &
     std::string time = query.findValue(format_settings.rawstore.rawstore_time_extraction_rule.c_str(), "");
     if (time.empty())
         throw Exception(
-            "extract _time from _raw failed with rule: " + format_settings.rawstore.rawstore_time_extraction_rule,
-            ErrorCodes::INCORRECT_DATA);
+            ErrorCodes::INCORRECT_DATA,
+            "extract _time from _raw failed with rule: {}",
+            format_settings.rawstore.rawstore_time_extraction_rule);
 
     /// Wrap the time with \" to allow deserializeTextJSON to get the correct value
     String s;
@@ -335,7 +337,7 @@ void RawStoreInputFormat::extractTimeFromRawByRegex(IColumn & time_col, IColumn 
     if (raw_col.getDataType() == TypeIndex::String)
         raw = raw_col.getDataAt(raw_col.size() - 1);
     else
-        throw Exception("_raw column is not String type", ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "_raw column is not String type");
 
     re2::StringPiece in{raw.data, raw.size};
     int num_captures = time_extraction_regex->NumberOfCapturingGroups() + 1;
@@ -343,9 +345,10 @@ void RawStoreInputFormat::extractTimeFromRawByRegex(IColumn & time_col, IColumn 
 
     if (!time_extraction_regex->Match(in, 0, in.size(), re2::RE2::Anchor::UNANCHORED, matches, num_captures))
         throw Exception(
-            "Cannot extract _time from " + in.as_string()
-                + " time_extraction_rule: " + format_settings.rawstore.rawstore_time_extraction_rule,
-            ErrorCodes::INCORRECT_DATA);
+            ErrorCodes::INCORRECT_DATA,
+            "Cannot extract _time from '{}', time_extraction_rule: {}",
+            in,
+            format_settings.rawstore.rawstore_time_extraction_rule);
 
     String s;
     s.append("\"");
@@ -361,7 +364,7 @@ void RawStoreInputFormat::extractTimeFromRaw(IColumn & time_col, IColumn & raw_c
 {
     StringRef raw;
     if (raw_col.getDataType() != TypeIndex::String)
-        throw Exception("_raw column is not String type", ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "_raw column is not String type");
 
     raw = raw_col.getDataAt(raw_col.size() - 1);
     re2::StringPiece in{raw.data, std::min(raw.size, MAX_REGEX_SCAN_SIZE)};

@@ -1,0 +1,59 @@
+tags:
+  - session window
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: stream session window with multiple session keys, triggered by interval,
+  2s interval with session_size 10, session based on hop
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '701'
+    type: stream
+    query: |
+      with transformed as (
+      select id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') as transformed_timestamp
+      from test7_session
+      )
+      select max(value), window_start, window_end, id, location
+      from session(transformed, transformed_timestamp, 2s)
+      partition by id, location
+      group by window_start, window_end
+    schema:
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: id
+        type: string
+      - name: location
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 57.3, '{"create_time":"2020-02-02 20:00:00.000"}', '2020-02-02 20:00:00+00:00')
+        ('dev2', 'bj', 58.3, '{"create_time":"2020-02-02 20:00:01.000"}', '2020-02-02 20:00:01+00:00')
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 66, '{"create_time":"2020-02-02 20:00:02"}', '2020-02-02 20:00:02+00:00')
+        ('dev2', 'ca', 60, '{"create_time":"2020-02-02 20:00:02"}', '2020-02-02 20:00:02+00:00')
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev2', 'ca', 67, '{"create_time":"2020-02-02 20:00:15"}', '2020-02-02 20:00:15+00:00')
+
+  - type: check
+    target_name: '701'
+    expected_result:
+      - [ '57.3', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:02+00:00', dev1, ca ]
+      - [ '60', '2020-02-02 20:00:02+00:00', '2020-02-02 20:00:12+00:00', dev2, ca ]
+

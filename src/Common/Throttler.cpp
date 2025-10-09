@@ -38,7 +38,7 @@ Throttler::Throttler(size_t max_speed_, size_t limit_, const char * limit_exceed
     , parent(parent_)
 {}
 
-uint64_t Throttler::add(size_t amount)
+UInt64 Throttler::add(size_t amount)
 {
     // Values obtained under lock to be checked after release
     size_t count_value;
@@ -58,13 +58,13 @@ uint64_t Throttler::add(size_t amount)
     }
 
     if (limit && count_value > limit)
-        throw Exception(limit_exceeded_exception_message + std::string(" Maximum: ") + toString(limit), ErrorCodes::LIMIT_EXCEEDED);
+        throw Exception::createDeprecated(limit_exceeded_exception_message + std::string(" Maximum: ") + toString(limit), ErrorCodes::LIMIT_EXCEEDED);
 
     /// Wait unless there is positive amount of tokens - throttling
-    int64_t sleep_time = 0;
+    Int64 sleep_time = 0;
     if (max_speed && tokens_value < 0)
     {
-        sleep_time = static_cast<int64_t>(-tokens_value / max_speed * NS);
+        sleep_time = static_cast<Int64>(-tokens_value / max_speed * NS);
         accumulated_sleep += sleep_time;
         sleepForNanoseconds(sleep_time);
         accumulated_sleep -= sleep_time;
@@ -74,7 +74,7 @@ uint64_t Throttler::add(size_t amount)
     if (parent)
         sleep_time += parent->add(amount);
 
-    return static_cast<uint64_t>(sleep_time);
+    return static_cast<UInt64>(sleep_time);
 }
 
 void Throttler::reset()

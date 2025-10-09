@@ -1,0 +1,4 @@
+name: random_stream
+description: Tests covering random stream.
+tags:
+- smoke

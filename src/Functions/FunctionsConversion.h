@@ -1,65 +1,72 @@
 #pragma once
 
-#include "Common/Exception.h"
 #include <cstddef>
 #include <type_traits>
 
-#include <IO/WriteBufferFromVector.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/Operators.h>
-#include <IO/parseDateTimeBestEffort.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
+#include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnLowCardinality.h>
+#include <Columns/ColumnMap.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnObject.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnStringHelpers.h>
+#include <Columns/ColumnTuple.h>
+#include <Columns/ColumnVariant.h>
+#include <Columns/ColumnDynamic.h>
+#include <Columns/ColumnsCommon.h>
+#include <Core/AccurateComparison.h>
+#include <Core/Types.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypeInterval.h>
-#include <DataTypes/DataTypeAggregateFunction.h>
-#include <DataTypes/DataTypeObject.h>
-#include <DataTypes/ObjectUtils.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNested.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeObject.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeVariant.h>
+#include <DataTypes/DataTypeDynamic.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypesBinaryEncoding.h>
+#include <DataTypes/ObjectUtils.h>
 #include <DataTypes/Serializations/SerializationDecimal.h>
 #include <Formats/FormatSettings.h>
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnConst.h>
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnTuple.h>
-#include <Columns/ColumnMap.h>
-#include <Columns/ColumnObject.h>
-#include <Columns/ColumnsCommon.h>
-#include <Columns/ColumnStringHelpers.h>
-#include <Common/assert_cast.h>
-#include <Common/Concepts.h>
-#include <Common/quoteString.h>
-#include <Core/AccurateComparison.h>
-#include <Functions/IFunctionAdaptors.h>
+#include <Formats/FormatFactory.h>
+#include <Functions/CastOverloadResolver.h>
+#include <Functions/DateTimeTransforms.h>
 #include <Functions/FunctionsMiscellaneous.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/DateTimeTransforms.h>
-#include <Functions/toFixedString.h>
-#include <Functions/TransformDateTime64.h>
 #include <Functions/FunctionsCodingIP.h>
-#include <DataTypes/DataTypeLowCardinality.h>
-#include <Columns/ColumnLowCardinality.h>
+#include <Functions/IFunctionAdaptors.h>
+#include <Functions/TransformDateTime64.h>
+#include <Functions/toFixedString.h>
+#include <IO/Operators.h>
+#include <IO/ReadBufferFromMemory.h>
+#include <IO/WriteBufferFromVector.h>
+#include <IO/parseDateTimeBestEffort.h>
 #include <Interpreters/Context.h>
+#include <Common/Concepts.h>
+#include <Common/Exception.h>
 #include <Common/HashTable/HashMap.h>
-#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <Common/IPv6ToBinary.h>
-#include "DataTypes/IDataType.h"
-#include <Core/Types.h>
+#include <Common/assert_cast.h>
+#include <Common/quoteString.h>
 
 
 namespace DB
@@ -68,6 +75,9 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ATTEMPT_TO_READ_AFTER_EOF;
+    /// proton: starts.
+    extern const int CANNOT_PARSE_VALUE;
+    /// proton: ends.
     extern const int CANNOT_PARSE_NUMBER;
     extern const int CANNOT_READ_ARRAY_FROM_TEXT;
     extern const int CANNOT_PARSE_INPUT_ASSERTION_FAILED;
@@ -103,7 +113,7 @@ inline UInt32 extractToDecimalScale(const ColumnWithTypeAndName & named_column)
         || checkAndGetDataType<DataTypeUInt16>(arg_type)
         || checkAndGetDataType<DataTypeUInt8>(arg_type);
     if (!ok)
-        throw Exception("Illegal type of to_decimal() scale " + named_column.type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type of to_decimal() scale {}", named_column.type->getName());
 
     Field field;
     named_column.column->get(0, field);
@@ -150,8 +160,8 @@ struct ConvertImpl
         if (std::is_same_v<Name, NameToUnixTimestamp>)
         {
             if (isDateOrDate32(named_from.type))
-                throw Exception("Illegal type " + named_from.type->getName() + " of first argument of function " + Name::name,
-                    ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal type {} of first argument of function {}",
+                    named_from.type->getName(), Name::name);
         }
 
         if constexpr ((IsDataTypeDecimal<FromDataType> || IsDataTypeDecimal<ToDataType>)
@@ -159,8 +169,8 @@ struct ConvertImpl
         {
             if constexpr (!IsDataTypeDecimalOrNumber<FromDataType> || !IsDataTypeDecimalOrNumber<ToDataType>)
             {
-                throw Exception("Illegal column " + named_from.column->getName() + " of first argument of function " + Name::name,
-                    ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+                    named_from.column->getName(), Name::name);
             }
         }
 
@@ -211,20 +221,34 @@ struct ConvertImpl
                     }
                 }
 
-                if constexpr (std::is_same_v<FromDataType, DataTypeUUID> != std::is_same_v<ToDataType, DataTypeUUID>)
+                if constexpr (std::is_same_v<FromDataType, DataTypeUUID> && std::is_same_v<ToDataType, DataTypeUInt128>)
                 {
-                    throw Exception("Conversion between numeric types and uuid is not supported. Probably the passed uuid is unquoted", ErrorCodes::NOT_IMPLEMENTED);
+                    static_assert(
+                        std::is_same_v<DataTypeUInt128::FieldType, DataTypeUUID::FieldType::UnderlyingType>,
+                        "UInt128 and UUID types must be same");
+
+                    vec_to[i].items[1] = vec_from[i].toUnderType().items[0];
+                    vec_to[i].items[0] = vec_from[i].toUnderType().items[1];
+                }
+                else if constexpr (std::is_same_v<FromDataType, DataTypeUUID> != std::is_same_v<ToDataType, DataTypeUUID>)
+                {
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                                    "Conversion between numeric types and uuid is not supported. "
+                                    "Probably the passed uuid is unquoted");
                 }
                 else if constexpr (
                     (std::is_same_v<FromDataType, DataTypeIPv4> != std::is_same_v<ToDataType, DataTypeIPv4>)
                     && !(is_any_of<FromDataType, DataTypeUInt8, DataTypeUInt16, DataTypeUInt32, DataTypeUInt64, DataTypeIPv6> || is_any_of<ToDataType, DataTypeUInt32, DataTypeUInt64, DataTypeUInt128, DataTypeUInt256, DataTypeIPv6>)
                 )
                 {
-                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Conversion from {} to {} is not supported", TypeName<typename FromDataType::FieldType>, TypeName<typename ToDataType::FieldType>);
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Conversion from {} to {} is not supported",
+                                    TypeName<typename FromDataType::FieldType>, TypeName<typename ToDataType::FieldType>);
                 }
                 else if constexpr (std::is_same_v<FromDataType, DataTypeIPv6> != std::is_same_v<ToDataType, DataTypeIPv6> && !(std::is_same_v<ToDataType, DataTypeIPv4> || std::is_same_v<FromDataType, DataTypeIPv4>))
                 {
-                    throw Exception("Conversion between numeric types and IPv6 is not supported. Probably the passed IPv6 is unquoted", ErrorCodes::NOT_IMPLEMENTED);
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                                    "Conversion between numeric types and IPv6 is not supported. "
+                                    "Probably the passed IPv6 is unquoted");
                 }
                 else
                 {
@@ -259,7 +283,7 @@ struct ConvertImpl
                             else if constexpr (IsDataTypeNumber<FromDataType> && IsDataTypeDecimal<ToDataType>)
                                 vec_to[i] = convertToDecimal<FromDataType, ToDataType>(vec_from[i], col_to->getScale());
                             else
-                                throw Exception("Unsupported data type in conversion function", ErrorCodes::CANNOT_CONVERT_TYPE);
+                                throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Unsupported data type in conversion function");
                         }
                     }
                     else
@@ -276,7 +300,7 @@ struct ConvertImpl
                                     continue;
                                 }
                                 else
-                                    throw Exception("Unexpected inf or nan to integer conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
+                                    throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Unexpected inf or nan to integer conversion");
                             }
                         }
 
@@ -294,10 +318,8 @@ struct ConvertImpl
                                 }
                                 else
                                 {
-                                    throw Exception(
-                                        "Value in column " + named_from.column->getName() + " cannot be safely converted into type "
-                                            + result_type->getName(),
-                                        ErrorCodes::CANNOT_CONVERT_TYPE);
+                                    throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Value in column {} cannot be safely converted into type {}",
+                                        named_from.column->getName(), result_type->getName());
                                 }
                             }
                         }
@@ -369,8 +391,8 @@ struct ConvertImpl
                 return col_to;
         }
         else
-            throw Exception("Illegal column " + named_from.column->getName() + " of first argument of function " + Name::name,
-                ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+                named_from.column->getName(), Name::name);
     }
 };
 
@@ -1132,13 +1154,21 @@ inline void convertFromTime<DataTypeDateTime>(DataTypeDateTime::FieldType & x, t
 /** Conversion of strings to numbers, dates, datetimes: through parsing.
   */
 template <typename DataType>
-void parseImpl(typename DataType::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+void parseImpl(typename DataType::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool precise_float_parsing)
 {
-    readText(x, rb);
+    if constexpr (std::is_floating_point_v<typename DataType::FieldType>)
+    {
+        if (precise_float_parsing)
+            readFloatTextPrecise(x, rb);
+        else
+            readFloatTextFast(x, rb);
+    }
+    else
+        readText(x, rb);
 }
 
 template <>
-inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     DayNum tmp(0);
     readDateText(tmp, rb);
@@ -1146,7 +1176,7 @@ inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb
 }
 
 template <>
-inline void parseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline void parseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     ExtendedDayNum tmp(0);
     readDateText(tmp, rb);
@@ -1156,7 +1186,7 @@ inline void parseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuffer 
 
 // NOTE: no need of extra overload of DateTime64, since readDateTimeText64 has different signature and that case is explicitly handled in the calling code.
 template <>
-inline void parseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone)
+inline void parseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone, bool)
 {
     time_t time = 0;
     readDateTimeText(time, rb, *time_zone);
@@ -1164,7 +1194,7 @@ inline void parseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuf
 }
 
 template <>
-inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     UUID tmp;
     readUUIDText(tmp, rb);
@@ -1172,7 +1202,7 @@ inline void parseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer & rb
 }
 
 template <>
-inline void parseImpl<DataTypeIPv4>(DataTypeIPv4::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline void parseImpl<DataTypeIPv4>(DataTypeIPv4::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     IPv4 tmp;
     readIPv4Text(tmp, rb);
@@ -1180,7 +1210,7 @@ inline void parseImpl<DataTypeIPv4>(DataTypeIPv4::FieldType & x, ReadBuffer & rb
 }
 
 template <>
-inline void parseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline void parseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     IPv6 tmp;
     readIPv6Text(tmp, rb);
@@ -1188,16 +1218,21 @@ inline void parseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer & rb
 }
 
 template <typename DataType>
-bool tryParseImpl(typename DataType::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+bool tryParseImpl(typename DataType::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool precise_float_parsing)
 {
     if constexpr (std::is_floating_point_v<typename DataType::FieldType>)
-        return tryReadFloatText(x, rb);
+    {
+        if (precise_float_parsing)
+            return tryReadFloatTextPrecise(x, rb);
+        else
+            return tryReadFloatTextFast(x, rb);
+    }
     else /*if constexpr (is_integer_v<typename DataType::FieldType>)*/
         return tryReadIntText(x, rb);
 }
 
 template <>
-inline bool tryParseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline bool tryParseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     DayNum tmp(0);
     if (!tryReadDateText(tmp, rb))
@@ -1207,7 +1242,7 @@ inline bool tryParseImpl<DataTypeDate>(DataTypeDate::FieldType & x, ReadBuffer &
 }
 
 template <>
-inline bool tryParseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline bool tryParseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     ExtendedDayNum tmp(0);
     if (!tryReadDateText(tmp, rb))
@@ -1217,7 +1252,7 @@ inline bool tryParseImpl<DataTypeDate32>(DataTypeDate32::FieldType & x, ReadBuff
 }
 
 template <>
-inline bool tryParseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone)
+inline bool tryParseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone, bool)
 {
     time_t tmp = 0;
     if (!tryReadDateTimeText(tmp, rb, *time_zone))
@@ -1227,7 +1262,7 @@ inline bool tryParseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, Read
 }
 
 template <>
-inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     UUID tmp;
     if (!tryReadUUIDText(tmp, rb))
@@ -1238,7 +1273,7 @@ inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer &
 }
 
 template <>
-inline bool tryParseImpl<DataTypeIPv4>(DataTypeIPv4::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline bool tryParseImpl<DataTypeIPv4>(DataTypeIPv4::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     IPv4 tmp;
     if (!tryReadIPv4Text(tmp, rb))
@@ -1249,7 +1284,7 @@ inline bool tryParseImpl<DataTypeIPv4>(DataTypeIPv4::FieldType & x, ReadBuffer &
 }
 
 template <>
-inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer & rb, const DateLUTImpl *, bool)
 {
     IPv6 tmp;
     if (!tryReadIPv6Text(tmp, rb))
@@ -1267,7 +1302,7 @@ inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer &
     WriteBufferFromOwnString message_buf;
     message_buf << "Cannot parse string " << quote << String(read_buffer.buffer().begin(), read_buffer.buffer().size())
                 << " as " << result_type.getName()
-                << ": syntax error";
+                << ": parsing error";
 
     if (read_buffer.offset())
         message_buf << " at position " << read_buffer.offset()
@@ -1279,7 +1314,7 @@ inline bool tryParseImpl<DataTypeIPv6>(DataTypeIPv6::FieldType & x, ReadBuffer &
     if (isNativeNumber(result_type) && !(result_type.getName() == "ipv4" || result_type.getName() == "ipv6"))
         message_buf << ". Note: there are to_" << Poco::toLower(result_type.getName()) << "_or_zero and to_" << Poco::toLower(result_type.getName()) << "_or_null functions, which returns zero/null instead of throwing exception.";
 
-    throw Exception(message_buf.str(), ErrorCodes::CANNOT_PARSE_TEXT);
+    throw Exception(PreformattedMessage{message_buf.str(), "Cannot parse string {} as {}: syntax error {}"}, ErrorCodes::CANNOT_PARSE_TEXT);
 }
 
 
@@ -1369,12 +1404,12 @@ struct ConvertThroughParsing
         const ColumnFixedString * col_from_fixed_string = checkAndGetColumn<ColumnFixedString>(col_from);
 
         if (std::is_same_v<FromDataType, DataTypeString> && !col_from_string)
-            throw Exception(
-                "Illegal column " + col_from->getName() + " of first argument of function " + Name::name, ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+                col_from->getName(), Name::name);
 
         if (std::is_same_v<FromDataType, DataTypeFixedString> && !col_from_fixed_string)
-            throw Exception(
-                "Illegal column " + col_from->getName() + " of first argument of function " + Name::name, ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+                col_from->getName(), Name::name);
 
         size_t size = input_rows_count;
         typename ColVecTo::MutablePtr col_to = nullptr;
@@ -1421,6 +1456,16 @@ struct ConvertThroughParsing
         }
 
         size_t current_offset = 0;
+
+        bool precise_float_parsing = false;
+
+        if (DB::CurrentThread::isInitialized())
+        {
+            const DB::ContextPtr query_context = DB::CurrentThread::get().getQueryContext();
+
+            if (query_context)
+                precise_float_parsing = query_context->getSettingsRef().precise_float_parsing;
+        }
 
         for (size_t i = 0; i < size; ++i)
         {
@@ -1487,8 +1532,8 @@ struct ConvertThroughParsing
                                 }
                             }
 
-                            parseImpl<ToDataType>(vec_to[i], read_buffer, local_time_zone);
-                        } while(false);
+                            parseImpl<ToDataType>(vec_to[i], read_buffer, local_time_zone, precise_float_parsing);
+                        } while (false);
                     }
                 }
 
@@ -1556,8 +1601,8 @@ struct ConvertThroughParsing
                                 }
                             }
 
-                            parsed = tryParseImpl<ToDataType>(vec_to[i], read_buffer, local_time_zone);
-                        } while(false);
+                            parsed = tryParseImpl<ToDataType>(vec_to[i], read_buffer, local_time_zone, precise_float_parsing);
+                        } while (false);
                     }
                 }
 
@@ -1618,21 +1663,18 @@ struct ConvertImpl<FromDataType, ToDataType, Name, ConvertReturnZeroOnErrorTag>
 
 
 /// Generic conversion of any type from String. Used for complex types: Array and Tuple or types with custom serialization.
-template <typename StringColumnType>
+template <bool throw_on_error>
 struct ConvertImplGenericFromString
 {
-    static ColumnPtr execute(ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count)
+    static ColumnPtr execute(ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count, const ContextPtr & context)
     {
-        static_assert(std::is_same_v<StringColumnType, ColumnString> || std::is_same_v<StringColumnType, ColumnFixedString>,
-                "Can be used only to parse from ColumnString or ColumnFixedString");
-
         const IColumn & column_from = *arguments[0].column;
         const IDataType & data_type_to = *result_type;
         auto res = data_type_to.createColumn();
         auto serialization = data_type_to.getDefaultSerialization();
         const auto * null_map = column_nullable ? &column_nullable->getNullMapData() : nullptr;
 
-        executeImpl(column_from, *res, *serialization, input_rows_count, null_map, result_type.get());
+        executeImpl(column_from, *res, *serialization, input_rows_count, null_map, result_type.get(), context);
         return res;
     }
 
@@ -1641,47 +1683,173 @@ struct ConvertImplGenericFromString
         IColumn & column_to,
         const ISerialization & serialization_from,
         size_t input_rows_count,
-        const PaddedPODArray<UInt8> * null_map = nullptr,
-        const IDataType * result_type = nullptr)
+        const PaddedPODArray<UInt8> * null_map,
+        const IDataType * result_type,
+        const ContextPtr & context)
     {
-        static_assert(std::is_same_v<StringColumnType, ColumnString> || std::is_same_v<StringColumnType, ColumnFixedString>,
-                "Can be used only to parse from ColumnString or ColumnFixedString");
+        column_to.reserve(input_rows_count);
 
-        if (const StringColumnType * col_from_string = checkAndGetColumn<StringColumnType>(&column_from))
+        FormatSettings format_settings = context ? getFormatSettings(context) : FormatSettings{};
+        for (size_t i = 0; i < input_rows_count; ++i)
         {
-            column_to.reserve(input_rows_count);
-
-            FormatSettings format_settings;
-            for (size_t i = 0; i < input_rows_count; ++i)
+            if (null_map && (*null_map)[i])
             {
-                if (null_map && (*null_map)[i])
-                {
-                    column_to.insertDefault();
-                    continue;
-                }
+                column_to.insertDefault();
+                continue;
+            }
 
-                const auto & val = col_from_string->getDataAt(i);
-                ReadBufferFromMemory read_buffer(val.data, val.size);
+            const auto & val = column_from.getDataAt(i);
+            ReadBufferFromMemory read_buffer(val.data, val.size);
+            try
+            {
                 serialization_from.deserializeWholeText(column_to, read_buffer, format_settings);
+            }
+            catch (const Exception &)
+            {
+                if constexpr (throw_on_error)
+                    throw;
+                /// Check if exception happened after we inserted the value
+                /// (deserializeWholeText should not do it, but let's check anyway).
+                if (column_to.size() > i)
+                    column_to.popBack(column_to.size() - i);
+                column_to.insertDefault();
+            }
 
-                if (!read_buffer.eof())
+            /// Usually deserializeWholeText checks for eof after parsing, but let's check one more time just in case.
+            if (!read_buffer.eof())
+            {
+                if constexpr (throw_on_error)
                 {
                     if (result_type)
                         throwExceptionForIncompletelyParsedValue(read_buffer, *result_type);
                     else
-                        throw Exception(ErrorCodes::CANNOT_PARSE_TEXT,
-                            "Cannot parse string to column {}. Expected eof", column_to.getName());
+                        throw Exception(
+                            ErrorCodes::CANNOT_PARSE_TEXT, "Cannot parse string to column {}. Expected eof", column_to.getName());
+                }
+                else
+                {
+                    if (column_to.size() > i)
+                        column_to.popBack(column_to.size() - i);
+                    column_to.insertDefault();
                 }
             }
         }
-        else
-            throw Exception(ErrorCodes::ILLEGAL_COLUMN,
-                "Illegal column {} of first argument of conversion function from string",
-                column_from.getName());
     }
-
 };
 
+struct ConvertImplFromDynamicToColumn
+{
+    static ColumnPtr execute(
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & result_type,
+        size_t input_rows_count,
+        const std::function<ColumnPtr(ColumnsWithTypeAndName &, const DataTypePtr)> & nested_convert)
+    {
+        /// When casting Dynamic to regular column we should cast all variants from current Dynamic column
+        /// and construct the result based on discriminators.
+        const auto & column_dynamic = assert_cast<const ColumnDynamic &>(*arguments.front().column.get());
+        const auto & variant_column = column_dynamic.getVariantColumn();
+        const auto & variant_info = column_dynamic.getVariantInfo();
+
+        /// First, cast usual variants to result type.
+        const auto & variant_types = assert_cast<const DataTypeVariant &>(*variant_info.variant_type).getVariants();
+        std::vector<ColumnPtr> cast_variant_columns(variant_types.size());
+        for (size_t i = 0; i != variant_types.size(); ++i)
+        {
+            /// Skip shared variant, it will be processed later.
+            if (i == column_dynamic.getSharedVariantDiscriminator())
+                continue;
+
+            ColumnsWithTypeAndName new_args = arguments;
+            new_args[0] = {variant_column.getVariantPtrByGlobalDiscriminator(i), variant_types[i], ""};
+            cast_variant_columns[i] = nested_convert(new_args, result_type);
+        }
+
+        /// Second, collect all variants stored in shared variant and cast them to result type.
+        std::vector<MutableColumnPtr> variant_columns_from_shared_variant;
+        DataTypes variant_types_from_shared_variant;
+        /// We will need to know what variant to use when we see discriminator of a shared variant.
+        /// To do it, we remember what variant was extracted from each row and what was it's offset.
+        PaddedPODArray<UInt64> shared_variant_indexes;
+        PaddedPODArray<UInt64> shared_variant_offsets;
+        std::unordered_map<String, UInt64> shared_variant_to_index;
+        const auto & shared_variant = column_dynamic.getSharedVariant();
+        const auto shared_variant_discr = column_dynamic.getSharedVariantDiscriminator();
+        const auto & local_discriminators = variant_column.getLocalDiscriminators();
+        const auto & offsets = variant_column.getOffsets();
+        if (!shared_variant.empty())
+        {
+            shared_variant_indexes.reserve(input_rows_count);
+            shared_variant_offsets.reserve(input_rows_count);
+            FormatSettings format_settings;
+            const auto shared_variant_local_discr = variant_column.localDiscriminatorByGlobal(shared_variant_discr);
+            for (size_t i = 0; i != input_rows_count; ++i)
+            {
+                if (local_discriminators[i] == shared_variant_local_discr)
+                {
+                    auto value = shared_variant.getDataAt(offsets[i]);
+                    ReadBufferFromMemory buf(value.data, value.size);
+                    auto type = decodeDataType(buf);
+                    auto type_name = type->getName();
+                    auto it = shared_variant_to_index.find(type_name);
+                    /// Check if we didn't create column for this variant yet.
+                    if (it == shared_variant_to_index.end())
+                    {
+                        it = shared_variant_to_index.emplace(type_name, variant_columns_from_shared_variant.size()).first;
+                        variant_columns_from_shared_variant.push_back(type->createColumn());
+                        variant_types_from_shared_variant.push_back(type);
+                    }
+
+                    shared_variant_indexes.push_back(it->second);
+                    shared_variant_offsets.push_back(variant_columns_from_shared_variant[it->second]->size());
+                    type->getDefaultSerialization()->deserializeBinary(*variant_columns_from_shared_variant[it->second], buf, format_settings);
+                }
+                else
+                {
+                    shared_variant_indexes.emplace_back();
+                    shared_variant_offsets.emplace_back();
+                }
+            }
+        }
+
+        /// Cast all extracted variants into result type.
+        std::vector<ColumnPtr> cast_shared_variant_columns(variant_types_from_shared_variant.size());
+        for (size_t i = 0; i != variant_types_from_shared_variant.size(); ++i)
+        {
+            ColumnsWithTypeAndName new_args = arguments;
+            new_args[0] = {variant_columns_from_shared_variant[i]->getPtr(), variant_types_from_shared_variant[i], ""};
+            cast_shared_variant_columns[i] = nested_convert(new_args, result_type);
+        }
+
+        /// Construct result column from all cast variants.
+        auto res = result_type->createColumn();
+        res->reserve(input_rows_count);
+        for (size_t i = 0; i != input_rows_count; ++i)
+        {
+            auto global_discr = variant_column.globalDiscriminatorByLocal(local_discriminators[i]);
+            if (global_discr == ColumnVariant::NULL_DISCRIMINATOR)
+            {
+                res->insertDefault();
+            }
+            else if (global_discr == shared_variant_discr)
+            {
+                if (cast_shared_variant_columns[shared_variant_indexes[i]])
+                    res->insertFrom(*cast_shared_variant_columns[shared_variant_indexes[i]], shared_variant_offsets[i]);
+                else
+                    res->insertDefault();
+            }
+            else
+            {
+                if (cast_variant_columns[global_discr])
+                    res->insertFrom(*cast_variant_columns[global_discr], offsets[i]);
+                else
+                    res->insertDefault();
+            }
+        }
+
+        return res;
+    }
+};
 
 template <>
 struct ConvertImpl<DataTypeString, DataTypeUInt32, NameToUnixTimestamp, ConvertDefaultBehaviorTag>
@@ -1765,9 +1933,8 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
             return col_to;
         }
         else
-            throw Exception("Illegal column " + arguments[0].column->getName()
-                    + " of first argument of function " + Name::name,
-                ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}",
+                    arguments[0].column->getName(), Name::name);
     }
 };
 
@@ -1790,7 +1957,7 @@ struct NameToDecimal256 { static constexpr auto name = "to_decimal256"; };
     struct NameToInterval ## INTERVAL_KIND \
     { \
         static constexpr auto name = "to_interval_" #INTERVAL_NAME; \
-        static constexpr auto kind = IntervalKind::INTERVAL_KIND; \
+        static constexpr auto kind = IntervalKind::Kind::INTERVAL_KIND; \
     };
 
 DEFINE_NAME_TO_INTERVAL(nanosecond, Nanosecond)
@@ -1819,7 +1986,7 @@ static inline bool isDateTime64(const ColumnsWithTypeAndName & arguments)
     else if constexpr (std::is_same_v<Name, NameToDateTime> || std::is_same_v<Name, NameParseDateTimeBestEffort>
         || std::is_same_v<Name, NameParseDateTimeBestEffortOrZero> || std::is_same_v<Name, NameParseDateTimeBestEffortOrNull>)
     {
-        return (arguments.size() == 2 && isUnsignedInteger(arguments[1].type)) || arguments.size() == 3;
+        return (arguments.size() == 2 && isUInt(arguments[1].type)) || arguments.size() == 3;
     }
 
     return false;
@@ -1949,7 +2116,7 @@ public:
             else if constexpr (std::is_same_v<Name, NameToDecimal256>)
                 return createDecimalMaxPrecision<Decimal256>(scale);
 
-            throw Exception("Unexpected branch in code of conversion function: it is a bug.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected branch in code of conversion function: it is a bug.");
         }
         else
         {
@@ -1973,7 +2140,7 @@ public:
             if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
             else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
-                throw Exception("Unexpected branch in code of conversion function: it is a bug.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected branch in code of conversion function: it is a bug.");
             else
                 return std::make_shared<ToDataType>();
         }
@@ -2014,6 +2181,10 @@ public:
                     + result_type->getName() + " from "
                     + arguments[0].type->getName()
                     + ", because value is too short");
+
+                /// proton: starts. Use a parse error `CANNOT_PARSE_VALUE` instead of `ATTEMPT_TO_READ_AFTER_EOF`.
+                throw Exception::createRuntime(ErrorCodes::CANNOT_PARSE_VALUE, e.message());
+                /// proton: ends.
             }
             else if (e.code() == ErrorCodes::CANNOT_PARSE_NUMBER
                 || e.code() == ErrorCodes::CANNOT_READ_ARRAY_FROM_TEXT
@@ -2053,8 +2224,7 @@ private:
     ColumnPtr executeInternal(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
     {
         if (arguments.empty())
-            throw Exception{"Function " + getName() + " expects at least 1 argument",
-               ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+            throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function {} expects at least 1 argument", getName());
 
         if (result_type->onlyNull())
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
@@ -2075,13 +2245,11 @@ private:
                 {
                     /// Account for optional timezone argument.
                     if (arguments.size() != 2 && arguments.size() != 3)
-                        throw Exception{"Function " + getName() + " expects 2 or 3 arguments for datetime64.",
-                            ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+                        throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function {} expects 2 or 3 arguments for datetime64.", getName());
                 }
                 else if (arguments.size() != 2)
                 {
-                    throw Exception{"Function " + getName() + " expects 2 arguments for decimal.",
-                        ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+                    throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function {} expects 2 arguments for decimal.", getName());
                 }
 
                 const ColumnWithTypeAndName & scale_column = arguments[1];
@@ -2108,7 +2276,7 @@ private:
                 if constexpr ((bad_left && std::is_same_v<RightDataType, DataTypeUUID>) ||
                               (bad_right && std::is_same_v<LeftDataType, DataTypeUUID>))
                 {
-                    throw Exception("Wrong uuid conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
+                    throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Wrong uuid conversion");
                 }
                 else
                 {
@@ -2133,8 +2301,8 @@ private:
             if (to_datetime64 || scale != 0) /// When scale = 0, the data type is DateTime otherwise the data type is DateTime64
             {
                 if (!callOnIndexAndDataType<DataTypeDateTime64>(from_type->getTypeId(), call, ConvertDefaultBehaviorTag{}))
-                    throw Exception("Illegal type " + arguments[0].type->getName() + " of argument of function " + getName(),
-                                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}",
+                                    arguments[0].type->getName(), getName());
 
                 return result_column;
             }
@@ -2177,8 +2345,8 @@ private:
                 return ConvertImplGenericToString<ColumnString>::execute(arguments, result_type, input_rows_count);
             }
             else
-                throw Exception("Illegal type " + arguments[0].type->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}",
+                    arguments[0].type->getName(), getName());
         }
 
         return result_column;
@@ -2321,25 +2489,23 @@ public:
         else
         {
             if ((arguments.size() != 1 && arguments.size() != 2) || (to_decimal && arguments.size() != 2))
-                throw Exception("Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) +
-                    ", should be 1 or 2. Second argument only make sense for DateTime (time zone, optional) and decimal (scale).",
-                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1 or 2. "
+                    "Second argument only make sense for datetime (time zone, optional) and decimal (scale).",
+                    getName(), arguments.size());
 
             if (!isStringOrFixedString(arguments[0].type))
             {
                 /// proton: starts. renaming lower
                 if (this->getName().find("_or_zero") != std::string::npos ||
                     this->getName().find("_or_null") != std::string::npos)
-                    throw Exception(
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Illegal type {} of first argument of function {}. Conversion functions with postfix '_or_zero' or '_or_null' "
-                        "should take string argument",
-                        arguments[0].type->getName(),
-                        getName());
+                    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of first argument of function {}. "
+                            "Conversion functions with postfix '_or_zero' or '_or_null' should take string argument",
+                            arguments[0].type->getName(), getName());
                 /// proton: ends.
                 else
-                    throw Exception("Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of first argument of function {}",
+                            arguments[0].type->getName(), getName());
             }
 
             if (arguments.size() == 2)
@@ -2347,35 +2513,36 @@ public:
                 if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
                 {
                     if (!isString(arguments[1].type))
-                        throw Exception("Illegal type " + arguments[1].type->getName() + " of 2nd argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of 2nd argument of function {}",
+                            arguments[1].type->getName(), getName());
                 }
                 else if constexpr (to_decimal)
                 {
                     if (!isInteger(arguments[1].type))
-                        throw Exception("Illegal type " + arguments[1].type->getName() + " of 2nd argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of 2nd argument of function {}",
+                            arguments[1].type->getName(), getName());
                     if (!arguments[1].column)
-                        throw Exception("Second argument for function " + getName() + " must be constant", ErrorCodes::ILLEGAL_COLUMN);
+                        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Second argument for function {} must be constant", getName());
                 }
                 else
                 {
-                    throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
-                        + toString(arguments.size()) + ", should be 1. Second argument makes sense only for datetime and decimal.",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+                    throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                        "Number of arguments for function {} doesn't match: passed {}, should be 1. "
+                        "Second argument makes sense only for datetime and decimal.",
+                        getName(), arguments.size());
                 }
             }
 
             if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
                 res = std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, 1, 0));
             else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
-                throw Exception("LOGICAL ERROR: It is a bug.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "LOGICAL ERROR: It is a bug.");
             else if constexpr (to_decimal)
             {
                 UInt64 scale = extractToDecimalScale(arguments[1]);
                 res = createDecimalMaxPrecision<typename ToDataType::FieldType>(scale);
                 if (!res)
-                    throw Exception("Something wrong with to_decimalNN_or_zero() or to_decimalNN_or_null()", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Something wrong with to_decimalNN_or_zero() or to_decimalNN_or_null()");
             }
             else
                 res = std::make_shared<ToDataType>();
@@ -2437,10 +2604,9 @@ public:
         }
 
         if (!result_column)
-            throw Exception("Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                + ". Only string or fixed_string argument is accepted for try-conversion function."
-                + " For other arguments, use function without '_or_zero' or '_or_null'.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of function {}. "
+                "Only string or fixed_string argument is accepted for try-conversion function. For other arguments, "
+                "use function without '_or_zero' or '_or_null'.", arguments[0].type->getName(), getName());
 
         return result_column;
     }
@@ -2948,14 +3114,8 @@ class ExecutableFunctionCast : public IExecutableFunction
 public:
     using WrapperType = std::function<ColumnPtr(ColumnsWithTypeAndName &, const DataTypePtr &, const ColumnNullable *, size_t)>;
 
-    struct Diagnostic
-    {
-        std::string column_from;
-        std::string column_to;
-    };
-
     explicit ExecutableFunctionCast(
-            WrapperType && wrapper_function_, const char * name_, std::optional<Diagnostic> diagnostic_)
+            WrapperType && wrapper_function_, const char * name_, std::optional<CastDiagnostic> diagnostic_)
             : wrapper_function(std::move(wrapper_function_)), name(name_), diagnostic(std::move(diagnostic_)) {}
 
     String getName() const override { return name; }
@@ -2991,24 +3151,16 @@ protected:
 private:
     WrapperType wrapper_function;
     const char * name;
-    std::optional<Diagnostic> diagnostic;
+    std::optional<CastDiagnostic> diagnostic;
 };
 
 struct CastName { static constexpr auto name = "cast"; };
 struct CastInternalName { static constexpr auto name = "__cast"; };
 
-enum class CastType
-{
-    nonAccurate,
-    accurate,
-    accurateOrNull
-};
-
 class FunctionCastBase : public IFunctionBase
 {
 public:
     using MonotonicityForRange = std::function<Monotonicity(const IDataType &, const Field &, const Field &)>;
-    using Diagnostic = ExecutableFunctionCast::Diagnostic;
 };
 
 template <typename FunctionName>
@@ -3022,7 +3174,7 @@ public:
             , MonotonicityForRange && monotonicity_for_range_
             , const DataTypes & argument_types_
             , const DataTypePtr & return_type_
-            , std::optional<Diagnostic> diagnostic_
+            , std::optional<CastDiagnostic> diagnostic_
             , CastType cast_type_)
         : cast_name(cast_name_), monotonicity_for_range(std::move(monotonicity_for_range_))
         , argument_types(argument_types_), return_type(return_type_), diagnostic(std::move(diagnostic_))
@@ -3072,7 +3224,7 @@ private:
     DataTypes argument_types;
     DataTypePtr return_type;
 
-    std::optional<Diagnostic> diagnostic;
+    std::optional<CastDiagnostic> diagnostic;
     CastType cast_type;
     ContextPtr context;
 
@@ -3174,7 +3326,18 @@ private:
     {
         if (checkAndGetDataType<DataTypeString>(from_type.get()))
         {
-            return &ConvertImplGenericFromString<ColumnString>::execute;
+            if (cast_type == CastType::accurateOrNull)
+            {
+                return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count) -> ColumnPtr
+                {
+                    return ConvertImplGenericFromString<false>::execute(arguments, result_type, column_nullable, input_rows_count, context);
+                };
+            }
+
+            return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count) -> ColumnPtr
+            {
+                return ConvertImplGenericFromString<true>::execute(arguments, result_type, column_nullable, input_rows_count, context);
+            };
         }
 
         return createWrapper<ToDataType>(from_type, to_type, requested_result_is_nullable);
@@ -3206,7 +3369,7 @@ private:
     WrapperType createFixedStringWrapper(const DataTypePtr & from_type, const size_t N) const
     {
         if (!isStringOrFixedString(from_type))
-            throw Exception{"CAST AS fixed_string is only implemented for types string and fixed_string", ErrorCodes::NOT_IMPLEMENTED};
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CAST AS fixed_string is only implemented for types string and fixed_string");
 
         bool exception_mode_null = cast_type == CastType::accurateOrNull;
         return [exception_mode_null, N] (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t /*input_rows_count*/)
@@ -3219,12 +3382,12 @@ private:
     }
 
 #define GENERATE_INTERVAL_CASE(INTERVAL_KIND) \
-            case IntervalKind::INTERVAL_KIND: \
+            case IntervalKind::Kind::INTERVAL_KIND: \
                 return createFunctionAdaptor(FunctionConvert<DataTypeInterval, NameToInterval##INTERVAL_KIND, PositiveMonotonicity>::create(), from_type);
 
     static WrapperType createIntervalWrapper(const DataTypePtr & from_type, IntervalKind kind)
     {
-        switch (kind)
+        switch (kind.kind)
         {
             GENERATE_INTERVAL_CASE(Nanosecond)
             GENERATE_INTERVAL_CASE(Microsecond)
@@ -3258,8 +3421,8 @@ private:
             if (cast_type == CastType::accurateOrNull)
                 return createToNullableColumnWrapper();
             else
-                throw Exception{"Conversion from " + from_type->getName() + " to " + to_type->getName() + " is not supported",
-                    ErrorCodes::CANNOT_CONVERT_TYPE};
+                throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Conversion from {} to {} is not supported",
+                    from_type->getName(), to_type->getName());
         }
 
         auto wrapper_cast_type = cast_type;
@@ -3347,16 +3510,45 @@ private:
         /// Conversion from String through parsing.
         if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
         {
-            return &ConvertImplGenericFromString<ColumnString>::execute;
+            return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count) -> ColumnPtr
+            {
+                return ConvertImplGenericFromString<true>::execute(arguments, result_type, column_nullable, input_rows_count, context);
+            };
+        }
+        else if (const auto * agg_type = checkAndGetDataType<DataTypeAggregateFunction>(from_type_untyped.get()))
+        {
+            if (agg_type->getFunction()->haveSameStateRepresentation(*to_type->getFunction()))
+            {
+                return [function = to_type->getFunction()](
+                           ColumnsWithTypeAndName & arguments,
+                           const DataTypePtr & /* result_type */,
+                           const ColumnNullable * /* nullable_source */,
+                           size_t /*input_rows_count*/) -> ColumnPtr
+                {
+                    const auto & argument_column = arguments.front();
+                    const auto * col_agg = checkAndGetColumn<ColumnAggregateFunction>(argument_column.column.get());
+                    if (col_agg)
+                    {
+                        auto new_col_agg = ColumnAggregateFunction::create(*col_agg);
+                        new_col_agg->set(function);
+                        return new_col_agg;
         }
         else
         {
-            if (cast_type == CastType::accurateOrNull)
-                return createToNullableColumnWrapper();
-            else
-                throw Exception{"Conversion from " + from_type_untyped->getName() + " to " + to_type->getName() +
-                    " is not supported", ErrorCodes::CANNOT_CONVERT_TYPE};
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "Illegal column {} for function CAST AS AggregateFunction",
+                            argument_column.column->getName());
+                    }
+                };
+            }
         }
+
+        if (cast_type == CastType::accurateOrNull)
+            return createToNullableColumnWrapper();
+        else
+            throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Conversion from {} to {} is not supported",
+                from_type_untyped->getName(), to_type->getName());
     }
 
     WrapperType createArrayWrapper(const DataTypePtr & from_type_untyped, const DataTypeArray & to_type) const
@@ -3364,15 +3556,24 @@ private:
         /// Conversion from String through parsing.
         if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
         {
-            return &ConvertImplGenericFromString<ColumnString>::execute;
+            return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count) -> ColumnPtr
+            {
+                return ConvertImplGenericFromString<true>::execute(arguments, result_type, column_nullable, input_rows_count, context);
+            };
         }
 
+        DataTypePtr from_type_holder;
         const auto * from_type = checkAndGetDataType<DataTypeArray>(from_type_untyped.get());
         const auto * from_type_map = checkAndGetDataType<DataTypeMap>(from_type_untyped.get());
 
         /// Convert from Map
         if (from_type_map)
-            from_type = checkAndGetDataType<DataTypeArray>(from_type_map->getNestedType().get());
+        {
+            /// Recreate array of unnamed tuples because otherwise it may work
+            /// unexpectedly while converting to array of named tuples.
+            from_type_holder = from_type_map->getNestedTypeWithUnnamedTuple();
+            from_type = assert_cast<const DataTypeArray *>(from_type_holder.get());
+        }
 
         if (!from_type)
         {
@@ -3449,13 +3650,16 @@ private:
         /// Conversion from String through parsing.
         if (checkAndGetDataType<DataTypeString>(from_type_untyped.get()))
         {
-            return &ConvertImplGenericFromString<ColumnString>::execute;
+            return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * column_nullable, size_t input_rows_count) -> ColumnPtr
+            {
+                return ConvertImplGenericFromString<true>::execute(arguments, result_type, column_nullable, input_rows_count, context);
+            };
         }
 
         const auto * from_type = checkAndGetDataType<DataTypeTuple>(from_type_untyped.get());
         if (!from_type)
-            throw Exception{"CAST AS tuple can only be performed between tuple types or from string.\nLeft type: "
-                + from_type_untyped->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
+            throw Exception(ErrorCodes::TYPE_MISMATCH, "CAST AS tuple can only be performed between tuple types or from string.\n"
+                            "Left type: {}, right type: {}", from_type_untyped->getName(), to_type->getName());
 
         const auto & from_element_types = from_type->getElements();
         const auto & to_element_types = to_type->getElements();
@@ -3496,8 +3700,9 @@ private:
         else
         {
             if (from_element_types.size() != to_element_types.size())
-                throw Exception{"CAST AS Tuple can only be performed between tuple types with the same number of elements or from String.\n"
-                    "Left type: " + from_type->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
+                throw Exception(ErrorCodes::TYPE_MISMATCH, "CAST AS tuple can only be performed between tuple types "
+                                "with the same number of elements or from String.\nLeft type: {}, right type: {}",
+                                from_type->getName(), to_type->getName());
 
             element_wrappers = getElementWrappers(from_element_types, to_element_types);
             to_reverse_index.reserve(to_element_types.size());
@@ -3610,8 +3815,8 @@ private:
         if (const auto * from_tuple = checkAndGetDataType<DataTypeTuple>(from_type_untyped.get()))
         {
             if (from_tuple->getElements().size() != 2)
-                throw Exception{"CAST AS map from tuple requeires 2 elements.\n"
-                    "Left type: " + from_tuple->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
+                throw Exception(ErrorCodes::TYPE_MISMATCH, "CAST AS map from tuple requeires 2 elements. "
+                    "Left type: {}, right type: {}", from_tuple->getName(), to_type->getName());
 
             DataTypes from_kv_types;
             const auto & to_kv_types = to_type->getKeyValueTypes();
@@ -3632,8 +3837,8 @@ private:
         {
             const auto * nested_tuple = typeid_cast<const DataTypeTuple *>(from_array->getNestedType().get());
             if (!nested_tuple || nested_tuple->getElements().size() != 2)
-                throw Exception{"CAST AS map from array requeires nested tuple of 2 elements.\n"
-                    "Left type: " + from_array->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
+                throw Exception(ErrorCodes::TYPE_MISMATCH, "CAST AS map from array requeires nested tuple of 2 elements. "
+                    "Left type: {}, right type: {}", from_array->getName(), to_type->getName());
 
             return createArrayToMapWrrapper(nested_tuple->getElements(), to_type->getKeyValueTypes());
         }
@@ -3643,169 +3848,1201 @@ private:
         }
         else
         {
-            throw Exception{"Unsupported types to CAST AS map\n"
-                "Left type: " + from_type_untyped->getName() + ", right type: " + to_type->getName(), ErrorCodes::TYPE_MISMATCH};
+            throw Exception(ErrorCodes::TYPE_MISMATCH, "Unsupported types to CAST AS map. "
+                "Left type: {}, right type: {}", from_type_untyped->getName(), to_type->getName());
         }
     }
 
-    WrapperType createTupleToObjectWrapper(const DataTypeTuple & from_tuple, bool has_nullable_subcolumns) const
+    /// We support nested Objects types. For example, in JSON we can have paths with type Array(JSON).
+    /// The parameters max_dynamic_types/max_dynamic_paths of these nested Object types depend on the
+    /// parameters of the original Object type (they are reduced by constant factors to avoid subcolumns
+    /// explosion). And this logic is used to read typed subcolumns without knowing the reduced parameters
+    /// like this: "SELECT json.a.b.:`Array(JSON)`" (or simply "SELECT json.a.b[]"). In this case we substitute the
+    /// nested JSON type name to the JSON type name with reduced parameters (see replaceJSONTypeNameIfNeeded function in DataTypeObject.cpp).
+    /// It's done to allow the user to request nested JSON subcolumns without specifying these parameters.
+    /// All this means that during conversion from one Object type to another the max_dynamic_types/max_dynamic_paths
+    /// parameters may change and we should change the parameters of all nested Object types recursively.
+    /// The next few functions are needed to do this conversion of nested Object types.
+
+    /// Convert all nested object types to new provided object type. Go inside Array and Tuple types.
+    DataTypePtr convertNestedObjectType(const DataTypePtr & type, const DataTypePtr & new_object_type) const
     {
-        if (!from_tuple.haveExplicitNames())
-            throw Exception(ErrorCodes::TYPE_MISMATCH,
-            "Cast to json can be performed only from flatten named tuple. Got: {}", from_tuple.getName());
+        if (isObject(type))
+            return new_object_type;
 
-        PathsInData paths;
-        DataTypes from_types;
+        if (const auto * type_array = checkAndGetDataType<DataTypeArray>(type.get()))
+            return std::make_shared<DataTypeArray>(convertNestedObjectType(type_array->getNestedType(), new_object_type));
 
-        std::tie(paths, from_types) = flattenTuple(from_tuple.getPtr());
-        auto to_types = from_types;
-
-        for (auto & type : to_types)
+        if (const auto * type_tuple = checkAndGetDataType<DataTypeTuple>(type.get()))
         {
-            if (isTuple(type) || isNested(type))
-                throw Exception(ErrorCodes::TYPE_MISMATCH,
-                    "Cast to json can be performed only from flatten named tuple. Got: {}",
-                    from_tuple.getName());
-
-            type = recursiveRemoveLowCardinality(type);
+            const auto & elements = type_tuple->getElements();
+            DataTypes new_elements;
+            new_elements.reserve(elements.size());
+            for (const auto & element : elements)
+                new_elements.push_back(convertNestedObjectType(element, new_object_type));
+            return type_tuple->haveExplicitNames() ? std::make_shared<DataTypeTuple>(new_elements, type_tuple->getElementNames())
+                                                   : std::make_shared<DataTypeTuple>(new_elements);
         }
 
-        return [element_wrappers = getElementWrappers(from_types, to_types),
-            has_nullable_subcolumns, from_types, to_types, paths]
-            (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable * nullable_source, size_t input_rows_count)
+        return type;
+    }
+
+    /// Copy the value in a form <binary_encoded_type><binary_value> with converted Object type.
+    /// Such values are used in shared variant inside Dynamic column and shared data inside Object column.
+    void copySharedValueWithConvertedNestedObjectType(const ColumnString & old_values, ColumnString & new_values, const DataTypePtr & new_object_type, size_t row, const FormatSettings & format_settings) const
+    {
+        auto value = old_values.getDataAt(row);
+        ReadBufferFromMemory value_buf(value.data, value.size);
+        auto type = decodeDataType(value_buf);
+        if (type->hasDynamicSubcolumns())
         {
-            size_t tuple_size = to_types.size();
-            auto flattened_column = flattenTuple(arguments.front().column);
-            const auto & column_tuple = assert_cast<const ColumnTuple &>(*flattened_column);
+            /// Deserialize value into temporary column.
+            auto tmp_column = type->createColumn();
+            type->getDefaultSerialization()->deserializeBinary(*tmp_column, value_buf, format_settings);
+            /// Create new type and cast temporary column to it.
+            auto new_type = convertNestedObjectType(type, new_object_type);
+            auto wrapper = prepareUnpackDictionaries(type, new_type);
+            ColumnsWithTypeAndName args = {{tmp_column->getPtr(), type, ""}};
+            auto new_column = wrapper(args, new_type, nullptr, tmp_column->size());
+            /// Encode new type and serialize new value.
+            WriteBufferFromVector<ColumnString::Chars> new_value_buf(new_values.getChars(), AppendModeTag());
+            encodeDataType(new_type, new_value_buf);
+            new_type->getDefaultSerialization()->serializeBinary(*new_column, 0, new_value_buf, format_settings);
+            new_value_buf.finalize();
+            new_values.getChars().push_back(0);
+            new_values.getOffsets().push_back(new_values.getChars().size());
+        }
+        else
+        {
+            /// Just copy the value.
+            new_values.insertFrom(old_values, row);
+        }
+    }
 
-            if (tuple_size != column_tuple.getColumns().size())
-                throw Exception(ErrorCodes::TYPE_MISMATCH,
-                    "Expected tuple with {} subcolumn, but got {} subcolumns",
-                    tuple_size, column_tuple.getColumns().size());
+        /// Create new values of shared data/shared variant with all object types converted to new provided object type.
+    ColumnPtr getSharedValuesWithConvertedNestedObjectTypes(const ColumnString & old_values, const DataTypePtr & new_object_type) const
+    {
+        auto new_values = ColumnString::create();
+        new_values->reserve(old_values.size());
+        FormatSettings format_settings;
+        for (size_t i = 0; i != old_values.size(); ++i)
+            copySharedValueWithConvertedNestedObjectType(old_values, *new_values, new_object_type, i, format_settings);
+        return new_values;
+    }
 
-            auto res = ColumnObject::create(has_nullable_subcolumns);
-            for (size_t i = 0; i < tuple_size; ++i)
+    bool checkIfSharedValuesContainNestedObjectsTypes(const ColumnString & values) const
+    {
+        for (size_t i = 0; i != values.size(); ++i)
+        {
+            auto value = values.getDataAt(i);
+            ReadBufferFromMemory buf(value.data, value.size);
+            auto type = decodeDataType(buf);
+            if (type->hasDynamicSubcolumns())
+                return true;
+        }
+
+        return false;
+    }
+
+    ColumnPtr getSharedDataWithConvertedNestedObjectTypes(const ColumnPtr & shared_data, const DataTypePtr & new_object_type) const
+    {
+        const auto & shared_data_array = assert_cast<const ColumnArray &>(*shared_data);
+        const auto & shared_data_offsets = shared_data_array.getOffsetsPtr();
+        const auto & shared_data_tuple = assert_cast<const ColumnTuple &>(shared_data_array.getData());
+        const auto & shared_data_paths = shared_data_tuple.getColumnPtr(0);
+        const auto & shared_data_values = shared_data_tuple.getColumnPtr(1);
+        const auto & shared_data_values_str = assert_cast<const ColumnString &>(*shared_data_values);
+
+        /// First check if we actually have any object type in the values.
+        /// If we don't have object types, just return the original shared data column.
+        if (!checkIfSharedValuesContainNestedObjectsTypes(shared_data_values_str))
+            return shared_data;
+
+        /// Otherwise we should create new shared data column with converted object types.
+        auto new_shared_data_values = getSharedValuesWithConvertedNestedObjectTypes(shared_data_values_str, new_object_type);
+        return ColumnArray::create(ColumnTuple::create(Columns{shared_data_paths, new_shared_data_values}), shared_data_offsets);
+    }
+
+    ColumnPtr getDynamicColumnWithConvertedNestedObjectTypes(const ColumnPtr & column, const DataTypePtr & new_object_type) const
+    {
+        const auto & dynamic_column = assert_cast<const ColumnDynamic &>(*column);
+        const auto & variant_info = dynamic_column.getVariantInfo();
+        const auto & variants_types = assert_cast<const DataTypeVariant &>(*variant_info.variant_type).getVariants();
+
+        /// First check if we have any nested object type inside this dynamic column.
+        bool has_nested_object_type = false;
+        for (const auto & variant_type : variants_types)
+        {
+            if (variant_type->hasDynamicSubcolumns())
             {
-                ColumnsWithTypeAndName element = {{column_tuple.getColumns()[i], from_types[i], "" }};
-                auto converted_column = element_wrappers[i](element, to_types[i], nullable_source, input_rows_count);
-                res->addSubcolumn(paths[i], converted_column->assumeMutable());
+                has_nested_object_type = true;
+                break;
+            }
+        }
+
+        /// If there are no variants with object type, check shared variant
+        if (!has_nested_object_type)
+            has_nested_object_type = checkIfSharedValuesContainNestedObjectsTypes(dynamic_column.getSharedVariant());
+
+        /// If there are no nested objects, don't do anything.
+        if (!has_nested_object_type)
+            return column;
+
+        /// If there are nested objects, we need to convert them to new object type.
+        const auto & variant_column = dynamic_column.getVariantColumn();
+        const auto & variants_columns = variant_column.getVariants();
+        auto shared_variant_global_discriminator = dynamic_column.getSharedVariantDiscriminator();
+        DataTypes new_variants_types;
+        new_variants_types.reserve(variants_types.size());
+        Columns new_variants_columns;
+        new_variants_columns.resize(variants_columns.size());
+        for (size_t global_discr = 0; global_discr != variants_types.size(); ++global_discr)
+        {
+            auto local_discr = variant_column.localDiscriminatorByGlobal(global_discr);
+            if (global_discr == shared_variant_global_discriminator)
+            {
+                new_variants_columns[local_discr] = getSharedValuesWithConvertedNestedObjectTypes(dynamic_column.getSharedVariant(), new_object_type);
+                new_variants_types.push_back(variants_types[global_discr]);
+            }
+            else if (variants_types[global_discr]->hasDynamicSubcolumns())
+            {
+                /// Cast variant to new type with converted object type.
+                auto new_variant_type = convertNestedObjectType(variants_types[global_discr], new_object_type);
+                auto wrapper = prepareUnpackDictionaries(variants_types[global_discr], new_variant_type);
+                ColumnsWithTypeAndName args = {{variants_columns[local_discr], variants_types[global_discr], ""}};
+                new_variants_columns[local_discr] = wrapper(args, new_variant_type, nullptr, variants_columns[local_discr]->size());
+                new_variants_types.push_back(new_variant_type);
+            }
+            else
+            {
+                new_variants_columns[local_discr] = variants_columns[local_discr];
+                new_variants_types.push_back(variants_types[global_discr]);
+            }
+        }
+
+        auto new_variant_type = std::make_shared<DataTypeVariant>(new_variants_types);
+        auto new_variant_column = ColumnVariant::create(variant_column.getLocalDiscriminatorsPtr(), variant_column.getOffsetsPtr(), new_variants_columns, variant_column.getLocalToGlobalDiscriminatorsMapping());
+        return ColumnDynamic::create(std::move(new_variant_column), new_variant_type, dynamic_column.getMaxDynamicTypes(), dynamic_column.getGlobalMaxDynamicTypes());
+    }
+
+    WrapperType createObjectToObjectWrapper(const DataTypeObject & from_object, const DataTypeObject & to_object) const
+    {
+        bool skip_rules_are_changed = from_object.getPathsToSkip() != to_object.getPathsToSkip() || from_object.getPathRegexpsToSkip() != to_object.getPathRegexpsToSkip();
+        bool typed_paths_are_changed = false;
+        bool have_new_typed_paths = false;
+        const auto & old_typed_paths_types = from_object.getTypedPaths();
+        const auto & new_typed_paths_types = to_object.getTypedPaths();
+        /// If numbers of typed paths are different - they are 100% different.
+        typed_paths_are_changed |= old_typed_paths_types.size() != new_typed_paths_types.size();
+        for (const auto & [new_typed_path, new_type] : new_typed_paths_types)
+        {
+            auto it = old_typed_paths_types.find(new_typed_path);
+            /// Check if there is no such path in from_object typed paths.
+            if (it == old_typed_paths_types.end())
+            {
+                typed_paths_are_changed = true;
+                have_new_typed_paths = true;
+                break;
+            }
+
+            /// Check if type is changed for this typed path.
+            if (!it->second->equals(*new_type))
+            {
+                typed_paths_are_changed = true;
+            }
+        }
+
+        auto new_max_dynamic_paths = to_object.getMaxDynamicPaths();
+        auto old_max_dynamic_types = from_object.getMaxDynamicTypes();
+        auto new_max_dynamic_types = to_object.getMaxDynamicTypes();
+        auto old_dynamic_type = std::make_shared<DataTypeDynamic>(old_max_dynamic_types);
+        auto new_dynamic_type = std::make_shared<DataTypeDynamic>(new_max_dynamic_types);
+        auto wrapper_from_old_to_new_dynamic_type = createDynamicToDynamicWrapper(*old_dynamic_type, *new_dynamic_type);
+        /// When object type changes, the type of nested objects (like Array(JSON)) also may change.
+        const auto & old_type_of_nested_objects = from_object.getTypeOfNestedObjects();
+        const auto & new_type_of_nested_objects = to_object.getTypeOfNestedObjects();
+        bool need_to_convert_nested_objects_type = !old_type_of_nested_objects->equals(*new_type_of_nested_objects);
+
+        /// Simple use case - when only max_dynamic_paths/max_dynamic_types parameters are changed and max_dynamic_paths is not decreased.
+        /// In this case we almost don't need to rewrite anything (except nested objects) and can process it separately.
+        if (!skip_rules_are_changed && !typed_paths_are_changed && from_object.getMaxDynamicPaths() <= to_object.getMaxDynamicPaths())
+        {
+            return [this,
+                    new_max_dynamic_paths,
+                    old_max_dynamic_types,
+                    new_max_dynamic_types,
+                    old_dynamic_type,
+                    new_dynamic_type,
+                    wrapper_from_old_to_new_dynamic_type,
+                    new_type_of_nested_objects,
+                    need_to_convert_nested_objects_type](
+                       ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t)
+            {
+                const auto & old_column_object = assert_cast<const ColumnObject &>(*arguments[0].column);
+                const auto & old_typed_paths = old_column_object.getTypedPaths();
+                const auto & old_dynamic_paths = old_column_object.getDynamicPaths();
+                const auto & old_shared_data = old_column_object.getSharedDataPtr();
+
+                std::unordered_map<String, ColumnPtr> new_typed_paths;
+                new_typed_paths.reserve(old_typed_paths.size());
+                for (const auto & [path, column] : old_typed_paths)
+                    new_typed_paths[path] = column;
+
+                std::unordered_map<String, ColumnPtr> new_dynamic_paths;
+                new_dynamic_paths.reserve(old_dynamic_paths.size());
+                if (old_max_dynamic_types == new_max_dynamic_types)
+                {
+                    for (const auto & [path, column] : old_dynamic_paths)
+                        new_dynamic_paths[path] = column;
+                }
+                else
+                {
+                    for (const auto & [path, column] : old_dynamic_paths)
+                    {
+                        ColumnsWithTypeAndName args = {ColumnWithTypeAndName(column, old_dynamic_type, path)};
+                        new_dynamic_paths[path] = wrapper_from_old_to_new_dynamic_type(args, new_dynamic_type, nullptr, column->size());
+                    }
+                }
+
+                ColumnPtr new_shared_data = old_shared_data;
+
+                /// Convert nested object types inside dynamic paths and shared data if needed.
+                if (need_to_convert_nested_objects_type)
+                {
+                    for (auto & [_, column] : new_dynamic_paths)
+                        column = getDynamicColumnWithConvertedNestedObjectTypes(column, new_type_of_nested_objects);
+                    new_shared_data = getSharedDataWithConvertedNestedObjectTypes(old_shared_data, new_type_of_nested_objects);
+                }
+
+                return ColumnObject::create(new_typed_paths, new_dynamic_paths, new_shared_data, old_column_object.getMaxDynamicPaths(), new_max_dynamic_paths, new_max_dynamic_types);
+            };
+        }
+
+        /// Create wrappers for:
+        ///  - typed paths with changed data type
+        ///  - typed paths that will be casted to new Dynamic
+        ///  - new typed paths from old Dynamic type.
+        std::unordered_map<String, WrapperType> typed_paths_wrappers;
+        if (typed_paths_are_changed)
+        {
+            for (const auto & [path, old_type] : old_typed_paths_types)
+            {
+                /// Check if this path remains in typed paths.
+                if (auto it = new_typed_paths_types.find(path); it != new_typed_paths_types.end())
+                {
+                    /// Check if the data type is changed.
+                    if (!old_type->equals(*it->second))
+                        typed_paths_wrappers[path] = prepareUnpackDictionaries(old_type, it->second);
+                }
+                /// Otherwise this path will be casted to Dynamic.
+                else
+                {
+                    typed_paths_wrappers[path] = createColumnToDynamicWrapper(old_type, *new_dynamic_type);
+                }
+            }
+
+            /// For new typed paths create a wrapper from old Dynamic type.
+            if (have_new_typed_paths)
+            {
+                for (const auto & [path, type] : new_typed_paths_types)
+                {
+                    if (!old_typed_paths_types.contains(path))
+                        typed_paths_wrappers[path] = createDynamicToColumnWrapper(type);
+                }
+            }
+        }
+
+        const auto & new_paths_to_skip = to_object.getPathsToSkip();
+        std::vector<String> new_paths_to_skip_sorted;
+        new_paths_to_skip_sorted.reserve(new_paths_to_skip.size());
+        for (const auto & path : new_paths_to_skip)
+            new_paths_to_skip_sorted.push_back(path);
+        std::sort(new_paths_to_skip_sorted.begin(), new_paths_to_skip_sorted.end());
+
+        auto should_skip_path =
+            [new_paths_to_skip,
+             new_paths_to_skip_sorted,
+             new_path_regexps_to_skip = to_object.getPathRegexpsToSkip()](const String & path)
+        {
+            /// Check if we have this path in skip list.
+            if (new_paths_to_skip.contains(path))
+                return true;
+
+            /// Check if skip list contains prefix of this path.
+            if (!new_paths_to_skip_sorted.empty())
+            {
+                auto it = std::lower_bound(new_paths_to_skip_sorted.begin(), new_paths_to_skip_sorted.end(), path);
+                if (it != new_paths_to_skip_sorted.begin() && path.starts_with(*std::prev(it)))
+                    return true;
+            }
+
+            /// Check if path matches any skip regexps.
+            for (const auto & path_regexp_to_skip : new_path_regexps_to_skip)
+            {
+                if (re2::RE2::FullMatch(path, path_regexp_to_skip))
+                    return true;
+            }
+
+            return false;
+        };
+
+        /// General case when we need to rewrite the data manually according to the new constraints
+        return [this,
+                skip_rules_are_changed,
+                typed_paths_are_changed,
+                have_new_typed_paths,
+                old_typed_paths_types,
+                new_typed_paths_types,
+                typed_paths_wrappers,
+                new_max_dynamic_paths,
+                new_max_dynamic_types,
+                old_dynamic_type,
+                new_dynamic_type,
+                wrapper_from_old_to_new_dynamic_type,
+                should_skip_path,
+                new_type_of_nested_objects,
+                need_to_convert_nested_objects_type](
+                   ColumnsWithTypeAndName & arguments,
+                   const DataTypePtr &,
+                   const ColumnNullable *,
+                   size_t)
+        {
+            const auto & old_column_object = assert_cast<const ColumnObject &>(*arguments[0].column);
+            const auto & old_typed_paths = old_column_object.getTypedPaths();
+            const auto & old_dynamic_paths = old_column_object.getDynamicPaths();
+            const auto & old_shared_data = old_column_object.getSharedDataPtr();
+            const auto & old_shared_data_offsets = old_column_object.getSharedDataOffsets();
+            const auto [old_shared_data_paths, old_shared_data_values] = old_column_object.getSharedDataPathsAndValues();
+
+            std::unordered_map<String, ColumnPtr> new_typed_paths;
+            new_typed_paths.reserve(new_typed_paths_types.size());
+            std::unordered_map<String, ColumnPtr> new_dynamic_paths;
+
+            /// If the set of typed paths was changed, we should distribute old typed paths to new_typed_paths or new_dynamic_paths.
+            if (typed_paths_are_changed)
+            {
+                for (const auto & [path, column] : old_typed_paths)
+                {
+                    /// Check if this path should remain in typed paths.
+                    if (auto new_types_it = new_typed_paths_types.find(path); new_types_it != new_typed_paths_types.end())
+                    {
+                        /// Check if we need to cast the column to another type.
+                        if (auto wrapper_it = typed_paths_wrappers.find(path); wrapper_it != typed_paths_wrappers.end())
+                        {
+                            ColumnsWithTypeAndName args = {{column, old_typed_paths_types.at(path), path}};
+                            new_typed_paths[path] = wrapper_it->second(args, new_types_it->second, nullptr, column->size());
+                        }
+                        /// Otherwise just reuse existing column.
+                        else
+                        {
+                            new_typed_paths[path] = column;
+                        }
+                    }
+                    /// Otherwise if this path is not skipped, move this path to dynamic paths.
+                    else if (!skip_rules_are_changed || !should_skip_path(path))
+                    {
+                        /// First cast column to Dynamic.
+                        ColumnsWithTypeAndName args = {{column, old_typed_paths_types.at(path), path}};
+                        new_dynamic_paths[path] = typed_paths_wrappers.at(path)(args, new_dynamic_type, nullptr, column->size());
+                    }
+                }
+            }
+            /// If the set of typed paths wasn't changed, just use the old typed paths.
+            else
+            {
+                for (const auto & [path, column] : old_typed_paths)
+                    new_typed_paths[path] = column;
+            }
+
+            /// Now iterate over old dynamic paths and distribute them to new_typed_paths or new_dynamic_paths.
+            for (const auto & [path, column] : old_dynamic_paths)
+            {
+                ColumnsWithTypeAndName args = {{column, old_dynamic_type, path}};
+                /// Check if we need to move this path to typed paths. If yes, cast dynamic column to the required type.
+                if (auto it = new_typed_paths_types.find(path); it != new_typed_paths_types.end())
+                    new_typed_paths[path] = typed_paths_wrappers.at(path)(args, it->second, nullptr, column->size());
+                /// Otherwise cast it to new Dynamic type and move it to new dynamic paths if not skipped.
+                else if (!skip_rules_are_changed || !should_skip_path(path))
+                    new_dynamic_paths[path] = wrapper_from_old_to_new_dynamic_type(args, new_dynamic_type, nullptr, column->size());
+            }
+
+            /// Convert nested object types inside dynamic paths if needed.
+            if (need_to_convert_nested_objects_type)
+            {
+                for (auto & [_, column] : new_dynamic_paths)
+                    column = getDynamicColumnWithConvertedNestedObjectTypes(column, new_type_of_nested_objects);
+            }
+
+            /// We could exceed the new_max_dynamic_paths limit in new_dynamic_paths.
+            /// In this case we keep the most frequent paths and move the rarest to the shared data.
+            std::vector<std::pair<String, ColumnPtr>> paths_for_shared_data;
+            if (new_dynamic_paths.size() > new_max_dynamic_paths)
+            {
+                std::vector<std::pair<size_t, String>> new_dynamic_paths_with_sizes;
+                new_dynamic_paths_with_sizes.reserve(new_dynamic_paths.size());
+                /// If column has statistics from the data part, use size from it for consistency for alters.
+                const auto & statistics = old_column_object.getStatistics();
+                for (const auto & [path, column] : new_dynamic_paths)
+                {
+                    size_t size = column->size() - column->getNumberOfDefaultRows();
+                    /// If this path was moved from old typed paths, we won't have it statistics but consider it as the most frequent.
+                    if (old_typed_paths_types.contains(path))
+                    {
+                        size = std::numeric_limits<size_t>::max();
+                    }
+                    else if (statistics)
+                    {
+                        auto it = statistics->dynamic_paths_statistics.find(path);
+                        if (it != statistics->dynamic_paths_statistics.end())
+                            size = it->second;
+                    }
+
+                    new_dynamic_paths_with_sizes.emplace_back(size, path);
+                }
+
+                std::sort(new_dynamic_paths_with_sizes.begin(), new_dynamic_paths_with_sizes.end(), std::greater());
+                paths_for_shared_data.reserve(new_dynamic_paths_with_sizes.size() - new_max_dynamic_paths);
+                /// Move the rarest paths into paths_for_shared_data.
+                for (size_t i = new_max_dynamic_paths; i != new_dynamic_paths_with_sizes.size(); ++i)
+                {
+                    auto it = new_dynamic_paths.find(new_dynamic_paths_with_sizes[i].second);
+                    paths_for_shared_data.emplace_back(it->first, it->second);
+                    new_dynamic_paths.erase(it);
+                }
+
+                /// Sort paths_for_shared_data. Paths in shared data are sorted, so it will be easier to insert data there.
+                std::sort(paths_for_shared_data.begin(), paths_for_shared_data.end());
+            }
+
+            /// Now we have new typed paths (possibly incomplete) and dynamic paths and we need to create new shared data column.
+            ColumnPtr new_shared_data;
+
+            /// We can reuse shared data from old column if:
+            ///   - there are no new typed paths
+            ///   - we don't have paths in paths_for_shared_data to be inserted into shared data
+            ///   - we don't have new skipped rules
+            if (!have_new_typed_paths && paths_for_shared_data.empty() && !skip_rules_are_changed)
+            {
+                /// Convert nested object types inside shared data if needed.
+                if (need_to_convert_nested_objects_type)
+                    new_shared_data = getSharedDataWithConvertedNestedObjectTypes(old_shared_data, new_type_of_nested_objects);
+                else
+                    new_shared_data = old_shared_data;
+            }
+            /// Otherwise we should iterate over old shared data and construct the new one.
+            else
+            {
+                auto new_shared_data_mutable = DataTypeObject::getTypeOfSharedData()->createColumn();
+                auto & new_shared_data_array = assert_cast<ColumnArray &>(*new_shared_data_mutable);
+                auto & new_shared_data_offsets = new_shared_data_array.getOffsets();
+                new_shared_data_offsets.reserve(old_shared_data_offsets.size());
+                auto & new_shared_data_tuple = assert_cast<ColumnTuple &>(new_shared_data_array.getData());
+                auto & new_shared_data_paths = assert_cast<ColumnString &>(new_shared_data_tuple.getColumn(0));
+                auto & new_shared_data_values = assert_cast<ColumnString &>(new_shared_data_tuple.getColumn(1));
+
+                /// Collect extracted values of new typed paths into separate dynamic columns.
+                /// These columns will be casted to the required type later and inserted into new typed paths.
+                std::unordered_map<String, MutableColumnPtr> extracted_new_typed_paths;
+                FormatSettings format_settings;
+                for (size_t i = 0; i != old_shared_data_offsets.size(); ++i)
+                {
+                    size_t start = old_shared_data_offsets[i - 1];
+                    size_t end = old_shared_data_offsets[i];
+                    size_t paths_for_shared_data_index = 0;
+                    for (size_t j = start; j != end; ++j)
+                    {
+                        auto path = old_shared_data_paths->getDataAt(j).toString();
+                        /// Check if we have this path in new typed paths.
+                        if (new_typed_paths_types.contains(path))
+                        {
+                            auto it = extracted_new_typed_paths.find(path);
+                            if (it == extracted_new_typed_paths.end())
+                            {
+                                it = extracted_new_typed_paths.emplace(path, new_dynamic_type->createColumn()).first;
+                                it->second->insertManyDefaults(i);
+                            }
+                            ColumnObject::deserializeValueFromSharedData(old_shared_data_values, j, *it->second);
+                        }
+                        /// Insert this path into new shared data if not skipped.
+                        else if (!skip_rules_are_changed || !should_skip_path(path))
+                        {
+                            /// Before inserting check if we need to insert paths from paths_for_shared_data before.
+                            while (paths_for_shared_data_index < paths_for_shared_data.size()
+                                   && paths_for_shared_data[paths_for_shared_data_index].first < path)
+                            {
+                                const auto & path_and_column = paths_for_shared_data[paths_for_shared_data_index];
+                                ColumnObject::serializePathAndValueIntoSharedData(&new_shared_data_paths, &new_shared_data_values, path_and_column.first, *path_and_column.second, i);
+                                ++paths_for_shared_data_index;
+                            }
+
+                            /// Insert path and value from old shared data to new shared data.
+                            new_shared_data_paths.insertFrom(*old_shared_data_paths, j);
+                            /// Convert nested object type inside the value if needed.
+                            if (need_to_convert_nested_objects_type)
+                                copySharedValueWithConvertedNestedObjectType(*old_shared_data_values, new_shared_data_values, new_type_of_nested_objects, j, format_settings);
+                            else
+                                new_shared_data_values.insertFrom(*old_shared_data_values, j);
+                        }
+                    }
+
+                    /// Insert remaining paths from paths_for_shared_data.
+                    for (; paths_for_shared_data_index < paths_for_shared_data.size(); ++paths_for_shared_data_index)
+                    {
+                        const auto & path_and_column = paths_for_shared_data[paths_for_shared_data_index];
+                        ColumnObject::serializePathAndValueIntoSharedData(&new_shared_data_paths, &new_shared_data_values, path_and_column.first, *path_and_column.second, i);
+                    }
+
+                    new_shared_data_offsets.push_back(new_shared_data_paths.size());
+
+                    /// Insert default value in all not visited typed paths in extracted_new_typed_paths.
+                    for (auto & [_, column] : extracted_new_typed_paths)
+                    {
+                        if (column->size() == i)
+                            column->insertDefault();
+                    }
+                }
+
+                new_shared_data = std::move(new_shared_data_mutable);
+
+                /// Fill remaining typed paths from extracted values (or with defaults if no values were extracted).
+                for (const auto & [path, type] : new_typed_paths_types)
+                {
+                    if (!new_typed_paths.contains(path))
+                    {
+                        /// Check if we have values extracted from shared data for this typed path.
+                        if (auto it = extracted_new_typed_paths.find(path); it != extracted_new_typed_paths.end())
+                        {
+                            ColumnsWithTypeAndName args = {{it->second->getPtr(), new_dynamic_type, path}};
+                            new_typed_paths[path] = typed_paths_wrappers.at(path)(args, type, nullptr, it->second->size());
+                        }
+                        /// Otherwise fill this typed path with default values.
+                        else
+                        {
+                            auto column = type->createColumn();
+                            column->insertManyDefaults(old_column_object.size());
+                            new_typed_paths[path] = std::move(column);
+                        }
+                    }
+                }
+            }
+
+            return ColumnObject::create(new_typed_paths, new_dynamic_paths, new_shared_data, new_dynamic_paths.size(), new_max_dynamic_paths, new_max_dynamic_types);
+        };
+    }
+
+    WrapperType createObjectWrapper(const DataTypePtr & from_type, const DataTypeObject * to_object) const
+    {
+        if (checkAndGetDataType<DataTypeString>(from_type.get()))
+        {
+            return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * nullable_source, size_t input_rows_count)
+            {
+                return ConvertImplGenericFromString<true>::execute(arguments, result_type, nullable_source, input_rows_count, context);
+            };
+        }
+
+        /// Cast Tuple/Object/Map to JSON type through serializing into JSON string and parsing back into JSON column.
+        /// Potentially we can do smarter conversion Tuple -> JSON with type preservation, but it's questionable how exactly Tuple should be
+        /// converted to JSON (for example, should we recursively convert nested Array(Tuple) to Array(JSON) or not, should we infer types from String fields, etc).
+        if (checkAndGetDataType<DataTypeTuple>(from_type.get()) || checkAndGetDataType<DataTypeMap>(from_type.get()))
+        {
+            return [this](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * nullable_source, size_t input_rows_count)
+            {
+                auto json_string = ColumnString::create();
+                ColumnStringHelpers::WriteHelper write_helper(assert_cast<ColumnString &>(*json_string), input_rows_count);
+                auto & write_buffer = write_helper.getWriteBuffer();
+                FormatSettings format_settings = context ? getFormatSettings(context) : FormatSettings{};
+                auto serialization = arguments[0].type->getDefaultSerialization();
+                format_settings.json.quote_64bit_integers = false;
+                for (size_t i = 0; i < input_rows_count; ++i)
+                {
+                    serialization->serializeTextJSON(*arguments[0].column, i, write_buffer, format_settings);
+                    write_helper.rowWritten();
+                }
+                write_helper.finalize();
+
+                ColumnsWithTypeAndName args_with_json_string = {ColumnWithTypeAndName(json_string->getPtr(), std::make_shared<DataTypeString>(), "")};
+                return ConvertImplGenericFromString<true>::execute(args_with_json_string, result_type, nullable_source, input_rows_count, context);
+            };
+        }
+
+        if (const auto * from_object = checkAndGetDataType<DataTypeObject>(from_type.get()))
+            return createObjectToObjectWrapper(*from_object, *to_object);
+
+        /// TODO: support CAST between JSON types with different parameters
+        throw Exception(ErrorCodes::TYPE_MISMATCH, "Cast to {} can be performed only from String/Map/Object/Tuple/JSON. Got: {}", magic_enum::enum_name(to_object->getSchemaFormat()), from_type->getName());
+    }
+
+    WrapperType createVariantToVariantWrapper(const DataTypeVariant & from_variant, const DataTypeVariant & to_variant) const
+    {
+        /// We support only extension of variant type, so, only new types can be added.
+        /// For example: Variant(T1, T2) -> Variant(T1, T2, T3) is supported, but Variant(T1, T2) -> Variant(T1, T3) is not supported.
+        /// We want to extend Variant type for free without rewriting the data, but we sort data types inside Variant during type creation
+        /// (we do it because we want Variant(T1, T2) to be the same as Variant(T2, T1)), but after extension the order of variant types
+        /// (and so their discriminators) can be different. For example: Variant(T1, T3) -> Variant(T1, T2, T3).
+        /// To avoid full rewrite of discriminators column, ColumnVariant supports it's local order of variant columns (and so local
+        /// discriminators) and stores mapping global order -> local order.
+        /// So, to extend Variant with new types for free, we should keep old local order for old variants, append new variants and change
+        /// mapping global order -> local order according to the new global order.
+
+        /// Create map (new variant type) -> (it's global discriminator in new order).
+        const auto & new_variants = to_variant.getVariants();
+        std::unordered_map<String, ColumnVariant::Discriminator> new_variant_types_to_new_global_discriminator;
+        new_variant_types_to_new_global_discriminator.reserve(new_variants.size());
+        for (size_t i = 0; i != new_variants.size(); ++i)
+            new_variant_types_to_new_global_discriminator[new_variants[i]->getName()] = i;
+
+        /// Create set of old variant types.
+        const auto & old_variants = from_variant.getVariants();
+        std::unordered_map<String, ColumnVariant::Discriminator> old_variant_types_to_old_global_discriminator;
+        old_variant_types_to_old_global_discriminator.reserve(old_variants.size());
+        for (size_t i = 0; i != old_variants.size(); ++i)
+            old_variant_types_to_old_global_discriminator[old_variants[i]->getName()] = i;
+
+        /// Check that the set of old variants types is a subset of new variant types and collect new global discriminator for each old global discriminator.
+        std::unordered_map<ColumnVariant::Discriminator, ColumnVariant::Discriminator> old_global_discriminator_to_new;
+        old_global_discriminator_to_new.reserve(old_variants.size());
+        for (const auto & [old_variant_type, old_discriminator] : old_variant_types_to_old_global_discriminator)
+        {
+            auto it = new_variant_types_to_new_global_discriminator.find(old_variant_type);
+            if (it == new_variant_types_to_new_global_discriminator.end())
+                throw Exception(
+                    ErrorCodes::CANNOT_CONVERT_TYPE,
+                    "Cannot convert type {} to {}. Conversion between variant types is allowed only when new variant type is an extension "
+                    "of an initial one", from_variant.getName(), to_variant.getName());
+            old_global_discriminator_to_new[old_discriminator] = it->second;
+        }
+
+        /// Collect variant types and their global discriminators that should be added to the old Variant to get the new Variant.
+        std::vector<std::pair<DataTypePtr, ColumnVariant::Discriminator>> variant_types_and_discriminators_to_add;
+        variant_types_and_discriminators_to_add.reserve(new_variants.size() - old_variants.size());
+        for (size_t i = 0; i != new_variants.size(); ++i)
+        {
+            if (!old_variant_types_to_old_global_discriminator.contains(new_variants[i]->getName()))
+                variant_types_and_discriminators_to_add.emplace_back(new_variants[i], i);
+        }
+
+        return [old_global_discriminator_to_new, variant_types_and_discriminators_to_add]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t) -> ColumnPtr
+        {
+            const auto & column_variant = assert_cast<const ColumnVariant &>(*arguments.front().column.get());
+            size_t num_old_variants = column_variant.getNumVariants();
+            Columns new_variant_columns;
+            new_variant_columns.reserve(num_old_variants + variant_types_and_discriminators_to_add.size());
+            std::vector<ColumnVariant::Discriminator> new_local_to_global_discriminators;
+            new_local_to_global_discriminators.reserve(num_old_variants + variant_types_and_discriminators_to_add.size());
+            for (size_t i = 0; i != num_old_variants; ++i)
+            {
+                new_variant_columns.push_back(column_variant.getVariantPtrByLocalDiscriminator(i));
+                new_local_to_global_discriminators.push_back(old_global_discriminator_to_new.at(column_variant.globalDiscriminatorByLocal(i)));
+            }
+
+            for (const auto & [new_variant_type, new_global_discriminator] : variant_types_and_discriminators_to_add)
+            {
+                new_variant_columns.push_back(new_variant_type->createColumn());
+                new_local_to_global_discriminators.push_back(new_global_discriminator);
+            }
+
+            return ColumnVariant::create(column_variant.getLocalDiscriminatorsPtr(), column_variant.getOffsetsPtr(), new_variant_columns, new_local_to_global_discriminators);
+        };
+    }
+
+    /// Create wrapper only if we support this conversion.
+    WrapperType createWrapperIfCanConvert(const DataTypePtr & from, const DataTypePtr & to) const
+    {
+        try
+        {
+            /// We can avoid try/catch here if we will implement check that 2 types can be cast, but it
+            /// requires quite a lot of work. By now let's simply use try/catch.
+            /// First, check that we can create a wrapper.
+            WrapperType wrapper = prepareUnpackDictionaries(from, to);
+            /// Second, check if we can perform a conversion on column with default value.
+            /// (we cannot just check empty column as we do some checks only during iteration over rows).
+            auto test_col = from->createColumn();
+            test_col->insertDefault();
+            ColumnsWithTypeAndName column_from = {{test_col->getPtr(), from, "" }};
+            wrapper(column_from, to, nullptr, 1);
+            return wrapper;
+        }
+        catch (const Exception &)
+        {
+            return {};
+        }
+    }
+
+    WrapperType createVariantToColumnWrapper(const DataTypeVariant & from_variant, const DataTypePtr & to_type) const
+    {
+        const auto & variant_types = from_variant.getVariants();
+        std::vector<WrapperType> variant_wrappers;
+        variant_wrappers.reserve(variant_types.size());
+
+        /// Create conversion wrapper for each variant.
+        for (const auto & variant_type : variant_types)
+        {
+            WrapperType wrapper;
+            if (cast_type == CastType::accurateOrNull)
+            {
+                /// Create wrapper only if we support conversion from variant to the resulting type.
+                wrapper = createWrapperIfCanConvert(variant_type, to_type);
+            }
+            else
+            {
+                wrapper = prepareUnpackDictionaries(variant_type, to_type);
+            }
+            variant_wrappers.push_back(wrapper);
+        }
+
+        return [variant_wrappers, variant_types, to_type]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count) -> ColumnPtr
+        {
+            const auto & column_variant = assert_cast<const ColumnVariant &>(*arguments.front().column.get());
+
+            /// First, cast each variant to the result type.
+            std::vector<ColumnPtr> cast_variant_columns;
+            cast_variant_columns.reserve(variant_types.size());
+            for (size_t i = 0; i != variant_types.size(); ++i)
+            {
+                auto variant_col = column_variant.getVariantPtrByGlobalDiscriminator(i);
+                ColumnsWithTypeAndName variant = {{variant_col, variant_types[i], "" }};
+                const auto & variant_wrapper = variant_wrappers[i];
+                ColumnPtr cast_variant;
+                /// Check if we have wrapper for this variant.
+                if (variant_wrapper)
+                    cast_variant = variant_wrapper(variant, result_type, nullptr, variant_col->size());
+                cast_variant_columns.push_back(std::move(cast_variant));
+            }
+
+            /// Second, construct resulting column from cast variant columns according to discriminators.
+            const auto & local_discriminators = column_variant.getLocalDiscriminators();
+            auto res = result_type->createColumn();
+            res->reserve(input_rows_count);
+            for (size_t i = 0; i != input_rows_count; ++i)
+            {
+                auto global_discr = column_variant.globalDiscriminatorByLocal(local_discriminators[i]);
+                if (global_discr == ColumnVariant::NULL_DISCRIMINATOR || !cast_variant_columns[global_discr])
+                    res->insertDefault();
+                else
+                    res->insertFrom(*cast_variant_columns[global_discr], column_variant.offsetAt(i));
             }
 
             return res;
         };
     }
 
-    WrapperType createMapToObjectWrapper(const DataTypeMap & from_map, bool has_nullable_subcolumns) const
+    static ColumnPtr createVariantFromDescriptorsAndOneNonEmptyVariant(const DataTypes & variant_types, const ColumnPtr & discriminators, const ColumnPtr & variant, ColumnVariant::Discriminator variant_discr)
     {
-        auto key_value_types = from_map.getKeyValueTypes();
-
-        if (!isStringOrFixedString(key_value_types[0]))
-            throw Exception(ErrorCodes::TYPE_MISMATCH,
-                "Cast to json from Map can be performed only from map "
-                "with string or fixed_string key. Got: {}", from_map.getName());
-
-        const auto & value_type = key_value_types[1];
-        auto to_value_type = value_type;
-
-        if (!has_nullable_subcolumns && value_type->isNullable())
-            to_value_type = removeNullable(value_type);
-
-        if (has_nullable_subcolumns && !value_type->isNullable())
-            to_value_type = makeNullable(value_type);
-
-        DataTypes to_key_value_types{std::make_shared<DataTypeString>(), std::move(to_value_type)};
-        auto element_wrappers = getElementWrappers(key_value_types, to_key_value_types);
-
-        return [has_nullable_subcolumns, element_wrappers, key_value_types, to_key_value_types]
-            (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable * nullable_source, size_t) -> ColumnPtr
+        Columns variants;
+        variants.reserve(variant_types.size());
+        for (size_t i = 0; i != variant_types.size(); ++i)
         {
-            const auto & column_map = assert_cast<const ColumnMap &>(*arguments.front().column);
-            const auto & offsets = column_map.getNestedColumn().getOffsets();
-            auto key_value_columns = column_map.getNestedData().getColumnsCopy();
+            if (i == variant_discr)
+                variants.emplace_back(variant);
+            else
+                variants.push_back(variant_types[i]->createColumn());
+        }
 
-            for (size_t i = 0; i < 2; ++i)
+        return ColumnVariant::create(discriminators, variants);
+    }
+
+    WrapperType createStringToVariantWrapper() const
+    {
+        return [&](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count) -> ColumnPtr
+        {
+            auto column = arguments[0].column->convertToFullColumnIfLowCardinality();
+            auto args = arguments;
+            args[0].column = column;
+
+            const ColumnNullable * column_nullable = nullptr;
+            if (isColumnNullable(*args[0].column))
             {
-                ColumnsWithTypeAndName element{{key_value_columns[i], key_value_types[i], ""}};
-                key_value_columns[i] = element_wrappers[i](element, to_key_value_types[i], nullable_source, key_value_columns[i]->size());
+                column_nullable = assert_cast<const ColumnNullable *>(args[0].column.get());
+                args[0].column = column_nullable->getNestedColumnPtr();
             }
 
-            const auto & key_column_str = assert_cast<const ColumnString &>(*key_value_columns[0]);
-            const auto & value_column = *key_value_columns[1];
+            args[0].type = removeNullable(removeLowCardinality(args[0].type));
 
-            using SubcolumnsMap = HashMap<StringRef, MutableColumnPtr, StringRefHash>;
-            SubcolumnsMap subcolumns;
-
-            for (size_t row = 0; row < offsets.size(); ++row)
-            {
-                for (size_t i = offsets[static_cast<ssize_t>(row) - 1]; i < offsets[row]; ++i)
-                {
-                    auto ref = key_column_str.getDataAt(i);
-
-                    bool inserted;
-                    SubcolumnsMap::LookupResult it;
-                    subcolumns.emplace(ref, it, inserted);
-                    auto & subcolumn = it->getMapped();
-
-                    if (inserted)
-                        subcolumn = value_column.cloneEmpty()->cloneResized(row);
-
-                    /// Map can have duplicated keys. We insert only first one.
-                    if (subcolumn->size() == row)
-                        subcolumn->insertFrom(value_column, i);
-                }
-
-                /// Insert default values for keys missed in current row.
-                for (const auto & [_, subcolumn] : subcolumns)
-                    if (subcolumn->size() == row)
-                        subcolumn->insertDefault();
-            }
-
-            auto column_object = ColumnObject::create(has_nullable_subcolumns);
-            for (auto && [key, subcolumn] : subcolumns)
-            {
-                PathInData path(key.toView());
-                column_object->addSubcolumn(path, std::move(subcolumn));
-            }
-
-            return column_object;
+            if (cast_type == CastType::accurateOrNull)
+                return ConvertImplGenericFromString<false>::execute(args, result_type, column_nullable, input_rows_count, context);
+            return ConvertImplGenericFromString<true>::execute(args, result_type, column_nullable, input_rows_count, context);
         };
     }
 
-    WrapperType createObjectWrapper(const DataTypePtr & from_type, const DataTypeObject * to_type) const
+    WrapperType createColumnToVariantWrapper(const DataTypePtr & from_type, const DataTypeVariant & to_variant) const
     {
-        if (const auto * from_tuple = checkAndGetDataType<DataTypeTuple>(from_type.get()))
+        /// We allow converting NULL to Variant(...) as Variant can store NULLs.
+        if (from_type->onlyNull())
         {
-            return createTupleToObjectWrapper(*from_tuple, to_type->hasNullableSubcolumns());
-        }
-        else if (const auto * from_map = checkAndGetDataType<DataTypeMap>(from_type.get()))
-        {
-            return createMapToObjectWrapper(*from_map, to_type->hasNullableSubcolumns());
-        }
-        else if (checkAndGetDataType<DataTypeString>(from_type.get()))
-        {
-            return [] (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * nullable_source, size_t input_rows_count)
+            return [](ColumnsWithTypeAndName &, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count) -> ColumnPtr
             {
-                auto res = ConvertImplGenericFromString<ColumnString>::execute(arguments, result_type, nullable_source, input_rows_count)->assumeMutable();
-                res->finalize();
-                return res;
-            };
-        }
-        else if (checkAndGetDataType<DataTypeObject>(from_type.get()))
-        {
-            return [is_nullable = to_type->hasNullableSubcolumns()] (ColumnsWithTypeAndName & arguments, const DataTypePtr & , const ColumnNullable * , size_t) -> ColumnPtr
-            {
-                auto & column_object = assert_cast<const ColumnObject &>(*arguments.front().column);
-                auto res = ColumnObject::create(is_nullable);
-                for (size_t i = 0; i < column_object.size(); i++)
-                    res->insert(column_object[i]);
-
-                res->finalize();
-                return res;
+                auto result_column = result_type->createColumn();
+                result_column->insertManyDefaults(input_rows_count);
+                return result_column;
             };
         }
 
-        throw Exception(ErrorCodes::TYPE_MISMATCH,
-            "Cast to json can be performed only from flatten named tuple, map or string. Got: {}", from_type->getName());
+        auto variant_discr_opt = to_variant.tryGetVariantDiscriminator(removeNullableOrLowCardinalityNullable(from_type)->getName());
+        /// Cast String to Variant through parsing if it's not Variant(String).
+        if (isStringOrFixedString(removeNullable(removeLowCardinality(from_type))) && (!variant_discr_opt || to_variant.getVariants().size() > 1))
+            return createStringToVariantWrapper();
+
+        if (!variant_discr_opt)
+            throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Cannot convert type {} to {}. Conversion to Variant allowed only for types from this Variant", from_type->getName(), to_variant.getName());
+
+        return [variant_discr = *variant_discr_opt]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t) -> ColumnPtr
+        {
+            const auto & result_variant_type = assert_cast<const DataTypeVariant &>(*result_type);
+            const auto & variant_types = result_variant_type.getVariants();
+            if (const ColumnNullable * col_nullable = typeid_cast<const ColumnNullable *>(arguments.front().column.get()))
+            {
+                const auto & column = col_nullable->getNestedColumnPtr();
+                const auto & null_map = col_nullable->getNullMapData();
+                IColumn::Filter filter;
+                filter.reserve(column->size());
+                auto discriminators = ColumnVariant::ColumnDiscriminators::create();
+                auto & discriminators_data = discriminators->getData();
+                discriminators_data.reserve(column->size());
+                size_t variant_size_hint = 0;
+                for (size_t i = 0; i != column->size(); ++i)
+                {
+                    if (null_map[i])
+                    {
+                        discriminators_data.push_back(ColumnVariant::NULL_DISCRIMINATOR);
+                        filter.push_back(0);
+                    }
+                    else
+                    {
+                        discriminators_data.push_back(variant_discr);
+                        filter.push_back(1);
+                        ++variant_size_hint;
+                    }
+                }
+
+                ColumnPtr variant_column;
+                /// If there were no NULLs, just use the column.
+                if (variant_size_hint == column->size())
+                    variant_column = column;
+                /// Otherwise we should use filtered column.
+                else
+                    variant_column = column->filter(filter, variant_size_hint);
+                return createVariantFromDescriptorsAndOneNonEmptyVariant(variant_types, std::move(discriminators), variant_column, variant_discr);
+            }
+            else if (isColumnLowCardinalityNullable(*arguments.front().column))
+            {
+                const auto & column = arguments.front().column;
+
+                /// Variant column cannot have LowCardinality(Nullable(...)) variant, as Variant column stores NULLs itself.
+                /// We should create a null-map, insert NULL_DISCRIMINATOR on NULL values and filter initial column.
+                const auto & col_lc = assert_cast<const ColumnLowCardinality &>(*column);
+                const auto & indexes = col_lc.getIndexes();
+                auto null_index = col_lc.getDictionary().getNullValueIndex();
+                IColumn::Filter filter;
+                filter.reserve(col_lc.size());
+                auto discriminators = ColumnVariant::ColumnDiscriminators::create();
+                auto & discriminators_data = discriminators->getData();
+                discriminators_data.reserve(col_lc.size());
+                size_t variant_size_hint = 0;
+                for (size_t i = 0; i != col_lc.size(); ++i)
+                {
+                    if (indexes.getUInt(i) == null_index)
+                    {
+                        discriminators_data.push_back(ColumnVariant::NULL_DISCRIMINATOR);
+                        filter.push_back(0);
+                    }
+                    else
+                    {
+                        discriminators_data.push_back(variant_discr);
+                        filter.push_back(1);
+                        ++variant_size_hint;
+                    }
+                }
+
+                MutableColumnPtr variant_column;
+                /// If there were no NULLs, we can just clone the column.
+                if (variant_size_hint == col_lc.size())
+                    variant_column = IColumn::mutate(column);
+                /// Otherwise we should filter column.
+                else
+                    variant_column = IColumn::mutate(column->filter(filter, variant_size_hint));
+
+                assert_cast<ColumnLowCardinality &>(*variant_column).nestedRemoveNullable();
+                return createVariantFromDescriptorsAndOneNonEmptyVariant(variant_types, std::move(discriminators), std::move(variant_column), variant_discr);
+            }
+            else
+            {
+                const auto & column = arguments.front().column;
+                auto discriminators = ColumnVariant::ColumnDiscriminators::create();
+                discriminators->getData().resize_fill(column->size(), variant_discr);
+                return createVariantFromDescriptorsAndOneNonEmptyVariant(variant_types, std::move(discriminators), column, variant_discr);
+            }
+        };
+    }
+
+    /// Wrapper for conversion to/from Variant type
+    WrapperType createVariantWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    {
+        if (const auto * from_variant = checkAndGetDataType<DataTypeVariant>(from_type.get()))
+        {
+            if (const auto * to_variant = checkAndGetDataType<DataTypeVariant>(to_type.get()))
+                return createVariantToVariantWrapper(*from_variant, *to_variant);
+
+            return createVariantToColumnWrapper(*from_variant, to_type);
+        }
+
+        return createColumnToVariantWrapper(from_type, assert_cast<const DataTypeVariant &>(*to_type));
+    }
+
+    WrapperType createDynamicToColumnWrapper(const DataTypePtr &) const
+    {
+        auto nested_convert = [this](ColumnsWithTypeAndName & args, const DataTypePtr & result_type) -> ColumnPtr
+        {
+            WrapperType wrapper;
+            if (cast_type == CastType::accurateOrNull)
+            {
+                /// Create wrapper only if we support conversion from variant to the resulting type.
+                wrapper = createWrapperIfCanConvert(args[0].type, result_type);
+                if (!wrapper)
+                    return nullptr;
+            }
+            else
+            {
+                wrapper = prepareUnpackDictionaries(args[0].type, result_type);
+            }
+
+            return wrapper(args, result_type, nullptr, args[0].column->size());
+        };
+
+        return [nested_convert]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count) -> ColumnPtr
+        {
+            return ConvertImplFromDynamicToColumn::execute(arguments, result_type, input_rows_count, nested_convert);
+        };
+    }
+
+    WrapperType createStringToDynamicThroughParsingWrapper() const
+    {
+        return [&](ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count) -> ColumnPtr
+        {
+            auto column = arguments[0].column->convertToFullColumnIfLowCardinality();
+            auto args = arguments;
+            args[0].column = column;
+
+            const ColumnNullable * column_nullable = nullptr;
+            if (isColumnNullable(*args[0].column))
+            {
+                column_nullable = assert_cast<const ColumnNullable *>(args[0].column.get());
+                args[0].column = column_nullable->getNestedColumnPtr();
+            }
+
+            args[0].type = removeNullable(removeLowCardinality(args[0].type));
+
+            if (cast_type == CastType::accurateOrNull)
+                return ConvertImplGenericFromString<false>::execute(args, result_type, column_nullable, input_rows_count, context);
+            return ConvertImplGenericFromString<true>::execute(args, result_type, column_nullable, input_rows_count, context);
+        };
+    }
+
+    WrapperType createVariantToDynamicWrapper(const DataTypeVariant & from_variant_type, const DataTypeDynamic & dynamic_type) const
+    {
+        /// First create extended Variant with shared variant type and cast this Variant to it.
+        auto variants_for_dynamic = from_variant_type.getVariants();
+        size_t number_of_variants = variants_for_dynamic.size();
+        variants_for_dynamic.push_back(ColumnDynamic::getSharedVariantDataType());
+        const auto & variant_type_for_dynamic = std::make_shared<DataTypeVariant>(variants_for_dynamic);
+        auto old_to_new_variant_wrapper = createVariantToVariantWrapper(from_variant_type, *variant_type_for_dynamic);
+        auto max_dynamic_types = dynamic_type.getMaxDynamicTypes();
+        return [old_to_new_variant_wrapper, variant_type_for_dynamic, number_of_variants, max_dynamic_types]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * col_nullable, size_t input_rows_count) -> ColumnPtr
+        {
+            auto variant_column_for_dynamic = old_to_new_variant_wrapper(arguments, result_type, col_nullable, input_rows_count);
+            /// If resulting Dynamic column can contain all variants from this Variant column, just create Dynamic column from it.
+            if (max_dynamic_types >= number_of_variants)
+                return ColumnDynamic::create(variant_column_for_dynamic, variant_type_for_dynamic, max_dynamic_types, max_dynamic_types);
+
+            /// Otherwise some variants should go to the shared variant. Create temporary Dynamic column from this Variant and insert
+            /// all data to the resulting Dynamic column, this insertion will do all the logic with shared variant.
+            auto tmp_dynamic_column = ColumnDynamic::create(variant_column_for_dynamic, variant_type_for_dynamic, number_of_variants, number_of_variants);
+            auto result_dynamic_column = ColumnDynamic::create(max_dynamic_types);
+            result_dynamic_column->insertRangeFrom(*tmp_dynamic_column, 0, tmp_dynamic_column->size());
+            return result_dynamic_column;
+        };
+    }
+
+    WrapperType createColumnToDynamicWrapper(const DataTypePtr & from_type, const DataTypeDynamic & dynamic_type) const
+    {
+        if (const auto * variant_type = typeid_cast<const DataTypeVariant *>(from_type.get()))
+            return createVariantToDynamicWrapper(*variant_type, dynamic_type);
+
+        if (from_type->onlyNull())
+            return [](ColumnsWithTypeAndName &, const DataTypePtr & result_type, const ColumnNullable *, size_t input_rows_count) -> ColumnPtr
+            {
+                auto result = result_type->createColumn();
+                result->insertManyDefaults(input_rows_count);
+                return result;
+            };
+
+        if (context && context->getSettingsRef().cast_string_to_dynamic_use_inference && isStringOrFixedString(removeNullable(removeLowCardinality(from_type))))
+            return createStringToDynamicThroughParsingWrapper();
+
+        /// First, cast column to Variant with 2 variants - the type of the column we cast and shared variant type.
+        auto variant_type = std::make_shared<DataTypeVariant>(DataTypes{removeNullableOrLowCardinalityNullable(from_type)});
+        auto column_to_variant_wrapper = createColumnToVariantWrapper(from_type, *variant_type);
+        /// Second, cast this Variant to Dynamic.
+        auto variant_to_dynamic_wrapper = createVariantToDynamicWrapper(*variant_type, dynamic_type);
+        return [column_to_variant_wrapper, variant_to_dynamic_wrapper, variant_type]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * col_nullable, size_t input_rows_count) -> ColumnPtr
+        {
+            auto variant_res = column_to_variant_wrapper(arguments, variant_type, col_nullable, input_rows_count);
+            ColumnsWithTypeAndName args = {{variant_res, variant_type, ""}};
+            return variant_to_dynamic_wrapper(args, result_type, nullptr, input_rows_count);
+        };
+    }
+
+    WrapperType createDynamicToDynamicWrapper(const DataTypeDynamic & from_dynamic, const DataTypeDynamic & to_dynamic) const
+    {
+        size_t from_max_types = from_dynamic.getMaxDynamicTypes();
+        size_t to_max_types = to_dynamic.getMaxDynamicTypes();
+        if (from_max_types == to_max_types)
+            return createIdentityWrapper(from_dynamic.getPtr());
+
+        if (to_max_types > from_max_types)
+        {
+            return [to_max_types]
+                   (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t) -> ColumnPtr
+            {
+                const auto & dynamic_column = assert_cast<const ColumnDynamic &>(*arguments[0].column);
+                /// We should use the same limit as already used in column and change only global limit.
+                /// It's needed because shared variant should contain values only when limit is exceeded,
+                /// so if there are already some data, we cannot increase the limit.
+                return ColumnDynamic::create(dynamic_column.getVariantColumnPtr(), dynamic_column.getVariantInfo(), dynamic_column.getMaxDynamicTypes(), to_max_types);
+            };
+        }
+
+        return [to_max_types]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t) -> ColumnPtr
+        {
+            const auto & dynamic_column = assert_cast<const ColumnDynamic &>(*arguments[0].column);
+            /// If real limit in the column is not greater than desired, just use the same variant column.
+            if (dynamic_column.getMaxDynamicTypes() <= to_max_types)
+                return ColumnDynamic::create(dynamic_column.getVariantColumnPtr(), dynamic_column.getVariantInfo(), dynamic_column.getMaxDynamicTypes(), to_max_types);
+
+            /// Otherwise some variants should go to the shared variant. We try to keep the most frequent variants.
+            const auto & variant_info = dynamic_column.getVariantInfo();
+            const auto & variants = assert_cast<const DataTypeVariant &>(*variant_info.variant_type).getVariants();
+            const auto & statistics = dynamic_column.getStatistics();
+            const auto & variant_column = dynamic_column.getVariantColumn();
+            auto shared_variant_discr = dynamic_column.getSharedVariantDiscriminator();
+            std::vector<std::tuple<size_t, String, DataTypePtr>> variants_with_sizes;
+            variants_with_sizes.reserve(variant_info.variant_names.size());
+            for (const auto & [name, discr] : variant_info.variant_name_to_discriminator)
+            {
+                /// Don't include shared variant.
+                if (discr == shared_variant_discr)
+                    continue;
+
+                size_t size = variant_column.getVariantByGlobalDiscriminator(discr).size();
+                /// If column has statistics from the data part, use size from it for consistency.
+                /// It's important to keep the same dynamic structure of the result column during ALTER.
+                if (statistics)
+                {
+                    auto statistics_it = statistics->variants_statistics.find(name);
+                    if (statistics_it != statistics->variants_statistics.end())
+                        size = statistics_it->second;
+                }
+                variants_with_sizes.emplace_back(size, name, variants[discr]);
+            }
+
+            std::sort(variants_with_sizes.begin(), variants_with_sizes.end(), std::greater());
+            DataTypes result_variants;
+            result_variants.reserve(to_max_types + 1); /// +1 for shared variant.
+            /// Add new variants from sorted list until we reach to_max_types.
+            for (const auto & [size, name, type] : variants_with_sizes)
+            {
+                if (result_variants.size() < to_max_types)
+                    result_variants.push_back(type);
+                else
+                    break;
+            }
+
+            /// Add shared variant.
+            result_variants.push_back(ColumnDynamic::getSharedVariantDataType());
+            /// Create resulting Variant type and Dynamic column.
+            auto result_variant_type = std::make_shared<DataTypeVariant>(result_variants);
+            auto result_dynamic_column = ColumnDynamic::create(result_variant_type->createColumn(), result_variant_type, to_max_types, to_max_types);
+            const auto & result_variant_info = result_dynamic_column->getVariantInfo();
+            auto & result_variant_column = result_dynamic_column->getVariantColumn();
+            auto result_shared_variant_discr = result_dynamic_column->getSharedVariantDiscriminator();
+            /// Create mapping from old discriminators to the new ones.
+            std::vector<ColumnVariant::Discriminator> old_to_new_discriminators;
+            old_to_new_discriminators.resize(variant_info.variant_name_to_discriminator.size(), result_shared_variant_discr);
+            for (const auto & [name, discr] : result_variant_info.variant_name_to_discriminator)
+            {
+                auto old_discr = variant_info.variant_name_to_discriminator.at(name);
+                old_to_new_discriminators[old_discr] = discr;
+                /// Reuse old variant column if it's not shared variant.
+                if (discr != result_shared_variant_discr)
+                    result_variant_column.getVariantPtrByGlobalDiscriminator(discr) = variant_column.getVariantPtrByGlobalDiscriminator(old_discr);
+            }
+
+            const auto & local_discriminators = variant_column.getLocalDiscriminators();
+            const auto & offsets = variant_column.getOffsets();
+            const auto & shared_variant = dynamic_column.getSharedVariant();
+            auto & result_local_discriminators = result_variant_column.getLocalDiscriminators();
+            result_local_discriminators.reserve(local_discriminators.size());
+            auto & result_offsets = result_variant_column.getOffsets();
+            result_offsets.reserve(offsets.size());
+            auto & result_shared_variant = result_dynamic_column->getSharedVariant();
+            for (size_t i = 0; i != local_discriminators.size(); ++i)
+            {
+                auto global_discr = variant_column.globalDiscriminatorByLocal(local_discriminators[i]);
+                if (global_discr == ColumnVariant::NULL_DISCRIMINATOR)
+                {
+                    result_local_discriminators.push_back(ColumnVariant::NULL_DISCRIMINATOR);
+                    result_offsets.emplace_back();
+                }
+                else if (global_discr == shared_variant_discr)
+                {
+                    result_local_discriminators.push_back(result_variant_column.localDiscriminatorByGlobal(result_shared_variant_discr));
+                    result_offsets.push_back(result_shared_variant.size());
+                    result_shared_variant.insertFrom(shared_variant, offsets[i]);
+                }
+                else
+                {
+                    auto result_global_discr = old_to_new_discriminators[global_discr];
+                    if (result_global_discr == result_shared_variant_discr)
+                    {
+                        result_local_discriminators.push_back(result_variant_column.localDiscriminatorByGlobal(result_shared_variant_discr));
+                        result_offsets.push_back(result_shared_variant.size());
+                        ColumnDynamic::serializeValueIntoSharedVariant(
+                            result_shared_variant,
+                            variant_column.getVariantByGlobalDiscriminator(global_discr),
+                            variants[global_discr],
+                            variants[global_discr]->getDefaultSerialization(),
+                            offsets[i]);
+                    }
+                    else
+                    {
+                        result_local_discriminators.push_back(result_variant_column.localDiscriminatorByGlobal(result_global_discr));
+                        result_offsets.push_back(offsets[i]);
+                    }
+                }
+            }
+
+            return result_dynamic_column;
+        };
+    }
+
+    /// Wrapper for conversion to/from Dynamic type
+    WrapperType createDynamicWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    {
+        if (const auto * from_dynamic = checkAndGetDataType<DataTypeDynamic>(from_type.get()))
+        {
+            if (const auto * to_dynamic = checkAndGetDataType<DataTypeDynamic>(to_type.get()))
+                return createDynamicToDynamicWrapper(*from_dynamic, *to_dynamic);
+
+            return createDynamicToColumnWrapper(to_type);
+        }
+
+        return createColumnToDynamicWrapper(from_type, *checkAndGetDataType<DataTypeDynamic>(to_type.get()));
     }
 
     template <typename FieldType>
@@ -3833,8 +5070,8 @@ private:
             if (cast_type == CastType::accurateOrNull)
                 return createToNullableColumnWrapper();
             else
-                throw Exception{"Conversion from " + from_type->getName() + " to " + to_type->getName() + " is not supported",
-                    ErrorCodes::CANNOT_CONVERT_TYPE};
+                throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Conversion from {} to {} is not supported",
+                    from_type->getName(), to_type->getName());
         }
     }
 
@@ -3858,8 +5095,8 @@ private:
             const auto & old_value = name_value.second;
             const auto & new_value = to_type->getValue(name_value.first);
             if (old_value != new_value)
-                throw Exception{"Enum conversion changes value for element '" + name_value.first +
-                    "' from " + toString(old_value) + " to " + toString(new_value), ErrorCodes::CANNOT_CONVERT_TYPE};
+                throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Enum conversion changes value for element '{}' from {} to {}",
+                    name_value.first, toString(old_value), toString(new_value));
         }
     }
 
@@ -3876,7 +5113,7 @@ private:
             const ColumnStringType * col = typeid_cast<const ColumnStringType *>(first_col);
 
             if (col && nullable_col && nullable_col->size() != col->size())
-                throw Exception("ColumnNullable is not compatible with original", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "ColumnNullable is not compatible with original");
 
             if (col)
             {
@@ -3907,8 +5144,8 @@ private:
                 return res;
             }
             else
-                throw Exception{"Unexpected column " + first_col->getName() + " as first argument of function " + function_name,
-                    ErrorCodes::LOGICAL_ERROR};
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected column {} as first argument of function {}",
+                    first_col->getName(), function_name);
         };
     }
 
@@ -3932,6 +5169,14 @@ private:
 
     WrapperType prepareUnpackDictionaries(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
+        /// Conversion from/to Variant/Dynamic data type is processed in a special way.
+        /// We don't need to remove LowCardinality/Nullable.
+        if (isDynamic(to_type) || isDynamic(from_type))
+            return createDynamicWrapper(from_type, to_type);
+
+        if (isVariant(to_type) || isVariant(from_type))
+            return createVariantWrapper(from_type, to_type);
+
         const auto * from_low_cardinality = typeid_cast<const DataTypeLowCardinality *>(from_type.get());
         const auto * to_low_cardinality = typeid_cast<const DataTypeLowCardinality *>(to_type.get());
         const auto & from_nested = from_low_cardinality ? from_low_cardinality->getDictionaryType() : from_type;
@@ -3939,7 +5184,7 @@ private:
 
         if (from_type->onlyNull())
         {
-            if (!to_nested->isNullable())
+            if (!to_nested->isNullable() && !isVariant(to_type))
             {
                 if (cast_type == CastType::accurateOrNull)
                 {
@@ -3947,7 +5192,7 @@ private:
                 }
                 else
                 {
-                    throw Exception{"Cannot convert NULL to a non-nullable type", ErrorCodes::CANNOT_CONVERT_TYPE};
+                    throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Cannot convert NULL to a non-nullable type");
                 }
             }
 
@@ -3977,7 +5222,7 @@ private:
             ColumnPtr converted_column;
 
             ColumnPtr res_indexes;
-            /// For some types default can't be casted (for example, String to Int). In that case convert column to full.
+            /// For some types default can't be cast (for example, String to Int). In that case convert column to full.
             bool src_converted_to_full_column = false;
 
             {
@@ -3991,8 +5236,7 @@ private:
                     const auto * col_low_cardinality = typeid_cast<const ColumnLowCardinality *>(arguments[0].column.get());
 
                     if (skip_not_null_check && col_low_cardinality->containsNull())
-                        throw Exception{"Cannot convert null value to non-nullable type",
-                                        ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
+                        throw Exception(ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN, "Cannot convert null value to non-nullable type");
 
                     arg.column = col_low_cardinality->getDictionary().getNestedColumn();
                     arg.type = from_low_cardinality->getDictionaryType();
@@ -4017,9 +5261,7 @@ private:
                 auto * col_low_cardinality = typeid_cast<ColumnLowCardinality *>(res_column.get());
 
                 if (from_low_cardinality && !src_converted_to_full_column)
-                {
                     col_low_cardinality->insertRangeFromDictionaryEncodedColumn(*converted_column, *res_indexes);
-                }
                 else
                     col_low_cardinality->insertRangeFromFullColumn(*converted_column, 0, converted_column->size());
 
@@ -4062,7 +5304,7 @@ private:
                 if (source_is_nullable)
                 {
                     if (arguments.size() != 1)
-                        throw Exception("Invalid number of arguments", ErrorCodes::LOGICAL_ERROR);
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid number of arguments");
                     nullable_source = typeid_cast<const ColumnNullable *>(arguments.front().column.get());
                 }
 
@@ -4071,8 +5313,8 @@ private:
 
                 /// May happen in fuzzy tests. For debug purpose.
                 if (!tmp_res)
-                    throw Exception("Couldn't convert " + arguments[0].type->getName() + " to "
-                                    + nested_type->getName() + " in " + " prepareRemoveNullable wrapper.", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Couldn't convert {} to {} in prepareRemoveNullable wrapper.",
+                                    arguments[0].type->getName(), nested_type->getName());
 
                 return wrapInNullable(tmp_res, arguments, nested_type, input_rows_count);
             };
@@ -4097,8 +5339,7 @@ private:
                     const auto & null_map = nullable_col.getNullMapData();
 
                     if (!memoryIsZero(null_map.data(), 0, null_map.size()))
-                        throw Exception{"Cannot convert null value to non-nullable type",
-                                        ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
+                        throw Exception(ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN, "Cannot convert null value to non-nullable type");
                 }
                 const ColumnNullable * nullable_source = typeid_cast<const ColumnNullable *>(arguments.front().column.get());
                 return wrapper(tmp_args, nested_type, nullable_source, input_rows_count);
@@ -4241,7 +5482,21 @@ private:
 
                 if (to_type->getCustomSerialization() && to_type->getCustomName())
                 {
-                    ret = &ConvertImplGenericFromString<typename FromDataType::ColumnType>::execute;
+                    ret = [requested_result_is_nullable, this](
+                              ColumnsWithTypeAndName & arguments,
+                              const DataTypePtr & result_type,
+                              const ColumnNullable * column_nullable,
+                              size_t input_rows_count) -> ColumnPtr
+                    {
+                        auto wrapped_result_type = result_type;
+                        if (requested_result_is_nullable)
+                            wrapped_result_type = makeNullable(result_type);
+                        if (this->cast_type == CastType::accurateOrNull)
+                            return ConvertImplGenericFromString<false>::execute(
+                                arguments, wrapped_result_type, column_nullable, input_rows_count, context);
+                        return ConvertImplGenericFromString<true>::execute(
+                            arguments, wrapped_result_type, column_nullable, input_rows_count, context);
+                    };
                     return true;
                 }
             }
@@ -4291,8 +5546,8 @@ private:
         if (cast_type == CastType::accurateOrNull)
             return createToNullableColumnWrapper();
         else
-            throw Exception{"Conversion from " + from_type->getName() + " to " + to_type->getName() + " is not supported",
-                ErrorCodes::CANNOT_CONVERT_TYPE};
+            throw Exception(ErrorCodes::CANNOT_CONVERT_TYPE, "Conversion from {} to {} is not supported",
+                from_type->getName(), to_type->getName());
     }
 };
 
@@ -4309,8 +5564,6 @@ public:
 
     static MonotonicityForRange getMonotonicityInformation(const DataTypePtr & from_type, const IDataType * to_type)
     {
-        if (const auto * type = checkAndGetDataType<DataTypeUInt8>(to_type))
-            return monotonicityForType(type);
         if (const auto * type = checkAndGetDataType<DataTypeUInt8>(to_type))
             return monotonicityForType(type);
         if (const auto * type = checkAndGetDataType<DataTypeUInt16>(to_type))

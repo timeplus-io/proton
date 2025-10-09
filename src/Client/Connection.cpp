@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <memory>
 #include <Poco/Net/NetException.h>
 #include <Core/Settings.h>
@@ -20,8 +21,10 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/OpenSSLHelpers.h>
 #include <Common/randomSeed.h>
-#include "Core/Block.h"
+#include <Common/logger_useful.h>
+#include <Core/Block.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Compression/CompressionFactory.h>
 #include <QueryPipeline/Pipe.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -30,7 +33,8 @@
 #include <pcg_random.hpp>
 #include <base/scope_guard.h>
 
-#include "config_version.h"
+#include <Common/config_version.h>
+#include <Core/Types.h>
 #include "config.h"
 
 #if USE_SSL
@@ -57,7 +61,17 @@ namespace ErrorCodes
     extern const int EMPTY_DATA_PASSED;
 }
 
-Connection::~Connection() = default;
+Connection::~Connection()
+{
+    try{
+        if (connected)
+            Connection::disconnect();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+}
 
 Connection::Connection(const String & host_, UInt16 port_,
     const String & default_database_,
@@ -111,7 +125,7 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
             /// the server know which host we want to talk with (single IP can process requests for multiple hosts using SNI).
             static_cast<Poco::Net::SecureStreamSocket*>(socket.get())->setPeerHostName(host);
 #else
-            throw Exception{"tcp_secure protocol is disabled because poco library was built without NetSSL support.", ErrorCodes::SUPPORT_IS_DISABLED};
+                throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "tcp_secure protocol is disabled because poco library was built without NetSSL support.");
 #endif
         }
         else
@@ -146,7 +160,7 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
         connected = true;
 
         sendHello();
-        receiveHello();
+        receiveHello(timeouts.handshake_timeout);
         if (server_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_ADDENDUM)
             sendAddendum();
 
@@ -158,7 +172,7 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
         disconnect();
 
         /// Add server address to exception. Also Exception will remember stack trace. It's a pity that more precise exception type is lost.
-        throw NetException(e.displayText() + " (" + getDescription() + ")", ErrorCodes::NETWORK_ERROR);
+        throw NetException(ErrorCodes::NETWORK_ERROR, "{} ({})", e.displayText(), getDescription());
     }
     catch (Poco::TimeoutException & e)
     {
@@ -171,21 +185,57 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
         disconnect();
 
         /// Add server address to exception. Also Exception will remember stack trace. It's a pity that more precise exception type is lost.
-        throw NetException(message, ErrorCodes::SOCKET_TIMEOUT);
+        throw NetException(ErrorCodes::SOCKET_TIMEOUT, message);
     }
 }
 
 
 void Connection::disconnect()
 {
-    maybe_compressed_out = nullptr;
     in = nullptr;
     last_input_packet_type.reset();
-    out = nullptr; // can write to socket
+    std::exception_ptr finalize_exception;
+
+    try
+    {
+        // finalize() can write and throw an exception.
+        if (maybe_compressed_out)
+            maybe_compressed_out->finalize();
+    }
+    catch (...)
+    {
+        /// Don't throw an exception here, it will leave Connection in invalid state.
+        finalize_exception = std::current_exception();
+
+        if (out)
+        {
+            out->cancel();
+            out = nullptr;
+        }
+    }
+    maybe_compressed_out = nullptr;
+
+    try
+    {
+        if (out)
+            out->finalize();
+    }
+    catch (...)
+    {
+        /// Don't throw an exception here, it will leave Connection in invalid state.
+        finalize_exception = std::current_exception();
+    }
+    out = nullptr;
+
     if (socket)
         socket->close();
+
     socket = nullptr;
     connected = false;
+    nonce.reset();
+
+    if (finalize_exception)
+        std::rethrow_exception(finalize_exception);
 }
 
 
@@ -211,12 +261,13 @@ void Connection::sendHello()
     if (has_control_character(default_database)
         || has_control_character(user)
         || has_control_character(password))
-        throw Exception("Parameters 'default_database', 'user' and 'password' must not contain ASCII control characters", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                        "Parameters 'default_database', 'user' and 'password' must not contain ASCII control characters");
 
     writeVarUInt(Protocol::Client::Hello, *out);
-    writeStringBinary((DBMS_NAME " ") + client_name, *out);
-    writeVarUInt(DBMS_VERSION_MAJOR, *out);
-    writeVarUInt(DBMS_VERSION_MINOR, *out);
+    writeStringBinary(std::string(VERSION_NAME) + " " + client_name, *out);
+    writeVarUInt(VERSION_MAJOR, *out);
+    writeVarUInt(VERSION_MINOR, *out);
     // NOTE For backward compatibility of the protocol, client cannot send its version_patch.
     writeVarUInt(DBMS_TCP_PROTOCOL_VERSION, *out);
     writeStringBinary(default_database, *out);
@@ -230,9 +281,8 @@ void Connection::sendHello()
 #if USE_SSL
         sendClusterNameAndSalt();
 #else
-        throw Exception(
-            "Inter-server secret support is disabled, because proton was built without SSL library",
-            ErrorCodes::SUPPORT_IS_DISABLED);
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
+                        "Inter-server secret support is disabled, because timeplus was built without SSL library");
 #endif
     }
     else
@@ -253,8 +303,10 @@ void Connection::sendAddendum()
 }
 
 
-void Connection::receiveHello()
+void Connection::receiveHello(const Poco::Timespan & handshake_timeout)
 {
+    TimeoutSetter timeout_setter(*socket, socket->getSendTimeout(), handshake_timeout);
+
     /// Receive hello packet.
     UInt64 packet_type = 0;
 
@@ -279,11 +331,24 @@ void Connection::receiveHello()
         readVarUInt(server_version_patch, *in);
         /// else
         ///    server_version_patch = server_revision;
+
+        if (server_revision >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_V2)
+        {
+            chassert(!nonce.has_value());
+
+            UInt64 read_nonce;
+            readIntBinary(read_nonce, *in);
+            nonce.emplace(read_nonce);
+        }
     }
     else if (packet_type == Protocol::Server::Exception)
         receiveException()->rethrow();
     else
     {
+        /// Reset timeout_setter before disconnect,
+        /// because after disconnect socket will be invalid.
+        timeout_setter.reset();
+
         /// Close connection, to not stay in unsynchronised state.
         disconnect();
         throwUnexpectedPacket(packet_type, "Hello or Exception");
@@ -457,6 +522,22 @@ void Connection::sendQuery(
     bool with_pending_data,
     std::function<void(const Progress &)>)
 {
+    OpenTelemetry::SpanHolder span("Connection::sendQuery()");
+    span.addAttribute("proton.query_id", query_id_);
+    span.addAttribute("proton.query", query);
+    span.addAttribute("target", [this] () { return this->getHost() + ":" + std::to_string(this->getPort()); });
+
+    ClientInfo new_client_info;
+    const auto &current_trace_context = OpenTelemetry::CurrentContext();
+    if (client_info && current_trace_context.isTraceEnabled())
+    {
+        // use current span as the parent of remote span
+        new_client_info = *client_info;
+        new_client_info.client_trace_context = current_trace_context;
+
+        client_info = &new_client_info;
+    }
+
     if (!connected)
         connect(timeouts);
 
@@ -521,6 +602,9 @@ void Connection::sendQuery(
         {
 #if USE_SSL
             std::string data(salt);
+            // For backward compatibility
+            if (nonce.has_value())
+                data += std::to_string(nonce.value());
             data += cluster_secret;
             data += query;
             data += query_id;
@@ -530,9 +614,8 @@ void Connection::sendQuery(
             std::string hash = encodeSHA256(data);
             writeStringBinary(hash, *out);
 #else
-        throw Exception(
-            "Inter-server secret support is disabled, because proton was built without SSL library",
-            ErrorCodes::SUPPORT_IS_DISABLED);
+            throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
+                            "Inter-server secret support is disabled, because proton was built without SSL library");
 #endif
         }
         else
@@ -553,6 +636,8 @@ void Connection::sendQuery(
     }
 
     maybe_compressed_in.reset();
+    if (maybe_compressed_out && maybe_compressed_out != out)
+        maybe_compressed_out->cancel();
     maybe_compressed_out.reset();
     block_in.reset();
     block_logs_in.reset();
@@ -588,9 +673,7 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
         else
             maybe_compressed_out = out;
 
-        block_out = std::make_unique<NativeWriter>(*maybe_compressed_out, block.cloneEmpty(), server_revision);
-        if (compatible_with_clickhouse)
-            block_out->setCompatibleWithClickHouse();
+        block_out = std::make_unique<NativeWriter>(*maybe_compressed_out, server_revision, block.cloneEmpty());
     }
 
     if (scalar)
@@ -626,7 +709,7 @@ void Connection::sendReadTaskResponse(const String & response)
 }
 
 
-void Connection::sendMergeTreeReadTaskResponse(const PartitionReadResponse & response)
+void Connection::sendMergeTreeReadTaskResponse(const ParallelReadResponse & response)
 {
     writeVarUInt(Protocol::Client::MergeTreeReadTaskResponse, *out);
     response.serialize(*out);
@@ -638,7 +721,7 @@ void Connection::sendPreparedData(ReadBuffer & input, size_t size, const String 
     /// NOTE 'Throttler' is not used in this method (could use, but it's not important right now).
 
     if (input.eof())
-        throw Exception("Buffer is empty (some kind of corruption)", ErrorCodes::EMPTY_DATA_PASSED);
+        throw Exception(ErrorCodes::EMPTY_DATA_PASSED, "Buffer is empty (some kind of corruption)");
 
     writeVarUInt(Protocol::Client::Data, *out);
     writeStringBinary(name, *out);
@@ -900,8 +983,12 @@ Packet Connection::receivePacket()
             case Protocol::Server::ReadTaskRequest:
                 return res;
 
+            case Protocol::Server::MergeTreeAllRangesAnnounecement:
+                res.announcement = receiveInitialParallelReadAnnounecement();
+                return res;
+
             case Protocol::Server::MergeTreeReadTaskRequest:
-                res.request = receivePartitionReadRequest();
+                res.request = receiveParallelReadRequest();
                 return res;
 
             case Protocol::Server::ProfileEvents:
@@ -911,9 +998,8 @@ Packet Connection::receivePacket()
             default:
                 /// In unknown state, disconnect - to not leave unsynchronised connection.
                 disconnect();
-                throw Exception("Unknown packet "
-                    + toString(res.type)
-                    + " from server " + getDescription(), ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
+                throw Exception(ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}",
+                    toString(res.type), getDescription());
         }
     }
     catch (Exception & e)
@@ -987,10 +1073,6 @@ void Connection::initBlockInput()
         }
 
         block_in = std::make_unique<NativeReader>(*maybe_compressed_in, server_revision);
-        /// proton: starts
-        if (compatible_with_clickhouse)
-            block_in->setCompatibleWithClickHouse();
-        /// proton: ends
     }
 }
 
@@ -1001,10 +1083,6 @@ void Connection::initBlockLogsInput()
     {
         /// Have to return superset of SystemLogsQueue::getSampleBlock() columns
         block_logs_in = std::make_unique<NativeReader>(*in, server_revision);
-        /// proton: starts
-        if (compatible_with_clickhouse)
-            block_logs_in->setCompatibleWithClickHouse();
-        /// proton: ends
     }
 }
 
@@ -1014,10 +1092,6 @@ void Connection::initBlockProfileEventsInput()
     if (!block_profile_events_in)
     {
         block_profile_events_in = std::make_unique<NativeReader>(*in, server_revision);
-        /// proton: starts
-        if (compatible_with_clickhouse)
-            block_profile_events_in->setCompatibleWithClickHouse();
-        /// proton: ends
     }
 }
 
@@ -1067,20 +1141,26 @@ ProfileInfo Connection::receiveProfileInfo() const
     return profile_info;
 }
 
-PartitionReadRequest Connection::receivePartitionReadRequest() const
+ParallelReadRequest Connection::receiveParallelReadRequest() const
 {
-    PartitionReadRequest request;
+    ParallelReadRequest request;
     request.deserialize(*in);
     return request;
+}
+
+InitialAllRangesAnnouncement Connection::receiveInitialParallelReadAnnounecement() const
+{
+    InitialAllRangesAnnouncement announcement;
+    announcement.deserialize(*in);
+    return announcement;
 }
 
 
 void Connection::throwUnexpectedPacket(UInt64 packet_type, const char * expected) const
 {
-    throw NetException(
-            "Unexpected packet from server " + getDescription() + " (expected " + expected
-            + ", got " + String(Protocol::Server::toString(packet_type)) + ")",
-            ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
+    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
+            "Unexpected packet from server {} (expected {}, got {})",
+                       getDescription(), expected, String(Protocol::Server::toString(packet_type)));
 }
 
 ServerConnectionPtr Connection::createConnection(const ConnectionParameters & parameters, ContextPtr)
@@ -1098,20 +1178,5 @@ ServerConnectionPtr Connection::createConnection(const ConnectionParameters & pa
         parameters.compression,
         parameters.security);
 }
-
-/// proton: starts
-void Connection::setCompatibleWithClickHouse()
-{
-    compatible_with_clickhouse = true;
-    if (block_in)
-        block_in->setCompatibleWithClickHouse();
-    if (block_logs_in)
-        block_logs_in->setCompatibleWithClickHouse();
-    if (block_profile_events_in)
-        block_profile_events_in->setCompatibleWithClickHouse();
-    if (block_out)
-        block_out->setCompatibleWithClickHouse();
-}
-/// proton: ends
 
 }

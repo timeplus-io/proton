@@ -1,0 +1,36 @@
+tags:
+- local-run
+
+description: global aggregation query with two level hash table, convering stremaing
+  and historical query
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: 3100
+  type: stream
+  query: with cte as (select i % 100 + 1 as key, count() from test_31_rstream group by key settings group_by_two_level_threshold=50, max_block_size=100) select count() from cte limit 3
+  schema:
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- name: 3101
+  type: stream
+  query: with cte as (select i % 100 + 1 as key, count() from table(test_31_rstream) group by key settings group_by_two_level_threshold=50, max_block_size=100, max_events=10000) select count() from cte
+  schema:
+    - name: count()
+      type: uint64
+
+- type: check
+  target_name: 3100
+  expected_result:
+  - [100]
+  - [100]
+  - [100]
+
+- type: check
+  target_name: 3101
+  expected_result:
+  - [100]

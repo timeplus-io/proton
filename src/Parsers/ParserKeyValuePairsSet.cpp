@@ -40,10 +40,10 @@ bool ParserKeyValuePairsSet::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
             }
             else
             {
-                throw Exception("Duplicate key \"" + key_value->first + "\" has existed previously", ErrorCodes::DUPLICATE_KEY);
+                throw Exception(ErrorCodes::DUPLICATE_KEY, "Duplicate key '{}' has existed previously", key_value->first);
             }
         }
-        
+
         return true;
     };
 

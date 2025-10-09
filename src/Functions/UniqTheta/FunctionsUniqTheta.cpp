@@ -23,7 +23,7 @@ Typical usage:
 )",
                     .examples{
                             {"typical", "select finalize_aggregation(uniq_theta_intersect(arrayReduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));", ""}},
-                    .categories{"uniqTheta"}
+                    .category{"uniqTheta"}
             });
 
     factory.registerFunction<FunctionUniqThetaUnion>(
@@ -40,7 +40,7 @@ Typical usage:
 )",
                     .examples{
                             {"typical", "select finalize_aggregation(uniq_theta_union(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));", ""}},
-                    .categories{"uniqTheta"}
+                    .category{"uniqTheta"}
             });
     factory.registerFunction<FunctionUniqThetaNot>(
             FunctionDocumentation{.description = R"(
@@ -56,7 +56,7 @@ Typical usage:
 )",
                     .examples{
                             {"typical", "select finalize_aggregation(uniq_theta_not(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));", ""}},
-                    .categories{"uniqTheta"}
+                    .category{"uniqTheta"}
             });
 }
 

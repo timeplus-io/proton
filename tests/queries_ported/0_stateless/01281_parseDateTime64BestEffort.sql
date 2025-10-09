@@ -5,7 +5,7 @@ SELECT parse_datetime64_best_effort('foo'); -- {serverError 41}
 
 SELECT parse_datetime64_best_effort('2020-05-14T03:37:03.253184Z', 'bar');  -- {serverError 43} -- invalid scale parameter
 SELECT parse_datetime64_best_effort('2020-05-14T03:37:03.253184Z', 3, 4);  -- {serverError 43} -- invalid timezone parameter
-SELECT parse_datetime64_best_effort('2020-05-14T03:37:03.253184Z', 3, 'baz');  -- {serverError 1000} -- unknown timezone
+SELECT parse_datetime64_best_effort('2020-05-14T03:37:03.253184Z', 3, 'baz');  -- {serverError BAD_ARGUMENTS} -- unknown timezone
 
 SELECT parse_datetime64_best_effort('2020-05-14T03:37:03.253184Z', materialize(3), 4);  -- {serverError 44} -- non-const precision
 SELECT parse_datetime64_best_effort('2020-05-14T03:37:03.253184Z', 3, materialize('UTC'));  -- {serverError 44} -- non-const timezone

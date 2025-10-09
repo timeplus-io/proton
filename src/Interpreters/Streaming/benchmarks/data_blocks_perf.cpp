@@ -1,5 +1,5 @@
-#include <Interpreters/Streaming/RefCountDataBlockList.h>
-#include <Interpreters/Streaming/RefCountDataBlockPages.h>
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/RefCountDataBlockList.h>
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/RefCountDataBlockPages.h>
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
@@ -144,6 +144,8 @@ void refCountDataBlockList(benchmark::State & state, Args &&... args)
     }
 }
 }
+
+bool LOG_PANIC_ABORT = true;
 
 BENCHMARK_CAPTURE(
     refCountDataBlockPages,

@@ -13,7 +13,7 @@ public:
 
     ~TumbleWindowAssignmentTransform() override = default;
 
-    String getName() const override { return "StreamingTumbleWindowAssignmentTransform"; }
+    String getName() const override { return "TumbleWindowAssignmentTransform"; }
 
 private:
     void assignWindow(Columns & columns) const override;

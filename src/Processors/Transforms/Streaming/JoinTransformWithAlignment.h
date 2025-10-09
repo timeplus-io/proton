@@ -2,11 +2,11 @@
 
 #include <Checkpoint/CheckpointContextFwd.h>
 #include <Core/LightChunk.h>
-#include <Interpreters/Streaming/IHashJoin.h>
+#include <Interpreters/Streaming/HashJoin/IHashJoin.h>
 #include <Processors/IProcessor.h>
 #include <base/ClockUtils.h>
-#include <Common/serde.h>
 #include <Common/ColumnUtils.h>
+#include <Common/serde.h>
 
 namespace DB::Streaming
 {
@@ -24,12 +24,18 @@ class JoinTransformWithAlignment final : public IProcessor
 {
 public:
     JoinTransformWithAlignment(
-        Block left_input_header, Block right_input_header, Block output_header, HashJoinPtr join_, UInt64 join_max_cached_bytes_);
+        Block left_input_header,
+        Block right_input_header,
+        Block output_header,
+        HashJoinPtr join_,
+        size_t transform_id_,
+        UInt64 join_max_cached_bytes_);
 
-    String getName() const override { return "StreamingJoinTransformWithAlignment"; }
+    String getName() const override;
     Status prepare() override;
     void work() override;
 
+    bool hasState() const override { return true; }
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
 
@@ -42,7 +48,10 @@ private:
 
         void add(Chunk && chunk);
 
-        bool hasCompleteChunks() const noexcept { return !input_chunks.empty() && !(input_chunks.size() == 1 && required_update_processing); }
+        bool hasCompleteChunks() const noexcept
+        {
+            return !input_chunks.empty() && !(input_chunks.size() == 1 && required_update_processing);
+        }
 
         bool isFull() const noexcept { return need_buffer_data_to_align && hasCompleteChunks(); }
 
@@ -92,10 +101,11 @@ private:
 
     static void unmuteInput(InputPortWithData & input_with_data) noexcept { input_with_data.muted = false; }
 
-    void onCancel() override;
+    void onCancel() noexcept override;
 
 private:
     SERDE HashJoinPtr join;
+    size_t transform_id;
 
     Chunk output_header_chunk;
     Int64 latency_threshold;
@@ -118,6 +128,6 @@ private:
     AlignmentStats stats;
 
     Int64 last_stats_log_ts;
-    Poco::Logger * log;
+    LoggerPtr logger;
 };
 }

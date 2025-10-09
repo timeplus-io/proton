@@ -1,0 +1,49 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value array(int));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_slice(value array(int)) RETURNS array(int) LANGUAGE PYTHON AS
+      $$
+      def test_slice(value):
+          myslice = slice(2)
+          res = [x[myslice] for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-15-1
+    type: stream
+    query: select test_slice(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: array(int32)
+      - name: value
+        type: array(int32)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values ([1])([2,3])([4,5,6]);
+
+  - type: check
+    target_name: python-udf1-15-1
+    expected_result:
+      - [[1], [1]]
+      - [[2,3], [2,3]]
+      - [[4,5], [4,5,6]]

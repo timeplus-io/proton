@@ -1,0 +1,72 @@
+tags:
+- query_state
+- view
+- probe_bug
+description: create a stream test19_state_stream6 with low_cardinality type and ingest,
+  query view state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop view if exists test19_state_view6
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream6
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream6 (id string, value_str string)
+- type: wait
+  time: 1
+
+- type: query
+  sql: create view if not exists test19_state_view6 as select emit_version(), group_array(id)
+    as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs)
+    as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from
+    (select id, latest(value_str) as latest_value_str from test19_state_stream6 group
+    by id order by id)
+- type: wait
+  name: 1
+
+- name: '19162'
+  type: stream
+  query_id: '19162'
+  query: subscribe to select * from test19_state_view6 limit 2 settings checkpoint_interval=1
+  schema:
+  - name: emit_version()
+    type: int64
+  - name: ids
+    type: array(string)
+  - name: latest_value_strs
+    type: array(string)
+  - name: id_value_strs
+    type: map(string, string)
+  - name: id_value_a
+    type: string
+  - name: to_float(array_element(map_cast(group_array(id), group_array(latest_value_str)), 'a'))
+    type: float32
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test19_state_stream6 (id, value_str) values ('a', 100.1) ('b', 200.1) ('c', 300.1)
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test19_state_stream6 (id, value_str) values ('c', 400.1) ('d', 500.1) ('e', 600.1)
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '19162'
+
+- type: check
+  target_name: '19162'
+  expected_result:
+  - [0, [any_value, any_value, any_value], [any_value, any_value, any_value], {'a': any_value, 'b': any_value, 'c': any_value}, any_value, any_value] # [0, ['a', 'b', 'c'], [100.1, 200.1, 300.1], {'a': 100.1, 'b': 200.1, 'c': 300.1}, 100.1, 100.1]
+  - [1, [any_value, any_value, any_value, any_value, any_value], [any_value, any_value, any_value, any_value, any_value], {'a': any_value, 'b': any_value, 'c': any_value, 'd': any_value, 'e': any_value}, any_value, any_value] # [1, ['a', 'b', 'c', 'd', 'e'], [100.1, 200.1, 400.1, 500.1, 600.1], {'a': 100.1, 'b': 200.1, 'c': 400.1, 'd': 500.1, 'e': 600.1}, 100.1, 100.1]

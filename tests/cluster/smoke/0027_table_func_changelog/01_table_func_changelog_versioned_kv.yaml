@@ -1,0 +1,57 @@
+tags:
+- table_func_changelog
+description: tail query from table function changelog(versioned_kv)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test28_version_kv_stream;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test28_version_kv_stream(i int, k string) primary
+    key k settings mode='versioned_kv';
+- type: wait
+  time: 2
+
+- name: '2801'
+  type: stream
+  query: select i, k, _tp_delta from changelog(test28_version_kv_stream, true);
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test28_version_kv_stream(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'k1']
+
+- type: query
+  sql: insert into test28_version_kv_stream(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [2, 'k1']
+
+- type: check
+  target_name: '2801'
+  expected_result:
+  - [1, k1, 1]
+  - [1, k1, -1]
+  - [2, k1, 1]

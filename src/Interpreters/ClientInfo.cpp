@@ -7,7 +7,7 @@
 #include <base/getFQDNOrHostName.h>
 #include <unistd.h>
 
-#include "config_version.h"
+#include <Common/config_version.h>
 
 
 namespace DB
@@ -193,7 +193,10 @@ void ClientInfo::setInitialQuery()
 {
     query_kind = QueryKind::INITIAL_QUERY;
     fillOSUserHostNameAndVersionInfo();
-    client_name = (DBMS_NAME " ") + client_name;
+    if (client_name.empty())
+        client_name = VERSION_NAME;
+    else
+        client_name = std::string(VERSION_NAME) + " " + client_name;
 }
 
 
@@ -207,9 +210,9 @@ void ClientInfo::fillOSUserHostNameAndVersionInfo()
 
     client_hostname = getFQDNOrHostName();
 
-    client_version_major = DBMS_VERSION_MAJOR;
-    client_version_minor = DBMS_VERSION_MINOR;
-    client_version_patch = DBMS_VERSION_PATCH;
+    client_version_major = VERSION_MAJOR;
+    client_version_minor = VERSION_MINOR;
+    client_version_patch = VERSION_PATCH;
     client_tcp_protocol_version = DBMS_TCP_PROTOCOL_VERSION;
 }
 

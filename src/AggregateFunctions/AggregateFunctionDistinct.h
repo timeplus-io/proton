@@ -168,7 +168,7 @@ protected:
 
 public:
     AggregateFunctionDistinct(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
-    : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_)
+    : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_, nested_func_->getResultType())
     , nested_func(nested_func_)
     , arguments_num(arguments.size())
     {
@@ -255,14 +255,9 @@ public:
         return nested_func->getName() + "_distinct";
     }
 
-    DataTypePtr getReturnType() const override
-    {
-        return nested_func->getReturnType();
-    }
-
     bool allocatesMemoryInArena() const override
     {
-        return true;
+        return true; /// This function is only used for historical processing, we always allow allocate memory in the arena.
     }
 
     bool isState() const override

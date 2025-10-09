@@ -1,0 +1,65 @@
+description: |
+  Test base select (External Stream -> MV -> Target Stream), auction inner join person 
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q3
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q3
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      CREATE EXTERNAL STREAM target(
+          name  string,
+          city  string,
+          state string,
+          auction_id int64
+      ) 
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q3', 
+              data_format='JSONEachRow',
+              one_message_per_row=true;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT
+          P.name, P.city, P.state, A.id
+      FROM
+          auction AS A INNER JOIN person AS P on A.seller = P.id
+      WHERE
+          A.category = 14 and (P.state = 'or' OR P.state = 'wy' OR P.state = 'ca')
+      SETTINGS seek_to = 'earliest';
+      
+  - type: wait
+    time: 150
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 30

@@ -70,7 +70,9 @@ def test_alter():
     instance.query("ALTER ROLE rx SETTINGS PROFILE s2")
     instance.query("GRANT SELECT ON mydb.mytable TO u1")
     instance.query("GRANT SELECT ON mydb.* TO rx WITH GRANT OPTION")
-    instance.query("ALTER SETTINGS PROFILE s1 SETTINGS max_memory_usage = 987654321 READONLY")
+    instance.query(
+        "ALTER SETTINGS PROFILE s1 SETTINGS max_memory_usage = 987654321 CONST"
+    )
 
     def check():
         assert instance.query("SHOW CREATE USER u1") == "CREATE USER u1 SETTINGS PROFILE s1\n"
@@ -82,8 +84,10 @@ def test_alter():
         assert instance.query("SHOW CREATE ROLE ry") == "CREATE ROLE ry\n"
         assert instance.query("SHOW GRANTS FOR rx") == "GRANT SELECT ON mydb.* TO rx WITH GRANT OPTION\n"
         assert instance.query("SHOW GRANTS FOR ry") == "GRANT rx TO ry WITH ADMIN OPTION\n"
-        assert instance.query(
-            "SHOW CREATE SETTINGS PROFILE s1") == "CREATE SETTINGS PROFILE s1 SETTINGS max_memory_usage = 987654321 READONLY\n"
+        assert (
+                instance.query("SHOW CREATE SETTINGS PROFILE s1")
+                == "CREATE SETTINGS PROFILE s1 SETTINGS max_memory_usage = 987654321 CONST\n"
+        )
         assert instance.query(
             "SHOW CREATE SETTINGS PROFILE s2") == "CREATE SETTINGS PROFILE s2 SETTINGS INHERIT s1 TO u2\n"
 

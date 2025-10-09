@@ -1,0 +1,152 @@
+tags:
+  - cleanup
+
+description: |
+  Tests covering the async pause and resume scenario.
+  Main steps:
+  - create 1 stream, 1 mv, 1 target stream
+  - insert data into stream
+  - call batch_action restapi with pause type async
+  - insert data into stream
+  - check data no change in target stream
+  - call batch_action restapi with resume type async
+  - insert data into stream
+  - check data change in target stream
+
+cluster:
+  - p3k1
+
+steps:
+  # create stream & create mv
+  - type: query
+    sql: create stream test37_stream(id int, value string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test37_target(id string, value string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create materialized view test37_mv into test37_target as select to_string(id) as id, value from test37_stream
+  - type: wait
+    time: 2
+
+  # insert data
+  - type: query
+    sql: insert into test37_stream(id, value) values (1, 'aaaa')
+  - type: wait
+    time: 3
+
+  # pause
+  - name: cleanup-7-1
+    type: rest
+    node:
+      - p1
+    query_id: cleanup-7-1
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: pause
+      stream_list:
+        - test37_mv
+      synchronous: false
+  - type: wait
+    time: 3
+
+  - name: cleanup-7-2
+    type: rest
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=1_cleanup-7-1
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: cleanup-7-2
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - test37_mv
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-7-1
+
+  - type: query
+    sql: insert into test37_stream(id, value) values (2, 'bbbb')
+  - type: wait
+    time: 1
+
+  - name: cleanup-7-3
+    type: stream
+    query: select id, value from table(test37_target);
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: string
+
+  - type: check
+    target_name: cleanup-7-3
+    expected_result: 
+     - [1, 'aaaa']
+
+  # resume
+  - name: cleanup-7-4
+    type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    method: POST
+    query_id: cleanup-7-4
+    url: /proton/v1/batch_action/streams
+    data:
+      type: resume
+      stream_list:
+        - test37_mv
+      synchronous: false
+  - type: wait
+    time: 1
+
+  - name: cleanup-7-5
+    type: rest
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=2_cleanup-7-4
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: cleanup-7-5
+    expected_result:
+      - status: success
+        elapsed_ms: any_value
+        finished_tables:
+          - test37_mv
+        code: 0
+        request_datetime: any_value
+        request_id: cleanup-7-4
+
+  - type: query
+    sql: insert into test37_stream(id, value) values (3, 'cccc')
+  - type: wait
+    time: 1
+
+  - name: cleanup-7-6
+    type: stream
+    query: select id, value from table(test37_target);
+    schema:
+      - name: id
+        type: string
+      - name: value
+        type: string
+
+  - type: check
+    target_name: cleanup-7-6
+    mode: random
+    expected_result:
+      - [1, 'aaaa']
+      - [2, 'bbbb']
+      - [3, 'cccc']

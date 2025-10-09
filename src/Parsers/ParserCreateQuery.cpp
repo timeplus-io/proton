@@ -3,11 +3,13 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTCreateNamedCollectionQuery.h>
 #include <Parsers/ASTTableOverrides.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -33,6 +35,7 @@ namespace ErrorCodes
 
 namespace
 {
+
 ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
 {
     ParserKeyword s_comment("COMMENT");
@@ -43,6 +46,7 @@ ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
 
     return comment;
 }
+
 }
 
 bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
@@ -92,7 +96,7 @@ bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
 bool ParserColumnDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
-    return ParserList(std::make_unique<ParserColumnDeclaration>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserColumnDeclaration>(require_type, allow_null_modifiers, check_keywords_after_name), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
@@ -108,7 +112,7 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_granularity("GRANULARITY");
 
     ParserIdentifier name_p;
-    ParserDataType data_type_p;
+    ParserExpressionWithOptionalArguments type_p;
     ParserExpression expression_p;
     ParserUnsignedInteger granularity_p;
 
@@ -126,20 +130,29 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     if (!s_type.ignore(pos, expected))
         return false;
 
-    if (!data_type_p.parse(pos, type, expected))
+    if (!type_p.parse(pos, type, expected))
         return false;
 
-    if (!s_granularity.ignore(pos, expected))
-        return false;
-
-    if (!granularity_p.parse(pos, granularity, expected))
-        return false;
+    if (s_granularity.ignore(pos, expected))
+    {
+        if (!granularity_p.parse(pos, granularity, expected))
+            return false;
+    }
 
     auto index = std::make_shared<ASTIndexDeclaration>();
+
+    if (granularity)
+    {
+        index->granularity = granularity->as<ASTLiteral &>().value.safeGet<UInt64>();
+    }
+    else
+    {
+        index->granularity = ASTIndexDeclaration::DEFAULT_INDEX_GRANULARITY;
+    }
     index->name = name->as<ASTIdentifier &>().name();
-    index->granularity = granularity->as<ASTLiteral &>().value.safeGet<UInt64>();
     index->set(index->expr, expr);
     index->set(index->type, type);
+
     node = index;
 
     return true;
@@ -236,11 +249,16 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
         if (!constraint_p.parse(pos, new_node, expected))
             return false;
     }
+    /// proton: starts
+    /// PROJECTION SUPPORT DISABLED: Remove projection parsing to disable projection support at AST level
+    /* 
     else if (s_projection.ignore(pos, expected))
     {
         if (!projection_p.parse(pos, new_node, expected))
             return false;
     }
+    */
+    /// proton: ends
     else if (s_primary_key.ignore(pos, expected))
     {
         if (!primary_key_p.parse(pos, new_node, expected))
@@ -297,8 +315,13 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
             indices->children.push_back(elem);
         else if (elem->as<ASTConstraintDeclaration>())
             constraints->children.push_back(elem);
+        /// proton: starts
+        /// PROJECTION SUPPORT DISABLED: Skip projection processing
+        /*
         else if (elem->as<ASTProjectionDeclaration>())
             projections->children.push_back(elem);
+        */
+        /// proton : ends
         else if (elem->as<ASTIdentifier>() || elem->as<ASTFunction>())
         {
             if (primary_key)
@@ -320,8 +343,13 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
         res->set(res->indices, indices);
     if (!constraints->children.empty())
         res->set(res->constraints, constraints);
+    /// proton: starts
+    /// PROJECTION SUPPORT DISABLED: Don't set projections in result AST
+    /*
     if (!projections->children.empty())
         res->set(res->projections, projections);
+    */
+    /// proton: ends
     if (primary_key)
         res->set(res->primary_key, primary_key);
 
@@ -365,16 +393,25 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ 
             return false;
     }
 
+    /// shortcut for database engine parsing
     if (parse_database_engine)
     {
-        if (engine)
-        {
-            auto storage = std::make_shared<ASTStorage>();
-            storage->set(storage->engine, engine);
-            node = storage;
-            return true;
-        }
-        return false;
+        /// Database engine could be either by ENGINE or SETTINGS
+        /// CREATE DATABASE ... ENGINE=Atomic SETTINGS local=1
+        /// CREATE DATABASE ... SETTINGS type='mysql'
+        if (s_settings.ignore(pos, expected))
+            if (!settings_p.parse(pos, settings, expected))
+                return false;
+
+        if (!engine && !settings)
+            return false;
+
+        auto storage = std::make_shared<ASTStorage>();
+        storage->set(storage->engine, engine);
+        storage->set(storage->settings, settings);
+        node = storage;
+
+        return true;
     }
     /// proton: ends
 
@@ -448,18 +485,22 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
-    ParserKeyword s_replace("REPLACE");
-    ParserKeyword s_or_replace("OR REPLACE");
+    /// ParserKeyword s_replace("REPLACE");
+    /// ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_temporary("TEMPORARY");
     /// proton: starts
     ParserKeyword s_external("EXTERNAL");
     ParserKeyword s_stream("STREAM");
     ParserKeyword s_random("RANDOM");
+    ParserKeyword s_null("NULL");
     /// proton: ends
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserCompoundIdentifier table_name_p(true, true);
     ParserKeyword s_from("FROM");
-    ParserKeyword s_on("ON");
+    /// proton: starts
+    /// ParserKeyword s_on("ON");
+    /// proton: ends
+
     ParserKeyword s_as("AS");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -486,20 +527,24 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool or_replace = false;
     bool if_not_exists = false;
     bool is_temporary = false;
+
     /// proton: starts
-    bool is_external = false;
-    bool is_random = false;
+    ASTCreateQuery::Type type = ASTCreateQuery::Type::Stream;
     /// proton: ends
 
     if (s_create.ignore(pos, expected))
     {
-        if (s_or_replace.ignore(pos, expected, false))
-           replace = or_replace = true;
+        /// proton : starts
+        /// if (s_or_replace.ignore(pos, expected, false))
+        ///   replace = or_replace = true;
+        /// proton : ends
     }
     else if (s_attach.ignore(pos, expected))
         attach = true;
-    else if (s_replace.ignore(pos, expected, false))
-        replace = true;
+    /// proton : start
+    /// else if (s_replace.ignore(pos, expected, false))
+    ///    replace = true;
+    /// proton : ends
     else
         return false;
 
@@ -508,11 +553,13 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         is_temporary = true;
     }
 
-    if (s_external.ignore(pos, expected))
-        is_external = true;
     /// proton: starts
+    if (s_external.ignore(pos, expected))
+        type = ASTCreateQuery::Type::ExternalStream;
     else if (s_random.ignore(pos, expected))
-        is_random = true;
+        type = ASTCreateQuery::Type::RandomStream;
+    else if (s_null.ignore(pos, expected))
+        type = ASTCreateQuery::Type::NullStream;
     /// proton: ends
 
     if (!s_stream.ignore(pos, expected))
@@ -531,15 +578,17 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
             return false;
     }
 
-    if (s_on.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// proton: starts
+    /// if (s_on.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+    /// proton: ends
 
     auto * table_id = table->as<ASTTableIdentifier>();
 
-    // Shortcut for ATTACH a previously detached table
+    /// A shortcut for ATTACH a previously detached table.
     bool short_attach = attach && !from_path;
     if (short_attach && (!pos.isValid() || pos.get().type == TokenType::Semicolon))
     {
@@ -631,7 +680,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     auto * storage_ast = storage->as<ASTStorage>();
     if (storage_ast && storage_ast->engine && storage_ast->engine->name == "ExternalStream")
-        is_external = true;
+        type = ASTCreateQuery::Type::ExternalStream;
 
     auto query = std::make_shared<ASTCreateQuery>();
     node = query;
@@ -640,14 +689,13 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         query->as_table_function = as_table_function;
 
     query->attach = attach;
-    query->replace_table = replace;
-    query->create_or_replace = or_replace;
+    /// query->replace_table = replace;
+    /// query->create_or_replace = or_replace;
     query->if_not_exists = if_not_exists;
     query->temporary = is_temporary;
 
     /// proton: starts
-    query->is_external = is_external;
-    query->is_random = is_random;
+    query->type = type;
     /// proton: ends
 
     query->database = table_id->getDatabase();
@@ -670,7 +718,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     {
         if (query->storage->primary_key)
         {
-            throw Exception("Multiple primary keys are not allowed.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Multiple primary keys are not allowed.");
         }
         query->storage->primary_key = query->columns_list->primary_key;
     }
@@ -870,11 +918,11 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         uuid = parseFromString<UUID>(ast_uuid->as<ASTLiteral>()->value.get<String>());
     }
 
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
 
     storage_p.parse(pos, storage, expected);
     auto comment = parseComment(pos, expected);
@@ -961,11 +1009,13 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (!table_name_p.parse(pos, table, expected))
         return false;
 
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// proton: starts
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+    /// proton: ends
 
     if (ParserKeyword{"TO INNER UUID"}.ignore(pos, expected))
     {
@@ -1004,7 +1054,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_ordinary_view = true;
+    query->type = ASTCreateQuery::Type::View;
     query->replace_view = replace_view;
 
     auto * table_id = table->as<ASTTableIdentifier>();
@@ -1036,15 +1086,71 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
 }
 
+bool ParserCreateNamedCollectionQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+{
+    ParserKeyword s_create("CREATE");
+    ParserKeyword s_attach("ATTACH");
+    ParserKeyword s_named_collection("NAMED COLLECTION");
+    ParserKeyword s_as("AS");
+
+    ParserToken s_comma(TokenType::Comma);
+    ParserIdentifier name_p;
+
+    ASTPtr collection_name;
+    String cluster_str;
+
+    if (!s_create.ignore(pos, expected))
+        return false;
+
+    if (!s_named_collection.ignore(pos, expected))
+        return false;
+
+    if (!name_p.parse(pos, collection_name, expected))
+        return false;
+
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+
+    if (!s_as.ignore(pos, expected))
+        return false;
+
+    SettingsChanges changes;
+
+    while (true)
+    {
+        if (!changes.empty() && !s_comma.ignore(pos))
+            break;
+
+        changes.push_back(SettingChange{});
+
+        if (!ParserSetQuery::parseNameValuePair(changes.back(), pos, expected))
+            return false;
+    }
+
+    auto query = std::make_shared<ASTCreateNamedCollectionQuery>();
+
+    tryGetIdentifierNameInto(collection_name, query->collection_name);
+    query->changes = changes;
+
+    node = query;
+    return true;
+}
+
 bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
-    ParserKeyword s_replace("REPLACE");
-    ParserKeyword s_or_replace("OR REPLACE");
+    /// ParserKeyword s_replace("REPLACE");
+    /// ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_dictionary("DICTIONARY");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserKeyword s_on("ON");
+    /// proton: starts
+    /// ParserKeyword s_on("ON");
+    /// proton: ends
+
     ParserCompoundIdentifier dict_name_p(true, true);
     ParserToken s_left_paren(TokenType::OpeningRoundBracket);
     ParserToken s_right_paren(TokenType::ClosingRoundBracket);
@@ -1053,8 +1159,8 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
     ParserDictionary dictionary_p;
 
     bool if_not_exists = false;
-    bool replace = false;
-    bool or_replace = false;
+    /// bool replace = false;
+    /// bool or_replace = false;
 
     ASTPtr name;
     ASTPtr attributes;
@@ -1065,16 +1171,16 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 
     if (s_create.ignore(pos, expected))
     {
-        if (s_or_replace.ignore(pos, expected, false))
-        {
-            replace = true;
-            or_replace = true;
-        }
+        /// if (s_or_replace.ignore(pos, expected, false))
+        /// {
+        ///    replace = true;
+        ///    or_replace = true;
+        /// }
     }
     else if (s_attach.ignore(pos, expected))
         attach = true;
-    else if (s_replace.ignore(pos, expected, false))
-        replace = true;
+    /// else if (s_replace.ignore(pos, expected, false))
+    ///    replace = true;
     else
         return false;
 
@@ -1087,11 +1193,12 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
     if (!dict_name_p.parse(pos, name, expected))
         return false;
 
-    if (s_on.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    ///    if (s_on.ignore(pos, expected))
+    ///    {
+    ///        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///            return false;
+    ///    }
+
 
     if (!attach)
     {
@@ -1112,10 +1219,10 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 
     auto query = std::make_shared<ASTCreateQuery>();
     node = query;
-    query->is_dictionary = true;
+    query->type = ASTCreateQuery::Type::Dictionary;
     query->attach = attach;
-    query->create_or_replace = or_replace;
-    query->replace_table = replace;
+    /// query->create_or_replace = or_replace;
+    /// query->replace_table = replace;
 
     auto * dict_id = name->as<ASTTableIdentifier>();
     query->database = dict_id->getDatabase();

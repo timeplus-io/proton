@@ -1,0 +1,85 @@
+tags:
+- udf2
+description: SQL - UDA
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS udf_types;
+
+- type: query
+  sql: DROP FUNCTION IF EXISTS test_sec_large;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE STREAM udf_types (`f32` float);
+
+- name: udf-22-0
+  type: query
+  sql: "CREATE AGGREGATE FUNCTION test_sec_large(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+          {
+            initialize: function() {
+                this.max = -1.0;
+                this.sec = -1.0
+            },
+            process: function(values) {
+              for (let i = 0; i < values.length; i++) {
+                if (values[i] > this.max) {
+                  this.sec = this.max;
+                  this.max = values[i]
+                }
+                if (values[i] < this.max && values[i] > this.sec)
+                  this.sec = values[i];
+              }
+            },
+            finalize: function() {
+              return this.sec
+            },
+            serialize: function() {
+              let s = {
+                'max': this.max,
+                'sec': this.sec
+              };
+              return JSON.stringify(s)
+            },
+            deserialize: function(state_str) {
+                                                let s = JSON.parse(state_str);
+                                                this.max = s['max'];
+                                                this.sec = s['sec']
+            },
+            merge: function(state_str) {
+                                          let s = JSON.parse(state_str);
+                                          if (s['sec'] >= this.max) {
+                                          this.max = s['max'];
+                                          this.sec = s['sec']
+                                          } else if (s['max'] >= this.max) {
+                                          this.sec = this.max;
+                                          this.max = s['max']
+                                          } else if (s['max'] > this.sec) {
+                                          this.sec = s['max']
+                                          }
+                                          }
+            }
+        $$;"
+- type: wait
+  time: 2
+
+- name: udf-22-1
+  type: stream
+  query: select test_sec_large(f32) from udf_types;
+  schema:
+  - name: test_sec_large(f32)
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO udf_types (f32) SELECT number FROM numbers(10);
+
+- type: check
+  target_name: udf-22-1
+  expected_result:
+  - [8.0]

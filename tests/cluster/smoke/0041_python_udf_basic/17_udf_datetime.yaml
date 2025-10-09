@@ -1,0 +1,225 @@
+tags:
+  - udf
+
+description: Test covering python udf with datetime date type
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS test41_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: CREATE STREAM test41_stream(d1 datetime, d2 datetime('UTC'), d3 datetime('Asia/Shanghai'));
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_datetime1(value datetime) RETURNS datetime LANGUAGE PYTHON AS $$
+      def test_datetime1(value):
+          return value
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_datetime2(value datetime('UTC')) RETURNS datetime LANGUAGE PYTHON AS $$
+      def test_datetime2(value):
+          return value
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_datetime3(value datetime) RETURNS datetime('UTC') LANGUAGE PYTHON AS $$
+      def test_datetime3(value):
+          return value
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_datetime4(value datetime('UTC')) RETURNS datetime('UTC') LANGUAGE PYTHON AS $$
+      def test_datetime4(value):
+          return value
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_datetime5_timedelta(value datetime('UTC')) RETURNS datetime('Europe/Paris') LANGUAGE PYTHON AS $$
+      from datetime import datetime, timedelta
+      from zoneinfo import ZoneInfo
+
+      def test_datetime5_timedelta(value):
+          res = []
+          for v in value:
+              shift = (v + timedelta(hours=1)).astimezone(ZoneInfo('Europe/Paris'))
+              res.append(shift)
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_datetime6_replace(value datetime('Europe/Paris')) RETURNS datetime('Europe/Paris') LANGUAGE PYTHON AS $$
+      from datetime import datetime
+
+      def test_datetime6_replace(value):
+          res = []
+          for v in value:
+              v.replace(fold=1)
+              res.append(v)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: pyudf-basic-17-1
+    type: stream
+    query: select test_datetime1(d1), test_datetime1(d2), test_datetime1(d3) from test41_stream;
+    schema:
+      - name: test_datetime1(d1)
+        type: datetime
+      - name: test_datetime1(d2)
+        type: datetime
+      - name: test_datetime1(d3)
+        type: datetime
+
+  - name: pyudf-basic-17-2
+    type: stream
+    query: select test_datetime2(d1), test_datetime2(d2), test_datetime2(d3) from test41_stream;
+    schema:
+      - name: test_datetime2(d1)
+        type: datetime
+      - name: test_datetime2(d2)
+        type: datetime
+      - name: test_datetime2(d3)
+        type: datetime
+
+  - name: pyudf-basic-17-3
+    type: stream
+    query: select test_datetime3(d1), test_datetime3(d2), test_datetime3(d3) from test41_stream;
+    schema:
+      - name: test_datetime3(d1)
+        type: datetime
+      - name: test_datetime3(d2)
+        type: datetime
+      - name: test_datetime3(d3)
+        type: datetime
+
+  - name: pyudf-basic-17-4
+    type: stream
+    query: select test_datetime4(d1), test_datetime4(d2), test_datetime4(d3) from test41_stream;
+    schema:
+      - name: test_datetime4(d1)
+        type: datetime
+      - name: test_datetime4(d2)
+        type: datetime
+      - name: test_datetime4(d3)
+        type: datetime
+
+  - name: pyudf-basic-17-5
+    type: stream
+    query: select test_datetime5_timedelta(d1), test_datetime5_timedelta(d2), test_datetime5_timedelta(d3) from test41_stream;
+    schema:
+      - name: test_datetime5_timedelta(d1)
+        type: datetime
+      - name: test_datetime5_timedelta(d2)
+        type: datetime
+      - name: test_datetime5_timedelta(d3)
+        type: datetime
+
+  - name: pyudf-basic-17-6
+    type: stream
+    query: select test_datetime6_replace(d1), test_datetime6_replace(d2), test_datetime6_replace(d3) from test41_stream;
+    schema:
+      - name: test_datetime6_replace(d1)
+        type: datetime
+      - name: test_datetime6_replace(d2)
+        type: datetime
+      - name: test_datetime6_replace(d3)
+        type: datetime
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test41_stream (d1, d2, d3) values 
+      ('2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-27 01:11:11')
+      ('2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-31 02:22:22')
+      ('2025-01-01 03:33:33', '2025-01-01 03:33:33', '2025-01-01 03:33:33');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test41_stream (d1, d2, d3) values 
+      (parse_datetime32_best_effort('2019-10-27T01:11:11Z'), parse_datetime32_best_effort('2019-10-27T01:11:11Z'), parse_datetime32_best_effort('2019-10-27T01:11:11Z'))
+      (parse_datetime32_best_effort('2024-03-31T02:22:22Z'), parse_datetime32_best_effort('2024-03-31T02:22:22Z'), parse_datetime32_best_effort('2024-03-31T02:22:22Z'))
+      (parse_datetime32_best_effort('2025-01-01T03:33:33Z'), parse_datetime32_best_effort('2025-01-01T03:33:33Z'), parse_datetime32_best_effort('2025-01-01T03:33:33Z'));
+
+  - type: check
+    target_name: pyudf-basic-17-1
+    expected_result:
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-26 17:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-30 18:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2024-12-31 19:33:33']
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-27 01:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-31 02:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2025-01-01 03:33:33']
+
+  - type: check
+    target_name: pyudf-basic-17-2
+    expected_result:
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-26 17:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-30 18:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2024-12-31 19:33:33']
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-27 01:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-31 02:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2025-01-01 03:33:33']
+
+  - type: check
+    target_name: pyudf-basic-17-3
+    expected_result:
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-26 17:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-30 18:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2024-12-31 19:33:33']
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-27 01:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-31 02:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2025-01-01 03:33:33']
+
+  - type: check
+    target_name: pyudf-basic-17-4
+    expected_result:
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-26 17:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-30 18:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2024-12-31 19:33:33']
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-27 01:11:11']
+      - ['2024-03-31 02:22:22', '2024-03-31 02:22:22', '2024-03-31 02:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2025-01-01 03:33:33']
+
+  - type: check
+    target_name: pyudf-basic-17-5
+    expected_result:
+      - ['2019-10-27 02:11:11', '2019-10-27 02:11:11', '2019-10-26 18:11:11']
+      - ['2024-03-31 03:22:22', '2024-03-31 03:22:22', '2024-03-30 19:22:22']
+      - ['2025-01-01 04:33:33', '2025-01-01 04:33:33', '2024-12-31 20:33:33']
+      - ['2019-10-27 02:11:11', '2019-10-27 02:11:11', '2019-10-27 02:11:11']
+      - ['2024-03-31 03:22:22', '2024-03-31 03:22:22', '2024-03-31 03:22:22']
+      - ['2025-01-01 04:33:33', '2025-01-01 04:33:33', '2025-01-01 04:33:33']
+
+  - type: check
+    target_name: pyudf-basic-17-6
+    expected_result:
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-26 18:11:11']
+      - ['2024-03-31 03:22:22', '2024-03-31 03:22:22', '2024-03-30 18:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2024-12-31 19:33:33']
+      - ['2019-10-27 01:11:11', '2019-10-27 01:11:11', '2019-10-27 01:11:11']
+      - ['2024-03-31 03:22:22', '2024-03-31 03:22:22', '2024-03-31 03:22:22']
+      - ['2025-01-01 03:33:33', '2025-01-01 03:33:33', '2025-01-01 03:33:33']

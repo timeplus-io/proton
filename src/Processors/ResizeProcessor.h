@@ -10,7 +10,7 @@ namespace DB
 /** Has arbitrary non zero number of inputs and arbitrary non zero number of outputs.
   * All of them have the same structure.
   *
-  * Pulls data from arbitrary input (whenever it is ready) and pushes it to arbitrary output (whenever is is not full).
+  * Pulls data from arbitrary input (whenever it is ready) and pushes it to arbitrary output (whenever it is not full).
   * Doesn't do any heavy calculations.
   * Doesn't preserve an order of data.
   *
@@ -80,6 +80,13 @@ public:
     /// TODO Check that there is non zero number of inputs and outputs.
     StrictResizeProcessor(const Block & header, size_t num_inputs, size_t num_outputs)
         : IProcessor(InputPorts(num_inputs, header), OutputPorts(num_outputs, header), ProcessorID::StrictResizeProcessorID)
+        , current_input(inputs.begin())
+        , current_output(outputs.begin())
+    {
+    }
+
+    StrictResizeProcessor(InputPorts inputs_, OutputPorts outputs_)
+        : IProcessor(inputs_, outputs_, ProcessorID::StrictResizeProcessorID)
         , current_input(inputs.begin())
         , current_output(outputs.begin())
     {

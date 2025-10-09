@@ -117,8 +117,8 @@ protected:
     template <typename T>
     void visitImpl(Type &)
     {
-        throw Exception("visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
-                        + demangle(typeid(Derived).name()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "visitImpl({} &) is not implemented for class{}",
+                        demangle(typeid(T).name()), demangle(typeid(Derived).name()));
     }
 
     ~VisitorImplHelper() = default;
@@ -136,8 +136,8 @@ protected:
     template <typename T>
     void visitImpl(Type &)
     {
-        throw Exception("visitImpl(" + demangle(typeid(T).name()) + " &)" + " is not implemented for class"
-                        + demangle(typeid(Derived).name()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "visitImpl({} &) is not implemented for class{}",
+                        demangle(typeid(T).name()), demangle(typeid(Derived).name()));
     }
 
     ~VisitorImplHelper() = default;

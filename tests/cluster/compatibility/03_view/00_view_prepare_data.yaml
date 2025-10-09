@@ -1,0 +1,65 @@
+tags:
+  - prepare
+  - join
+
+description: prepare data for view
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop view if exists v;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists v_stream;
+
+  - type: query
+    sql: drop stream if exists v_join_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream v_join_stream(id string, type string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into v_join_stream(id, type) values
+      ('dev1', 'roof')('dev2', 'field')('dev3', 'window')('dev4', 'wall')
+      ('dev5', 'roof')('dev6', 'window')('dev7', 'wall')('dev8', 'floor');
+
+  - type: query
+    sql: |
+      create stream v_stream(id string, location string, value float32, json string, 
+      timestamp datetime64(3) DEFAULT now64(3));
+    
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create view v as select a.id, b.type, a.value, a.json, a.timestamp,
+      to_datetime(json_extract_string(json, 'create_time')) as transformed_timestamp, 
+      _tp_time from v_stream as a join table(v_join_stream) as b on a.id = b.id;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into v_stream(id, location, value, json, timestamp) values
+      ('dev1', 'ca', 60, '{"create_time":"2024-01-01 00:00:01"}', '2024-01-01 00:00:11.001')
+      ('dev2', 'ca', 31, '{"create_time":"2024-01-01 00:00:02"}', '2024-01-01 00:00:12.002')
+      ('dev3', 'ca', 58, '{"create_time":"2024-01-01 00:00:03"}', '2024-01-01 00:00:13.003')
+      ('dev8', 'ca', 77, '{"create_time":"2024-01-01 00:00:08"}', '2024-01-01 00:00:18.008');
+
+  - type: wait
+    time: 1

@@ -57,10 +57,10 @@ using namespace DB;
 static void addRootPath(String & path, const String & root_path)
 {
     if (path.empty())
-        throw Exception("Path cannot be empty", Error::ZBADARGUMENTS);
+        throw Exception(Error::ZBADARGUMENTS, "Path cannot be empty");
 
     if (path[0] != '/')
-        throw Exception("Path must begin with /, got " + path, Error::ZBADARGUMENTS);
+        throw Exception(Error::ZBADARGUMENTS, "Path must begin with /, got {}", path);
 
     if (root_path.empty())
         return;
@@ -77,7 +77,7 @@ static void removeRootPath(String & path, const String & root_path)
         return;
 
     if (path.size() <= root_path.size())
-        throw Exception("Received path is not longer than root_path", Error::ZDATAINCONSISTENCY);
+        throw Exception(Error::ZDATAINCONSISTENCY, "Received path is not longer than root_path");
 
     path = path.substr(root_path.size());
 }

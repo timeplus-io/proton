@@ -1,0 +1,65 @@
+tags:
+  - tumble window
+  - delay
+description: steram query with 5sec window with delay 3 sec w/late events within 2
+  sec delay
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '601'
+    type: stream
+    query: |
+      select window_start, window_end, count(*)
+      from tumble(test6_stream_only, timestamp, interval 5 second)
+      group by window_start, window_end, value
+      emit stream after window close with delay interval 3 second
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - name: '601-1'
+    type: stream
+    query: |
+      select window_start, window_end, count(*)
+      from tumble(test6_stream_only, timestamp, interval 5 second)
+      group by window_start, window_end, value
+      emit stream after watermark with delay interval 3 second
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00'),
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05');
+  
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03'),
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08');
+
+  - type: check
+    target_name: '601'
+    expected_result:
+      - [ '2020-02-02 20:01:00', '2020-02-02 20:01:05', 4 ]
+
+  - type: check
+    target_name: '601-1'
+    expected_result:
+      - [ '2020-02-02 20:01:00', '2020-02-02 20:01:05', 4 ]

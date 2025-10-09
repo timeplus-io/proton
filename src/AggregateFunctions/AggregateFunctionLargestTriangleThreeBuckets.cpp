@@ -17,6 +17,7 @@
 #include <Common/PODArray.h>
 #include <Common/assert_cast.h>
 #include <base/types.h>
+#include <Core/Settings.h>
 
 #include <boost/math/distributions/normal.hpp>
 
@@ -35,8 +36,12 @@ struct Settings;
 namespace
 {
 
-struct LargestTriangleThreeBucketsData : public StatisticalSample<Float64, Float64>
+template <bool use_arena>
+struct LargestTriangleThreeBucketsData : public StatisticalSample<Float64, Float64, use_arena>
 {
+    using SampleX = typename StatisticalSample<Float64, Float64, use_arena>::SampleX;
+    using SampleY = typename StatisticalSample<Float64, Float64, use_arena>::SampleY;
+
     void add(const Float64 xval, const Float64 yval, Arena * arena)
     {
         /// We need to ensure either both or neither coordinates are saved (StatisticalSample ignores NaNs)
@@ -60,8 +65,16 @@ struct LargestTriangleThreeBucketsData : public StatisticalSample<Float64, Float
 
         for (size_t i = 0; i < this->x.size(); ++i)
         {
-            temp_x.push_back(this->x[index[i]], arena);
-            temp_y.push_back(this->y[index[i]], arena);
+            if constexpr (use_arena)
+            {
+                temp_x.push_back(this->x[index[i]], arena);
+                temp_y.push_back(this->y[index[i]], arena);
+            }
+            else
+            {
+                temp_x.push_back(this->x[index[i]]);
+                temp_y.push_back(this->y[index[i]]);
+            }
         }
 
         for (size_t i = 0; i < this->x.size(); ++i)
@@ -164,7 +177,8 @@ struct LargestTriangleThreeBucketsData : public StatisticalSample<Float64, Float
 
 static constexpr auto AggregateFunctionLargestTriangleThreeBucketsName = "largest_triangle_three_buckets";
 
-class AggregateFunctionLargestTriangleThreeBuckets final : public IAggregateFunctionDataHelper<LargestTriangleThreeBucketsData, AggregateFunctionLargestTriangleThreeBuckets>
+template <bool use_arena>
+class AggregateFunctionLargestTriangleThreeBuckets final : public IAggregateFunctionDataHelper<LargestTriangleThreeBucketsData<use_arena>, AggregateFunctionLargestTriangleThreeBuckets<use_arena>>
 {
 private:
     UInt64 total_buckets{0};
@@ -173,7 +187,7 @@ private:
 
 public:
     explicit AggregateFunctionLargestTriangleThreeBuckets(const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<LargestTriangleThreeBucketsData, AggregateFunctionLargestTriangleThreeBuckets>({arguments}, {})
+        : IAggregateFunctionDataHelper<LargestTriangleThreeBucketsData<use_arena>, AggregateFunctionLargestTriangleThreeBuckets<use_arena>>({arguments}, {}, createResultType(arguments))
     {
         if (params.size() != 1)
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} require one parameter", getName());
@@ -190,19 +204,22 @@ public:
 
     String getName() const override { return AggregateFunctionLargestTriangleThreeBucketsName; }
 
-    bool allocatesMemoryInArena() const override { return true; }
+    bool allocatesMemoryInArena() const override { return use_arena; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypes & arguments)
     {
+        TypeIndex x_type = arguments[0]->getTypeId();
+        TypeIndex y_type = arguments[1]->getTypeId();
+
         UInt32 x_scale = 0;
         UInt32 y_scale = 0;
 
-        if (const auto * datetime64_type = typeid_cast<const DataTypeDateTime64 *>(argument_types[0].get()))
+        if (const auto * datetime64_type = typeid_cast<const DataTypeDateTime64 *>(arguments[0].get()))
         {
             x_scale = datetime64_type->getScale();
         }
 
-        if (const auto * datetime64_type = typeid_cast<const DataTypeDateTime64 *>(argument_types[1].get()))
+        if (const auto * datetime64_type = typeid_cast<const DataTypeDateTime64 *>(arguments[1].get()))
         {
             y_scale = datetime64_type->getScale();
         }
@@ -339,7 +356,7 @@ public:
 
 
 AggregateFunctionPtr
-createAggregateFunctionLargestTriangleThreeBuckets(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+createAggregateFunctionLargestTriangleThreeBuckets(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertBinary(name, argument_types);
 
@@ -357,7 +374,11 @@ createAggregateFunctionLargestTriangleThreeBuckets(const std::string & name, con
             "Aggregate function {} only supports Date, Date32, DateTime, DateTime64 and Number as the second argument",
             name);
 
-    return std::make_shared<AggregateFunctionLargestTriangleThreeBuckets>(argument_types, parameters);
+    bool use_arena = settings ? settings->default_hash_table != HashTableType::Hybrid : true;
+    if (use_arena)
+        return std::make_shared<AggregateFunctionLargestTriangleThreeBuckets<true>>(argument_types, parameters);
+    else
+        return std::make_shared<AggregateFunctionLargestTriangleThreeBuckets<false>>(argument_types, parameters);
 }
 
 }

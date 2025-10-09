@@ -1,0 +1,67 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (males int, females int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getMannwhitneyu(males int, females int) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy.stats import mannwhitneyu
+
+      class getMannwhitneyu:
+          def __init__(self):
+              self.mannwhitneyu = 0
+
+          def serialize(self):
+              data = {}
+              data['mannwhitneyu'] = self.mannwhitneyu
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.mannwhitneyu = data['mannwhitneyu']
+
+          def merge(self, other):
+              pass
+
+          def process(self, maless, femaless):
+              U1, p = mannwhitneyu(maless, femaless, method="exact")
+              self.mannwhitneyu = U1
+
+          def finalize(self):
+              return float(self.mannwhitneyu)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-33-1
+    type: stream
+    query: select getMannwhitneyu(males, females) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(males, females) values 
+          (19, 20)(22, 11)(16, 17)(29, 12);
+
+  - type: check
+    target_name: python-udf4-33-1
+    expected_result:
+      - [13.0]

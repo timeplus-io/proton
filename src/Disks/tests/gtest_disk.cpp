@@ -17,27 +17,15 @@ template <typename T>
 DB::DiskPtr createDisk();
 
 template <>
-DB::DiskPtr createDisk<DB::DiskMemory>()
-{
-    return std::make_shared<DB::DiskMemory>("memory_disk");
-}
-
-template <>
 DB::DiskPtr createDisk<DB::DiskLocal>()
 {
     fs::create_directory("tmp/");
-    return std::make_shared<DB::DiskLocal>("local_disk", "tmp/", 0);
+    return std::make_shared<DB::DiskLocal>("local_disk", "tmp/");
 }
 
 
 template <typename T>
 void destroyDisk(DB::DiskPtr & disk)
-{
-    disk.reset();
-}
-
-template <>
-void destroyDisk<DB::DiskMemory>(DB::DiskPtr & disk)
 {
     disk.reset();
 }
@@ -61,7 +49,7 @@ public:
 };
 
 
-using DiskImplementations = testing::Types<DB::DiskMemory, DB::DiskLocal>;
+using DiskImplementations = testing::Types<DB::DiskLocal>;
 TYPED_TEST_SUITE(DiskTest, DiskImplementations);
 
 

@@ -1,0 +1,80 @@
+tags:
+- local-run
+- udf
+description: test replace if exists. When this flag is set to true, the function will be replaced if it already exists. Otherwise, an error will be thrown.
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    replace_if_exists: true
+    source: function test_23_add_five(value) { for(let i=0; i<value.length; i++) {
+      value[i] = value[i]+5; } return value;}
+
+- name: '2301'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    replace_if_exists: false
+    source: function test_23_add_five(value) { for(let i=0; i<value.length; i++) {
+      value[i] = value[i]+5; } return value;}
+- type: check
+  target_name: "2301"
+  expected_result:
+  - code: 609
+    error_msg: "DB::Exception: The function 'test_23_add_five' already exists"
+
+- name: '2302'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    source: function test_23_add_five(value) { for(let i=0; i<value.length; i++) {
+      value[i] = value[i]+5; } return value;}
+- type: check
+  target_name: "2302"
+  expected_result:
+  - code: 609
+    error_msg: "DB::Exception: The function 'test_23_add_five' already exists"
+
+- name: '2303'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_add_five
+    arguments:
+    - name: value
+      type: float32
+    return_type: float32
+    replace_if_exists: true
+    source: function test_23_add_five(value) { for(let i=0; i<value.length; i++) {
+      value[i] = value[i]+5; } return value;}
+- type: check
+  target_name: "2303"
+  expected_result:
+  - request_id: any_value

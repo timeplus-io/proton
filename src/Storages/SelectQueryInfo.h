@@ -1,17 +1,19 @@
 #pragma once
 
-#include <Interpreters/PreparedSets.h>
-#include <Interpreters/DatabaseAndTableWithAlias.h>
-#include <Core/SortDescription.h>
 #include <Core/Names.h>
-#include <Storages/ProjectionsDescription.h>
+#include <Core/SortDescription.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/PreparedSets.h>
 #include <QueryPipeline/StreamLocalLimits.h>
+#include <Storages/ProjectionsDescription.h>
+#include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
 
 #include <memory>
 
 /// proton: starts.
-#include <Storages/Streaming/SeekToInfo.h>
+#include <Storages/QueryShard.h>
+#include <Storages/SeekToInfo.h>
 /// proton: ends.
 
 namespace DB
@@ -95,19 +97,38 @@ struct FilterDAGInfo
 
 struct InputOrderInfo
 {
-    SortDescription order_key_prefix_descr;
+    /// Sort description for merging of already sorted streams.
+    /// Always a prefix of ORDER BY or GROUP BY description specified in query.
+    SortDescription sort_description_for_merging;
+
+    /** Size of prefix of sorting key that is already
+     * sorted before execution of sorting or aggreagation.
+     *
+     * Contains both columns that scpecified in
+     * ORDER BY or GROUP BY clause of query
+     * and columns that turned out to be already sorted.
+     *
+     * E.g. if we have sorting key ORDER BY (a, b, c, d)
+     * and query with `WHERE a = 'x' AND b = 'y' ORDER BY c, d` clauses.
+     * sort_description_for_merging will be equal to (c, d) and
+     * used_prefix_of_sorting_key_size will be equal to 4.
+     */
+    size_t used_prefix_of_sorting_key_size;
+
     int direction;
     UInt64 limit;
 
-    InputOrderInfo(const SortDescription & order_key_prefix_descr_, int direction_, UInt64 limit_)
-        : order_key_prefix_descr(order_key_prefix_descr_), direction(direction_), limit(limit_) {}
-
-    bool operator ==(const InputOrderInfo & other) const
+    InputOrderInfo(
+        const SortDescription & sort_description_for_merging_,
+        size_t used_prefix_of_sorting_key_size_,
+        int direction_, UInt64 limit_)
+        : sort_description_for_merging(sort_description_for_merging_)
+        , used_prefix_of_sorting_key_size(used_prefix_of_sorting_key_size_)
+        , direction(direction_), limit(limit_)
     {
-        return order_key_prefix_descr == other.order_key_prefix_descr && direction == other.direction;
     }
 
-    bool operator !=(const InputOrderInfo & other) const { return !(*this == other); }
+    bool operator==(const InputOrderInfo &) const = default;
 };
 
 class IMergeTreeDataPart;
@@ -150,11 +171,18 @@ struct SelectQueryInfo
     ASTPtr query;
     ASTPtr view_query; /// Optimized VIEW query
     ASTPtr original_query; /// Unmodified query for projection analysis
+
+    /// Query tree
+    QueryTreeNodePtr query_tree;
+
     /// proton: starts.
     ASTPtr optimized_proxy_stream_query;  /// Optimized nested query in StreamProxy
     /// proton: ends.
 
     std::shared_ptr<const StorageLimitsList> storage_limits;
+
+    /// Local storage limits
+    StorageLimits local_storage_limits;
 
     /// Cluster for the query.
     ClusterPtr cluster;
@@ -163,10 +191,23 @@ struct SelectQueryInfo
     ///
     /// Configured in StorageDistributed::getQueryProcessingStage()
     ClusterPtr optimized_cluster;
+    /// should we use custom key with the cluster
+    bool use_custom_key = false;
+
+    mutable ParallelReplicasReadingCoordinatorPtr coordinator;
 
     TreeRewriterResultPtr syntax_analyzer_result;
 
-    PrewhereInfoPtr prewhere_info;
+    /// This is an additional filer applied to current table.
+    ASTPtr additional_filter_ast;
+
+    /// It is needed for PK analysis based on row_level_policy and additional_filters.
+    ASTs filter_asts;
+
+    ASTPtr parallel_replica_custom_key_ast;
+
+    /// Filter actions dag for current storage
+    ActionsDAGPtr filter_actions_dag;
 
     ReadInOrderOptimizerPtr order_optimizer;
     /// Can be modified while reading from storage
@@ -178,8 +219,16 @@ struct SelectQueryInfo
 
     /// Cached value of ExpressionAnalysisResult
     bool has_window = false;
+    bool has_order_by = false;
+    bool need_aggregate = false;
+    PrewhereInfoPtr prewhere_info;
+
+    /// If query has aggregate functions
+    bool has_aggregates = false;
 
     /// proton: starts.
+    std::optional<ShardsWithQueryMode> shards_to_query;
+
     SeekToInfoPtr seek_to_info; /// Rewind info for left streaming store in streaming query
     SeekToInfoPtr seek_to_info_of_right_stream; /// Rewind info for right streaming store in streaming query
 
@@ -193,13 +242,11 @@ struct SelectQueryInfo
     bool force_emit_changelog = false;
     std::optional<bool> changelog_query_drop_late_rows = true;
 
-    bool has_aggregate_over = false;
-    bool has_non_aggregate_over = false;
     bool has_javascript_uda = false; /// Used to guide query concurrency
-    Names partition_by_keys;
 
-    bool hasPartitionByKeys() const noexcept { return !partition_by_keys.empty(); }
     bool trackingChanges() const noexcept { return left_input_tracking_changes || right_input_tracking_changes; }
+
+    bool isStreaming() const;
     /// proton: ends.
 
     ClusterPtr getCluster() const { return !optimized_cluster ? cluster : optimized_cluster; }
@@ -210,12 +257,21 @@ struct SelectQueryInfo
     bool is_projection_query = false;
     bool merge_tree_empty_result = false;
     bool settings_limit_offset_done = false;
+    bool optimize_trivial_count = false;
+
     Block minmax_count_projection_block;
     MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr;
+
+    bool is_parameterized_view = false;
+
+    // If limit is not 0, that means it's a trivial limit query.
+    UInt64 limit = 0;
 
     InputOrderInfoPtr getInputOrderInfo() const
     {
         return input_order_info ? input_order_info : (projection ? projection->input_order_info : nullptr);
     }
+
+    bool isFinal() const;
 };
 }

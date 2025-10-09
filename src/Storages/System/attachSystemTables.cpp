@@ -31,6 +31,7 @@
 #include <Storages/System/StorageSystemProjectionPartsColumns.h>
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
+#include <Storages/System/StorageSystemServerSettings.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
@@ -60,11 +61,17 @@
 #include <Storages/System/StorageSystemPrivileges.h>
 #include <Storages/System/StorageSystemAsynchronousInserts.h>
 #include <Storages/System/StorageSystemFilesystemCache.h>
+#include <Storages/System/StorageSystemNamedCollections.h>
 #include <Storages/System/StorageSystemRemoteDataPaths.h>
 #include <Storages/System/StorageSystemSchemaInferenceCache.h>
+#include <Storages/System/StorageSystemScheduler.h>
 
 /// proton: starts.
-#include <Storages/Streaming/StorageSystemStreamSettings.h>
+#include <Storages/Stream/StorageSystemStreamSettings.h>
+#include <Storages/System/StorageSystemServer.h>
+#if USE_PYTHON_UDF
+#include <Storages/System/StorageSystemPythonPackageTasks.h>
+#endif
 /// proton: ends.
 
 #ifdef OS_LINUX
@@ -72,7 +79,6 @@
 #endif
 
 #if USE_ROCKSDB
-#include <Storages/RocksDB/StorageSystemRocksDB.h>
 #include <Storages/System/StorageSystemMergeTreeMetadataCache.h>
 #endif
 
@@ -93,8 +99,10 @@ void attachSystemTablesLocal(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemFunctions>(context, system_database, "functions");
     attach<StorageSystemEvents>(context, system_database, "events");
     attach<StorageSystemSettings>(context, system_database, "settings");
+    attach<StorageSystemServerSettings>(context, system_database, "server_settings");
     /// proton: starts. remove `merge tree` `replicated` and add `stream`
     attach<SystemStreamSettings>(context, system_database, "stream_settings");
+    attach<StorageSystemServer>(context, system_database, "server");
     /// proton: ends
     attach<StorageSystemBuildOptions>(context, system_database, "build_options");
     attach<StorageSystemFormats>(context, system_database, "formats");
@@ -125,11 +133,11 @@ void attachSystemTablesLocal(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemLicenses>(context, system_database, "licenses");
     attach<StorageSystemTimeZones>(context, system_database, "time_zones");
     attach<StorageSystemSchemaInferenceCache>(context, system_database, "schema_inference_cache");
+    attach<StorageSystemScheduler>(context, system_database, "scheduler");
 #ifdef OS_LINUX
     attach<StorageSystemStackTrace>(context, system_database, "stack_trace");
 #endif
 #if USE_ROCKSDB
-    attach<StorageSystemRocksDB>(context, system_database, "rocksdb");
     attach<StorageSystemMergeTreeMetadataCache>(context, system_database, "merge_tree_metadata_cache");
 #endif
 }
@@ -157,6 +165,13 @@ void attachSystemTablesServer(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemAsynchronousInserts>(context, system_database, "asynchronous_inserts");
     attach<StorageSystemFilesystemCache>(context, system_database, "filesystem_cache");
     attach<StorageSystemRemoteDataPaths>(context, system_database, "remote_data_paths");
+    attach<StorageSystemNamedCollections>(context, system_database, "named_collections");
+
+    /// proton : starts
+#if USE_PYTHON_UDF
+    attach<StorageSystemPythonPackageTasks>(context, system_database, "python_package_tasks");
+#endif
+    /// proton : ends
 }
 
 void attachSystemTablesAsync(ContextPtr context, IDatabase & system_database, AsynchronousMetrics & async_metrics)

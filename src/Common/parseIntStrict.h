@@ -14,9 +14,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int INVALID_INTEGER_STRING;
+extern const int INVALID_INTEGER_STRING;
 }
 
+/// Parse integer in range [lpos, rpos)
 template <typename Str, typename Integer>
 Integer parseIntStrict(const Str & s, String::size_type lpos, String::size_type rpos)
 {
@@ -29,17 +30,25 @@ Integer parseIntStrict(const Str & s, String::size_type lpos, String::size_type 
     if (ec != std::errc())
         throw Exception(ErrorCodes::INVALID_INTEGER_STRING, "Invalid number '{}' string, lpos={} rpos={} size={}", s, lpos, rpos, s.size());
     else if (p != &s[rpos])
-        throw Exception(ErrorCodes::INVALID_INTEGER_STRING, "Invalid number '{}' string, only parse partial of it, lpos={} rpos={} size={}", s, lpos, rpos, s.size());
+        throw Exception(
+            ErrorCodes::INVALID_INTEGER_STRING,
+            "Invalid number '{}' string, only parse partial of it, lpos={} rpos={} size={}",
+            s,
+            lpos,
+            rpos,
+            s.size());
 
     return n;
 }
 
+/// Parse integer in range [lpos, rpos)
 template <typename Integer>
 Integer parseIntStrict(const std::string & s, String::size_type lpos, String::size_type rpos)
 {
     return parseIntStrict<std::string, Integer>(s, lpos, rpos);
 }
 
+/// Parse integer in range [lpos, rpos)
 template <typename Integer>
 Integer parseIntStrict(std::string_view s, String::size_type lpos, String::size_type rpos)
 {

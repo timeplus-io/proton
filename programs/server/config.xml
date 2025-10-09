@@ -217,13 +217,12 @@
         <!-- The following file is used only if ssl_require_client_auth=1 -->
         <ssl_ca_cert_file>/path/to/ssl_ca_cert_file</ssl_ca_cert_file>
 
-        <!-- Default compression algorithm (applied if client doesn't specify another algorithm, see result_compression in QueryInfo).
+        <!-- Default transport compression type (can be overridden by client, see the transport_compression_type field in QueryInfo).
              Supported algorithms: none, deflate, gzip, stream_gzip -->
-        <compression>deflate</compression>
+        <transport_compression_type>none</transport_compression_type>
 
-        <!-- Default compression level (applied if client doesn't specify another level, see result_compression in QueryInfo).
-             Supported levels: none, low, medium, high -->
-        <compression_level>medium</compression_level>
+        <!-- Default transport compression level. Supported levels: 0..3 -->
+        <transport_compression_level>0</transport_compression_level>
 
         <!-- Send/receive message size limits in bytes. -1 means unlimited -->
         <max_send_message_size>-1</max_send_message_size>
@@ -422,7 +421,7 @@
     <!-- Path to temporary data for processing hard queries. -->
     <tmp_path>/var/lib/proton/tmp/</tmp_path>
 
-    <!-- Disable AuthType plaintext_password and no_password for ACL. --> 
+    <!-- Disable AuthType plaintext_password and no_password for ACL. -->
     <!-- <allow_plaintext_password>0</allow_plaintext_password> -->
     <!-- <allow_no_password>0</allow_no_password> -->`
 
@@ -605,6 +604,13 @@
              if this setting is true the user B will see all rows, and if this setting is false the user B will see no rows.
              By default this setting is false for compatibility with earlier access configurations. -->
         <users_without_row_policies_can_read_rows>false</users_without_row_policies_can_read_rows>
+
+        <!-- By default, for backward compatibility a settings profile constraint for a specific setting inherit every not set field from
+             previous profile. You can change this behaviour by setting this to true.
+             If it's set to true then if settings profile has a constraint for a specific setting, then this constraint completely cancels all
+             actions of previous constraint (defined in other profiles) for the same specific setting, including fields that are not set by new constraint.
+             It also enables 'changeable_in_readonly' constraint type -->
+        <settings_constraints_replace_previous>false</settings_constraints_replace_previous>
     </access_control_improvements>
 
     <!-- Default profile of settings. -->
@@ -753,6 +759,51 @@
                 </replica>
             </shard-->
         </test_cluster_one_shard_three_replicas_localhost>
+        <parallel_replicas>
+            <shard>
+                <internal_replication>false</internal_replication>
+                <replica>
+                    <host>127.0.0.1</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.2</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.3</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.4</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.5</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.6</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.7</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.8</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.9</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.10</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </parallel_replicas>
         <test_cluster_two_shards_localhost>
              <shard>
                  <replica>
@@ -1110,6 +1161,18 @@
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </processors_profile_log>
 
+    <!-- Log of asynchronous inserts. It allows to check status
+         of insert query in fire-and-forget mode.
+    -->
+    <asynchronous_insert_log>
+        <database>system</database>
+        <table>asynchronous_insert_log</table>
+
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY</ttl>
+    </asynchronous_insert_log>
+
     <!-- Parameters for embedded dictionaries, used in Yandex.Metrica.
          See https://proton.com/docs/en/dicts/internal_dicts/
     -->
@@ -1120,6 +1183,15 @@
     <!-- Path to directory with files containing names of regions -->
     <!-- <path_to_regions_names_files>/opt/geo/</path_to_regions_names_files> -->
 
+    <!-- Blob storage object operations log.
+        -->
+    <blob_storage_log>
+        <database>system</database>
+        <table>blob_storage_log</table>
+        <partition_by>toYYYYMM(event_date)</partition_by>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 30 DAY</ttl>
+    </blob_storage_log>
 
     <!-- <top_level_domains_path>/var/lib/proton/top_level_domains/</top_level_domains_path> -->
     <!-- Custom TLD lists.

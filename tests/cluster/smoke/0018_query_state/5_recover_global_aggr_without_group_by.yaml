@@ -1,0 +1,101 @@
+tags:
+  - query_state
+description: recover global aggregation state checkpoint without group by
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream(i int, s string)
+
+  - type: wait
+    time: 1
+
+  - name: '1905'
+    query_id: '1905'
+    type: stream
+    query: subscribe to select count(), sum(i), avg(i), min(i), max(i), min(s), max(s)
+      from test19_state_stream emit periodic 1s settings checkpoint_interval=1
+    schema:
+      - name: count()
+        type: uint64
+      - name: sum(i)
+        type: int64
+      - name: avg(i)
+        type: float64
+      - name: min(i)
+        type: int32
+      - name: max(i)
+        type: int32
+      - name: min(s)
+        type: string
+      - name: max(s)
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (1, 's1'), (2, 's2'), (3, 's3')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1905'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream(i, s) values (6, 's4')
+
+  - type: wait
+    time: 1
+
+  - name: 1905-1
+    query_id: 1905-1
+    type: stream
+    query: recover from '1905'
+    schema:
+      - name: count()
+        type: uint64
+      - name: sum(i)
+        type: int64
+      - name: avg(i)
+        type: float64
+      - name: min(i)
+        type: int32
+      - name: max(i)
+        type: int32
+      - name: min(s)
+        type: string
+      - name: max(s)
+        type: string
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='1905' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1905'
+
+  - type: check
+    target_name: '1905'
+    expected_result:
+      - [ 3, 6, 2, 1, 3, s1, s3 ]
+
+  - type: check
+    target_name: 1905-1
+    expected_result:
+      - [ 4, 12, 3, 1, 6, s1, s4 ]

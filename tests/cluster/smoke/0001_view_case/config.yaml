@@ -1,0 +1,126 @@
+name: view
+description: test_mvs covering the steam query smoke cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop stream if exists test1_mv_stream_sum_view
+    - type: query
+      sql: drop stream if exists test1_mv_stream_tumble_v
+    - type: query
+      sql: drop stream if exists test1_mv_stream_session_v
+    - type: query
+      sql: drop stream if exists test1_mv_stream_hop_v
+    - type: query
+      sql: drop stream if exists test_v_stream_sum_view
+    - type: query
+      sql: drop stream if exists test_v_stream_tumble_v
+    - type: query
+      sql: drop stream if exists test1_mv_union
+    - type: query
+      sql: drop stream if exists test_v_table
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists view_stream
+    - type: query
+      sql: drop stream if exists test1_mv
+    - type: query
+      sql: drop stream if exists test1_mv_d
+    - type: query
+      sql: drop stream if exists test1_mv_seek
+    - type: query
+      sql: drop stream if exists test1_mv_no_default_tp_time
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: |
+        create stream test1_mv (
+          id string,
+          location string,
+          value float64,
+          json string,
+          timestamp datetime64(3) default now64(3)
+        ) settings event_time_column='timestamp';
+
+    - type: query
+      sql: |
+        create stream test1_mv_no_default_tp_time (
+          id string,
+          location string,
+          value float64,
+          json string,
+          timestamp datetime64(3)
+        );
+
+    - type: query
+      sql: |
+        create stream test1_mv_seek (
+          id string,
+          location string,
+          value float64,
+          json string,
+          timestamp datetime64(3) default now64(3)
+        ) settings event_time_column='timestamp';
+
+    - type: query
+      sql: |
+        create stream test1_mv_d (
+          id string,
+          type string
+        );
+    
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: |
+        insert into test1_mv_d (id, type) values
+        ('dev1', 'roof'),
+        ('dev2', 'field'),
+        ('dev3', 'window'),
+        ('dev4', 'wall'),
+        ('dev5', 'roof'),
+        ('dev6', 'window'),
+        ('dev7', 'wall'),
+        ('dev8', 'floor');
+
+teardown:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop stream if exists test1_mv_stream_sum_view
+    - type: query
+      sql: drop stream if exists test1_mv_stream_tumble_v
+    - type: query
+      sql: drop stream if exists test1_mv_stream_session_v
+    - type: query
+      sql: drop stream if exists test1_mv_stream_hop_v
+    - type: query
+      sql: drop stream if exists test_v_stream_sum_view
+    - type: query
+      sql: drop stream if exists test_v_stream_tumble_v
+    - type: query
+      sql: drop stream if exists test1_mv_union
+    - type: query
+      sql: drop stream if exists test_v_table
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: drop stream if exists view_stream
+    - type: query
+      sql: drop stream if exists test1_mv
+    - type: query
+      sql: drop stream if exists test1_mv_d
+    - type: query
+      sql: drop stream if exists test1_mv_seek
+    - type: query
+      sql: drop stream if exists test1_mv_no_default_tp_time

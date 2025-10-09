@@ -1,0 +1,111 @@
+tags:
+  - global aggr distinct
+  - append only
+  - multi shard
+  - checkpoint
+description: (#419) sum_distinct and count_distinct for append only stream with multishard.
+cluster:
+  - p1k1
+  # - p3k1 # subscribe to unsupport for cluster
+steps:
+  - type: query
+    sql: drop stream if exists v_12183487
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream v_12183487(id int, val int) primary key id settings shards=3
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 12183487213
+    query_id: '12183487213'
+    query: subscribe to select sum_distinct_streaming(val), sum(val), count_distinct(val), count(val) from v_12183487 settings checkpoint_interval=1
+    schema:
+      - name: sum_distinct_streaming(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+      - name: count_distinct(val)
+        type: uint64
+      - name: count(val)
+        type: uint64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into v_12183487(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: int32
+    inputs:
+      - [3, 30]
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='12183487213'
+  - type: wait
+    time: 4
+  
+  - type: stream
+    name: 12183487213-1
+    query_id: 12183487213-1
+    query: recover from '12183487213'
+    schema:
+      - name: sum_distinct_streaming(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+      - name: count_distinct(val)
+        type: uint64
+      - name: count(val)
+        type: uint64
+  - type: wait
+    time: 5
+  
+  - type: query
+    sql: insert into v_12183487(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: int32
+    inputs:
+      - [4, 40]
+      - [5, 50]
+  - type: wait
+    time: 5
+
+  - type: query
+    sql: insert into v_12183487(id, val) values
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: int32
+    inputs:
+      - [4, 40]
+      - [5, 50]
+  - type: wait
+    time: 5
+
+  - type: query
+    sql: kill query where query_id='12183487213' sync
+
+  - type: query
+    sql: unsubscribe to '12183487213'
+
+  - type: check
+    target_name: 12183487213
+    expected_result:
+      - [30, 30, 1, 1]
+
+  - type: check
+    target_name: 12183487213-1
+    expected_result:
+      - [120, 120, 3, 3]
+      - [120, 210, 3, 5]

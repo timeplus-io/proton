@@ -6,13 +6,10 @@
 #include <Databases/IDatabase.h>
 #include <mutex>
 
-
 /// General functionality for several different database engines.
 
 namespace DB
 {
-
-void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemoryMetadata & metadata);
 ASTPtr getCreateQueryFromStorage(const StoragePtr & storage, const ASTPtr & ast_storage, bool only_ordinary, uint32_t max_parser_depth, bool throw_on_error);
 
 class Context;
@@ -39,7 +36,7 @@ public:
 
 protected:
     Tables tables;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     DatabaseWithOwnTablesBase(const String & name_, const String & logger, ContextPtr context);
 

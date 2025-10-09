@@ -51,8 +51,8 @@ NamesAndTypesList StorageSystemRowPolicies::getNamesAndTypes()
 void StorageSystemRowPolicies::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
     context->checkAccess(AccessType::SHOW_ROW_POLICIES);
-    const auto & access_control = context->getAccessControl();
-    std::vector<UUID> ids = access_control.findAll<RowPolicy>();
+    const auto access_control = context->getAccessControl();
+    std::vector<UUID> ids = access_control->findAll<RowPolicy>();
 
     size_t column_index = 0;
     auto & column_name = assert_cast<ColumnString &>(*res_columns[column_index++]);
@@ -111,7 +111,7 @@ void StorageSystemRowPolicies::fillData(MutableColumns & res_columns, ContextPtr
 
         column_is_restrictive.push_back(is_restrictive);
 
-        auto apply_to_ast = apply_to.toASTWithNames(access_control);
+        auto apply_to_ast = apply_to.toASTWithNames(*access_control);
         column_apply_to_all.push_back(apply_to_ast->all);
 
         for (const auto & role_name : apply_to_ast->names)
@@ -125,10 +125,10 @@ void StorageSystemRowPolicies::fillData(MutableColumns & res_columns, ContextPtr
 
     for (const auto & id : ids)
     {
-        auto policy = access_control.tryRead<RowPolicy>(id);
+        auto policy = access_control->tryRead<RowPolicy>(id);
         if (!policy)
             continue;
-        auto storage = access_control.findStorage(id);
+        auto storage = access_control->findStorage(id);
         if (!storage)
             continue;
 

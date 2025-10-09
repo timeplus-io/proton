@@ -1,0 +1,28 @@
+-- Tags: no-fasttest, long
+
+SET enable_json_type = 1;
+
+drop stream if exists test;
+
+{% for create_command in ['create stream test (json nullable(json(a uint32, b array(uint32), c nullable(uint32), d tuple(e uint32, f nullable(uint32))))) engine=Memory;',
+                          'create stream test (json nullable(json(a uint32, b array(uint32), c nullable(uint32), d tuple(e uint32, f nullable(uint32))))) engine=MergeTree order by tuple_cast() settings min_rows_for_wide_part=100000000, min_bytes_for_wide_part=1000000000;',
+                          'create stream test (json nullable(json(a uint32, b array(uint32), c nullable(uint32), d tuple(e uint32, f nullable(uint32))))) engine=MergeTree order by tuple_cast() settings min_rows_for_wide_part=1, min_bytes_for_wide_part=1;'] -%}
+
+select '{{ create_command }}';
+{{ create_command }}
+
+insert into test select number % 2 ? NULL : '{"a" : 1, "b" : [1, 2, 3], "c" : null, "d" : {"e" : 1, "f" : null}, "x" : 42, "y" : [1, 2, 3]}' from numbers(4);
+select json.a as path, to_type_name(path) from test;
+select json.b as path, to_type_name(path) from test;
+select json.c as path, to_type_name(path) from test;
+select json.d as path, to_type_name(path) from test;
+select json.d.e as path, to_type_name(path) from test;
+select json.d.f as path, to_type_name(path) from test;
+select json.x as path, to_type_name(path) from test;
+select json.x.:int64 as path, to_type_name(path) from test;
+select json.y as path, to_type_name(path) from test;
+select json.y.:`array(nullable(int64))` as path, to_type_name(path) from test;
+
+drop stream test;
+
+{% endfor -%}

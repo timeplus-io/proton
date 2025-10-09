@@ -1,0 +1,70 @@
+tags:
+  - global aggregation
+  - subquery
+
+description: global aggregation from subquery(tail query)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_append_stream_2 (id int, name string, val
+      float, ts datetime);
+  - type: wait
+    time: 2
+
+  - name: "1450"
+    type: stream
+    query:
+      with subquery as (select id, count() as cnt, min(val) as min_val, max(val)
+      as max_val from changelog(test14_append_stream_2, id, name) group by id) select
+      count(*), sum(cnt), min(min_val), max(max_val) from subquery;
+    schema:
+      - name: count(*)
+        type: uint64
+      - name: sum(cnt)
+        type: uint64
+      - name: min(min_val)
+        type: float32
+      - name: max(max_val)
+        type: float32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'a', 11.1
+      ,'2020-02-02 20:00:00') (2, 'a', 33.3 ,'2020-02-02 20:00:01');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 22.2
+      ,'2020-02-02 20:00:02') (2, 'b', 22.2 ,'2020-02-02 20:00:03');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'c', 33.3
+      ,'2020-02-02 20:00:04') (2, 'c', 11.1 ,'2020-02-02 20:00:05');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 44.4
+      ,'2020-02-02 20:00:06') (2, 'b', 44.4 ,'2020-02-02 20:00:07');
+
+  - type: check
+    target_name: "1450"
+    expected_result:
+      - [2, 2, 11.1, 33.3]
+      - [2, 4, 11.1, 33.3]
+      - [2, 6, 11.1, 33.3]
+      - [2, 6, 11.1, 44.4]

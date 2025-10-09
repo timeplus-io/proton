@@ -1,0 +1,110 @@
+tags:
+  - udf
+
+description: |
+  Test covering python udf on create file
+  Main Steps:
+    1.Clean files in proton container
+    2.Create stream
+    3.Create python udf to write file
+    4.Verify file not created after python udf created
+    5.Query python udf and check results
+    5.Verify file created after python udf execute
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: command
+    node: [p1]
+    shell: rm -rf /var/lib/proton/user_files/0041_python_udf_basic*.txt
+
+  - type: query
+    sql: drop stream if exists test41_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream(file string, value uint16);
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_file(file string, value uint16) RETURNS string LANGUAGE PYTHON AS $$
+      def add_file(file, value):
+          results = []
+          for f, v in zip(file, value):
+              try:
+                  result = f"Test python udf add_file, value: {v}"
+                  with open(f, "a") as file:
+                      file.write(result)
+                      file.write("\n")
+                  results.append(result)
+              except Exception as e:
+                  results.append(str(e))
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-15-1
+    type: command
+    node: [p1]
+    shell: |
+      [ ! -f "/var/lib/proton/user_files/0041_python_udf_basic.txt" ] && echo "file 0041_python_udf_basic.txt not exist" || echo "file 0041_python_udf_basic.txt exist"
+      [ ! -f "/var/lib/proton/user_files/0041_python_udf_basic3.txt" ] && echo "file 0041_python_udf_basic3.txt not exist" || echo "file 0041_python_udf_basic3.txt exist"
+
+  - type: check
+    target_name: python-udf-15-1
+    expected_result: ["file 0041_python_udf_basic.txt not exist\nfile 0041_python_udf_basic3.txt not exist"]
+
+  - name: python-udf-15-2
+    type: stream
+    node: [p1] # write file on query node
+    query: select add_file(file, value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: uint16
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test41_stream(file, value) values 
+      ('/var/lib/proton/user_files/0041_python_udf_basic.txt', 1)
+      ('/var/lib/proton/user_files/0041_python_udf_basic.txt', 2)
+      ('/var/lib/proton/user_files/0041_python_udf_basic3.txt', 3);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test41_stream(file, value) values 
+      ('/var/lib/proton/user_files/0041_python_udf_basic.txt', -1)
+      ('0041_python_udf_basic.txt', 0);
+
+  - type: check
+    target_name: python-udf-15-2
+    expected_result:
+      - ['Test python udf add_file, value: 1', 1]
+      - ['Test python udf add_file, value: 2', 2]
+      - ['Test python udf add_file, value: 3', 3]
+      - ['Test python udf add_file, value: 65535', 65535]
+      - ["[Errno 13] Permission denied: '0041_python_udf_basic.txt'", 0]
+
+  - name: python-udf-15-3
+    type: command
+    node: [p1]
+    shell: |
+      cat /var/lib/proton/user_files/0041_python_udf_basic.txt
+      cat /var/lib/proton/user_files/0041_python_udf_basic3.txt
+
+  - type: check
+    target_name: python-udf-15-3
+    expected_result: ["Test python udf add_file, value: 1\nTest python udf add_file, value: 2\nTest python udf add_file, value: 65535\nTest python udf add_file, value: 3"]

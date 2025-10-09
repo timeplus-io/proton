@@ -1,9 +1,17 @@
 #pragma once
 
+#include "config.h"
+
 #include <Server/IServer.h>
 
 #include <Daemon/BaseDaemon.h>
 
+/// proton : starts
+#if USE_PYTHON_UDF
+#include <Python.h>
+#endif
+
+/// proton : ends
 
 /** Server provides three interfaces:
   * 1. HTTP - simple interface for any applications.
@@ -28,8 +36,15 @@ namespace v8
     class Platform;
 }
 
+namespace cluster
+{
+struct NodeDescriptor;
+}
+
 namespace DB
 {
+struct ServerDescriptor;
+using ServerDescriptorPtr = std::shared_ptr<ServerDescriptor>;
 class AsynchronousMetrics;
 class ProtocolServerAdapter;
 
@@ -64,6 +79,12 @@ public:
     void initV8();
 
     void disposeV8();
+
+    void initPythonInterpreter();
+
+    void finalizePythonInterpreter();
+
+    std::string getDefaultPath() const;
     /// proton: ends
 
 protected:
@@ -82,6 +103,11 @@ private:
 
     /// proton: starts
     std::unique_ptr<v8::Platform> platform;
+    bool v8_initialized = false;
+
+#if USE_PYTHON_UDF
+    PyThreadState * mainstate = nullptr;
+#endif
     /// proton: ends
 
     Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
@@ -91,6 +117,7 @@ private:
         Poco::Util::AbstractConfiguration & config,
         const std::string & listen_host,
         const char * port_name,
+        uint64_t port,
         bool listen_try,
         bool start_server,
         std::vector<ProtocolServerAdapter> & servers,
@@ -98,18 +125,11 @@ private:
 
     void createServers(
         Poco::Util::AbstractConfiguration & config,
-        const std::vector<std::string> & listen_hosts,
-        bool listen_try,
+        ServerDescriptorPtr server_descriptor,
         Poco::ThreadPool & server_pool,
         AsynchronousMetrics & async_metrics,
         std::vector<ProtocolServerAdapter> & servers,
         bool start_servers = false);
-
-    void updateServers(
-        Poco::Util::AbstractConfiguration & config,
-        Poco::ThreadPool & server_pool,
-        AsynchronousMetrics & async_metrics,
-        std::vector<ProtocolServerAdapter> & servers);
 };
 
 }

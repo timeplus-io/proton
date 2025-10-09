@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea int, valueb int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getDfAlign(valuea int, valueb int) RETURNS array(array(array(float))) LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+
+      class getDfAlign:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.df_align = [[]]
+
+          def serialize(self):
+              data = {}
+              data['df_align'] = self.df_align
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.df_align = data['df_align']
+
+          def merge(self, other):
+              pass
+
+          def process(self, valueas, valuebs):
+              df = pd.DataFrame(data=valueas, columns=["A"])
+              other = pd.DataFrame(data=valuebs, columns=["B"])
+              left, right = df.align(other, join="outer", axis=1)
+              self.df_align = [left.values.tolist(), right.values.tolist()]
+
+          def finalize(self):
+              return self.df_align
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-4-1
+    type: stream
+    query: select getDfAlign(valuea, valueb) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(array(float32)))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb) values (1, 2)(4, 5);
+
+  - type: check
+    target_name: python-udf3-4-1
+    expected_result:
+      - [[[[1.0, nan], [4.0, nan]], [[nan, 2.0], [nan, 5.0]]]]

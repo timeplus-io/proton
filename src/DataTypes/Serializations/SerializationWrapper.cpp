@@ -29,9 +29,10 @@ void SerializationWrapper::serializeBinaryBulkStateSuffix(
 
 void SerializationWrapper::deserializeBinaryBulkStatePrefix(
     DeserializeBinaryBulkSettings & settings,
-    DeserializeBinaryBulkStatePtr & state) const
+    DeserializeBinaryBulkStatePtr & state,
+    SubstreamsDeserializeStatesCache * cache) const
 {
-    nested_serialization->deserializeBinaryBulkStatePrefix(settings, state);
+    nested_serialization->deserializeBinaryBulkStatePrefix(settings, state, cache);
 }
 
 void SerializationWrapper::serializeBinaryBulkWithMultipleStreams(
@@ -96,6 +97,11 @@ void SerializationWrapper::deserializeTextEscaped(IColumn & column, ReadBuffer &
     nested_serialization->deserializeTextEscaped(column, istr, settings);
 }
 
+bool SerializationWrapper::tryDeserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
+{
+    return nested_serialization->tryDeserializeTextEscaped(column, istr, settings);
+}
+
 void SerializationWrapper::serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     nested_serialization->serializeTextQuoted(column, row_num, ostr, settings);
@@ -104,6 +110,11 @@ void SerializationWrapper::serializeTextQuoted(const IColumn & column, size_t ro
 void SerializationWrapper::deserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     nested_serialization->deserializeTextQuoted(column, istr, settings);
+}
+
+bool SerializationWrapper::tryDeserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
+{
+    return nested_serialization->tryDeserializeTextQuoted(column, istr, settings);
 }
 
 void SerializationWrapper::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
@@ -116,6 +127,11 @@ void SerializationWrapper::deserializeTextCSV(IColumn & column, ReadBuffer & ist
     nested_serialization->deserializeTextCSV(column, istr, settings);
 }
 
+bool SerializationWrapper::tryDeserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
+{
+    return nested_serialization->tryDeserializeTextCSV(column, istr, settings);
+}
+
 void SerializationWrapper::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     nested_serialization->serializeText(column, row_num, ostr, settings);
@@ -124,6 +140,11 @@ void SerializationWrapper::serializeText(const IColumn & column, size_t row_num,
 void SerializationWrapper::deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     nested_serialization->deserializeWholeText(column, istr, settings);
+}
+
+bool SerializationWrapper::tryDeserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
+{
+    return nested_serialization->tryDeserializeWholeText(column, istr, settings);
 }
 
 void SerializationWrapper::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
@@ -136,23 +157,62 @@ void SerializationWrapper::deserializeTextJSON(IColumn & column, ReadBuffer & is
     nested_serialization->deserializeTextJSON(column, istr, settings);
 }
 
+bool SerializationWrapper::tryDeserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
+{
+    return nested_serialization->tryDeserializeTextJSON(column, istr, settings);
+}
+
+void SerializationWrapper::serializeTextJSONPretty(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings, size_t indent) const
+{
+    nested_serialization->serializeTextJSONPretty(column, row_num, ostr, settings, indent);
+}
+
 void SerializationWrapper::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     nested_serialization->serializeTextXML(column, row_num, ostr, settings);
 }
 
 /// proton: starts
-void SerializationWrapper::deserializeBinaryBulkWithMultipleStreamsSkip(
+void SerializationWrapper::deserializeBinaryBulkWithMultipleStreamsDiscard(
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
     DeserializeBinaryBulkStatePtr & state) const
 {
-    nested_serialization->deserializeBinaryBulkWithMultipleStreamsSkip(limit, settings, state);
+    nested_serialization->deserializeBinaryBulkWithMultipleStreamsDiscard(limit, settings, state);
 }
 
-void SerializationWrapper::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+void SerializationWrapper::deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const
 {
-    nested_serialization->deserializeBinaryBulkSkip(istr, limit);
+    nested_serialization->deserializeBinaryBulkDiscard(istr, limit);
+}
+
+void SerializationWrapper::deserializeBinaryDiscard(ReadBuffer & istr) const
+{
+    nested_serialization->deserializeBinaryDiscard(istr);
+}
+
+void SerializationWrapper::serializeBinaryPrefixTree(
+    const Field & field, String & encoded, const FormatSettings & settings, bool ascending) const
+{
+    nested_serialization->serializeBinaryPrefixTree(field, encoded, settings, ascending);
+}
+
+void SerializationWrapper::serializeBinaryPrefixTree(
+    const IColumn & column, size_t row_num, String & encoded, const FormatSettings & settings, bool ascending) const
+{
+    nested_serialization->serializeBinaryPrefixTree(column, row_num, encoded, settings, ascending);
+}
+
+void SerializationWrapper::deserializeBinaryPrefixTree(
+    IColumn & column, std::string_view & data, const FormatSettings & settings, bool ascending) const
+{
+    nested_serialization->deserializeBinaryPrefixTree(column, data, settings, ascending);
+}
+
+void SerializationWrapper::deserializeBinaryPrefixTreeDiscard(
+    std::string_view & data, const DB::FormatSettings & settings, bool ascending) const
+{
+    nested_serialization->deserializeBinaryPrefixTreeDiscard(data, settings, ascending);
 }
 /// proton: ends
 }

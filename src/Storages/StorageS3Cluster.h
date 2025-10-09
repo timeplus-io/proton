@@ -23,6 +23,18 @@ class StorageS3Cluster : public shared_ptr_helper<StorageS3Cluster>, public ISto
 {
     friend struct shared_ptr_helper<StorageS3Cluster>;
 public:
+    struct Configuration : public StorageS3::Configuration
+    {
+        std::string cluster_name;
+    };
+
+    StorageS3Cluster(
+        const Configuration & configuration_,
+        const StorageID & table_id_,
+        const ColumnsDescription & columns_,
+        const ConstraintsDescription & constraints_,
+        ContextPtr context_);
+
     std::string getName() const override { return "S3Cluster"; }
 
     Pipe read(const Names &, const StorageSnapshotPtr &, SelectQueryInfo &,
@@ -33,18 +45,15 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
+    bool supportsSubcolumns() const override { return true; }
+
+    bool supportsDynamicSubcolumns() const override { return true; }
+
 protected:
-    StorageS3Cluster(
-        const StorageS3ClusterConfiguration & configuration_,
-        const StorageID & table_id_,
-        const ColumnsDescription & columns_,
-        const ConstraintsDescription & constraints_,
-        ContextPtr context_);
+    void updateConfigurationIfChanged(ContextPtr local_context);
 
 private:
-    StorageS3::S3Configuration s3_configuration;
-
-    String filename;
+    StorageS3::Configuration s3_configuration;
     String cluster_name;
     String format_name;
     String compression_method;

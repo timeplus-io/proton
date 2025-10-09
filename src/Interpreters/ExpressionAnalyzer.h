@@ -13,7 +13,7 @@
 #include <Storages/SelectQueryInfo.h>
 
 /// proton: starts.
-#include <Storages/Streaming/SeekToInfo.h>
+#include <Storages/SeekToInfo.h>
 /// proton: ends.
 
 namespace DB
@@ -99,6 +99,7 @@ private:
     {
         const bool use_index_for_in_with_subqueries;
         const SizeLimits size_limits_for_set;
+        const SizeLimits size_limits_for_set_used_with_index;
         const UInt64 distributed_group_by_no_merge;
 
         explicit ExtractedSettings(const Settings & settings_);
@@ -123,8 +124,9 @@ public:
     ActionsDAGPtr getActionsDAG(bool add_aliases, bool project_result = true);
     ExpressionActionsPtr getActions(bool add_aliases, bool project_result = true, CompileExpressions compile_expressions = CompileExpressions::no);
 
-    /// Actions that can be performed on an empty block: adding constants and applying functions that depend only on constants.
+    /// Get actions to evaluate a constant expression. The function adds constants and applies functions that depend only on constants.
     /// Does not execute subqueries.
+    ActionsDAGPtr getConstActionsDAG(const ColumnsWithTypeAndName & constant_inputs = {});
     ExpressionActionsPtr getConstActions(const ColumnsWithTypeAndName & constant_inputs = {});
 
     /** Sets that require a subquery to be create.
@@ -140,12 +142,8 @@ public:
     /// A list of windows for window functions.
     const WindowDescriptions & windowDescriptions() const { return window_descriptions; }
 
+    void makeWindowDescriptionFromAST(const Context & context, const WindowDescriptions & existing_descriptions, WindowDescription & desc, const IAST * ast);
     void makeWindowDescriptions(ActionsDAGPtr actions);
-
-    /** Create Set from a subquery or a table expression in the query. The created set is suitable for using the index.
-      * The set will not be created if its size hits the limit.
-      */
-    void tryMakeSetForIndexFromSubquery(const ASTPtr & subquery_or_table_name, const SelectQueryOptions & query_options = {});
 
     /** Checks if subquery is not a plain StorageSet.
       * Because while making set we will read data from StorageSet which is not allowed.
@@ -161,13 +159,15 @@ protected:
         size_t subquery_depth_,
         bool do_global_,
         bool is_explain_,
-        PreparedSetsPtr prepared_sets_);
+        PreparedSetsPtr prepared_sets_,
+        bool is_create_parameterized_view_ = false);
 
     ASTPtr query;
     const ExtractedSettings settings;
     size_t subquery_depth;
 
     TreeRewriterResultPtr syntax;
+    bool is_create_parameterized_view;
 
     const ConstStoragePtr & storage() const { return syntax->storage; } /// The main table in FROM clause, if exists.
     const TableJoin & analyzedJoin() const { return *syntax->analyzed_join; }
@@ -187,6 +187,8 @@ protected:
     void getRootActionsNoMakeSet(const ASTPtr & ast, ActionsDAGPtr & actions, bool only_consts = false);
 
     void getRootActionsForHaving(const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions, bool only_consts = false);
+
+    void getRootActionsForWindowFunctions(const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions);
 
     /** Add aggregation keys to aggregation_keys, aggregate functions to aggregate_descriptions,
       * Create a set of columns aggregated_columns resulting after the aggregation, if any,
@@ -217,6 +219,7 @@ namespace Streaming
 struct ExpressionAnalysisContext
 {
     bool emit_version;
+    bool has_window_watermark;
     DataStreamSemanticEx data_stream_semantic;
 };
 }
@@ -250,6 +253,12 @@ struct ExpressionAnalysisResult
     ActionsDAGPtr converting_join_columns;
     JoinPtr join;
     ActionsDAGPtr before_where;
+    /// proton: starts.
+    ActionsDAGPtr before_partition_by;
+    Names partition_by_keys;
+    ActionsDAGPtr before_shuffle_by;
+    Names shuffle_by_keys;
+    /// proton: ends.
     ActionsDAGPtr before_aggregation;
     ActionsDAGPtr before_having;
     String having_column_name;
@@ -286,6 +295,7 @@ struct ExpressionAnalysisResult
         bool second_stage,
         bool only_types,
         const FilterDAGInfoPtr & filter_info,
+        const FilterDAGInfoPtr & additional_filter, /// for setting additional_filters
         const Block & source_header,
         Streaming::ExpressionAnalysisContext analysis_ctx);
 
@@ -295,8 +305,16 @@ struct ExpressionAnalysisResult
     bool hasJoin() const { return join.get(); }
     bool hasPrewhere() const { return prewhere_info.get(); }
     bool hasWhere() const { return before_where.get(); }
+    /// proton: starts.
+    bool hasPartitionBy() const { return before_partition_by.get(); }
+    bool hasShuffleBy() const { return before_shuffle_by.get(); }
+    /// proton: ends.
     bool hasHaving() const { return before_having.get(); }
     bool hasLimitBy() const { return before_limit_by.get(); }
+
+    /// proton: starts.
+    bool hasStatefulFunctions() const;
+    /// proton: ends.
 
     void removeExtraColumns() const;
     void checkActions() const;
@@ -330,7 +348,8 @@ public:
             options_.subquery_depth,
             do_global_,
             options_.is_explain,
-            prepared_sets_)
+            prepared_sets_,
+            options_.is_create_parameterized_view)
         , metadata_snapshot(metadata_snapshot_)
         , required_result_columns(required_result_columns_)
         , query_options(options_)
@@ -344,6 +363,8 @@ public:
     bool hasTableJoin() const { return syntax->ast_join; }
 
     /// proton: starts.
+    bool hasStreamingJoin() const;
+
 private:
     SeekToInfoPtr seek_to_info_of_joined_table;
 
@@ -369,9 +390,6 @@ public:
     void appendSelect(ExpressionActionsChain & chain, bool only_types);
     /// Deletes all columns except mentioned by SELECT, arranges the remaining columns and renames them to aliases.
     ActionsDAGPtr appendProjectResult(ExpressionActionsChain & chain) const;
-
-    /// Create Set-s that we make from IN section to use index on them.
-    void makeSetsForIndex(const ASTPtr & node);
 
 private:
     StorageMetadataPtr metadata_snapshot;
@@ -413,6 +431,8 @@ private:
     void appendAggregateFunctionsArguments(ExpressionActionsChain & chain, bool only_types);
     void appendWindowFunctionsArguments(ExpressionActionsChain & chain, bool only_types);
 
+    void appendExpressionsAfterWindowFunctions(ExpressionActionsChain & chain, bool only_types);
+
     /// After aggregation:
     bool appendHaving(ExpressionActionsChain & chain, bool only_types);
     ///  appendSelect
@@ -421,6 +441,9 @@ private:
     ///  appendProjectResult
 
     /// proton : starts
+    bool appendPartitionBy(ExpressionActionsChain & chain, bool only_types, bool before_join);
+    bool appendShuffleBy(ExpressionActionsChain & chain, bool only_types);
+
     std::shared_ptr<IJoin> chooseJoinAlgorithmStreaming(std::shared_ptr<TableJoin> analyzed_join);
     /// proton : ends
 };

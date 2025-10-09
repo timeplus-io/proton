@@ -1,0 +1,18 @@
+-- Tags: no-fasttest
+
+set output_format_write_statistics=0;
+
+-- FIXME: support SQLInsert in future
+{% for format in ['CSV', 'TSV', 'JSONEachRow', 'JSONCompactEachRow', 'TSKV', 'XML', 'Markdown', 'CustomSeparated', 'Vertical', 'JSON', 'JSONCompact', 'Values'] -%}
+
+select '{{ format }}';
+select 'format_row';
+select format_row('{{ format }}', number, good) from (select number, 'good' as good from numbers(3));
+select 'format_row_no_newline';
+select format_row_no_newline('{{ format }}', number, good) from (select number, 'good' as good from numbers(3));
+
+{% endfor -%}
+
+-- unknown format
+select format_row('aaa', *) from numbers(3); -- { serverError 73 }
+

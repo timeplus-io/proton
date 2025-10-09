@@ -15,6 +15,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_temporary("TEMPORARY");
     /// proton: starts
     ParserKeyword s_stream("STREAM");
+    ParserKeyword s_cascade("CASCADE");
     /// proton: ends
     ParserKeyword s_dictionary("DICTIONARY");
     ParserKeyword s_view("VIEW");
@@ -35,6 +36,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     bool is_view = false;
     bool no_delay = false;
     bool permanently = false;
+    bool cascade = false;
 
     if (s_database.ignore(pos, expected, false))
     {
@@ -77,11 +79,13 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     }
 
     /// common for tables / dictionaries / databases
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// proton: starts
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+    /// proton: ends
 
     if (kind == ASTDropQuery::Kind::Detach && s_permanently.ignore(pos, expected))
         permanently = true;
@@ -89,6 +93,11 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     /// actually for TRUNCATE NO DELAY / SYNC means nothing
     if (s_no_delay.ignore(pos, expected) || s_sync.ignore(pos, expected))
         no_delay = true;
+
+    /// proton: starts
+    if (s_cascade.ignore(pos, expected))
+        cascade = true;
+    /// proton: ends
 
     auto query = std::make_shared<ASTDropQuery>();
     node = query;
@@ -102,6 +111,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     query->permanently = permanently;
     query->database = database;
     query->table = table;
+    query->cascade = cascade; /// proton: newly added
 
     if (database)
         query->children.push_back(database);

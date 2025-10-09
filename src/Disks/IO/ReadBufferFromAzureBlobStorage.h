@@ -38,8 +38,6 @@ public:
 
     void setReadUntilPosition(size_t position) override;
 
-    Range getRemainingReadRange() const override;
-
     bool supportsRightBoundedReads() const override { return true; }
 
 private:
@@ -65,7 +63,7 @@ private:
     char * data_ptr;
     size_t data_capacity;
 
-    Poco::Logger * log = &Poco::Logger::get("ReadBufferFromAzureBlobStorage");
+    LoggerPtr log = getLogger("ReadBufferFromAzureBlobStorage");
 };
 
 }

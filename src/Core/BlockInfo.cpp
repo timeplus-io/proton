@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 
 /// Write values in binary form. NOTE: You could use protobuf, but it would be overkill for this case.
-void BlockInfo::write(WriteBuffer & out) const
+void BlockInfo::write(WriteBuffer & out, bool additional_internal_fields) const
 {
 /// Set of pairs `FIELD_NUM`, value in binary form. Then 0.
 #define WRITE_FIELD(TYPE, NAME, DEFAULT, FIELD_NUM) \
@@ -27,6 +27,12 @@ void BlockInfo::write(WriteBuffer & out) const
 
     APPLY_FOR_BLOCK_INFO_FIELDS(WRITE_FIELD)
 
+    /// proton: starts.
+    if (additional_internal_fields)
+    {
+        APPLY_FOR_BLOCK_INFO_FIELDS_INTERNAL(WRITE_FIELD)
+    }
+    /// proton: ends.
 #undef WRITE_FIELD
     writeVarUInt(0, out);
 }
@@ -50,10 +56,13 @@ void BlockInfo::read(ReadBuffer & in)
                 break;
 
             APPLY_FOR_BLOCK_INFO_FIELDS(READ_FIELD)
+            /// proton: starts.
+            APPLY_FOR_BLOCK_INFO_FIELDS_INTERNAL(READ_FIELD)
+            /// proton: ends.
 
         #undef READ_FIELD
             default:
-                throw Exception("Unknown BlockInfo field number: " + toString(field_num), ErrorCodes::UNKNOWN_BLOCK_INFO_FIELD);
+                throw Exception(ErrorCodes::UNKNOWN_BLOCK_INFO_FIELD, "Unknown BlockInfo field number: {}", field_num);
         }
     }
 }

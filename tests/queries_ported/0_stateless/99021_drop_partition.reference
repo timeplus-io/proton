@@ -1,0 +1,2 @@
+Before alter, partition count is equal to 3.
+After alter partition, no partition found to drop.

@@ -22,7 +22,7 @@ INSERT INTO test_a (OldColumn, EventTime) VALUES('1', now());
 INSERT INTO test_b (OldColumn, NewColumn, EventTime) VALUES('1', '1a', now());
 INSERT INTO test_b (OldColumn, NewColumn, EventTime) VALUES('2', '2a', now());
 
-ALTER STREAM test_a ADD COLUMN NewColumn string DEFAULT '' AFTER OldColumn;
+ALTER STREAM test_a ADD COLUMN NewColumn string DEFAULT '';
 
 INSERT INTO test_a (OldColumn, NewColumn, EventTime) VALUES('2', '2a', now());
 

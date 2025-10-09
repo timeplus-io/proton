@@ -1,0 +1,58 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (xs float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_anomaly(xs float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import random
+      from river import anomaly
+
+      def test_anomaly(xs):
+          rng = random.Random(42)
+          detector = anomaly.GaussianScorer()
+          for y in (rng.gauss(0, 1) for _ in range(100)):
+              detector.learn_one(None, y)
+          res = [detector.score_one(None, x) for x in xs]
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-3-1
+    type: stream
+    query: select test_anomaly(xs) as res, xs from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: xs
+        type: float32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(xs) values (-3)(3)(0)(0.5);
+
+  - type: check
+    target_name: python-udf13-3-1
+    expected_result:
+      - [0.9994778691536549, -3]
+      - [0.9991532115426525, 3]
+      - [0.05266528549944571, 0]
+      - [0.38371791710216074, 0.5]

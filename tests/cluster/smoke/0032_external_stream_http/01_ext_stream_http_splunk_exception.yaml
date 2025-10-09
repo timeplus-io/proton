@@ -1,0 +1,46 @@
+tags:
+  - splunk
+
+description: |
+  Test http external streams exception
+  - insert exception when external stream with no splunk token registered (#9019)
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists http_01_ex
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream http_01_ex (
+        event string,
+        sourcetype string default '_json'
+      ) settings type='http', 
+                 url='https://splunk:8088/services/collector', 
+                 http_header_Authorization='Splunk f807d838-40e4-4ff2-9b3f-8828ebd11385',
+                 skip_ssl_cert_check=true;
+
+  - type: wait
+    time: 2
+
+  - name: http-01-insert
+    type: stream
+    query: |
+      insert into http_01_ex (event) values 
+      ('{"i": 1, "s": "one"}')
+      ('{"i": 2, "s": "two"}')
+      ('{"i": 3, "s": "three"}')
+      ('{"i": 4, "s": "four"}')
+      ('{"i": 5, "s": "five"}')
+      ('{"i": 6, "s": "six"}');
+
+  - type: check
+    target_name: http-01-insert
+    expected_result:
+      - ['error_code:86'] # RECEIVED_ERROR_FROM_REMOTE_IO_SERVER (86): DB::HTTPException: Received error from remote server

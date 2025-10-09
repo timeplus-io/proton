@@ -1,0 +1,60 @@
+tags:
+  - join
+description: stream table j22_stream_tail_join_tableoin table w/o aggregation
+cluster:
+  - p1k1
+  - p3k1
+steps:
+    
+  - type: query
+    sql: drop stream test6_stream_only
+  
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream test6_stream_only (
+        id string,
+        location string,
+        value float64,
+        json string,
+        timestamp datetime64(3) default now64(3)
+      ) settings event_time_column='timestamp';
+  
+  - type: wait
+    time: 2
+  
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00')
+      ('dev1', 'ca', 70, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01')
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05');
+
+  - type: wait
+    time: 2
+
+  - name: '601'
+    type: stream
+    query: |
+      select a.id, b.type, a.value
+      from table(test6_stream_only) as a
+      join table(test6_stream_only_d) as b
+      on a.id = b.id
+      where a.value < 70
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: value
+        type: float64
+
+  - type: check
+    target_name: '601'
+    expected_result:
+      - [ dev1, roof, 57.3 ]
+      - [ dev2, field, 58.3 ]
+

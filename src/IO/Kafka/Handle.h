@@ -29,7 +29,7 @@ public:
     void startPolling();
 
 protected:
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
 private:
     using RdKafkaPtr = std::unique_ptr<rd_kafka_t, decltype(rd_kafka_destroy) *>;

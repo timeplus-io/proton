@@ -1,0 +1,72 @@
+tags:
+  - validate
+  - tumble window
+  - skip # https://github.com/timeplus-io/proton-enterprise/issues/6984
+  
+description: extra tests on mv tumble window aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      insert into tumble_source_stream(id, location, value, json, timestamp) values
+      ('dev1', 'ca', 83, '{"create_time":"2024-01-01 20:00:10"}', '2024-01-01 20:00:10.000')
+      ('dev2', 'ca', 27, '{"create_time":"2024-01-01 20:00:15"}', '2024-01-01 20:00:15.000')
+      ('dev3', 'ca', 94, '{"create_time":"2024-01-01 20:00:15"}', '2024-01-01 20:00:15.000')
+      ('dev3', 'ca', 67, '{"create_time":"2024-01-01 20:00:20"}', '2024-01-01 20:00:20.000');
+
+  - type: wait
+    time: 2
+
+  - name: view-9-3
+    type: stream
+    query: select * except (_tp_time) from tumble_mv settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-9-3
+    mode: random
+    expected_result:
+      - ['dev3', '94', '2024-01-01 20:00:15', '2024-01-01 20:00:20']
+      - ['dev2', '27', '2024-01-01 20:00:15', '2024-01-01 20:00:20']
+      - ['dev2', '77', '2024-01-01 20:00:10', '2024-01-01 20:00:15']
+      - ['dev1', '83', '2024-01-01 20:00:10', '2024-01-01 20:00:15']
+      - ['dev2', '58', '2024-01-01 20:00:05', '2024-01-01 20:00:10']
+      - ['dev1', '31', '2024-01-01 20:00:05', '2024-01-01 20:00:10']
+      - ['dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:05']
+
+  - name: view-9-4
+    type: stream
+    query: select * except (_tp_time) from tumble_target_stream settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: max
+        type: float32
+      - name: win_start
+        type: datetime64(3)
+      - name: win_end
+        type: datetime64(3)
+
+  - type: check
+    target_name: view-9-4
+    mode: random
+    expected_result:
+      - ['dev3', '94', '2024-01-01 20:00:15', '2024-01-01 20:00:20']
+      - ['dev2', '27', '2024-01-01 20:00:15', '2024-01-01 20:00:20']
+      - ['dev2', '77', '2024-01-01 20:00:10', '2024-01-01 20:00:15']
+      - ['dev1', '83', '2024-01-01 20:00:10', '2024-01-01 20:00:15']
+      - ['dev2', '58', '2024-01-01 20:00:05', '2024-01-01 20:00:10']
+      - ['dev1', '31', '2024-01-01 20:00:05', '2024-01-01 20:00:10']
+      - ['dev1', '60', '2024-01-01 20:00:00', '2024-01-01 20:00:05']

@@ -2,6 +2,8 @@ import pytest
 import logging
 from helpers.cluster import ClickHouseCluster
 from helpers.test_tools import TSV
+from helpers.wait_for_helpers import wait_for_delete_inactive_parts
+from helpers.wait_for_helpers import wait_for_delete_empty_parts
 
 cluster = ClickHouseCluster(__file__)
 instance = cluster.add_instance('instance')
@@ -51,37 +53,72 @@ def partition_complex_assert_columns_txt():
         assert instance.exec_in_container(['wc', '-l', path_to_columns]).split()[0] == '5'
 
 
-def partition_complex_assert_checksums():
+def partition_complex_assert_checksums(after_detach=False):
     # Do not check increment.txt - it can be changed by other tests with FREEZE
     cmd = ["bash", "-c", f"cd {path_to_data} && find shadow -type f -exec" + " md5sum {} \\; | grep partition_complex" \
            " | sed 's shadow/[0-9]*/data/[a-z0-9_-]*/ shadow/1/data/test/ g' | sort | uniq"]
 
-    checksums = "082814b5aa5109160d5c0c5aff10d4df\tshadow/1/data/test/partition_complex/19700102_2_2_0/k.bin\n" \
-                "082814b5aa5109160d5c0c5aff10d4df\tshadow/1/data/test/partition_complex/19700201_1_1_0/v1.bin\n" \
-                "13cae8e658e0ca4f75c56b1fc424e150\tshadow/1/data/test/partition_complex/19700102_2_2_0/minmax_p.idx\n" \
-                "25daad3d9e60b45043a70c4ab7d3b1c6\tshadow/1/data/test/partition_complex/19700102_2_2_0/partition.dat\n" \
-                "3726312af62aec86b64a7708d5751787\tshadow/1/data/test/partition_complex/19700201_1_1_0/partition.dat\n" \
-                "37855b06a39b79a67ea4e86e4a3299aa\tshadow/1/data/test/partition_complex/19700102_2_2_0/checksums.txt\n" \
-                "38e62ff37e1e5064e9a3f605dfe09d13\tshadow/1/data/test/partition_complex/19700102_2_2_0/v1.bin\n" \
-                "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/k.mrk\n" \
-                "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/p.mrk\n" \
-                "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/v1.mrk\n" \
-                "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/k.mrk\n" \
-                "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/p.mrk\n" \
-                "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/v1.mrk\n" \
-                "55a54008ad1ba589aa210d2629c1df41\tshadow/1/data/test/partition_complex/19700201_1_1_0/primary.idx\n" \
-                "5f087cb3e7071bf9407e095821e2af8f\tshadow/1/data/test/partition_complex/19700201_1_1_0/checksums.txt\n" \
-                "77d5af402ada101574f4da114f242e02\tshadow/1/data/test/partition_complex/19700102_2_2_0/columns.txt\n" \
-                "77d5af402ada101574f4da114f242e02\tshadow/1/data/test/partition_complex/19700201_1_1_0/columns.txt\n" \
-                "88cdc31ded355e7572d68d8cde525d3a\tshadow/1/data/test/partition_complex/19700201_1_1_0/p.bin\n" \
-                "9e688c58a5487b8eaf69c9e1005ad0bf\tshadow/1/data/test/partition_complex/19700102_2_2_0/primary.idx\n" \
-                "c0904274faa8f3f06f35666cc9c5bd2f\tshadow/1/data/test/partition_complex/19700102_2_2_0/default_compression_codec.txt\n" \
-                "c0904274faa8f3f06f35666cc9c5bd2f\tshadow/1/data/test/partition_complex/19700201_1_1_0/default_compression_codec.txt\n" \
-                "c4ca4238a0b923820dcc509a6f75849b\tshadow/1/data/test/partition_complex/19700102_2_2_0/count.txt\n" \
-                "c4ca4238a0b923820dcc509a6f75849b\tshadow/1/data/test/partition_complex/19700201_1_1_0/count.txt\n" \
-                "cfcb770c3ecd0990dcceb1bde129e6c6\tshadow/1/data/test/partition_complex/19700102_2_2_0/p.bin\n" \
-                "e2af3bef1fd129aea73a890ede1e7a30\tshadow/1/data/test/partition_complex/19700201_1_1_0/k.bin\n" \
+    # no metadata version
+    if after_detach:
+        checksums = (
+            "082814b5aa5109160d5c0c5aff10d4df\tshadow/1/data/test/partition_complex/19700102_2_2_0/k.bin\n"
+            "082814b5aa5109160d5c0c5aff10d4df\tshadow/1/data/test/partition_complex/19700201_1_1_0/v1.bin\n"
+            "13cae8e658e0ca4f75c56b1fc424e150\tshadow/1/data/test/partition_complex/19700102_2_2_0/minmax_p.idx\n"
+            "25daad3d9e60b45043a70c4ab7d3b1c6\tshadow/1/data/test/partition_complex/19700102_2_2_0/partition.dat\n"
+            "3726312af62aec86b64a7708d5751787\tshadow/1/data/test/partition_complex/19700201_1_1_0/partition.dat\n"
+            "37855b06a39b79a67ea4e86e4a3299aa\tshadow/1/data/test/partition_complex/19700102_2_2_0/checksums.txt\n"
+            "38e62ff37e1e5064e9a3f605dfe09d13\tshadow/1/data/test/partition_complex/19700102_2_2_0/v1.bin\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/k.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/p.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/v1.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/k.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/p.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/v1.mrk\n"
+            "55a54008ad1ba589aa210d2629c1df41\tshadow/1/data/test/partition_complex/19700201_1_1_0/primary.idx\n"
+            "5f087cb3e7071bf9407e095821e2af8f\tshadow/1/data/test/partition_complex/19700201_1_1_0/checksums.txt\n"
+            "77d5af402ada101574f4da114f242e02\tshadow/1/data/test/partition_complex/19700102_2_2_0/columns.txt\n"
+            "77d5af402ada101574f4da114f242e02\tshadow/1/data/test/partition_complex/19700201_1_1_0/columns.txt\n"
+            "88cdc31ded355e7572d68d8cde525d3a\tshadow/1/data/test/partition_complex/19700201_1_1_0/p.bin\n"
+            "9e688c58a5487b8eaf69c9e1005ad0bf\tshadow/1/data/test/partition_complex/19700102_2_2_0/primary.idx\n"
+            "c0904274faa8f3f06f35666cc9c5bd2f\tshadow/1/data/test/partition_complex/19700102_2_2_0/default_compression_codec.txt\n"
+            "c0904274faa8f3f06f35666cc9c5bd2f\tshadow/1/data/test/partition_complex/19700201_1_1_0/default_compression_codec.txt\n"
+            "c4ca4238a0b923820dcc509a6f75849b\tshadow/1/data/test/partition_complex/19700102_2_2_0/count.txt\n"
+            "c4ca4238a0b923820dcc509a6f75849b\tshadow/1/data/test/partition_complex/19700201_1_1_0/count.txt\n"
+            "cfcb770c3ecd0990dcceb1bde129e6c6\tshadow/1/data/test/partition_complex/19700102_2_2_0/p.bin\n"
+            "e2af3bef1fd129aea73a890ede1e7a30\tshadow/1/data/test/partition_complex/19700201_1_1_0/k.bin\n"
                 "f2312862cc01adf34a93151377be2ddf\tshadow/1/data/test/partition_complex/19700201_1_1_0/minmax_p.idx\n"
+        )
+    else:
+        checksums = (
+            "082814b5aa5109160d5c0c5aff10d4df\tshadow/1/data/test/partition_complex/19700102_2_2_0/k.bin\n"
+            "082814b5aa5109160d5c0c5aff10d4df\tshadow/1/data/test/partition_complex/19700201_1_1_0/v1.bin\n"
+            "13cae8e658e0ca4f75c56b1fc424e150\tshadow/1/data/test/partition_complex/19700102_2_2_0/minmax_p.idx\n"
+            "25daad3d9e60b45043a70c4ab7d3b1c6\tshadow/1/data/test/partition_complex/19700102_2_2_0/partition.dat\n"
+            "3726312af62aec86b64a7708d5751787\tshadow/1/data/test/partition_complex/19700201_1_1_0/partition.dat\n"
+            "37855b06a39b79a67ea4e86e4a3299aa\tshadow/1/data/test/partition_complex/19700102_2_2_0/checksums.txt\n"
+            "38e62ff37e1e5064e9a3f605dfe09d13\tshadow/1/data/test/partition_complex/19700102_2_2_0/v1.bin\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/k.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/p.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700102_2_2_0/v1.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/k.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/p.mrk\n"
+            "4ae71336e44bf9bf79d2752e234818a5\tshadow/1/data/test/partition_complex/19700201_1_1_0/v1.mrk\n"
+            "55a54008ad1ba589aa210d2629c1df41\tshadow/1/data/test/partition_complex/19700201_1_1_0/primary.idx\n"
+            "5f087cb3e7071bf9407e095821e2af8f\tshadow/1/data/test/partition_complex/19700201_1_1_0/checksums.txt\n"
+            "77d5af402ada101574f4da114f242e02\tshadow/1/data/test/partition_complex/19700102_2_2_0/columns.txt\n"
+            "77d5af402ada101574f4da114f242e02\tshadow/1/data/test/partition_complex/19700201_1_1_0/columns.txt\n"
+            "88cdc31ded355e7572d68d8cde525d3a\tshadow/1/data/test/partition_complex/19700201_1_1_0/p.bin\n"
+            "9e688c58a5487b8eaf69c9e1005ad0bf\tshadow/1/data/test/partition_complex/19700102_2_2_0/primary.idx\n"
+            "c0904274faa8f3f06f35666cc9c5bd2f\tshadow/1/data/test/partition_complex/19700102_2_2_0/default_compression_codec.txt\n"
+            "c0904274faa8f3f06f35666cc9c5bd2f\tshadow/1/data/test/partition_complex/19700201_1_1_0/default_compression_codec.txt\n"
+            "c4ca4238a0b923820dcc509a6f75849b\tshadow/1/data/test/partition_complex/19700102_2_2_0/count.txt\n"
+            "c4ca4238a0b923820dcc509a6f75849b\tshadow/1/data/test/partition_complex/19700201_1_1_0/count.txt\n"
+            "cfcb770c3ecd0990dcceb1bde129e6c6\tshadow/1/data/test/partition_complex/19700102_2_2_0/p.bin\n"
+            "cfcd208495d565ef66e7dff9f98764da\tshadow/1/data/test/partition_complex/19700102_2_2_0/metadata_version.txt\n"
+            "cfcd208495d565ef66e7dff9f98764da\tshadow/1/data/test/partition_complex/19700201_1_1_0/metadata_version.txt\n"
+            "e2af3bef1fd129aea73a890ede1e7a30\tshadow/1/data/test/partition_complex/19700201_1_1_0/k.bin\n"
+            "f2312862cc01adf34a93151377be2ddf\tshadow/1/data/test/partition_complex/19700201_1_1_0/minmax_p.idx\n"
+        )
 
     assert TSV(instance.exec_in_container(cmd).replace('  ', '\t')) == TSV(checksums)
 
@@ -89,8 +126,10 @@ def partition_complex_assert_checksums():
 @pytest.fixture
 def partition_table_complex(started_cluster):
     q("DROP TABLE IF EXISTS test.partition_complex")
-    q("CREATE TABLE test.partition_complex (p Date, k Int8, v1 Int8 MATERIALIZED k + 1) "
-      "ENGINE = MergeTree PARTITION BY p ORDER BY k SETTINGS index_granularity=1, index_granularity_bytes=0")
+    q(
+        "CREATE TABLE test.partition_complex (p Date, k Int8, v1 Int8 MATERIALIZED k + 1) "
+        "ENGINE = MergeTree PARTITION BY p ORDER BY k SETTINGS index_granularity=1, index_granularity_bytes=0, compress_marks=false, compress_primary_key=false, replace_long_file_name_to_hash = false"
+    )
     q("INSERT INTO test.partition_complex (p, k) VALUES(toDate(31), 1)")
     q("INSERT INTO test.partition_complex (p, k) VALUES(toDate(1), 2)")
 
@@ -162,6 +201,9 @@ def attach_check_all_parts_table(started_cluster):
 def test_attach_check_all_parts(attach_check_all_parts_table):
     q("ALTER TABLE test.attach_partition DETACH PARTITION 0")
 
+    wait_for_delete_inactive_parts(instance, "test.attach_partition")
+    wait_for_delete_empty_parts(instance, "test.attach_partition")
+
     path_to_detached = path_to_data + 'data/test/attach_partition/detached/'
     instance.exec_in_container(['mkdir', '{}'.format(path_to_detached + '0_5_5_0')])
     instance.exec_in_container(['cp', '-pr', path_to_detached + '0_1_1_0', path_to_detached + 'attaching_0_6_6_0'])
@@ -170,7 +212,10 @@ def test_attach_check_all_parts(attach_check_all_parts_table):
     error = instance.client.query_and_get_error("ALTER TABLE test.attach_partition ATTACH PARTITION 0")
     assert 0 <= error.find('No columns in part 0_5_5_0') or 0 <= error.find('No columns.txt in part 0_5_5_0')
 
-    parts = q("SElECT name FROM system.parts WHERE table='attach_partition' AND database='test' ORDER BY name")
+    parts = q(
+        "SElECT name FROM system.parts "
+        "WHERE table='attach_partition' AND database='test' AND active ORDER BY name"
+    )
     assert TSV(parts) == TSV('1_2_2_0\n1_4_4_0')
     detached = q("SELECT name FROM system.detached_parts "
                  "WHERE table='attach_partition' AND database='test' ORDER BY name")
@@ -321,13 +366,128 @@ def test_detached_part_dir_exists(started_cluster):
     q("create table detached_part_dir_exists (n int) engine=MergeTree order by n")
     q("insert into detached_part_dir_exists select 1")  # will create all_1_1_0
     q("alter table detached_part_dir_exists detach partition id 'all'")  # will move all_1_1_0 to detached/all_1_1_0
+
+    wait_for_delete_empty_parts(instance, "detached_part_dir_exists")
+    wait_for_delete_inactive_parts(instance, "detached_part_dir_exists")
+
     q("detach table detached_part_dir_exists")
     q("attach table detached_part_dir_exists")
     q("insert into detached_part_dir_exists select 1")  # will create all_1_1_0
     q("insert into detached_part_dir_exists select 1")  # will create all_2_2_0
-    instance.exec_in_container(['bash', '-c', 'mkdir /var/lib/clickhouse/data/default/detached_part_dir_exists/detached/all_2_2_0'], privileged=True)
-    instance.exec_in_container(['bash', '-c', 'touch /var/lib/clickhouse/data/default/detached_part_dir_exists/detached/all_2_2_0/file'], privileged=True)
-    q("alter table detached_part_dir_exists detach partition id 'all'") # directories already exist, but it's ok
-    assert q("select name from system.detached_parts where table='detached_part_dir_exists' order by name") == \
-           "all_1_1_0\nall_1_1_0_try1\nall_2_2_0\nall_2_2_0_try1\n"
+
+    assert (
+        q(
+            "select name from system.parts where table='detached_part_dir_exists' and active order by name"
+        )
+        == "all_1_1_0\nall_2_2_0\n"
+    )
+
+    instance.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "mkdir /var/lib/clickhouse/data/default/detached_part_dir_exists/detached/all_2_2_0",
+        ],
+        privileged=True,
+    )
+    instance.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "touch /var/lib/clickhouse/data/default/detached_part_dir_exists/detached/all_2_2_0/file",
+        ],
+        privileged=True,
+    )
+    q(
+        "alter table detached_part_dir_exists detach partition id 'all'"
+    )  # directories already exist, but it's ok
+    assert (
+        q(
+            "select name from system.detached_parts where table='detached_part_dir_exists' order by name"
+        )
+        == "all_1_1_0\nall_1_1_0_try1\nall_2_2_0\nall_2_2_0_try1\n"
+    )
     q("drop table detached_part_dir_exists")
+
+
+def test_make_clone_in_detached(started_cluster):
+    q(
+        "create table clone_in_detached (n int, m String) engine=ReplicatedMergeTree('/clone_in_detached', '1') order by n SETTINGS compress_marks=false, compress_primary_key=false"
+    )
+
+    path = path_to_data + "data/default/clone_in_detached/"
+
+    # broken part already detached
+    q("insert into clone_in_detached values (42, '¯-_(ツ)_-¯')")
+    instance.exec_in_container(["rm", path + "all_0_0_0/data.bin"])
+    instance.exec_in_container(
+        ["cp", "-r", path + "all_0_0_0", path + "detached/broken_all_0_0_0"]
+    )
+    assert_eq_with_retry(instance, "select * from clone_in_detached", "\n")
+    assert ["broken_all_0_0_0",] == sorted(
+        instance.exec_in_container(["ls", path + "detached/"]).strip().split("\n")
+    )
+
+    # there's a directory with the same name, but different content
+    q("insert into clone_in_detached values (43, '¯-_(ツ)_-¯')")
+    instance.exec_in_container(["rm", path + "all_1_1_0/data.bin"])
+    instance.exec_in_container(
+        ["cp", "-r", path + "all_1_1_0", path + "detached/broken_all_1_1_0"]
+    )
+    instance.exec_in_container(["rm", path + "detached/broken_all_1_1_0/primary.idx"])
+    instance.exec_in_container(
+        ["cp", "-r", path + "all_1_1_0", path + "detached/broken_all_1_1_0_try0"]
+    )
+    instance.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "echo 'broken' > {}".format(
+                path + "detached/broken_all_1_1_0_try0/checksums.txt"
+            ),
+        ]
+    )
+    assert_eq_with_retry(instance, "select * from clone_in_detached", "\n")
+    assert [
+        "broken_all_0_0_0",
+        "broken_all_1_1_0",
+        "broken_all_1_1_0_try0",
+        "broken_all_1_1_0_try1",
+    ] == sorted(
+        instance.exec_in_container(["ls", path + "detached/"]).strip().split("\n")
+    )
+
+    # there are directories with the same name, but different content, and part already detached
+    q("insert into clone_in_detached values (44, '¯-_(ツ)_-¯')")
+    instance.exec_in_container(["rm", path + "all_2_2_0/data.bin"])
+    instance.exec_in_container(
+        ["cp", "-r", path + "all_2_2_0", path + "detached/broken_all_2_2_0"]
+    )
+    instance.exec_in_container(["rm", path + "detached/broken_all_2_2_0/primary.idx"])
+    instance.exec_in_container(
+        ["cp", "-r", path + "all_2_2_0", path + "detached/broken_all_2_2_0_try0"]
+    )
+    instance.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "echo 'broken' > {}".format(
+                path + "detached/broken_all_2_2_0_try0/checksums.txt"
+            ),
+        ]
+    )
+    instance.exec_in_container(
+        ["cp", "-r", path + "all_2_2_0", path + "detached/broken_all_2_2_0_try1"]
+    )
+    assert_eq_with_retry(instance, "select * from clone_in_detached", "\n")
+    assert [
+        "broken_all_0_0_0",
+        "broken_all_1_1_0",
+        "broken_all_1_1_0_try0",
+        "broken_all_1_1_0_try1",
+        "broken_all_2_2_0",
+        "broken_all_2_2_0_try0",
+        "broken_all_2_2_0_try1",
+    ] == sorted(
+        instance.exec_in_container(["ls", path + "detached/"]).strip().split("\n")
+    )

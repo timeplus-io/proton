@@ -7,6 +7,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int DEADLOCK_AVOIDED;
+extern const int LOGICAL_ERROR;
+extern const int NO_FREE_CONNECTION;
 extern const int TIMEOUT_EXCEEDED;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 extern const int UNEXPECTED_PACKET_FROM_SERVER;
@@ -28,13 +30,29 @@ size_t calculatePollInterval(const ConnectionTimeouts & timeouts)
 
 }
 
-Client::Client(DB::ConnectionPool::Entry connection_, ConnectionTimeouts timeouts_, Poco::Logger * logger_)
-    : connection(std::move(connection_))
+Client::Client(TypeNameProviderPtr type_name_provider_, ConnectionPool::Entry connection_, ConnectionTimeouts timeouts_, LoggerPtr logger_)
+    : type_name_provider(std::move(type_name_provider_))
+    , connection(std::move(connection_))
     , timeouts(std::move(timeouts_))
     , poll_interval(calculatePollInterval(timeouts))
-    , logger(logger_)
+    , logger(std::move(logger_))
 {
-    connection->setCompatibleWithClickHouse();
+}
+
+Client::Client(
+    TypeNameProviderPtr type_name_provider_,
+    ConnectionPoolPtr connection_pool_,
+    UInt64 connection_pool_max_wait_ms,
+    ConnectionTimeouts timeouts_,
+    LoggerPtr logger_)
+    : type_name_provider(std::move(type_name_provider_))
+    , connection_pool(std::move(connection_pool_))
+    , timeouts(std::move(timeouts_))
+    , poll_interval(calculatePollInterval(timeouts))
+    , logger(std::move(logger_))
+{
+    get_connection_settings.emplace();
+    get_connection_settings->connection_pool_max_wait_ms = connection_pool_max_wait_ms;
 }
 
 void Client::reset()
@@ -46,25 +64,30 @@ void Client::reset()
 
 void Client::executeQuery(const String & query, const String & query_id, bool fail_quick)
 {
+    prepareConnection();
+    chassert(connection.has_value());
+
     assert(!has_running_query);
     has_running_query = true;
 
     reset();
 
-    bool suppress_error_log {false};
+    bool suppress_error_log{false};
     while (true)
     {
         try
         {
-            connection->sendQuery(
-                timeouts,
-                query,
-                {} /*query_parameters*/,
-                query_id,
-                QueryProcessingStage::Complete,
-                nullptr /*settings*/,
-                nullptr /*client_info*/,
-                false);
+            (*connection)
+                ->sendQuery(
+                    timeouts,
+                    query,
+                    /*query_parameters=*/{},
+                    query_id,
+                    QueryProcessingStage::Complete,
+                    /*settings=*/nullptr,
+                    /*client_info=*/nullptr,
+                    /*with_pending_data=*/false,
+                    /*process_progress_callback=*/{});
 
             break;
         }
@@ -74,12 +97,12 @@ void Client::executeQuery(const String & query, const String & query_id, bool fa
                 e.rethrow();
 
             /// connection lost
-            if (!connection->checkConnected())
+            if (!(*connection)->checkConnected())
             {
                 if (!suppress_error_log)
                     LOG_ERROR(logger, "Connection lost");
                 /// set the connection not connected so that sendQuery will reconnect
-                connection->disconnect();
+                (*connection)->disconnect();
                 std::this_thread::sleep_for(std::chrono::seconds(2));
             }
             /// Retry when the server said "Client should retry" and no rows has been received yet.
@@ -101,9 +124,54 @@ void Client::executeQuery(const String & query, const String & query_id, bool fa
     }
 }
 
-void Client::executeInsertQuery(const String & query, const String & query_id)
+void Client::receiveInsertQueryResponse()
 {
+    chassert(connection.has_value());
+
+    while (true)
+    {
+        Packet packet = (*connection)->receivePacket();
+
+        switch (packet.type)
+        {
+            case Protocol::Server::Exception:
+                onServerException(std::move(packet.exception));
+                return;
+
+            case Protocol::Server::TableColumns:
+                [[fallthrough]];
+            case Protocol::Server::Log:
+                [[fallthrough]];
+            case Protocol::Server::ProfileEvents:
+                [[fallthrough]];
+            case Protocol::Server::Progress:
+                continue;
+
+            case Protocol::Server::Data:
+                return;
+
+            default:
+                throw NetException(
+                    ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
+                    "Unexpected packet from server for insert: {}",
+                    String(Protocol::Server::toString(packet.type)));
+        }
+    }
+}
+
+void Client::executeInsertQuery(const String & query, const Block & block, const String & query_id)
+{
+    prepareConnection();
+
     executeQuery(query, query_id);
+    receiveInsertQueryResponse();
+    throwServerExceptionIfAny();
+
+    (*connection)->sendData(block, type_name_provider->getColumnTypeNames(), "", false);
+    // Send empty block as marker of end of data.
+    (*connection)->sendData(Block(), "", false);
+
+    // Wait for EOS.
     receiveEndOfQuery();
 }
 
@@ -111,6 +179,8 @@ std::optional<Block> Client::pollData()
 {
     if (!has_running_query)
         return std::nullopt;
+
+    chassert(connection.has_value());
 
     while (true)
     {
@@ -125,15 +195,18 @@ std::optional<Block> Client::pollData()
                 {
                     cancelQuery();
 
-                    throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout exceeded while receiving data from server. Waited for {} seconds, timeout is {} seconds", static_cast<size_t>(elapsed), timeouts.receive_timeout.totalSeconds());
-
+                    throw Exception(
+                        ErrorCodes::TIMEOUT_EXCEEDED,
+                        "Timeout exceeded while receiving data from server. Waited for {} seconds, timeout is {} seconds",
+                        static_cast<size_t>(elapsed),
+                        timeouts.receive_timeout.totalSeconds());
                 }
             }
 
             /// Poll for changes after a cancellation check, otherwise it never reached
             /// because of progress updates from server.
 
-            if (connection->poll(poll_interval))
+            if ((*connection)->poll(poll_interval))
                 break;
         }
 
@@ -153,7 +226,8 @@ void Client::cancelQuery()
         return;
 
     LOG_INFO(logger, "Query cancelled.");
-    connection->sendCancel();
+    if (connection)
+        (*connection)->sendCancel();
     cancelled = true;
     has_running_query = false;
 }
@@ -163,8 +237,9 @@ void Client::cancelQuery()
 bool Client::receiveAndProcessPacket()
 {
     assert(has_running_query);
+    chassert(connection.has_value());
 
-    Packet packet = connection->receivePacket();
+    Packet packet = (*connection)->receivePacket();
 
     switch (packet.type)
     {
@@ -210,16 +285,18 @@ bool Client::receiveAndProcessPacket()
 
         default:
             throw Exception(
-                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());
+                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, (*connection)->getDescription());
     }
 }
 
 /// Process Log packets, exit when receive Exception or EndOfStream
 bool Client::receiveEndOfQuery()
 {
+    chassert(connection.has_value());
+
     while (true)
     {
-        Packet packet = connection->receivePacket();
+        Packet packet = (*connection)->receivePacket();
 
         switch (packet.type)
         {
@@ -244,7 +321,8 @@ bool Client::receiveEndOfQuery()
                 break;
 
             default:
-                throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
+                throw NetException(
+                    ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
                     "Unexpected packet from server (expected Exception, EndOfStream, Log, Progress or ProfileEvents. Got {})",
                     String(Protocol::Server::toString(packet.type)));
         }
@@ -268,6 +346,31 @@ void Client::throwServerExceptionIfAny()
         server_exception->rethrow();
 }
 
+void Client::releaseConnection()
+{
+    if (connection.has_value())
+    {
+        connection.reset();
+        LOG_DEBUG(logger, "Connection released.");
+    }
+}
+
+void Client::prepareConnection()
+{
+    if (connection)
+        return;
+
+    if (!connection_pool)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not get connection as connection pool is not provided.");
+
+    connection = connection_pool->get(timeouts, &get_connection_settings.value(), true);
+    if (!connection)
+        throw Exception(
+            ErrorCodes::NO_FREE_CONNECTION,
+            "No connection available, please try stop some running queries or use a bigger value for pooled_connections setting");
+
+    LOG_DEBUG(logger, "New connection prepared.");
+}
 }
 
 }

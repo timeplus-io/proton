@@ -36,7 +36,8 @@ public:
 
     void deserializeBinaryBulkStatePrefix(
         DeserializeBinaryBulkSettings & settings,
-        DeserializeBinaryBulkStatePtr & state) const override;
+        DeserializeBinaryBulkStatePtr & state,
+        SubstreamsDeserializeStatesCache * cache) const override;
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,
@@ -63,28 +64,45 @@ public:
 
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    void serializeTextJSONPretty(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings, size_t indent) const override;
 
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const override;
 
     /// proton: starts
-    void deserializeBinaryBulkWithMultipleStreamsSkip(
+    void deserializeBinaryBulkWithMultipleStreamsDiscard(
         size_t limit,
         DeserializeBinaryBulkSettings & settings,
         DeserializeBinaryBulkStatePtr & state) const override;
 
-    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    void deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const override;
+
+    void deserializeBinaryDiscard(ReadBuffer & istr) const override;
+
+    void serializeBinaryPrefixTree(const Field & field, String & encoded, const FormatSettings &, bool ascending) const override;
+
+    void serializeBinaryPrefixTree(
+        const IColumn & column, size_t row_num, String & encoded, const FormatSettings &, bool ascending) const override;
+
+    void deserializeBinaryPrefixTree(IColumn & column, std::string_view & data, const FormatSettings &, bool ascending) const override;
+
+    void deserializeBinaryPrefixTreeDiscard(std::string_view & data, const DB::FormatSettings &, bool /*ascending*/) const override;
     /// proton: ends
 };
 

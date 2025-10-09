@@ -1,19 +1,28 @@
 #include <Storages/IStorage.h>
 
-#include <Common/StringUtils/StringUtils.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
-#include <QueryPipeline/Pipe.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ParserTablesInSelectQuery.h>
+#include <Parsers/parseQuery.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPipeline/Pipe.h>
 #include <Storages/AlterCommands.h>
+#include <Common/StringUtils/StringUtils.h>
 
 /// proton: starts.
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Interpreters/MetadataHelper.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Storages/Stream/storageUtil.h>
+
 #include <ranges>
 /// proton: ends.
 
@@ -26,6 +35,7 @@ namespace ErrorCodes
     extern const int DEADLOCK_AVOIDED;
     /// proton: starts.
     extern const int HAVE_DEPENDENT_OBJECTS;
+    extern const int RESOURCE_NOT_FOUND;
     /// proton: ends.
 }
 
@@ -42,12 +52,9 @@ RWLockImpl::LockHolder IStorage::tryLockTimed(
     if (!lock_holder)
     {
         const String type_str = type == RWLockImpl::Type::Read ? "READ" : "WRITE";
-        throw Exception(
-            type_str + " locking attempt on \"" + getStorageID().getFullTableName() + "\" has timed out! ("
-                + std::to_string(acquire_timeout.count())
-                + "ms) "
-                  "Possible deadlock avoided. Client should retry.",
-            ErrorCodes::DEADLOCK_AVOIDED);
+        throw Exception(ErrorCodes::DEADLOCK_AVOIDED,
+            "{} locking attempt on \"{}\" has timed out! ({}ms) Possible deadlock avoided. Client should retry.",
+            type_str, getStorageID(), acquire_timeout.count());
     }
     return lock_holder;
 }
@@ -56,10 +63,22 @@ TableLockHolder IStorage::lockForShare(const String & query_id, const std::chron
 {
     TableLockHolder result = tryLockTimed(drop_lock, RWLockImpl::Read, query_id, acquire_timeout);
 
-    if (is_dropped)
+    if (is_dropped || is_detached)
     {
         auto table_id = getStorageID();
         throw Exception(ErrorCodes::STREAM_IS_DROPPED, "Stream {}.{} is dropped", table_id.database_name, table_id.table_name);
+    }
+    return result;
+}
+
+TableLockHolder IStorage::tryLockForShare(const String & query_id, const std::chrono::milliseconds & acquire_timeout)
+{
+    TableLockHolder result = tryLockTimed(drop_lock, RWLockImpl::Read, query_id, acquire_timeout);
+
+    if (is_dropped)
+    {
+        // Table was dropped while acquiring the lock
+        result = nullptr;
     }
 
     return result;
@@ -73,10 +92,10 @@ IStorage::AlterLockHolder IStorage::lockForAlter(const std::chrono::milliseconds
         throw Exception(ErrorCodes::DEADLOCK_AVOIDED,
                         "Locking attempt for ALTER on \"{}\" has timed out! ({} ms) "
                         "Possible deadlock avoided. Client should retry.",
-                        getStorageID().getFullTableName(), std::to_string(acquire_timeout.count()));
+                        getStorageID().getFullTableName(), acquire_timeout.count());
 
-    if (is_dropped)
-        throw Exception("Stream is dropped", ErrorCodes::STREAM_IS_DROPPED);
+    if (is_dropped || is_detached)
+        throw Exception(ErrorCodes::STREAM_IS_DROPPED, "Stream {} is dropped", getStorageID());
 
     return lock;
 }
@@ -87,8 +106,8 @@ TableExclusiveLockHolder IStorage::lockExclusively(const String & query_id, cons
     TableExclusiveLockHolder result;
     result.drop_lock = tryLockTimed(drop_lock, RWLockImpl::Write, query_id, acquire_timeout);
 
-    if (is_dropped)
-        throw Exception("Stream is dropped", ErrorCodes::STREAM_IS_DROPPED);
+    if (is_dropped || is_detached)
+        throw Exception(ErrorCodes::STREAM_IS_DROPPED, "Stream {} is dropped", getStorageID());
 
     return result;
 }
@@ -101,7 +120,7 @@ Pipe IStorage::watch(
     size_t /*max_block_size*/,
     size_t /*num_streams*/)
 {
-    throw Exception("Method watch is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method watch is not supported by storage {}", getName());
 }
 
 Pipe IStorage::read(
@@ -113,7 +132,7 @@ Pipe IStorage::read(
     size_t /*max_block_size*/,
     size_t /*num_streams*/)
 {
-    throw Exception("Method read is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method read is not supported by storage {}", getName());
 }
 
 void IStorage::read(
@@ -127,6 +146,13 @@ void IStorage::read(
     size_t num_streams)
 {
     auto pipe = read(column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+
+    /// parallelize processing if not yet
+    const size_t output_ports = pipe.numOutputPorts();
+    const bool parallelize_output = context->getSettingsRef().parallelize_output_from_storages;
+    if (parallelize_output && parallelizeOutputAfterReading(context) && output_ports > 0 && output_ports < num_streams)
+        pipe.resize(num_streams);
+
     readFromPipe(query_plan, std::move(pipe), column_names, storage_snapshot, query_info, context, getName());
 }
 
@@ -161,7 +187,7 @@ std::optional<QueryPipeline> IStorage::distributedWrite(
 Pipe IStorage::alterPartition(
     const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */)
 {
-    throw Exception("Partition operations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Partition operations are not supported by storage {}", getName());
 }
 
 void IStorage::alter(const AlterCommands & params, ContextPtr context, AlterLockHolder &)
@@ -169,7 +195,12 @@ void IStorage::alter(const AlterCommands & params, ContextPtr context, AlterLock
     auto table_id = getStorageID();
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
     params.apply(new_metadata, context);
-    DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(context, table_id, new_metadata);
+    /// proton: starts. StorageView::alter will use this function
+    if (params.empty())
+        DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(context, table_id, new_metadata);
+    else
+        DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(context, table_id, new_metadata, params.front().typeString(), params.astCommands(table_id));
+    /// proton: ends.
     setInMemoryMetadata(new_metadata);
 }
 
@@ -185,13 +216,13 @@ void IStorage::checkAlterIsPossible(const AlterCommands & commands, ContextPtr /
 
 void IStorage::checkMutationIsPossible(const MutationCommands & /*commands*/, const Settings & /*settings*/) const
 {
-    throw Exception("The current engine " + getName() + " doesn't support mutations", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The current engine {} doesn't support mutations", getName());
 }
 
 void IStorage::checkAlterPartitionIsPossible(
     const PartitionCommands & /*commands*/, const StorageMetadataPtr & /*metadata_snapshot*/, const Settings & /*settings*/) const
 {
-    throw Exception("The current engine " + getName() + " doesn't support partitioning", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The current engine {} doesn't support partitioning", getName());
 }
 
 StorageID IStorage::getStorageID() const
@@ -227,11 +258,12 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
     for (const auto & depend_id : dependencies)
     {
         auto depend_table = DatabaseCatalog::instance().getTable(depend_id, context);
-        if (depend_table->getInMemoryMetadataPtr()->select.inner_query)
+        auto metadata_snapshot = depend_table->getInMemoryMetadataPtr();
+        if (metadata_snapshot->getSelectQuery().inner_query)
         {
             /// proton: starts. MV supported union query for now
             /// FIXME: Need to check membership of required columns
-            const auto & select_with_union_query = depend_table->getInMemoryMetadataPtr()->select.inner_query;
+            const auto & select_with_union_query = metadata_snapshot->getSelectQuery().inner_query;
             for (const auto & select_query : select_with_union_query->as<ASTSelectWithUnionQuery&>().list_of_selects->children)
             {
                 auto required_columns = InterpreterSelectQuery(select_query, context, SelectQueryOptions{}.noModify()).getRequiredColumns();
@@ -250,7 +282,7 @@ bool IStorage::isStaticStorage() const
     if (storage_policy)
     {
         for (const auto & disk : storage_policy->getDisks())
-            if (!disk->isReadOnly())
+            if (!(disk->isReadOnly() || disk->isWriteOnce()))
                 return false;
         return true;
     }
@@ -259,12 +291,12 @@ bool IStorage::isStaticStorage() const
 
 BackupEntries IStorage::backup(const ASTs &, ContextPtr)
 {
-    throw Exception("The engine " + getName() + " doesn't support backups", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The engine {} doesn't support backups", getName());
 }
 
 RestoreDataTasks IStorage::restoreFromBackup(const BackupPtr &, const String &, const ASTs &, ContextMutablePtr)
 {
-    throw Exception("The engine " + getName() + " doesn't support restoring", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The engine {} doesn't support restoring", getName());
 }
 
 std::string PrewhereInfo::dump() const
@@ -332,6 +364,96 @@ void IStorage::checkTableCanBeRenamed(ContextPtr context) const
                 fmt::join(dependencies_views, ", "));
         }
     }
+}
+
+void IStorage::setInMemoryMetadata(const StorageInMemoryMetadata & metadata_)
+{
+    /// FIXME: Sanity check whether the version already exists
+    /// No check yet due to partial support multiple versions
+    StorageMetadataPtr updated;
+    {
+        std::unique_lock lock(multi_metadata_mutex);
+        metadata.set(std::make_unique<StorageInMemoryMetadata>(metadata_));
+
+        updated = metadata.get();
+        multi_version_metadata.emplace(updated->getVersion(), std::make_pair(updated, updated->getSampleBlock()));
+        /// Special 'ANY_SCHEMA_VERSION' always use latest metadata/schema
+        multi_version_metadata.emplace(
+            cluster::SchemaRecord::ANY_SCHEMA_VERSION, std::make_pair(updated, updated->getSampleBlock()));
+    }
+
+    onInMemoryMetadataUpdate(updated);
+}
+
+std::pair<StorageMetadataPtr, const Block &> IStorage::getMetadataByVersion(UInt16 version) const
+{
+    {
+        std::shared_lock lock(multi_metadata_mutex);
+        auto iter = multi_version_metadata.find(version);
+        if (iter != multi_version_metadata.end())
+            return iter->second;
+    }
+
+    /// Try load multi version metadata from metastore, and then find the version again
+    if (!loaded_from_metastore.test())
+    {
+        auto loaded_metadata_vec = getMultiVersionMetadataFromMetastore(shared_from_this(), Context::getGlobalContextInstance());
+
+        std::unique_lock lock(multi_metadata_mutex);
+        for (auto & loaded_metadata : loaded_metadata_vec)
+            multi_version_metadata.emplace(
+                loaded_metadata->getVersion(), std::make_pair(loaded_metadata, loaded_metadata->getSampleBlock()));
+
+        loaded_from_metastore.test_and_set();
+
+        auto iter = multi_version_metadata.find(version);
+        if (iter != multi_version_metadata.end())
+            return iter->second;
+    }
+
+    throw Exception(
+        ErrorCodes::RESOURCE_NOT_FOUND, "Metadata for version={} of '{}' not found", version, getStorageID().getFullTableName());
+}
+
+std::optional<Block>
+IStorage::getWriteSampleBlock(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+{
+    if (query)
+    {
+        if (const auto * insert = query->as<ASTInsertQuery>(); insert != nullptr)
+        {
+            InterpreterInsertQuery interpreter{query, local_context};
+            return interpreter.getSampleBlock(*insert, shared_from_this(), metadata_snapshot);
+        }
+    }
+    else if (local_context->isQueryFromMaterializedView())
+    {
+        ParserTableExpression parser;
+        /// The creator is the MV's name.
+        auto parsed_ast = parseQuery(parser, local_context->getCreator(), 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+        if (const auto * table_expression = parsed_ast->as<ASTTableExpression>(); table_expression != nullptr)
+        {
+            StorageID mv_id{table_expression->database_and_table_name};
+            if (const auto table_ptr = DatabaseCatalog::instance().getTable(mv_id, local_context))
+            {
+                /// Exclude the columns which are not in MV's output.
+                const auto storage_sample_block = metadata_snapshot->getSampleBlock();
+                const auto mv_sample_block = table_ptr->getInMemoryMetadataPtr()->getSampleBlock();
+
+                Block res;
+                res.reserve(std::min(storage_sample_block.columns(), mv_sample_block.columns()));
+                for (const auto & col : storage_sample_block.getColumnsWithTypeAndName())
+                {
+                    if (mv_sample_block.has(col.name))
+                        res.insert(col);
+                }
+
+                return res;
+            }
+        }
+    }
+
+    return std::nullopt;
 }
 /// proton: ends.
 

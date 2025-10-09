@@ -11,7 +11,7 @@ namespace DB
 class TableFunctionGenerateRandom : public ITableFunction
 {
 public:
-    static constexpr auto name = "generateRandom";
+    static constexpr auto name = "generate_random";
     std::string getName() const override { return name; }
     bool hasStaticStructure() const override { return true; }
 private:

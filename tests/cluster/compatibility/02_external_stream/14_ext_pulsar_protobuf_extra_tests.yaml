@@ -1,0 +1,48 @@
+tags:
+  - validate
+  - pulsar
+  - protobuf
+  - format_schema
+  
+description: extra tests on append-only stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      insert into ex_pulsar_proto values 
+      (-2147483646, -9223372036854775806, 4294967294, 18446744073709551614,  false, 'bbbb', {'key2': 222}, 'b', [4, 5, 6]);
+
+  - name: ext-14-1
+    type: stream
+    query: select _tp_shard, * from ex_pulsar_proto settings seek_to='earliest';
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: bool_c
+        type: bool    
+      - name: string_c
+        type: string
+      - name: map_c
+        type: map(string, int32)
+      - name: enum_c
+        type: enum8('a'=0, 'b'=1, 'z'=26)
+      - name: array_c
+        type: array(int32)
+
+  - type: check
+    target_name: ext-14-1
+    expected_result:
+      - [-1, -2147483647, -9223372036854775807, 4294967295, 18446744073709551615,  true, 'aaaa', {'key1': 111}, 'a', [1, 2, 3]]
+      - [-1, -2147483646, -9223372036854775806, 4294967294, 18446744073709551614,  false, 'bbbb', {'key2': 222}, 'b', [4, 5, 6]]

@@ -38,4 +38,13 @@ private:
     std::shared_ptr<const StorageLimitsList> storage_limits;
 };
 
+/// proton: starts.
+class ReadFromStorageShardStep : public ReadFromStorageStep
+{
+public:
+    using ReadFromStorageStep::ReadFromStorageStep;
+
+    String getName() const override { return "ReadFromStorageShard"; }
+};
+/// proton: ends.
 }

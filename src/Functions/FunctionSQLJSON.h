@@ -22,6 +22,7 @@
 #include <IO/ReadHelpers.h>
 #include <base/range.h>
 
+#include "Formats/FormatSettings.h"
 #include "config.h"
 
 /// proton: starts.
@@ -62,16 +63,16 @@ public:
 
             if (arguments.size() < 2)
             {
-                throw Exception{"JSONPath functions require at least 2 arguments", ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
+                throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "JSONPath functions require at least 2 arguments");
             }
 
             const auto & json_column = arguments[0];
 
             if (!isString(json_column.type))
             {
-                throw Exception(
-                    "JSONPath functions require first argument to be JSON of string, illegal type: " + json_column.type->getName(),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                                "JSONPath functions require first argument to be JSON of string, illegal type: {}",
+                                json_column.type->getName());
             }
 
             /// proton: starts. support multi-paths
@@ -125,7 +126,7 @@ public:
                 const bool parse_res = parser.parse(token_iterator, paths[i], expected);
                 if (!parse_res)
                 {
-                    throw Exception{"Unable to parse JSONPath", ErrorCodes::BAD_ARGUMENTS};
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unable to parse JSONPath");
                 }
             }
 
@@ -342,7 +343,7 @@ public:
         if (current_element.isString())
         {
             ReadBufferFromString buf(output_str);
-            readJSONStringInto(data, buf);
+            readJSONStringInto(data, buf, default_json_settings);
             data.push_back(0);
             offsets.push_back(data.size());
         }
@@ -352,6 +353,8 @@ public:
         }
         return true;
     }
+
+    static const FormatSettings::JSON constexpr default_json_settings;
 };
 
 /// proton: starts. support multi paths `json_values`
@@ -405,10 +408,10 @@ public:
             else
                 elements.emplace_back(std::move(current_element));
         }
-        
+
         auto & arr_to = assert_cast<ColumnArray &>(dest);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
-        
+
         ColumnString & col_str = assert_cast<ColumnString &>(arr_to.getData());
         ColumnString::Chars & data = col_str.getChars();
         ColumnString::Offsets & offsets = col_str.getOffsets();
@@ -431,7 +434,7 @@ public:
             if ((*current_element).isString())
             {
                 ReadBufferFromString buf(output_str);
-                readJSONStringInto(data, buf);
+                readJSONStringInto(data, buf, default_json_settings);
                 data.push_back(0);
                 offsets.push_back(data.size());
             }
@@ -442,6 +445,8 @@ public:
         }
         return true;
     }
+
+    static const FormatSettings::JSON constexpr default_json_settings;
 };
 /// proton: ends.
 

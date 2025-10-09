@@ -7,7 +7,6 @@
 #include <Common/ShellCommand.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
 #include <Interpreters/Cache/FileCache.h>
-#include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
@@ -25,14 +24,14 @@
 #include <Interpreters/MetricLog.h>
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
-#include <Interpreters/ZooKeeperLog.h>
 #include <Interpreters/FilesystemCacheLog.h>
 #include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/AsynchronousInsertLog.h>
+#include <IO/S3/BlobStorageLogWriter.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <IO/copyData.h>
 #include <Access/ContextAccess.h>
 #include <Access/Common/AllowedClientHosts.h>
-#include <Disks/DiskRestartProxy.h>
 #include <Disks/IStoragePolicy.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageFile.h>
@@ -45,12 +44,21 @@
 #include <csignal>
 
 /// proton: starts
-#include <Storages/Streaming/StorageStream.h>
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/Requests/DropFormatSchemaCacheRequest.h>
+#include <Storages/Stream/StorageStream.h>
 /// proton: ends
+
+#if USE_AWS_S3
+#include <IO/S3/Client.h>
+#endif
+
 #include "config.h"
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -60,9 +68,8 @@ namespace ErrorCodes
     extern const int TIMEOUT_EXCEEDED;
     extern const int STREAM_WAS_NOT_DROPPED;
     /// proton: starts
-    extern const int NO_SUCH_REPLICA;
-    extern const int UNKNOWN_STREAM;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int CANNOT_CREATE_TASK;
+    extern const int CANNOT_DROP_FORMAT_SCHEMA_CACHE;
     /// proton: ends
 }
 
@@ -76,9 +83,6 @@ namespace ActionLocks
     extern StorageActionBlockType DistributedSend;
     extern StorageActionBlockType PartsTTLMerge;
     extern StorageActionBlockType PartsMove;
-    /// proton: starts
-    extern StorageActionBlockType StreamConsume;
-    /// proton: ends
 }
 
 
@@ -118,7 +122,7 @@ void executeCommandsAndThrowIfError(Callables && ... commands)
 {
     auto status = getOverallExecutionStatusOfCommands(std::forward<Callables>(commands)...);
     if (status.code != 0)
-        throw Exception(status.message, status.code);
+        throw Exception::createDeprecated(status.message, status.code);
 }
 
 
@@ -138,29 +142,9 @@ AccessType getRequiredAccessType(StorageActionBlockType action_type)
         return AccessType::SYSTEM_TTL_MERGES;
     else if (action_type == ActionLocks::PartsMove)
         return AccessType::SYSTEM_MOVES;
-    /// proton: starts
-    if (action_type == ActionLocks::StreamConsume)
-        return AccessType::SYSTEM_MERGES;
-    /// proton: ends
     else
-        throw Exception("Unknown action type: " + std::to_string(action_type), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown action type: {}", std::to_string(action_type));
 }
-
-/// proton: starts.
-[[maybe_unused]] bool shouldBeDistributed(ASTSystemQuery & system, ContextMutablePtr & ctx)
-{
-    if (system.replica != ctx->getNodeIdentity())
-        return true;
-    else
-    {
-        if (system.type == ASTSystemQuery::Type::STOP_MAINTAIN || system.type == ASTSystemQuery::Type::START_MAINTAIN
-            || system.type == ASTSystemQuery::Type::RESTART_REPLICA)
-            return false;
-
-        return true;
-    }
-}
-/// proton: ends.
 }
 
 /// Implements SYSTEM [START|STOP] <something action from ActionLocks>
@@ -187,17 +171,9 @@ void InterpreterSystemQuery::startStopAction(StorageActionBlockType action_type,
             {
                 manager->remove(table, action_type);
                 table->onActionLockRemove(action_type);
-                /// proton: starts
-                LOG_INFO(log, "remove type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
-                /// proton: ends
             }
             else
-            {
                 manager->add(table, action_type);
-                /// proton: starts
-                LOG_INFO(log, "add type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
-                /// proton: ends
-            }
         }
     }
     else
@@ -220,80 +196,17 @@ void InterpreterSystemQuery::startStopAction(StorageActionBlockType action_type,
                 {
                     manager->remove(table, action_type);
                     table->onActionLockRemove(action_type);
-                    /// proton: starts
-                    LOG_INFO(log, "remove type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
                 }
                 else
-                {
                     manager->add(table, action_type);
-                    /// proton: starts
-                    LOG_INFO(log, "add type={} lock from stream '{}'", action_type, table->getStorageID().getFullTableName());
-                    /// proton: ends
-                }
             }
         }
     }
 }
 
-/// proton: starts
-void InterpreterSystemQuery::startStopMaintain(bool start)
-{
-    getContext()->checkAccess(getRequiredAccessForDDLOnCluster());
-    /// In maintain mode, no operation on parts are allowed
-    executeCommandsAndThrowIfError(
-        [&] { startStopAction(ActionLocks::PartsMerge, !start); },
-        [&] { startStopAction(ActionLocks::PartsTTLMerge, !start); },
-        [&] { startStopAction(ActionLocks::PartsMove, !start); },
-        [&] { startStopAction(ActionLocks::StreamConsume, !start); });
-}
-
-void InterpreterSystemQuery::reloadStream()
-{
-    auto manager = getContext()->getActionLocksManager();
-
-    auto reload = [&](StoragePtr & table) {
-        if (table && table->getName() == "Stream")
-        {
-            if (auto * stream = table->as<StorageStream>())
-            {
-                stream->reInit();
-
-                manager->remove(table, ActionLocks::PartsMerge);
-                stream->onActionLockRemove(ActionLocks::PartsMerge);
-
-                manager->remove(table, ActionLocks::PartsTTLMerge);
-                stream->onActionLockRemove(ActionLocks::PartsTTLMerge);
-
-                manager->remove(table, ActionLocks::PartsMove);
-                stream->onActionLockRemove(ActionLocks::PartsMove);
-
-                manager->remove(table, ActionLocks::StreamConsume);
-                stream->onActionLockRemove(ActionLocks::StreamConsume);
-            }
-        }
-    };
-
-    if (table_id)
-    {
-        auto table = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
-        reload(table);
-    }
-    else
-    {
-        for (auto & elem : DatabaseCatalog::instance().getDatabases())
-        {
-            for (auto iterator = elem.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            {
-                StoragePtr table = iterator->table();
-                reload(table);
-            }
-        }
-    }
-}
-/// proton: ends
 
 InterpreterSystemQuery::InterpreterSystemQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
-        : WithMutableContext(context_), query_ptr(query_ptr_->clone()), log(&Poco::Logger::get("InterpreterSystemQuery"))
+    : WithMutableContext(context_), query_ptr(query_ptr_->clone()), log(getLogger("InterpreterSystemQuery"))
 {
 }
 
@@ -353,7 +266,7 @@ BlockIO InterpreterSystemQuery::execute()
             copyData(res->out, out);
             copyData(res->err, out);
             if (!out.str().empty())
-                LOG_DEBUG(log, "The command returned output: {}", command, out.str());
+                LOG_DEBUG(log, "The command {} returned output: {}", command, out.str());
             res->wait();
             break;
         }
@@ -362,7 +275,7 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_DROP_DNS_CACHE);
             DNSResolver::instance().dropCache();
             /// Reinitialize clusters to update their resolved_addresses
-            system_context->reloadClusterConfig();
+            /// system_context->reloadClusterConfig();
             break;
         }
         case Type::DROP_MARK_CACHE:
@@ -392,18 +305,27 @@ BlockIO InterpreterSystemQuery::execute()
                 cache->reset();
             break;
 #endif
+#if USE_AWS_S3
+        case Type::DROP_S3_CLIENT_CACHE:
+            getContext()->checkAccess(AccessType::SYSTEM_DROP_S3_CLIENT_CACHE);
+            S3::ClientCacheRegistry::instance().clearCacheForAll();
+            break;
+#endif
+
         case Type::DROP_FILESYSTEM_CACHE:
         {
-            if (query.filesystem_cache_path.empty())
+            getContext()->checkAccess(AccessType::SYSTEM_DROP_FILESYSTEM_CACHE);
+
+            if (query.filesystem_cache_name.empty())
             {
                 auto caches = FileCacheFactory::instance().getAll();
                 for (const auto & [_, cache_data] : caches)
-                    cache_data->cache->removeIfReleasable();
+                    cache_data->cache->removeAllReleasable();
             }
             else
             {
-                auto cache = FileCacheFactory::instance().get(query.filesystem_cache_path);
-                cache->removeIfReleasable();
+                auto cache = FileCacheFactory::instance().getByName(query.filesystem_cache_name).cache;
+                cache->removeAllReleasable();
             }
             break;
         }
@@ -428,6 +350,36 @@ BlockIO InterpreterSystemQuery::execute()
 #endif
             if (caches_to_drop.contains("URL"))
                 StorageURL::getSchemaCache(getContext()).clear();
+            break;
+        }
+        case Type::DROP_FORMAT_SCHEMA_CACHE:
+        {
+            const auto & current_context = getContext();
+            current_context->checkAccess(AccessType::SYSTEM_DROP_FORMAT_SCHEMA_CACHE);
+            std::unordered_set<String> caches_to_drop;
+            if (query.schema_cache_format.empty())
+                caches_to_drop = {"Protobuf"};
+            else
+                caches_to_drop = {query.schema_cache_format};
+
+            /// proton: starts
+            auto timeout_ms = current_context->getSettingsRef().query_timeout_sec * 1000;
+
+            auto & metastore = Globals::getMetaStore();
+            auto drop_cache_req = std::make_shared<cluster::DropFormatSchemaCacheRequest>(
+                    std::move(caches_to_drop), current_context->getNodeID(), timeout_ms, /*request_version_=*/1);
+            auto system_command_resp = metastore.dropFormatSchemaCache(std::move(drop_cache_req));
+            if (system_command_resp->hasError())
+            {
+                const auto & err = system_command_resp->error();
+                throw Exception(
+                    ErrorCodes::CANNOT_DROP_FORMAT_SCHEMA_CACHE,
+                    "Failed to drop format schema cache for {}: error_code={} error_message={}",
+                    drop_cache_req->data().doString(),
+                    err.error_code,
+                    err.error_message);
+            }
+            /// proton: ends
             break;
         }
         case Type::RELOAD_DICTIONARY:
@@ -469,17 +421,13 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::RELOAD_FUNCTION:
         {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_FUNCTION);
-
-            auto & external_user_defined_executable_functions_loader = system_context->getExternalUserDefinedExecutableFunctionsLoader();
-            external_user_defined_executable_functions_loader.reloadFunction(query.target_function);
+            LOG_INFO(log, "External function is loaded from MetaStore, Reload function is deprecated.");
             break;
         }
         case Type::RELOAD_FUNCTIONS:
         {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_FUNCTION);
-
-            auto & external_user_defined_executable_functions_loader = system_context->getExternalUserDefinedExecutableFunctionsLoader();
-            external_user_defined_executable_functions_loader.reloadAllTriedToLoad();
+            LOG_INFO(log, "External function is loaded from MetaStore, Reload function is deprecated.");
             break;
         }
         case Type::RELOAD_EMBEDDED_DICTIONARIES:
@@ -497,7 +445,7 @@ BlockIO InterpreterSystemQuery::execute()
             SymbolIndex::reload();
             break;
 #else
-            throw Exception("SYSTEM RELOAD SYMBOLS is not supported on current platform", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "SYSTEM RELOAD SYMBOLS is not supported on current platform");
 #endif
         }
         case Type::STOP_MERGES:
@@ -542,12 +490,8 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::START_DISTRIBUTED_SENDS:
             startStopAction(ActionLocks::DistributedSend, true);
             break;
-        case Type::FLUSH_DISTRIBUTED:
-            flushDistributed(query);
-            break;
         case Type::RESTART_DISK:
             restartDisk(query.disk);
-            break;
         case Type::FLUSH_LOGS:
         {
             getContext()->checkAccess(AccessType::SYSTEM_FLUSH_LOGS);
@@ -561,10 +505,10 @@ BlockIO InterpreterSystemQuery::execute()
                 [&] { if (auto asynchronous_metric_log = getContext()->getAsynchronousMetricLog()) asynchronous_metric_log->flush(true); },
                 [&] { if (auto opentelemetry_span_log = getContext()->getOpenTelemetrySpanLog()) opentelemetry_span_log->flush(true); },
                 [&] { if (auto query_views_log = getContext()->getQueryViewsLog()) query_views_log->flush(true); },
-                [&] { if (auto zookeeper_log = getContext()->getZooKeeperLog()) zookeeper_log->flush(true); },
                 [&] { if (auto session_log = getContext()->getSessionLog()) session_log->flush(true); },
                 [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); },
-                [&] { if (auto cache_log = getContext()->getFilesystemCacheLog()) cache_log->flush(true); }
+                [&] { if (auto cache_log = getContext()->getFilesystemCacheLog()) cache_log->flush(true); },
+                [&] { if (auto asynchronous_insert_log = getContext()->getAsynchronousInsertLog()) asynchronous_insert_log->flush(true); }
             );
             break;
         }
@@ -580,56 +524,78 @@ BlockIO InterpreterSystemQuery::execute()
             ThreadFuzzer::start();
             break;
         /// proton: starts
-        case Type::START_MAINTAIN:
+        case Type::PAUSE_STREAM:
         {
-            if (executeDistributed(query))
-                return {};
-
-            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
-            startStopMaintain(true);
+            executePauseStream(query);
             break;
         }
-        case Type::STOP_MAINTAIN: {
-            if (executeDistributed(query))
-                return {};
-
-            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
-            startStopMaintain(false);
+        case Type::RESUME_STREAM:
+        {
+            executeResumeStream(query);
             break;
         }
-        case Type::RESTART_REPLICA:
+        case Type::RECOVER_STREAM:
         {
-            if (executeDistributed(query))
-                return {};
-
-            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
-            reloadStream();
+            executeRecoverStream(query);
             break;
         }
-        case Type::DROP_REPLICA:
-        case Type::REPLACE_REPLICA:
-        case Type::ADD_REPLICA:
+        case Type::PAUSE_MATERIALIZED_VIEW:
+        case Type::RESUME_MATERIALIZED_VIEW:
+        case Type::ABORT_MATERIALIZED_VIEW:
+        case Type::RECOVER_MATERIALIZED_VIEW:
         {
-            if (executeDistributed(query))
-                return {};
-
-            LOG_INFO(&Poco::Logger::get("InterpreterSystemQuery"), "[Local] Execute System query: {}", queryToString(query));
+            executeMaterializedViewAdmission(query);
             break;
+        }
+        case Type::SET_LOG_LEVEL:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
+            executeSetLogLevel(query);
+            break;
+        }
+        case Type::SHOW_LOGGERS:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
+            return executeShowLoggers(query);
+        }
+        case Type::PAUSE_TASK:
+        {
+            executePauseTask(query);
+            break;
+        }
+        case Type::RESUME_TASK:
+        {
+            executeResumeTask(query);
+            break;
+        }
+        case Type::INSTALL_PYTHON_PACKAGE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
+            executeInstallPythonPackage(query);
+#if USE_PYTHON_UDF
+            break;
+#endif
+        }
+        case Type::UNINSTALL_PYTHON_PACKAGE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
+            executeUninstallPythonPackage(query);
+#if USE_PYTHON_UDF
+            break;
+#endif
+        }
+        case Type::LIST_PYTHON_PACKAGES:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
+            return executeListPythonPackages(query);
         }
         /// proton: ends
         default:
-            throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown type of SYSTEM query");
     }
 
     return BlockIO();
 }
-
-/// proton: starts
-bool InterpreterSystemQuery::executeDistributed(ASTSystemQuery & system)
-{
-    return false;
-}
-/// proton: ends
 
 void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
 {
@@ -638,21 +604,13 @@ void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
     if (auto * storage_distributed = dynamic_cast<StorageDistributed *>(DatabaseCatalog::instance().getTable(table_id, getContext()).get()))
         storage_distributed->flushClusterNodesAllData(getContext());
     else
-        /// proton: starts
-        throw Exception("Stream " + table_id.getNameForLogs() + " is not distributed", ErrorCodes::BAD_ARGUMENTS);
-        /// proton: ends
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Stream {} is not distributed", table_id.getNameForLogs());
 }
 
 void InterpreterSystemQuery::restartDisk(String & name)
 {
     getContext()->checkAccess(AccessType::SYSTEM_RESTART_DISK);
-
-    auto disk = getContext()->getDisk(name);
-
-    if (DiskRestartProxy * restart_proxy = dynamic_cast<DiskRestartProxy*>(disk.get()))
-        restart_proxy->restart(getContext());
-    else
-        throw Exception("Disk " + name + " doesn't have possibility to restart", ErrorCodes::BAD_ARGUMENTS);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "SYSTEM RESTART DISK is not supported");
 }
 
 
@@ -682,6 +640,10 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::DROP_INDEX_UNCOMPRESSED_CACHE:
         case Type::DROP_FILESYSTEM_CACHE:
         case Type::DROP_SCHEMA_CACHE:
+        case Type::DROP_FORMAT_SCHEMA_CACHE:
+#if USE_AWS_S3
+        case Type::DROP_S3_CLIENT_CACHE:
+#endif
         {
             required_access.emplace_back(AccessType::SYSTEM_DROP_CACHE);
             break;
@@ -742,23 +704,6 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
                 required_access.emplace_back(AccessType::SYSTEM_MOVES, query.getDatabase(), query.getTable());
             break;
         }
-        /// proton: starts.Maintain requires access rights of 'SYSTEM_MERGES', 'SYSTEM_TTL_MERGES'
-        case Type::STOP_MAINTAIN: [[fallthrough]];
-        case Type::START_MAINTAIN:
-        {
-            if (!query.table)
-            {
-                required_access.emplace_back(AccessType::SYSTEM_MERGES);
-                required_access.emplace_back(AccessType::SYSTEM_TTL_MERGES);
-            }
-            else
-            {
-                required_access.emplace_back(AccessType::SYSTEM_MERGES, query.getDatabase(), query.getTable());
-                required_access.emplace_back(AccessType::SYSTEM_TTL_MERGES, query.getDatabase(), query.getTable());
-            }
-            break;
-        }
-        /// proton: ends.
         case Type::STOP_FETCHES: [[fallthrough]];
         case Type::START_FETCHES:
         {
@@ -805,14 +750,6 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_RESTORE_REPLICA, query.getDatabase(), query.getTable());
             break;
         }
-        /// proton: starts.
-        case Type::REPLACE_REPLICA: [[fallthrough]];
-        case Type::ADD_REPLICA:
-        {
-            required_access.emplace_back(AccessType::SYSTEM_DROP_REPLICA);
-            break;
-        }
-        /// proton: ends
         case Type::SYNC_REPLICA:
         {
             required_access.emplace_back(AccessType::SYSTEM_SYNC_REPLICA, query.getDatabase(), query.getTable());
@@ -826,6 +763,11 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::RESTART_REPLICAS:
         {
             required_access.emplace_back(AccessType::SYSTEM_RESTART_REPLICA);
+            break;
+        }
+        case Type::WAIT_LOADING_PARTS:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_WAIT_LOADING_PARTS, query.getDatabase(), query.getTable());
             break;
         }
         case Type::FLUSH_DISTRIBUTED:
@@ -848,6 +790,37 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::STOP_THREAD_FUZZER: break;
         case Type::START_THREAD_FUZZER: break;
         case Type::UNKNOWN: break;
+        /// proton : starts
+        case Type::PAUSE_STREAM:
+        case Type::RESUME_STREAM:
+        case Type::PAUSE_MATERIALIZED_VIEW:
+        case Type::RESUME_MATERIALIZED_VIEW:
+        case Type::ABORT_MATERIALIZED_VIEW:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_SHUTDOWN);
+            break;
+        }
+        case Type::RECOVER_STREAM:
+        case Type::RECOVER_MATERIALIZED_VIEW:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_RESTORE_REPLICA, query.getDatabase(), query.getTable());
+            break;
+        }
+        case Type::SET_LOG_LEVEL:
+        case Type::SHOW_LOGGERS:
+        case Type::INSTALL_PYTHON_PACKAGE:
+        case Type::UNINSTALL_PYTHON_PACKAGE:
+        case Type::LIST_PYTHON_PACKAGES:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_RELOAD_CONFIG);
+            break;
+        }
+        case Type::PAUSE_TASK:
+        case Type::RESUME_TASK:
+        {
+            break;
+        }
+        /// proton : ends
         case Type::END: break;
     }
     return required_access;
@@ -857,5 +830,79 @@ void InterpreterSystemQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
 {
     elem.query_kind = "System";
 }
+
+/// proton: starts
+void InterpreterSystemQuery::updateTaskStatus(String database, const String & task_name, uint32_t new_status)
+{
+    if (database.empty())
+        database = getContext()->getCurrentDatabase();
+
+    getContext()->checkAccess(AccessType::SYSTEM_TASK, database, task_name);
+
+    const auto & meta_store = Globals::getMetaStore();
+    auto req = std::make_shared<cluster::GetTaskRequest>(
+        database,
+        task_name,
+        /*versions_requested=*/1,
+        meta_store.nodeID(),
+        /*consistent_read=*/false,
+        /*timeout_ms=*/10000,
+        /*request_version=*/1);
+
+    auto & metastore = Globals::getMetaStore();
+    auto resp = metastore.getTask(std::move(req));
+    if (resp->hasError())
+        throw Exception(
+            resp->error().error_code, "Failed to load task {} in database {}, error={{{}}}", task_name, database, resp->error().string());
+
+    if (resp->data().descs.size() != 1)
+        throw Exception(
+            resp->error().error_code,
+            "Get invalid number of TaskDescriptor: database={} task={} "
+            "descriptors={}",
+            database,
+            task_name,
+            resp->data().descs.size());
+
+    auto & desc = resp->data().descs[0];
+    if (desc->status == new_status)
+        return;
+
+    auto alter_task_req = std::make_shared<cluster::AlterTaskRequest>(
+        desc->ns,
+        desc->name,
+        desc->id,
+        desc->data_version,
+        new_status,
+        getContext()->getUserName(),
+        meta_store.nodeID(),
+        /*timeout_ms=*/10000,
+        /*request_version=*/1);
+
+    auto alter_task_resp = metastore.alterTask(std::move(alter_task_req));
+    if (alter_task_resp->hasError())
+    {
+        const auto & err = alter_task_resp->error();
+        throw Exception(
+            ErrorCodes::CANNOT_CREATE_TASK,
+            "Failed to set task status: database={} task={} "
+            "new_status={} error={{{}}}",
+            database,
+            task_name,
+            new_status,
+            err.error_message);
+    }
+}
+
+void InterpreterSystemQuery::executePauseTask(const ASTSystemQuery & system)
+{
+    updateTaskStatus(system.getDatabase(), system.getTable(), 1);
+}
+
+void InterpreterSystemQuery::executeResumeTask(const ASTSystemQuery & system)
+{
+    updateTaskStatus(system.getDatabase(), system.getTable(), 0);
+}
+/// proton: ends
 
 }

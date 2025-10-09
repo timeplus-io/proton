@@ -10,6 +10,7 @@
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 
+#include <Core/Settings.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
@@ -21,7 +22,7 @@ struct Settings;
 
 /// min, max, any, any_last, any_heavy, etc...
 template <template <typename> class AggregateFunctionTemplate, template <typename> class Data>
-static IAggregateFunction * createAggregateFunctionSingleValue(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+static IAggregateFunction * createAggregateFunctionSingleValue(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -52,7 +53,14 @@ static IAggregateFunction * createAggregateFunctionSingleValue(const String & na
     if (which.idx == TypeIndex::Decimal128)
         return new AggregateFunctionTemplate<Data<SingleValueDataFixed<Decimal128>>>(argument_type);
     if (which.idx == TypeIndex::String)
-        return new AggregateFunctionTemplate<Data<SingleValueDataString>>(argument_type);
+    {
+        bool use_arena = settings ? settings->default_hash_table != HashTableType::Hybrid : true;
+        if (use_arena)
+            return new AggregateFunctionTemplate<Data<SingleValueDataString>>(argument_type);
+        else
+            /// Use Generic String Field
+            return new AggregateFunctionTemplate<Data<SingleValueDataGeneric>>(argument_type);
+    }
 
     return new AggregateFunctionTemplate<Data<SingleValueDataGeneric>>(argument_type);
 }
@@ -61,7 +69,7 @@ static IAggregateFunction * createAggregateFunctionSingleValue(const String & na
 
 /// argMin, argMax
 template <template <typename> class MinMaxData, typename ResData>
-static IAggregateFunction * createAggregateFunctionArgMinMaxSecond(const DataTypePtr & res_type, const DataTypePtr & val_type)
+static IAggregateFunction * createAggregateFunctionArgMinMaxSecond(const DataTypePtr & res_type, const DataTypePtr & val_type, bool use_arena)
 {
     WhichDataType which(val_type);
 
@@ -89,16 +97,24 @@ static IAggregateFunction * createAggregateFunctionArgMinMaxSecond(const DataTyp
     if (which.idx == TypeIndex::Decimal128)
         return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataFixed<Decimal128>>>>(res_type, val_type);
     if (which.idx == TypeIndex::String)
-        return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataString>>>(res_type, val_type);
+    {
+        if (use_arena)
+            return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataString>>>(res_type, val_type);
+        else
+            /// Use Generic String Field
+            return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataGeneric>>>(res_type, val_type);
+    }
 
     return new AggregateFunctionArgMinMax<AggregateFunctionArgMinMaxData<ResData, MinMaxData<SingleValueDataGeneric>>>(res_type, val_type);
 }
 
 template <template <typename> class MinMaxData>
-static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings * settings)
 {
     assertNoParameters(name, parameters);
     assertBinary(name, argument_types);
+
+    bool use_arena = settings ? settings->default_hash_table != HashTableType::Hybrid : true;
 
     const DataTypePtr & res_type = argument_types[0];
     const DataTypePtr & val_type = argument_types[1];
@@ -106,31 +122,37 @@ static IAggregateFunction * createAggregateFunctionArgMinMax(const String & name
     WhichDataType which(res_type);
 #define DISPATCH(TYPE) \
     if (which.idx == TypeIndex::TYPE) \
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<TYPE>>(res_type, val_type); /// NOLINT
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<TYPE>>(res_type, val_type, use_arena); /// NOLINT
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
     /// proton : starts. For bool type, its underlying representation is DataTypeNumber<UInt8>
     if (which.isBool())
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<UInt8>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<UInt8>>(res_type, val_type, use_arena);
     /// proton : ends
 
     if (which.idx == TypeIndex::Date)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDate::FieldType>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDate::FieldType>>(res_type, val_type, use_arena);
     if (which.idx == TypeIndex::DateTime)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDateTime::FieldType>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DataTypeDateTime::FieldType>>(res_type, val_type, use_arena);
     if (which.idx == TypeIndex::DateTime64)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DateTime64>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<DateTime64>>(res_type, val_type, use_arena);
     if (which.idx == TypeIndex::Decimal32)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<Decimal32>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<Decimal32>>(res_type, val_type, use_arena);
     if (which.idx == TypeIndex::Decimal64)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<Decimal64>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<Decimal64>>(res_type, val_type, use_arena);
     if (which.idx == TypeIndex::Decimal128)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<Decimal128>>(res_type, val_type);
+        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataFixed<Decimal128>>(res_type, val_type, use_arena);
     if (which.idx == TypeIndex::String)
-        return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataString>(res_type, val_type);
+    {
+        if (use_arena)
+            return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataString>(res_type, val_type, use_arena);
+        else
+            /// Use Generic String Field
+            return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataGeneric>(res_type, val_type, use_arena);
+    }
 
-    return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataGeneric>(res_type, val_type);
+    return createAggregateFunctionArgMinMaxSecond<MinMaxData, SingleValueDataGeneric>(res_type, val_type, use_arena);
 }
 
 #endif

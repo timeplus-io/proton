@@ -13,13 +13,14 @@
   * (~ 700 MB/sec, 15 million strings per second)
   */
 
-#include <base/types.h>
-#include <base/unaligned.h>
-#include <string>
-#include <type_traits>
 #include <Core/Defines.h>
 #include <base/extended_types.h>
+#include <base/types.h>
+#include <base/unaligned.h>
+#include <Common/hex.h>
+#include <Common/Exception.h>
 
+#include <string>
 
 #define ROTL(x, b) static_cast<UInt64>(((x) << (b)) | ((x) >> (64 - (b))))
 
@@ -123,7 +124,7 @@ public:
 
         /// Pad the remainder, which is missing up to an 8-byte word.
         current_word = 0;
-        switch (end - data)
+        switch (end - data) /// NOLINT(bugprone-switch-missing-default-case)
         {
             case 7: current_bytes[6] = data[6]; [[fallthrough]];
             case 6: current_bytes[5] = data[5]; [[fallthrough]];
@@ -192,13 +193,28 @@ inline void sipHash128(const char * data, const size_t size, char * out)
     hash.get128(out);
 }
 
-inline UInt128 sipHash128(const char * data, const size_t size)
+inline UInt128 sipHash128Keyed(UInt64 key0, UInt64 key1, const char * data, const size_t size)
 {
-    SipHash hash;
+    SipHash hash(key0, key1);
     hash.update(data, size);
     UInt128 res;
     hash.get128(res);
     return res;
+}
+
+inline UInt128 sipHash128(const char * data, const size_t size)
+{
+    return sipHash128Keyed(0, 0, data, size);
+}
+
+inline String sipHash128String(const char * data, const size_t size)
+{
+    return getHexUIntLowercase(sipHash128(data, size));
+}
+
+inline String sipHash128String(const String & str)
+{
+    return sipHash128String(str.data(), str.size());
 }
 
 inline UInt64 sipHash64(const char * data, const size_t size)

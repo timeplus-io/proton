@@ -1,8 +1,7 @@
 #include <Storages/MergeTree/BackgroundJobsAssignee.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Common/CurrentMetrics.h>
 #include <Common/randomSeed.h>
-#include <pcg_random.hpp>
+#include <Interpreters/Context.h>
 #include <random>
 
 namespace DB
@@ -58,13 +57,6 @@ void BackgroundJobsAssignee::scheduleMergeMutateTask(ExecutableTaskPtr merge_tas
 }
 
 
-void BackgroundJobsAssignee::scheduleFetchTask(ExecutableTaskPtr fetch_task)
-{
-    bool res = getContext()->getFetchesExecutor()->trySchedule(fetch_task);
-    res ? trigger() : postpone();
-}
-
-
 void BackgroundJobsAssignee::scheduleMoveTask(ExecutableTaskPtr move_task)
 {
     bool res = getContext()->getMovesExecutor()->trySchedule(move_task);
@@ -110,7 +102,6 @@ void BackgroundJobsAssignee::finish()
         auto storage_id = data.getStorageID();
 
         getContext()->getMovesExecutor()->removeTasksCorrespondingToStorage(storage_id);
-        getContext()->getFetchesExecutor()->removeTasksCorrespondingToStorage(storage_id);
         getContext()->getMergeMutateExecutor()->removeTasksCorrespondingToStorage(storage_id);
         getContext()->getCommonExecutor()->removeTasksCorrespondingToStorage(storage_id);
     }

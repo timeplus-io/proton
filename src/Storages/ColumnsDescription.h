@@ -3,11 +3,12 @@
 #include <Compression/CompressionFactory.h>
 #include <Core/Block.h>
 #include <Core/Names.h>
-#include <Core/NamesAndTypes.h>
 #include <Core/NamesAndAliases.h>
+#include <Core/NamesAndTypes.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/ColumnDefault.h>
 #include <Common/Exception.h>
+#include <Common/SettingsChanges.h>
 
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index/mem_fun.hpp>
@@ -27,6 +28,14 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+enum class VirtualsKind : UInt8
+{
+    None = 0,
+    Ephemeral = 1,
+    Persistent = 2,
+    All = Ephemeral | Persistent,
+};
+
 struct GetColumnsOptions
 {
     enum Kind : UInt8
@@ -34,8 +43,9 @@ struct GetColumnsOptions
         Ordinary = 1,
         Materialized = 2,
         Aliases = 4,
+        AutoIncrement = 8, /// proton : added
 
-        AllPhysical = Ordinary | Materialized,
+        AllPhysical = Ordinary | Materialized | AutoIncrement,
         All = AllPhysical | Aliases,
     };
 
@@ -59,10 +69,17 @@ struct GetColumnsOptions
         return *this;
     }
 
+    GetColumnsOptions & withSystemColumns(bool value = true)
+    {
+        with_system_columns = value;
+        return *this;
+    }
+
     Kind kind;
     bool with_subcolumns = false;
     bool with_virtuals = false;
     bool with_extended_objects = false;
+    bool with_system_columns = false;
 };
 
 /// Description of a single table column (in CREATE STREAM for example).
@@ -73,12 +90,15 @@ struct ColumnDescription
     ColumnDefault default_desc;
     String comment;
     ASTPtr codec;
+    SettingsChanges settings;
     ASTPtr ttl;
 
     ColumnDescription() = default;
     ColumnDescription(ColumnDescription &&) noexcept = default;
     ColumnDescription(const ColumnDescription &) = default;
     ColumnDescription(String name_, DataTypePtr type_);
+    ColumnDescription(String name_, DataTypePtr type_, String comment_);
+    ColumnDescription(String name_, DataTypePtr type_, ASTPtr codec_, String comment_);
 
     bool operator==(const ColumnDescription & other) const;
     bool operator!=(const ColumnDescription & other) const { return !(*this == other); }
@@ -94,6 +114,8 @@ class ColumnsDescription : public IHints<1, ColumnsDescription>
 public:
     ColumnsDescription() = default;
     explicit ColumnsDescription(NamesAndTypesList ordinary);
+
+    ColumnsDescription(std::initializer_list<ColumnDescription> ordinary);
 
     explicit ColumnsDescription(NamesAndTypesList ordinary, NamesAndAliases aliases);
 
@@ -120,7 +142,10 @@ public:
 
     NamesAndTypesList getOrdinary() const;
     NamesAndTypesList getMaterialized() const;
+    NamesAndTypesList getInsertable() const; /// ordinary + ephemeral
     NamesAndTypesList getAliases() const;
+    NamesAndTypesList getAutoIncrement() const; /// proton : added
+    bool hasAutoIncrementColumn() const noexcept; /// proton : added
     NamesAndTypesList getAllPhysical() const; /// ordinary + materialized.
     NamesAndTypesList getAll() const; /// ordinary + materialized + aliases + ephemeral
     /// Returns .size0/.null/...
@@ -136,6 +161,7 @@ public:
     bool hasNested(const String & column_name) const;
     bool hasSubcolumn(const String & column_name) const;
     const ColumnDescription & get(const String & column_name) const;
+    const ColumnDescription * tryGet(const String & column_name) const;
 
     /// proton: starts.
     void updateColumn(const String & column_name, const DataTypePtr & new_type);
@@ -157,14 +183,13 @@ public:
         auto it = columns.get<1>().find(column_name);
         if (it == columns.get<1>().end())
         {
-            String exception_message = fmt::format("Cannot find column {} in ColumnsDescription", column_name);
-            appendHintsMessage(exception_message, column_name);
-            throw Exception(exception_message, ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot find column {} in ColumnsDescription{}",
+                            column_name, getHintsMessage(column_name));
         }
 
         removeSubcolumns(it->name);
         if (!columns.get<1>().modify(it, std::forward<F>(f)))
-            throw Exception("Cannot modify ColumnDescription for column " + column_name + ": column name cannot be changed", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot modify ColumnDescription for column {}: column name cannot be changed", column_name);
 
         addSubcolumns(it->name, it->type);
         modifyColumnOrder(column_name, after_column, first);
@@ -175,6 +200,8 @@ public:
     bool hasPhysical(const String & column_name) const;
     bool hasColumnOrSubcolumn(GetColumnsOptions::Kind kind, const String & column_name) const;
     bool hasColumnOrNested(GetColumnsOptions::Kind kind, const String & column_name) const;
+
+    bool hasOnlyOrdinary() const;
 
     NameAndTypePair getPhysical(const String & column_name) const;
     NameAndTypePair getColumnOrSubcolumn(GetColumnsOptions::Kind kind, const String & column_name) const;

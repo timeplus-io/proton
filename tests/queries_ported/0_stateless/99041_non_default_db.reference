@@ -1,0 +1,11 @@
+      "logstore_flush_messages": 1000,
+      "logstore_flush_ms": 120000,
+      "logstore_retention_bytes": 45648,
+      "logstore_retention_ms": 41886,
+before patch, created by user lin0116
+created_by=lin0116
+last_modified_by=lin0116
+after patch logstore retention by super user proton
+created_by=lin0116
+last_modified_by=proton
+gen0116.tar_in_gen

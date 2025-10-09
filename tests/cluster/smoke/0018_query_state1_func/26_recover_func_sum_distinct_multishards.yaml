@@ -1,0 +1,142 @@
+tags:
+  - query_state
+description: recover function sum_distinct from a state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream1(id int, val int) settings shards=3, sharding_expr='to_int(id)'
+
+  - type: wait
+    time: 1
+
+  - name: '1946-1'
+    query_id: '1946-1'
+    type: stream
+    query: subscribe to select sum_distinct(val), sum(val) from test19_state_stream1 emit periodic 990ms settings checkpoint_interval=1
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - name: '1946-2'
+    query_id: '1946-2'
+    type: stream
+    query: subscribe to select sum_distinct(val), sum(val) from changelog(test19_state_stream1, id) emit periodic 990ms settings checkpoint_interval=1
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, val) values(1, 30), (4, 40)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, val) values(2, 30), (5, 50), (1, 40)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test19_state_stream1(id, val) values(3, 50), (3, 60), (4, 60)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id = '1946-1'
+
+  - type: query
+    sql: kill query where query_id = '1946-2'
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test19_state_stream1(id, val) values (1, 80), (3, 30)
+
+  - type: wait
+    time: 3
+
+  - name: 1946-1-1
+    query_id: 1946-1-1
+    type: stream
+    query: recover from '1946-1'
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - name: 1946-2-1
+    query_id: 1946-2-1
+    type: stream
+    query: recover from '1946-2'
+    schema:
+      - name: sum_distinct(val)
+        type: int64
+      - name: sum(val)
+        type: int64
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id='1946-1' sync
+
+  - type: query
+    sql: kill query where query_id='1946-2' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1946-1'
+
+  - type: query
+    sql: unsubscribe to '1946-2'
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: '1946-1'
+    expected_result:
+      - [ 70, 70 ]
+      - [ 120, 190 ]
+      - [ 180, 360 ]
+    
+  - type: check
+    target_name: 1946-1-1
+    expected_result:
+      - [ 260, 470 ]
+
+  - type: check
+    target_name: '1946-2'
+    expected_result:
+      - [ 70, 70 ]
+      - [ 120, 160 ]
+      - [ 180, 240 ]
+
+  - type: check
+    target_name: 1946-2-1
+    expected_result:
+      - [ 220, 250 ]

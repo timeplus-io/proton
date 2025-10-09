@@ -1,0 +1,139 @@
+tags:
+- query_state
+- data_enrichment_join
+- left-join
+description: append-only left asof JOIN versioned_kv state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream3;
+- type: query
+  sql: drop stream if exists test19_vk_right_stream3;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream3(i int, k string);
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_vk_right_stream3(j int, k string, kk string)
+    PRIMARY KEY (k, kk) settings mode='versioned_kv';
+- type: wait
+  time: 1
+
+- name: '19359'
+  type: stream
+  query_id: '19359'
+  query: subscribe to SELECT i, test19_left_stream3.k, j, test19_vk_right_stream3.k,
+    kk FROM test19_left_stream3 left asof JOIN test19_vk_right_stream3 ON test19_left_stream3.k
+    = test19_vk_right_stream3.k AND i <= j SETTINGS keep_versions = 3 settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: test19_vk_right_stream3.k
+    type: string
+  - name: kk
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO test19_vk_right_stream3(j, k, kk) VALUES
+  schema:
+  - name: j
+    type: int32
+  - name: k
+    type: string
+  - name: kk
+    type: string
+  inputs:
+  - [100, 'a', 'bb']
+  - [102, 'a', 'cc']
+  - [103, 'a', 'dd']
+  - [104, 'a', '33']
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO test19_left_stream3(i, k) VALUES
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [101, 'a']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19359'
+- type: wait
+  time: 3
+
+- type: query
+  sql: INSERT INTO test19_vk_right_stream3(j, k, kk) VALUES
+  schema:
+  - name: j
+    type: int32
+  - name: k
+    type: string
+  - name: kk
+    type: string
+  inputs:
+  - [105, 'a', 'cc']
+
+- name: 19359-1
+  type: stream
+  query: recover from '19359'
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: test19_vk_right_stream3.k
+    type: string
+  - name: kk
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO test19_left_stream3(i, k) VALUES
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [101, 'a']
+  - [106, 'a']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19359' sync
+
+- type: query
+  sql: unsubscribe to '19359'
+
+- type: check
+  target_name: '19359'
+  expected_result:
+  - [101, a, 102, a, cc]
+
+- type: check
+  target_name: 19359-1
+  expected_result:
+  - [101, a, 103, a, dd]
+  - [106, a, 0, '', '']

@@ -1,0 +1,80 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (y1 int, y2 int, group string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getMultivariateMarova(y1 int, y2 int, group string) RETURNS array(float64) LANGUAGE PYTHON AS $$
+      import pickle
+      import pandas as pd
+      from statsmodels.multivariate.manova import MANOVA
+
+      class getMultivariateMarova:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.manova = 0
+
+          def serialize(self):
+              data = {}
+              data['manova'] = self.manova
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.manova = data['manova']
+
+          def merge(self, other):
+              pass
+
+          def process(self, y1s, y2s, groups):
+              d = {
+                  'y1': y1s,
+                  'y2': y2s,
+                  'group': groups
+              }
+              if len(d['group']) > 1:
+                  df = pd.DataFrame(data=d)
+                  manova_model = MANOVA.from_formula('y1 + y2 ~ group', data=df)
+                  res = manova_model.mv_test().results
+                  stat = res['group']['stat']
+                  tmp_manova = stat.iloc[:,0].to_list()
+                  self.manova = tmp_manova
+
+          def finalize(self):
+              return self.manova
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf5-3-1
+    type: stream
+    query: select getMultivariateMarova(y1, y2, group) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float64)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(y1, y2, group) values 
+          (10, 30, 'A')(12, 31, 'B')(13, 29, 'A')(14, 35, 'A')(16, 38, 'B')(17, 40, 'B')
+
+  - type: check
+    target_name: python-udf5-3-1
+    expected_result:
+      - [[0.6326877336051652, 0.36731226639483483, 0.5805585392051548, 0.5805585392051548]]

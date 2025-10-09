@@ -2,4 +2,8 @@ proton_add_executable (compressed_buffer compressed_buffer.cpp)
 target_link_libraries (compressed_buffer PRIVATE dbms)
 
 proton_add_executable (cached_compressed_read_buffer cached_compressed_read_buffer.cpp)
-target_link_libraries (cached_compressed_read_buffer PRIVATE dbms)
+target_link_libraries (cached_compressed_read_buffer PRIVATE
+    dbms
+    clickhouse_aggregate_functions
+    clickhouse_functions
+    clickhouse_table_functions)

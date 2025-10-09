@@ -4,7 +4,7 @@ create stream sample_merge_tree (dt datetime, x uint64) ENGINE = MergeTree PARTI
 
 INSERT INTO sample_merge_tree VALUES (to_datetime('2018-10-31 05:05:00'), 0), (to_datetime('2018-10-31 06:06:00'), 10), (to_datetime('2018-10-28 10:00:00'), 20);
 
-OPTIMIZE TABLE sample_merge_tree FINAL;
+OPTIMIZE STREAM sample_merge_tree FINAL;
 
 SELECT * FROM sample_merge_tree ORDER BY x;
 

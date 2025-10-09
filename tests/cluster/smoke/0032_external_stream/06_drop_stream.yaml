@@ -1,0 +1,200 @@
+tags:
+  - udf
+description: |
+  test drop and recreate external stream
+  Main Steps:
+    1.Create kafka topic
+    2.Create external stream type kafka
+    3.Create JS UDF
+    4.Ingest data into kafaka and external stream
+    5.Check external stream
+    6.Check JS UDF from external stream
+    7.Drop function, external stream, kafaka topic
+    8.Repeat Step 1-7
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP FUNCTION IF EXISTS add_suffix;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test33_external;
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 1
+        value: sometext1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test33_external (id int32, value string)
+      SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format = 'JSONEachRow';
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_suffix(value string) RETURNS string LANGUAGE JAVASCRIPT AS $$
+        function add_suffix(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+'x';
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: ext-6-1
+    query: select id, value from test33_external settings seek_to = 'earliest';
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: ext-6-2
+    query: select add_suffix(value) as res from test33_external;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 2
+        value: sometext2
+
+  - type: query
+    sql: INSERT INTO test33_external(id, value) VALUES (3, 'sometext3');
+
+  - type: check
+    target_name: ext-6-1
+    expected_result:
+      - [1, 'sometext1']
+      - [2, 'sometext2']
+      - [3, 'sometext3']
+
+  - type: check
+    target_name: ext-6-2
+    expected_result:
+      - ['sometext2x']
+      - ['sometext3x']
+
+  # drop and recreate
+  - type: query
+    sql: DROP FUNCTION add_suffix;
+
+  - type: query
+    sql: DROP STREAM test33_external;
+
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 4
+        value: sometext4
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test33_external (id int32, value string)
+      SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format = 'JSONEachRow';
+
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_suffix(value string) RETURNS string LANGUAGE JAVASCRIPT AS $$
+        function add_suffix(value) {
+          for(let i=0;i<value.length;i++) {
+            value[i]=value[i]+'x';
+          }
+          return value;
+        }
+      $$;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: ext-6-3
+    query: select id, value from test33_external settings seek_to = 'earliest';
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: ext-6-4
+    query: select add_suffix(value) as res from test33_external;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 5
+        value: sometext5
+
+  - type: query
+    sql: INSERT INTO test33_external(id, value) VALUES (6, 'sometext6');
+
+  - type: check
+    target_name: ext-6-3
+    expected_result:
+      - [4, 'sometext4']
+      - [5, 'sometext5']
+      - [6, 'sometext6']
+
+  - type: check
+    target_name: ext-6-4
+    expected_result:
+      - ['sometext5x']
+      - ['sometext6x']

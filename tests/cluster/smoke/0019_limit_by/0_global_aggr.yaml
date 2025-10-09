@@ -1,0 +1,40 @@
+tags:
+- local-run
+- limit_by
+description: global aggr limit by
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2000'
+  type: stream
+  query: select s, latest(i) as i, emit_version() as version from test20_limit_by_stream group by s order by i desc limit 2 by version
+  schema:
+  - name: s
+    type: string
+  - name: i
+    type: int32
+  - name: version
+    type: int64
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test20_limit_by_stream(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's1']
+  - [2, 's2']
+  - [3, 's3']
+  - [4, 's4']
+
+- type: check
+  target_name: '2000'
+  expected_result:
+  - ['s4', 4, 0]
+  - ['s3', 3, 0]

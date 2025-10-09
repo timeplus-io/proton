@@ -8,6 +8,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
+
 class FormatWithNamesAndTypesReader;
 
 /// Base class for input formats with -WithNames and -WithNamesAndTypes suffixes.
@@ -24,18 +29,21 @@ class FormatWithNamesAndTypesReader;
 class RowInputFormatWithNamesAndTypes : public RowInputFormatWithDiagnosticInfo
 {
 protected:
-    /** with_names - in the first line the header with column names
+    /** is_binary - it is a binary format (e.g. don't search for BOM)
+      * with_names - in the first line the header with column names
       * with_types - in the second line the header with column names
       */
     RowInputFormatWithNamesAndTypes(
         const Block & header_,
         ReadBuffer & in_,
         const Params & params_,
+        bool is_binary_,
         bool with_names_,
         bool with_types_,
         const FormatSettings & format_settings_,
         std::unique_ptr<FormatWithNamesAndTypesReader> format_reader_,
-        ProcessorID pid_);
+        bool try_detect_header_ = false,
+        ProcessorID pid_ = ProcessorID::InvalidID);
 
     void resetParser() override;
     bool isGarbageAfterField(size_t index, ReadBuffer::Position pos) override;
@@ -55,13 +63,16 @@ private:
     bool parseRowAndPrintDiagnosticInfo(MutableColumns & columns, WriteBuffer & out) override;
     void tryDeserializeField(const DataTypePtr & type, IColumn & column, size_t file_column) override;
 
-    void setupAllColumnsByTableSchema();
-    void addInputColumn(const String & column_name, std::vector<bool> & read_columns);
-    void insertDefaultsForNotSeenColumns(MutableColumns & columns, RowReadExtension & ext);
+    void tryDetectHeader(std::vector<String> & column_names, std::vector<String> & type_names);
 
+    bool is_binary;
     bool with_names;
     bool with_types;
     std::unique_ptr<FormatWithNamesAndTypesReader> format_reader;
+    bool try_detect_header;
+    bool is_header_detected = false;
+
+protected:
     std::unordered_map<String, size_t> column_indexes_by_names;
 };
 
@@ -92,6 +103,12 @@ public:
     /// Read row with types and return the list of them.
     virtual std::vector<String> readTypes() = 0;
 
+    /// Read row with raw values.
+    virtual std::vector<String> readRowForHeaderDetection()
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method readRowAndGetFieldsAndDataTypes is not implemented for format reader");
+    }
+
     /// Skip single field, it's used to skip unknown columns.
     virtual void skipField(size_t file_column) = 0;
     /// Skip the whole row with names.
@@ -115,9 +132,14 @@ public:
 
     virtual ~FormatWithNamesAndTypesReader() = default;
 
+    virtual FormatSettings::EscapingRule getEscapingRule() const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Format reader doesn't have an escaping rule");
+    }
+
 protected:
     ReadBuffer * in;
-    const FormatSettings format_settings;
+    FormatSettings format_settings;
 };
 
 /// Base class for schema inference for formats with -WithNames and -WithNamesAndTypes suffixes.
@@ -135,18 +157,35 @@ public:
         bool with_names_,
         bool with_types_,
         FormatWithNamesAndTypesReader * format_reader_,
-        DataTypePtr default_type_ = nullptr);
+        DataTypePtr default_type_ = nullptr,
+        bool try_detect_header_ = false);
 
     NamesAndTypesList readSchema() override;
 
 protected:
-    virtual DataTypes readRowAndGetDataTypes() override = 0;
+    virtual DataTypes readRowAndGetDataTypes() override;
+
+    virtual DataTypes readRowAndGetDataTypesImpl()
+    {
+        throw Exception{ErrorCodes::NOT_IMPLEMENTED, "Method readRowAndGetDataTypesImpl is not implemented"};
+    }
+
+    /// Return column fields with inferred types. In case of no more rows, return empty vectors.
+    virtual std::pair<std::vector<String>, DataTypes> readRowAndGetFieldsAndDataTypes()
+    {
+        throw Exception{ErrorCodes::NOT_IMPLEMENTED, "Method readRowAndGetFieldsAndDataTypes is not implemented"};
+    }
 
     bool with_names;
     bool with_types;
 
 private:
+    void tryDetectHeader(std::vector<String> & column_names_out, std::vector<String> & type_names_out);
+    std::vector<String> readNamesFromFields(const std::vector<String> & fields);
+
     FormatWithNamesAndTypesReader * format_reader;
+    bool try_detect_header;
+    DataTypes buffered_types;
 };
 
 }

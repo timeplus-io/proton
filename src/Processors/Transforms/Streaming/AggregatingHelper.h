@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Core/Streaming/Watermark.h>
 #include <base/defines.h>
 #include <base/types.h>
@@ -12,16 +13,15 @@ namespace DB
 class Block;
 class Chunk;
 
+using KeyColumns = std::list<Columns>;
+using ManyKeyColumns = std::vector<KeyColumns>;
+
 namespace Streaming
 {
 struct AggregatingTransformParams;
-struct AggregatedDataVariants;
-using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
-using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
-
-using RetractedDataVariants = AggregatedDataVariants;
-using RetractedDataVariantsPtr = std::shared_ptr<RetractedDataVariants>;
-using ManyRetractedDataVariants = ManyAggregatedDataVariants;
+struct IAggregatedDataVariants;
+using IAggregatedDataVariantsPtr = std::shared_ptr<IAggregatedDataVariants>;
+using ManyIAggregatedDataVariants = std::vector<IAggregatedDataVariantsPtr>;
 
 using ChunkPair = std::pair<Chunk, Chunk>;
 using ChunkList = std::list<Chunk>;
@@ -29,32 +29,35 @@ using ChunkList = std::list<Chunk>;
 namespace AggregatingHelper
 {
 /// Convert aggregated state to chunk
-ChunkList convertToChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList convertToChunks(IAggregatedDataVariants & data, const AggregatingTransformParams & params);
 /// Merge many aggregated state and convert them to chunk
-ChunkList mergeAndConvertToChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList mergeAndConvertToChunks(ManyIAggregatedDataVariants & data, const AggregatingTransformParams & params);
 
 /// Only used for two level
-/// splice aggregatd state of multiple buckets and convert them to chunk
-Chunk spliceAndConvertToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
-/// Merge many aggregated state of multiple threads, then splice aggregatd state of multiple buckets and convert them to chunk
+/// splice aggregated state of multiple buckets and convert them to chunk
+Chunk spliceAndConvertToChunk(
+    IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+/// Merge many aggregated state of multiple threads, then splice aggregated state of multiple buckets and convert them to chunk
 Chunk mergeAndSpliceAndConvertToChunk(
-    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
 
-/* for EMIT ON UPDATE */
+/// for EMIT ON UPDATE
 /// Convert aggregated state of update groups tracked to chunk
-ChunkList convertUpdatesToChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList
+convertUpdatesToChunks(IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, KeyColumns key_columns = {});
 /// Merge many aggregated state and convert them to chunk
-ChunkList mergeAndConvertUpdatesToChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList mergeAndConvertUpdatesToChunks(
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, ManyKeyColumns many_key_columns = {});
 
-/// Only used for two level
-/// splice aggregatd state of update groups tracked of multiple buckets and convert them to chunk
+/// Only used for two level time bucket
+/// splice aggregated state of update groups tracked of multiple buckets and convert them to chunk
 Chunk spliceAndConvertUpdatesToChunk(
-    AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
-/// Merge many aggregated state of multiple threads, then splice aggregatd state of multiple buckets and convert them to chunk
+    IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+/// Merge many aggregated state of multiple threads, then splice aggregated state of multiple buckets and convert them to chunk
 Chunk mergeAndSpliceAndConvertUpdatesToChunk(
-    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
 
-/* for EMIT CHANGELOG */
+/// for EMIT CHANGELOG
 /// Changelog chunk converters are used for changelog emit. They can return a pair of chunks : one
 /// for retraction and one for updates. And those 2 chunks are expected to be passed to downstream
 /// consecutively otherwise the down stream aggregation result may not be correct or emit incorrect
@@ -63,19 +66,23 @@ Chunk mergeAndSpliceAndConvertUpdatesToChunk(
 /// \return list {retract_chunk, update_chunk}, retract_chunk if not empty, contains retract data
 ///         because of the current updates; update_chunk if not empty, contains the result for the
 ///         latest update data
-ChunkList convertToChangelogChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params);
-ChunkList mergeAndConvertToChangelogChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList
+convertToChangelogChunks(IAggregatedDataVariants & data_variants, const AggregatingTransformParams & params, KeyColumns key_columns = {});
+ChunkList mergeAndConvertToChangelogChunks(
+    ManyIAggregatedDataVariants & many_data_variants, const AggregatingTransformParams & params, ManyKeyColumns many_key_columns = {});
 
 inline bool onlyEmitFinalizedWindows(EmitMode mode) noexcept
 {
-    return mode == EmitMode::Watermark;
+    return mode == EmitMode::AfterWindowClose;
 }
 
 inline bool onlyEmitUpdates(EmitMode mode) noexcept
 {
     return mode >= EmitMode::OnUpdate;
 }
+
 }
 
 }
+
 }

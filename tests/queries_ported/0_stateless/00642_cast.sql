@@ -1,3 +1,5 @@
+SET show_uuid = 0;
+
 SELECT CAST(1 AS enum8('hello' = 1, 'world' = 2));
 SELECT cast(1 AS enum8('hello' = 1, 'world' = 2));
 

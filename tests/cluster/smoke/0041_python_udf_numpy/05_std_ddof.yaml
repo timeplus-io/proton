@@ -1,0 +1,65 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.std function - population stdiance
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getStdDdof(x int, y int) RETURNS float LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getStdDdof:
+          def __init__(self):
+              self.std = 0
+
+          def serialize(self):
+              data = {}
+              data['std'] = self.std
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.std = data['std']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              arr = np.vstack((xs, ys))
+              self.std = float(np.std(arr))
+
+          def finalize(self):
+              return self.std
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-5-1
+    type: stream
+    query: select getStdDdof(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (1,2) (3,4);
+
+  - type: check
+    target_name: python-udf2-5-1
+    expected_result:
+      - [1.118033988749895]

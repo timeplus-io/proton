@@ -1,6 +1,7 @@
 #pragma once
-#include <Storages/TableLockHolder.h>
+#include <IO/Progress.h>
 #include <Processors/Transforms/ExceptionKeepingTransform.h>
+#include <Storages/TableLockHolder.h>
 
 namespace DB
 {
@@ -17,9 +18,17 @@ public:
     const Block & getHeader() const { return inputs.front().getHeader(); }
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
+    /// proton: starts.
+    void setProgressCallback(ProgressCallback callback) { progress_callback.swap(callback); }
+    /// proton: ends
+
 protected:
     virtual void consume(Chunk chunk) = 0;
     virtual bool lastBlockIsDuplicate() const { return false; }
+
+    /// proton: starts
+    static bool isErrorRetryable(int error_code);
+    /// proton: ends
 
 private:
     std::vector<TableLockHolder> table_locks;
@@ -28,6 +37,10 @@ private:
     GenerateResult onGenerate() override;
 
     Chunk cur_chunk;
+
+    /// proton: starts.
+    ProgressCallback progress_callback;
+    /// proton: ends.
 };
 
 using SinkToStoragePtr = std::shared_ptr<SinkToStorage>;

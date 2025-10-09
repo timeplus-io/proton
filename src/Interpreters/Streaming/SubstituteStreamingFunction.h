@@ -3,6 +3,8 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Parsers/ASTFunction.h>
 
+#include <Poco/String.h>
+
 namespace DB
 {
 namespace Streaming
@@ -32,7 +34,7 @@ private:
     /// check whether or not the function support 'retract' for changelog:
     /// the 1st return value: indicates whether or not it support retract
     /// the 2nd return value: the alias name of function should be rewritten in the query, empty if not support changelog
-    std::optional<String> supportChangelog(const String & function_name);
+    std::optional<String> supportChangelog(const String & func_name, const String & func_name_lower);
 };
 
 using SubstituteStreamingFunctionVisitor

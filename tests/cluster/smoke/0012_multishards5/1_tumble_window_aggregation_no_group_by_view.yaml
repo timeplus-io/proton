@@ -1,0 +1,224 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_aggregation
+- window_aggregation
+- tumble_window_aggregation
+- no_group_by
+- stateful_function
+description: tumble window aggregation no group by, view
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_5(i float, k int, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create view test13_view1_5 as
+      select i+2 as i,
+             k,
+             timestamp
+      from test13_multishard_5;
+  
+  - type: wait
+    time: 1
+  
+  - name: '1341'
+    type: stream
+    query: |
+      select max(i),
+             min(i),
+             avg(i),
+             count(i),
+             sum(i),
+             median(i),
+             window_start as s
+      from tumble(test13_view1_5 ,timestamp, 5s)
+      group by window_start,
+               window_end;
+    schema:
+        - name: max(i)
+          type: float64
+        - name: min(i)
+          type: float64
+        - name: avg(i)
+          type: float64
+        - name: count(i)
+          type: uint64
+        - name: sum(i)
+          type: float64
+        - name: quantile(i)
+          type: float64
+        - name: s
+          type: datetime64(3)
+          
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(0, 0, '2021-11-02 20:00:01');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(1, 1, '2021-11-02 20:00:01');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(2, 0, '2021-11-02 20:00:03');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(3, 1, '2021-11-02 20:00:04');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(4, 0, '2021-11-02 20:00:05');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(5, 1, '2021-11-02 20:00:06');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(6, 0, '2021-11-02 20:00:07');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(7, 1, '2021-11-02 20:00:08');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(8, 0, '2021-11-02 20:00:09');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(9, 1, '2021-11-02 20:00:10');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(10, 0, '2021-11-02 20:00:11');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(10, 0, '2021-11-02 20:00:12');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(10, 0, '2021-11-02 20:00:13');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(10, 0, '2021-11-02 20:00:14');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k, timestamp)
+      values(10, 0, '2021-11-02 20:00:14');
+
+  - type: check
+    target_name: '1341'
+    expected_result:
+    - [5, 2, 3.5, 4, 14, 3.5, '2021-11-02 20:00:00']
+    - [10, 6, 8, 5, 40, 8, '2021-11-02 20:00:05']

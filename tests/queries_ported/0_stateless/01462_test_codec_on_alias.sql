@@ -16,10 +16,10 @@ CREATE STREAM compression_codec_on_alias (
 
 select 'alter stream compression_codec_on_alias add column (ALIAS type) with CODEC';
 
-ALTER STREAM compression_codec_on_alias ADD COLUMN `c3` ALIAS c2 CODEC(ZSTD) AFTER c2; -- { serverError 36 }
+ALTER STREAM compression_codec_on_alias ADD COLUMN `c3` ALIAS c2 CODEC(ZSTD) AFTER c2; -- { clientError 62 }
 
 select 'alter stream compression_codec_on_alias add column (NOT ALIAS type) with CODEC';
 
-ALTER STREAM compression_codec_on_alias ADD COLUMN c2 uint64 CODEC(ZSTD) AFTER c1; -- success
+ALTER STREAM compression_codec_on_alias ADD COLUMN c2 uint64 CODEC(ZSTD) AFTER c1; -- { clientError 62 }
 
 DROP STREAM IF EXISTS compression_codec_on_alias;

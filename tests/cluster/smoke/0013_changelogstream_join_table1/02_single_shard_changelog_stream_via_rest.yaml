@@ -1,0 +1,36 @@
+tags:
+  - changelog_stream
+  - restapi
+description: single shard changelog stream creation via rest
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists changelog_stream_rest
+  - type: wait
+    time: 1
+    
+  - type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    name: 1
+    query_id: 14105
+    url: /proton/v1/ddl/streams
+    method: POST
+    data:
+      name: changelog_stream_rest
+      columns:
+        - name: i
+          type: int
+      mode: changelog
+
+  - type: check
+    target_name: 1
+    expected_result:
+      - request_id: "14105"

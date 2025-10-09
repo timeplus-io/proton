@@ -9,5 +9,7 @@ namespace StreamTypes
     const String PULSAR = "pulsar";
     const String TIMEPLUS = "timeplus";
     const String LOG = "log";
+    const String ICEBERG = "iceberg";
+    const String HTTP = "http";
 }
 }

@@ -1,0 +1,141 @@
+tags:
+  - restapi
+  - ddl
+description: create append_only, changelog, changelog_kv stream in node p1, insert stream in node p2, select * from node p3
+cluster:
+  - p3k1
+  - p1k1
+steps:
+  - type: rest
+    url: /proton/v1/ddl/streams/append_only_stream_rest
+    method: DELETE
+
+  - type: rest
+    url: /proton/v1/ddl/streams/changelog_stream_rest
+    method: DELETE
+
+  - type: rest
+    url: /proton/v1/ddl/streams/changelog_kv_stream_rest
+    method: DELETE
+
+  - type: wait
+    time: 1
+
+  - type: rest
+    url: /proton/v1/ddl/streams
+    method: POST
+    data:
+      name: append_only_stream_rest
+      type: table
+      columns:
+        - name: i
+          type: int32
+        - name: k
+          type: string
+        - name: timestamp
+          type: datetime64(3)
+          default: now64(3)
+      event_time_column: timestamp
+
+  - type: rest
+    url: /proton/v1/ddl/streams
+    method: POST
+    data:
+      name: changelog_stream_rest
+      columns:
+        - name: i
+          type: int32
+        - name: k
+          type: string
+      mode: changelog
+
+  - type: rest
+    url: /proton/v1/ddl/streams
+    method: POST
+    data:
+      name: changelog_kv_stream_rest
+      columns:
+        - name: i
+          type: int32
+        - name: k
+          type: string
+      mode: changelog_kv
+      primary_key: k
+
+  - type: wait
+    time: 2
+
+  - name: rest-5-2
+    type: stream
+    query: select i, k, timestamp from append_only_stream_rest
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+
+  - name: rest-5-3
+    type: stream
+    query: select i, k, _tp_delta from changelog_stream_rest
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - name: rest-5-4
+    type: stream
+    query: select i, k, _tp_delta from changelog_kv_stream_rest
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into append_only_stream_rest (i, k, timestamp) values (1, 's1', '1999-01-01 11:11:11')
+
+  - type: query
+    sql: insert into append_only_stream_rest (i, k, timestamp) values (2, 's2', '1999-01-02 11:22:22')
+
+  - type: query
+    sql: insert into changelog_stream_rest (i, k) values (1, 's1')
+
+  - type: query
+    sql: insert into changelog_stream_rest (i, k) values (2, 's2')
+
+  - type: query
+    sql: insert into changelog_kv_stream_rest (i, k) values (1, 's1')
+
+  - type: query
+    sql: insert into changelog_kv_stream_rest (i, k) values (2, 's2')
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: rest-5-2
+    expected_result:
+      - [1, 's1', '1999-01-01 11:11:11']
+      - [2, 's2', '1999-01-02 11:22:22']
+
+  - type: check
+    target_name: rest-5-3
+    expected_result:
+      - [1, 's1', 1]
+      - [2, 's2', 1]
+
+  - type: check
+    target_name: rest-5-4
+    expected_result:
+      - [1, 's1', 1]
+      - [2, 's2', 1]

@@ -1,9 +1,9 @@
-#include <Parsers/CommonParsers.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/CommonParsers.h>
 #include <Parsers/ParserCreateExternalTableQuery.h>
-#include <Parsers/ParserSetQuery.h>
+#include <Parsers/ParserCreateQuery.h>
 
 namespace DB
 {
@@ -22,7 +22,7 @@ ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
 }
 }
 
-bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_attach("ATTACH");
@@ -31,11 +31,18 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserKeyword s_settings("SETTINGS");
 
+    ParserToken s_lparen(TokenType::OpeningRoundBracket);
+    ParserToken s_rparen(TokenType::ClosingRoundBracket);
+
+    ParserTablePropertiesDeclarationList table_properties_p;
+
+    ParserStorage storage_p;
+
     ParserCompoundIdentifier table_name_p(true, true);
-    ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
 
     ASTPtr table;
-    ASTPtr settings;
+    ASTPtr columns_list;
+    ASTPtr storage;
 
     bool attach = false;
     bool or_replace = false;
@@ -60,19 +67,41 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     if (!table_name_p.parse(pos, table, expected))
         return false;
 
-    if (s_settings.ignore(pos, expected))
+    /// Columns
+    if (s_lparen.ignore(pos, expected))
     {
-        if (!settings_p.parse(pos, settings, expected))
+        if (!table_properties_p.parse(pos, columns_list, expected))
+            return false;
+
+        if (!s_rparen.ignore(pos, expected))
             return false;
     }
+
+    storage_p.parse(pos, storage, expected);
+
+    if (!storage)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Failed to parse SETTINGS in CREATE EXTERNAL TABLE.");
+
+    auto * storage_ast = storage->as<ASTStorage>();
+    if (storage_ast == nullptr || storage_ast->settings == nullptr)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "SETTINGS is required in CREATE EXTERNAL TABLE.");
+
+    if (storage_ast->engine != nullptr)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "ENGINE is not allowed in CREATE EXTERNAL TABLE.");
+
+    storage_ast->set(storage_ast->engine, makeASTFunction("ExternalTable"));
 
     auto comment = parseComment(pos, expected);
 
     auto create_query = std::make_shared<ASTCreateQuery>();
     node = create_query;
 
-    create_query->is_external = true;
-    create_query->create_or_replace = or_replace;
+    create_query->type = ASTCreateQuery::Type::ExternalTable;
+
+    /// proton : starts, we don't support replace / create or replace table for now
+    // create_query->create_or_replace = or_replace;
+    /// proton : ends
+
     create_query->if_not_exists = if_not_exists;
 
     auto * table_id = table->as<ASTTableIdentifier>();
@@ -88,13 +117,11 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     if (create_query->table)
         create_query->children.push_back(create_query->table);
 
+    create_query->set(create_query->columns_list, columns_list);
+    create_query->set(create_query->storage, storage);
+
     if (comment)
         create_query->set(create_query->comment, comment);
-
-    auto storage = std::make_shared<ASTStorage>();
-    storage->set(storage->engine, makeASTFunction("ExternalTable"));
-    storage->set(storage->settings, settings);
-    create_query->set(create_query->storage, storage);
 
     return true;
 }

@@ -1,0 +1,24 @@
+tags:
+- create random
+description: create random stream with default generating function, limit the amount
+  of data produced per window, set an invalid interval_time
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- name: '2223'
+  type: stream
+  query: create random stream test22_create_random(id int default rand()%4) engine Random()
+    settings eps=1000, interval_time=0
+- type: wait
+  time: 2
+
+- type: check
+  target_name: '2223'
+  expected_result:
+  - ["error_code:471"]

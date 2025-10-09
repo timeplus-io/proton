@@ -1,0 +1,103 @@
+description: |
+  Test sling data clean multiple streams
+  Main Steps:
+    1.Create 2 stream
+    2.Ingest data
+    3.Clean data with sling clean-partitions command
+    4.Check no data in 2 stream
+
+cluster:
+  - p1s1
+  - p3s1
+
+steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS trade1;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS trade2;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM trade1
+      (
+          trade_id uint64,
+          tradedate int64,
+          source string,
+          symbol string,
+          price float64,
+          quantity int32,
+          trade_type string,
+          trader_id string
+      )
+      PARTITION BY (tradedate, source)
+      ORDER BY (tradedate, symbol);
+
+  - type: query
+    sql: |
+      CREATE STREAM trade2
+      (
+          trade_id uint64,
+          tradedate int64,
+          source string,
+          symbol string,
+          price float64,
+          quantity int32,
+          trade_type string,
+          trader_id string
+      )
+      PARTITION BY (tradedate, source)
+      ORDER BY (tradedate, symbol);
+
+  - type: wait
+    time: 4
+
+  - type: query
+    sql: |
+      INSERT INTO trade1(trade_id, tradedate, source, symbol, price, quantity, trade_type, trader_id) VALUES
+      (1002, format_DateTime(now(), '%Y%m%d'),'SNAP','GOOGL',140.25,50,'Sell','TRADER002');
+
+  - type: query
+    sql: |
+      INSERT INTO trade2(trade_id, tradedate, source, symbol, price, quantity, trade_type, trader_id) VALUES
+      (1002, format_DateTime(now(), '%Y%m%d'),'SNAP','GOOGL',140.25,50,'Sell','TRADER002');
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [sling]
+    shell: sling clean-partitions -c ~/.sling/config/0002_00.yaml
+
+  - type: wait
+    time: 2
+
+  - name: sling-0-1
+    type: stream
+    query: SELECT trade_id FROM table(trade1);
+    schema:
+      - name: trade_id
+        type: uint64
+
+  - name: sling-0-2
+    type: stream
+    query: SELECT trade_id FROM table(trade2);
+    schema:
+      - name: trade_id
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: sling-0-1
+    expected_result:
+      - []
+
+  - type: check
+    target_name: sling-0-2
+    expected_result:
+      - []

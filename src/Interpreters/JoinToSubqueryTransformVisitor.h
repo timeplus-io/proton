@@ -20,6 +20,9 @@ public:
     {
         const std::vector<TableWithColumnNamesAndTypes> & tables;
         const Aliases & aliases;
+        /// proton: starts.
+        bool join_result_emit_changelog = false;
+        /// proton: ends.
         bool done = false;
     };
 

@@ -1,10 +1,8 @@
-#include "BlockUtils.h"
+#include <Interpreters/Streaming/BlockUtils.h>
 
 #include <Columns/ColumnsNumber.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypeString.h>
-#include <Databases/DatabaseFactory.h>
 #include <Interpreters/Context.h>
 #include <Common/logger_useful.h>
 #include <Common/typeid_cast.h>
@@ -13,7 +11,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int OK;
+extern const int OK;
 }
 
 namespace Streaming

@@ -1,0 +1,86 @@
+tags:
+- table_func_changelog
+description: tail query from table function changelog(view)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists v_compute_income;
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists hourly_cpu_usage;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream hourly_cpu_usage (id int, max_cpu int, rate float);
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into hourly_cpu_usage (id, max_cpu, rate) values
+  schema:
+  - name: id
+    type: int32
+  - name: max_cpu
+    type: int32
+  - name: rate
+    type: float32
+  inputs:
+  - [1, 2, 0.24]
+
+- type: query
+  sql: create view v_compute_income as SELECT id, max_cpu * rate FROM hourly_cpu_usage
+    WHERE _tp_time > earliest_ts();
+- type: wait
+  time: 1
+
+- name: '2810'
+  type: stream
+  query: SELECT * FROM changelog(v_compute_income, id);
+  schema:
+  - name: id
+    type: int32
+  - name: multiply(max_cpu, rate)
+    type: float64
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into hourly_cpu_usage (id, max_cpu, rate) values
+  schema:
+  - name: id
+    type: int32
+  - name: max_cpu
+    type: int32
+  - name: rate
+    type: float32
+  inputs:
+  - [2, 4, 0.48]
+
+- type: query
+  sql: insert into hourly_cpu_usage (id, max_cpu, rate) values
+  schema:
+  - name: id
+    type: int32
+  - name: max_cpu
+    type: int32
+  - name: rate
+    type: float32
+  inputs:
+  - [1, 6, 0.72]
+
+- type: query
+  sql: drop view if exists v_compute_income
+- type: check
+  target_name: '2810'
+  expected_result:
+  - [1, 0.48, 1]
+  - [2, 1.92, 1]
+  - [1, 0.48, -1]
+  - [1, 4.32, 1]

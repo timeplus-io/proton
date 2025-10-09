@@ -1,0 +1,30 @@
+tags:
+  - bool
+description: check finite, nan
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - name: '801'
+    type: stream
+    query: SELECT 1/0 as infimum, is_finite(infimum), is_infinite(infimum), if_not_finite(infimum,
+      42), is_nan(NaN)
+    schema:
+      - name: infimum
+        type: float64
+      - name: is_finite(divide(1, 0))
+        type: bool
+      - name: is_infinite(divide(1, 0))
+        type: bool
+      - name: if_not_finite(divide(1, 0), 42)
+        type: float64
+      - name: is_nan(nan)
+        type: bool
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ inf, 'False', 'True', 42, 'True' ]

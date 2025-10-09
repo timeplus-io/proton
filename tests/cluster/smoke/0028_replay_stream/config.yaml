@@ -1,0 +1,5 @@
+name: replay_stream
+description: Tests covering tail query with different replay speed, ail query from
+  the data with different ingest interval To check result and actual output interval
+tags:
+- smoke

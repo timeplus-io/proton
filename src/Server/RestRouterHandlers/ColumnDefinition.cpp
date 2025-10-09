@@ -36,7 +36,7 @@ String getCreateColumnDefinition(const Poco::JSON::Object::Ptr & column)
         }
     }
     else if (column->has("alias"))
-        column_definition.push_back(fmt::format(" ALIAS `{}`", column->get("alias").toString()));
+        column_definition.push_back(fmt::format(" ALIAS {}", column->get("alias").toString()));
 
     if (column->has("comment"))
         column_definition.push_back(fmt::format(" COMMENT '{}'", column->get("comment").toString()));
@@ -110,5 +110,4 @@ String getUpdateColumnDefinition(
 
     return boost::algorithm::join(update_segments, " ");
 }
-
 }

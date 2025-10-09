@@ -1,12 +1,11 @@
-#include "TableFunctionHist.h"
+#include <TableFunctions/TableFunctionHist.h>
 
-#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTFunction.h>
-#include <Storages/IStorage.h>
+#include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
-#include <Storages/Streaming/storageUtil.h>
+#include <Storages/Stream/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
 namespace DB
@@ -26,13 +25,13 @@ TableFunctionHist::TableFunctionHist(const String & name_) : TableFunctionProxyB
 void TableFunctionHist::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
     if (func_ast->children.size() != 1)
-        throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     /// table(table_id)
     auto * node = func_ast->as<ASTFunction>();
     ASTs & args = node->arguments->children;
     if (args.size() != 1)
-        throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     /// First argument is expected to be table or table function
     resolveStorageID(args[0], context);
@@ -73,9 +72,14 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
         }
         else if (!storage->supportsStreamingQuery())
             throw Exception(
-                ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getNameForLogs());
+                ErrorCodes::BAD_ARGUMENTS, "table function can't be applied to {} '{}'", storage->getName(), storage_id.getFullTableName());
 
-        underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+        /// Use the target table's metadata because columns are always read from the target table of the materialized view
+        if (auto * mv = storage->as<StorageMaterializedView>())
+            underlying_storage_snapshot = mv->getStorageSnapshot(mv->getTargetInMemoryMetadataPtr(), context);
+        else
+            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+
         columns = underlying_storage_snapshot->getMetadataForQuery()->getColumns();
         data_stream_semantic = storage->dataStreamSemantic();
         return storage;
@@ -91,7 +95,7 @@ void registerTableFunctionHist(TableFunctionFactory & factory)
             {},
         },
         TableFunctionFactory::CaseSensitive,
-        /*support subquery*/ true);
+        /*support_subquery=*/true);
 }
 }
 }

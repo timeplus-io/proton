@@ -1,21 +1,20 @@
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <map>
+#include <mutex>
+#include <vector>
+#include <base/scope_guard.h>
+#include <boost/noncopyable.hpp>
 #include <Poco/Notification.h>
 #include <Poco/NotificationQueue.h>
 #include <Poco/Timestamp.h>
-#include <thread>
-#include <atomic>
-#include <mutex>
-#include <condition_variable>
-#include <vector>
-#include <map>
-#include <functional>
-#include <boost/noncopyable.hpp>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
-#include <Common/ThreadPool.h>
-#include <base/scope_guard.h>
-
+#include <Common/ThreadPool_fwd.h>
+#include <Core/BackgroundSchedulePoolTaskHolder.h>
 
 namespace DB
 {
@@ -55,7 +54,9 @@ public:
     ~BackgroundSchedulePool();
 
 private:
-    using Threads = std::vector<ThreadFromGlobalPool>;
+    /// BackgroundSchedulePool schedules a task on its own task queue, there's no need to construct/restore tracing context on this level.
+    /// This is also how ThreadPool class treats the tracing context. See ThreadPool for more information.
+    using Threads = std::vector<ThreadFromGlobalPoolNoTracingContextPropagation>;
 
     void threadFunction();
     void delayExecutionThreadFunction();
@@ -77,17 +78,12 @@ private:
     std::condition_variable wakeup_cond;
     std::mutex delayed_tasks_mutex;
     /// Thread waiting for next delayed task.
-    ThreadFromGlobalPool delayed_thread;
+    std::unique_ptr<ThreadFromGlobalPoolNoTracingContextPropagation> delayed_thread;
     /// Tasks ordered by scheduled time.
     DelayedTasks delayed_tasks;
 
-    /// Thread group used for profiling purposes
-    ThreadGroupStatusPtr thread_group;
-
     CurrentMetrics::Metric tasks_metric;
     std::string thread_name;
-
-    [[nodiscard]] scope_guard attachToThreadGroup();
 };
 
 
@@ -140,31 +136,5 @@ private:
 };
 
 using BackgroundSchedulePoolTaskInfoPtr = std::shared_ptr<BackgroundSchedulePoolTaskInfo>;
-
-
-class BackgroundSchedulePoolTaskHolder
-{
-public:
-    BackgroundSchedulePoolTaskHolder() = default;
-    explicit BackgroundSchedulePoolTaskHolder(const BackgroundSchedulePoolTaskInfoPtr & task_info_) : task_info(task_info_) {}
-    BackgroundSchedulePoolTaskHolder(const BackgroundSchedulePoolTaskHolder & other) = delete;
-    BackgroundSchedulePoolTaskHolder(BackgroundSchedulePoolTaskHolder && other) noexcept = default;
-    BackgroundSchedulePoolTaskHolder & operator=(const BackgroundSchedulePoolTaskHolder & other) noexcept = delete;
-    BackgroundSchedulePoolTaskHolder & operator=(BackgroundSchedulePoolTaskHolder && other) noexcept = default;
-
-    ~BackgroundSchedulePoolTaskHolder()
-    {
-        if (task_info)
-            task_info->deactivate();
-    }
-
-    operator bool() const { return task_info != nullptr; }
-
-    BackgroundSchedulePoolTaskInfo * operator->() { return task_info.get(); }
-    const BackgroundSchedulePoolTaskInfo * operator->() const { return task_info.get(); }
-
-private:
-    BackgroundSchedulePoolTaskInfoPtr task_info;
-};
 
 }

@@ -21,6 +21,8 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings) override;
 
 private:
+    void updateOutputStream() override;
+
     TimestampFunctionDescriptionPtr timestamp_func_desc;
     bool backfill;
 };

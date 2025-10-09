@@ -5,6 +5,10 @@
 #ifdef __SSE2__
 #include <emmintrin.h>
 
+#if defined(__aarch64__) && defined(__ARM_NEON)
+#    include <arm_neon.h>
+#      pragma clang diagnostic ignored "-Wreserved-identifier"
+#endif
 
 /** memcpy function could work suboptimal if all the following conditions are met:
   * 1. Size of memory region is relatively small (approximately, under 50 bytes).

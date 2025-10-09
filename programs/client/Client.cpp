@@ -1,9 +1,11 @@
+#include <boost/algorithm/string/join.hpp>
 #include <cstdlib>
 #include <fcntl.h>
 #include <map>
 #include <iostream>
 #include <iomanip>
 #include <optional>
+#include <string_view>
 #include <Common/scope_guard_safe.h>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -12,15 +14,12 @@
 #include "Client.h"
 #include "Core/Protocol.h"
 
-#include <base/find_symbols.h>
-
-#include "config_version.h"
+#include <Common/config_version.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <Common/TerminalSize.h>
 #include <Common/Config/configReadClient.h>
 
-#include <Core/QueryProcessingStage.h>
 #include <Client/TestHint.h>
 #include <Columns/ColumnString.h>
 #include <Poco/Util/Application.h>
@@ -38,8 +37,6 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 
-#include <Interpreters/InterpreterSetQuery.h>
-
 #include <Functions/registerFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Formats/registerFormats.h>
@@ -50,6 +47,7 @@
 #endif
 
 namespace fs = std::filesystem;
+using namespace std::literals;
 
 
 namespace DB
@@ -209,7 +207,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
                 {
                     // Surprisingly, this is a client error. A server error would
                     // have been reported w/o throwing (see onReceiveSeverException()).
-                    client_exception = std::make_unique<Exception>(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
+                    client_exception = std::make_unique<Exception>(getCurrentExceptionMessageAndPattern(print_stack_trace), getCurrentExceptionCode());
                     have_error = true;
                 }
                 // Check whether the error (or its absence) matches the test hints
@@ -288,7 +286,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
                 // , where the inline data is delimited by semicolon and not by a
                 // newline.
                 auto * insert_ast = parsed_query->as<ASTInsertQuery>();
-                if (insert_ast && insert_ast->data)
+                if (insert_ast && isSyncInsertWithData(*insert_ast, global_context))
                 {
                     this_query_end = insert_ast->end;
                     adjustQueryEnd(this_query_end, all_queries_end, static_cast<UInt32>(global_context->getSettingsRef().max_parser_depth.value));
@@ -493,48 +491,79 @@ catch (...)
 
 void Client::connect()
 {
-    connection_parameters = ConnectionParameters(config());
-
-    if (is_interactive)
-        std::cout << "Connecting to "
-                    << (!connection_parameters.default_database.empty() ? "database " + connection_parameters.default_database + " at "
-                                                                        : "")
-                    << connection_parameters.host << ":" << connection_parameters.port
-                    << (!connection_parameters.user.empty() ? " as user " + connection_parameters.user : "") << "." << std::endl;
-
     String server_name;
     UInt64 server_version_major = 0;
     UInt64 server_version_minor = 0;
     UInt64 server_version_patch = 0;
 
-    try
+    if (hosts_and_ports.empty())
     {
-        connection = Connection::createConnection(connection_parameters, global_context);
-
-        if (max_client_network_bandwidth)
-        {
-            ThrottlerPtr throttler = std::make_shared<Throttler>(max_client_network_bandwidth, 0, "");
-            connection->setThrottler(throttler);
-        }
-
-        connection->getServerVersion(
-            connection_parameters.timeouts, server_name, server_version_major, server_version_minor, server_version_patch, server_revision);
+        String host = config().getString("host", "localhost");
+        UInt16 port = ConnectionParameters::getPortFromConfig(config());
+        hosts_and_ports.emplace_back(HostAndPort{host, port});
     }
-    catch (const Exception & e)
-    {
-        /// It is typical when users install ClickHouse, type some password and instantly forget it.
-        if ((connection_parameters.user.empty() || connection_parameters.user == "default")
-            && e.code() == DB::ErrorCodes::AUTHENTICATION_FAILED)
-        {
-            std::cerr << std::endl
-                << "If you have installed proton and forgot password you can reset it in the configuration file." << std::endl
-                << "The password for default user is typically located at /etc/proton-server/users.d/default-password.xml" << std::endl
-                << "and deleting this file will reset the password." << std::endl
-                << "See also /etc/proton-server/users.xml on the server where proton is installed." << std::endl
-                << std::endl;
-        }
 
-        throw;
+    for (size_t attempted_address_index = 0; attempted_address_index < hosts_and_ports.size(); ++attempted_address_index)
+    {
+        try
+        {
+            connection_parameters = ConnectionParameters(
+                config(), hosts_and_ports[attempted_address_index].host, hosts_and_ports[attempted_address_index].port);
+
+            if (is_interactive)
+                std::cout << "Connecting to "
+                          << (!connection_parameters.default_database.empty() ? "database " + connection_parameters.default_database + " at "
+                                                                              : "")
+                          << connection_parameters.host << ":" << connection_parameters.port
+                          << (!connection_parameters.user.empty() ? " as user " + connection_parameters.user : "") << "." << std::endl;
+
+            connection = Connection::createConnection(connection_parameters, global_context);
+
+            if (max_client_network_bandwidth)
+            {
+                ThrottlerPtr throttler = std::make_shared<Throttler>(max_client_network_bandwidth, 0, "");
+                connection->setThrottler(throttler);
+            }
+
+            connection->getServerVersion(
+                connection_parameters.timeouts, server_name, server_version_major, server_version_minor, server_version_patch, server_revision);
+            config().setString("host", connection_parameters.host);
+            config().setInt("port", connection_parameters.port);
+            break;
+        }
+        catch (const Exception & e)
+        {
+            /// It is typical when users install proton , type some password and instantly forget it.
+            /// This problem can't be fixed with reconnection so it is not attempted
+            if ((connection_parameters.user.empty() || connection_parameters.user == "default")
+                && e.code() == DB::ErrorCodes::AUTHENTICATION_FAILED)
+            {
+                std::cerr << std::endl
+                          << "If you have installed proton and forgot password you can reset it in the configuration file." << std::endl
+                          << "The password for default user is typically located at /etc/proton-server/users.d/default-password.xml" << std::endl
+                          << "and deleting this file will reset the password." << std::endl
+                          << "See also /etc/proton-server/users.xml on the server where proton is installed." << std::endl
+                          << std::endl;
+                throw;
+            }
+            else
+            {
+                if (attempted_address_index == hosts_and_ports.size() - 1)
+                    throw;
+
+                if (is_interactive)
+                {
+                    std::cerr << "Connection attempt to database at "
+                              << connection_parameters.host << ":" << connection_parameters.port
+                              << " resulted in failure"
+                              << std::endl
+                              << getExceptionMessage(e, false)
+                              << std::endl
+                              << "Attempting connection to the next provided address"
+                              << std::endl;
+                }
+            }
+        }
     }
 
     server_version = toString(server_version_major) + "." + toString(server_version_minor) + "." + toString(server_version_patch);
@@ -628,24 +657,28 @@ void Client::connect()
 // Prints changed settings to stderr. Useful for debugging fuzzing failures.
 void Client::printChangedSettings() const
 {
-    const auto & changes = global_context->getSettingsRef().changes();
-    if (!changes.empty())
+    auto print_changes = [](const auto & changes, std::string_view settings_name)
     {
-        fmt::print(stderr, "Changed settings: ");
-        for (size_t i = 0; i < changes.size(); ++i)
+        if (!changes.empty())
         {
-            if (i)
+            fmt::print(stderr, "Changed {}: ", settings_name);
+            for (size_t i = 0; i < changes.size(); ++i)
             {
-                fmt::print(stderr, ", ");
+                if (i)
+                    fmt::print(stderr, ", ");
+                fmt::print(stderr, "{} = '{}'", changes[i].name, toString(changes[i].value));
             }
-            fmt::print(stderr, "{} = '{}'", changes[i].name, toString(changes[i].value));
+
+            fmt::print(stderr, "\n");
         }
-        fmt::print(stderr, "\n");
-    }
-    else
-    {
-        fmt::print(stderr, "No changed settings.\n");
-    }
+        else
+        {
+            fmt::print(stderr, "No changed {}.\n", settings_name);
+        }
+    };
+
+    print_changes(global_context->getSettingsRef().changes(), "settings");
+    print_changes(cmd_merge_tree_settings.changes(), "MergeTree settings");
 }
 
 
@@ -775,7 +808,7 @@ bool Client::processWithFuzzing(const String & full_query)
 
                 WriteBufferFromOStream cerr_buf(std::cerr, 4096);
                 fuzz_base->dumpTree(cerr_buf);
-                cerr_buf.next();
+                cerr_buf.finalize();
 
                 fmt::print(
                     stderr,
@@ -802,7 +835,7 @@ bool Client::processWithFuzzing(const String & full_query)
             // uniformity.
             // Surprisingly, this is a client exception, because we get the
             // server exception w/o throwing (see onReceiveException()).
-            client_exception = std::make_unique<Exception>(getCurrentExceptionMessage(print_stack_trace), getCurrentExceptionCode());
+            client_exception = std::make_unique<Exception>(getCurrentExceptionMessageAndPattern(print_stack_trace), getCurrentExceptionCode());
             have_error = true;
         }
 
@@ -969,6 +1002,7 @@ void Client::printHelpMessage(const OptionsDescription & options_description)
 {
     std::cout << options_description.main_description.value() << "\n";
     std::cout << options_description.external_description.value() << "\n";
+    std::cout << options_description.hosts_and_ports_description.value() << "\n";
     std::cout << "In addition, --param_name=value can be specified for substitution of parameters for parametrized queries.\n";
 }
 
@@ -978,8 +1012,6 @@ void Client::addOptions(OptionsDescription & options_description)
     /// Main commandline options related to client functionality and all parameters from Settings.
     options_description.main_description->add_options()
         ("config,c", po::value<std::string>(), "config-file path (another shorthand)")
-        ("host,h", po::value<std::string>()->default_value("localhost"), "server host")
-        ("port", po::value<int>()->default_value(8463), "server port")
         ("secure,s", "Use TLS connection")
         ("user,u", po::value<std::string>()->default_value("default"), "user")
         /** If "--password [value]" is used but the value is omitted, the bad argument exception will be thrown.
@@ -1025,12 +1057,24 @@ void Client::addOptions(OptionsDescription & options_description)
     (
         "types", po::value<std::string>(), "types"
     );
+
+    /// Commandline options related to hosts and ports.
+    options_description.hosts_and_ports_description.emplace(createOptionsDescription("Hosts and ports options", terminal_width));
+    options_description.hosts_and_ports_description->add_options()
+        ("host,h", po::value<String>()->default_value("localhost"),
+         "Server hostname. Multiple hosts can be passed via multiple arguments"
+         "Example of usage: '--host host1 --host host2 --port port2 --host host3 ...'"
+         "Each '--port port' will be attached to the last seen host that doesn't have a port yet,"
+         "if there is no such host, the port will be attached to the next first host or to default host.")
+         ("port", po::value<UInt16>(), "server ports")
+    ;
 }
 
 
 void Client::processOptions(const OptionsDescription & options_description,
                             const CommandLineOptions & options,
-                            const std::vector<Arguments> & external_tables_arguments)
+                            const std::vector<Arguments> & external_tables_arguments,
+                            const std::vector<Arguments> & hosts_and_ports_arguments)
 {
     namespace po = boost::program_options;
 
@@ -1049,7 +1093,7 @@ void Client::processOptions(const OptionsDescription & options_description,
             if (external_tables.back().file == "-")
                 ++number_of_external_tables_with_stdin_source;
             if (number_of_external_tables_with_stdin_source > 1)
-                throw Exception("Two or more external tables has stdin (-) set as --file field", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Two or more external tables has stdin (-) set as --file field");
         }
         catch (const Exception & e)
         {
@@ -1062,6 +1106,21 @@ void Client::processOptions(const OptionsDescription & options_description,
             exit(exit_code); /// NOLINT(concurrency-mt-unsafe)
         }
     }
+
+    for (const auto & hosts_and_ports_argument : hosts_and_ports_arguments)
+    {
+        /// Parse commandline options related to external tables.
+        po::parsed_options parsed_hosts_and_ports
+            = po::command_line_parser(hosts_and_ports_argument).options(options_description.hosts_and_ports_description.value()).run();
+        po::variables_map host_and_port_options;
+        po::store(parsed_hosts_and_ports, host_and_port_options);
+        std::string host = host_and_port_options["host"].as<std::string>();
+        std::optional<UInt16> port = !host_and_port_options["port"].empty()
+                                     ? std::make_optional(host_and_port_options["port"].as<UInt16>())
+                                     : std::nullopt;
+        hosts_and_ports.emplace_back(HostAndPort{host, port});
+    }
+
     send_external_tables = true;
 
     shared_context = Context::createShared();
@@ -1078,20 +1137,21 @@ void Client::processOptions(const OptionsDescription & options_description,
     {
         const auto & name = setting.getName();
         if (options.count(name))
-            config().setString(name, options[name].as<String>());
+        {
+            if (allow_repeated_settings)
+                config().setString(name, options[name].as<Strings>().back());
+            else
+                config().setString(name, options[name].as<String>());
+        }
     }
 
     if (options.count("config-file") && options.count("config"))
-        throw Exception("Two or more configuration files referenced in arguments", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Two or more configuration files referenced in arguments");
 
     if (options.count("config"))
         config().setString("config-file", options["config"].as<std::string>());
-    if (options.count("host") && !options["host"].defaulted())
-        config().setString("host", options["host"].as<std::string>());
     if (options.count("interleave-queries-file"))
         interleave_queries_files = options["interleave-queries-file"].as<std::vector<std::string>>();
-    if (options.count("port") && !options["port"].defaulted())
-        config().setInt("port", options["port"].as<int>());
     if (options.count("secure"))
         config().setBool("secure", true);
     if (options.count("user") && !options["user"].defaulted())
@@ -1191,11 +1251,165 @@ void Client::processConfig()
     client_info.quota_key = config().getString("quota_key", "");
 }
 
+
+void Client::readArguments(
+    int argc,
+    char ** argv,
+    Arguments & common_arguments,
+    std::vector<Arguments> & external_tables_arguments,
+    std::vector<Arguments> & hosts_and_ports_arguments)
+{
+    /** We allow different groups of arguments:
+        * - common arguments;
+        * - arguments for any number of external tables each in form "--external args...",
+        *   where possible args are file, name, format, structure, types;
+        * - param arguments for prepared statements.
+        * Split these groups before processing.
+        */
+    bool in_external_group = false;
+
+    std::string prev_host_arg;
+    std::string prev_port_arg;
+
+    for (int arg_num = 1; arg_num < argc; ++arg_num)
+    {
+        std::string_view arg = argv[arg_num];
+
+        if (arg == "--external")
+        {
+            in_external_group = true;
+            external_tables_arguments.emplace_back(Arguments{""});
+        }
+        /// Options with value after equal sign.
+        else if (
+            in_external_group
+            && (arg.starts_with("--file=") || arg.starts_with("--name=") || arg.starts_with("--format=") || arg.starts_with("--structure=")
+                || arg.starts_with("--types=")))
+        {
+            external_tables_arguments.back().emplace_back(arg);
+        }
+        /// Options with value after whitespace.
+        else if (in_external_group && (arg == "--file" || arg == "--name" || arg == "--format" || arg == "--structure" || arg == "--types"))
+        {
+            if (arg_num + 1 < argc)
+            {
+                external_tables_arguments.back().emplace_back(arg);
+                ++arg_num;
+                arg = argv[arg_num];
+                external_tables_arguments.back().emplace_back(arg);
+            }
+            else
+                break;
+        }
+        else
+        {
+            in_external_group = false;
+            if (arg == "--file"sv || arg == "--name"sv || arg == "--structure"sv || arg == "--types"sv)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter must be in external group, try add --external before {}", arg);
+
+            /// Parameter arg after underline.
+            if (arg.starts_with("--param_"))
+            {
+                auto param_continuation = arg.substr(strlen("--param_"));
+                auto equal_pos = param_continuation.find_first_of('=');
+
+                if (equal_pos == std::string::npos)
+                {
+                    /// param_name value
+                    ++arg_num;
+                    if (arg_num >= argc)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter requires value");
+                    arg = argv[arg_num];
+                    query_parameters.emplace(String(param_continuation), String(arg));
+                }
+                else
+                {
+                    if (equal_pos == 0)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter name cannot be empty");
+
+                    /// param_name=value
+                    query_parameters.emplace(param_continuation.substr(0, equal_pos), param_continuation.substr(equal_pos + 1));
+                }
+            }
+            else if (arg.starts_with("--host") || arg.starts_with("-h"))
+            {
+                std::string host_arg;
+                /// --host host
+                if (arg == "--host" || arg == "-h")
+                {
+                    ++arg_num;
+                    if (arg_num >= argc)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Host argument requires value");
+                    arg = argv[arg_num];
+                    host_arg = "--host=";
+                    host_arg.append(arg);
+                }
+                else
+                    host_arg = arg;
+
+                /// --port port1 --host host1
+                if (!prev_port_arg.empty())
+                {
+                    hosts_and_ports_arguments.push_back({host_arg, prev_port_arg});
+                    prev_port_arg.clear();
+                }
+                else
+                {
+                    /// --host host1 --host host2
+                    if (!prev_host_arg.empty())
+                        hosts_and_ports_arguments.push_back({prev_host_arg});
+
+                    prev_host_arg = host_arg;
+                }
+            }
+            else if (arg.starts_with("--port"))
+            {
+                auto port_arg = String{arg};
+                /// --port port
+                if (arg == "--port")
+                {
+                    port_arg.push_back('=');
+                    ++arg_num;
+                    if (arg_num >= argc)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Port argument requires value");
+                    arg = argv[arg_num];
+                    port_arg.append(arg);
+                }
+
+                /// --host host1 --port port1
+                if (!prev_host_arg.empty())
+                {
+                    hosts_and_ports_arguments.push_back({port_arg, prev_host_arg});
+                    prev_host_arg.clear();
+                }
+                else
+                {
+                    /// --port port1 --port port2
+                    if (!prev_port_arg.empty())
+                        hosts_and_ports_arguments.push_back({prev_port_arg});
+
+                    prev_port_arg = port_arg;
+                }
+            }
+            else if (arg == "--allow_repeated_settings")
+                allow_repeated_settings = true;
+            else if (arg == "--allow_merge_tree_settings")
+                allow_merge_tree_settings = true;
+            else
+                common_arguments.emplace_back(arg);
+        }
+    }
+    if (!prev_host_arg.empty())
+        hosts_and_ports_arguments.push_back({prev_host_arg});
+    if (!prev_port_arg.empty())
+        hosts_and_ports_arguments.push_back({prev_port_arg});
+}
+
 }
 
 
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wmissing-declarations"
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wmissing-declarations"
 
 int mainClient(int argc, char ** argv)
 {

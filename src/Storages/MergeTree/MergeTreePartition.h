@@ -25,7 +25,6 @@ struct MergeTreePartition
 {
     Row value;
 
-public:
     MergeTreePartition() = default;
 
     explicit MergeTreePartition(Row value_) : value(std::move(value_)) {}
@@ -38,14 +37,24 @@ public:
 
     static std::optional<Row> tryParseValueFromID(const String & partition_id, const Block & partition_key_sample);
 
-    void serializeText(const MergeTreeData & storage, WriteBuffer & out, const FormatSettings & format_settings) const;
+    void serializeText(StorageMetadataPtr metadata_snapshot, WriteBuffer & out, const FormatSettings & format_settings) const;
+    String serializeToString(StorageMetadataPtr metadata_snapshot) const;
 
-    void load(const MergeTreeData & storage, const PartMetadataManagerPtr & manager);
+    void load(const StorageMetadataPtr & metadata_snapshot, const PartMetadataManagerPtr & manager, const ContextPtr & context);
 
     /// Store functions return write buffer with written but not finalized data.
     /// User must call finish() for returned object.
-    [[nodiscard]] std::unique_ptr<WriteBufferFromFileBase> store(const MergeTreeData & storage, IDataPartStorage & data_part_storage, MergeTreeDataPartChecksums & checksums) const;
-    [[nodiscard]] std::unique_ptr<WriteBufferFromFileBase> store(const Block & partition_key_sample, IDataPartStorage & data_part_storage, MergeTreeDataPartChecksums & checksums, const WriteSettings & settings) const;
+    [[nodiscard]] std::unique_ptr<WriteBufferFromFileBase> store(
+        StorageMetadataPtr metadata_snapshot,
+        ContextPtr storage_context,
+        IDataPartStorage & data_part_storage,
+        MergeTreeDataPartChecksums & checksums) const;
+
+    [[nodiscard]] std::unique_ptr<WriteBufferFromFileBase> store(
+        const Block & partition_key_sample,
+        IDataPartStorage & data_part_storage,
+        MergeTreeDataPartChecksums & checksums,
+        const WriteSettings & settings) const;
 
     void assign(const MergeTreePartition & other) { value = other.value; }
 

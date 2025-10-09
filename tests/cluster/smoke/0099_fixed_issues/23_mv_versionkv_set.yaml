@@ -1,0 +1,77 @@
+tags:
+  - in set
+  - checkpoint
+description: (#498) mv over versioned_kv with where in set
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_mv_498
+
+  - type: query
+    sql: drop stream if exists test_dim_498
+
+  - type: query
+    sql: drop stream if exists test_vk_498
+
+  - type: query
+    sql: create stream test_dim_498(id int, type string)
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_vk_498(id int, value float) primary key id settings mode='versioned_kv'
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_dim_498(id, type) values
+    schema:
+      - name: id
+        type: int32
+      - name: type
+        type: string
+    inputs:
+      - [1, 'old']
+      - [2, 'old']
+      - [3, 'new']
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create materialized view test_mv_498 as with list as (select id from table(test_dim_498)) select id, value from test_vk_498 where id in list
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9923
+    query: select id, value from test_mv_498
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: float32
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_vk_498(id, value)values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: float32
+    inputs:
+      - [3, 20]
+      - [3, 30]
+      - [1, 10]
+      - [5, 50]
+
+  - type: check
+    target_name: 9923
+    mode: random
+    expected_result:
+      - [1, 10]
+      - [3, 20]
+      - [3, 30]

@@ -1,0 +1,136 @@
+tags:
+- versioned_kv
+description: global aggr query from versioned_kv state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_vk_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_vk_stream(i int, s string, val float) primary
+    key s settings mode='versioned_kv'
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_stream(i, s, val) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - [1, 'a', 10]
+  - [2, 'b', 20]
+- type: wait
+  time: 1
+
+- name: '19251'
+  type: stream
+  query_id: '19251'
+  query: subscribe to select count(*), min(val), max(val), sum(val), avg(val), min_k(i,
+    3), max_k(i, 3), min_k(i, 3, s), max_k(i, 3, s) from test19_vk_stream emit periodic
+    1s settings checkpoint_interval=1
+  schema:
+  - name: count(*)
+    type: uint64
+  - name: min(val)
+    type: float32
+  - name: max(val)
+    type: float32
+  - name: sum(val)
+    type: float64
+  - name: avg(val)
+    type: float64
+  - name: min_k(i, 3)
+    type: array(int32)
+  - name: max_k(i, 3)
+    type: array(int32)
+  - name: min_k(i, 3, s)
+    type: array(tuple(int32, string))
+  - name: max_k(i, 3, s)
+    type: array(tuple(int32, string))
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_vk_stream(i, s, val) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - [3, 'a', 30]
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19251'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_vk_stream(i, s, val) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - [4, 'c', 50]
+  - [5, 'b', 10]
+- type: wait
+  time: 1
+
+- name: 19251-1
+  type: stream
+  query: recover from '19251'
+  schema:
+  - name: count(*)
+    type: uint64
+  - name: min(val)
+    type: float32
+  - name: max(val)
+    type: float32
+  - name: sum(val)
+    type: float64
+  - name: avg(val)
+    type: float64
+  - name: min_k(i, 3)
+    type: array(int32)
+  - name: max_k(i, 3)
+    type: array(int32)
+  - name: min_k(i, 3, s)
+    type: array(tuple(int32, string))
+  - name: max_k(i, 3, s)
+    type: array(tuple(int32, string))
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19251' sync
+
+- type: query
+  sql: unsubscribe to '19251'
+
+- type: check
+  target_name: '19251'
+  expected_result:
+  - [2, 10, 20, 30, 15, [1, 2], [2, 1], [[1, 'a'], [2, 'b']], [[2, 'b'], [1, 'a']]]
+  - [2, 20, 30, 50, 25, [2, 3], [3, 2], [[2, 'b'], [3, 'a']], [[3, 'a'], [2, 'b']]]
+
+- type: check
+  target_name: 19251-1
+  expected_result:
+  - [3, 10, 50, 90, 30, [3, 4, 5], [5, 4, 3], [[3, 'a'], [4, 'c'], [5, 'b']], [[5, 'b'], [4, 'c'], [3, 'a']]]

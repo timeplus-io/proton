@@ -14,7 +14,7 @@ while [ "$n" -lt 50 ];
 do
     n=$(( n + 1 ))
     $CLICKHOUSE_CLIENT --query="INSERT INTO stream_for_concurrent_alter VALUES(1, 'Hello')" > /dev/null 2> /dev/null &
-    $CLICKHOUSE_CLIENT --query="OPTIMIZE TABLE stream_for_concurrent_alter FINAL" > /dev/null 2> /dev/null &
+    $CLICKHOUSE_CLIENT --query="OPTIMIZE STREAM stream_for_concurrent_alter FINAL" > /dev/null 2> /dev/null &
 done &
 
 

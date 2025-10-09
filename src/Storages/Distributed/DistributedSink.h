@@ -46,7 +46,6 @@ public:
         const ClusterPtr & cluster_,
         bool insert_sync_,
         UInt64 insert_timeout_,
-        StorageID main_table_,
         const Names & columns_to_send_);
 
     String getName() const override { return "DistributedSink"; }
@@ -54,6 +53,8 @@ public:
     void onFinish() override;
 
 private:
+    void onCancel() noexcept override;
+
     IColumn::Selector createSelector(const Block & source_block) const;
 
     void writeAsync(const Block & block);
@@ -69,9 +70,9 @@ private:
     Block removeSuperfluousColumns(Block block) const;
 
     /// Increments finished_writings_count after each repeat.
-    void writeToLocal(const Block & block, size_t repeats);
+    void writeToLocal(const Cluster::ShardInfo & shard_info, const Block & block, size_t repeats);
 
-    void writeToShard(const Block & block, const std::vector<std::string> & dir_names);
+    void writeToShard(const Cluster::ShardInfo & shard_info, const Block & block, const std::vector<std::string> & dir_names);
 
 
     /// Performs synchronous insertion to remote nodes. If timeout_exceeded flag was set, throws.
@@ -106,12 +107,13 @@ private:
 
     /// Sync-related stuff
     UInt64 insert_timeout; // in seconds
-    StorageID main_table;
     NameSet columns_to_send;
     Stopwatch watch;
     Stopwatch watch_current_block;
     std::optional<ThreadPool> pool;
     ThrottlerPtr throttler;
+
+    std::mutex execution_mutex;
 
     struct JobReplica
     {
@@ -150,7 +152,7 @@ private:
 
     std::atomic<unsigned> finished_jobs_count{0};
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

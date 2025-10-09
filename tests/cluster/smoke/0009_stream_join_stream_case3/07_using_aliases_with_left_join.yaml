@@ -1,0 +1,40 @@
+description: Using Aliases with Left Join
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: stream
+    name: 3200
+    query_id: '3200'
+    query: |
+      SELECT A.name AS a_name, B.value AS b_value 
+      FROM left_Stream A 
+      LEFT JOIN right_Stream B ON A.id = B.id;
+    schema:
+      - name: a_name
+        type: string
+      - name: b_value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO right_Stream (id, value, department_id, type) VALUES
+      (1, 'X', 1, 'A');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO left_Stream (id, name, department_id, manager_id, type) VALUES
+      (1, 'Alice', 1, NULL, 'A');
+
+  - type: check
+    target_name: 3200
+    expected_result:
+      - ['Alice', 'X']

@@ -1,4 +1,4 @@
-#include "ParserCreateMaterializedViewQuery.h"
+#include <Parsers/Streaming/ParserCreateMaterializedViewQuery.h>
 
 #include <IO/ReadHelpers.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -12,6 +12,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int UNSUPPORTED;
+}
+
 bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
@@ -19,6 +25,7 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserCompoundIdentifier table_name_p(true);
     ParserKeyword s_as("AS");
+    ParserKeyword s_scheduled("SCHEDULED");
     ParserKeyword s_streaming_view("MATERIALIZED VIEW");
 
     ParserToken s_dot(TokenType::Dot);
@@ -33,9 +40,11 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
     ASTPtr columns_list;
     ASTPtr select;
 
-    String cluster_str;
+    /// String cluster_str;
     bool attach = false;
     bool if_not_exists = false;
+
+    bool scheduled = false;
 
     if (!s_create.ignore(pos, expected))
     {
@@ -44,6 +53,9 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
         else
             return false;
     }
+
+    if (s_scheduled.ignore(pos, expected))
+        scheduled = true;
 
     if (!s_streaming_view.ignore(pos, expected))
         return false;
@@ -68,6 +80,9 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
             return false;
     }
 
+    if (scheduled && !to_table)
+        throw DB::Exception(ErrorCodes::UNSUPPORTED, "Scheduled Materialized View requires an explicit target stream or table via `INTO target_stream");
+
     /// Optional - a list of columns can be specified. It must fully comply with SELECT.
     if (s_lparen.ignore(pos, expected))
     {
@@ -85,6 +100,27 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
     if (!select_p.parse(pos, select, expected))
         return false;
 
+    /// Storage Settings
+    /// CREATE MATERIALIZED VIEW mv AS SELECT ... STORAGE_SETTINGS shards=1
+    ASTPtr storage_settings;
+    ParserKeyword s_storage_settings("STORAGE_SETTINGS");
+    if (s_storage_settings.ignore(pos, expected))
+    {
+        ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
+        if (!settings_p.parse(pos, storage_settings, expected))
+            return false;
+    }
+
+    /// mv_inner_storage_ttl
+    ASTPtr mv_inner_storage_ttl;
+    ParserKeyword s_mv_inner_storage_ttl("TTL");
+    if (s_mv_inner_storage_ttl.ignore(pos, expected))
+    {
+        ParserTTLExpressionList parser_ttl_list;
+        if (!parser_ttl_list.parse(pos, mv_inner_storage_ttl, expected))
+            return false;
+    }
+
     /// Comment
     ParserKeyword s_comment("COMMENT");
     ParserStringLiteral string_literal_parser;
@@ -96,13 +132,13 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
 
     query->attach = attach;
     query->if_not_exists = if_not_exists;
-    query->is_materialized_view = true;
+    query->type = scheduled ? ASTCreateQuery::Type::ScheduledMaterializedView : ASTCreateQuery::Type::MaterializedView;
 
     const auto & table_identifier = table->as<ASTTableIdentifier &>();
     query->setDatabase(table_identifier.getDatabaseName());
     query->setTable(table_identifier.shortName());
     query->uuid = table_identifier.uuid;
-    query->cluster = cluster_str;
+    /// query->cluster = cluster_str;
 
     if (to_table)
         query->to_table_id = to_table->as<ASTTableIdentifier>()->getTableId();
@@ -111,6 +147,14 @@ bool ParserCreateMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
         query->to_inner_uuid = parseFromString<UUID>(to_inner_uuid->as<ASTLiteral>()->value.get<String>());
 
     query->set(query->columns_list, columns_list);
+
+    if (storage_settings)
+        query->set(query->storage_settings, storage_settings);
+
+
+    if (mv_inner_storage_ttl)
+        query->mv_inner_storage_ttl = mv_inner_storage_ttl;
+
     if (comment)
         query->set(query->comment, comment);
 

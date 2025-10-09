@@ -1,0 +1,68 @@
+tags:
+  - query state
+description: recover the query with incorrect start sn (0) if there is no checkpointed
+  sn (-1)
+cluster:
+  - p1k1
+#  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists fixed_issues2_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream fixed_issues2_stream(i int);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into fixed_issues2_stream(i) values(1)(2)(3);
+
+  - type: wait
+    time: 2
+
+  - name: fixed-issues2-1
+    query_id: fixed-issues2-1
+    type: stream
+    query: subscribe to select count() from fixed_issues2_stream emit periodic 1s;
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id='fixed-issues2-1';
+
+  - type: wait
+    time: 1
+
+  - name: fixed-issues2-1-1
+    query_id: fixed-issues2-1-1
+    type: stream
+    query: recover from 'fixed-issues2-1';
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: query
+    sql: insert into fixed_issues2_stream(i) values(4);
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: unsubscribe to 'fixed-issues2-1';
+
+  - type: check
+    target_name: fixed-issues2-1
+    expected_result: [ [ ] ]
+
+  - type: check
+    target_name: fixed-issues2-1-1
+    expected_result:
+      - [ 1 ]

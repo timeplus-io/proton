@@ -53,9 +53,9 @@ enum class JoinLocality
 const char * toString(JoinLocality locality);
 
 /// ASOF JOIN inequality type
-enum class ASOFJoinInequality
+enum class ASOFJoinInequality : uint8_t
 {
-    None,
+    None = 0,
     Less,
     Greater,
     LessOrEquals,
@@ -108,6 +108,7 @@ enum class JoinAlgorithm
     PARTIAL_MERGE,
     PREFER_PARTIAL_MERGE,
     PARALLEL_HASH,
+    GRACE_HASH,
     DIRECT,
     FULL_SORTING_MERGE,
 };

@@ -1,0 +1,96 @@
+tags:
+  - udf
+
+description: Test covering asyncio queue
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_queue(value float) RETURNS string LANGUAGE PYTHON AS $$
+      import time
+      import random
+      import asyncio
+
+      async def worker(name, queue):
+          while True:
+              sleep_for = await queue.get()
+              await asyncio.sleep(sleep_for)
+              queue.task_done()
+
+      async def run(value):
+          queue = asyncio.Queue()
+
+          total_sleep_time = 0
+          for _ in range(6):
+              sleep_for = value
+              total_sleep_time += sleep_for
+              queue.put_nowait(sleep_for)
+
+          tasks = []
+          for i in range(3):
+              task = asyncio.create_task(worker(f'worker-{i}', queue))
+              tasks.append(task)
+
+          started_at = time.time()
+          await queue.join()
+          total_slept_for = int(time.time() - started_at)
+
+          for task in tasks:
+              task.cancel()
+          await asyncio.gather(*tasks, return_exceptions=True)
+
+          return f'3 workers slept in parallel for {total_slept_for} seconds'
+
+      def test_async_queue(value):
+          results = []
+          for v in value:
+              try:
+                  result = asyncio.run(run(v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-6-1
+    type: stream
+    query: select test_async_queue(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values (0.0)(0.5);
+
+  - type: query
+    sql: insert into test41_stream(value) values (1.0)(1.5);
+
+  - type: check
+    target_name: python-udf-6-1
+    expected_result:
+      - ['3 workers slept in parallel for 0 seconds', 0.0]
+      - ['3 workers slept in parallel for 1 seconds', 0.5]
+      - ['3 workers slept in parallel for 2 seconds', 1.0]
+      - ['3 workers slept in parallel for 3 seconds', 1.5]

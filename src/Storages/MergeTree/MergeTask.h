@@ -59,6 +59,7 @@ public:
         bool deduplicate_,
         Names deduplicate_by_columns_,
         MergeTreeData::MergingParams merging_params_,
+        bool need_prefix,
         IMergeTreeDataPart * parent_part_,
         String suffix_,
         MergeTreeTransactionPtr txn,
@@ -86,6 +87,7 @@ public:
             global_ctx->merges_blocker = std::move(merges_blocker_);
             global_ctx->ttl_merges_blocker = std::move(ttl_merges_blocker_);
             global_ctx->txn = std::move(txn);
+            global_ctx->need_prefix = need_prefix;
 
             auto prepare_stage_ctx = std::make_shared<ExecuteAndFinalizeHorizontalPartRuntimeContext>();
 
@@ -161,6 +163,8 @@ private:
 
         MergeTreeData::MutableDataPartPtr new_data_part{nullptr};
 
+        /// If lightweight delete mask is present then some input rows are filtered out right after reading.
+        std::shared_ptr<std::atomic<size_t>> input_rows_filtered{std::make_shared<std::atomic<size_t>>(0)};
         size_t rows_written{0};
         UInt64 watch_prev_elapsed{0};
 
@@ -169,6 +173,7 @@ private:
         IMergedBlockOutputStream::WrittenOffsetColumns written_offset_columns{};
 
         MergeTreeTransactionPtr txn;
+        bool need_prefix;
 
         scope_guard temporary_directory_lock;
     };
@@ -182,6 +187,7 @@ private:
     {
         /// Dependencies
         String suffix;
+        bool need_prefix;
         MergeTreeData::MergingParams merging_params{};
 
         DiskPtr tmp_disk{nullptr};
@@ -190,7 +196,7 @@ private:
         bool force_ttl{false};
         CompressionCodecPtr compression_codec{nullptr};
         size_t sum_input_rows_upper_bound{0};
-        std::unique_ptr<TemporaryFile> rows_sources_file{nullptr};
+        std::unique_ptr<PocoTemporaryFile> rows_sources_file{nullptr};
         std::unique_ptr<WriteBufferFromFileBase> rows_sources_uncompressed_write_buf{nullptr};
         std::unique_ptr<WriteBuffer> rows_sources_write_buf{nullptr};
         std::optional<ColumnSizeEstimator> column_sizes{};
@@ -204,7 +210,7 @@ private:
         size_t sum_compressed_bytes_upper_bound{0};
         bool blocks_are_granules_size{false};
 
-        Poco::Logger * log{&Poco::Logger::get("MergeTask::PrepareStage")};
+        LoggerPtr log{getLogger("MergeTask::PrepareStage")};
 
         /// Dependencies for next stages
         std::list<DB::NameAndTypePair>::const_iterator it_name_and_type;
@@ -255,7 +261,7 @@ private:
         /// Begin dependencies from previous stage
         std::unique_ptr<WriteBuffer> rows_sources_write_buf{nullptr};
         std::unique_ptr<WriteBufferFromFileBase> rows_sources_uncompressed_write_buf{nullptr};
-        std::unique_ptr<TemporaryFile> rows_sources_file;
+        std::unique_ptr<PocoTemporaryFile> rows_sources_file;
         std::optional<ColumnSizeEstimator> column_sizes;
         CompressionCodecPtr compression_codec;
         DiskPtr tmp_disk{nullptr};
@@ -330,7 +336,7 @@ private:
         MergeTasks tasks_for_projections;
         MergeTasks::iterator projections_iterator;
 
-        Poco::Logger * log{&Poco::Logger::get("MergeTask::MergeProjectionsStage")};
+        LoggerPtr log{getLogger("MergeTask::MergeProjectionsStage")};
     };
 
     using MergeProjectionsRuntimeContextPtr = std::shared_ptr<MergeProjectionsRuntimeContext>;

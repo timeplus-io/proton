@@ -2,6 +2,7 @@
 #include <base/CachedFn.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
+#include <Common/logger_useful.h>
 #include <Core/Names.h>
 #include <base/types.h>
 #include <Poco/Net/IPAddress.h>
@@ -57,7 +58,7 @@ static void splitHostAndPort(const std::string & host_and_port, std::string & ou
         while (it != end && *it != ']')
             out_host += *it++;
         if (it == end)
-            throw Exception("Malformed IPv6 address", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Malformed IPv6 address");
         ++it;
     }
     else /// Case '<IPv4 or domain name or something else>:<port>'
@@ -73,7 +74,7 @@ static void splitHostAndPort(const std::string & host_and_port, std::string & ou
             port_str += *it++;
     }
     else
-        throw Exception("Missing port number", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Missing port number");
 
     unsigned port;
     if (Poco::NumberParser::tryParseUnsigned(port_str, port) && port <= 0xFFFF)
@@ -81,7 +82,7 @@ static void splitHostAndPort(const std::string & host_and_port, std::string & ou
         out_port = static_cast<UInt16>(port);
     }
     else
-        throw Exception("Port must be numeric", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Port must be numeric");
 }
 
 static DNSResolver::IPAddresses resolveIPAddressImpl(const std::string & host)
@@ -119,12 +120,12 @@ static DNSResolver::IPAddresses resolveIPAddressImpl(const std::string & host)
     }
     catch (const Poco::Net::DNSException & e)
     {
-        LOG_ERROR(&Poco::Logger::get("DNSResolver"), "Cannot resolve host ({}), error {}: {}.", host, e.code(), e.message());
+        LOG_WARNING(getLogger("DNSResolver"), "Cannot resolve host ({}), error {}: {}.", host, e.code(), e.name());
         addresses.clear();
     }
 
     if (addresses.empty())
-        throw Exception("Not found address of host: " + host, ErrorCodes::DNS_ERROR);
+        throw Exception(ErrorCodes::DNS_ERROR, "Not found address of host: {}", host);
 
     return addresses;
 }
@@ -166,7 +167,7 @@ struct DNSResolver::Impl
 };
 
 
-DNSResolver::DNSResolver() : impl(std::make_unique<DNSResolver::Impl>()), log(&Poco::Logger::get("DNSResolver")) {}
+DNSResolver::DNSResolver() : impl(std::make_unique<DNSResolver::Impl>()), log(getLogger("DNSResolver")) {}
 
 Poco::Net::IPAddress DNSResolver::resolveHost(const std::string & host)
 {
@@ -249,7 +250,7 @@ static const String & cacheElemToString(const String & str) { return str; }
 static String cacheElemToString(const Poco::Net::IPAddress & addr) { return addr.toString(); }
 
 template<typename UpdateF, typename ElemsT>
-bool DNSResolver::updateCacheImpl(UpdateF && update_func, ElemsT && elems, const String & log_msg)
+bool DNSResolver::updateCacheImpl(UpdateF && update_func, ElemsT && elems, FormatStringHelper<String> log_msg)
 {
     bool updated = false;
     String lost_elems;
@@ -274,7 +275,7 @@ bool DNSResolver::updateCacheImpl(UpdateF && update_func, ElemsT && elems, const
     }
 
     if (!lost_elems.empty())
-        LOG_INFO(log, fmt::runtime(log_msg), lost_elems);
+        LOG_INFO(log, log_msg.format(std::move(lost_elems)));
 
     return updated;
 }

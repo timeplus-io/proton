@@ -49,8 +49,8 @@ struct fmt::formatter<ReadableSize>
     }
 
     template <typename FormatContext>
-    auto format(const ReadableSize & size, FormatContext & ctx)
+    auto format(const ReadableSize & size, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{}", formatReadableSizeWithBinarySuffix(size.value));
+        return fmt::format_to(ctx.out(), "{}", formatReadableSizeWithBinarySuffix(size.value));
     }
 };

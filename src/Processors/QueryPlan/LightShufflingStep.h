@@ -16,6 +16,11 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
 
 private:
+    void updateOutputStream() override
+    {
+        output_stream = createOutputStream(input_streams.front(), input_streams.front().header, getDataStreamTraits());
+    }
+
     std::vector<size_t> key_positions;
     size_t max_num_outputs;
 };

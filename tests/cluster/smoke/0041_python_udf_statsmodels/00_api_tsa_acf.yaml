@@ -1,0 +1,58 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_api_tsa_acf(value int) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      import statsmodels.api as sm
+
+      def test_api_tsa_acf(value):
+          res = sm.tsa.acf(value, nlags=20)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf5-0-1
+    type: stream
+    query: select test_api_tsa_acf(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: int32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream(value) select number from numbers(1,10);
+
+  - type: check
+    target_name: python-udf5-0-1
+    expected_result:
+      - [1.0, 1]
+      - [0.7 , 2]
+      - [0.41212121, 3]
+      - [0.14848485, 4]
+      - [-0.07878788, 5]
+      - [-0.25757576, 6]
+      - [-0.37575758, 7]
+      - [-0.42121212, 8]
+      - [-0.38181818, 9]
+      - [-0.24545455, 10]

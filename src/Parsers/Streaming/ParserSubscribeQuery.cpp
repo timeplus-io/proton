@@ -28,7 +28,7 @@ bool ParserSubscribeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     {
         auto * select_ast = node->as<ASTSelectWithUnionQuery>();
         assert(select_ast);
-        select_ast->exec_mode = SelectExecuteMode::SUBSCRIBE;
+        select_ast->exec_mode = SelectExecuteMode::Subscribe;
     }
 
     return parsed;

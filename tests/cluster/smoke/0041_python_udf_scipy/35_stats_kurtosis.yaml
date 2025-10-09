@@ -1,0 +1,66 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getKurtosis(value float64) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy.stats import norm, kurtosis
+
+      class getKurtosis:
+          def __init__(self):
+              self.kurtosis = 0
+
+          def serialize(self):
+              data = {}
+              data['kurtosis'] = self.kurtosis
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.kurtosis = data['kurtosis']
+
+          def merge(self, other):
+              pass
+
+          def process(self, values):
+              self.kurtosis = kurtosis(values)
+
+          def finalize(self):
+              return float(self.kurtosis)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-35-1
+    type: stream
+    query: select getKurtosis(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          (16.1424402)(6.79626088)(-11.6510342)(7.92685372);
+
+  - type: check
+    target_name: python-udf4-35-1
+    expected_result:
+      - [-0.89110654533753]

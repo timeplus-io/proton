@@ -3,6 +3,7 @@
 #include "config.h"
 
 #include <Access/Credentials.h>
+#include <Common/Logger.h>
 #include <base/types.h>
 #include <memory>
 
@@ -40,7 +41,7 @@ public:
 
     const String & getRealm() const;
     bool isFailed() const;
-    MAYBE_NORETURN String processToken(const String & input_token, Poco::Logger * log);
+    MAYBE_NORETURN String processToken(const String & input_token, LoggerPtr log);
 
 private:
     void reset();

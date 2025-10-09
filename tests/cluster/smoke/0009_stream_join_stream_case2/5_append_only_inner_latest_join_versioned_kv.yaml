@@ -1,0 +1,66 @@
+tags:
+  - data_enrichment_join
+  - inner-join
+description: append-only INNER LATEST JOIN versioned-kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists left_stream
+
+  - type: query
+    sql: drop stream if exists test10_vk_right_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream left_stream (i int, s string)
+
+  - type: query
+    sql: create stream test10_vk_right_stream (ii int, ss string, value
+      float) primary key (ii, ss) settings mode='versioned_kv'
+
+  - type: wait
+    time: 2
+
+  - name: '1055'
+    type: stream
+    query: select i, s, ii, ss, value from left_stream inner latest join test10_vk_right_stream
+      on i=ii
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+      - name: ii
+        type: int32
+      - name: ss
+        type: string
+      - name: value
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_vk_right_stream(ii, ss, value) values (1, 'ss1', 11.1)
+
+  - type: query
+    sql: insert into test10_vk_right_stream(ii, ss, value) values (1, 'ss2', 22.2)
+
+  - type: query
+    sql: insert into left_stream(i, s) values (1, 's1')
+
+  - type: query
+    sql: insert into test10_vk_right_stream(ii, ss, value) values (1, 'ss2', 33.3)
+
+  - type: query
+    sql: insert into left_stream(i, s) values (1, 's2')
+  
+  - type: check
+    target_name: '1055'
+    expected_result:
+      - [ 1, s1, 1, ss2, 22.2 ]
+      - [ 1, s2, 1, ss2, 33.3 ]

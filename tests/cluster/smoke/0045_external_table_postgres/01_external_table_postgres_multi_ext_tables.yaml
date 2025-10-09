@@ -1,0 +1,86 @@
+description: |
+  Test multiple postgres external table source same postgres table
+    1.Create postgres table and ingest data
+    2.Create 2 postgresql external table with same source
+    3.Ingest data into 2 external table
+    4.Check 2 external table data
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "DROP TABLE IF EXISTS products;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "CREATE TABLE products (product_id varchar NOT NULL, price float8, PRIMARY KEY (product_id));"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "INSERT INTO products (product_id, price) VALUES ('1', '10.99'), ('2', '19.99'), ('3', '29.99');"
+
+  - type: query
+    sql: DROP STREAM IF EXISTS pg_ext;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS pg_ext1;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE pg_ext
+      SETTINGS type='postgresql', address='postgres:5432', user='postgres', password='postgres', database='postgres', table='products';
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE pg_ext1
+      SETTINGS type='postgresql', address='postgres:5432', user='postgres', password='postgres', database='postgres', table='products';
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: INSERT INTO pg_ext(product_id, price) VALUES ('4', 39.99);
+
+  - type: query
+    sql: INSERT INTO pg_ext1(product_id, price) VALUES ('5', 49.99);
+
+  - type: wait
+    time: 1
+
+  - name: pg-1-1
+    type: stream
+    query: SELECT product_id, price FROM pg_ext;
+    schema:
+      - name: product_id
+        type: string
+      - name: price
+        type: nullable(float64)
+
+  - name: pg-1-2
+    type: stream
+    query: SELECT product_id, price FROM pg_ext1;
+    schema:
+      - name: product_id
+        type: string
+      - name: price
+        type: nullable(float64)
+
+  - type: check
+    target_name: pg-1-1
+    expected_result:
+      - ['1', 10.99]
+      - ['2', 19.99]
+      - ['3', 29.99]
+      - ['4', 39.99]
+      - ['5', 49.99]
+
+  - type: check
+    target_name: pg-1-2
+    expected_result:
+      - ['1', 10.99]
+      - ['2', 19.99]
+      - ['3', 29.99]
+      - ['4', 39.99]
+      - ['5', 49.99]

@@ -1,0 +1,80 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - streaming_tailing
+  - stateful_function
+description: add into versioned_kv, multi_shard, streaming_tailing, stateful_function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_multishard_8(i float, k1 int, k2 string)
+      primary key k2 settings mode='versioned_kv', shards=3;
+  - type: wait
+    time: 2
+
+  - name: "1456"
+    type: stream
+    query: |
+      select lag(i, 2),
+        k1,
+        k2
+      from test14_multishard_8;
+    schema: 
+      - name: lag(i, 2)
+        type: float32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (2, 1, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (1, 1, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (3, 1, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (2, 1, 'd');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (5, 1, 'e');
+
+  - type: check
+    target_name: "1456"
+    mode: random
+    expected_result:
+      - [0, 1, a]
+      - [0, 1, b]
+      - [2, 1, c]
+      - [1, 1, d]
+      - [3, 1, e]

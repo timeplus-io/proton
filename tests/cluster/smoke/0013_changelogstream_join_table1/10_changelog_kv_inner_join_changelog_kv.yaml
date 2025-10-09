@@ -1,0 +1,86 @@
+tags:
+  - changelog_kv
+  - bidirectional-join
+  - not supported
+
+description: changelog-kv inner all join changelog-kv
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists changelog_kv_stream1
+
+  - type: query
+    sql: drop stream if exists changelog_kv_stream2
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream changelog_kv_stream1(i int64, s string) primary key s settings mode='changelog_kv'
+
+  - type: query
+    sql: create stream changelog_kv_stream2(ii int64, ss string) primary key ss settings mode='changelog_kv'
+
+  - type: wait
+    time: 2
+
+  - name: "14113"
+    type: stream
+    query: select i, s, ii, ss from changelog_kv_stream1 inner join changelog_kv_stream2 on i == ii
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string     
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into changelog_kv_stream1 (i, s) values (1, 's1')
+    
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into changelog_kv_stream2 (ii, ss) values (1, 'ss1')
+  
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into changelog_kv_stream1 (i, s) values (1, 's2')
+  
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into changelog_kv_stream1 (i, s, _tp_delta) values (1, 's1', -1)
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: insert into changelog_kv_stream2 (ii, ss) values (1, 'ss2')
+
+  - type: check
+    target_name: "14113"
+    expected_result:
+      - - 1
+        - s1
+        - 1
+        - ss1
+      - - 1
+        - s2
+        - 1
+        - ss1
+      - - 1
+        - s2
+        - 1
+        - ss2

@@ -1,0 +1,159 @@
+tags:
+- format_schema
+- avro
+
+description: replace avro format schema with different content
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+  # kafka topic: drop and create
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FORMAT SCHEMA avro_schema AS
+      $$
+      {
+        "type": "record",
+        "name": "User",
+        "fields": [
+          {"name": "name", "type": "string"},
+          {"name": "favorite_number",  "type": ["int", "null"]},
+          {"name": "favorite_color", "type": ["string", "null"]}
+        ]
+      }
+      $$
+      TYPE Avro;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_external_stream
+      (
+        name string,
+        favorite_number nullable(int32),
+        favorite_color nullable(string)
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'test',
+          data_format = 'Avro',
+          format_schema = 'avro_schema';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: external-stream-23-1
+    query: SELECT * FROM test_external_stream;
+    schema:
+      - name: name
+        type: string
+      - name: favorite_number
+        type: nullable(int32)
+      - name: favorite_color
+        type: nullable(string)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test_external_stream(name, favorite_number, favorite_color) values 
+      ('select', 1, 'a') ('create', 2, 'b') ('drop', null, null);
+
+  - type: check
+    target_name: external-stream-23-1
+    expected_result:
+      - ['select', 1, 'a']
+      - ['create', 2, 'b']
+      - ['drop', null, null]
+
+  # replace format schema
+  - type: query
+    sql: |
+      CREATE OR REPLACE FORMAT SCHEMA avro_schema AS
+      $$
+      {
+        "namespace": "example.avro",
+        "type": "record",
+        "name": "User",
+        "fields": [
+          {"name": "name1", "type": "string"},
+          {"name": "favorite_number",  "type": ["int", "null"]},
+          {"name": "favorite_color", "type": "string"}
+        ]
+      }
+      $$
+      TYPE Avro;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_external_stream
+      (
+        name1 string,
+        favorite_number nullable(int32),
+        favorite_color string
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'test',
+          data_format = 'Avro',
+          format_schema = 'avro_schema';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: external-stream-23-2
+    query: SELECT * FROM test_external_stream;
+    schema:
+      - name: name1
+        type: string
+      - name: favorite_number
+        type: nullable(int32)
+      - name: favorite_color
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test_external_stream(name1, favorite_number, favorite_color) values 
+      ('select', 4, 'a') ('create', 5, 'b') ('drop', null, 'c');
+
+  - type: check
+    target_name: external-stream-23-2
+    expected_result:
+      - ['select', 4, 'a']
+      - ['create', 5, 'b']
+      - ['drop', null, 'c']

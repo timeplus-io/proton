@@ -33,6 +33,9 @@ static ITransformingStep::Traits getTraits(bool pre_distinct, bool already_disti
             .returns_single_stream = !pre_distinct && !already_distinct_columns,
             .preserves_number_of_streams = pre_distinct || already_distinct_columns,
             .preserves_sorting = true, /// Sorting is preserved indeed because of implementation.
+            /// proton: starts.
+            .preserves_substream = false,
+            /// proton: ends.
         },
         {
             .preserves_number_of_rows = false,
@@ -185,6 +188,23 @@ void DistinctStep::describeActions(JSONBuilder::JSONMap & map) const
         columns_array->add(column);
 
     map.add("Columns", std::move(columns_array));
+}
+
+void DistinctStep::updateOutputStream()
+{
+    output_stream = createOutputStream(
+        input_streams.front(),
+        input_streams.front().header,
+        getTraits(pre_distinct, checkColumnsAlreadyDistinct(columns, input_streams.front().distinct_columns)).data_stream_traits);
+
+    if (!output_stream->distinct_columns.empty() /// Columns already distinct, do nothing
+        && (!pre_distinct /// Main distinct
+            || input_streams.front().has_single_port)) /// pre_distinct for single port works as usual one
+    {
+        /// Build distinct set.
+        for (const auto & name : columns)
+            output_stream->distinct_columns.insert(name);
+    }
 }
 
 }

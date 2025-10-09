@@ -1,0 +1,47 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_len(value string) RETURNS int LANGUAGE PYTHON AS
+      $$
+      def test_len(value):
+          res = [len(x) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-6-1
+    type: stream
+    query: select test_len(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values ('abcdefg')('I am a boy.');
+
+  - type: check
+    target_name: python-udf1-6-1
+    expected_result:
+      - [7, 'abcdefg']
+      - [11, 'I am a boy.']

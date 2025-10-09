@@ -5,7 +5,6 @@
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
 #include <Server/HTTPHandlerRequestFilter.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/logger_useful.h>
 
 #include <Poco/Util/LayeredConfiguration.h>
 
@@ -30,7 +29,7 @@ public:
     std::unique_ptr<HTTPRequestHandler> createRequestHandler(const HTTPServerRequest & request) override;
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string name;
 
     std::vector<HTTPRequestHandlerFactoryPtr> child_factories;
@@ -79,7 +78,7 @@ public:
             else if (filter_type == "methods")
                 addFilter(methodsFilter(config, prefix + ".methods"));
             else
-                throw Exception("Unknown element in config: " + prefix + "." + filter_type, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+                throw Exception(ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG, "Unknown element in config: {}.{}", prefix, filter_type);
         }
     }
 
@@ -138,7 +137,7 @@ createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_met
 HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name);
 HTTPRequestHandlerFactoryPtr createSQLAnalyzeHandlerFactory(IServer & server, const std::string & config_prefix);
 
-/// proton: starts.
-HTTPRequestHandlerFactoryPtr createMetaStoreHandlerFactory(IServer & server, const std::string & name);
+/// proton: starts. REST handler factory for kv_service
+HTTPRequestHandlerFactoryPtr createKeyValueServiceHandlerFactory(IServer & server, const std::string & name);
 /// proton: ends.
 }

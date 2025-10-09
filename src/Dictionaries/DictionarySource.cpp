@@ -2,6 +2,7 @@
 #include <Dictionaries/DictionaryHelpers.h>
 #include <Processors/ISource.h>
 
+#include <numeric>
 
 namespace DB
 {
@@ -12,7 +13,7 @@ namespace ErrorCodes
     extern const int NO_SUCH_COLUMN_IN_STREAM;
 }
 
-class DictionarySource final : public ISource
+class DictionarySource : public ISource
 {
 public:
 
@@ -34,19 +35,10 @@ private:
 
         const auto & header = coordinator->getHeader();
 
-        std::vector<ColumnPtr> key_columns;
-        std::vector<DataTypePtr> key_types;
-
-        key_columns.reserve(key_columns_to_read.size());
-        key_types.reserve(key_columns_to_read.size());
-
         std::unordered_map<std::string_view, ColumnPtr> name_to_column;
 
         for (const auto & key_column_to_read : key_columns_to_read)
         {
-            key_columns.emplace_back(key_column_to_read.column);
-            key_types.emplace_back(key_column_to_read.type);
-
             if (header.has(key_column_to_read.name))
                 name_to_column.emplace(key_column_to_read.name, key_column_to_read.column);
         }
@@ -61,12 +53,16 @@ private:
         const auto & attributes_types_to_read = coordinator->getAttributesTypesToRead();
         const auto & attributes_default_values_columns = coordinator->getAttributesDefaultValuesColumns();
 
+        std::vector<size_t> key_index_map;
+        key_index_map.resize(key_columns_to_read.size());
+        std::iota(key_index_map.begin(), key_index_map.end(), 0);
+
         const auto & read_columns_func = coordinator->getReadColumnsFunc();
         auto attributes_columns = read_columns_func(
+            key_columns_to_read,
+            key_index_map,
             attributes_names_to_read,
             attributes_types_to_read,
-            key_columns,
-            key_types,
             attributes_default_values_columns);
 
         for (size_t i = 0; i < attributes_names_to_read.size(); ++i)

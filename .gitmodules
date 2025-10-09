@@ -3,10 +3,7 @@
 	url = https://github.com/facebook/zstd.git
 [submodule "contrib/lz4"]
 	path = contrib/lz4
-	url = https://github.com/lz4/lz4.git
-[submodule "contrib/librdkafka"]
-	path = contrib/librdkafka
-	url = https://github.com/ClickHouse-Extras/librdkafka.git
+	url = https://github.com/lz4/lz4
 [submodule "contrib/cctz"]
 	path = contrib/cctz
 	url = https://github.com/ClickHouse-Extras/cctz.git
@@ -80,7 +77,7 @@
 	url = https://github.com/awslabs/aws-c-event-stream.git
 [submodule "contrib/aws-c-common"]
 	path = contrib/aws-c-common
-	url = https://github.com/ClickHouse/aws-c-common.git
+	url = https://github.com/awslabs/aws-c-common.git
 [submodule "contrib/aws-checksums"]
 	path = contrib/aws-checksums
 	url = https://github.com/awslabs/aws-checksums.git
@@ -132,9 +129,6 @@
 [submodule "contrib/miniselect"]
 	path = contrib/miniselect
 	url = https://github.com/danlark1/miniselect
-[submodule "contrib/rocksdb"]
-	path = contrib/rocksdb
-	url = https://github.com/ClickHouse-Extras/rocksdb.git
 [submodule "contrib/xz"]
 	path = contrib/xz
 	url = https://github.com/xz-mirror/xz
@@ -149,14 +143,7 @@
 	url = https://github.com/fastfloat/fast_float
 [submodule "contrib/libpq"]
 	path = contrib/libpq
-	url = https://github.com/ClickHouse-Extras/libpq
-[submodule "contrib/boringssl"]
-	path = contrib/boringssl
-	url = https://github.com/ClickHouse-Extras/boringssl.git
-	branch = MergeWithUpstream
-[submodule "contrib/NuRaft"]
-	path = contrib/NuRaft
-	url = https://github.com/ClickHouse-Extras/NuRaft.git
+	url = https://github.com/ClickHouse/libpq
 [submodule "contrib/datasketches-cpp"]
 	path = contrib/datasketches-cpp
 	url = https://github.com/apache/datasketches-cpp.git
@@ -195,7 +182,7 @@
 	url = https://github.com/google/libprotobuf-mutator
 [submodule "contrib/sysroot"]
 	path = contrib/sysroot
-	url = https://github.com/ClickHouse-Extras/sysroot.git
+	url = https://github.com/ClickHouse/sysroot
 [submodule "contrib/nlp-data"]
 	path = contrib/nlp-data
 	url = https://github.com/ClickHouse-Extras/nlp-data.git
@@ -226,10 +213,6 @@
 [submodule "contrib/libhdfs3"]
 	path = contrib/libhdfs3
 	url = https://github.com/ClickHouse/libhdfs3.git
-[submodule "contrib/muduo"]
-	path = contrib/muduo
-	url = https://github.com/yokofly/muduo.git
-	branch = bugfix/fix-cross-compile-to-macOS
 [submodule "contrib/llvm-project"]
 	path = contrib/llvm-project
 	url = https://github.com/ClickHouse/llvm-project.git
@@ -281,9 +264,43 @@
 [submodule "contrib/c-ares"]
 	path = contrib/c-ares
 	url = https://github.com/c-ares/c-ares.git
+[submodule "contrib/libuv"]
+	path = contrib/libuv
+	url = https://github.com/libuv/libuv
+[submodule "contrib/rocksdb"]
+	path = contrib/rocksdb
+	url = https://github.com/ClickHouse/rocksdb
+[submodule "contrib/cpython"]
+	path = contrib/cpython
+	url = https://github.com/timeplus-io/cpython.git
+[submodule "contrib/numpy-cmake/numpy"]
+	path = contrib/numpy-cmake/numpy
+	url = https://github.com/numpy/numpy.git
+[submodule "contrib/libffi"]
+	path = contrib/libffi
+	url = https://github.com/timeplus-io/libffi.git
 [submodule "contrib/pulsar-cmake/pulsar-client-cpp"]
 	path = contrib/pulsar-cmake/pulsar-client-cpp
 	url = https://github.com/apache/pulsar-client-cpp.git
 [submodule "contrib/google-protobuf"]
 	path = contrib/google-protobuf
 	url = https://github.com/ClickHouse/google-protobuf
+	ignore = dirty
+[submodule "contrib/openssl"]
+	path = contrib/openssl
+	url = https://github.com/ClickHouse/openssl.git
+[submodule "contrib/mariadb-connector-c"]
+	path = contrib/mariadb-connector-c
+	url = https://github.com/ClickHouse/mariadb-connector-c.git
+[submodule "contrib/confluentinc-librdkafka"]
+	path = contrib/confluentinc-librdkafka
+	url = https://github.com/confluentinc/librdkafka.git
+[submodule "contrib/mongo-cxx-driver"]
+	path = contrib/mongo-cxx-driver
+	url = https://github.com/ClickHouse/mongo-cxx-driver.git
+[submodule "contrib/mongo-c-driver"]
+	path = contrib/mongo-c-driver
+	url = https://github.com/ClickHouse/mongo-c-driver.git
+[submodule "contrib/ulid-c"]
+	path = contrib/ulid-c
+	url = https://github.com/ClickHouse/ulid-c.git

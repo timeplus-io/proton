@@ -147,6 +147,7 @@ SortingTransform::SortingTransform(
     const SortDescription & description_,
     size_t max_merged_block_size_,
     UInt64 limit_,
+    bool increase_sort_description_compile_attempts,
     ProcessorID pid_)
     : IProcessor({header}, {header}, pid_)
     , description(description_)
@@ -170,6 +171,9 @@ SortingTransform::SortingTransform(
         }
     }
 
+    DataTypes sort_description_types;
+    sort_description_types.reserve(description.size());
+
     /// Remove constants from column_description and remap positions.
     SortDescription description_without_constants;
     description_without_constants.reserve(description.size());
@@ -179,10 +183,17 @@ SortingTransform::SortingTransform(
         auto new_pos = map[old_pos];
 
         if (new_pos < num_columns)
+        {
+            auto type = sample.safeGetByPosition(old_pos).type;
+            sort_description_types.emplace_back(type);
             description_without_constants.push_back(column_description);
+        }
     }
 
     description.swap(description_without_constants);
+
+    if (SortQueueVariants(sort_description_types, description).variantSupportJITCompilation())
+        compileSortDescriptionIfNeeded(description, sort_description_types, increase_sort_description_compile_attempts);
 }
 
 SortingTransform::~SortingTransform() = default;
@@ -348,8 +359,8 @@ void SortingTransform::removeConstColumns(Chunk & chunk)
     size_t num_rows = chunk.getNumRows();
 
     if (num_columns != const_columns_to_remove.size())
-        throw Exception("Block has different number of columns with header: " + toString(num_columns)
-                        + " vs " + toString(const_columns_to_remove.size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Block has different number of columns with header: {} vs {}",
+                        num_columns, const_columns_to_remove.size());
 
     auto columns = chunk.detachColumns();
     Columns column_without_constants;
@@ -383,8 +394,7 @@ void SortingTransform::enrichChunkWithConstants(Chunk & chunk)
         else
         {
             if (next_non_const_column >= columns.size())
-                throw Exception("Can't enrich chunk with constants because run out of non-constant columns.",
-                        ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't enrich chunk with constants because run out of non-constant columns.");
 
             column_with_constants.emplace_back(std::move(columns[next_non_const_column]));
             ++next_non_const_column;
@@ -396,7 +406,7 @@ void SortingTransform::enrichChunkWithConstants(Chunk & chunk)
 
 void SortingTransform::serialize()
 {
-    throw Exception("Method 'serialize' is not implemented for " + getName() + " processor", ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'serialize' is not implemented for {} processor", getName());
 }
 
 }

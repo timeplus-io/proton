@@ -1,0 +1,49 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value array(string));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_str(value array(string)) RETURNS string LANGUAGE PYTHON AS
+      $$
+      def test_str(value):
+          res = [str(x) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-11-1
+    type: stream
+    query: select test_str(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: array(string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values 
+            (['aa', 'bb'])(['cc', 'dd'])(['ee', 'ff']);
+
+  - type: check
+    target_name: python-udf1-11-1
+    expected_result:
+      - ["['aa', 'bb']", ['aa', 'bb']]
+      - ["['cc', 'dd']", ['cc', 'dd']]
+      - ["['ee', 'ff']", ['ee', 'ff']]

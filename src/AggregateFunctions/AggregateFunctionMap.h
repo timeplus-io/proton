@@ -18,9 +18,14 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include "DataTypes/Serializations/ISerialization.h"
 #include "base/types.h"
 #include <Common/Arena.h>
 #include "AggregateFunctions/AggregateFunctionFactory.h"
+
+/// proton: starts.
+#include <Common/MemoryHelpers.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -34,7 +39,8 @@ template <typename KeyType>
 struct AggregateFunctionMapCombinatorData
 {
     using SearchType = KeyType;
-    std::unordered_map<KeyType, AggregateDataPtr> merged_maps;
+    /// proton updated: AggregateDataPtr -> DataUniqPtr
+    std::unordered_map<KeyType, DataUniqPtr> merged_maps;
 
     static void writeKey(KeyType key, WriteBuffer & buf) { writeBinary(key, buf); }
     static void readKey(KeyType & key, ReadBuffer & buf) { readBinary(key, buf); }
@@ -56,7 +62,8 @@ struct AggregateFunctionMapCombinatorData<String>
 #else
     using SearchType = std::string;
 #endif
-    std::unordered_map<String, AggregateDataPtr, StringHash, std::equal_to<>> merged_maps;
+    /// proton updated: AggregateDataPtr -> DataUniqPtr
+    std::unordered_map<String, DataUniqPtr, StringHash, std::equal_to<>> merged_maps;
 
     static void writeKey(String key, WriteBuffer & buf)
     {
@@ -104,26 +111,28 @@ public:
         return nested_func->getDefaultVersion();
     }
 
-    AggregateFunctionMap(AggregateFunctionPtr nested, const DataTypes & types) : Base(types, nested->getParameters()), nested_func(nested)
+    AggregateFunctionMap(AggregateFunctionPtr nested, const DataTypes & types)
+        : Base(types, nested->getParameters(), std::make_shared<DataTypeMap>(DataTypes{getKeyType(types, nested), nested->getResultType()}))
+        , nested_func(nested)
     {
-        if (types.empty())
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function " + getName() + " requires at least one argument");
-
-        if (types.size() > 1)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function " + getName() + " requires only one map argument");
-
-        const auto * map_type = checkAndGetDataType<DataTypeMap>(types[0].get());
-        if (!map_type)
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function " + getName() + " requires map as argument");
-
-        key_type = map_type->getKeyType();
+        key_type = getKeyType(types, nested_func);
     }
 
     String getName() const override { return nested_func->getName() + "_map"; }
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeMap>(DataTypes{key_type, nested_func->getReturnType()}); }
+    static DataTypePtr getKeyType(const DataTypes & types, const AggregateFunctionPtr & nested)
+    {
+        if (types.size() != 1)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Aggregate function {}_map requires one map argument, but {} found", nested->getName(), types.size());
+
+        const auto * map_type = checkAndGetDataType<DataTypeMap>(types[0].get());
+        if (!map_type)
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Aggregate function {}_map requires map as argument", nested->getName());
+
+        return map_type->getKeyType();
+    }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -168,12 +177,13 @@ public:
             if (it == merged_maps.end())
             {
                 // create a new place for each key
-                nested_place = arena->alignedAlloc(nested_func->sizeOfData(), nested_func->alignOfData());
+                auto new_place = alignedAllocate(nested_func->sizeOfData(), nested_func->alignOfData());
+                nested_place = new_place.get();
                 nested_func->create(nested_place);
-                merged_maps.emplace(key, nested_place);
+                merged_maps.emplace(key, std::move(new_place));
             }
             else
-                nested_place = it->second;
+                nested_place = it->second.get();
 
             const IColumn * nested_columns[1] = {&val_column};
             nested_func->add(nested_place, nested_columns, offset + i, arena);
@@ -194,16 +204,17 @@ public:
             {
                 // elem.second cannot be copied since this it will be destroyed after merging,
                 // and lead to use-after-free.
-                nested_place = arena->alignedAlloc(nested_func->sizeOfData(), nested_func->alignOfData());
+                auto new_place = alignedAllocate(nested_func->sizeOfData(), nested_func->alignOfData());
+                nested_place = new_place.get();
                 nested_func->create(nested_place);
-                merged_maps.emplace(elem.first, nested_place);
+                merged_maps.emplace(elem.first, std::move(new_place));
             }
             else
             {
-                nested_place = it->second;
+                nested_place = it->second.get();
             }
 
-            nested_func->merge(nested_place, elem.second, arena);
+            nested_func->merge(nested_place, elem.second.get(), arena);
         }
     }
 
@@ -215,9 +226,9 @@ public:
         for (const auto & [key, nested_place] : state.merged_maps)
         {
             if constexpr (up_to_state)
-                nested_func->destroyUpToState(nested_place);
+                nested_func->destroyUpToState(nested_place.get());
             else
-                nested_func->destroy(nested_place);
+                nested_func->destroy(nested_place.get());
         }
 
         state.~Data();
@@ -246,7 +257,7 @@ public:
         for (const auto & elem : merged_maps)
         {
             this->data(place).writeKey(elem.first, buf);
-            nested_func->serialize(elem.second, buf);
+            nested_func->serialize(elem.second.get(), buf);
         }
     }
 
@@ -262,9 +273,10 @@ public:
             AggregateDataPtr nested_place;
 
             this->data(place).readKey(key, buf);
-            nested_place = arena->alignedAlloc(nested_func->sizeOfData(), nested_func->alignOfData());
+            auto new_place = alignedAllocate(nested_func->sizeOfData(), nested_func->alignOfData());
+            nested_place = new_place.get();
             nested_func->create(nested_place);
-            merged_maps.emplace(key, nested_place);
+            merged_maps.emplace(key, std::move(new_place));
             nested_func->deserialize(nested_place, buf, std::nullopt, arena);
         }
     }
@@ -295,9 +307,9 @@ public:
         {
             key_column.insert(key);
             if constexpr (merge)
-                nested_func->insertMergeResultInto(merged_maps[key], val_column, arena);
+                nested_func->insertMergeResultInto(merged_maps.at(key).get(), val_column, arena);
             else
-                nested_func->insertResultInto(merged_maps[key], val_column, arena);
+                nested_func->insertResultInto(merged_maps.at(key).get(), val_column, arena);
         }
 
         IColumn::Offsets & res_offsets = nested_column.getOffsets();
@@ -314,7 +326,7 @@ public:
         insertResultIntoImpl<true>(place, to, arena);
     }
 
-    bool allocatesMemoryInArena() const override { return true; }
+    bool allocatesMemoryInArena() const override { return nested_func->allocatesMemoryInArena(); }
 
     AggregateFunctionPtr getNestedFunction() const override { return nested_func; }
 };

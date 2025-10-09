@@ -1,0 +1,22 @@
+name: changelog_stream2
+description: Tests covering the single shard changelog stream query smoke cases.
+tags:
+- smoke
+
+setup:
+  scope: case
+  steps:
+  - type: query
+    sql: drop stream if exists test14_append_stream1_2;
+
+  - type: query
+    sql: drop stream if exists test14_append_stream2_2;
+
+  - type: query
+    sql: drop stream if exists test14_append_stream3_2;
+
+  - type: query
+    sql: drop stream if exists test14_append_stream_2;
+
+  - type: wait
+    time: 1

@@ -2,7 +2,7 @@
 
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/InDepthNodeVisitor.h>
-#include <Storages/Streaming/SeekToInfo.h>
+#include <Storages/SeekToInfo.h>
 
 namespace DB
 {
@@ -39,7 +39,7 @@ public:
     private:
         SeekToInfoPtr tryGetSeekToInfo(size_t stream_pos) const;
         std::pair<size_t, SeekToInfoPtr> parseSeekToInfo(const ASTFunction & func, ASTPtr & ast) const;
-        std::tuple<size_t, SeekBy, Int64, bool> parseEventPredicate(ASTPtr left_ast, ASTPtr right_ast) const;
+        std::tuple<size_t, SeekBy, Int64, bool> parseEventPredicate(ASTPtr & left_ast, ASTPtr & right_ast) const;
         std::pair<size_t, SeekBy> parseSeekBy(ASTPtr ast) const;
 
         friend class EventPredicateMatcher;

@@ -1,11 +1,19 @@
 #include "MarkRange.h"
 
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
 namespace DB
 {
 
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+}
+
+size_t MarkRange::getNumberOfMarks() const
+{
+    return end - begin;
 }
 
 bool MarkRange::operator==(const MarkRange & rhs) const
@@ -23,7 +31,8 @@ bool MarkRange::operator<(const MarkRange & rhs) const
 
     if (is_intersection)
         throw Exception(ErrorCodes::LOGICAL_ERROR,
-        "Intersecting mark ranges are not allowed, it is a bug! First range ({}, {}), second range ({}, {})", begin, end, rhs.begin, rhs.end);
+                        "Intersecting mark ranges are not allowed, it "
+                        "is a bug! First range ({}, {}), second range ({}, {})", begin, end, rhs.begin, rhs.end);
 
     return begin < rhs.begin && end <= rhs.begin;
 }
@@ -46,6 +55,59 @@ std::string toString(const MarkRanges & ranges)
         result += "(" + std::to_string(mark_range.begin) + ", " + std::to_string(mark_range.end) + ")";
     }
     return result;
+}
+
+void assertSortedAndNonIntersecting(const MarkRanges & ranges)
+{
+    MarkRanges ranges_copy(ranges.begin(), ranges.end());
+    /// Should also throw an exception if interseting range is found during comparison.
+    std::sort(ranges_copy.begin(), ranges_copy.end());
+    if (ranges_copy != ranges)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Expected sorted and non intersecting ranges. Ranges: {}",
+            toString(ranges));
+}
+
+size_t MarkRanges::getNumberOfMarks() const
+{
+    size_t result = 0;
+    for (const auto & mark : *this)
+        result += mark.getNumberOfMarks();
+    return result;
+}
+
+bool MarkRanges::isOneRangeForWholePart(size_t num_marks_in_part) const
+{
+    return size() == 1 && front().begin == 0 && front().end == num_marks_in_part;
+}
+
+void MarkRanges::serialize(WriteBuffer & out) const
+{
+    writeIntBinary(this->size(), out);
+
+    for (const auto & [begin, end] : *this)
+    {
+        writeIntBinary(begin, out);
+        writeIntBinary(end, out);
+    }
+}
+
+String MarkRanges::describe() const
+{
+    return fmt::format("Size: {}, Data: {}", this->size(), fmt::join(*this, ","));
+}
+
+void MarkRanges::deserialize(ReadBuffer & in)
+{
+    size_t size = 0;
+    readIntBinary(size, in);
+
+    this->resize(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        readIntBinary((*this)[i].begin, in);
+        readIntBinary((*this)[i].end, in);
+    }
 }
 
 }

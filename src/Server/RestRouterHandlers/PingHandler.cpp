@@ -1,13 +1,10 @@
-#include "PingHandler.h"
+#include <Server/RestRouterHandlers/PingHandler.h>
 
-#include <KafkaLog/KafkaWALPool.h>
-#include <NativeLog/Server/NativeLog.h>
-
-#include <Core/Block.h>
-#include <Core/ServerUUID.h>
 #include <base/getMemoryAmount.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
+#include <Core/Block.h>
+#include <Core/ServerMeta.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
 
@@ -40,11 +37,7 @@ std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr &
     }
     else if (status == "ping")
     {
-        /// FIXME : introduce more sophisticated health calculation in future.
-        if (nlog::NativeLog::instance(query_context).enabled() || klog::KafkaWALPool::instance(query_context).enabled())
-            return {"{\"status\":\"UP\"}", HTTPResponse::HTTP_OK};
-        else
-            return {"{\"status\":\"Initializing\"}", HTTPResponse::HTTP_NOT_FOUND};
+        return {"{\"status\":\"UP\"}", HTTPResponse::HTTP_OK};
     }
     else
     {
@@ -82,10 +75,11 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
 
     Poco::JSON::Object server_info;
 
-    const auto & server_uuid = DB::ServerUUID::get();
+    const auto & server_uuid = DB::ServerMeta::getIdentity();
 
     server_info.set("uuid", DB::toString(server_uuid));
     server_info.set("num_of_physical_cpu_cores", getNumberOfPhysicalCPUCores());
+    server_info.set("num_of_logical_cpu_cores", getNumberOfLogicalCPUCores());
     server_info.set("memory_amount", getMemoryAmount());
     json_resp.set("server", server_info);
 

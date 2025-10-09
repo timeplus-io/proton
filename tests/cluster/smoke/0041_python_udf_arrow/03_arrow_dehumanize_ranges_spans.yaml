@@ -1,0 +1,157 @@
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value datetime);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_dehumanize(value datetime) RETURNS datetime LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_dehumanize(value):
+          res = [arrow.get(v).dehumanize("in a month").datetime for v in value]
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_span(value datetime) RETURNS array(datetime) LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_span(value):
+          res = []
+          for v in value:
+              arw = arrow.get(v)
+              start, end = arw.span('hour')
+              res.append([start.datetime, end.datetime])
+          return res
+      $$;
+  
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_floor(value datetime) RETURNS datetime LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_floor(value):
+          res = [arrow.get(v).floor('hour').datetime for v in value]
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_ceil(value datetime) RETURNS datetime LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_ceil(value):
+          res = [arrow.get(v).ceil('hour').datetime for v in value]
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_range(value datetime('UTC')) RETURNS array(string) LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_range(value):
+          res = []
+          for v in value:
+              tmp_res = []
+              start = arrow.get(v)
+              end = start.shift(hours=1)
+              for r in arrow.Arrow.range('hour', start, end):
+                  tmp_res.append(r.format('YYYY-MM-DD HH:mm:ss'))
+              res.append(tmp_res)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf7-3-1
+    type: stream
+    query: select test_dehumanize(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: datetime
+      - name: value
+        type: datetime
+
+  - name: python-udf7-3-2
+    type: stream
+    query: select test_span(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: array(datetime)
+      - name: value
+        type: datetime
+
+  - name: python-udf7-3-3
+    type: stream
+    query: select test_floor(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: datetime
+      - name: value
+        type: datetime
+
+  - name: python-udf7-3-4
+    type: stream
+    query: select test_ceil(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: datetime
+      - name: value
+        type: datetime
+
+  - name: python-udf7-3-5
+    type: stream
+    query: select test_range(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: array(string)
+      - name: value
+        type: datetime
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream(value) values (parse_datetime32_best_effort('2025-01-01T01:11:11Z'));
+
+  - type: check
+    target_name: python-udf7-3-1
+    expected_result:
+      - ['2025-02-01 01:11:11', '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-3-2
+    expected_result:
+      - [['2025-01-01 01:00:00', '2025-01-01 01:59:59'], '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-3-3
+    expected_result:
+      - ['2025-01-01 01:00:00', '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-3-4
+    expected_result:
+      - ['2025-01-01 01:59:59', '2025-01-01 01:11:11']
+
+  - type: check
+    target_name: python-udf7-3-5
+    expected_result:
+      - [['2025-01-01 01:11:11', '2025-01-01 02:11:11'], '2025-01-01 01:11:11']

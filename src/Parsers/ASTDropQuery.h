@@ -35,6 +35,7 @@ public:
 
     /// proton: starts
     bool is_external_table{false};
+    bool cascade{false};
     /// proton: ends
 
     // We detach the object permanently, so it will not be reattached back during server restart.
@@ -49,7 +50,7 @@ public:
         return removeOnCluster<ASTDropQuery>(clone(), new_database);
     }
 
-    virtual QueryKind getQueryKind() const override { return QueryKind::Drop; }
+    QueryKind getQueryKind() const override { return QueryKind::Drop; }
 
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;

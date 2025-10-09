@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Storages/MergeTree/MergeTreeDataPartType.h>
 #include <Interpreters/SystemLog.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/NamesAndAliases.h>
@@ -32,7 +33,10 @@ struct PartLogElement
     String table_name;
     String part_name;
     String partition_id;
+    String partition;
     String path_on_disk;
+
+    MergeTreeDataPartType part_type;
 
     /// Size of the part
     UInt64 rows = 0;

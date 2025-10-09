@@ -426,7 +426,7 @@ The range tuple must be a constant:
             {"from_table", "SELECT morton_decode(2, code) FROM table", ""},
             {"from_table_range", "SELECT morton_decode((1,2), code) FROM table", ""},
             },
-        .categories {"ZCurve", "Morton coding"}
+        .category {"Encoding"}
     });
 }
 

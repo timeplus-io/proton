@@ -5,6 +5,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
+#include <Server/RestRouterHandlers/ColumnDefinition.h>
 
 #include <gtest/gtest.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -12,6 +13,8 @@
 
 #include <Common/tests/gtest_global_context.h>
 
+namespace
+{
 DB::ASTPtr queryToAST(const DB::String & query)
 {
     const char * start = query.data();
@@ -43,6 +46,14 @@ std::string ignoreEmptyChars(std::string str)
     return str;
 }
 
+/// Unused function - commented out to avoid compilation warning
+/// Poco::JSON::Object::Ptr parseJSON(const std::string & json_str)
+/// {
+///     Poco::JSON::Parser parser;
+///     return parser.parse(json_str).extract<Poco::JSON::Object::Ptr>();
+/// }
+}
+
 TEST(DDLHelper, getJSONFromCreateQuery)
 {
     /// normal case
@@ -55,7 +66,7 @@ CREATE STREAM default.tests
     `cpu_usage`      float32,
     `timestamp`      datetime64(3) DEFAULT now64(3),
     `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(1, 1, rand()))###")),
+) ENGINE = Stream(1, rand()))###")),
         ignoreEmptyChars(R"###({
 "columns": [{
     "name": "device",
@@ -83,7 +94,6 @@ CREATE STREAM default.tests
 "name": "tests",
 "order_by_granularity": "H",
 "partition_by_granularity": "D",
-"replication_factor": 1,
 "shard_by_expression": "rand()",
 "shards": 1
 })###"));
@@ -97,7 +107,7 @@ CREATE STREAM default.tests
     `_tp_index_time`datetime(3) DEFAULT now(UTC),
     `_tp_xxxx`      uint64,
     `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(2, 1, rand()))###"),
+) ENGINE = Stream(2, rand()))###"),
         ignoreEmptyChars(R"###(
 {
 	"columns": [{
@@ -123,7 +133,6 @@ CREATE STREAM default.tests
 	"name": "tests",
 	"order_by_granularity": "H",
 	"partition_by_granularity": "D",
-	"replication_factor": 1,
 	"shard_by_expression": "rand()",
 	"shards": 2
 })###"));
@@ -134,7 +143,7 @@ CREATE STREAM default.tests
 CREATE STREAM default.tests
 (
     `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(2, 1, rand())
+) ENGINE = Stream(2, rand())
 PARTITION BY ttl
 ORDER BY ttl
 TTL ttl + to_interval_day(1)
@@ -150,7 +159,6 @@ TTL ttl + to_interval_day(1)
 	"name": "tests",
 	"order_by_expression": "ttl",
 	"partition_by_expression": "ttl",
-	"replication_factor": 1,
 	"shard_by_expression": "rand()",
 	"shards": 2,
     "ttl_expression":"ttl + to_interval_day(1)"
@@ -186,49 +194,49 @@ TEST(DDLHelper, getJSONFromAlterQuery)
     EXPECT_EQ(queryToJSON(R"###(ALTER STREAM tests DROP COLUMN id1)###"), ignoreEmptyChars(R"###({"name": "id1"})###"));
 }
 
-nlog::OpCode getOpCodeFromSQL(const String & query)
+cluster::protocol::OpCode getOpCodeFromSQL(const String & query)
 {
     auto ast = queryToAST(query);
     if (const auto * alter = ast->as<DB::ASTAlterQuery>())
         return DB::Streaming::getOpCodeFromQuery(*alter);
 
-    return nlog::OpCode::MAX_OPS_CODE;
+    return cluster::protocol::OpCode::Null;
 }
 
 TEST(DDLHelper, getOpCodeFromQuery)
 {
     /// modify ttl
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), nlog::OpCode::ALTER_TABLE);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY)###"), cluster::protocol::OpCode::AlterStreamSettings);
 
     /// add column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id uint32 DEFAULT 20)###"), nlog::OpCode::CREATE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests ADD COLUMN id uint32 DEFAULT 20)###"), cluster::protocol::OpCode::CreateColumn);
 
     /// modify column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64)###"), nlog::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests MODIFY COLUMN id uint64 DEFAULT 64)###"), cluster::protocol::OpCode::AlterColumn);
 
     /// rename column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), nlog::OpCode::ALTER_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests RENAME COLUMN id to id1)###"), cluster::protocol::OpCode::AlterColumn);
 
     /// drop column
-    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests DROP COLUMN id1)###"), nlog::OpCode::DELETE_COLUMN);
+    EXPECT_EQ(getOpCodeFromSQL(R"###(ALTER STREAM tests DROP COLUMN id1)###"), cluster::protocol::OpCode::DeleteColumn);
 }
 
 TEST(DDLHelper, getAlterTableParamOpCode)
 {
     /// modify ttl
-    EXPECT_EQ(DB::Streaming::getAlterTableParamOpCode({{"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::ALTER_TABLE);
+    EXPECT_EQ(DB::Streaming::getAlterTableParamOpCode({{"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), cluster::protocol::OpCode::AlterStreamSettings);
 
     /// add column
     EXPECT_EQ(
-        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), nlog::OpCode::CREATE_COLUMN);
+        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_POST}}), cluster::protocol::OpCode::CreateColumn);
 
     /// modify column
     EXPECT_EQ(
-        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_PATCH}}), nlog::OpCode::ALTER_COLUMN);
+        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_PATCH}}), cluster::protocol::OpCode::AlterColumn);
 
     /// drop column
     EXPECT_EQ(
-        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), nlog::OpCode::DELETE_COLUMN);
+        DB::Streaming::getAlterTableParamOpCode({{"column", "test"}, {"query_method", Poco::Net::HTTPRequest::HTTP_DELETE}}), cluster::protocol::OpCode::DeleteColumn);
 }
 
 TEST(DDLHelper, checkAndPrepareCreateQueryForStream)
@@ -243,17 +251,17 @@ CREATE STREAM default.tests
     `cpu_usage`      float32,
     `timestamp`      datetime64(3) DEFAULT now64(3),
     `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(1, 1, rand())
+) ENGINE = Stream(1, rand())
 )###");
     auto * create = ast->as<DB::ASTCreateQuery>();
     DB::Streaming::checkAndPrepareCreateQueryForStream(*create, ctx);
-    EXPECT_EQ(create->columns_list->columns->children.size(), 6);
+    EXPECT_EQ(create->columns_list->columns->children.size(), 7);
 
     DB::ASTFunction * order_by = create->storage->order_by->as<DB::ASTFunction>();
     EXPECT_EQ(order_by->name, "to_start_of_hour");
 
     DB::ASTFunction * partition_by = create->storage->partition_by->as<DB::ASTFunction>();
-    EXPECT_EQ(partition_by->name, "to_YYYYMMDD");
+    EXPECT_EQ(partition_by->name, "to_YYYYMM");
 
     /// throw exception if try to add _tp_xxx column
     ast = queryToAST(R"###(
@@ -263,7 +271,7 @@ CREATE STREAM default.tests
     `_tp_index_time`datetime(3) DEFAULT now(UTC),
     `_tp_xxxx`      uint64,
     `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(2, 1, rand()))###");
+) ENGINE = Stream(2, rand()))###");
     create = ast->as<DB::ASTCreateQuery>();
     EXPECT_THROW(DB::Streaming::checkAndPrepareCreateQueryForStream(*create, ctx), DB::Exception);
 
@@ -273,7 +281,7 @@ CREATE STREAM default.tests
 (
     `timestamp`      datetime64(3) DEFAULT now64(3),
     `ttl`            datetime DEFAULT now()
-) ENGINE = Stream(1, 1, rand())
+) ENGINE = Stream(1, rand())
 SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 )###");
     create = ast->as<DB::ASTCreateQuery>();
@@ -283,10 +291,12 @@ SETTINGS event_time_column = 'to_start_of_hour(timestamp)'
 CREATE STREAM default.tests (
   `timestamp` datetime64(3) DEFAULT now64(3),
   `ttl` datetime DEFAULT now(),
-  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), LZ4()),
-  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 2
-) ENGINE = Stream(1, 1, rand())
-PARTITION BY to_YYYYMMDD(_tp_time)
+  `_tp_time` datetime64(3,'UTC') DEFAULT to_start_of_hour(timestamp) CODEC(DoubleDelta(), ZSTD()),
+  `_tp_sn` int64 CODEC(Delta(), ZSTD()),
+  INDEX _tp_time_index _tp_time TYPE minmax GRANULARITY 32,
+  INDEX _tp_sn_index_tp_sn TYPE minmax GRANULARITY 32
+) ENGINE = Stream(1, rand())
+PARTITION BY to_YYYYMM(_tp_time)
 ORDER BY to_start_of_hour(_tp_time) SETTINGS event_time_column='to_start_of_hour(timestamp)')###"));
 }
 
@@ -304,19 +314,19 @@ CREATE STREAM default.tests
 ))###");
     auto * create = ast->as<DB::ASTCreateQuery>();
 
-    DB::Streaming::prepareEngine(*create, global_context);
-    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = Stream(1, 1, rand()))###"));
+    DB::Streaming::prepareStorageEngine(*create, global_context);
+    EXPECT_EQ(ignoreEmptyChars(queryToString(*create->storage)), ignoreEmptyChars(R"###(ENGINE = Stream(1, rand()))###"));
 
     ast = queryToAST(R"###(
 CREATE STREAM default.tests
 (
     `ttl`            datetime DEFAULT now()
 )
-SETTINGS shards=2, replicas=1, sharding_expr='hash(ttl)'
+SETTINGS shards=2, sharding_expr='hash(ttl)'
 )###");
     create = ast->as<DB::ASTCreateQuery>();
-    DB::Streaming::prepareEngine(*create, global_context);
+    DB::Streaming::prepareStorageEngine(*create, global_context);
     EXPECT_EQ(
         ignoreEmptyChars(queryToString(*create->storage)),
-        ignoreEmptyChars(R"###(ENGINE=Stream(2,1,hash(ttl))SETTINGSshards=2,replicas=1,sharding_expr='hash(ttl)')###"));
+        ignoreEmptyChars(R"###(ENGINE=Stream(2,hash(ttl))SETTINGSshards=2,sharding_expr='hash(ttl)')###"));
 }

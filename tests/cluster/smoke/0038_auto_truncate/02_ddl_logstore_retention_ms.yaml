@@ -1,0 +1,178 @@
+tags:
+  - materialized view
+  - kafka
+  - external_stream
+
+description: |
+  Tests covering create stream settings logstore_retention_ms scenario.
+  Main steps:
+  - create external stream
+  - create target stream settings logstore_retention_ms=3000 (3s)
+  - create mv
+  - insert data into external stream from random stream
+  - verify target stream native log truncated
+  - verify container log contains "reason=retention_time_breached"
+  - verify container log contains "retention_size=18446744073709551615"
+  - verify container log contains "retention_check_ms=2000"
+  - verify container log contains "min_size_to_keep=1048576"
+
+cluster:
+  - p1k1
+
+steps:
+  # create topic
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  # create stream & mv
+  - type: query
+    sql: drop view if exists test38_mv;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test38_rd;
+
+  - type: query
+    sql: drop stream if exists test38_target2;
+
+  - type: query
+    sql: drop stream if exists test38_external;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create random stream test38_rd (
+        id string default to_string(rand() % 100),
+        value string default 'abcd'
+      );
+
+  - type: query
+    sql: |
+      create stream test38_target2 (id int64, value string)
+      settings logstore_retention_ms = 3000;
+
+  - type: query
+    sql: |
+      create external stream test38_external (id int64, value string)
+      settings type='kafka',
+               brokers='stream-store:9092',
+               topic='test',
+               data_format='JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view test38_mv into test38_target2 as 
+      select to_int64(id), value from test38_external;
+
+  - type: wait
+    time: 8 # wait some time for nativelog created
+
+  - name: auto-truncate-2-1
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test38_target2';")
+
+      # verify mv first-line native log exists
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+      [ -f "$first_record" ] && echo "true" || echo "After creating mv, there should be one native log, but none was found. ($first_record)"
+
+  - type: check
+    target_name: auto-truncate-2-1
+    expected_result: ["true"]
+
+  - type: wait
+    time: 1
+
+  # insert data
+  - type: stream
+    query: |
+      insert into test38_external select id, value
+      from test38_rd settings eps=50000;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: string
+  
+  - type: wait
+    time: 15 # wait some time for auto truncate take effect
+
+  # check
+  - name: auto-truncate-2-2
+    type: command
+    node: [p1]
+    shell: |
+      uuid=$(proton client -h 127.1 -q "select uuid from system.tables where name='test38_target2';")
+
+      # verify mv first-line native log removed after auto truncate
+      first_record=/var/lib/proton/nativelog/default/${uuid}.0/00000001-00000000000000000001.log
+
+      [ ! -e "$first_record" ] && echo "true" || { echo "After inserting data, the first native log should have been removed, but it was not. ($first_record)"; ls -ltrh /var/lib/proton/nativelog/default/${uuid}.0; }
+
+  - type: check
+    target_name: auto-truncate-2-2
+    expected_result: ["true"]
+
+  - name: auto-truncate-2-3
+    type: command
+    node: [p1]
+    shell: |
+      log=/var/log/proton-server/proton-server.log
+      [ $(grep "test38_target2" $log | grep -o "reason=retention_time_breached" | wc -l) -ge 1 ] && echo "true" || echo "expect log reason=retention_time_breached not found"
+
+  - type: check
+    target_name: auto-truncate-2-3
+    expected_result: ["true"]
+
+
+  - name: auto-truncate-2-4
+    type: command
+    node: [p1]
+    shell: |
+      log=/var/log/proton-server/proton-server.log
+      [ $(grep "test38_target2" $log | grep -o "retention_size=18446744073709551615" | wc -l) -ge 1 ] && echo "true" || echo "expect log retention_size=18446744073709551615 not found"
+
+  - type: check
+    target_name: auto-truncate-2-4
+    expected_result: ["true"]
+
+  - name: auto-truncate-2-5
+    type: command
+    node: [p1]
+    shell: |
+      log=/var/log/proton-server/proton-server.log
+      [ $(grep "test38_target2" $log | grep -o "retention_check_ms=2000" | wc -l) -ge 1 ] && echo "true" || echo "expect log retention_check_ms=2000 not found"
+
+  - type: check
+    target_name: auto-truncate-2-5
+    expected_result: ["true"]
+
+  - name: auto-truncate-2-6
+    type: command
+    node: [p1]
+    shell: |
+      log=/var/log/proton-server/proton-server.log
+      [ $(grep "test38_target2" $log | grep -o "min_size_to_keep=1048576" | wc -l) -ge 1 ] && echo "true" || echo "expect log min_size_to_keep=1048576 not found"
+
+  - type: check
+    target_name: auto-truncate-2-6
+    expected_result: ["true"]

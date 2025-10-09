@@ -21,6 +21,8 @@
 /// proton: starts.
 #include <DataTypes/ObjectUtils.h>
 #include <Processors/QueryPlan/QueryExecuteMode.h>
+#include <Processors/QueryPlan/Streaming/ConcatStep.h>
+#include <Processors/QueryPlan/Streaming/DelayStep.h>
 #include <Processors/QueryPlan/Streaming/LimitStep.h>
 #include <Processors/QueryPlan/Streaming/OffsetStep.h>
 /// proton: ends.
@@ -56,11 +58,11 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
 
     size_t num_children = ast->list_of_selects->children.size();
     if (!num_children)
-        throw Exception("Logical error: no children in ASTSelectWithUnionQuery", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: no children in ASTSelectWithUnionQuery");
 
     /// proton: starts. Not allow INTO OUTFILE for beta
     if (ast->out_file)
-        throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+        throw Exception(ErrorCodes::INTO_OUTFILE_NOT_ALLOWED, "INTO OUTFILE is not allowed");
     /// proton: ends
 
     /// Note that we pass 'required_result_column_names' to the first SELECT.
@@ -88,11 +90,9 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
                 = getCurrentChildResultHeader(ast->list_of_selects->children.at(query_num), required_result_column_names);
 
             if (full_result_header_for_current_select.columns() != full_result_header.columns())
-                throw Exception("Different number of columns in UNION ALL elements:\n"
-                    + full_result_header.dumpNames()
-                    + "\nand\n"
-                    + full_result_header_for_current_select.dumpNames() + "\n",
-                    ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
+                throw Exception(ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH,
+                                "Different number of columns in UNION ALL elements:\n{}\nand\n{}\n",
+                                full_result_header.dumpNames(), full_result_header_for_current_select.dumpNames());
 
             required_result_column_names_for_other_selects[query_num].reserve(required_result_column_names.size());
             for (const auto & pos : positions_of_required_result_columns)
@@ -155,6 +155,9 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
 
         nested_interpreters.emplace_back(
             buildCurrentChildInterpreter(ast->list_of_selects->children.at(query_num), require_full_header ? Names() : current_required_result_column_names));
+        // We need to propagate the uses_view_source flag from children to the (self) parent since, if one of the children uses
+        // a view source that means that the parent uses it too and can be cached globally
+        uses_view_source |= nested_interpreters.back()->usesViewSource();
     }
 
     /// Determine structure of the result.
@@ -196,11 +199,9 @@ Block InterpreterSelectWithUnionQuery::getCommonHeaderForUnion(const Blocks & he
     for (size_t query_num = 1; query_num < num_selects; ++query_num)
     {
         if (headers[query_num].columns() != num_columns)
-            throw Exception("Different number of columns in UNION ALL elements:\n"
-                            + common_header.dumpNames()
-                            + "\nand\n"
-                            + headers[query_num].dumpNames() + "\n",
-                            ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
+            throw Exception(ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH,
+                            "Different number of columns in UNION ALL elements:\n{}\nand\n{}\n",
+                            common_header.dumpNames(), headers[query_num].dumpNames());
     }
 
     std::vector<const ColumnWithTypeAndName *> columns(num_selects);
@@ -242,7 +243,7 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;
 
 /// proton : starts. Calculate data stream semantic for the underlying subquery as well
-Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::DataStreamSemanticEx * output_data_stream_semantic)
+Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_, ContextPtr context_, bool is_subquery, Streaming::DataStreamSemanticEx * output_data_stream_semantic, bool is_create_parameterized_view)
 {
     SelectQueryOptions select_options;
     select_options.analyze();
@@ -252,6 +253,17 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
 
     if (!context_->hasQueryContext())
     {
+        if (is_create_parameterized_view)
+        {
+            SelectQueryOptions options;
+            if (is_subquery)
+                options = options.subquery();
+    
+            options = options.createParameterizedView();
+
+            return InterpreterSelectWithUnionQuery(query_ptr_, context_, std::move(options.analyze())).getSampleBlock();
+        }
+
         InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
         if (output_data_stream_semantic)
             *output_data_stream_semantic = interpreter.getDataStreamSemantic();
@@ -274,6 +286,18 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     auto cache_iter = cache.find(key);
     if (cache_iter != cache.end())
         return cache_iter->second;
+
+    if (is_create_parameterized_view)
+    {
+        SelectQueryOptions options;
+        if (is_subquery)
+            options = options.subquery();
+
+        options = options.createParameterizedView();
+
+        return cache[key]
+            = InterpreterSelectWithUnionQuery(query_ptr_, context_, std::move(options.analyze())).getSampleBlock();
+    }
 
     InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
 
@@ -327,9 +351,72 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
         }
 
         auto max_threads = context->getSettingsRef().max_threads;
-        auto union_step = std::make_unique<UnionStep>(std::move(data_streams), max_threads);
 
-        query_plan.unitePlans(std::move(union_step), std::move(plans));
+        /// proton: starts. Union historical and streaming query plans
+        ///
+        /// [historical_plan-1] ———+====> (Union or Delay) ———+====> (Concat) ==> ...
+        ///         ...            |                          |
+        /// [historical_plan-m] ———+                          |
+        ///                                                   |
+        ///                                                   |
+        /// [streaming_plan_1]  ———+====>      (Union)     ———+
+        ///         ...            |
+        /// [streaming_plan_n]  ———+
+        ///
+        if (std::ranges::any_of(data_streams, [](const auto & data_stream) { return data_stream.is_streaming; })
+            && std::ranges::any_of(data_streams, [](const auto & data_stream) { return !data_stream.is_streaming; }))
+        {
+            DataStreams historical_streams, streaming_streams;
+            std::vector<std::unique_ptr<QueryPlan>> historical_plans, streaming_plans;
+            for (size_t i = 0; i < num_plans; ++i)
+            {
+                auto & data_stream = data_streams[i];
+                auto & plan = plans[i];
+                if (data_stream.is_streaming)
+                {
+                    streaming_streams.push_back(std::move(data_stream));
+                    streaming_plans.push_back(std::move(plan));
+                }
+                else
+                {
+                    historical_streams.push_back(std::move(data_stream));
+                    historical_plans.push_back(std::move(plan));
+                }
+            }
+
+            /// Unite historical plans via UnionStep or Streaming::DelayStep
+            QueryPlanStepPtr union_step;
+            if (settings.union_historical_queries_in_parallel)
+                union_step = std::make_unique<UnionStep>(std::move(historical_streams), max_threads);
+            else
+                union_step = std::make_unique<Streaming::DelayStep>(std::move(historical_streams));
+
+            auto historical_plan = std::make_unique<QueryPlan>();
+            historical_plan->unitePlans(std::move(union_step), std::move(historical_plans));
+
+            /// Unite streaming plans via UnionStep
+            auto streaming_plan = std::make_unique<QueryPlan>();
+            streaming_plan->unitePlans(std::make_unique<UnionStep>(std::move(streaming_streams), max_threads), std::move(streaming_plans));
+
+            /// Concat historical plan and streaming plan via Streaming::ConcatStep
+            plans.clear();
+            plans.emplace_back(std::move(historical_plan));
+            plans.emplace_back(std::move(streaming_plan));
+
+            DataStreams input_streams;
+            input_streams.reserve(plans.size());
+            for (const auto & plan : plans)
+                input_streams.emplace_back(plan->getCurrentDataStream());
+
+            query_plan.unitePlans(
+                std::make_unique<Streaming::ConcatStep>(std::move(input_streams), /*disable_concat_callback=*/true), std::move(plans));
+        }
+        else
+        {
+            auto union_step = std::make_unique<UnionStep>(std::move(data_streams), max_threads);
+            query_plan.unitePlans(std::move(union_step), std::move(plans));
+        }
+        /// proton: ends.
 
         const auto & query = query_ptr->as<ASTSelectWithUnionQuery &>();
         if (query.union_mode == SelectUnionMode::DISTINCT)
@@ -385,6 +472,7 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
         /// proton: ends.
     }
 
+    addAdditionalPostFilter(query_plan);
     query_plan.addInterpreterContext(context);
 }
 
@@ -469,6 +557,12 @@ Streaming::DataStreamSemanticEx InterpreterSelectWithUnionQuery::getDataStreamSe
     return data_semantic;
 }
 
+void InterpreterSelectWithUnionQuery::assertNoNonDeterministicFunctions(const Names & required, std::string_view msg_prefix) const
+{
+    for (const auto & interpreter : nested_interpreters)
+        interpreter->assertNoNonDeterministicFunctions(required, msg_prefix);
+}
+
 std::set<String> InterpreterSelectWithUnionQuery::getGroupByColumns() const
 {
     std::set<String> group_by_columns;
@@ -481,6 +575,16 @@ std::set<String> InterpreterSelectWithUnionQuery::getGroupByColumns() const
         group_by_columns.insert(nested_group_by.begin(), nested_group_by.end());
     }
     return group_by_columns;
+}
+
+bool InterpreterSelectWithUnionQuery::isConsistentWithoutCheckpoint() const
+{
+    for (const auto & interpreter : nested_interpreters)
+    {
+        if (!interpreter->isConsistentWithoutCheckpoint())
+            return false;
+    }
+    return true;
 }
 /// proton: ends
 

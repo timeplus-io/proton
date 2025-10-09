@@ -2,6 +2,8 @@
 
 #include <Core/Streaming/Watermark.h>
 
+#include <numeric>
+
 namespace DB
 {
 namespace Streaming::HopWindowHelper
@@ -18,14 +20,14 @@ WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, co
 /// For example: hop(<stream>, 2s, 3s), assume current watermark is `6s` so
 /// - The slide interval is `2s`
 /// - The window interval is `3s`
-/// - The base-bucket interval is `1s`
+/// - The base-bucket (gcd) interval is `1s`
 ///  [bucket-0] [bucket-1] [bucket-2] [bucket-3] [bucket-4] [bucket-5] [bucket-6]
 /// |           window-1             |                                  ^
 ///                       |            window-2            |            |
 ///                                             |            window-3   |        |
 ///                                                                     |
 ///                                                               watermark (6s)
-/// As above, we can finlize the follows windows:
+/// As above, we can finalize the follows windows:
 /// 1) `window-1`, which contains `bucket-0`, `bucket-1`, `bucket-2`
 /// 2) `window-2`, which contains `bucket-2`, `bucket-3`, `bucket-4`
 Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params)
@@ -47,7 +49,7 @@ Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params)
         last_finalized_window_end};
 }
 
-/// \brief Get max exprired time bucket can be remove by the \param watermark
+/// \brief Get max expired time bucket can be remove by the \param watermark
 /// \param is_start_time_bucket. true: <gcd window start time>, otherwise: <gcd window end time>
 /// For example: hop(<stream>, 2s, 3s), assume current watermark is `6s` so
 /// - The slide interval is `2s`
@@ -59,7 +61,7 @@ Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params)
 ///                                             |            window-3   |        |
 ///                                                                     |
 ///                                                               watermark (6s)
-/// As above, we finlized the follows windows:
+/// As above, we finalized the follows windows:
 /// 1) `window-1`, which contains `bucket-0`, `bucket-1`, `bucket-2`
 /// 2) `window-2`, which contains `bucket-2`, `bucket-3`, `bucket-4`
 /// So we can remove max bucket `bucket-3` (before next window-3)
@@ -99,7 +101,7 @@ WindowsWithBuckets getWindowsWithBuckets(const HopWindowParams & params, bool is
         return {};
 
     Window window;
-    Int64 min_bucket_of_window, max_bucket_of_window;
+    Int64 min_bucket_of_window = 0, max_bucket_of_window = 0;
     auto calc_window_min_max_buckets = [&]() {
         if (is_start_time_bucket)
         {
@@ -128,7 +130,7 @@ WindowsWithBuckets getWindowsWithBuckets(const HopWindowParams & params, bool is
 
     /// Collect windows
     WindowsWithBuckets windows_with_buckets;
-    while (*buckets.begin() <= max_bucket_of_window)
+    while (buckets.front() <= max_bucket_of_window)
     {
         auto window_with_buckets = windows_with_buckets.emplace(windows_with_buckets.begin(), WindowWithBuckets{window, {}});
         for (auto time_bucket : buckets)

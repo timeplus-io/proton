@@ -1,0 +1,12 @@
+name: http_external_stream
+description: Smoke tests for Http external streams
+tags:
+  - smoke
+  - http
+  - external_stream
+
+setup:
+  scope: suite
+  steps:
+  - type: wait
+    time: 10 # splunk need time to ready

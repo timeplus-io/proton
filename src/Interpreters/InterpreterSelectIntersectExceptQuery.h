@@ -42,7 +42,11 @@ public:
     bool hasStreamingWindowFunc() const override;
     Streaming::DataStreamSemanticEx getDataStreamSemantic() const override;
 
+    void assertNoNonDeterministicFunctions(const Names & required, std::string_view msg_prefix) const override;
+
     std::set<String> getGroupByColumns() const override;
+
+    bool isConsistentWithoutCheckpoint() const override;
     /// proton: ends
 
 private:

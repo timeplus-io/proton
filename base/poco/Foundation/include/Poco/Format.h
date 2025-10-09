@@ -127,9 +127,9 @@ void Foundation_API format(std::string& result, const std::string& fmt, const An
 void Foundation_API format(std::string& result, const std::string& fmt, const Any& value1, const Any& value2, const Any& value3, const Any& value4, const Any& value5, const Any& value6, const Any& value7, const Any& value8, const Any& value9, const Any& value10);
 
 
-void Foundation_API format(std::string& result, const std::string& fmt, const std::vector<Any>& values);
-	/// Supports a variable number of arguments and is used by
-	/// all other variants of format().
+void Foundation_API formatVector(std::string & result, const std::string & fmt, const std::vector<Any> & values);
+/// Supports a variable number of arguments and is used by
+/// all other variants of format().
 
 
 } // namespace Poco

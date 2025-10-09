@@ -1,0 +1,50 @@
+tags:
+  - global aggregation
+description: global aggregation by max and group by id, execute query, end query after
+  5 second
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '601'
+    type: stream
+    query: |
+      select id, max(value)
+      from test6_stream_only
+      group by id
+      limit 4
+      emit periodic 5s
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00')
+      ('dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01')
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05')
+      ('dev2', 'ca', 59, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03')
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02')
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08')
+      ('dev3', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:00')
+      ('dev3', 'ca', 66, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:01')
+      ('dev2', 'ca', 76, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:05')
+      ('dev2', 'ca', 80, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:03')
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:01:02')
+      ('dev8', 'ca', 77, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:01:08');
+
+  - type: check
+    target_name: '601'
+    mode: random
+    expected_result:
+      - [ dev2, '80' ]
+      - [ dev8, '77' ]
+      - [ dev1, '66' ]
+      - [ dev3, '66' ]
+

@@ -5,6 +5,9 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/FieldFromAST.h>
 
 #include <Core/Names.h>
 #include <IO/ReadBufferFromString.h>
@@ -15,7 +18,6 @@
 #include <Common/SettingsChanges.h>
 #include <Common/typeid_cast.h>
 
-
 namespace DB
 {
 
@@ -23,6 +25,7 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
 }
+
 
 class ParameterFieldVisitorToString : public StaticVisitor<String>
 {
@@ -93,6 +96,59 @@ public:
     }
 };
 
+
+class ParserLiteralOrMap : public IParserBase
+{
+public:
+protected:
+    const char * getName() const override { return "literal or map"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, bool hint) override
+    {
+        {
+            ParserLiteral literal;
+            if (literal.parse(pos, node, expected, hint))
+                return true;
+        }
+
+        ParserToken l_br(TokenType::OpeningCurlyBrace);
+        ParserToken r_br(TokenType::ClosingCurlyBrace);
+        ParserToken comma(TokenType::Comma);
+        ParserToken colon(TokenType::Colon);
+        ParserStringLiteral literal;
+
+        if (!l_br.ignore(pos, expected))
+            return false;
+
+        Map map;
+
+        while (!r_br.ignore(pos, expected))
+        {
+            if (!map.empty() && !comma.ignore(pos, expected))
+                return false;
+
+            ASTPtr key;
+            ASTPtr val;
+
+            if (!literal.parse(pos, key, expected, hint))
+                return false;
+
+            if (!colon.ignore(pos, expected))
+                return false;
+
+            if (!literal.parse(pos, val, expected, hint))
+                return false;
+
+            Tuple tuple;
+            tuple.push_back(std::move(key->as<ASTLiteral>()->value));
+            tuple.push_back(std::move(val->as<ASTLiteral>()->value));
+            map.push_back(std::move(tuple));
+        }
+
+        node = std::make_shared<ASTLiteral>(std::move(map));
+        return true;
+    }
+};
+
 /// Parse Identifier, Literal, Array/Tuple/Map of literals
 bool parseParameterValueIntoString(IParser::Pos & pos, String & value, Expected & expected)
 {
@@ -139,11 +195,14 @@ bool parseParameterValueIntoString(IParser::Pos & pos, String & value, Expected 
 bool ParserSetQuery::parseNameValuePair(SettingChange & change, IParser::Pos & pos, Expected & expected)
 {
     ParserCompoundIdentifier name_p;
-    ParserLiteral value_p;
+    ParserLiteralOrMap literal_or_map_p;
     ParserToken s_eq(TokenType::Equals);
+    ParserSetQuery set_p(true);
+    ParserFunction function_p;
 
     ASTPtr name;
     ASTPtr value;
+    ASTPtr function_ast;
 
     if (!name_p.parse(pos, name, expected))
         return false;
@@ -151,11 +210,15 @@ bool ParserSetQuery::parseNameValuePair(SettingChange & change, IParser::Pos & p
     if (!s_eq.ignore(pos, expected))
         return false;
 
-    if (ParserKeyword("TRUE").ignore(pos, expected))
-        value = std::make_shared<ASTLiteral>(Field(UInt64(1)));
-    else if (ParserKeyword("FALSE").ignore(pos, expected))
-        value = std::make_shared<ASTLiteral>(Field(UInt64(0)));
-    else if (!value_p.parse(pos, value, expected))
+    /// for SETTINGS disk=disk(type='s3', path='', ...)
+    if (function_p.parse(pos, function_ast, expected) && function_ast->as<ASTFunction>()->name == "disk")
+    {
+        tryGetIdentifierNameInto(name, change.name);
+        change.value = createFieldFromAST(function_ast);
+
+        return true;
+    }
+    else if (!literal_or_map_p.parse(pos, value, expected))
         return false;
 
     tryGetIdentifierNameInto(name, change.name);
@@ -168,11 +231,13 @@ bool ParserSetQuery::parseNameValuePairWithParameterOrDefault(
     SettingChange & change, String & default_settings, ParserSetQuery::Parameter & parameter, IParser::Pos & pos, Expected & expected)
 {
     ParserCompoundIdentifier name_p;
-    ParserLiteral value_p;
+    ParserLiteralOrMap value_p;
     ParserToken s_eq(TokenType::Equals);
+    ParserFunction function_p;
 
     ASTPtr node;
     String name;
+    ASTPtr function_ast;
 
     if (!name_p.parse(pos, node, expected))
         return false;
@@ -207,10 +272,13 @@ bool ParserSetQuery::parseNameValuePairWithParameterOrDefault(
     }
 
     /// Setting
-    if (ParserKeyword("TRUE").ignore(pos, expected))
-        node = std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(1)));
-    else if (ParserKeyword("FALSE").ignore(pos, expected))
-        node = std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(0)));
+    if (function_p.parse(pos, function_ast, expected) && function_ast->as<ASTFunction>()->name == "disk")
+    {
+        change.name = name;
+        change.value = createFieldFromAST(function_ast);
+
+        return true;
+    }
     else if (!value_p.parse(pos, node, expected))
         return false;
 
@@ -219,6 +287,7 @@ bool ParserSetQuery::parseNameValuePairWithParameterOrDefault(
 
     return true;
 }
+
 
 bool ParserSetQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {

@@ -7,11 +7,10 @@ namespace DB
 struct BlockWithShard
 {
     Block block;
-    int32_t shard;
+    UInt32 shard;
 
-    BlockWithShard(Block && block_, int32_t shard_) : block(std::move(block_)), shard(shard_) { }
+    BlockWithShard(Block && block_, UInt32 shard_) : block(std::move(block_)), shard(shard_) { }
 };
 
 using BlocksWithShard = std::vector<BlockWithShard>;
 }
-

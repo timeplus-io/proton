@@ -5,24 +5,23 @@
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/StorageProxy.h>
 
-namespace DB
-{
-
-namespace ExternalStream
+namespace DB::ExternalStream
 {
 
 class Timeplus final : public StorageProxy
 {
 public:
     Timeplus(
-        IStorage * storage,
-        StorageInMemoryMetadata & storage_metadata,
+        StorageID storage_id,
+        StorageInMemoryMetadata storage_metadata,
         std::unique_ptr<ExternalStreamSettings> settings_,
         bool attach,
         ContextPtr context);
     ~Timeplus() override = default;
 
     String getName() const override { return "TimeplusExternalStream"; }
+    bool isLocal() const override { return false; }
+
     StoragePtr getNested() const override { return storage_ptr; }
 
     bool squashInsert() const noexcept override { return false; }
@@ -53,9 +52,7 @@ private:
 
     bool secure;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
-
-}
 
 }

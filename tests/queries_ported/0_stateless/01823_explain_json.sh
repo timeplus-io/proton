@@ -17,7 +17,7 @@ $CLICKHOUSE_CLIENT -q "EXPLAIN json = 1, actions = 1, header = 1, description = 
 echo "--------"
 $CLICKHOUSE_CLIENT -q "EXPLAIN json = 1, actions = 1, description = 0
                        SELECT x, y from numbers(2) array join [number, 1] as x, [number + 1] as y  FORMAT TSVRaw
-                      " | grep arrayJoin -A 2
+                      " | grep ArrayJoin -A 2
 
 echo "--------"
 $CLICKHOUSE_CLIENT -q "EXPLAIN json = 1, actions = 1, description = 0

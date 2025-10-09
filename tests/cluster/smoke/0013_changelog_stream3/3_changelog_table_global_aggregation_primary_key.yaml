@@ -1,0 +1,90 @@
+tags:
+  - changelog(table))
+  - global aggregation
+  - subquery
+  - skip
+description: changelog(table) global aggregation (primary key)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_append_stream_3;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_append_stream_3 (id int, name string, val float);
+  - type: wait
+    time: 2
+
+  - name: "1454"
+    type: stream
+    query: |
+      with subquery as (select id, count() as cnt, min(val) as min_val, max(val)
+      as max_val from changelog(test14_append_stream_3, id, name) group by id)select
+      count(*), sum(cnt), min(min_val), max(max_val) from subquery;
+    schema:
+      - name: count()
+        type: uint64
+      - name: sum(cnt)
+        type: uint64
+      - name: min(min_val)  
+        type: float32
+      - name: max(max_val)
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (1, 'a', 11.1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (2, 'a', 33.3);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (1, 'b', 22.2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (2, 'b', 22.2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (1, 'c', 33.3);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (2, 'c', 11.1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (1, 'b', 44.4);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream_3 (id, name, val) values (2, 'b', 44.4);
+
+  - type: check
+    target_name: "1454"
+    expected_result:
+      - [2, 2, 11.100000381469727, 33.29999923706055]
+      - [2, 4, 11.100000381469727, 33.29999923706055]
+      - [2, 6, 11.100000381469727, 33.29999923706055]
+      - [2, 6, 11.100000381469727, 44.400001525878906]

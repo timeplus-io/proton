@@ -1,27 +1,76 @@
 #pragma once
 
+#include <Client/ConnectionPool.h>
 #include <Core/QueryProcessingStage.h>
-#include <Interpreters/ClusterProxy/IStreamFactory.h>
+#include <Interpreters/Cluster.h>
 #include <Interpreters/StorageID.h>
+#include <Parsers/IAST.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/StorageSnapshot.h>
 
 namespace DB
 {
 
+struct Settings;
+class Cluster;
+class Throttler;
+struct SelectQueryInfo;
+
+class Pipe;
+using Pipes = std::vector<Pipe>;
+
+class QueryPlan;
+using QueryPlanPtr = std::unique_ptr<QueryPlan>;
+
+struct StorageID;
+
+class PreparedSets;
+using PreparedSetsPtr = std::shared_ptr<PreparedSets>;
+
 namespace ClusterProxy
 {
 
-using ColumnsDescriptionByShardNum = std::unordered_map<UInt32, ColumnsDescription>;
+/// select query has database, table and table function names as AST pointers
+/// Creates a copy of query, changes database, table and table function names.
+ASTPtr rewriteSelectQuery(
+    ContextPtr context,
+    const ASTPtr & query,
+    const std::string & remote_database,
+    const std::string & remote_table,
+    ASTPtr table_function_ptr = nullptr);
 
-class SelectStreamFactory final : public IStreamFactory
+using ColumnsDescriptionByShardNum = std::unordered_map<UInt32, ColumnsDescription>;
+using AdditionalShardFilterGenerator = std::function<ASTPtr(uint64_t)>;
+
+class SelectStreamFactory
 {
 public:
+    struct Shard
+    {
+        /// Query and header may be changed depending on shard.
+        ASTPtr query;
+        Block header;
+
+        bool has_missing_objects = false;
+
+        Cluster::ShardInfo shard_info;
+
+        /// If we connect to replicas lazily.
+        /// (When there is a local replica with big delay).
+        bool lazy = false;
+
+        AdditionalShardFilterGenerator shard_filter_generator{};
+    };
+
+    using Shards = std::vector<Shard>;
+
     SelectStreamFactory(
         const Block & header_,
         const ColumnsDescriptionByShardNum & objects_by_shard_,
         const StorageSnapshotPtr & storage_snapshot_,
         QueryProcessingStage::Enum processed_stage_);
+
+    ~SelectStreamFactory() = default;
 
     void createForShard(
         const Cluster::ShardInfo & shard_info,
@@ -31,9 +80,10 @@ public:
         ContextPtr context,
         std::vector<QueryPlanPtr> & local_plans,
         Shards & remote_shards,
-        UInt32 shard_count) override;
+        UInt32 shard_count,
+        bool parallel_replicas_enabled,
+        AdditionalShardFilterGenerator shard_filter_generator);
 
-private:
     const Block header;
     const ColumnsDescriptionByShardNum objects_by_shard;
     const StorageSnapshotPtr storage_snapshot;

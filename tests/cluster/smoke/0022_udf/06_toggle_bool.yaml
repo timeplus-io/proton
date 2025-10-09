@@ -1,0 +1,34 @@
+tags:
+- udf
+description: bool input and output, toggle input
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: toggle_bool
+    arguments:
+    - name: bool_value
+      type: bool
+    return_type: bool
+    source: function toggle_bool(values) { for (let i = 0; i < values.length; i++)
+      values[i] = !values[i]; return values; }
+- type: wait
+  time: 5
+
+- name: udf-6
+  type: stream
+  query: select toggle_bool(true)
+  schema:
+  - name: toggle_bool(true)
+    type: bool
+
+- type: check
+  target_name: udf-6
+  expected_result:
+  - ['False']

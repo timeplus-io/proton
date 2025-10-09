@@ -12,10 +12,12 @@
 #include <absl/container/flat_hash_set.h>
 
 #include <base/unaligned.h>
+#include <base/defines.h>
 #include <base/sort.h>
 #include <Common/randomSeed.h>
 #include <Common/Arena.h>
 #include <Common/ArenaWithFreeLists.h>
+#include <Common/ArenaUtils.h>
 #include <Common/MemorySanitizer.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/HashTable/HashMap.h>
@@ -26,11 +28,6 @@
 #include <Dictionaries/DictionaryHelpers.h>
 
 
-namespace CurrentMetrics
-{
-    extern const Metric Write;
-}
-
 namespace ProfileEvents
 {
     extern const Event FileOpen;
@@ -38,6 +35,8 @@ namespace ProfileEvents
     extern const Event AIOWriteBytes;
     extern const Event AIORead;
     extern const Event AIOReadBytes;
+    extern const Event FileSync;
+    extern const Event FileSyncElapsedMicroseconds;
 }
 
 namespace DB
@@ -135,7 +134,7 @@ public:
 
     /// Reset block with new block_data
     /// block_data must be filled with zeroes if it is new block
-    inline void reset(char * new_block_data)
+    void reset(char * new_block_data)
     {
         block_data = new_block_data;
         current_block_offset = block_header_size;
@@ -143,15 +142,15 @@ public:
     }
 
     /// Check if it is enough place to write key in block
-    inline bool enoughtPlaceToWriteKey(const SSDCacheSimpleKey & cache_key) const
+    bool enoughtPlaceToWriteKey(const SSDCacheSimpleKey & cache_key) const
     {
         return (current_block_offset + (sizeof(cache_key.key) + sizeof(cache_key.size) + cache_key.size)) <= block_size;
     }
 
     /// Check if it is enough place to write key in block
-    inline bool enoughtPlaceToWriteKey(const SSDCacheComplexKey & cache_key) const
+    bool enoughtPlaceToWriteKey(const SSDCacheComplexKey & cache_key) const
     {
-        StringRef key = cache_key.key;
+        const StringRef & key = cache_key.key;
         size_t complex_key_size = sizeof(key.size) + key.size;
 
         return (current_block_offset + (complex_key_size + sizeof(cache_key.size) + cache_key.size)) <= block_size;
@@ -160,7 +159,7 @@ public:
     /// Write key and returns offset in ssd cache block where data is written
     /// It is client responsibility to check if there is enough place in block to write key
     /// Returns true if key was written and false if there was not enough place to write key
-    inline bool writeKey(const SSDCacheSimpleKey & cache_key, size_t & offset_in_block)
+    bool writeKey(const SSDCacheSimpleKey & cache_key, size_t & offset_in_block)
     {
         assert(cache_key.size > 0);
 
@@ -189,7 +188,7 @@ public:
         return true;
     }
 
-    inline bool writeKey(const SSDCacheComplexKey & cache_key, size_t & offset_in_block)
+    bool writeKey(const SSDCacheComplexKey & cache_key, size_t & offset_in_block)
     {
         assert(cache_key.size > 0);
 
@@ -198,7 +197,7 @@ public:
 
         char * current_block_offset_data = block_data + current_block_offset;
 
-        StringRef key = cache_key.key;
+        const StringRef & key = cache_key.key;
 
         /// Write complex key
         memcpy(reinterpret_cast<void *>(current_block_offset_data), reinterpret_cast<const void *>(&key.size), sizeof(key.size));
@@ -224,20 +223,20 @@ public:
         return true;
     }
 
-    inline size_t getKeysSize() const { return keys_size; }
+    size_t getKeysSize() const { return keys_size; }
 
     /// Write keys size into block header
-    inline void writeKeysSize()
+    void writeKeysSize()
     {
         char * keys_size_offset_data = block_data + block_header_check_sum_size;
         std::memcpy(keys_size_offset_data, &keys_size, sizeof(size_t));
     }
 
     /// Get check sum from block header
-    inline size_t getCheckSum() const { return unalignedLoad<size_t>(block_data); }
+    size_t getCheckSum() const { return unalignedLoad<size_t>(block_data); }
 
     /// Calculate check sum in block
-    inline size_t calculateCheckSum() const
+    size_t calculateCheckSum() const
     {
         size_t calculated_check_sum = static_cast<size_t>(CityHash_v1_0_2::CityHash64(block_data + block_header_check_sum_size, block_size - block_header_check_sum_size));
 
@@ -245,7 +244,7 @@ public:
     }
 
     /// Check if check sum from block header matched calculated check sum in block
-    inline bool checkCheckSum() const
+    bool checkCheckSum() const
     {
         size_t calculated_check_sum = calculateCheckSum();
         size_t check_sum = getCheckSum();
@@ -254,16 +253,16 @@ public:
     }
 
     /// Write check sum in block header
-    inline void writeCheckSum()
+    void writeCheckSum()
     {
         size_t check_sum = static_cast<size_t>(CityHash_v1_0_2::CityHash64(block_data + block_header_check_sum_size, block_size - block_header_check_sum_size));
         std::memcpy(block_data, &check_sum, sizeof(size_t));
     }
 
-    inline size_t getBlockSize() const { return block_size; }
+    size_t getBlockSize() const { return block_size; }
 
     /// Returns block data
-    inline char * getBlockData() const { return block_data; }
+    char * getBlockData() const { return block_data; }
 
     /// Read keys that were serialized in block
     /// It is client responsibility to ensure that simple or complex keys were written in block
@@ -406,16 +405,16 @@ public:
         current_write_block.writeCheckSum();
     }
 
-    inline char * getPlace(SSDCacheIndex index) const
+    char * getPlace(SSDCacheIndex index) const
     {
         return buffer.m_data + index.block_index * block_size + index.offset_in_block;
     }
 
-    inline size_t getCurrentBlockIndex() const { return current_block_index; }
+    size_t getCurrentBlockIndex() const { return current_block_index; }
 
-    inline const char * getData() const { return buffer.m_data; }
+    const char * getData() const { return buffer.m_data; }
 
-    inline size_t getSizeInBytes() const { return block_size * partition_blocks_size; }
+    size_t getSizeInBytes() const { return block_size * partition_blocks_size; }
 
     void readKeys(PaddedPODArray<KeyType> & keys) const
     {
@@ -432,7 +431,7 @@ public:
         }
     }
 
-    inline void reset()
+    void reset()
     {
         current_block_index = 0;
         current_write_block.reset(buffer.m_data);
@@ -471,7 +470,7 @@ public:
         auto path = std::filesystem::path{file_path};
         auto parent_path_directory = path.parent_path();
 
-        /// If cache file is in directory that does not exists create it
+        /// If cache file is in directory that does not exist create it
         if (!std::filesystem::exists(parent_path_directory))
             if (!std::filesystem::create_directories(parent_path_directory))
                 throw Exception(ErrorCodes::CANNOT_CREATE_DIRECTORY, "Failed to create directories.");
@@ -494,6 +493,20 @@ public:
             throwFromErrnoWithPath("Cannot preallocate space for the file " + file_path, file_path, ErrorCodes::CANNOT_ALLOCATE_MEMORY);
 
         current_blocks_size += file_blocks_size;
+    }
+
+    UInt64 diskSize() const
+    {
+        try
+        {
+            return std::filesystem::file_size(file_path);
+        }
+        catch (...)
+        {
+            return 0;
+        }
+
+        UNREACHABLE();
     }
 
     bool writeBuffer(const char * buffer, size_t buffer_size_in_blocks)
@@ -526,8 +539,6 @@ public:
                 throw Exception(ErrorCodes::CANNOT_IO_SUBMIT, "Cannot submit request for asynchronous IO on file {}", file_path);
         }
 
-        // CurrentMetrics::Increment metric_increment_write{CurrentMetrics::Write};
-
         io_event event;
 
         while (io_getevents(aio_context.ctx, 1, 1, &event, nullptr) < 0)
@@ -548,8 +559,11 @@ public:
             throw Exception(ErrorCodes::AIO_WRITE_ERROR,
                 "Not all data was written for asynchronous IO on file {}. returned: {}",
                 file_path,
-                std::to_string(bytes_written));
+                bytes_written);
 
+        ProfileEvents::increment(ProfileEvents::FileSync);
+
+        Stopwatch watch;
         #if defined(OS_DARWIN)
         if (::fsync(file.fd) < 0)
             throwFromErrnoWithPath("Cannot fsync " + file_path, file_path, ErrorCodes::CANNOT_FSYNC);
@@ -557,6 +571,7 @@ public:
         if (::fdatasync(file.fd) < 0)
             throwFromErrnoWithPath("Cannot fdatasync " + file_path, file_path, ErrorCodes::CANNOT_FSYNC);
         #endif
+        ProfileEvents::increment(ProfileEvents::FileSyncElapsedMicroseconds, watch.elapsedMicroseconds());
 
         current_block_index += buffer_size_in_blocks;
 
@@ -719,11 +734,10 @@ public:
                 if (!block.checkCheckSum())
                 {
                     std::string calculated_check_sum = std::to_string(block.calculateCheckSum());
-                    std::string check_sum = std::to_string(block.getCheckSum());
+                    std::string expected_check_sum = std::to_string(block.getCheckSum());
                     throw Exception(ErrorCodes::CORRUPTED_DATA,
-                        "Cache data corrupted. Checksum validation failed. Calculated {} in block {}",
-                        calculated_check_sum,
-                        check_sum);
+                        "Cache data corrupted. Checksum validation failed. Calculated {} expected in block {}, in file {}",
+                        calculated_check_sum, expected_check_sum, file_path);
                 }
 
                 std::forward<FetchBlockFunc>(func)(blocks_to_fetch[block_to_fetch_index], block.getBlockData());
@@ -749,9 +763,9 @@ public:
         }
     }
 
-    inline size_t getCurrentBlockIndex() const { return current_block_index; }
+    size_t getCurrentBlockIndex() const { return current_block_index; }
 
-    inline void reset()
+    void reset()
     {
         current_block_index = 0;
     }
@@ -768,7 +782,8 @@ private:
             if (this == &rhs)
                 return *this;
 
-            close(fd);
+            [[maybe_unused]] int err = ::close(fd);
+            chassert(!err || errno == EINTR);
 
             fd = rhs.fd;
             rhs.fd = -1;
@@ -777,13 +792,16 @@ private:
         ~FileDescriptor()
         {
             if (fd != -1)
-                close(fd);
+            {
+                [[maybe_unused]] int err = close(fd);
+                chassert(!err || errno == EINTR);
+            }
         }
 
         int fd = -1;
     };
 
-    inline static int preallocateDiskSpace(int fd, size_t offset, size_t len)
+    static int preallocateDiskSpace(int fd, size_t offset, size_t len)
     {
         #if defined(OS_FREEBSD)
             return posix_fallocate(fd, offset, len);
@@ -792,7 +810,7 @@ private:
         #endif
     }
 
-    inline static char * getRequestBuffer(const iocb & request)
+    static char * getRequestBuffer(const iocb & request)
     {
         char * result = nullptr;
 
@@ -805,7 +823,7 @@ private:
         return result;
     }
 
-    inline static ssize_t eventResult(io_event & event)
+    static ssize_t eventResult(io_event & event)
     {
         ssize_t  bytes_written;
 
@@ -855,18 +873,19 @@ public:
     {
         if (dictionary_key_type == DictionaryKeyType::Simple)
             return "SSDCache";
-        else
-            return "SSDComplexKeyCache";
+
+        return "SSDComplexKeyCache";
     }
 
     bool supportsSimpleKeys() const override { return dictionary_key_type == DictionaryKeyType::Simple; }
 
     SimpleKeysStorageFetchResult fetchColumnsForKeys(
         const PaddedPODArray<UInt64> & keys,
-        const DictionaryStorageFetchRequest & fetch_request) override
+        const DictionaryStorageFetchRequest & fetch_request,
+        IColumn::Filter * const default_mask) override
     {
         if constexpr (dictionary_key_type == DictionaryKeyType::Simple)
-            return fetchColumnsForKeysImpl<SimpleKeysStorageFetchResult>(keys, fetch_request);
+            return fetchColumnsForKeysImpl<SimpleKeysStorageFetchResult>(keys, fetch_request, default_mask);
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method insertColumnsForKeys is not supported for complex key storage");
     }
@@ -899,10 +918,11 @@ public:
 
     ComplexKeysStorageFetchResult fetchColumnsForKeys(
         const PaddedPODArray<StringRef> & keys,
-        const DictionaryStorageFetchRequest & fetch_request) override
+        const DictionaryStorageFetchRequest & fetch_request,
+        IColumn::Filter * const default_mask) override
     {
         if constexpr (dictionary_key_type == DictionaryKeyType::Complex)
-            return fetchColumnsForKeysImpl<ComplexKeysStorageFetchResult>(keys, fetch_request);
+            return fetchColumnsForKeysImpl<ComplexKeysStorageFetchResult>(keys, fetch_request, default_mask);
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method fetchColumnsForKeys is not supported for simple key storage");
     }
@@ -960,6 +980,8 @@ public:
         return index.getBufferSizeInBytes() + memory_partitions_bytes_size + file_partitions_bytes_size;
     }
 
+    UInt64 getStorageSize() const override { return file_buffer.diskSize(); }
+
 private:
 
     using TimePoint = std::chrono::system_clock::time_point;
@@ -978,9 +1000,9 @@ private:
         size_t in_memory_partition_index;
         CellState state;
 
-        inline bool isInMemory() const { return state == in_memory; }
-        inline bool isOnDisk() const { return state == on_disk; }
-        inline bool isDefaultValue() const { return state == default_value; }
+        bool isInMemory() const { return state == in_memory; }
+        bool isOnDisk() const { return state == on_disk; }
+        bool isDefaultValue() const { return state == default_value; }
     };
 
     struct KeyToBlockOffset
@@ -996,7 +1018,8 @@ private:
     template <typename Result>
     Result fetchColumnsForKeysImpl(
         const PaddedPODArray<KeyType> & keys,
-        const DictionaryStorageFetchRequest & fetch_request) const
+        const DictionaryStorageFetchRequest & fetch_request,
+        IColumn::Filter * const default_mask) const
     {
         Result result;
 
@@ -1006,6 +1029,7 @@ private:
         const time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
         size_t fetched_columns_index = 0;
+        size_t fetched_columns_index_without_default = 0;
 
         using BlockIndexToKeysMap = absl::flat_hash_map<size_t, PaddedPODArray<KeyToBlockOffset>, DefaultHash<size_t>>;
         BlockIndexToKeysMap block_to_keys_map;
@@ -1055,8 +1079,11 @@ private:
             {
                 case Cell::in_memory:
                 {
-                    result.key_index_to_state[key_index] = {key_state, fetched_columns_index};
+                    result.key_index_to_state[key_index] = {key_state,
+                        default_mask ? fetched_columns_index_without_default : fetched_columns_index};
+
                     ++fetched_columns_index;
+                    ++fetched_columns_index_without_default;
 
                     const auto & partition = memory_buffer_partitions[cell.in_memory_partition_index];
                     char * serialized_columns_place = partition.getPlace(cell.index);
@@ -1083,12 +1110,14 @@ private:
                 }
                 case Cell::default_value:
                 {
-                    result.key_index_to_state[key_index] = {key_state, fetched_columns_index};
+                    result.key_index_to_state[key_index] = {key_state,
+                        default_mask ? fetched_columns_index_without_default : fetched_columns_index};
                     result.key_index_to_state[key_index].setDefault();
                     ++fetched_columns_index;
                     ++result.default_keys_size;
 
-                    insertDefaultValuesIntoColumns(result.fetched_columns, fetch_request, key_index);
+                    if (!default_mask)
+                        insertDefaultValuesIntoColumns(result.fetched_columns, fetch_request, key_index);
                     break;
                 }
             }
@@ -1097,7 +1126,8 @@ private:
         /// Sort blocks by offset before start async io requests
         ::sort(blocks_to_request.begin(), blocks_to_request.end());
 
-        file_buffer.fetchBlocks(configuration.read_buffer_blocks_size, blocks_to_request, [&](size_t block_index, char * block_data)
+        file_buffer.fetchBlocks(configuration.read_buffer_blocks_size, blocks_to_request,
+            [&](size_t block_index, char * block_data)
         {
             auto & keys_in_block = block_to_keys_map[block_index];
 
@@ -1106,9 +1136,11 @@ private:
                 char * key_data = block_data + key_in_block.offset_in_block;
                 deserializeAndInsertIntoColumns(result.fetched_columns, fetch_request, key_data);
 
-                result.key_index_to_state[key_in_block.key_index].setFetchedColumnIndex(fetched_columns_index);
+                result.key_index_to_state[key_in_block.key_index].setFetchedColumnIndex(
+                    default_mask ? fetched_columns_index_without_default : fetched_columns_index);
 
                 ++fetched_columns_index;
+                ++fetched_columns_index_without_default;
             }
         });
 
@@ -1227,6 +1259,7 @@ private:
 
         SSDCacheIndex cache_index {0, 0};
 
+        /// NOLINTBEGIN(readability-else-after-return)
         while (true)
         {
             bool started_reusing_old_partitions = memory_buffer_partitions.size() == configuration.max_partitions_count;
@@ -1347,9 +1380,10 @@ private:
                 }
             }
         }
+        /// NOLINTEND(readability-else-after-return)
     }
 
-    inline void setCellDeadline(Cell & cell, TimePoint now)
+    void setCellDeadline(Cell & cell, TimePoint now)
     {
         if (configuration.lifetime.min_sec == 0 && configuration.lifetime.max_sec == 0)
         {
@@ -1366,7 +1400,7 @@ private:
         cell.deadline = std::chrono::system_clock::to_time_t(deadline);
     }
 
-    inline void eraseKeyFromIndex(KeyType key)
+    void eraseKeyFromIndex(KeyType key)
     {
         auto it = index.find(key);
 

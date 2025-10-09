@@ -1,0 +1,36 @@
+left asof using
+false	\N	0	\N	bool	nullable(uint8)	uint8	nullable(uint8)
+true	\N	1	\N	bool	nullable(uint8)	uint8	nullable(uint8)
+true	true	2	2	bool	nullable(uint8)	uint8	nullable(uint8)
+false	\N	0	\N	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	\N	1	\N	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	true	2	2	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+false	\N	0	\N	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	true	1	0	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	true	2	0	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+left asof on
+false	\N	0	\N	bool	nullable(uint8)	uint8	nullable(uint8)
+true	\N	1	\N	bool	nullable(uint8)	uint8	nullable(uint8)
+true	true	2	2	bool	nullable(uint8)	uint8	nullable(uint8)
+false	\N	0	\N	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	\N	1	\N	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	true	2	2	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+false	\N	0	\N	bool	nullable(uint8)	uint8	nullable(uint8)
+true	true	1	0	bool	nullable(uint8)	uint8	nullable(uint8)
+true	true	2	0	bool	nullable(uint8)	uint8	nullable(uint8)
+false	\N	0	\N	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	true	1	0	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+true	true	2	0	bool	nullable(uint8)	nullable(uint8)	nullable(uint8)
+asof using
+true	true	2	2	bool	uint8	uint8	uint8
+true	true	1	0	bool	uint8	nullable(uint8)	nullable(uint8)
+true	true	2	0	bool	uint8	nullable(uint8)	nullable(uint8)
+asof on
+true	true	2	2	bool	uint8	uint8	uint8
+true	true	2	2	bool	uint8	nullable(uint8)	uint8
+true	true	1	0	bool	uint8	uint8	nullable(uint8)
+true	true	2	0	bool	uint8	uint8	nullable(uint8)
+true	true	1	0	bool	uint8	nullable(uint8)	nullable(uint8)
+true	true	2	0	bool	uint8	nullable(uint8)	nullable(uint8)
+true	true	1	0	bool	uint8	nullable(uint8)	nullable(uint8)
+true	true	2	0	bool	uint8	nullable(uint8)	nullable(uint8)

@@ -1,0 +1,59 @@
+description: |
+  Test cover SQL UDF query
+  Main Steps:
+    1.Query UDF with ILLEGAL_TYPE_OF_ARGUMENT
+    2.Query UDF with UNSUPPORTED_METHOD
+    3.Query UDF with UNKNOWN_FUNCTION
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_add_five AS (value) -> value + 5
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_add_five_err AS (value) -> sums(value) + 5
+
+- type: wait
+  time: 2
+
+- name: udf-4-1
+  type: stream
+  query: SELECT test_add_five('aaa') as res;
+  schema:
+  - name: res
+    type: int64
+
+- name: udf-4-2
+  type: stream
+  query: SELECT test_add_five(1,2) as res;
+  schema:
+  - name: res
+    type: int64
+
+- name: udf-4-3
+  type: stream
+  query: SELECT test_add_five_err(1) as res;
+  schema:
+  - name: res
+    type: int64
+
+- type: wait
+  time: 1
+
+- type: check
+  target_name: udf-4-1
+  expected_result:
+  - ['error_code:43']
+
+- type: check
+  target_name: udf-4-2
+  expected_result:
+  - ['error_code:1']
+
+- type: check
+  target_name: udf-4-3
+  expected_result:
+  - ['error_code:46']

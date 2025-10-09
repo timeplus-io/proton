@@ -11,6 +11,8 @@ namespace CurrentMetrics
 {
 extern const Metric AsyncDrainedConnections;
 extern const Metric ActiveAsyncDrainedConnections;
+extern const Metric ConnectionCollectorThreads;
+extern const Metric ConnectionCollectorThreadsActive;
 }
 
 namespace DB
@@ -26,7 +28,7 @@ std::unique_ptr<ConnectionCollector> ConnectionCollector::connection_collector;
 static constexpr UInt64 max_connection_draining_tasks_per_thread = 20;
 
 ConnectionCollector::ConnectionCollector(ContextMutablePtr global_context_, size_t max_threads)
-    : WithMutableContext(global_context_), pool(max_threads, max_threads, max_threads * max_connection_draining_tasks_per_thread)
+    : WithMutableContext(global_context_), pool(CurrentMetrics::ConnectionCollectorThreads, CurrentMetrics::ConnectionCollectorThreadsActive, max_threads, max_threads, max_threads * max_connection_draining_tasks_per_thread)
 {
 }
 
@@ -34,7 +36,7 @@ ConnectionCollector & ConnectionCollector::init(ContextMutablePtr global_context
 {
     if (connection_collector)
     {
-        throw Exception("Connection collector is initialized twice. This is a bug", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Connection collector is initialized twice. This is a bug");
     }
 
     connection_collector.reset(new ConnectionCollector(global_context_, max_threads));
@@ -103,7 +105,7 @@ void ConnectionCollector::drainConnections(IConnections & connections, bool thro
     }
     catch (...)
     {
-        tryLogCurrentException(&Poco::Logger::get("ConnectionCollector"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(getLogger("ConnectionCollector"), __PRETTY_FUNCTION__);
         if (!is_drained)
         {
             try
@@ -112,7 +114,7 @@ void ConnectionCollector::drainConnections(IConnections & connections, bool thro
             }
             catch (...)
             {
-                tryLogCurrentException(&Poco::Logger::get("ConnectionCollector"), __PRETTY_FUNCTION__);
+                tryLogCurrentException(getLogger("ConnectionCollector"), __PRETTY_FUNCTION__);
             }
         }
 

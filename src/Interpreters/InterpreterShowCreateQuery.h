@@ -2,6 +2,10 @@
 
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
+/// proton: starts
+#include <Storages/IStorage_fwd.h>
+#include <Interpreters/StorageID.h>
+/// proton: ends
 
 
 namespace DB
@@ -16,12 +20,16 @@ public:
 
     BlockIO execute() override;
 
-    static Block getSampleBlock();
+    Block getSampleBlock() const;
 
 private:
     ASTPtr query_ptr;
 
     QueryPipeline executeImpl();
+
+    /// proton : starts
+    QueryPipeline showMultiVersions(const StorageID & table_id) const;
+    /// proton : ends
 };
 
 

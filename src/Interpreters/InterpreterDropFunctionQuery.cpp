@@ -1,16 +1,12 @@
 #include <Parsers/ASTDropFunctionQuery.h>
 
 #include <Access/ContextAccess.h>
-#include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
-#include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/InterpreterDropFunctionQuery.h>
 /// proton: starts
-//#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Functions/UserDefined/UDFHelper.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
-#include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
 /// proton: ends
 
 
@@ -46,13 +42,19 @@ BlockIO InterpreterDropFunctionQuery::execute()
 
     current_context->checkAccess(access_rights_elements);
 
-    bool throw_if_not_exists = !drop_function_query.if_exists;
+    bool force_drop_function = current_context->getSettingsRef().force;
+    bool throw_if_not_exists = !drop_function_query.if_exists && !force_drop_function;
 
-    /// proton: starts. Handle SQL and JavaScript UDF separately
-    if (UserDefinedFunctionFactory::instance().has(drop_function_query.function_name, getContext()))
-        UserDefinedFunctionFactory::instance().unregisterFunction(current_context, drop_function_query.function_name, throw_if_not_exists);
-    else
-        UserDefinedSQLFunctionFactory::instance().unregisterFunction(current_context, drop_function_query.function_name, throw_if_not_exists);
+    if (force_drop_function)
+    {
+        UserDefinedFunctionFactory::instance().forceUnregisterFunction(
+            current_context, drop_function_query.function_name, throw_if_not_exists);
+
+        return {};
+    }
+
+    /// proton: starts.
+    UserDefinedFunctionFactory::instance().unregisterFunction(current_context, drop_function_query.function_name, throw_if_not_exists);
     /// proton: ends
 
     return {};

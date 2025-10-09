@@ -1,0 +1,84 @@
+name: nexmark_perf
+description: Tests performance of proton
+tags:
+  - perf
+  - nexmark
+
+setup:
+  scope: case
+  steps:
+    - type: wait
+      time: 1
+
+    - type: query
+      node: [p1]
+      sql: DROP VIEW IF EXISTS mv;
+    - type: wait
+      time: 8
+
+    - type: query
+      node: [p2]
+      sql: DROP STREAM IF EXISTS person
+
+    - type: query
+      node: [p2]
+      sql: DROP STREAM IF EXISTS auction
+
+    - type: query
+      node: [p2]
+      sql: DROP STREAM IF EXISTS bid
+
+    - type: query
+      node: [p2]
+      sql: DROP STREAM IF EXISTS target
+    - type: wait
+      time: 2
+
+    - type: query
+      sql: CREATE STREAM person
+          (
+            id int64,
+            name string,
+            emailAddress string,
+            creditCard string,
+            city string,
+            state string,
+            date_time datetime64,
+            extra string
+          )
+          ENGINE = ExternalStream
+          SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'nexmark-person';
+
+    - type: query
+      sql: CREATE STREAM auction
+          (
+            id int64,
+            itemName string,
+            description string,
+            initialBid int64,
+            reserve int64,
+            date_time datetime64,
+            expires  datetime64,
+            seller int64,
+            category int64,
+            extra string
+          )
+          ENGINE = ExternalStream
+          SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'nexmark-auction';
+
+    - type: query
+      sql: CREATE STREAM bid
+          (
+            auction  int64,
+            bidder  int64,
+            price  int64,
+            channel  string,
+            url  string,
+            date_time  datetime64,
+            extra  string
+          )
+          ENGINE = ExternalStream
+          SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'nexmark-bid';
+
+    - type: wait
+      time: 2

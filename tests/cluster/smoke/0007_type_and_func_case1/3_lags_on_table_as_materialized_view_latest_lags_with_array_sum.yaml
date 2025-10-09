@@ -1,0 +1,55 @@
+tags:
+  - lags
+description: create a stream, and create a materialized view with lags check arry_sum
+  of latest lags
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists lags_mv1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists t_lags1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_lags1(id int, income float, time datetime64(3))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_lags1(id, income, time)values(1, -1000, '2020-01-02 00:00:01')(1,
+      -1000, '2020-01-03 09:01:02')(1, -1000, '2020-01-05 09:01:03')(1, 3100, '2020-01-18
+      09:01:04')(1, 100, '2020-03-09 09:01:05')
+
+  - type: query
+    sql: create materialized view lags_mv1 as select id, latest(lags(income,
+      1, 10)) as income_lags_latest, array_sum(income_lags_latest) as income_lags_sum
+      from t_lags1 group by id settings seek_to='earliest'
+
+  - name: '801'
+    type: stream
+    query: select id, income_lags_latest, income_lags_sum from lags_mv1 limit 1 settings
+      seek_to='earliest'
+    schema:
+      - name: id
+        type: int32
+      - name: income_lags_latest
+        type: array(float32)
+      - name: income_lags_sum
+        type: float64
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ '1', [ 3100.0, -1000.0, -1000.0, -1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ], 100.0 ]
+
+  - type: query
+    sql: drop view if exists lags_mv1

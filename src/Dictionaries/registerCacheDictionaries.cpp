@@ -1,19 +1,26 @@
 #include "CacheDictionary.h"
 #include "CacheDictionaryStorage.h"
 #include "SSDCacheDictionaryStorage.h"
+
+#include <Core/Settings.h>
+#include <Dictionaries/HybridHashCacheDictionary.h>
 #include <Common/filesystemHelpers.h>
+
 #include <Dictionaries/DictionaryFactory.h>
-#include <Interpreters/Context.h>
+#include <Dictionaries/DictionarySourceHelpers.h>
+#include <Dictionaries/TimeplusDictionarySource.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Storages/IStorage.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int TOO_SMALL_BUFFER_SIZE;
-    extern const int UNSUPPORTED_METHOD;
-    extern const int BAD_ARGUMENTS;
-    extern const int PATH_ACCESS_DENIED;
+extern const int TOO_SMALL_BUFFER_SIZE;
+extern const int UNSUPPORTED_METHOD;
+extern const int BAD_ARGUMENTS;
+extern const int PATH_ACCESS_DENIED;
 }
 
 CacheDictionaryStorageConfiguration parseCacheStorageConfiguration(
@@ -25,7 +32,9 @@ CacheDictionaryStorageConfiguration parseCacheStorageConfiguration(
 {
     size_t size = config.getUInt64(dictionary_layout_prefix + ".size_in_cells");
     if (size == 0)
-        throw Exception(ErrorCodes::TOO_SMALL_BUFFER_SIZE, "{}: dictionary of layout '{}' setting 'size_in_cells' must be greater than 0", full_name, layout_type);
+        throw Exception(ErrorCodes::TOO_SMALL_BUFFER_SIZE,
+                        "{}: dictionary of layout '{}' setting 'size_in_cells' must be greater than 0",
+                        full_name, layout_type);
 
     size_t dict_lifetime_seconds = static_cast<size_t>(dict_lifetime.max_sec);
     size_t strict_max_lifetime_seconds = config.getUInt64(dictionary_layout_prefix + ".strict_max_lifetime_seconds", dict_lifetime_seconds);
@@ -40,6 +49,43 @@ CacheDictionaryStorageConfiguration parseCacheStorageConfiguration(
 
     return storage_configuration;
 }
+
+/// proton: starts
+namespace
+{
+HybridHashCacheDictionaryConfiguration parseHybridCacheConfiguration(
+    const Poco::Util::AbstractConfiguration & config,
+    const String &, ///full_name,
+    const String &, ///layout_type,
+    const String & dictionary_layout_prefix,
+    const DictionaryLifetime & dict_lifetime,
+    bool use_async_executor)
+{
+    auto spill_dir_path = config.getString(dictionary_layout_prefix + ".path");
+    auto ttl = static_cast<int32_t>(config.getInt(dictionary_layout_prefix + ".ttl", 0));
+
+    /// Default to 100,000 in-memory keys for better performance 
+    /// (Note: The hybrid hash table internally uses 10,000 as its default value)
+    auto max_hot_key_count = config.getUInt64(
+        dictionary_layout_prefix + ".max_hot_key_count", config.getUInt64(dictionary_layout_prefix + ".in_memory_keys_max", 100'000));
+
+    auto cleanup_on_disk_data = config.getBool(
+        dictionary_layout_prefix + ".cleanup_on_disk_data",
+        config.getBool(dictionary_layout_prefix + ".delete_disk_data_on_shutdown", true));
+
+    HybridHashCacheDictionaryConfiguration configuration{
+        .spill_dir_path = std::move(spill_dir_path),
+        .ttl = ttl,
+        .max_hot_key_count = max_hot_key_count,
+        .cleanup_on_disk_data = cleanup_on_disk_data,
+        .use_async_executor = use_async_executor,
+        .lifetime = dict_lifetime};
+
+    return configuration;
+}
+
+} /// namespace
+/// proton: ends
 
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
 
@@ -147,26 +193,35 @@ CacheDictionaryUpdateQueueConfiguration parseCacheDictionaryUpdateQueueConfigura
     return update_queue_configuration;
 }
 
-template <DictionaryKeyType dictionary_key_type, bool ssd>
+enum CacheDictionaryPersistentType : uint8_t
+{
+    InMemory = 0,
+    SSD = 1,
+    Hybrid = 3, /// HybridHashTable
+};
+
+template <DictionaryKeyType dictionary_key_type, CacheDictionaryPersistentType persistent_type>
 DictionaryPtr createCacheDictionaryLayout(
     const String & full_name,
     const DictionaryStructure & dict_struct,
     const Poco::Util::AbstractConfiguration & config,
     const std::string & config_prefix,
     DictionarySourcePtr source_ptr,
-    ContextPtr global_context [[maybe_unused]],
+    ContextPtr global_context,
     bool created_from_ddl [[maybe_unused]])
 {
     String layout_type;
 
-    if constexpr (dictionary_key_type == DictionaryKeyType::Simple && !ssd)
+    if constexpr (dictionary_key_type == DictionaryKeyType::Simple && persistent_type == CacheDictionaryPersistentType::InMemory)
         layout_type = "cache";
-    else if constexpr (dictionary_key_type == DictionaryKeyType::Simple && ssd)
+    else if constexpr (dictionary_key_type == DictionaryKeyType::Simple && persistent_type == CacheDictionaryPersistentType::SSD)
         layout_type = "ssd_cache";
-    else if constexpr (dictionary_key_type == DictionaryKeyType::Complex && !ssd)
+    else if constexpr (dictionary_key_type == DictionaryKeyType::Complex && persistent_type == CacheDictionaryPersistentType::InMemory)
         layout_type = "complex_key_cache";
-    else if constexpr (dictionary_key_type == DictionaryKeyType::Complex && ssd)
+    else if constexpr (dictionary_key_type == DictionaryKeyType::Complex && persistent_type == CacheDictionaryPersistentType::SSD)
         layout_type = "complex_key_ssd_cache";
+    else if constexpr (dictionary_key_type == DictionaryKeyType::Complex && persistent_type == CacheDictionaryPersistentType::Hybrid)
+        layout_type = "hybrid_hash_cache";
 
     if constexpr (dictionary_key_type == DictionaryKeyType::Simple)
     {
@@ -204,11 +259,16 @@ DictionaryPtr createCacheDictionaryLayout(
 
     std::shared_ptr<ICacheDictionaryStorage> storage;
 
-    if constexpr (!ssd)
+    if constexpr (persistent_type == CacheDictionaryPersistentType::InMemory)
     {
         auto storage_configuration = parseCacheStorageConfiguration(config, full_name, layout_type, dictionary_layout_prefix, dict_lifetime);
         storage = std::make_shared<CacheDictionaryStorage<dictionary_key_type>>(dict_struct, storage_configuration);
     }
+    /// proton: starts
+    else if constexpr (persistent_type == CacheDictionaryPersistentType::Hybrid)
+    {
+    }
+    /// proton: ends
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
     else
     {
@@ -220,6 +280,28 @@ DictionaryPtr createCacheDictionaryLayout(
         storage = std::make_shared<SSDCacheDictionaryStorage<dictionary_key_type>>(storage_configuration);
     }
 #endif
+    ContextMutablePtr context = copyContextAndApplySettingsFromDictionaryConfig(global_context, config, config_prefix);
+    const auto & settings = context->getSettingsRef();
+
+    /// proton: starts
+    const auto * timeplus_source = dynamic_cast<const TimeplusDictionarySource *>(source_ptr.get());
+    bool use_async_executor = timeplus_source && timeplus_source->isLocal() && settings.dictionary_use_async_executor;
+
+    if constexpr (persistent_type == CacheDictionaryPersistentType::Hybrid)
+    {
+        return std::make_unique<HybridHashCacheDictionary>(
+            dictionary_identifier,
+            dict_struct,
+            source_ptr,
+            parseHybridCacheConfiguration(config, full_name, layout_type, dictionary_layout_prefix, dict_lifetime, use_async_executor));
+    }
+    /// proton: ends
+
+    CacheDictionaryConfiguration configuration{
+        allow_read_expired_keys,
+        dict_lifetime,
+        use_async_executor,
+    };
 
     auto dictionary = std::make_unique<CacheDictionary<dictionary_key_type>>(
         dictionary_identifier,
@@ -227,8 +309,7 @@ DictionaryPtr createCacheDictionaryLayout(
         std::move(source_ptr),
         std::move(storage),
         update_queue_configuration,
-        dict_lifetime,
-        allow_read_expired_keys);
+        configuration);
 
     return dictionary;
 }
@@ -243,7 +324,7 @@ void registerDictionaryCache(DictionaryFactory & factory)
                                           ContextPtr global_context,
                                           bool created_from_ddl) -> DictionaryPtr
     {
-        return createCacheDictionaryLayout<DictionaryKeyType::Simple, false/* ssd */>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
+        return createCacheDictionaryLayout<DictionaryKeyType::Simple, CacheDictionaryPersistentType::InMemory>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
     };
 
     factory.registerLayout("cache", create_simple_cache_layout, false);
@@ -256,7 +337,7 @@ void registerDictionaryCache(DictionaryFactory & factory)
                                                ContextPtr global_context,
                                                bool created_from_ddl) -> DictionaryPtr
     {
-        return createCacheDictionaryLayout<DictionaryKeyType::Complex, false /* ssd */>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
+        return createCacheDictionaryLayout<DictionaryKeyType::Complex, CacheDictionaryPersistentType::InMemory>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
     };
 
     factory.registerLayout("complex_key_cache", create_complex_key_cache_layout, true);
@@ -271,7 +352,7 @@ void registerDictionaryCache(DictionaryFactory & factory)
                                               ContextPtr global_context,
                                               bool created_from_ddl) -> DictionaryPtr
     {
-        return createCacheDictionaryLayout<DictionaryKeyType::Simple, true /* ssd */>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
+        return createCacheDictionaryLayout<DictionaryKeyType::Simple, CacheDictionaryPersistentType::SSD>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
     };
 
     factory.registerLayout("ssd_cache", create_simple_ssd_cache_layout, false);
@@ -283,13 +364,27 @@ void registerDictionaryCache(DictionaryFactory & factory)
                                                    DictionarySourcePtr source_ptr,
                                                    ContextPtr global_context,
                                                    bool created_from_ddl) -> DictionaryPtr {
-        return createCacheDictionaryLayout<DictionaryKeyType::Complex, true /* ssd */>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
+        return createCacheDictionaryLayout<DictionaryKeyType::Complex, CacheDictionaryPersistentType::SSD>(full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
     };
 
     factory.registerLayout("complex_key_ssd_cache", create_complex_key_ssd_cache_layout, true);
 
 #endif
 
+    /// proton : starts
+    auto create_hybrid_hash_cache_layout = [=](const String & full_name,
+                                               const DictionaryStructure & dict_struct,
+                                               const Poco::Util::AbstractConfiguration & config,
+                                               const std::string & config_prefix,
+                                               DictionarySourcePtr source_ptr,
+                                               ContextPtr global_context,
+                                               bool created_from_ddl) -> DictionaryPtr {
+        return createCacheDictionaryLayout<DictionaryKeyType::Complex, CacheDictionaryPersistentType::Hybrid>(
+            full_name, dict_struct, config, config_prefix, std::move(source_ptr), global_context, created_from_ddl);
+    };
+
+    factory.registerLayout("hybrid_hash_cache", create_hybrid_hash_cache_layout, /*is_layout_complex=*/true);
+    /// proton : ends
 }
 
 }

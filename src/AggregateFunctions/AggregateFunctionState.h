@@ -23,18 +23,13 @@ private:
 
 public:
     AggregateFunctionState(AggregateFunctionPtr nested_, const DataTypes & arguments_, const Array & params_)
-        : IAggregateFunctionHelper<AggregateFunctionState>(arguments_, params_)
+        : IAggregateFunctionHelper<AggregateFunctionState>(arguments_, params_, nested_->getStateType())
         , nested_func(nested_)
     {}
 
     String getName() const override
     {
         return nested_func->getName() + "_state";
-    }
-
-    DataTypePtr getReturnType() const override
-    {
-        return getStateType();
     }
 
     const IAggregateFunction & getBaseAggregateFunctionWithSameStateRepresentation() const override
@@ -94,6 +89,19 @@ public:
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         nested_func->merge(place, rhs, arena);
+    }
+
+    bool isAbleToParallelizeMerge() const override { return nested_func->isAbleToParallelizeMerge(); }
+    bool canOptimizeEqualKeysRanges() const override { return nested_func->canOptimizeEqualKeysRanges(); }
+
+    void parallelizeMergePrepare(AggregateDataPtrs & places, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled) const override
+    {
+        nested_func->parallelizeMergePrepare(places, thread_pool, is_cancelled);
+    }
+
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena * arena) const override
+    {
+        nested_func->merge(place, rhs, thread_pool, is_cancelled, arena);
     }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> version) const override

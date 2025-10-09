@@ -1,0 +1,73 @@
+tags:
+  - changelog(table)
+  - global aggregation
+  - with group by
+description: changelog(table) global Aggregation with group by
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_append_stream_2 (id int, name string, val
+      float, ts datetime);
+  - type: wait
+    time: 1
+
+  - name: "1446"
+    type: stream
+    query:
+      select count(), min(val), max(val), sum(val), avg(val) from changelog(test14_append_stream_2,
+      id, name) group by id emit periodic 1s;
+    schema:
+      - name: count()
+        type: uint64
+      - name: min(val)
+        type: float32
+      - name: max(val)
+        type: float32
+      - name: sum(val)
+        type: float64
+      - name: avg(val)
+        type: float64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'a', 11.1
+      ,'2020-02-02 20:00:00') (2, 'a', 33.3 ,'2020-02-02 20:00:01');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 22.2
+      ,'2020-02-02 20:00:02') (2, 'b', 22.2 ,'2020-02-02 20:00:03');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'c', 33.3
+      ,'2020-02-02 20:00:04') (2, 'c', 11.1 ,'2020-02-02 20:00:05');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 44.4
+      ,'2020-02-02 20:00:06') (2, 'b', 44.4 ,'2020-02-02 20:00:07');
+
+  - type: check
+    target_name: "1446"
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [1, 33.3, 33.3, 33.3, 33.3]
+      - [1, 11.1, 11.1, 11.1, 11.1]
+      - [2, 22.2, 33.3, 55.5, 27.75]
+      - [2, 11.1, 22.2, 33.3, 16.65]
+      - [3, 11.1, 33.3, 66.6, 22.2]
+      - [3, 11.1, 33.3, 66.6, 22.2]
+      - [3, 11.1, 44.4, 88.8, 29.6]
+      - [3, 11.1, 44.4, 88.8, 29.6]

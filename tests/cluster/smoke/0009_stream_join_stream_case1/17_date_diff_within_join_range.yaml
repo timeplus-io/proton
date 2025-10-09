@@ -1,0 +1,34 @@
+tags:
+- stream_join_stream
+description: date_diff_within-join-range-issue-944
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: 1040-1
+  type: stream
+  query: select s, ss from test10_left_stream1 inner join test10_right_stream1 on
+    i=ii and date_diff_within(100s, test10_left_stream1._tp_time, test10_right_stream1._tp_time)
+  schema:
+    - name: s
+      type: string
+    - name: ss
+      type: string
+      
+- type: wait
+  time: 1
+  
+- type: query
+  sql: insert into test10_left_stream1(i, s, ts, _tp_time) values (1, 's', '2022-05-23
+    15:45:10', '2022-05-25 23:57:31.023')
+  
+- type: query
+  sql: insert into test10_right_stream1(ii, ss, tts, _tp_time) values(1, 's1', '2022-05-23
+    15:44:59', '2022-05-25 23:57:39.204'),(1, 's2', '2022-05-23 15:44:59', '2022-05-25
+    23:59:06.204'),(1, 's3', '2022-05-23 15:44:59', '2022-05-25 23:59:39.204')
+  
+- type: check
+  target_name: 1040-1
+  expected_result:
+  - [s, s1]
+  - [s, s2]

@@ -1,0 +1,151 @@
+tags:
+- checkpoint
+- multishards
+description: global aggr func from multishards state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists multishards_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream multishards_stream (id int, name string, val float, ts datetime)
+    settings shards=3
+- type: wait
+  time: 1
+
+- name: '19303'
+  type: stream
+  query_id: '19303'
+  query: subscribe to select count(*), count_distinct(val), count_if(val > 30), unique(id),
+    unique_exact(id), unique_exact_if(id, val > 30) from multishards_stream emit periodic
+    2s settings checkpoint_interval=1
+  schema:
+  - name: count()
+    type: uint64
+  - name: count_distinct(val)
+    type: uint64
+  - name: count_if(greater(val, 30))
+    type: uint64
+  - name: unique(id)
+    type: uint64
+  - name: unique_exact(id)
+    type: uint64
+  - name: unique_exact_if(id, greater(val, 30))
+    type: uint64
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+  - [1, 's4', 44.4, '2020-02-02 20:00:04']
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's2', 22.2, '2020-02-02 20:00:02']
+  - [2, 's5', 55.5, '2020-02-02 20:00:05']
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [3, 's3', 33.3, '2020-02-02 20:00:03']
+  - [3, 's6', 66.6, '2020-02-02 20:00:06']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19303'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into multishards_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's7', 77.7, '2020-02-02 20:00:07']
+  - [2, 's8', 88.8, '2020-02-02 20:00:08']
+  - [3, 's9', 99.9, '2020-02-02 20:00:09']
+- type: wait
+  time: 3
+
+- name: 19303-1
+  type: stream
+  query: recover from '19303'
+  schema:
+  - name: count()
+    type: uint64
+  - name: count_distinct(val)
+    type: uint64
+  - name: count_if(greater(val, 30))
+    type: uint64
+  - name: unique(id)
+    type: uint64
+  - name: unique_exact(id)
+    type: uint64
+  - name: unique_exact_if(id, greater(val, 30))
+    type: uint64
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19303' sync
+
+- type: query
+  sql: unsubscribe to '19303'
+
+- type: check
+  target_name: '19303'
+  expected_result:
+  - [2, 2, 1, 1, 1, 1]
+  - [4, 4, 2, 2, 2, 2]
+  - [6, 6, 4, 3, 3, 3]
+
+- type: check
+  target_name: 19303-1
+  expected_result:
+  - [9, 9, 7, 3, 3, 3]

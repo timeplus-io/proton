@@ -1,0 +1,78 @@
+tags:
+  - udf
+  - bug # (#7908) Code: 2624. DB::Exception: Received from localhost:8463. DB::Exception: UDF running error, detail message: 'ParallelExt' object has no attribute '_backend_args'
+
+description: |
+  Test covering udf qlib data retrieval
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_qlib_data_loader(value string) RETURNS array(array(float32)) LANGUAGE PYTHON AS
+      $$
+      import qlib
+      from qlib.constant import REG_CN
+      from qlib.data.dataset.loader import QlibDataLoader
+
+      provider_uri = '/var/lib/proton/.qlib/qlib_data/cn_data'
+      qlib.init(provider_uri=provider_uri, region=REG_CN)
+
+      fields = ['(EMA($close, 12) - EMA($close, 26))/$close - EMA((EMA($close, 12) - EMA($close, 26))/$close, 9)/$close']
+      names = ['MACD']
+      labels = ['Ref($close, -2)/Ref($close, -1) - 1']
+      label_names = ['LABEL']
+      data_loader_config = {
+          "feature": (fields, names),
+          "label": (labels, label_names)
+      }
+
+      def test_qlib_data_loader(value):
+          res = []
+          for v in value:
+              if len(v) == 0:
+                  continue
+
+              data_loader = QlibDataLoader(config=data_loader_config)
+              df = data_loader.load(instruments=v, start_time='2010-01-01', end_time='2017-12-31').head()
+
+              res.append(df.values.tolist())
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf-1
+    type: stream
+    query: select test_qlib_data_loader(value) as res from udf_stream;
+    schema:
+      - name: res
+        type: array(array(float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream (value) values ('csi300');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream (value) values ('csi500');
+
+  - type: check
+    target_name: python-udf-1
+    expected_result:
+      - [[[0.039008282124996185, -0.019841015338897705], [0.04016319289803505, -0.04060167074203491], [0.015625236555933952, 0.004479765892028809], [0.024716725572943687, 0.01658773422241211], [0.03277694806456566, -0.0011001825332641602]]]
+      - [[[0.0027943053282797337, -0.010265469551086426], [0.006898688618093729, -0.02050471305847168], [0.008182825520634651, -0.008315861225128174], [0.007012091111391783, 0.10012352466583252], [0.03813861683011055, -0.02123337984085083]]]

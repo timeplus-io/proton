@@ -1,0 +1,82 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x float64, xx float64, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getRandomForestClassifier(x float64, xx float64, y int) RETURNS array(int64) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      from sklearn.ensemble import RandomForestClassifier
+
+      class getRandomForestClassifier:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.classifier = 0
+
+          def serialize(self):
+              data = {}
+              data['classifier'] = self.classifier
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.classifier = data['classifier']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, xxs, ys):
+              X = np.stack((xs, xxs), axis=1)
+              y = np.array(ys)
+              clf = RandomForestClassifier(random_state=0, n_estimators=100)
+              clf.fit(X, y)
+              self.classifier = clf.predict([[0, 0]]).tolist()
+
+          def finalize(self):
+              return self.classifier
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf6-4-1
+    type: stream
+    query: select getRandomForestClassifier(x, xx, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(int64)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, xx, y) values
+          (0.59424183, 0.60315012, 0)
+          (0.68253246, 0.57535917, 1)
+          (0.42906237, 0.27592269, 2)
+          (0.76858133, 0.22627243, 3)
+          (0.69235431, 0.23333282, 4)
+          (0.62533017, 0.74707827, 5)
+          (0.21871389, 0.0599433, 6)
+          (0.13097374, 0.60599697, 7)
+          (0.84944641, 0.04499682, 8)
+          (0.73415126, 0.34131865, 9);
+
+  - type: check
+    target_name: python-udf6-4-1
+    expected_result:
+      - [[6]]

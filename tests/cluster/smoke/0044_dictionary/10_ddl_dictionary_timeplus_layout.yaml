@@ -1,0 +1,501 @@
+description: |
+  Test ddl dictionary layout with source timeplus
+  Main steps:
+  1.Create stream and ingest data
+  2.Create dictionary with source Timeplus covering all layout
+  3.Verify dictionary connectivity via dict_get
+
+steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS test44_stream6;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test44_stream6_2;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: CREATE STREAM test44_stream6 (id uint64, value string, start date, end date);
+  
+  - type: query
+    sql: CREATE STREAM test44_stream6_2 (prefix string, asn uint32, cca2 string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: INSERT INTO test44_stream6 (id, value, start, end) VALUES (1, 'Hello world', '2024-01-01', '2025-01-01');
+
+  - type: query
+    sql: INSERT INTO test44_stream6_2 (prefix, asn, cca2) VALUES ('202.79.32.0/20', 17501, 'NP');
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_flat;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_hashed;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_sparse_hashed;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_hashed;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_sparse_hashed;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_hashed_array;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_hashed_array;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_range_hashed;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_range_hashed;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_cache;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_cache;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_ssd_cache;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_ssd_cache;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_direct;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_complex_key_direct;
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS tp_ip_trie;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_flat(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_hashed(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(HASHED());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_sparse_hashed(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(SPARSE_HASHED());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_hashed(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(COMPLEX_KEY_HASHED());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_sparse_hashed(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(COMPLEX_KEY_SPARSE_HASHED());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_hashed_array(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(HASHED_ARRAY());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_hashed_array(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(COMPLEX_KEY_HASHED_ARRAY());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_range_hashed(id uint64 DEFAULT 0, value string DEFAULT '', start date, end date)
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, start, end, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(RANGE_HASHED(RANGE_LOOKUP_STRATEGY 'max'))
+      RANGE(MIN start MAX end);
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_range_hashed(id uint64 DEFAULT 0, value string DEFAULT '', start date, end date)
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, start, end, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(COMPLEX_KEY_RANGE_HASHED())
+      RANGE(MIN start MAX end);
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_cache(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(CACHE(SIZE_IN_CELLS 1000));
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_cache(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(COMPLEX_KEY_CACHE(SIZE_IN_CELLS 1000));
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_ssd_cache(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(SSD_CACHE(BLOCK_SIZE 4096 FILE_SIZE 16777216 READ_BUFFER_SIZE 1048576 PATH '/var/lib/proton/user_files/test_dict'));
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_ssd_cache(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(COMPLEX_KEY_SSD_CACHE(BLOCK_SIZE 4096 FILE_SIZE 16777216 READ_BUFFER_SIZE 1048576 PATH '/var/lib/proton/user_files/test_dict'));
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_direct(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LAYOUT(DIRECT());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_complex_key_direct(id uint64 DEFAULT 0, value string DEFAULT '')
+      PRIMARY KEY id
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT id, value FROM table(test44_stream6)' PASSWORD ''))
+      LAYOUT(COMPLEX_KEY_DIRECT());
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY tp_ip_trie(prefix string, asn  uint32, cca2 string DEFAULT '??')
+      PRIMARY KEY prefix
+      SOURCE(TIMEPLUS(HOST 'localhost' PORT tcp_port() USER 'default' QUERY 'SELECT prefix, asn, cca2 FROM table(test44_stream6_2)' PASSWORD ''))
+      LIFETIME(3600)
+      LAYOUT(IP_TRIE());
+
+  - type: wait
+    time: 1
+
+  - name: dict-10-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_flat', 'value', '1');
+    schema:
+      - name: dict_get('tp_flat', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-1
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_hashed', 'value', '1');
+    schema:
+      - name: dict_get('tp_hashed', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-2
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-3
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_sparse_hashed', 'value', '1');
+    schema:
+      - name: dict_get('tp_sparse_hashed', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-3
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-4
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_hashed', 'value', '1');
+    schema:
+      - name: dict_get('tp_complex_key_hashed', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-4
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-5
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_sparse_hashed', 'value', '1');
+    schema:
+      - name: dict_get('tp_complex_key_sparse_hashed', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-5
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-6
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_hashed_array', 'value', '1');
+    schema:
+      - name: dict_get('tp_hashed_array', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-6
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-7
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_hashed_array', 'value', '1');
+    schema:
+      - name: dict_get('tp_complex_key_hashed_array', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-7
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-8
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_range_hashed', 'value', to_uint64(1), to_date('2025-01-01'));
+    schema:
+      - name: dict_get('tp_range_hashed', 'value', to_uint64(1), to_date('2025-01-01'))
+        type: string
+
+  - type: check
+    target_name: dict-10-8
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-9
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_range_hashed', 'value', '1', to_date('2025-01-01'));
+    schema:
+      - name: dict_get('tp_complex_key_range_hashed', 'value', '1', to_date('2025-01-01'))
+        type: string
+
+  - type: check
+    target_name: dict-10-9
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-10
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_cache', 'value', '1');
+    schema:
+      - name: dict_get('tp_cache', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-10
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-11
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_cache', 'value', '1');
+    schema:
+      - name: dict_get('tp_complex_key_cache', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-11
+    expected_result:
+      - ['Hello world']
+  
+  - name: dict-10-12
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_ssd_cache', 'value', '1');
+    schema:
+      - name: dict_get('tp_ssd_cache', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-12
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-13
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_ssd_cache', 'value', '1');
+    schema:
+      - name: dict_get('tp_complex_key_ssd_cache', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-13
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-14
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_direct', 'value', '1');
+    schema:
+      - name: dict_get('tp_direct', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-14
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-15
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_complex_key_direct', 'value', '1');
+    schema:
+      - name: dict_get('tp_complex_key_direct', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-10-15
+    expected_result:
+      - ['Hello world']
+
+  - name: dict-10-16
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('tp_ip_trie', 'cca2', to_ipv4('202.79.32.0'));
+    schema:
+      - name: dict_get('tp_ip_trie', 'cca2', to_ipv4('202.79.32.0'))
+        type: string
+
+  - type: check
+    target_name: dict-10-16
+    expected_result:
+      - ['NP']

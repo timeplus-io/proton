@@ -9,8 +9,6 @@
 #include <thread>
 #include <filesystem>
 
-#include <re2/re2.h>
-
 #include <boost/program_options.hpp>
 
 #include <Common/TerminalSize.h>
@@ -18,6 +16,7 @@
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ShellCommand.h>
+#include <Common/re2.h>
 #include <base/find_symbols.h>
 
 #include <IO/copyData.h>
@@ -25,7 +24,6 @@
 #include <IO/WriteHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
-
 
 static constexpr auto documentation = R"(
 A tool to extract information from Git repository for analytics.
@@ -1160,7 +1158,7 @@ void processLog(const Options & options)
     /// Will run multiple processes in parallel
     size_t num_threads = options.threads;
     if (num_threads == 0)
-        throw Exception("num-threads cannot be zero", ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "num-threads cannot be zero");
 
     std::vector<std::unique_ptr<ShellCommand>> show_commands(num_threads);
     for (size_t i = 0; i < num_commits && i < num_threads; ++i)
@@ -1221,7 +1219,7 @@ try
             << "Usage: " << argv[0] << '\n'
             << desc << '\n'
             << "\nExample:\n"
-            << "\nclickhouse git-import --skip-paths 'generated\\.cpp|^(contrib|docs?|website|libs/(libcityhash|liblz4|libdivide|libvectorclass|libdouble-conversion|libcpuid|libzstd|libfarmhash|libmetrohash|libpoco|libwidechar_width))/' --skip-commits-with-messages '^Merge branch '\n";
+            << "\nproton git-import --skip-paths 'generated\\.cpp|^(contrib|docs?|website|libs/(libcityhash|liblz4|libdivide|libvectorclass|libdouble-conversion|libcpuid|libzstd|libfarmhash|libmetrohash|libpoco|libwidechar_width))/' --skip-commits-with-messages '^Merge branch '\n";
         return 1;
     }
 

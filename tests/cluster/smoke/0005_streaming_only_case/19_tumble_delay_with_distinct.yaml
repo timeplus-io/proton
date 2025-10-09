@@ -1,0 +1,92 @@
+tags:
+  - native_not_support
+description: last 20s tumble 5s count(*)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '601'
+    type: stream
+    query: |
+      select id, sum(distinct value), to_string(to_timezone(window_end, '')) as win_end
+      from tumble(test6_stream_only_no_default_tp_time, timestamp, 5s)
+      group by id, window_end
+      emit after window close with delay 2s settings seek_to='-1s'
+    schema:
+      - name: id
+        type: string
+      - name: sum_distinct(value)
+        type: float64
+      - name: win_end
+        type: string
+
+  - name: '601-1'
+    type: stream
+    query: |
+      select id, sum(distinct value), to_string(to_timezone(window_end, '')) as win_end
+      from tumble(test6_stream_only_no_default_tp_time, timestamp, 5s)
+      group by id, window_end
+      emit after watermark with delay 2s settings seek_to='-1s'
+    schema:
+      - name: id
+        type: string
+      - name: sum_distinct(value)
+        type: float64
+      - name: win_end
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test6_stream_only_no_default_tp_time (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:00')
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:01')
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-03 20:00:10"', '2020-02-03 20:01:05');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only_no_default_tp_time (id, location, value, json, timestamp) values
+      ('dev3', 'ca', 59, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:03')
+      ('dev8', 'ca', 67, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:02')
+      ('dev8', 'ca', 77, '"create_time":"2021-11-03 20:00:10"', '2020-02-03 20:01:08');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only_no_default_tp_time (id, location, value, json, timestamp) values
+      ('dev3', 'ca', 57.3, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:09')
+      ('dev3', 'ca', 66, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:10')
+      ('dev2', 'ca', 76, '"create_time":"2021-11-03 20:00:10"', '2020-02-03 20:01:09');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only_no_default_tp_time (id, location, value, json, timestamp) values
+      ('dev2', 'ca', 80, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:07')
+      ('dev8', 'ca', 67, '"create_time":"2021-11-03 20:00:01"', '2020-02-03 20:01:11')
+      ('dev8', 'ca', 77, '"create_time":"2021-11-03 20:00:10"', '2020-02-03 20:01:12');
+
+  - type: wait
+    time: 2 # wait for the function sum(distinct) computation results with last data insertion.
+
+  - type: check
+    target_name: '601'
+    mode: random
+    expected_result:
+      - [ dev3, '59', '2020-02-03 20:01:05.000' ]
+      - [ dev8, '67', '2020-02-03 20:01:05.000' ]
+      - [ dev1, '57.3', '2020-02-03 20:01:05.000' ]
+      - [ dev2, '214.3', '2020-02-03 20:01:10.000' ]
+      - [ dev8, '77', '2020-02-03 20:01:10.000' ]
+      - [ dev3, '57.3', '2020-02-03 20:01:10.000' ]
+
+  - type: check
+    target_name: '601-1'
+    mode: random
+    expected_result:
+      - [ dev3, '59', '2020-02-03 20:01:05.000' ]
+      - [ dev8, '67', '2020-02-03 20:01:05.000' ]
+      - [ dev1, '57.3', '2020-02-03 20:01:05.000' ]
+      - [ dev2, '214.3', '2020-02-03 20:01:10.000' ]
+      - [ dev8, '77', '2020-02-03 20:01:10.000' ]
+      - [ dev3, '57.3', '2020-02-03 20:01:10.000' ]

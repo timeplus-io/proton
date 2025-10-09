@@ -1,5 +1,6 @@
 #pragma once
 
+#include <IO/Progress.h>
 #include <Processors/IProcessor.h>
 
 namespace DB
@@ -18,6 +19,10 @@ protected:
     bool finished = false;
     bool got_exception = false;
     Port::Data current_chunk;
+
+    /// proton: starts.
+    ProgressCallback progress_callback;
+    /// proton: ends.
 
     std::shared_ptr<const StorageLimitsList> storage_limits;
 
@@ -42,6 +47,11 @@ public:
     std::optional<ReadProgress> getReadProgress() final;
 
     void addTotalRowsApprox(size_t value) { read_progress.total_rows_approx += value; }
+    void addTotalBytes(size_t value) { read_progress.total_bytes += value; }
+
+    /// proton: starts.
+    void setProgressCallback(ProgressCallback callback) { progress_callback.swap(callback); }
+    /// proton: ends
 };
 
 using SourcePtr = std::shared_ptr<ISource>;

@@ -10,6 +10,77 @@
 namespace DB
 {
 
+/// proton : starts.
+bool ASTStorage::hasLocalInSettings() const noexcept
+{
+    if (settings)
+    {
+        if (auto * local_f = settings->changes.tryGet("local"); local_f)
+        {
+            bool is_local = false;
+            if (!local_f->tryGet(is_local))
+            {
+                /// SETTINGS local=1 is uint64_t
+                uint64_t is_local_u64 = 0;
+                if (local_f->tryGet(is_local_u64))
+                    is_local = is_local_u64 > 0;
+            }
+            return is_local;
+        }
+    }
+    return false;
+}
+
+bool ASTStorage::isLocal() const noexcept
+{
+    if (hasLocalInSettings())
+        return true;
+
+    if (engine)
+    {
+        if (engine->name == "Stream" || engine->name == "ExternalStream" || engine->name == "Random" || engine->name == "Null")
+            return false;
+
+        return true;
+    }
+    return false;
+}
+
+const char * mapCreateType(ASTCreateQuery::Type type)
+{
+    switch (type)
+    {
+        case ASTCreateQuery::Type::Database:
+            return "DATABASE";
+        case ASTCreateQuery::Type::Stream:
+            return "STREAM";
+        case ASTCreateQuery::Type::VersionedKeyValueStream:
+            return "VERSIONED_KV STREAM";
+        case ASTCreateQuery::Type::ChangelogKeyValueStream:
+            return "CHANGELOG_KV STREAM";
+        case ASTCreateQuery::Type::ChangelogStream:
+            return "CHANGELOG STREAM";
+        case ASTCreateQuery::Type::RandomStream:
+            return "RANDOM STREAM";
+        case ASTCreateQuery::Type::NullStream:
+            return "NULL STREAM";
+        case ASTCreateQuery::Type::ExternalStream:
+            return "EXTERNAL STREAM";
+        case ASTCreateQuery::Type::ExternalTable:
+            return "EXTERNAL TABLE";
+        case ASTCreateQuery::Type::Dictionary:
+            return "DICTIONARY";
+        case ASTCreateQuery::Type::View:
+            return "VIEW";
+        case ASTCreateQuery::Type::MaterializedView:
+            return "MATERIALIZED VIEW";
+        case ASTCreateQuery::Type::ScheduledMaterializedView:
+            return "SCHEDULED MATERIALIZED VIEW";
+    }
+}
+
+/// proton : ends
+
 ASTPtr ASTStorage::clone() const
 {
     auto res = std::make_shared<ASTStorage>(*this);
@@ -67,11 +138,16 @@ void ASTStorage::formatImpl(const FormatSettings & s, FormatState & state, Forma
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "TTL " << (s.hilite ? hilite_none : "");
         ttl_table->formatImpl(s, state, frame);
     }
-    if (settings)
+    if (settings && !settings->isEmpty()) /// proton: if setting is empty, skip format it. Empty settings cause syntax error
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "SETTINGS " << (s.hilite ? hilite_none : "");
         settings->formatImpl(s, state, frame);
     }
+}
+
+bool ASTStorage::isExtendedStorageDefinition() const
+{
+    return partition_by || primary_key || order_by || sample_by || settings;
 }
 
 
@@ -205,7 +281,7 @@ ASTPtr ASTCreateQuery::clone() const
 
     if (dictionary)
     {
-        assert(is_dictionary);
+        assert(isDictionary());
         res->set(res->dictionary_attributes_list, dictionary_attributes_list->clone());
         res->set(res->dictionary, dictionary->clone());
     }
@@ -257,30 +333,22 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         return;
     }
 
-    if (!is_dictionary)
+    if (!isDictionary())
     {
         String action = "CREATE";
         if (attach)
             action = "ATTACH";
         else if (replace_view)
             action = "CREATE OR REPLACE";
-        else if (replace_table && create_or_replace)
-            action = "CREATE OR REPLACE";
-        else if (replace_table)
-            action = "REPLACE";
+        /// proton : starts
+        /// else if (replace_table && create_or_replace)
+        ///    action = "CREATE OR REPLACE";
+        /// else if (replace_table)
+        ///    action = "REPLACE";
+        /// proton : ends
 
         /// proton: starts.
-        String what = "STREAM";
-        /// proton: ends.
-        if (is_ordinary_view)
-            what = "VIEW";
-        else if (is_materialized_view)
-            what = "MATERIALIZED VIEW";
-        else if (is_random)
-            what = "RANDOM STREAM";
-        else if (storage && storage->engine && storage->engine->name == "ExternalTable")
-            what = "EXTERNAL TABLE";
-        /// proton: ends.
+        const auto * what = mapCreateType(type);
 
         settings.ostr
             << (settings.hilite ? hilite_keyword : "")
@@ -307,10 +375,12 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         String action = "CREATE";
         if (attach)
             action = "ATTACH";
-        else if (replace_table && create_or_replace)
-            action = "CREATE OR REPLACE";
-        else if (replace_table)
-            action = "REPLACE";
+        /// proton : starts
+        /// else if (replace_table && create_or_replace)
+        ///    action = "CREATE OR REPLACE";
+        /// else if (replace_table)
+        ///    action = "REPLACE";
+        /// proton : ends
 
         /// Always DICTIONARY
         settings.ostr << (settings.hilite ? hilite_keyword : "") << action << " DICTIONARY "
@@ -324,9 +394,9 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (to_table_id)
     {
-        assert(is_materialized_view && to_inner_uuid == UUIDHelpers::Nil);
+        assert(isMaterializedView() && to_inner_uuid == UUIDHelpers::Nil);
         settings.ostr
-            << (settings.hilite ? hilite_keyword : "") << (is_materialized_view ? " INTO " : " TO ") << (settings.hilite ? hilite_none : "")
+            << (settings.hilite ? hilite_keyword : "") << (isMaterializedView() ? " INTO " : " TO ") << (settings.hilite ? hilite_none : "")
             << (!to_table_id.database_name.empty() ? backQuoteIfNeed(to_table_id.database_name) + "." : "")
             << backQuoteIfNeed(to_table_id.table_name);
     }
@@ -334,8 +404,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (to_inner_uuid != UUIDHelpers::Nil)
     {
         /// proton: starts.
-        assert(is_materialized_view && !to_table_id);
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << (is_materialized_view ? " INTO INNER UUID " : " TO INNER UUID ") << (settings.hilite ? hilite_none : "")
+        assert(isMaterializedView() && !to_table_id);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << (isMaterializedView() ? " INTO INNER UUID " : " TO INNER UUID ") << (settings.hilite ? hilite_none : "")
                       << quoteString(toString(to_inner_uuid));
         /// proton: ends.
     }
@@ -407,11 +477,56 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         tables->formatImpl(settings, state, frame);
     }
 
+    /// proton : starts
+    if (storage_settings)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "STORAGE_SETTINGS " << (settings.hilite ? hilite_none : "");
+        storage_settings->formatImpl(settings, state, frame);
+    }
+
+    if (mv_inner_storage_ttl)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "TTL " << (settings.hilite ? hilite_none : "");
+        mv_inner_storage_ttl->formatImpl(settings, state, frame);
+    }
+    /// proton : ends
+
     if (comment)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "COMMENT " << (settings.hilite ? hilite_none : "");
         comment->formatImpl(settings, state, frame);
     }
+}
+
+/// proton : starts
+bool ASTCreateQuery::isLocal() const noexcept
+{
+    if (table)
+    {
+        return storage && storage->isLocal();
+    }
+    else
+    {
+        /// Database with `local` flag is "forced" local
+        auto is_local_database = storage && storage->hasLocalInSettings();
+        if (is_local_database)
+            return true;
+
+        /// `system` database is always local
+        if (getDatabase() == "system")
+            return true;
+
+        /// For all other databases, they are all distributed
+        return false;
+    }
+}
+/// proton : ends
+
+bool ASTCreateQuery::isParameterizedView() const
+{
+    if (isOrdinaryView() && select && select->hasQueryParameters())
+        return true;
+    return false;
 }
 
 }

@@ -4,7 +4,6 @@
 #include <unordered_map>
 #include <vector>
 #include <memory>
-#include <utility>
 #include <Core/Block.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
@@ -47,7 +46,7 @@ struct IMergeTreeIndexGranule
     /// - 1 -- everything else.
     ///
     /// Implementation is responsible for version check,
-    /// and throw LOGICAL_ERROR in case of unsupported version.
+    /// and throws LOGICAL_ERROR in case of unsupported version.
     ///
     /// See also:
     /// - IMergeTreeIndex::getSerializedFileExtension()
@@ -61,6 +60,16 @@ struct IMergeTreeIndexGranule
 
 using MergeTreeIndexGranulePtr = std::shared_ptr<IMergeTreeIndexGranule>;
 using MergeTreeIndexGranules = std::vector<MergeTreeIndexGranulePtr>;
+
+
+/// Stores many granules at once in a more optimal form, allowing bulk filtering.
+struct IMergeTreeIndexBulkGranules
+{
+    virtual ~IMergeTreeIndexBulkGranules() = default;
+    virtual void deserializeBinary(size_t granule_num, ReadBuffer & istr, MergeTreeIndexVersion version) = 0;
+};
+
+using MergeTreeIndexBulkGranulesPtr = std::shared_ptr<IMergeTreeIndexBulkGranules>;
 
 
 /// Aggregates info about a single block of data.
@@ -90,13 +99,19 @@ public:
     virtual bool alwaysUnknownOrTrue() const = 0;
 
     virtual bool mayBeTrueOnGranule(MergeTreeIndexGranulePtr granule) const = 0;
+
+    using FilteredGranules = std::vector<size_t>;
+    virtual FilteredGranules getPossibleGranules(const MergeTreeIndexBulkGranulesPtr &) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Index does not support filtering in bulk");
+    }
 };
 
 using MergeTreeIndexConditionPtr = std::shared_ptr<IMergeTreeIndexCondition>;
-using MergeTreeIndexConditions = std::vector<MergeTreeIndexConditionPtr>;
 
 struct IMergeTreeIndex;
 using MergeTreeIndexPtr = std::shared_ptr<const IMergeTreeIndex>;
+
 
 /// IndexCondition that checks several indexes at the same time.
 class IMergeTreeIndexMergedCondition
@@ -118,7 +133,6 @@ protected:
 };
 
 using MergeTreeIndexMergedConditionPtr = std::shared_ptr<IMergeTreeIndexMergedCondition>;
-using MergeTreeIndexMergedConditions = std::vector<IMergeTreeIndexMergedCondition>;
 
 
 struct IMergeTreeIndex
@@ -159,11 +173,24 @@ struct IMergeTreeIndex
     virtual bool mayBenefitFromIndexForIn(const ASTPtr & node) const = 0;
 
     virtual MergeTreeIndexGranulePtr createIndexGranule() const = 0;
+    
+    /// A more optimal filtering method
+    virtual bool supportsBulkFiltering() const
+    {
+        return false;
+    }
+
+    virtual MergeTreeIndexBulkGranulesPtr createIndexBulkGranules() const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Index does not support filtering in bulk");
+    }
 
     virtual MergeTreeIndexAggregatorPtr createIndexAggregator() const = 0;
 
     virtual MergeTreeIndexConditionPtr createIndexCondition(
-        const SelectQueryInfo & query_info, ContextPtr context) const = 0;
+        const ActionsDAGPtr & filter_actions_dag, ContextPtr context) const = 0;
+
+    virtual bool isVectorSearch() const { return false; }
 
     virtual MergeTreeIndexMergedConditionPtr createIndexMergedCondition(
         const SelectQueryInfo & /*query_info*/, StorageMetadataPtr /*storage_metadata*/) const

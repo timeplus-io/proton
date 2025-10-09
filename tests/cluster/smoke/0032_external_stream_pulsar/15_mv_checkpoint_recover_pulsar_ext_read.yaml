@@ -1,0 +1,130 @@
+tags:
+  - materialized view
+
+description: |
+  Test cover checkpoint recover pulsar external stream read / write
+  Main Steps:
+    1.Create external stream
+    2.Create materialized view from external stream
+    3.Ingest data into pulsar
+    4.Check mv data
+    5.System pause mv
+    6.Ingest data into pulsar
+    7.Check mv no new data
+    8.System resume mv
+    9.Ingest data into pulsar
+    10.Check mv new data from last checkpoint
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_14
+
+  - type: pulsar
+    name: create
+    topic: test_14
+
+  - type: query
+    sql: drop view if exists mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists github_events;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream github_events
+      (
+        id int,
+        value string
+      )
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='test_14';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW mv_github_events AS
+      SELECT
+        id, value, _tp_time
+      FROM
+        github_events
+      SETTINGS
+        seek_to = 'earliest';
+
+  - type: wait
+    time: 1
+
+  - type: pulsar
+    name: produce
+    topic: test_14
+    messages:
+      - id: 1
+        value: sometext1
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-15-1
+    query: select id, value from mv_github_events settings seek_to='earliest';
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: check
+    target_name: pulsar-15-1
+    expected_result:
+      - [1, 'sometext1']
+
+  - type: query
+    sql: system pause materialized view mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: pulsar
+    name: produce
+    topic: test_14
+    messages:
+      - id: 2
+        value: sometext2
+
+  - type: check
+    target_name: pulsar-15-1
+    expected_result: []
+
+  - type: query
+    sql: system resume materialized view mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pulsar-15-1
+    expected_result:
+      - [2, 'sometext2']
+
+  - type: pulsar
+    name: produce
+    topic: test_14
+    messages:
+      - id: 3
+        value: sometext3
+
+  - type: check
+    target_name: pulsar-15-1
+    expected_result:
+      - [3, 'sometext3']

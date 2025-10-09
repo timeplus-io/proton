@@ -1,6 +1,6 @@
 #pragma once
 
-#include <NativeLog/Base/Concurrent/BlockingQueue.h>
+#include <Cluster/Base/Concurrent/BlockingQueue.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/TelemetryElement.h>
 #include <Common/logger_useful.h>
@@ -62,9 +62,9 @@ private:
     Int64 prev_streaming_select_query = 0;
     Int64 prev_historical_select_query = 0;
 
-    ThreadFromGlobalPool upload_thread;
-    nlog::BlockingQueue<std::shared_ptr<TelemetryElement>> queue;
+    std::unique_ptr<ThreadFromGlobalPool> upload_thread;
+    cluster::BlockingQueue<std::shared_ptr<TelemetryElement>> queue;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 }

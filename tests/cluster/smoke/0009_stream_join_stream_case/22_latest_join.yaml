@@ -1,0 +1,43 @@
+tags:
+  - stream_join_stream
+  - to_support
+  - bug
+description: latest join emits changelog
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '1023'
+    type: stream
+    query: select s, ss, _tp_delta from test10_left_stream inner latest join test10_right_stream on i=ii
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+      - name: _tp_delta
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_left_stream(i, s) values (1, 's')
+
+  - type: query
+    sql: insert into test10_right_stream(ii, ss) values (1, 's1')
+
+  - type: query
+    sql: insert into test10_right_stream(ii, ss) values (1, 's2')
+
+  - type: query
+    sql: insert into test10_left_stream(i, s) values (1, 's3')
+
+  - type: check
+    target_name: '1023'
+    expected_result:
+      - [ s, s1, 1 ]
+      - [ s, s1, -1 ]
+      - [ s, s2, 1 ]
+      - [ s, s2, -1 ]
+      - [ s3, s2, 1 ]

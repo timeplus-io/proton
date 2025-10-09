@@ -1,0 +1,200 @@
+tags:
+  - changelog
+  - changelog_kv
+  - left join
+
+description: |
+  Test covering changelog left all join changelog_kv smoke cases
+  Scenario:
+  - all primary key
+  - partial primary key
+  - no primary key
+  Check:
+  - left stream insert new key, output one line with empty right stream
+  - left stream insert exist key, output one line directly
+  - right stream insert new key, no output
+  - right stream insert exist key, output two line (delta=-1 and delta=1)
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test35_versionkv_stream1;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test35_versionkv_stream2;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream test35_versionkv_stream1
+      (
+        id int,
+        v string,
+        v2 datetime64(3)
+      )
+      primary key (id, v)
+      settings mode='changelog'
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream test35_versionkv_stream2
+      (
+        id int,
+        v string,
+        v2 datetime64(3)
+      )
+      primary key (id, v)
+      settings mode='changelog_kv'
+  - type: wait
+    time: 1
+
+  - name: changelog-left-join-2-1
+    type: stream
+    query: |
+      SELECT
+        id, v, v2, kv2.id, kv2.v, kv2.v2, _tp_delta
+      FROM
+        test35_versionkv_stream1 AS kv
+      LEFT JOIN test35_versionkv_stream2 AS kv2 ON kv.id = kv2.id and kv.v = kv2.v emit changelog;
+    schema:
+      - name: id
+        type: int32
+      - name: v
+        type: string
+      - name: v2
+        type: datetime64(3)
+      - name: kv2.id
+        type: int32
+      - name: kv2.v
+        type: string
+      - name: kv2.v2
+        type: datetime64(3)
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - name: changelog-left-join-2-2
+    type: stream
+    query: |
+      SELECT
+        id, v, v2, kv2.id, kv2.v, kv2.v2, _tp_delta
+      FROM
+        test35_versionkv_stream1 AS kv
+      LEFT JOIN test35_versionkv_stream2 AS kv2 ON kv.id = kv2.id emit changelog;
+    schema:
+      - name: id
+        type: int32
+      - name: v
+        type: string
+      - name: v2
+        type: datetime64(3)
+      - name: kv2.id
+        type: int32
+      - name: kv2.v
+        type: string
+      - name: kv2.v2
+        type: datetime64(3)
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - name: changelog-left-join-2-3
+    type: stream
+    query: |
+      SELECT
+        id, v, v2, kv2.id, kv2.v, kv2.v2, _tp_delta
+      FROM
+        test35_versionkv_stream1 AS kv
+      LEFT JOIN test35_versionkv_stream2 AS kv2 ON kv.v2 = kv2.v2 emit changelog;
+    schema:
+      - name: id
+        type: int32
+      - name: v
+        type: string
+      - name: v2
+        type: datetime64(3)
+      - name: kv2.id
+        type: int32
+      - name: kv2.v
+        type: string
+      - name: kv2.v2
+        type: datetime64(3)
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test35_versionkv_stream1(id, v, v2) values
+    schema:
+      - name: id
+        type: int32
+      - name: v
+        type: string
+      - name: v2
+        type: datetime64(3)
+    inputs:
+     - [1, 't1', '2023-01-01 00:00:01']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test35_versionkv_stream2(id, v, v2) values
+    schema:
+      - name: id
+        type: int32
+      - name: v
+        type: string
+      - name: v2
+        type: datetime64(3)
+    inputs:
+     - [1, 't1', '2023-01-01 00:00:02']
+     - [2, 't2', '2023-01-01 00:00:01']
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test35_versionkv_stream1(id, v, v2) values
+    schema:
+      - name: id
+        type: int32
+      - name: v
+        type: string
+      - name: v2
+        type: datetime64(3)
+    inputs:
+     - [2, 't2', '2023-01-01 00:00:02']
+
+  - type: check
+    target_name: changelog-left-join-2-1
+    expected_result:
+      - [1, 't1', '2023-01-01 00:00:01', 0, '', '0001-01-01 00:00:00', 1] # 1970
+      - [1, 't1', '2023-01-01 00:00:01', 0, '', '0001-01-01 00:00:00', -1] # 1970
+      - [1, 't1', '2023-01-01 00:00:01', 1, 't1', '2023-01-01 00:00:02', 1]
+      - [2, 't2', '2023-01-01 00:00:02', 2, 't2', '2023-01-01 00:00:01', 1]
+
+  - type: check
+    target_name: changelog-left-join-2-2
+    expected_result:
+      - [1, 't1', '2023-01-01 00:00:01', 0, '', '0001-01-01 00:00:00', 1] # 1970
+      - [1, 't1', '2023-01-01 00:00:01', 0, '', '0001-01-01 00:00:00', -1] # 1970
+      - [1, 't1', '2023-01-01 00:00:01', 1, 't1', '2023-01-01 00:00:02', 1]
+      - [2, 't2', '2023-01-01 00:00:02', 2, 't2', '2023-01-01 00:00:01', 1]
+
+  - type: check
+    target_name: changelog-left-join-2-3
+    expected_result:
+      - [1, 't1', '2023-01-01 00:00:01', 0, '', '0001-01-01 00:00:00', 1] # 1970
+      - [1, 't1', '2023-01-01 00:00:01', 0, '', '0001-01-01 00:00:00', -1] # 1970
+      - [1, 't1', '2023-01-01 00:00:01', 2, 't2', '2023-01-01 00:00:01', 1]
+      - [2, 't2', '2023-01-01 00:00:02', 1, 't1', '2023-01-01 00:00:02', 1]

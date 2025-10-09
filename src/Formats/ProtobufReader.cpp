@@ -36,7 +36,7 @@ namespace
 
 
 ProtobufReader::ProtobufReader(ReadBuffer & in_)
-    : in(in_)
+    : in(&in_)
 {
 }
 
@@ -152,7 +152,7 @@ bool ProtobufReader::readFieldNumber(int & field_number_)
     {
         if (current_message_end == END_OF_FILE)
         {
-            if (unlikely(in.eof()))
+            if (unlikely(in->eof()))
             {
                 current_message_end = cursor;
                 return false;
@@ -281,26 +281,26 @@ void ProtobufReader::readStringAndAppend(PaddedPODArray<UInt8> & str)
 
 void ProtobufReader::readBinary(void* data, size_t size)
 {
-    in.readStrict(reinterpret_cast<char*>(data), size);
+    in->readStrict(reinterpret_cast<char*>(data), size);
     cursor += size;
 }
 
 void ProtobufReader::ignore(UInt64 num_bytes)
 {
-    in.ignore(num_bytes);
+    in->ignore(num_bytes);
     cursor += num_bytes;
 }
 
 void ProtobufReader::ignoreAll()
 {
-    cursor += in.tryIgnore(std::numeric_limits<size_t>::max());
+    cursor += in->tryIgnore(std::numeric_limits<size_t>::max());
 }
 
 void ProtobufReader::moveCursorBackward(UInt64 num_bytes)
 {
-    if (in.offset() < num_bytes)
+    if (in->offset() < num_bytes)
         throwUnknownFormat();
-    in.position() -= num_bytes;
+    in->position() -= num_bytes;
     cursor -= num_bytes;
 }
 
@@ -312,7 +312,7 @@ UInt64 ProtobufReader::continueReadingVarint(UInt64 first_byte)
 #    define PROTOBUF_READER_READ_VARINT_BYTE(byteNo) \
         do \
         { \
-            in.readStrict(c); \
+            in->readStrict(c); \
             ++cursor; \
             if constexpr ((byteNo) < 10) \
             { \
@@ -351,7 +351,7 @@ void ProtobufReader::ignoreVarint()
 #    define PROTOBUF_READER_IGNORE_VARINT_BYTE(byteNo) \
         do \
         { \
-            in.readStrict(c); \
+            in->readStrict(c); \
             ++cursor; \
             if constexpr ((byteNo) < 10) \
             { \
@@ -428,18 +428,16 @@ void ProtobufReader::ignoreGroup()
 
 [[noreturn]] void ProtobufReader::throwUnknownFormat() const
 {
-    throw Exception(
-        std::string("Protobuf messages are corrupted or don't match the provided schema.")
-            + (root_message_has_length_delimiter
-                   ? " Please note that Protobuf stream is length-delimited: every message is prefixed by its length in varint."
-                   : ""),
-        ErrorCodes::UNKNOWN_PROTOBUF_FORMAT);
+    throw Exception(ErrorCodes::UNKNOWN_PROTOBUF_FORMAT, "Protobuf messages are corrupted or don't match the provided schema.{}",
+            root_message_has_length_delimiter
+            ? " Please note that Protobuf stream is length-delimited: every message is prefixed by its length in varint."
+            : "");
 }
 
 /// proton: starts
 void ProtobufReader::setReadBuffer(ReadBuffer & buf)
 {
-    in.swap(buf);
+    in = &buf;
     /// reset states
     cursor = 0;
     current_message_level = 0;

@@ -1,0 +1,19 @@
+tags:
+  - sqlformat
+description: send a sqlformat request of complex query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '401'
+    type: rest
+    url: /proton/v1/sqlformat
+    method: POST
+    data:
+      query: select A except select B
+
+  - type: check
+    target_name: '401'
+    expected_result:
+      - query: "SELECT\n  A\nEXCEPT\nSELECT\n  B"
+        request_id: any_value

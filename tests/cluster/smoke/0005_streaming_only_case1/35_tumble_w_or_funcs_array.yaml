@@ -1,0 +1,77 @@
+tags:
+  - tumble window
+  - functions
+  - func rename
+description: extract timestamp from json and run tumble on it, and run all func rename.
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: 601-1
+    type: stream
+    query: |
+      select id,
+             max(value),
+             json_extract_array_raw(json, 'array1') as array1,
+             json_extract_array_raw(json, 'array1') as array2,
+             array_concat(array1, array2) as array_concat,
+             length(array_concat) as array_length,
+             window_end
+      from tumble(test6_stream_only1, to_time(json_extract_string(json, 'create_time')), interval 5 second)
+      where window_end < '2021-11-02 20:00:10'
+      group by id, json, array1, array2, array_concat, array_length, window_end
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: array1
+        type: array(string)
+      - name: array2
+        type: array(string)
+      - name: array_concat
+        type: array(string)
+      - name: array_length
+        type: uint64
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 60, '{"create_time":"11/02/2021 20:00:01", "1953":"1953-11-02", "float":127.001,"int":600, "bool":true, "array1":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4,-5]], "array2":[[20, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:00')
+        ('dev2', 'ca', 66, '{"create_time":"2021-11-02 20:00:03", "1953":"1953-11-02", "float":127.001,"int":600.03,"bool":true, "array1":[[1, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:01')
+        ('dev2', 'ca', 58.3, '{"create_time":"11-02-2021 20:00:02", "1953":"1953-11-02","float":127.001,"int": 312,"bool":false, "array1":[[22, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4,-5]]}', '2020-02-02 20:01:03')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 59, '{"create_time":"11.02.2021 20:00:04", "1953":"1953-11-02","float":"127.001","int": 65536.001, "bool":true, "array1":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3,-4, -5]], "array2":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:06')
+        ('dev1', 'ca', 67, '{"create_time":"2021-11-02 20:00:05", "1953":"1953-11-02","float":127.001,"bool":true, "array1":[[3, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[3,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:07')
+        ('dev1', 'ca', 77, '{"create_time":"11-02-2021 20:00:06", "1953":"1953-11-02","float":127.001,"bool":false, "array1":[[4, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[4,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:10')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev3', 'ca', 57.3, '{"create_time":"2021-11-02 20:00:09", "1953":"1953-11-02","float":127.001,"bool":true, "array1":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[0,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:11')
+        ('dev2', 'ca', 66, '{"create_time":"2021-11-02 20:00:08", "1953":"1953-11-02","float":127.001,"bool":true, "array1":[[5, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[5,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:14')
+        ('dev2', 'ca', 76, '{"create_time":"2021-11-02 20:00:07", "1953":"1953-11-02","float":127.001,"bool":false, "array1":[[90, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[90,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:11')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev3', 'ca', 80, '{"create_time":"2021-11-02 20:00:09", "1953":"1953-11-02","float":"127.001","bool":true, "array1":[[0, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[0,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:13')
+        ('dev3', 'ca', 67, '{"create_time":"2021-11-02 20:00:01", "1953":"1953-11-02","float":"127.001","bool":true, "array1":[[72, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[72,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:12')
+        ('dev3', 'ca', 77, '{"create_time":"2021-11-02 20:00:10", "1953":"1953-11-02","float":"127.001","bool":true, "array1":[[7, 1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]], "array2":[[7,1, 2, 3, 4, 5],[0, -1, -2, -3, -4, -5]]}', '2020-02-02 20:01:15')
+
+  - type: check
+    target_name: 601-1
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [ dev1, 59, ['[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]', '[0,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], '4', '2021-11-02 20:00:05' ]
+      - [ dev1, 60, ['[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]', '[20,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], '4', '2021-11-02 20:00:05' ]
+      - [ dev2, 66, ['[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]', '[1,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], '4', '2021-11-02 20:00:05' ]
+      - [ dev2, 58.3, ['[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], ['[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]', '[22,1,2,3,4,5]', '[0,-1,-2,-3,-4,-5]'], '4', '2021-11-02 20:00:05' ]

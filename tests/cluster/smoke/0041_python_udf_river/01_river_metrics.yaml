@@ -1,0 +1,61 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (xs map(string, float), ys bool);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_metric(xs map(string, float), ys bool) RETURNS string LANGUAGE PYTHON AS
+      $$
+      from river import linear_model
+      from river import metrics
+
+      def test_metric(xs, ys):
+          res = []
+          model = linear_model.LogisticRegression()
+          metric = metrics.ROCAUC()
+          for x, y in zip(xs, ys):
+              x = dict(x)
+              y_pred = model.predict_proba_one(x)
+              metric.update(y, y_pred)
+              res.append(str(metric))
+              model.learn_one(x, y)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-1-1
+    type: stream
+    query: select test_metric(xs, ys) as res, xs, ys from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: xs
+        type: map(string, float32)
+      - name: ys
+        type: bool
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(xs, ys) values ({'https': 0.0, 'is_popular': 0.5}, True) ({'https': 0.0, 'is_popular': 0.5}, False);
+
+  - type: check
+    target_name: python-udf13-1-1
+    expected_result:
+      - ['ROCAUC: -0.00%', {'https': 0.0, 'is_popular': 0.5}, True]
+      - ['ROCAUC: 50.00%', {'https': 0.0, 'is_popular': 0.5}, False]

@@ -16,12 +16,13 @@ public:
 
     BlockIO execute() override;
 
-    static Block getSampleBlock();
+    Block getSampleBlock() const;
 
 private:
     ASTPtr query_ptr;
 
     QueryPipeline executeImpl();
+    QueryPipeline showMultiVersions(const String & schema_name, const String & schema_type) const;
 };
 
 

@@ -9,10 +9,11 @@
 
 #include <base/EnumReflection.h>
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
 #include <Core/TypeId.h>
-#include <IO/ReadBufferFromString.h>
 #include <DataTypes/IDataType.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/IExternalLoadable.h>
 
 
@@ -34,7 +35,9 @@ enum class AttributeUnderlyingType : TypeIndexUnderlying
     map_item(Decimal32), map_item(Decimal64), map_item(Decimal128), map_item(Decimal256),
     map_item(DateTime64),
 
-    map_item(UUID), map_item(String), map_item(Array)
+    map_item(UUID), map_item(String), map_item(Array),
+
+    map_item(IPv4), map_item(IPv6)
 };
 
 #undef map_item
@@ -121,6 +124,10 @@ struct DictionaryStructure final
 
     DataTypes getKeyTypes() const;
     void validateKeyTypes(const DataTypes & key_types) const;
+
+    /// proton : starts
+    void validateKeyTypes(const ColumnsWithTypeAndName & key_columns_with_types, const std::vector<size_t> & key_index_map) const;
+    /// proton : ends
 
     bool hasAttribute(const std::string & attribute_name) const;
     const DictionaryAttribute & getAttribute(const std::string & attribute_name) const;

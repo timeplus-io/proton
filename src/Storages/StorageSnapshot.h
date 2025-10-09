@@ -1,5 +1,6 @@
 #pragma once
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/ColumnsDescription.h>
 
 namespace DB
 {
@@ -14,11 +15,7 @@ struct StorageSnapshot
     const IStorage & storage;
     const StorageMetadataPtr metadata;
 
-    /// proton : starts.
-    /// Make object column multi-versioned to allow to get/set
-    /// dynamic object columns for streaming store source
-    MultiVersion<ColumnsDescription> object_columns;
-    /// proton : ends
+    /// proton: updates. Remove object_columns for only new json type is supported.
 
     /// Additional data, on which set of columns may depend.
     /// E.g. data parts in MergeTree, list of blocks in Memory, etc.
@@ -27,7 +24,7 @@ struct StorageSnapshot
         virtual ~Data() = default;
     };
 
-    using DataPtr = std::shared_ptr<const Data>;
+    using DataPtr = std::shared_ptr<Data>;
     DataPtr data;
 
     /// Projection that is used in query.
@@ -35,27 +32,19 @@ struct StorageSnapshot
 
     StorageSnapshot(
         const IStorage & storage_,
-        const StorageMetadataPtr & metadata_)
-        : storage(storage_), metadata(metadata_), object_columns(std::make_unique<ColumnsDescription>())
+        StorageMetadataPtr metadata_)
+        : storage(storage_), metadata(std::move(metadata_))  /// proton: updates
     {
         init();
     }
 
     StorageSnapshot(
         const IStorage & storage_,
-        const StorageMetadataPtr & metadata_,
-        const ColumnsDescription & object_columns_)
-        : storage(storage_), metadata(metadata_), object_columns(std::make_unique<ColumnsDescription>(object_columns_))
-    {
-        init();
-    }
-
-    StorageSnapshot(
-        const IStorage & storage_,
-        const StorageMetadataPtr & metadata_,
-        const ColumnsDescription & object_columns_,
+        StorageMetadataPtr metadata_,
         DataPtr data_)
-        : storage(storage_), metadata(metadata_), object_columns(std::make_unique<ColumnsDescription>(object_columns_)), data(std::move(data_))
+        : storage(storage_)
+        , metadata(std::move(metadata_))
+        , data(std::move(data_))
     {
         init();
     }
@@ -63,7 +52,6 @@ struct StorageSnapshot
     StorageSnapshot(const StorageSnapshot & snapshot_)
         : storage(snapshot_.storage)
         , metadata(snapshot_.metadata)
-        , object_columns(std::make_unique<ColumnsDescription>(*(snapshot_.object_columns.get())))
         , data(snapshot_.data)
         , projection(snapshot_.projection)
         , virtual_columns(snapshot_.virtual_columns)
@@ -71,6 +59,8 @@ struct StorageSnapshot
     }
 
     std::shared_ptr<StorageSnapshot> clone() const;
+
+    std::shared_ptr<StorageSnapshot> clone(DataPtr data_) const;
 
     /// Get all available columns with types according to options.
     NamesAndTypesList getColumns(const GetColumnsOptions & options) const;
@@ -81,6 +71,8 @@ struct StorageSnapshot
     /// Get column with type according to options for requested name.
     std::optional<NameAndTypePair> tryGetColumn(const GetColumnsOptions & options, const String & column_name) const;
     NameAndTypePair getColumn(const GetColumnsOptions & options, const String & column_name) const;
+
+    ASTPtr getCodecDescOrDefault(const String & column_name, CompressionCodecPtr default_codec) const;
 
     /// Block with ordinary + materialized + aliases + virtuals + subcolumns.
     Block getSampleBlockForColumns(const Names & column_names) const;

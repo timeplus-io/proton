@@ -1,0 +1,237 @@
+tags:
+  - window aggr
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: tumble/hop aggregation with substream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: "1700"
+    node:
+      - p1
+    type: stream
+    query: select id, window_start, window_end, sum(val_i) from tumble(test17_substream, 2s) partition by id group by window_start, window_end order by id, window_start
+    schema:
+      - name: id
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: sum(val_i)
+        type: int64
+  - type: wait
+    time: 2
+
+  - name: "1701"
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    type: stream
+    query: select id, window_start, count(val_s), sum(val_i), max(val_i64), min(val_f) from tumble(test17_substream, 5s) partition by id group by window_start order by id, window_start
+    schema:
+      - name: id 
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: count(val_s)
+        type: uint64        
+      - name: sum(val_i)
+        type: int64
+      - name: max(val_i64)
+        type: int64        
+      - name: min(val_f)
+        type: float64   
+
+  - name: "1702"
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    type: stream
+    query: select id, window_start, count(val_s), sum(val_i), max(val_i64), min(val_f) from tumble(test17_substream, 5s) partition by id group by window_start order by id, window_start
+    schema:
+      - name: id 
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: count(val_s)
+        type: uint64        
+      - name: sum(val_i)
+        type: int64
+      - name: max(val_i64)
+        type: int64        
+      - name: min(val_f)
+        type: float64 
+
+  - name: "1703"
+    node:
+      - p1
+    type: stream
+    query: select to_timezone(val_date, 'UTC'), window_end, id, sum(val_i) from tumble(test17_substream, 2s) partition by val_date group by window_end, id order by val_date, window_end, id
+    schema:
+      - name: to_timezone(val_date, 'UTC')
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: id 
+        type: uint64     
+      - name: sum(val_i)
+        type: int64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into test17_substream(id, val_i, val_i64, val_f, val_s, val_date, timestamp) values
+        (1, 1, 10000, 5.6, '11', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:00+00:00')
+        (1, 2, 10010, 7.6, '12', '2020-02-02 20:00:06+00:00', '2020-02-02 20:00:01+00:00')
+        (1, 3, 10012, 12.6, '13', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:03+00:00')
+        (2, 21, 20000, 25.6, '21', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:00+00:00')
+        (3, 31, 30000, 35.6, '31', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:00+00:00')
+        (3, 32, 30010, 37.6, '32', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:01+00:00')
+        (2, 22, 20010, 27.6, '22', '2020-02-02 20:00:01+00:00', '2020-02-02 20:00:01+00:00')
+        (2, 23, 20012, 212.6, '23', '2020-02-02 20:00:02+00:00', '2020-02-02 20:00:03+00:00')
+        (1, 6, 10050, 27.34, '16', '2020-02-02 20:00:06+00:00', '2020-02-02 20:00:08+00:00');
+
+  - type: query
+    sql: |
+      insert into test17_substream(id, val_i, val_i64, val_f, val_s, val_date, timestamp) values
+        (2, 24, 20050, 27.34, '24', '2020-02-02 20:00:03+00:00', '2020-02-02 20:00:03+00:00')
+        (2, 25, 20042, 213.6, '25', '2020-02-02 20:00:04+00:00', '2020-02-02 20:00:05+00:00')
+        (2, 26, 20050, 227.34, '26', '2020-02-02 20:00:05+00:00', '2020-02-02 20:00:08+00:00');
+
+  - type: query
+    sql: |
+      insert into test17_substream(id, val_i, val_i64, val_f, val_s, val_date, timestamp) values
+        (3, 33, 30012, 312.6, '33', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:08+00:00')
+        (3, 34, 30050, 37.34, '34', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:03+00:00')
+        (1, 4, 10050, 7.34, '4', '2020-02-02 20:00:05+00:00', '2020-02-02 20:00:03+00:00')
+        (1, 5, 10042, 13.6, '5', '2020-02-02 20:00:05+00:00', '2020-02-02 20:00:05+00:00')
+        (3, 35, 30042, 313.6, '35', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:05+00:00')
+        (3, 36, 30050, 327.34, '36', '2020-02-02 20:00:00+00:00', '2020-02-02 20:00:02+00:00');
+
+  - type: query
+    sql: |
+      insert into test17_substream(id, val_i, val_i64, val_f, val_s, val_date, timestamp) values
+        (4, 424, 40050, 427.34, '400', '2020-02-02 20:00:10+00:00', '2020-02-02 20:00:10+00:00');
+
+  - type: check
+    target_name: "1700"
+    mode: random
+    expected_result:
+      - - 1
+        - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 3
+      - - 1
+        - "2020-02-02 20:00:02+00:00"
+        - "2020-02-02 20:00:04+00:00"
+        - 3
+      - - 2
+        - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 43
+      - - 2
+        - "2020-02-02 20:00:02+00:00"
+        - "2020-02-02 20:00:04+00:00"
+        - 47
+      - - 2
+        - "2020-02-02 20:00:04+00:00"
+        - "2020-02-02 20:00:06+00:00"
+        - 25
+      - - 3
+        - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 63
+      - - 3
+        - "2020-02-02 20:00:02+00:00"
+        - "2020-02-02 20:00:04+00:00"
+        - 70
+      - - 3
+        - "2020-02-02 20:00:04+00:00"
+        - "2020-02-02 20:00:06+00:00"
+        - 35
+
+  - type: check
+    target_name: "1701"
+    mode: random
+    expected_result:
+      - - 1
+        - "2020-02-02 20:00:00+00:00"
+        - 3
+        - 6
+        - 10012
+        - 5.6
+      - - 2
+        - "2020-02-02 20:00:00+00:00"
+        - 4
+        - 90
+        - 20050
+        - 25.6
+      - - 3
+        - "2020-02-02 20:00:00+00:00"
+        - 4
+        - 133
+        - 30050
+        - 35.6
+
+  - type: check
+    target_name: "1702"
+    mode: random
+    expected_result:
+      - - 1
+        - "2020-02-02 20:00:00+00:00"
+        - 3
+        - 6
+        - 10012
+        - 5.6
+      - - 2
+        - "2020-02-02 20:00:00+00:00"
+        - 4
+        - 90
+        - 20050
+        - 25.6
+      - - 3
+        - "2020-02-02 20:00:00+00:00"
+        - 4
+        - 133
+        - 30050
+        - 35.6
+
+  - type: check
+    target_name: "1703"
+    mode: random
+    expected_result:
+      - - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 1
+        - 1
+      - - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 2
+        - 21
+      - - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 3
+        - 63
+      - - "2020-02-02 20:00:06+00:00"
+        - "2020-02-02 20:00:02+00:00"
+        - 1
+        - 2
+      - - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:04+00:00"
+        - 1
+        - 3
+      - - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:04+00:00"
+        - 3
+        - 70
+      - - "2020-02-02 20:00:00+00:00"
+        - "2020-02-02 20:00:06+00:00"
+        - 3
+        - 35

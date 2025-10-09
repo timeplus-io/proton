@@ -63,8 +63,7 @@
                 "Argument Types": ["uint64"],
                 "Result Type": "float64"
               },
-              "Arguments": ["number"],
-              "Argument Positions": [0]
+              "Arguments": ["number"]
             },
             {
               "Name": "sum_if(number, greater(number, 0))",
@@ -73,9 +72,13 @@
                 "Argument Types": ["uint64", "bool"],
                 "Result Type": "uint64"
               },
-              "Arguments": ["number", "greater(number, 0)"],
-              "Argument Positions": [0, 2]
+              "Arguments": ["number", "greater(number, 0)"]
+            }
+          ],
 --------
+          "Node Type": "ArrayJoin",
+          "Left": false,
+          "Columns": ["x", "y"],
 --------
           "Node Type": "Distinct",
           "Columns": ["int_div(number, 3)", "int_div(number, 2)"],

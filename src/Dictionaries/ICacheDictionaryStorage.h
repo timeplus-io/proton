@@ -22,19 +22,19 @@ struct KeyState
         , fetched_column_index(fetched_column_index_)
     {}
 
-    KeyState(State state_)
+    KeyState(State state_) /// NOLINT
         : state(state_)
     {}
 
-    inline bool isFound() const { return state == State::found; }
-    inline bool isExpired() const { return state == State::expired; }
-    inline bool isNotFound() const { return state == State::not_found; }
-    inline bool isDefault() const { return is_default; }
-    inline void setDefault() { is_default = true; }
-    inline void setDefaultValue(bool is_default_value) { is_default = is_default_value; }
+    bool isFound() const { return state == State::found; }
+    bool isExpired() const { return state == State::expired; }
+    bool isNotFound() const { return state == State::not_found; }
+    bool isDefault() const { return is_default; }
+    void setDefault() { is_default = true; }
+    void setDefaultValue(bool is_default_value) { is_default = is_default_value; }
     /// Valid only if keyState is found or expired
-    inline size_t getFetchedColumnIndex() const { return fetched_column_index; }
-    inline void setFetchedColumnIndex(size_t fetched_column_index_value) { fetched_column_index = fetched_column_index_value; }
+    size_t getFetchedColumnIndex() const { return fetched_column_index; }
+    void setFetchedColumnIndex(size_t fetched_column_index_value) { fetched_column_index = fetched_column_index_value; }
 private:
     State state = not_found;
     size_t fetched_column_index = 0;
@@ -81,7 +81,8 @@ public:
     /// Fetch columns for keys, this method is not write thread safe
     virtual SimpleKeysStorageFetchResult fetchColumnsForKeys(
         const PaddedPODArray<UInt64> & keys,
-        const DictionaryStorageFetchRequest & fetch_request) = 0;
+        const DictionaryStorageFetchRequest & fetch_request,
+        IColumn::Filter * default_mask) = 0;
 
     /// Fetch columns for keys, this method is not write thread safe
     virtual void insertColumnsForKeys(const PaddedPODArray<UInt64> & keys, Columns columns) = 0;
@@ -98,7 +99,8 @@ public:
     /// Fetch columns for keys, this method is not write thread safe
     virtual ComplexKeysStorageFetchResult fetchColumnsForKeys(
         const PaddedPODArray<StringRef> & keys,
-        const DictionaryStorageFetchRequest & column_fetch_requests) = 0;
+        const DictionaryStorageFetchRequest & column_fetch_requests,
+        IColumn::Filter * default_mask) = 0;
 
     /// Fetch columns for keys, this method is not write thread safe
     virtual void insertColumnsForKeys(const PaddedPODArray<StringRef> & keys, Columns columns) = 0;
@@ -113,12 +115,19 @@ public:
     /// Return size of keys in storage
     virtual size_t getSize() const = 0;
 
+    virtual UInt64 getStorageSize() const { return 0; }
+
     /// Returns storage load factor
     virtual double getLoadFactor() const = 0;
 
     /// Return bytes allocated in storage
     virtual size_t getBytesAllocated() const = 0;
 
+    /// proton : starts. There are 2 ways to encode keys before lookup
+    /// 1. regular encoding
+    /// 2. prefix encoding for Mutable stream
+    virtual bool requiresPrefixEncoding() const noexcept { return false; }
+    /// proton : ends
 };
 
 using CacheDictionaryStoragePtr = std::shared_ptr<ICacheDictionaryStorage>;

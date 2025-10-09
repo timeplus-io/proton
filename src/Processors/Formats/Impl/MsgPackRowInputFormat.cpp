@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <Common/assert_cast.h>
 #include <IO/ReadHelpers.h>
+#include <IO/ReadBufferFromMemory.h>
 
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
@@ -21,6 +22,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeUUID.h>
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
@@ -28,6 +30,8 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnLowCardinality.h>
+
+#include <Formats/MsgPackExtensionTypes.h>
 
 namespace DB
 {
@@ -40,11 +44,11 @@ namespace ErrorCodes
     extern const int UNEXPECTED_END_OF_FILE;
 }
 
-MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_)
-    : MsgPackRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_) {}
+MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & settings)
+    : MsgPackRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_, settings) {}
 
-MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_)
-    : IRowInputFormat(header_, *buf_, std::move(params_), ProcessorID::MsgPackRowInputFormatID), buf(std::move(buf_)), parser(visitor), data_types(header_.getDataTypes())  {}
+MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_, const FormatSettings & settings)
+    : IRowInputFormat(header_, *buf_, std::move(params_), ProcessorID::MsgPackRowInputFormatID), buf(std::move(buf_)), visitor(settings.null_as_default), parser(visitor), data_types(header_.getDataTypes())  {}
 
 void MsgPackRowInputFormat::resetParser()
 {
@@ -53,13 +57,13 @@ void MsgPackRowInputFormat::resetParser()
     visitor.reset();
 }
 
-void MsgPackVisitor::set_info(IColumn & column, DataTypePtr type) // NOLINT
+void MsgPackVisitor::set_info(IColumn & column, DataTypePtr type, UInt8 & read) // NOLINT
 {
     while (!info_stack.empty())
     {
         info_stack.pop();
     }
-    info_stack.push(Info{column, type});
+    info_stack.push(Info{column, type, &read});
 }
 
 void MsgPackVisitor::reset()
@@ -157,20 +161,38 @@ static void insertInteger(IColumn & column, DataTypePtr type, UInt64 value)
             assert_cast<DataTypeDateTime64::ColumnType &>(column).insertValue(value);
             break;
         }
+        case TypeIndex::IPv4:
+        {
+            assert_cast<ColumnIPv4 &>(column).insertValue(IPv4(static_cast<UInt32>(value)));
+            break;
+        }
         default:
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert MessagePack integer into column with type {}.", type->getName());
     }
 }
 
-static void insertString(IColumn & column, DataTypePtr type, const char * value, size_t size)
+static void insertString(IColumn & column, DataTypePtr type, const char * value, size_t size, bool bin)
 {
     auto insert_func = [&](IColumn & column_, DataTypePtr type_)
     {
-        insertString(column_, type_, value, size);
+        insertString(column_, type_, value, size, bin);
     };
 
     if (checkAndInsertNullable(column, type, insert_func) || checkAndInsertLowCardinality(column, type, insert_func))
         return;
+
+    if (isUUID(type))
+    {
+        ReadBufferFromMemory buf(value, size);
+        UUID uuid;
+        if (bin)
+            readBinary(uuid, buf);
+        else
+            readUUIDText(uuid, buf);
+
+        assert_cast<ColumnUUID &>(column).insertValue(uuid);
+        return;
+    }
 
     if (!isStringOrFixedString(type))
         throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert MessagePack string into column with type {}.", type->getName());
@@ -210,11 +232,11 @@ static void insertFloat64(IColumn & column, DataTypePtr type, Float64 value) // 
     assert_cast<ColumnFloat64 &>(column).insertValue(value);
 }
 
-static void insertNull(IColumn & column, DataTypePtr type)
+static void insertNull(IColumn & column, DataTypePtr type, UInt8 * read, bool null_as_default)
 {
     auto insert_func = [&](IColumn & column_, DataTypePtr type_)
     {
-        insertNull(column_, type_);
+        insertNull(column_, type_, read, null_as_default);
     };
 
     /// LowCardinality(Nullable(...))
@@ -222,9 +244,37 @@ static void insertNull(IColumn & column, DataTypePtr type)
         return;
 
     if (!type->isNullable())
-        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert MessagePack null into non-nullable column with type {}.", type->getName());
+    {
+        if (!null_as_default)
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN, "Cannot insert MessagePack null into non-nullable column with type {}.", type->getName());
+        column.insertDefault();
+        /// In case of default on null column can have defined DEFAULT expression that should be used.
+        if (read)
+            *read = false;
+        return;
+    }
 
     assert_cast<ColumnNullable &>(column).insertDefault();
+}
+
+static void insertUUID(IColumn & column, DataTypePtr type, const char * value, size_t size)
+{
+    auto insert_func = [&](IColumn & column_, DataTypePtr type_)
+    {
+        insertUUID(column_, type_, value, size);
+    };
+
+    if (checkAndInsertNullable(column, type, insert_func) || checkAndInsertLowCardinality(column, type, insert_func))
+        return;
+
+    if (!isUUID(type))
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Cannot insert MessagePack UUID into column with type {}.", type->getName());
+    ReadBufferFromMemory buf(value, size);
+    UUID uuid;
+    readBinaryBigEndian(uuid.toUnderType().items[0], buf);
+    readBinaryBigEndian(uuid.toUnderType().items[1], buf);
+    assert_cast<ColumnUUID &>(column).insertValue(uuid);
 }
 
 bool MsgPackVisitor::visit_positive_integer(UInt64 value) // NOLINT
@@ -241,13 +291,13 @@ bool MsgPackVisitor::visit_negative_integer(Int64 value) // NOLINT
 
 bool MsgPackVisitor::visit_str(const char * value, size_t size) // NOLINT
 {
-    insertString(info_stack.top().column, info_stack.top().type, value, size);
+    insertString(info_stack.top().column, info_stack.top().type, value, size, false);
     return true;
 }
 
 bool MsgPackVisitor::visit_bin(const char * value, size_t size) // NOLINT
 {
-    insertString(info_stack.top().column, info_stack.top().type, value, size);
+    insertString(info_stack.top().column, info_stack.top().type, value, size, true);
     return true;
 }
 
@@ -279,7 +329,7 @@ bool MsgPackVisitor::start_array(size_t size) // NOLINT
     ColumnArray::Offsets & offsets = column_array.getOffsets();
     IColumn & nested_column = column_array.getData();
     offsets.push_back(offsets.back() + size);
-    info_stack.push(Info{nested_column, nested_type});
+    info_stack.push(Info{nested_column, nested_type, nullptr});
     return true;
 }
 
@@ -303,7 +353,7 @@ bool MsgPackVisitor::start_map_key() // NOLINT
 {
     auto key_column = assert_cast<ColumnMap &>(info_stack.top().column).getNestedData().getColumns()[0];
     auto key_type = assert_cast<const DataTypeMap &>(*info_stack.top().type).getKeyType();
-    info_stack.push(Info{*key_column, key_type});
+    info_stack.push(Info{*key_column, key_type, nullptr});
     return true;
 }
 
@@ -317,7 +367,7 @@ bool MsgPackVisitor::start_map_value() // NOLINT
 {
     auto value_column = assert_cast<ColumnMap &>(info_stack.top().column).getNestedData().getColumns()[1];
     auto value_type = assert_cast<const DataTypeMap &>(*info_stack.top().type).getValueType();
-    info_stack.push(Info{*value_column, value_type});
+    info_stack.push(Info{*value_column, value_type, nullptr});
     return true;
 }
 
@@ -329,13 +379,25 @@ bool MsgPackVisitor::end_map_value() // NOLINT
 
 bool MsgPackVisitor::visit_nil()
 {
-    insertNull(info_stack.top().column, info_stack.top().type);
+    insertNull(info_stack.top().column, info_stack.top().type, info_stack.top().read, null_as_default);
     return true;
+}
+
+bool MsgPackVisitor::visit_ext(const char * value, uint32_t size)
+{
+    int8_t type = *value;
+    if (*value == int8_t(MsgPackExtensionTypes::UUID))
+    {
+        insertUUID(info_stack.top().column, info_stack.top().type, value + 1, size - 1);
+        return true;
+    }
+
+    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported MsgPack extension type: {:x}", type);
 }
 
 void MsgPackVisitor::parse_error(size_t, size_t) // NOLINT
 {
-    throw Exception("Error occurred while parsing msgpack data.", ErrorCodes::INCORRECT_DATA);
+    throw Exception(ErrorCodes::INCORRECT_DATA, "Error occurred while parsing msgpack data.");
 }
 
 bool MsgPackRowInputFormat::readObject()
@@ -349,7 +411,7 @@ bool MsgPackRowInputFormat::readObject()
     {
         buf->position() = buf->buffer().end();
         if (buf->eof())
-            throw Exception("Unexpected end of file while parsing msgpack object.", ErrorCodes::INCORRECT_DATA);
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Unexpected end of file while parsing msgpack object.");
         buf->position() = buf->buffer().end();
         buf->makeContinuousMemoryFromCheckpointToPos();
         buf->rollbackToCheckpoint();
@@ -358,13 +420,14 @@ bool MsgPackRowInputFormat::readObject()
     return true;
 }
 
-bool MsgPackRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &)
+bool MsgPackRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & ext)
 {
     size_t column_index = 0;
     bool has_more_data = true;
+    ext.read_columns.resize(columns.size(), true);
     for (; column_index != columns.size(); ++column_index)
     {
-        visitor.set_info(*columns[column_index], data_types[column_index]);
+        visitor.set_info(*columns[column_index], data_types[column_index], ext.read_columns[column_index]);
         has_more_data = readObject();
         if (!has_more_data)
             break;
@@ -372,7 +435,7 @@ bool MsgPackRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &
     if (!has_more_data)
     {
         if (column_index != 0)
-            throw Exception("Not enough values to complete the row.", ErrorCodes::INCORRECT_DATA);
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Not enough values to complete the row.");
         return false;
     }
     return true;
@@ -380,8 +443,7 @@ bool MsgPackRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &
 
 void MsgPackRowInputFormat::setReadBuffer(ReadBuffer & in_)
 {
-    buf = std::make_unique<PeekableReadBuffer>(in_);
-    IInputFormat::setReadBuffer(in_);
+    buf->setSubBuffer(in_);
 }
 
 MsgPackSchemaReader::MsgPackSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_)
@@ -389,7 +451,9 @@ MsgPackSchemaReader::MsgPackSchemaReader(ReadBuffer & in_, const FormatSettings 
 {
     if (!number_of_columns)
         /// proton: starts
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "You must specify setting input_format_msgpack_number_of_columns to extract stream structure from MsgPack data");
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                        "You must specify setting input_format_msgpack_number_of_columns "
+                        "to extract stream schema from MsgPack data");
         /// proton: ends
 }
 
@@ -415,7 +479,7 @@ msgpack::object_handle MsgPackSchemaReader::readObject()
         {
             buf.position() = buf.buffer().end();
             if (buf.eof())
-                throw Exception("Unexpected end of file while parsing msgpack object", ErrorCodes::UNEXPECTED_END_OF_FILE);
+                throw Exception(ErrorCodes::UNEXPECTED_END_OF_FILE, "Unexpected end of file while parsing msgpack object");
             buf.position() = buf.buffer().end();
             buf.makeContinuousMemoryFromCheckpointToPos();
             buf.rollbackToCheckpoint();
@@ -431,16 +495,16 @@ DataTypePtr MsgPackSchemaReader::getDataType(const msgpack::object & object)
     {
         case msgpack::type::object_type::POSITIVE_INTEGER: [[fallthrough]];
         case msgpack::type::object_type::NEGATIVE_INTEGER:
-            return makeNullable(std::make_shared<DataTypeInt64>());
+            return std::make_shared<DataTypeInt64>();
         case msgpack::type::object_type::FLOAT32:
-            return makeNullable(std::make_shared<DataTypeFloat32>());
+            return std::make_shared<DataTypeFloat32>();
         case msgpack::type::object_type::FLOAT64:
-            return makeNullable(std::make_shared<DataTypeFloat64>());
+            return std::make_shared<DataTypeFloat64>();
         case msgpack::type::object_type::BOOLEAN:
-            return makeNullable(std::make_shared<DataTypeUInt8>());
+            return std::make_shared<DataTypeUInt8>();
         case msgpack::type::object_type::BIN: [[fallthrough]];
         case msgpack::type::object_type::STR:
-            return makeNullable(std::make_shared<DataTypeString>());
+            return std::make_shared<DataTypeString>();
         case msgpack::type::object_type::ARRAY:
         {
             msgpack::object_array object_array = object.via.array;
@@ -466,8 +530,13 @@ DataTypePtr MsgPackSchemaReader::getDataType(const msgpack::object & object)
         }
         case msgpack::type::object_type::NIL:
             return nullptr;
-        default:
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Msgpack type is not supported");
+        case msgpack::type::object_type::EXT:
+        {
+            msgpack::object_ext object_ext = object.via.ext;
+            if (object_ext.type() == int8_t(MsgPackExtensionTypes::UUID))
+                return std::make_shared<DataTypeUUID>();
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Msgpack extension type {:x} is not supported", object_ext.type());
+        }
     }
 }
 
@@ -493,9 +562,9 @@ void registerInputFormatMsgPack(FormatFactory & factory)
             ReadBuffer & buf,
             const Block & sample,
             const RowInputFormatParams & params,
-            const FormatSettings &)
+            const FormatSettings & settings)
     {
-        return std::make_shared<MsgPackRowInputFormat>(sample, buf, params);
+        return std::make_shared<MsgPackRowInputFormat>(sample, buf, params, settings);
     });
     factory.registerFileExtension("messagepack", "MsgPack");
 }
@@ -506,6 +575,14 @@ void registerMsgPackSchemaReader(FormatFactory & factory)
     {
         return std::make_shared<MsgPackSchemaReader>(buf, settings);
     });
+    factory.registerAdditionalInfoForSchemaCacheGetter("MsgPack", [](const FormatSettings & settings)
+    {
+            return fmt::format(
+                "number_of_columns={}, schema_inference_hints={}, max_rows_to_read_for_schema_inference={}",
+                settings.msgpack.number_of_columns,
+                settings.schema_inference_hints,
+                settings.max_rows_to_read_for_schema_inference);
+        });
 }
 
 }

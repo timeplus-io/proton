@@ -28,7 +28,8 @@ public:
         size_t max_block_size,
         Int64 start_timestamp_,
         FileContainer files_,
-        Poco::Logger * logger_);
+        bool streaming_query_,
+        LoggerPtr logger_);
 
     ~FileLogSource() override;
 
@@ -37,6 +38,9 @@ public:
     Chunk generate() override;
 
 private:
+    void initVirtualColumnValueFunctions(const Block & header_);
+    Chunk createChunkFor(const std::vector<std::string_view> & lines) const;
+
     bool handleCurrentFile();
 
     size_t calculateFileHash(int fd, std::vector<char> & read_buf, size_t bytes_to_read, const String & filename);
@@ -45,19 +49,23 @@ private:
     Chunk process();
     Chunk flushBuffer();
     void checkNewFiles();
+    void setCurrentFile(int new_file_fd);
 
+private:
     FileLog * file_log;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr query_context;
-    DataTypePtr column_type;
     Chunk head_chunk;
     size_t max_block_size;
+
+    std::vector<std::function<String()>> virtual_col_value_functions;
 
     Int64 start_timestamp;
 
     FileContainer files;
     FileContainer::iterator iter;
     int current_fd = -1;
+    Int64 current_file_size = std::numeric_limits<Int64>::max();
     Int64 current_offset = -1;
 
     /// Int64 flush_interval_ms = 1000;
@@ -71,7 +79,5 @@ private:
     size_t remaining = 0;
 
     std::unordered_map<size_t, std::string> file_hashes;
-
-    Poco::Logger * logger;
 };
 }

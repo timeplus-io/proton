@@ -17,8 +17,8 @@ $CLICKHOUSE_CLIENT -q "CREATE DATABASE test_01114_1 ENGINE=Atomic"
 $CLICKHOUSE_CLIENT -q "CREATE DATABASE test_01114_2"
 $CLICKHOUSE_CLIENT --allow_deprecated_database_ordinary=1 -q "CREATE DATABASE test_01114_3 ENGINE=Ordinary"
 
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=0 -q "SHOW CREATE DATABASE test_01114_1"
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=0 -q "SHOW CREATE DATABASE test_01114_2"
+$CLICKHOUSE_CLIENT --show_uuid=0 -q "SHOW CREATE DATABASE test_01114_1"
+$CLICKHOUSE_CLIENT --show_uuid=0 -q "SHOW CREATE DATABASE test_01114_2"
 $CLICKHOUSE_CLIENT -q "SHOW CREATE DATABASE test_01114_3"
 
 uuid_db_1=`$CLICKHOUSE_CLIENT -q "SELECT uuid FROM system.databases WHERE name='test_01114_1'"`
@@ -45,7 +45,7 @@ DROP DATABASE test_01114_3;
 
 explicit_uuid=$($CLICKHOUSE_CLIENT -q "SELECT generateUUIDv4()")
 $CLICKHOUSE_CLIENT -q "CREATE TABLE test_01114_2.mt UUID '$explicit_uuid' (n UInt64) ENGINE=MergeTree() ORDER BY tuple() PARTITION BY (n % 5)"
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE TABLE test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
+$CLICKHOUSE_CLIENT --show_uuid=1 -q "SHOW CREATE TABLE test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
 $CLICKHOUSE_CLIENT -q "SELECT name, uuid, create_table_query FROM system.tables WHERE database='test_01114_2'" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
 
 
@@ -64,8 +64,8 @@ EXCHANGE TABLES test_01114_1.mt AND test_01114_2.mt;
 # Check that nothing changed
 $CLICKHOUSE_CLIENT -q "SELECT count() FROM test_01114_1.mt"
 uuid_mt1=$($CLICKHOUSE_CLIENT -q "SELECT uuid FROM system.tables WHERE database='test_01114_1' AND name='mt'")
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE TABLE test_01114_1.mt" | sed "s/$uuid_mt1/00001114-0000-4000-8000-000000000001/g"
-$CLICKHOUSE_CLIENT --show_table_uuid_in_table_create_query_if_not_nil=1 -q "SHOW CREATE TABLE test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
+$CLICKHOUSE_CLIENT --show_uuid=1 -q "SHOW CREATE TABLE test_01114_1.mt" | sed "s/$uuid_mt1/00001114-0000-4000-8000-000000000001/g"
+$CLICKHOUSE_CLIENT --show_uuid=1 -q "SHOW CREATE TABLE test_01114_2.mt" | sed "s/$explicit_uuid/00001114-0000-4000-8000-000000000002/g"
 
 $CLICKHOUSE_CLIENT -nm -q "
 DROP TABLE test_01114_1.mt SETTINGS database_atomic_wait_for_drop_and_detach_synchronously=0;

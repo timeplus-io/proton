@@ -37,7 +37,7 @@ function thread3()
 function thread4()
 {
     while true; do
-        $CLICKHOUSE_CLIENT -n --query "OPTIMIZE TABLE test FINAL";
+        $CLICKHOUSE_CLIENT -n --query "OPTIMIZE STREAM test FINAL";
         sleep 0.1$RANDOM
     done
 }

@@ -2,15 +2,11 @@
 #if defined(OS_LINUX)
 
 #include <sys/epoll.h>
-#include <vector>
 #include <boost/noncopyable.hpp>
 #include <Poco/Logger.h>
 
 namespace DB
 {
-
-using AsyncCallback = std::function<void(int, Poco::Timespan, const std::string &)>;
-
 class Epoll
 {
 public:

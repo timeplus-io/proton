@@ -5,7 +5,6 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
-#include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <Parsers/queryToString.h>
 #include <Storages/System/StorageSystemFunctions.h>
@@ -17,7 +16,10 @@ enum class FunctionOrigin : Int8
 {
     SYSTEM = 0,
     SQL_USER_DEFINED = 1,
-    EXECUTABLE_USER_DEFINED = 2
+    EXECUTABLE_USER_DEFINED = 2,
+    REMOTE_USER_DEFINED = 3,
+    JAVASCRIPT_USER_DEFINED = 4,
+    PYTHON_USER_DEFINED = 5
 };
 
 namespace
@@ -34,7 +36,7 @@ namespace
         res_columns[0]->insert(name);
         res_columns[1]->insert(is_aggregate);
 
-        if constexpr (std::is_same_v<Factory, UserDefinedSQLFunctionFactory> || std::is_same_v<Factory, UserDefinedFunctionFactory>)
+        if constexpr (std::is_same_v<Factory, UserDefinedFunctionFactory>)
         {
             res_columns[2]->insert(false);
             res_columns[3]->insertDefault();
@@ -70,7 +72,7 @@ namespace
                 res_columns[8]->insert(documentation.argumentsAsString());
                 res_columns[9]->insert(documentation.returned_value);
                 res_columns[10]->insert(documentation.examplesAsString());
-                res_columns[11]->insert(documentation.categoriesAsString());
+                res_columns[11]->insert(documentation.category);
             }
         }
         else
@@ -90,8 +92,10 @@ std::vector<std::pair<String, Int8>> getOriginEnumsAndValues()
     return std::vector<std::pair<String, Int8>>{
         {"System", static_cast<Int8>(FunctionOrigin::SYSTEM)},
         {"SQLUserDefined", static_cast<Int8>(FunctionOrigin::SQL_USER_DEFINED)},
-        {"ExecutableUserDefined", static_cast<Int8>(FunctionOrigin::EXECUTABLE_USER_DEFINED)}
-    };
+        {"ExecutableUserDefined", static_cast<Int8>(FunctionOrigin::EXECUTABLE_USER_DEFINED)},
+        {"RemoteUserDefined", static_cast<Int8>(FunctionOrigin::REMOTE_USER_DEFINED)},
+        {"JavaScriptUserDefined", static_cast<Int8>(FunctionOrigin::JAVASCRIPT_USER_DEFINED)},
+        {"PythonUserDefined", static_cast<Int8>(FunctionOrigin::PYTHON_USER_DEFINED)}};
 }
 
 NamesAndTypesList StorageSystemFunctions::getNamesAndTypes()
@@ -128,19 +132,44 @@ void StorageSystemFunctions::fillData(MutableColumns & res_columns, ContextPtr c
         fillRow(res_columns, function_name, UInt64(1), "", FunctionOrigin::SYSTEM, aggregate_functions_factory);
     }
 
-    const auto & user_defined_sql_functions_factory = UserDefinedSQLFunctionFactory::instance();
-    const auto & user_defined_sql_functions_names = user_defined_sql_functions_factory.getAllRegisteredNames();
-    for (const auto & function_name : user_defined_sql_functions_names)
-    {
-        auto create_query = queryToString(user_defined_sql_functions_factory.get(function_name));
-        fillRow(res_columns, function_name, UInt64(0), create_query, FunctionOrigin::SQL_USER_DEFINED, user_defined_sql_functions_factory);
-    }
-
     const auto & user_defined_executable_functions_factory = UserDefinedFunctionFactory::instance();
-    const auto & user_defined_executable_functions_names = user_defined_executable_functions_factory.getRegisteredNames(context);
-    for (const auto & function_name : user_defined_executable_functions_names)
+    const auto & user_defined_executable_functions_name_and_types
+        = user_defined_executable_functions_factory.getRegisteredNameAndTypes(context);
+    for (const auto & [function_name, udf_type] : user_defined_executable_functions_name_and_types)
     {
-        fillRow(res_columns, function_name, UInt64(0), "", FunctionOrigin::EXECUTABLE_USER_DEFINED, user_defined_executable_functions_factory);
+        FunctionOrigin function_origin;
+        String create_query = "";
+        switch (udf_type)
+        {
+            case cluster::protocol::UDFType::SQL:
+            {
+                function_origin = FunctionOrigin::SQL_USER_DEFINED;
+                auto create_query_ast = user_defined_executable_functions_factory.tryGetSQLFunction(function_name);
+                create_query = create_query_ast ? queryToString(*create_query_ast) : "";
+                break;
+            }
+            case cluster::protocol::UDFType::Executable:
+            {
+                function_origin = FunctionOrigin::EXECUTABLE_USER_DEFINED;
+                break;
+            }
+            case cluster::protocol::UDFType::Remote:
+            {
+                function_origin = FunctionOrigin::REMOTE_USER_DEFINED;
+                break;
+            }
+            case cluster::protocol::UDFType::Javascript:
+            {
+                function_origin = FunctionOrigin::JAVASCRIPT_USER_DEFINED;
+                break;
+            }
+            case cluster::protocol::UDFType::Python:
+            {
+                function_origin = FunctionOrigin::PYTHON_USER_DEFINED;
+                break;
+            }
+        }
+        fillRow(res_columns, function_name, UInt64(0), create_query, function_origin, user_defined_executable_functions_factory);
     }
 }
 }

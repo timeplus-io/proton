@@ -1,0 +1,55 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (text string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_transformers(text string) RETURNS tuple(string, float) LANGUAGE PYTHON AS
+      $$
+      from transformers import pipeline
+
+      classifier = pipeline('sentiment-analysis', model='/var/lib/proton/user_files/bert-base-uncased')
+
+      def test_transformers(text):
+          results = classifier(text)
+          res = [(res['label'], round(res['score'], 4)) for res in results]
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf16-0-1
+    type: stream
+    query: select test_transformers(text) as res, text from udf_stream;
+    schema:
+      - name: res
+        type: tuple(string, float32)
+      - name: text
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(text) values
+      ('We are very happy to show you the 🤗 Transformers library.')
+      ('We hope you do not hate it.');
+
+  - type: check
+    target_name: python-udf16-0-1
+    expected_result:
+      - [[any_value, any_value], 'We are very happy to show you the 🤗 Transformers library.'] # vary ('LABEL_0', 0.5116)
+      - [[any_value, any_value], 'We hope you do not hate it.'] # vary ('LABEL_1', 0.523)

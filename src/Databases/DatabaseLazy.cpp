@@ -1,5 +1,8 @@
-#include <Core/Settings.h>
 #include <Databases/DatabaseLazy.h>
+
+#include <base/isSharedPtrUnique.h>
+#include <Core/Settings.h>
+#include <Databases/DatabaseFactory.h>
 #include <Databases/DatabaseOnDisk.h>
 #include <Databases/DatabasesCommon.h>
 #include <Interpreters/Context.h>
@@ -7,13 +10,13 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
 #include <Storages/IStorage.h>
 #include <Common/escapeForFileName.h>
 
 #include <Common/logger_useful.h>
 #include <Common/scope_guard_safe.h>
 #include <base/sort.h>
-#include <iomanip>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -27,6 +30,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_STREAM;
     extern const int UNSUPPORTED_METHOD;
     extern const int LOGICAL_ERROR;
+    extern const int BAD_ARGUMENTS;
 }
 
 
@@ -47,9 +51,7 @@ void DatabaseLazy::loadStoredObjects(
         fs::path detached_permanently_flag = fs::path(getMetadataPath()) / (file_name + detached_suffix);
         if (fs::exists(detached_permanently_flag))
         {
-            /// proton: starts
             LOG_DEBUG(log, "Skipping permanently detached stream {}.", backQuote(table_name));
-            /// proton: ends
             return;
         }
 
@@ -66,7 +68,7 @@ void DatabaseLazy::createTable(
 {
     SCOPE_EXIT_MEMORY_SAFE({ clearExpiredTables(); });
     if (!endsWith(table->getName(), "Log"))
-        throw Exception("Lazy engine can be used only with *Log tables.", ErrorCodes::UNSUPPORTED_METHOD);
+        throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Lazy engine can be used only with *Log tables.");
     DatabaseOnDisk::createTable(local_context, table_name, table, query);
 
     /// DatabaseOnDisk::createTable renames file, so we need to get new metadata_modification_time.
@@ -79,10 +81,11 @@ void DatabaseLazy::createTable(
 void DatabaseLazy::dropTable(
     ContextPtr local_context,
     const String & table_name,
-    bool no_delay)
+    bool sync,
+    const ASTPtr & query)
 {
     SCOPE_EXIT_MEMORY_SAFE({ clearExpiredTables(); });
-    DatabaseOnDisk::dropTable(local_context, table_name, no_delay);
+    DatabaseOnDisk::dropTable(local_context, table_name, sync, query);
 }
 
 void DatabaseLazy::renameTable(
@@ -104,18 +107,18 @@ time_t DatabaseLazy::getObjectMetadataModificationTime(const String & table_name
     auto it = tables_cache.find(table_name);
     if (it != tables_cache.end())
         return it->second.metadata_modification_time;
-    /// proton: starts
-    throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_STREAM);
-    /// proton: ends
+    throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist.", backQuote(database_name), backQuote(table_name));
 }
 
 void DatabaseLazy::alterTable(
     ContextPtr /* context */,
     const StorageID & /*table_id*/,
-    const StorageInMemoryMetadata & /* metadata */)
+    const StorageInMemoryMetadata & /* metadata */,
+    String /* alter_command*/,
+    std::vector<String> /*alter_command_asts*/)
 {
     clearExpiredTables();
-    throw Exception("ALTER query is not supported for Lazy database.", ErrorCodes::UNSUPPORTED_METHOD);
+    throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "ALTER query is not supported for Lazy database.");
 }
 
 bool DatabaseLazy::isTableExist(const String & table_name) const
@@ -167,9 +170,7 @@ bool DatabaseLazy::empty() const
 
 void DatabaseLazy::attachTable(ContextPtr /* context_ */, const String & table_name, const StoragePtr & table, const String &)
 {
-    /// proton: starts
     LOG_DEBUG(log, "Attach stream {}.", backQuote(table_name));
-    /// proton: ends
     std::lock_guard lock(mutex);
     time_t current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
@@ -177,14 +178,12 @@ void DatabaseLazy::attachTable(ContextPtr /* context_ */, const String & table_n
                               std::forward_as_tuple(table_name),
                               std::forward_as_tuple(table, current_time, DatabaseOnDisk::getObjectMetadataModificationTime(table_name)));
     if (!inserted)
-        /// proton: starts
         throw Exception(
             ErrorCodes::STREAM_ALREADY_EXISTS,
             "{} {}.{} already exists.",
             it->second.table->getName(),
             backQuote(database_name),
             backQuote(table_name));
-        /// proton: ends
 
     it->second.expiration_iterator = cache_expiration_queue.emplace(cache_expiration_queue.end(), current_time, table_name);
 }
@@ -193,15 +192,11 @@ StoragePtr DatabaseLazy::detachTable(ContextPtr /* context */, const String & ta
 {
     StoragePtr res;
     {
-        /// proton: starts
         LOG_DEBUG(log, "Detach stream {}.", backQuote(table_name));
-        /// proton: ends
         std::lock_guard lock(mutex);
         auto it = tables_cache.find(table_name);
         if (it == tables_cache.end())
-            /// proton: starts
-            throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_STREAM);
-            /// proton: ends
+            throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist.", backQuote(database_name), backQuote(table_name));
         res = it->second.table;
         if (it->second.expiration_iterator != cache_expiration_queue.end())
             cache_expiration_queue.erase(it->second.expiration_iterator);
@@ -221,7 +216,7 @@ void DatabaseLazy::shutdown()
     for (const auto & kv : tables_snapshot)
     {
         if (kv.second.table)
-            kv.second.table->flushAndShutdown();
+            kv.second.table->flushAndShutdown(/*dropping=*/false);
     }
 
     std::lock_guard lock(mutex);
@@ -244,9 +239,7 @@ StoragePtr DatabaseLazy::loadTable(const String & table_name) const
 {
     SCOPE_EXIT_MEMORY_SAFE({ clearExpiredTables(); });
 
-    /// proton: starts
     LOG_DEBUG(log, "Load stream {} to cache.", backQuote(table_name));
-    /// proton: ends
 
     const String table_metadata_path = fs::path(getMetadataPath()) / (escapeForFileName(table_name) + ".sql");
 
@@ -260,20 +253,18 @@ StoragePtr DatabaseLazy::loadTable(const String & table_name) const
         {
             const auto & ast_create = ast->as<const ASTCreateQuery &>();
             String table_data_path_relative = getTableDataPath(ast_create);
-            table = createTableFromAST(ast_create, getDatabaseName(), table_data_path_relative, context_copy, false).second;
+            table = createTableFromAST(ast_create, getDatabaseName(), table_data_path_relative, context_copy, false, 1).second;
         }
 
         if (!ast || !endsWith(table->getName(), "Log"))
-            throw Exception("Only *Log tables can be used with Lazy database engine.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Only *Log tables can be used with Lazy database engine.");
 
         table->startup();
         {
             std::lock_guard lock(mutex);
             auto it = tables_cache.find(table_name);
             if (it == tables_cache.end())
-                /// proton: starts
-                throw Exception("Stream " + backQuote(database_name) + "." + backQuote(table_name) + " doesn't exist.", ErrorCodes::UNKNOWN_STREAM);
-                /// proton: ends
+                throw Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {}.{} doesn't exist.", backQuote(database_name), backQuote(table_name));
 
             if (it->second.expiration_iterator != cache_expiration_queue.end())
                 cache_expiration_queue.erase(it->second.expiration_iterator);
@@ -285,9 +276,7 @@ StoragePtr DatabaseLazy::loadTable(const String & table_name) const
     }
     catch (Exception & e)
     {
-        /// proton: starts
         e.addMessage("Cannot create stream from metadata file " + table_metadata_path);
-        /// proton: ends
         throw;
     }
 }
@@ -312,20 +301,16 @@ try
         String table_name = expired_tables.front().table_name;
         auto it = tables_cache.find(table_name);
 
-        if (!it->second.table || it->second.table.unique())
+        if (!it->second.table || isSharedPtrUnique(it->second.table))
         {
-            /// proton: starts
             LOG_DEBUG(log, "Drop stream {} from cache.", backQuote(it->first));
-            /// proton
             it->second.table.reset();
             expired_tables.erase(it->second.expiration_iterator);
             it->second.expiration_iterator = cache_expiration_queue.end();
         }
         else
         {
-            /// proton: starts
             LOG_DEBUG(log, "Stream {} is busy.", backQuote(it->first));
-            /// proton: ends
             busy_tables.splice(busy_tables.end(), expired_tables, it->second.expiration_iterator);
         }
     }
@@ -372,4 +357,26 @@ const StoragePtr & DatabaseLazyIterator::table() const
     return current_storage;
 }
 
+void registerDatabaseLazy(DatabaseFactory & factory)
+{
+    auto create_fn = [](const DatabaseFactory::Arguments & args)
+    {
+        auto * engine_define = args.create_query.storage;
+        const ASTFunction * engine = engine_define->engine;
+
+        if (!engine->arguments || engine->arguments->children.size() != 1)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Lazy database require cache_expiration_time_seconds argument");
+
+        const auto & arguments = engine->arguments->children;
+
+        const auto cache_expiration_time_seconds = safeGetLiteralValue<UInt64>(arguments[0], "Lazy");
+
+        return make_shared<DatabaseLazy>(
+            args.database_name,
+            args.metadata_path,
+            cache_expiration_time_seconds,
+            args.context);
+    };
+    factory.registerDatabase("Lazy", create_fn, {.supports_arguments = true});
+}
 }

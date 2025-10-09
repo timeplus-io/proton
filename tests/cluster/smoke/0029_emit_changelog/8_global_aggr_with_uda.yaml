@@ -1,0 +1,105 @@
+tags:
+- changelog join changelog
+- emit changelog
+- uda
+description: global aggregation emit changelog query with uda
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test30_stream;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test30_stream (i int);
+- type: wait
+  time: 1
+
+- type: query
+  sql: DROP FUNCTION IF EXISTS test_count;
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE AGGREGATE FUNCTION test_count(value int) RETURNS int LANGUAGE JAVASCRIPT AS $$
+      {
+        initialize: function() {
+          this.count = 0;
+        },
+        
+        process: function(values, deltas) {
+          let is_changelog = deltas !== undefined;
+          for (let i = 0; i < values.length; i++) {
+            if (is_changelog) {
+              if (deltas[i] === 1) {
+                this.count += 1;
+              } else if (deltas[i] === -1) 
+                this.count -= 1;
+            } else 
+                this.count += 1;
+          }
+        },
+        
+        finalize: function() {
+          return this.count;
+        },
+        
+        serialize: function() {
+          let s = {
+          'count': this.count
+          };
+          return JSON.stringify(s);
+        },
+        
+        deserialize: function(state_str) {
+          let s = JSON.parse(state_str);
+          this.count = s['count'];
+        },
+        
+        merge: function(state_str) {
+          let s = JSON.parse(state_str);
+          this.count += s['count'];
+        }
+      }
+    $$;
+- type: wait
+  time: 5
+
+- name: 3000
+  type: stream
+  query: select test_count(i), _tp_delta from test30_stream emit changelog periodic 1s
+  schema:
+  - name: test_count(i)
+    type: int32
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream(i) values
+  schema:
+    - name: i
+      type: int32
+  inputs:
+    - [1]
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream(i) values
+  schema:
+    - name: i
+      type: int32
+  inputs:
+    - [2]
+
+- type: check
+  target_name: 3000
+  expected_result:
+  - [1, 1]
+  - [1, -1]
+  - [2, 1]

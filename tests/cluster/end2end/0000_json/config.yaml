@@ -1,0 +1,4 @@
+name: json
+description: Tests covering the external stream e2e cases, including json format.
+tags:
+  - e2e

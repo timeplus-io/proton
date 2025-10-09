@@ -1,0 +1,6 @@
+name: external_table_s3
+description: Smoke tests covering the S3 external table use cases.
+tags:
+  - smoke
+  - external_table
+  - s3

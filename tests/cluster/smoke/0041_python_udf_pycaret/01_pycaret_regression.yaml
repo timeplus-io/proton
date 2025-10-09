@@ -1,0 +1,83 @@
+tags:
+  - uda
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/7346
+
+description: Test covering python uda test on pycaret.regression function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (d1 float, d2 string, target int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION regressTester(d1 float, d2 string, target int) RETURNS array(float) LANGUAGE PYTHON AS $$
+      import pandas as pd
+      from pycaret.regression import RegressionExperiment
+
+      class regressTester:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, d1s, d2s, targets):
+              if len(d1s) < 4:
+                  return
+              data = pd.DataFrame(zip(d1s, d2s, targets),columns=['d1','d2','target'])
+              s = RegressionExperiment()
+              s.setup(data=data, target='target', session_id=123)
+              model = s.create_model('lr', fold=3)
+              predictions = s.predict_model(model, data = data)
+              self.res = predictions['prediction_label'].to_list()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf12-1-1
+    type: stream
+    query: select regressTester(d1, d2, target) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into uda_stream(d1, d2, target) values
+      (1.75, 'CH', 1) (1.75, 'CH', 0) (1.86, 'CH', 1)
+      (1.69, 'MM', 0) (1.69, 'CH', 1);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into uda_stream(d1, d2, target) values
+      (1.75, 'CH', 1) (1.75, 'CH', 0) (1.86, 'CH', 1)
+      (1.69, 'MM', 0) (1.69, 'CH', 1);
+
+  - type: check
+    target_name: python-udf12-1-1
+    expected_result:
+      - [[1.0, 1.0, 1.0, 1.0, 1.0]]
+      - [[1.0, 1.0, 1.0, 1.0, 1.0]]

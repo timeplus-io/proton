@@ -20,6 +20,9 @@ Chunk convertToChunk(const Block & block)
     /// proton: starts
     if (block.hasWatermark())
         chunk.setWatermark(block.watermark());
+
+    if (block.hasSN())
+        chunk.setSN(block.getSN());
     /// proton: ends
 
     return chunk;

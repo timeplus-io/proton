@@ -1,0 +1,4 @@
+lc	low_cardinality(nullable(string))					
+abc
+lc	low_cardinality(nullable(string))					
+abc

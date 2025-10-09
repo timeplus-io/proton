@@ -3,7 +3,6 @@
 #include <Interpreters/CatBoostModel.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ExternalLoader.h>
-#include <Common/logger_useful.h>
 
 #include <memory>
 
@@ -31,8 +30,11 @@ public:
     }
 
 protected:
-    LoadablePtr create(const std::string & name, const Poco::Util::AbstractConfiguration & config,
-            const std::string & config_prefix, const std::string & repository_name) const override;
+    LoadableMutablePtr createObject(
+        const std::string & name,
+        const Poco::Util::AbstractConfiguration & config,
+        const std::string & config_prefix,
+        const std::string & repository_name) const override;
 
     friend class StorageSystemModels;
 };

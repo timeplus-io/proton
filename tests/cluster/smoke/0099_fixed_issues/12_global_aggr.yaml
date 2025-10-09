@@ -1,0 +1,123 @@
+tags:
+  - global aggr
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: (#3015) global aggr over tumble (with substream, with timeout, with join)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_3015_l
+
+  - type: query
+    sql: drop stream if exists test_stream_3015_vk_r
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_stream_3015_l(i int64, s string, timestamp datetime64(3, 'UTC')) settings event_time_column='timestamp'
+
+  - type: query
+    sql: create stream test_stream_3015_vk_r(i int64, s string, timestamp datetime64(3, 'UTC')) primary key (i, s) settings mode='versioned_kv', event_time_column='timestamp'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_3015_vk_r (i, s, timestamp) values
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+    inputs:
+      - [1, 'test', '2023-01-01 00:00:00']
+      - [2, 'test', '2023-01-01 00:00:01']
+      - [2, 'test1', '2023-01-01 00:00:02']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: 9900
+    query: WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s ) SELECT sum(max_v) as income FROM t2 emit periodic 5s
+    schema:
+      - name: income
+        type: int64
+
+  - type: stream
+    name: 9901
+    query: WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, to_int(max(to_float(i))) + 1 AS max_v FROM tumble(t1, 2s) partition by i, s GROUP BY window_start) SELECT sum(max_v) as income FROM t2 partition by i, s emit periodic 5s
+    schema:
+      - name: income
+        type: int64
+
+  - type: stream
+    name: 9902
+    query: WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s emit after window close and timeout 5s) SELECT sum(max_v) as income FROM t2 partition by s emit periodic 5s
+    schema:
+      - name: income
+        type: int64
+
+  - type: stream
+    name: 9903
+    query: WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s ) SELECT sum(max_v) as income FROM t2 as a join t2 as b using(i, s) emit periodic 5s
+    schema:
+      - name: income
+        type: int64
+
+  - type: stream
+    name: 9904
+    query: WITH t1 AS ( SELECT _tp_time, i, s FROM test_stream_3015_l INNER JOIN test_stream_3015_vk_r AS wp ON test_stream_3015_l.i = test_stream_3015_vk_r.i WHERE (test_stream_3015_l._tp_time > '2023-01-01 00:00:00') AND (test_stream_3015_l.s = 'test') ), t2 AS ( SELECT window_start, i, s, (to_int(max(to_float(i))) + 1) AS max_v FROM tumble(t1, 2s) GROUP BY window_start, i, s emit timeout 5s) SELECT sum(max_v) as income FROM t2 partition by s emit periodic 5s
+    schema:
+      - name: income
+        type: int64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_stream_3015_l(i, s, timestamp) values
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+    inputs:
+      - [1, 'test', '2023-01-01 00:00:00']
+      - [1, 'test1', '2023-01-01 00:00:00']
+      - [2, 'test', '2023-01-01 00:00:01']
+      - [2, 'test1', '2023-01-01 00:00:01']
+      - [1, 'test', '2023-01-01 00:00:02']
+      - [2, 'test', '2023-01-01 00:00:02']
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - [3]
+
+  - type: check
+    target_name: 9901
+    expected_result:
+      - [3]
+
+  - type: check
+    target_name: 9902
+    expected_result:
+      - [3]
+      - [8]
+      
+  - type: check
+    target_name: 9903
+    expected_result:
+      - [3]
+
+  - type: check
+    target_name: 9904
+    expected_result:
+      - [3]
+      - [8]

@@ -1,12 +1,13 @@
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 
-#include <KafkaLog/KafkaWALPool.h>
-
+#include <Cluster/KafkaLog/KafkaWALPool.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -14,10 +15,12 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserDataType.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/extractKeyExpressionList.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/logger_useful.h>
 
@@ -35,8 +38,6 @@ extern const int INVALID_SETTING_VALUE;
 extern const int UNKNOWN_EXCEPTION;
 extern const int TIMEOUT_EXCEEDED;
 extern const int SYNTAX_ERROR;
-extern const int NO_REPLICA_NAME_GIVEN;
-extern const int UNKNOWN_TYPE;
 
 extern const int OK;
 extern const int RESOURCE_ALREADY_EXISTS;
@@ -59,8 +60,7 @@ const std::vector<String> CREATE_TABLE_SETTINGS = {
     "logstore_retention_ms",
     "logstore_flush_messages",
     "logstore_flush_ms",
-    "logstore_replication_factor",
-    "distributed_ingest_mode",
+    "ingest_mode",
     "flush_threshold_ms",
     "flush_threshold_count",
     "flush_threshold_bytes",
@@ -68,8 +68,6 @@ const std::vector<String> CREATE_TABLE_SETTINGS = {
     "logstore",
     "mode",
 };
-
-constexpr Int32 DWAL_MAX_RETRIES = 3;
 
 void normalizeColumns(ASTCreateQuery & create, ContextPtr context)
 {
@@ -126,12 +124,10 @@ void getAndValidateStorageSetting(
             if (value != "earliest" && value != "latest")
                 throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "logstore_auto_offset_reset only supports 'earliest' or 'latest'");
         }
-        else if (key == "distributed_ingest_mode")
+        else if (key == "ingest_mode")
         {
-            if (value != "async" && value != "sync" && value != "fire_and_forget" && value != "ordered")
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE,
-                    "distributed_ingest_mode only supports 'async' or 'sync' or 'fire_and_forget' or 'ordered'");
+            if (value != "async" && value != "sync")
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "ingest_mode only supports 'async' or 'sync'");
         }
         else if (key == "storage_type")
         {
@@ -151,11 +147,11 @@ ASTPtr functionToAST(const String & query)
     return parseQuery(parser, start, end, "", 0, 0);
 }
 
-void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
+void prepareStorageEngine(ASTCreateQuery & create, ContextPtr ctx)
 {
     Field shards = ctx->getStreamSettings().default_shards.value;
-    Field replicas = ctx->getStreamSettings().default_replicas.value;
     Field sharding_expr_field = ctx->getStreamSettings().default_sharding_expr.value;
+
     String expr;
 
     if (!create.storage)
@@ -165,7 +161,6 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
     else if (create.storage->settings && !create.storage->settings->changes.empty())
     {
         create.storage->settings->changes.tryGet("shards", shards);
-        create.storage->settings->changes.tryGet("replicas", replicas);
         create.storage->settings->changes.tryGet("sharding_expr", sharding_expr_field);
     }
 
@@ -185,11 +180,12 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
     else
         sharding_expr = functionToAST(expr);
 
-    auto engine = makeASTFunction("Stream", std::make_shared<ASTLiteral>(shards), std::make_shared<ASTLiteral>(replicas), sharding_expr);
+    auto engine
+        = makeASTFunction("Stream", std::make_shared<ASTLiteral>(shards), sharding_expr);
     create.storage->set(create.storage->engine, engine);
 }
 
-void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
+void prepareStorageEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
 {
     Poco::URI uri;
 
@@ -211,7 +207,7 @@ void prepareEngineSettings(const ASTCreateQuery & create, ContextMutablePtr ctx)
     ctx->setQueryParameter("url_parameters", uri.getRawQuery());
 }
 
-void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
+void checkAndPrepareColumnsAndIndexes(ASTCreateQuery & create, ContextPtr context)
 {
     /// Set and retrieve list of columns
     normalizeColumns(create, context);
@@ -232,15 +228,20 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
     bool has_event_time = false;
     bool has_event_time_index = false;
     [[maybe_unused]] bool has_index_time = false;
-    [[maybe_unused]] bool has_sequence_id = false;
+    bool has_sequence_id = false;
+    bool has_event_sn_index = false;
     bool has_delta_flag = false;
+    String auto_increment_column_name;
 
     for (const ASTPtr & column_ast : column_asts)
     {
-        const auto & column = column_ast->as<ASTColumnDeclaration &>();
+        auto & column = column_ast->as<ASTColumnDeclaration &>();
+
+        if (boost::iequals(column.default_specifier, "AUTO_INCREMENT"))
+            auto_increment_column_name = column.name;
 
         /// Skip reserved internal columns
-        if (column.name.starts_with("_tp_")
+        if ((column.name.starts_with("_tp_") && column.name != ProtonConsts::RESERVED_MESSAGE_KEY)
             || std::find(
                    ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.begin(), ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end(), column.name)
                 != ProtonConsts::STREAMING_WINDOW_COLUMN_NAMES.end())
@@ -251,8 +252,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
                 if (!column.type)
                     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
 
-                auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "datetime64")
+                auto * type = column.type->as<ASTDataType>();
+                if (type == nullptr || type->name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
@@ -267,9 +268,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
                 if (!column.type)
                     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
 
-                has_index_time = true;
-                auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "datetime64")
+                auto * type = column.type->as<ASTDataType>();
+                if (type == nullptr || type->name != "datetime64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'datetime64' but actual type '{}'.",
@@ -284,8 +284,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
                 if (!column.type)
                     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
 
-                auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "int64")
+                auto * type = column.type->as<ASTDataType>();
+                if (type == nullptr || type->name != "int64")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'int64 ' but actual type '{}'.",
@@ -300,8 +300,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
                 if (!column.type)
                     throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Reserved column {} can't be alias", column.name);
 
-                auto type_name = tryGetFunctionName(column.type);
-                if (!type_name || *type_name != "int8")
+                auto * type = column.type->as<ASTDataType>();
+                if (type == nullptr || type->name != "int8")
                     throw Exception(
                         ErrorCodes::ILLEGAL_COLUMN,
                         "Column {} is reserved, expected type 'int8' but actual type '{}'.",
@@ -311,7 +311,9 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
                 has_delta_flag = true;
             }
             else
+            {
                 throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column {} is reserved, should not used in create query.", column.name);
+            }
         }
     }
 
@@ -323,6 +325,8 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
 
             if (ProtonConsts::RESERVED_EVENT_TIME_INDEX == index.name)
                 has_event_time_index = true;
+            else if (ProtonConsts::RESERVED_EVENT_SEQUENCE_INDEX == index.name)
+                has_event_sn_index = true;
         }
     }
 
@@ -331,7 +335,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
         col_tp_time->name = ProtonConsts::RESERVED_EVENT_TIME;
         col_tp_time->type
-            = makeASTFunction("datetime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
+            = makeASTDataType("datetime64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
 
         if (!event_time_default_expr.empty())
         {
@@ -345,15 +349,19 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         }
 
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
-        auto func_double_delta = std::make_shared<ASTFunction>();
-        func_double_delta->name = "DoubleDelta";
-        auto func_lz4 = std::make_shared<ASTFunction>();
-        func_lz4->name = "LZ4";
-        col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
+        if (!create.isMaterializedView())
+        {
+            auto func_double_delta = std::make_shared<ASTFunction>();
+            func_double_delta->name = "DoubleDelta";
+            auto func_compression = std::make_shared<ASTFunction>();
+            func_compression->name = "ZSTD";
+            col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_compression));
+        }
+
         column_asts.emplace_back(std::move(col_tp_time));
     }
 
-    if (!has_event_time_index)
+    if (!has_event_time_index && !create.isMaterializedView())
     {
         auto expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
         auto type = std::make_shared<ASTFunction>();
@@ -361,7 +369,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         type->no_empty_args = true;
         auto index = std::make_shared<ASTIndexDeclaration>();
         index->name = ProtonConsts::RESERVED_EVENT_TIME_INDEX;
-        index->granularity = 2;
+        index->granularity = 32;
         index->set(index->expr, expr);
         index->set(index->type, type);
         if (create.columns_list->indices == nullptr)
@@ -382,28 +390,52 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         /// col_tp_time->default_expression
         ///    = makeASTFunction("now64", std::make_shared<ASTLiteral>(Field(UInt64(3))), std::make_shared<ASTLiteral>("UTC"));
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
-        auto func_double_delta = std::make_shared<ASTFunction>();
-        func_double_delta->name = "DoubleDelta";
-        auto func_lz4 = std::make_shared<ASTFunction>();
-        func_lz4->name = "LZ4";
-        col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
-        column_asts.emplace_back(std::move(col_tp_time));
+        if (!create.is_kv && !create.is_materialized_view)
+        {
+            auto func_double_delta = std::make_shared<ASTFunction>();
+            func_double_delta->name = "DoubleDelta";
+            auto func_lz4 = std::make_shared<ASTFunction>();
+            func_lz4->name = "LZ4";
+            col_tp_time->codec = makeASTFunction("CODEC", std::move(func_double_delta), std::move(func_lz4));
+            column_asts.emplace_back(std::move(col_tp_time));
+        }
     }
+#endif
 
     if (!has_sequence_id)
     {
-        auto col_tp_time = std::make_shared<ASTColumnDeclaration>();
-        col_tp_time->name = ProtonConsts::RESERVED_EVENT_SEQUENCE_ID;
-        col_tp_time->type = makeASTFunction("int64");
+        auto col_tp_sn = std::make_shared<ASTColumnDeclaration>();
+        col_tp_sn->name = ProtonConsts::RESERVED_EVENT_SEQUENCE_ID;
+        col_tp_sn->type = makeASTDataType("int64");
+
         /// makeASTFunction cannot be used because 'DoubleDelta' and 'LZ4' need null arguments.
-        auto func_delta = std::make_shared<ASTFunction>();
-        func_delta->name = "Delta";
-        auto func_lz4 = std::make_shared<ASTFunction>();
-        func_lz4->name = "LZ4";
-        col_tp_time->codec = makeASTFunction("CODEC", std::move(func_delta), std::move(func_lz4));
-        column_asts.emplace_back(std::move(col_tp_time));
+        if (!create.isMaterializedView())
+        {
+            auto func_delta = std::make_shared<ASTFunction>();
+            func_delta->name = "Delta";
+            auto func_compression = std::make_shared<ASTFunction>();
+            func_compression->name = "ZSTD";
+            col_tp_sn->codec = makeASTFunction("CODEC", std::move(func_delta), std::move(func_compression));
+        }
+
+        column_asts.emplace_back(std::move(col_tp_sn));
     }
-#endif
+
+    if (!has_event_sn_index && !create.isMaterializedView())
+    {
+        auto expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
+        auto type = std::make_shared<ASTFunction>();
+        type->name = "minmax";
+        type->no_empty_args = true;
+        auto index = std::make_shared<ASTIndexDeclaration>();
+        index->name = ProtonConsts::RESERVED_EVENT_SEQUENCE_INDEX;
+        index->granularity = 32;
+        index->set(index->expr, expr);
+        index->set(index->type, type);
+        if (create.columns_list->indices == nullptr)
+            create.columns_list->set(create.columns_list->indices, std::make_shared<DB::ASTExpressionList>());
+        create.columns_list->indices->children.emplace_back(std::move(index));
+    }
 
     /// Only changelog stream needs delta flag
     if (!has_delta_flag)
@@ -416,7 +448,7 @@ void checkAndPrepareColumns(ASTCreateQuery & create, ContextPtr context)
         {
             auto delta_flag = std::make_shared<ASTColumnDeclaration>();
             delta_flag->name = ProtonConsts::RESERVED_DELTA_FLAG;
-            delta_flag->type = makeASTFunction("int8");
+            delta_flag->type = makeASTDataType("int8");
             delta_flag->default_specifier = "DEFAULT";
             delta_flag->default_expression = std::make_shared<ASTLiteral>(Field(Int8(1)));
             delta_flag->children.push_back(delta_flag->default_expression);
@@ -436,6 +468,10 @@ void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
     {
         if (!create.storage->primary_key)
             throw Exception(ErrorCodes::SYNTAX_ERROR, "Primary key is required for changelog kv or versioned kv stream");
+
+        /// versioned-kv and changelog-kv only supports partition by primary key
+        /// if (create.storage->partition_by)
+        ///    throw Exception(ErrorCodes::SYNTAX_ERROR, "Primary key is required for changelog kv or versioned kv stream");
     }
     else
     {
@@ -444,18 +480,18 @@ void prepareOrderByAndPartitionBy(ASTCreateQuery & create)
             auto new_order_by = makeASTFunction("to_start_of_hour", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME));
             create.storage->set(create.storage->order_by, new_order_by);
         }
-    }
 
-    if (!create.storage->partition_by)
-    {
-        auto new_partition_by = makeASTFunction("to_YYYYMMDD", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME));
-        create.storage->set(create.storage->partition_by, new_partition_by);
+        if (!create.storage->partition_by)
+        {
+            auto new_partition_by = makeASTFunction("to_YYYYMM", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME));
+            create.storage->set(create.storage->partition_by, new_partition_by);
+        }
     }
 }
 
 void checkAndPrepareCreateQueryForStream(ASTCreateQuery & create, ContextPtr context)
 {
-    checkAndPrepareColumns(create, context);
+    checkAndPrepareColumnsAndIndexes(create, context);
     prepareOrderByAndPartitionBy(create);
 }
 
@@ -475,7 +511,7 @@ void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * column
     resp_table.set("columns", columns_mapping_json);
 }
 
-nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
+cluster::protocol::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std::string> & queryParams)
 {
     if (queryParams.contains("column"))
     {
@@ -483,38 +519,38 @@ nlog::OpCode getAlterTableParamOpCode(const std::unordered_map<std::string, std:
 
         if (iter->second == Poco::Net::HTTPRequest::HTTP_POST)
         {
-            return nlog::OpCode::CREATE_COLUMN;
+            return cluster::protocol::OpCode::CreateColumn;
         }
         else if (iter->second == Poco::Net::HTTPRequest::HTTP_PATCH)
         {
-            return nlog::OpCode::ALTER_COLUMN;
+            return cluster::protocol::OpCode::AlterColumn;
         }
         else if (iter->second == Poco::Net::HTTPRequest::HTTP_DELETE)
         {
-            return nlog::OpCode::DELETE_COLUMN;
+            return cluster::protocol::OpCode::DeleteColumn;
         }
         else
         {
             assert(false);
-            return nlog::OpCode::MAX_OPS_CODE;
+            return cluster::protocol::OpCode::Null;
         }
     }
 
-    return nlog::OpCode::ALTER_TABLE;
+    return cluster::protocol::OpCode::AlterStreamSettings;
 }
 
-const std::map<ASTAlterCommand::Type, nlog::OpCode> command_type_to_opcode
-    = {{ASTAlterCommand::Type::ADD_COLUMN, nlog::OpCode::CREATE_COLUMN},
-       {ASTAlterCommand::Type::MODIFY_COLUMN, nlog::OpCode::ALTER_COLUMN},
-       {ASTAlterCommand::Type::RENAME_COLUMN, nlog::OpCode::ALTER_COLUMN},
-       {ASTAlterCommand::Type::MODIFY_TTL, nlog::OpCode::ALTER_TABLE},
-       {ASTAlterCommand::Type::MODIFY_SETTING, nlog::OpCode::ALTER_TABLE},
-       {ASTAlterCommand::Type::DROP_COLUMN, nlog::OpCode::DELETE_COLUMN}};
+const std::map<ASTAlterCommand::Type, cluster::protocol::OpCode> command_type_to_opcode
+    = {{ASTAlterCommand::Type::ADD_COLUMN, cluster::protocol::OpCode::CreateColumn},
+       {ASTAlterCommand::Type::MODIFY_COLUMN, cluster::protocol::OpCode::AlterColumn},
+       {ASTAlterCommand::Type::RENAME_COLUMN, cluster::protocol::OpCode::AlterColumn},
+       {ASTAlterCommand::Type::MODIFY_TTL, cluster::protocol::OpCode::AlterStreamSettings},
+       {ASTAlterCommand::Type::MODIFY_SETTING, cluster::protocol::OpCode::AlterStreamSettings},
+       {ASTAlterCommand::Type::DROP_COLUMN, cluster::protocol::OpCode::DeleteColumn}};
 
-nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
+cluster::protocol::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
 {
     if (alter.command_list->children.empty())
-        return nlog::OpCode::MAX_OPS_CODE;
+        return cluster::protocol::OpCode::Null;
 
     for (const auto & child : alter.command_list->children)
     {
@@ -527,7 +563,7 @@ nlog::OpCode getOpCodeFromQuery(const ASTAlterQuery & alter)
             }
         }
     }
-    return nlog::OpCode::MAX_OPS_CODE;
+    return cluster::protocol::OpCode::Null;
 }
 
 String getJSONFromCreateQuery(const ASTCreateQuery & create)
@@ -537,8 +573,7 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
     String payload_str;
     Poco::JSON::Object payload;
     UInt64 shards = create.storage->engine->arguments->children[0]->as<ASTLiteral &>().value.safeGet<UInt64>();
-    UInt64 replicas = create.storage->engine->arguments->children[1]->as<ASTLiteral &>().value.safeGet<UInt64>();
-    String shard_by_expression = queryToString(create.storage->engine->arguments->children[2]);
+    String shard_by_expression = queryToString(create.storage->engine->arguments->children[1]);
 
     Field mode("");
     if (create.storage->settings)
@@ -547,7 +582,6 @@ String getJSONFromCreateQuery(const ASTCreateQuery & create)
     Poco::JSON::Object table_mapping_json;
     payload.set("name", create.getTable());
     payload.set("shards", shards);
-    payload.set("replication_factor", replicas);
     payload.set("shard_by_expression", shard_by_expression);
 
     /// If primary key / order by / partition key are specified, honor them
@@ -638,50 +672,6 @@ String getJSONFromAlterQuery(const ASTAlterQuery & alter)
     return payload;
 }
 
-String getJSONFromSystemQuery(const ASTSystemQuery & system)
-{
-    Poco::JSON::Object json;
-    String type_name = ASTSystemQuery::typeToString(system.type);
-
-    if (system.replica.empty())
-        throw Exception(ErrorCodes::NO_REPLICA_NAME_GIVEN, "replica name should be provided for {} command", type_name);
-
-    if (system.type == ASTSystemQuery::Type::UNKNOWN)
-        throw Exception(ErrorCodes::UNKNOWN_TYPE, "{} command type is not supported", type_name);
-
-    json.set("name", system.replica);
-    json.set("type", type_name);
-
-    if (!system.is_drop_whole_replica)
-    {
-        const String & database = system.getDatabase();
-        const String & table = system.getTable();
-        if (!database.empty())
-            json.set("database", database);
-
-        if (!table.empty())
-            json.set("stream", table);
-
-        if (system.type == ASTSystemQuery::Type::ADD_REPLICA)
-        {
-            if (system.shard < 0)
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Missing or invalid shard number {} for {} command", system.shard, type_name);
-
-            json.set("shard", std::to_string(system.shard));
-        }
-    }
-
-    if (system.type == ASTSystemQuery::Type::REPLACE_REPLICA)
-    {
-        if (system.old_replica.empty())
-            throw Exception(ErrorCodes::NO_REPLICA_NAME_GIVEN, "old replica name should be provided for {} command", type_name);
-
-        json.set("old_replica", system.old_replica);
-    }
-
-    return jsonToString(json);
-}
-
 TTLSettings parseTTLSettings(const String & payload)
 {
     std::vector<std::pair<String, String>> stream_settings;
@@ -712,10 +702,11 @@ bool assertColumnExists(const String & database, const String & table, const Str
     return false;
 }
 
+#if 0 /// FIXME, cluster
 void waitUntilDWalReady(const klog::KafkaWALContext & ctx, ContextPtr global_context)
 {
     klog::KafkaWALPtr dwal = klog::KafkaWALPool::instance(global_context).getMeta();
-    auto log = &Poco::Logger::get("DDLHelper");
+    auto log = getLogger("DDLHelper");
     while (true)
     {
         if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
@@ -733,7 +724,7 @@ void waitUntilDWalReady(const klog::KafkaWALContext & ctx, ContextPtr global_con
 void doCreateDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
 {
     klog::KafkaWALPtr dwal = klog::KafkaWALPool::instance(global_context).getMeta();
-    auto * log = &Poco::Logger::get("DDLHelper");
+    auto log = getLogger("DDLHelper");
 
     if (dwal->describe(ctx.topic).err == ErrorCodes::OK)
     {
@@ -743,7 +734,8 @@ void doCreateDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
 
     LOG_INFO(log, "Didn't find topic={}, create one with settings={}", ctx.topic, ctx.string());
 
-    int retries = 0;
+    constexpr int32 DWAL_MAX_RETRIES = 3;
+    int32 retries = 0;
     while (true)
     {
         auto err = dwal->create(ctx.topic, ctx);
@@ -783,41 +775,11 @@ void doCreateDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
     waitUntilDWalReady(ctx, global_context);
 }
 
-void createDWAL(const String & uuid, Int32 shards, Int32 replication_factor, const String & url_parameters, ContextPtr global_context)
-{
-    klog::KafkaWALContext ctx{uuid, shards, replication_factor, "delete"};
-
-    /// Parse these settings from url parameters
-    /// logstore_retention_bytes,
-    /// logstore_retention_ms,
-    /// logstore_flush_messages,
-    /// logstore_flush_ms
-    if (!url_parameters.empty())
-    {
-        Poco::URI uri;
-        uri.setRawQuery(url_parameters);
-        auto params = uri.getQueryParameters();
-
-        for (const auto & kv : params)
-        {
-            if (kv.first == "logstore_retention_bytes")
-                ctx.retention_bytes = std::stoll(kv.second);
-            else if (kv.first == "logstore_retention_ms")
-                ctx.retention_ms = std::stoll(kv.second);
-            else if (kv.first == "logstore_flush_messages")
-                ctx.flush_messages = std::stoll(kv.second);
-            else if (kv.first == "logstore_flush_ms")
-                ctx.flush_ms = std::stoll(kv.second);
-        }
-    }
-
-    doCreateDWal(ctx, global_context);
-}
-
 void doDeleteDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
 {
+    auto dwal = Globals
     klog::KafkaWALPtr dwal = klog::KafkaWALPool::instance(global_context).getMeta();
-    auto * log = &Poco::Logger::get("DDLHelper");
+    auto log = getLogger("DDLHelper");
 
     int retries = 0;
     while (retries++ < DWAL_MAX_RETRIES)
@@ -847,6 +809,7 @@ void deleteDWAL(const String & uuid, ContextPtr global_context)
     klog::KafkaWALContext ctx{uuid};
     doDeleteDWal(ctx, global_context);
 }
+#endif
 
 int extractErrorCodeFromMsg(const String & err_msg)
 {

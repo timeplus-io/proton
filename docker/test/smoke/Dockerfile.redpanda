@@ -1,0 +1,34 @@
+# rebuild in #6736
+# docker buildx build . --platform linux/amd64,linux/arm64 -f Dockerfile.redpanda -t timeplus/redpanda-smoke-test:v24.2.12
+ARG FROM_TAG=v24.2.12
+FROM docker.redpanda.com/redpandadata/redpanda:$FROM_TAG
+
+ARG USERNAME=default
+
+USER root
+
+RUN apt-get update \
+ && env DEBIAN_FRONTEND=noninteractive \
+    apt-get install --yes --no-install-recommends \
+    openssh-server \
+    sudo \
+    vim \
+    jq \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -ms /bin/bash "$USERNAME" \
+ && usermod -aG sudo "$USERNAME"
+
+RUN sed -i'' 's|#PermitRootLogin prohibit-password|PermitRootLogin yes|g' /etc/ssh/sshd_config \
+ && sed -i'' 's|#PubkeyAuthentication yes|PubkeyAuthentication yes|g' /etc/ssh/sshd_config \
+ && sed -i'' 's|#PasswordAuthentication yes|PasswordAuthentication yes|g' /etc/ssh/sshd_config \
+ # use authorized_keys2 to avoid conflict with authorized_keys on ec2 instance
+ && echo 'AuthorizedKeysFile .ssh/authorized_keys2 /home/$USERNAME/.ssh/authorized_keys2' >> /etc/ssh/sshd_config \
+ && sed -i '2a\/bin/bash -c "service ssh start"' /entrypoint.sh
+
+EXPOSE 22
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+CMD ["redpanda" "start" "--overprovisioned"]

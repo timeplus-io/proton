@@ -1,3 +1,5 @@
+SET allow_experimental_analyzer = 1;
+
 DROP STREAM IF EXISTS part;
 DROP STREAM IF EXISTS supplier;
 DROP STREAM IF EXISTS partsupp;
@@ -66,7 +68,7 @@ CREATE STREAM orders
     o_custkey       int32,  -- FK c_custkey
     o_orderstatus   fixed_string(1),
     o_totalprice    decimal(18,2),
-    o_orderdate     Date,
+    o_orderdate     date,
     o_orderpriority fixed_string(15),
     o_clerk         fixed_string(15),
     o_shippriority  int32,  -- integer
@@ -86,9 +88,9 @@ CREATE STREAM lineitem
     l_tax           decimal(18,2),
     l_returnflag    fixed_string(1),
     l_linestatus    fixed_string(1),
-    l_shipdate      Date,
-    l_commitdate    Date,
-    l_receiptdate   Date,
+    l_shipdate      date,
+    l_commitdate    date,
+    l_receiptdate   date,
     l_shipinstruct  fixed_string(25),
     l_shipmode      fixed_string(10),
     l_comment       string, -- variable text size 44
@@ -416,7 +418,7 @@ order by
     revenue desc
 limit 20;
 
-select 11; -- TODO: remove to_decimal()
+select 11; -- TODO: remove todecimal()
 select
     ps_partkey,
     sum(ps_supplycost * ps_availqty) as value

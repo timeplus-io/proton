@@ -2,10 +2,13 @@
 
 #include <IO/Kafka/Common.h>
 #include <IO/Kafka/Handle_fwd.h>
+#include <Common/Logger.h>
 #include <Common/SharedMutex.h>
 
 #include <librdkafka/rdkafka.h>
-#include <Poco/Logger.h>
+
+#include <functional>
+#include <unordered_map>
 
 namespace DB
 {
@@ -28,7 +31,7 @@ public:
 
     std::string name() const;
     std::string topicName() const;
-    int32_t getPartitionCount() const;
+    int32_t getPartitionCount(uint64_t timeout_ms = 5000) const;
     WatermarkOffsets queryWatermarkOffsets(int32_t partition) const;
     WatermarkOffsets getWatermarkOffsets(int32_t partition) const;
 
@@ -38,7 +41,7 @@ protected:
     std::shared_ptr<Handle> handle;
     RdkTopicPtr topic_handle;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 class Consumer final : public Client, public std::enable_shared_from_this<Consumer>
@@ -46,13 +49,13 @@ class Consumer final : public Client, public std::enable_shared_from_this<Consum
 public:
     Consumer(const ConnectionPtr &, const ConsumerHandlePtr &, const std::string & topic);
 
-    using Callback = std::function<void(void * rkmessage, size_t total_count, void * data)>;
-    using ErrorCallback = std::function<void(rd_kafka_resp_err_t)>;
+    using Callback = std::function<void(const void * rkmessage, size_t total_count, void * data)>;
+    using ErrorCallback = std::function<void(rd_kafka_resp_err_t errcode, std::string_view errmsg)>;
 
     using Version = size_t;
 
     /// Initialize the consumer for consuming data from the partitions.
-    void initialize(const std::vector<int32_t> & partitions);
+    void initialize(const std::vector<uint64_t> & partitions);
 
     void startConsume(int32_t partition, int64_t offset);
     void stopConsume(int32_t partition);
@@ -94,7 +97,7 @@ class Producer final : public Client, public std::enable_shared_from_this<Produc
 public:
     Producer(const ProducerHandlePtr &, const std::string & topic);
 
-    void start();
+    void start(bool need_poll = true);
     void stop();
 };
 

@@ -6,6 +6,14 @@
 #include <vector>
 
 #include <Core/Field.h>
+#include <Common/logger_useful.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeVariant.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
@@ -13,6 +21,7 @@
 #include <Processors/QueryPlan/PartsSplitter.h>
 #include <Processors/Transforms/FilterSortedStreamByRange.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
+#include <Storages/MergeTree/IMergeTreeDataPart.h>
 
 using namespace DB;
 
@@ -24,6 +33,58 @@ using Values = std::vector<Field>;
 std::string toString(const Values & value)
 {
     return fmt::format("({})", fmt::join(value, ", "));
+}
+
+/** We rely that FieldVisitorAccurateLess will have strict weak ordering for any Field values including
+  * NaN, Null and containers (Array, Tuple, Map) that contain NaN or Null. But right now it does not properly
+  * support NaN and Nulls inside containers, because it uses Field operator< or accurate::lessOp for comparison
+  * that compares Nulls and NaNs differently than FieldVisitorAccurateLess.
+  * TODO: Update Field operator< to compare NaNs and Nulls the same way as FieldVisitorAccurateLess.
+  */
+bool isSafePrimaryDataKeyType(const IDataType & data_type)
+{
+    auto type_id = data_type.getTypeId();
+    switch (type_id)
+    {
+        case TypeIndex::Float32:
+        case TypeIndex::Float64:
+        case TypeIndex::Nullable:
+        case TypeIndex::Object:
+        case TypeIndex::Variant:
+        case TypeIndex::Dynamic:
+            return false;
+        case TypeIndex::Array:
+        {
+            const auto & data_type_array = static_cast<const DataTypeArray &>(data_type);
+            return isSafePrimaryDataKeyType(*data_type_array.getNestedType());
+        }
+        case TypeIndex::Tuple:
+        {
+            const auto & data_type_tuple = static_cast<const DataTypeTuple &>(data_type);
+            const auto & data_type_tuple_elements = data_type_tuple.getElements();
+            for (const auto & data_type_tuple_element : data_type_tuple_elements)
+                if (!isSafePrimaryDataKeyType(*data_type_tuple_element))
+                    return false;
+
+            return true;
+        }
+        case TypeIndex::LowCardinality:
+        {
+            const auto & data_type_low_cardinality = static_cast<const DataTypeLowCardinality &>(data_type);
+            return isSafePrimaryDataKeyType(*data_type_low_cardinality.getDictionaryType());
+        }
+        case TypeIndex::Map:
+        {
+            const auto & data_type_map = static_cast<const DataTypeMap &>(data_type);
+            return isSafePrimaryDataKeyType(*data_type_map.getKeyType()) && isSafePrimaryDataKeyType(*data_type_map.getValueType());
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    return true;
 }
 
 /// Adaptor to access PK values from index.
@@ -77,7 +138,7 @@ std::pair<std::vector<Values>, std::vector<RangesInDataParts>> split(RangesInDat
             RangeEnd,
         };
 
-        bool operator<(const PartsRangesIterator & other) const { return std::tie(value, event) > std::tie(other.value, other.event); }
+        [[ maybe_unused ]] bool operator<(const PartsRangesIterator & other) const { return std::tie(value, event) > std::tie(other.value, other.event); }
 
         Values value;
         MarkRangeWithPartIdx range;
@@ -140,8 +201,10 @@ std::pair<std::vector<Values>, std::vector<RangesInDataParts>> split(RangesInDat
                 {
                     result_layers.back().emplace_back(
                         parts[part_idx].data_part,
+                        parts[part_idx].alter_conversions,
                         parts[part_idx].part_index_in_query,
                         MarkRanges{{current_part_range_begin[part_idx], current.range.end}});
+
                     current_part_range_begin.erase(part_idx);
                     current_part_range_end.erase(part_idx);
                     continue;
@@ -168,8 +231,10 @@ std::pair<std::vector<Values>, std::vector<RangesInDataParts>> split(RangesInDat
         {
             result_layers.back().emplace_back(
                 parts[part_idx].data_part,
+                parts[part_idx].alter_conversions,
                 parts[part_idx].part_index_in_query,
                 MarkRanges{{current_part_range_begin[part_idx], last_mark + 1}});
+
             current_part_range_begin[part_idx] = current_part_range_end[part_idx];
         }
     }
@@ -237,6 +302,7 @@ namespace ErrorCodes
 
 Pipes buildPipesForReadingByPKRanges(
     const KeyDescription & primary_key,
+    ExpressionActionsPtr sorting_expr,
     RangesInDataParts parts,
     size_t max_layers,
     ContextPtr context,
@@ -252,6 +318,8 @@ Pipes buildPipesForReadingByPKRanges(
     for (size_t i = 0; i < result_layers.size(); ++i)
     {
         pipes[i] = reading_step_getter(std::move(result_layers[i]));
+        pipes[i].addSimpleTransform([sorting_expr](const Block & header)
+                                    { return std::make_shared<ExpressionTransform>(header, sorting_expr); });
         auto & filter_function = filters[i];
         if (!filter_function)
             continue;
@@ -260,9 +328,6 @@ Pipes buildPipesForReadingByPKRanges(
         ExpressionActionsPtr expression_actions = std::make_shared<ExpressionActions>(std::move(actions));
         auto description = fmt::format(
             "filter values in [{}, {})", i ? ::toString(borders[i - 1]) : "-inf", i < borders.size() ? ::toString(borders[i]) : "+inf");
-        auto pk_expression = std::make_shared<ExpressionActions>(primary_key.expression->getActionsDAG().clone());
-        pipes[i].addSimpleTransform([pk_expression](const Block & header)
-                                    { return std::make_shared<ExpressionTransform>(header, pk_expression); });
         pipes[i].addSimpleTransform(
             [&](const Block & header)
             {

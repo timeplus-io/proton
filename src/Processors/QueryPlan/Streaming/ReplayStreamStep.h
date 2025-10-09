@@ -15,6 +15,11 @@ public:
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
 
 private:
+    void updateOutputStream() override
+    {
+        output_stream = createOutputStream(input_streams.front(), input_streams.front().header, getDataStreamTraits());
+    }
+
     Float32 replay_speed = 0;
     std::vector<Int64> shards_last_sns;
     const String replay_time_col;

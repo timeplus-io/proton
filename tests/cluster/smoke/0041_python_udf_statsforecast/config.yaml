@@ -1,0 +1,30 @@
+name: python_udf_statsforecast
+description: Tests covering the python_udf statsforecast library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - statsforecast
+  - skip # DB::Exception: UDF running error, detail message: Numba needs NumPy 2.1 or less. Got NumPy 2.2.
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # statsforecast
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "statsforecast"}'
+
+    - type: command
+      name: python-udf11-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "statsforecast") | length > 0'
+    
+    - type: check
+      target_name: python-udf11-1
+      expected_result: ['true']

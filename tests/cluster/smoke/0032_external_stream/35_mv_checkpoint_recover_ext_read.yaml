@@ -1,0 +1,136 @@
+tags:
+  - materialized view
+
+description: |
+  Test cover checkpoint recover kafka external stream read with small data
+  Main Steps:
+    1.Create external stream
+    2.Create materialized view from external stream
+    3.Ingest data into kafka
+    4.Check mv data
+    5.System pause mv
+    6.Ingest data into kafka
+    7.Check mv no new data
+    8.System resume mv
+    9.Ingest data into kafka
+    10.Check mv new data from last checkpoint
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop view if exists mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists github_events;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream github_events
+      (
+        id int,
+        value string
+      )
+      settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW mv_github_events AS
+      SELECT
+        id, value, _tp_time
+      FROM
+        github_events
+      SETTINGS
+        seek_to = 'earliest';
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 1
+        value: sometext1
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: ext-34-1
+    query: select id, value from mv_github_events settings seek_to='earliest';
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: check
+    target_name: ext-34-1
+    expected_result:
+      - [1, 'sometext1']
+
+  - type: query
+    sql: system pause materialized view mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 2
+        value: sometext2
+
+  - type: check
+    target_name: ext-34-1
+    expected_result: []
+
+  - type: query
+    sql: system resume materialized view mv_github_events;
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: ext-34-1
+    expected_result:
+      - [2, 'sometext2']
+
+  - type: kafka
+    name: produce
+    topic: test
+    messages:
+      - id: 3
+        value: sometext3
+
+  - type: check
+    target_name: ext-34-1
+    expected_result:
+      - [3, 'sometext3']

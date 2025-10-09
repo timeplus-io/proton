@@ -2,7 +2,6 @@
 
 #include <deque>
 #include <functional>
-#include <atomic>
 #include <mutex>
 #include <future>
 #include <condition_variable>
@@ -10,12 +9,16 @@
 #include <iostream>
 
 #include <boost/circular_buffer.hpp>
+#include <Poco/Event.h>
 
 #include <base/shared_ptr_helper.h>
-#include <Common/logger_useful.h>
-#include <Common/ThreadPool.h>
+#include <Common/ThreadPool_fwd.h>
 #include <Common/Stopwatch.h>
+#include <base/defines.h>
 #include <Storages/MergeTree/IExecutableTask.h>
+#include <Common/CurrentMetrics.h>
+
+
 namespace DB
 {
 namespace ErrorCodes
@@ -50,7 +53,8 @@ struct TaskRuntimeData
 
     ExecutableTaskPtr task;
     CurrentMetrics::Metric metric;
-    std::atomic_bool is_currently_deleting{false};
+    /// Guarded by MergeTreeBackgroundExecutor<>::mutex
+    bool is_currently_deleting{false};
     /// Actually autoreset=false is needed only for unit test
     /// where multiple threads could remove tasks corresponding to the same storage
     /// This scenario in not possible in reality.
@@ -164,30 +168,9 @@ public:
         String name_,
         size_t threads_count_,
         size_t max_tasks_count_,
-        CurrentMetrics::Metric metric_)
-        : name(name_)
-        , threads_count(threads_count_)
-        , max_tasks_count(max_tasks_count_)
-        , metric(metric_)
-    {
-        if (max_tasks_count == 0)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Task count for MergeTreeBackgroundExecutor must not be zero");
+        CurrentMetrics::Metric metric_);
 
-        pending.setCapacity(max_tasks_count);
-        active.set_capacity(max_tasks_count);
-
-        pool.setMaxThreads(std::max(1UL, threads_count));
-        pool.setMaxFreeThreads(std::max(1UL, threads_count));
-        pool.setQueueSize(std::max(1UL, threads_count));
-
-        for (size_t number = 0; number < threads_count; ++number)
-            pool.scheduleOrThrowOnError([this] { threadFunction(); });
-    }
-
-    ~MergeTreeBackgroundExecutor()
-    {
-        wait();
-    }
+    ~MergeTreeBackgroundExecutor();
 
     bool trySchedule(ExecutableTaskPtr task);
     void removeTasksCorrespondingToStorage(StorageID id);
@@ -196,20 +179,23 @@ public:
 private:
 
     String name;
-    size_t threads_count{0};
-    size_t max_tasks_count{0};
+    size_t threads_count TSA_GUARDED_BY(mutex) = 0;
+    size_t max_tasks_count TSA_GUARDED_BY(mutex) = 0;
     CurrentMetrics::Metric metric;
 
     void routine(TaskRuntimeDataPtr item);
-    void threadFunction();
+
+    /// libc++ does not provide TSA support for std::unique_lock -> TSA_NO_THREAD_SAFETY_ANALYSIS
+    void threadFunction() TSA_NO_THREAD_SAFETY_ANALYSIS;
 
     /// Initially it will be empty
-    Queue pending{};
-    boost::circular_buffer<TaskRuntimeDataPtr> active{0};
-    std::mutex mutex;
-    std::condition_variable has_tasks;
-    std::atomic_bool shutdown{false};
-    ThreadPool pool;
+    Queue pending TSA_GUARDED_BY(mutex);
+    boost::circular_buffer<TaskRuntimeDataPtr> active TSA_GUARDED_BY(mutex);
+    mutable std::mutex mutex;
+    std::condition_variable has_tasks TSA_GUARDED_BY(mutex);
+    bool shutdown TSA_GUARDED_BY(mutex) = false;
+    std::unique_ptr<ThreadPool> pool;
+    LoggerPtr log = getLogger("MergeTreeBackgroundExecutor");
 };
 
 extern template class MergeTreeBackgroundExecutor<MergeMutateRuntimeQueue>;

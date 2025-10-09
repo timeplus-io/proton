@@ -59,34 +59,35 @@ public:
 
     virtual bool expectMaterializedColumns() const { return true; }
 
-    void setTotals(const Block & totals)
-    {
-        writeSuffixIfNot();
-        consumeTotals(Chunk(totals.getColumns(), totals.rows()));
-        are_totals_written = true;
-    }
-    void setExtremes(const Block & extremes)
-    {
-        writeSuffixIfNot();
-        consumeExtremes(Chunk(extremes.getColumns(), extremes.rows()));
-    }
+    void setTotals(const Block & totals);
+    void setExtremes(const Block & extremes);
+
+    virtual bool supportsWritingException() const { return false; }
+    virtual void setException(const String & /*exception_message*/) {}
 
     size_t getResultRows() const { return result_rows; }
     size_t getResultBytes() const { return result_bytes; }
 
     void doNotWritePrefix() { need_write_prefix = false; }
 
-protected:
-    friend class ParallelFormattingOutputFormat;
+    void resetFormatter()
+    {
+        need_write_prefix = true;
+        need_write_suffix = true;
+        finalized = false;
+        resetFormatterImpl();
+    }
 
-    virtual void consume(Chunk) = 0;
-    virtual void consumeTotals(Chunk) {}
-    virtual void consumeExtremes(Chunk) {}
-    virtual void finalizeImpl() {}
-    virtual void writePrefix() {}
-    virtual void writeSuffix() {}
+    /// Reset the statistics watch to a specific point in time
+    /// If set to not running it will stop on the call (elapsed = now() - given start)
+    void setStartTime(UInt64 start, bool is_running)
+    {
+        statistics.watch = Stopwatch(CLOCK_MONOTONIC, start, true);
+        if (!is_running)
+            statistics.watch.stop();
+    }
 
-    void writePrefixIfNot()
+    void writePrefixIfNeeded()
     {
         if (need_write_prefix)
         {
@@ -95,7 +96,10 @@ protected:
         }
     }
 
-    void writeSuffixIfNot()
+protected:
+    friend class ParallelFormattingOutputFormat;
+
+    void writeSuffixIfNeeded()
     {
         if (need_write_suffix)
         {
@@ -103,6 +107,15 @@ protected:
             need_write_suffix = false;
         }
     }
+
+    virtual void consume(Chunk) = 0;
+    virtual void consumeTotals(Chunk) {}
+    virtual void consumeExtremes(Chunk) {}
+    virtual void finalizeImpl() {}
+    virtual void finalizeBuffers() {}
+    virtual void writePrefix() {}
+    virtual void writeSuffix() {}
+    virtual void resetFormatterImpl() {}
 
     /// Methods-helpers for parallel formatting.
 
@@ -132,9 +145,6 @@ protected:
         Chunk extremes;
     };
 
-    void setOutsideStatistics(Statistics statistics_) { statistics = std::make_shared<Statistics>(std::move(statistics_)); }
-    std::shared_ptr<Statistics> getOutsideStatistics() const { return statistics; }
-
     /// In some formats the way we print extremes depends on
     /// were totals printed or not. In this case in parallel formatting
     /// we should notify underling format if totals were printed.
@@ -144,6 +154,11 @@ protected:
     /// Return true if format saves totals and extremes in consumeTotals/consumeExtremes and
     /// outputs them in finalize() method.
     virtual bool areTotalsAndExtremesUsedInFinalize() const { return false; }
+
+    /// Derived classes can use some wrappers around out WriteBuffer
+    /// and can override this method to return wrapper
+    /// that should be used in its derived classes.
+    virtual WriteBuffer * getWriteBufferPtr() { return &out; }
 
     WriteBuffer & out;
 
@@ -160,14 +175,19 @@ protected:
     bool need_write_suffix = true;
 
     RowsBeforeLimitCounterPtr rows_before_limit_counter;
+    Statistics statistics;
+
+    /// To serialize the calls to writeProgress (which could be called from another thread) and other writing methods.
+    std::mutex writing_mutex;
 
 private:
     size_t rows_read_before = 0;
-    std::shared_ptr<Statistics> statistics = nullptr;
     bool are_totals_written = false;
 
     /// Counters for consumed chunks. Are used for QueryLog.
     size_t result_rows = 0;
     size_t result_bytes = 0;
 };
+
+using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
 }

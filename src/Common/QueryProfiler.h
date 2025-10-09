@@ -7,6 +7,8 @@
 
 #include "config.h"
 
+#include <Common/Logger.h>
+
 
 namespace Poco
 {
@@ -37,7 +39,7 @@ public:
 private:
     void tryCleanup();
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 #ifndef OS_DARWIN
     /// Timer id from timer_create(2)

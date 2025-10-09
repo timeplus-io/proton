@@ -1,0 +1,83 @@
+tags:
+  - append-only
+  - versioned_kv
+  - Dynamic data enrichment join
+description:
+  append-only inner/left join versioned_kv inner/left join versioned_kv(partial
+  primary join)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_append_stream1_2 (i int, k1 int, k2 string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_append_stream2_2 (j int, kk1 int, kk2 string)
+      primary key(kk1, kk2) settings mode='versioned_kv';
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_append_stream3_2 (k int, kkk1 int, kkk2
+      string) primary key (kkk1, kkk2) settings mode='versioned_kv';
+  - type: wait
+    time: 1
+
+  - name: "1443"
+    type: stream
+    query:
+      select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, c.k, c.kkk1, c.kkk2
+      from test14_append_stream1_2 as a inner all join test14_append_stream2_2 as b
+      on a.k1 = b.kk1 inner all join test14_append_stream3_2 as c on b.kk2 = c.kkk2;
+    schema:
+      - name: a.i
+        type: int32
+      - name: a.k1
+        type: int32
+      - name: a.k2
+        type: string
+      - name: b.j
+        type: int32
+      - name: b.kk1
+        type: int32
+      - name: b.kk2
+        type: string
+      - name: c.k
+        type: int32
+      - name: c.kkk1
+        type: int32
+      - name: c.kkk2
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream3_2(k, kkk1, kkk2) values (3, 2, 'k2');
+
+  - type: query
+    sql: insert into test14_append_stream2_2(j, kk1, kk2) values (2, 1, 'k2');
+
+  - type: query
+    sql: insert into test14_append_stream1_2(i, k1, k2) values (1, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream2_2(j, kk1, kk2) values (4, 1, 'k2');
+
+  - type: query
+    sql: insert into test14_append_stream3_2(k, kkk1, kkk2) values (5, 3, 'k2');
+
+  - type: query
+    sql: insert into test14_append_stream1_2(i, k1, k2) values (1, 1, 'k');
+    
+  - type: check
+    target_name: "1443"
+    expected_result:
+      - [1, 1, k, 2, 1, k2, 3, 2, k2]
+      - [1, 1, k, 4, 1, k2, 3, 2, k2]
+      - [1, 1, k, 4, 1, k2, 5, 3, k2]

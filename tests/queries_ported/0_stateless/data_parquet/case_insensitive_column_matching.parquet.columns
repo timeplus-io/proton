@@ -1,0 +1,1 @@
+`Id` nullable(string), `Score` nullable(int32)

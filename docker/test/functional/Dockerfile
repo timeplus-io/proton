@@ -1,6 +1,10 @@
-# docker build --build-arg FROM_TAG=1.2.26 -t ghcr.io/timeplus-io/proton-functional-testrunner .
+# docker build --build-arg FROM_TAG=1.2.26 --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-functional-testrunner .
 ARG FROM_TAG=latest
-FROM ghcr.io/timeplus-io/proton:$FROM_TAG
+ARG FROM_REPO=timeplus/proton
+FROM $FROM_REPO:$FROM_TAG
+
+# Switch to root to install packagtes.
+USER 0:0
 
 RUN apt-get update \
  && env DEBIAN_FRONTEND=noninteractive \
@@ -13,11 +17,18 @@ RUN apt-get update \
      python3-termcolor \
      python3-pip \
      curl \
+     jq \
      pigz
 
-RUN mkdir /datasets \
- && curl https://datasets.clickhouse.com/hits/tsv/hits_v1.tsv.xz | unxz --threads=`nproc` > /datasets/hits_v1.tsv \
- && curl https://datasets.clickhouse.com/visits/tsv/visits_v1.tsv.xz | unxz --threads=`nproc` > /datasets/visits_v1.tsv
+COPY datasets /datasets
+
+RUN unxz /datasets/hits_v1.tsv.xz --threads=`nproc` \
+ && unxz /datasets/visits_v1.tsv.xz --threads=`nproc` \
+ && mkdir -p /test_output \
+ && chown timeplus:timeplus -R /datasets /test_output
+
+# Switch back to timeplus user
+USER 101:101
 
 ENV CLICKHOUSE_USER="proton"
 ENV CLICKHOUSE_PASSWORD="proton@t+"

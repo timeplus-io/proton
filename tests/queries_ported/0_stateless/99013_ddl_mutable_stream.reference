@@ -1,0 +1,84 @@
+[
+  {
+    "columns": [
+      "name"
+    ],
+    "name": "basic_info"
+  },
+  {
+    "columns": [
+      "timestamp",
+      "quantity",
+      "price"
+    ],
+    "name": "transaction_details"
+  },
+  {
+    "columns": [
+      "_tp_time",
+      "_tp_sn"
+    ],
+    "name": "__tp_cf_default"
+  }
+]
+[
+  {
+    "columns": [
+      "quantity"
+    ],
+    "name": "idx_quantity",
+    "storing": [
+      "id",
+      "name"
+    ],
+    "unique": true
+  },
+  {
+    "columns": [
+      "price"
+    ],
+    "name": "idx_price"
+  }
+]
+[
+  {
+    "name": "id",
+    "nullable": false,
+    "type": "int32"
+  },
+  {
+    "name": "name",
+    "nullable": false,
+    "type": "string"
+  },
+  {
+    "name": "timestamp",
+    "nullable": false,
+    "type": "datetime"
+  },
+  {
+    "name": "quantity",
+    "nullable": false,
+    "type": "int64"
+  },
+  {
+    "name": "price",
+    "nullable": false,
+    "type": "float64"
+  },
+  {
+    "codec": "CODEC(DoubleDelta, ZSTD(1))",
+    "default": "now64(3, 'UTC')",
+    "name": "_tp_time",
+    "nullable": false,
+    "type": "datetime64(3, 'UTC')"
+  },
+  {
+    "codec": "CODEC(Delta(8), ZSTD(1))",
+    "name": "_tp_sn",
+    "nullable": false,
+    "type": "int64"
+  }
+]
+succeed
+0	empty

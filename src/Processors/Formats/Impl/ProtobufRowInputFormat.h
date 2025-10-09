@@ -7,6 +7,7 @@
 #   include <Processors/Formats/ISchemaReader.h>
 #   include <Processors/Formats/ISchemaWriter.h>
 #   include <Formats/FormatSchemaInfo.h>
+#   include <Formats/ProtobufSchemas.h>
 
 /// proton: starts
 #    include <Formats/KafkaSchemaRegistry.h>
@@ -44,18 +45,23 @@ public:
 
     String getName() const override { return "ProtobufRowInputFormat"; }
 
-    /// proton: starts
-    void setReadBuffer(ReadBuffer & buf) override;
-    /// proton: ends
+    void setReadBuffer(ReadBuffer & in_) override;
+    void resetParser() override;
 
 private:
     bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
     bool allowSyncAfterError() const override;
     void syncAfterError() override;
 
+    void createReaderAndSerializer();
+
     std::unique_ptr<ProtobufReader> reader;
     std::vector<size_t> missing_column_indices;
     std::unique_ptr<ProtobufSerializer> serializer;
+
+    const ProtobufSchemas::DescriptorHolder descriptor;
+    bool with_length_delimiter;
+    bool flatten_google_wrappers;
 };
 
 class ProtobufSchemaReader : public IExternalSchemaReader
@@ -85,7 +91,6 @@ public:
     String getName() const override { return "ProtobufConfluentRowInputFormat"; }
 
     // void setReadBuffer(ReadBuffer & buf) override;
-
     class SchemaRegistryWithCache;
 
 private:
@@ -94,7 +99,19 @@ private:
     bool flatten_google_wrappers {false};
     std::shared_ptr<SchemaRegistryWithCache> registry;
     std::vector<size_t> missing_column_indices;
-    std::unique_ptr<ProtobufSerializer> serializer;
+};
+
+class ProtobufConfluentSchemaReader : public IExternalSchemaReader
+{
+public:
+    explicit ProtobufConfluentSchemaReader(const FormatSettings & format_settings);
+
+    NamesAndTypesList readSchema() override;
+
+private:
+    std::shared_ptr<ProtobufConfluentRowInputFormat::SchemaRegistryWithCache> registry;
+    String subject;
+    bool skip_unsupported_fields;
 };
 
 class ProtobufSchemaWriter : public IExternalSchemaWriter

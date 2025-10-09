@@ -1,8 +1,10 @@
+#include <Parsers/IAST.h>
+
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
+#include <Common/SensitiveDataMasker.h>
 #include <Common/SipHash.h>
-#include <Parsers/IAST.h>
 
 
 namespace DB
@@ -90,27 +92,47 @@ IAST::~IAST()
     }
 }
 
-size_t IAST::size() const
+size_t IAST::sizeImpl(std::unordered_set<const IAST *> & checked_asts) const
 {
     size_t res = 1;
     for (const auto & child : children)
-        res += child->size();
+    {
+        if (auto [_, inserted] = checked_asts.emplace(child.get()); inserted)
+        {
+            if (child)
+                res += child->sizeImpl(checked_asts);
+        }
+    }
+
+    return res;
+}
+
+size_t IAST::size() const
+{
+    std::unordered_set<const IAST *> checked_asts;
+    return sizeImpl(checked_asts);
+}
+
+size_t IAST::checkSizeImpl(std::unordered_set<const IAST *> & checked_asts, size_t max_size) const
+{
+    size_t res = 1;
+    for (const auto & child : children)
+    {
+        if (auto [_, inserted] = checked_asts.emplace(child.get()); inserted)
+            res += child->checkSizeImpl(checked_asts, max_size);
+    }
+
+    if (res > max_size)
+        throw Exception(ErrorCodes::TOO_BIG_AST, "AST is too big. Maximum: {}", max_size);
 
     return res;
 }
 
 size_t IAST::checkSize(size_t max_size) const
 {
-    size_t res = 1;
-    for (const auto & child : children)
-        res += child->checkSize(max_size);
-
-    if (res > max_size)
-        throw Exception("AST is too big. Maximum: " + toString(max_size), ErrorCodes::TOO_BIG_AST);
-
-    return res;
+    std::unordered_set<const IAST *> checked_asts;
+    return checkSizeImpl(checked_asts, max_size);
 }
-
 
 IAST::Hash IAST::getTreeHash() const
 {
@@ -138,24 +160,43 @@ void IAST::updateTreeHashImpl(SipHash & hash_state) const
 }
 
 
-size_t IAST::checkDepthImpl(size_t max_depth, size_t level) const
+size_t IAST::checkDepthImpl(std::unordered_set<const IAST *> & checked_asts, size_t max_depth, size_t level) const
 {
     size_t res = level + 1;
     for (const auto & child : children)
     {
         if (level >= max_depth)
-            throw Exception("AST is too deep. Maximum: " + toString(max_depth), ErrorCodes::TOO_DEEP_AST);
-        res = std::max(res, child->checkDepthImpl(max_depth, level + 1));
+            throw Exception(ErrorCodes::TOO_DEEP_AST, "AST is too deep. Maximum: {}", max_depth);
+
+        if (auto [_, inserted] = checked_asts.emplace(child.get()); inserted)
+            res = std::max(res, child->checkDepthImpl(checked_asts, max_depth, level + 1));
     }
 
     return res;
 }
 
-std::string IAST::formatForErrorMessage() const
+String IAST::formatWithPossiblyHidingSensitiveData(
+    size_t max_length,
+    bool one_line,
+    bool show_secrets) const
 {
     WriteBufferFromOwnString buf;
-    format(FormatSettings(buf, true /* one line */));
-    return buf.str();
+
+    FormatSettings settings{buf, one_line};
+    settings.show_secrets = show_secrets;
+    format(settings);
+
+    return wipeSensitiveDataAndCutToLength(buf.str(), max_length);
+}
+
+bool IAST::childrenHaveSecretParts() const
+{
+    for (const auto & child : children)
+    {
+        if (child->hasSecretParts())
+            return true;
+    }
+    return false;
 }
 
 void IAST::cloneChildren()
@@ -188,8 +229,9 @@ void IAST::FormatSettings::writeIdentifier(const String & name) const
         case IdentifierQuotingStyle::None:
         {
             if (always_quote_identifiers)
-                throw Exception("Incompatible arguments: always_quote_identifiers = true && identifier_quoting_style == IdentifierQuotingStyle::None",
-                    ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                                "Incompatible arguments: always_quote_identifiers = true && "
+                                "identifier_quoting_style == IdentifierQuotingStyle::None");
             writeString(name, ostr);
             break;
         }
@@ -228,7 +270,7 @@ void IAST::dumpTree(WriteBuffer & ostr, size_t indent) const
     writeChar('\n', ostr);
     for (const auto & child : children)
     {
-        if (!child) throw Exception("Can't dump nullptr child", ErrorCodes::UNKNOWN_ELEMENT_IN_AST);
+        if (!child) throw Exception(ErrorCodes::UNKNOWN_ELEMENT_IN_AST, "Can't dump nullptr child");
         child->dumpTree(ostr, indent + 1);
     }
 }

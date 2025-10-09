@@ -214,6 +214,7 @@ if __name__ == "__main__":
             "--client-option", "max_memory_usage_for_user=0",
             "--client-option", "memory_profiler_step=1Gi",
             "--hung-check",
+            "--report-logs-stats",
             "00001_select_1"
         ])
         res = call(cmd, shell=True, stderr=STDOUT)

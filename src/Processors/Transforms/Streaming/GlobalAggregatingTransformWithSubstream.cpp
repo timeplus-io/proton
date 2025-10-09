@@ -2,6 +2,7 @@
 
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
+#include <base/scope_guard.h>
 
 namespace DB
 {
@@ -14,21 +15,23 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 
 namespace Streaming
 {
-GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_)
+GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream(
+    Block header, AggregatingTransformParamsPtr params_, size_t id)
     : AggregatingTransformWithSubstream(
-        std::move(header),
-        std::move(params_),
-        "GlobalAggregatingTransformWithSubstream",
-        ProcessorID::GlobalAggregatingTransformWithSubstreamID)
+          std::move(header),
+          std::move(params_),
+          id,
+          "GlobalAggregatingTransformWithSubstream",
+          ProcessorID::GlobalAggregatingTransformWithSubstreamID)
 {
-    assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
+    chassert(params->params->group_by == IAggregatorParams::GroupBy::Other);
+
     if (params->emit_changelog && params->emit_version)
         throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
 }
 
-SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
+void GlobalAggregatingTransformWithSubstream::initSubstreamContext(const SubstreamAggregatedDataPtr & substream_ctx)
 {
-    auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
     if (params->emit_changelog && !substream_ctx->hasField())
     {
         bool retract_enabled = false;
@@ -51,31 +54,11 @@ SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstrea
                  DB::readBinary(std::any_cast<bool &>(field), rb);
              }});
     }
-    return substream_ctx;
-}
-
-std::pair<bool, bool>
-GlobalAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
-{
-    if (params->emit_changelog)
-    {
-        assert(!params->only_merge && !no_more_keys);
-
-        auto num_rows = chunk.getNumRows();
-        if (retractEnabled(substream_ctx)) [[likely]]
-            return params->aggregator.executeAndRetractOnBlock(
-                chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns);
-        else
-            return params->aggregator.executeOnBlock(
-                chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns);
-    }
-    else
-        return AggregatingTransformWithSubstream::executeOrMergeColumns(chunk, substream_ctx);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
 /// and push the block to downstream pipe
-void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
+void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx)
 {
     assert(substream_ctx);
 
@@ -86,29 +69,44 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     });
 
     /// If there is no new data, don't emit aggr result
-    if (!substream_ctx->hasNewData())
+    if (!(params->repeatEmit() || substream_ctx->hasNewData()))
         return;
 
     auto & variants = substream_ctx->variants;
-    if (variants.empty())
+    if (variants->empty())
         return;
 
-    auto start = MonotonicMilliseconds::now();
+    Stopwatch stopwatch;
+
     ChunkList chunks;
     if (params->emit_changelog)
     {
-        chunks = AggregatingHelper::convertToChangelogChunks(variants, *params);
+        chunks = AggregatingHelper::convertToChangelogChunks(*variants, *params, std::move(substream_ctx->processed_keys_columns));
         /// Enable retract after first finalization
-        retractEnabled(substream_ctx) |= !chunks.empty();
+        if (!chunks.empty())
+            enableRetract(substream_ctx);
+
+        /// Enable keys cache when
+        /// 1) Exists group by keys
+        /// 2) And after first finalization, there are two reasons:
+        ///   - If is first finalization after execution, all keys of current state are changed, so we don't need cache them.
+        ///   - If is first finalization after recovery, the cached keys are not checkpointed, so we will lose the cached parts after recovery
+        if (params->params->keys_size != 0 && params->aggregatorType() == AggregatorType::Memory)
+            enableKeysCache(substream_ctx);
+    }
+    else if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
+    {
+        chunks = AggregatingHelper::convertUpdatesToChunks(*variants, *params, std::move(substream_ctx->processed_keys_columns));
+        if (params->emit_version)
+            emitVersion(chunks, substream_ctx);
+
+        if (params->params->keys_size != 0 && params->aggregatorType() == AggregatorType::Memory)
+            enableKeysCache(substream_ctx);
     }
     else
     {
-        if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
-            chunks = AggregatingHelper::convertUpdatesToChunks(variants, *params);
-        else
-            chunks = AggregatingHelper::convertToChunks(variants, *params);
-
-        if (params->final && params->emit_version)
+        chunks = AggregatingHelper::convertToChunks(*variants, *params);
+        if (params->emit_version)
             emitVersion(chunks, substream_ctx);
     }
 
@@ -119,15 +117,39 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     chunks.back().setChunkContext(chunk_ctx);
     setAggregatedResult(chunks);
 
-    auto end = MonotonicMilliseconds::now();
-
-    LOG_INFO(log, "Took {} milliseconds to finalize aggregation", end - start);
+    if (auto elapsed_ms = stopwatch.elapsedMilliseconds(); elapsed_ms >= 100)
+    {
+        auto [aggr_chunks, aggr_rows] = chunksAndRowsOfAggregateResults();
+        LOG_INFO(
+            logger,
+            "Took {} milliseconds to finalize aggregation, aggregated_chunks={} aggregated_rows={}",
+            elapsed_ms,
+            aggr_chunks,
+            aggr_rows);
+    }
 }
 
-bool & GlobalAggregatingTransformWithSubstream::retractEnabled(const SubstreamContextPtr & substream_ctx) const noexcept
+bool GlobalAggregatingTransformWithSubstream::retractEnabled(const SubstreamAggregatedDataPtr & substream_ctx) const
 {
-    return substream_ctx->getField<bool &>();
+    return substream_ctx->hasField() && substream_ctx->getField<bool>();
+}
+
+void GlobalAggregatingTransformWithSubstream::enableRetract(const SubstreamAggregatedDataPtr & substream_ctx)
+{
+    substream_ctx->getField<bool &>() = true;
+}
+
+String GlobalAggregatingTransformWithSubstream::getName() const
+{
+    switch (params->aggregatorType())
+    {
+        case AggregatorType::Memory:
+            return "GlobalAggregatingTransformWithSubstream";
+        case AggregatorType::Hybrid:
+            return "HybridGlobalAggregatingTransformWithSubstream";
+    }
 }
 
 }
+
 }

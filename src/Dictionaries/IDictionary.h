@@ -15,6 +15,8 @@
 #include <Dictionaries/DictionaryStructure.h>
 #include <DataTypes/IDataType.h>
 
+#include <numeric>
+
 namespace DB
 {
 
@@ -37,7 +39,7 @@ using DictionaryHierarchicalParentToChildIndexPtr = std::shared_ptr<DictionaryHi
   *
   * Complex is for dictionaries that support any combination of key columns.
   */
-enum class DictionaryKeyType
+enum class DictionaryKeyType : uint8_t
 {
     Simple,
     Complex
@@ -46,7 +48,7 @@ enum class DictionaryKeyType
 /** DictionarySpecialKeyType provides IDictionary client information about
   * which special key type is supported by dictionary.
   */
-enum class DictionarySpecialKeyType
+enum class DictionarySpecialKeyType : uint8_t
 {
     None,
     Range
@@ -65,26 +67,28 @@ public:
 
     std::string getFullName() const
     {
-        std::lock_guard lock{name_mutex};
-        return dictionary_id.getInternalDictionaryName();
+        std::lock_guard lock{mutex};
+        return dictionary_id.getNameForLogs();
+    }
+
+    /// Returns fully qualified unquoted dictionary name
+    std::string getQualifiedName() const
+    {
+        std::lock_guard lock{mutex};
+        if (dictionary_id.database_name.empty())
+            return dictionary_id.table_name;
+        return dictionary_id.database_name + "." + dictionary_id.table_name;
     }
 
     StorageID getDictionaryID() const
     {
-        std::lock_guard lock{name_mutex};
+        std::lock_guard lock{mutex};
         return dictionary_id;
-    }
-
-    void updateDictionaryName(const StorageID & new_name) const
-    {
-        std::lock_guard lock{name_mutex};
-        assert(new_name.uuid == dictionary_id.uuid && dictionary_id.uuid != UUIDHelpers::Nil);
-        dictionary_id = new_name;
     }
 
     std::string getLoadableName() const final
     {
-        std::lock_guard lock{name_mutex};
+        std::lock_guard lock{mutex};
         return dictionary_id.getInternalDictionaryName();
     }
 
@@ -95,11 +99,19 @@ public:
 
     std::string getDatabaseOrNoDatabaseTag() const
     {
+        std::lock_guard lock{mutex};
+
         if (!dictionary_id.database_name.empty())
             return dictionary_id.database_name;
 
         return NO_DATABASE_TAG;
     }
+
+    /// proton: starts
+    std::string keyValueType() const override { return getTypeName(); }
+
+    virtual UInt64 getStorageSize() const { return 0; }
+    /// proton: ends
 
     virtual std::string getTypeName() const = 0;
 
@@ -107,6 +119,9 @@ public:
 
     virtual size_t getQueryCount() const = 0;
 
+    /// The percentage of time a lookup successfully found an entry.
+    /// When there were no lookups, it returns zero (instead of NaN).
+    /// The value is calculated non atomically and can be slightly off in the presence of concurrent lookups.
     virtual double getFoundRate() const = 0;
 
     virtual double getHitRate() const = 0;
@@ -156,8 +171,8 @@ public:
 
             auto & key_column_to_cast = key_columns[key_attribute_type_index];
             ColumnWithTypeAndName column_to_cast = {key_column_to_cast, key_type, ""};
-            auto casted_column = castColumnAccurate(std::move(column_to_cast), key_attribute_type);
-            key_column_to_cast = std::move(casted_column);
+            auto cast_column = castColumnAccurate(column_to_cast, key_attribute_type);
+            key_column_to_cast = std::move(cast_column);
             key_type = key_attribute_type;
         }
     }
@@ -165,28 +180,85 @@ public:
     /** Subclass must validate key columns and keys types
       * and return column representation of dictionary attribute.
       *
-      * Parameter default_values_column must be used to provide default values
-      * for keys that are not in dictionary. If null pointer is passed,
-      * then default attribute value must be used.
+      * Parameter default_or_filter is std::variant type, so either a column of
+      * default values is passed or a filter used in short circuit case, Filter's
+      * 1 represents to be filled later on by lazy execution, and 0 means we have
+      * the value right now.
       */
+    using RefDefault = std::reference_wrapper<const ColumnPtr>;
+    using RefFilter = std::reference_wrapper<IColumn::Filter>;
+    using DefaultOrFilter = std::variant<RefDefault, RefFilter>;
     virtual ColumnPtr getColumn(
-        const std::string & attribute_name,
-        const DataTypePtr & result_type,
-        const Columns & key_columns,
-        const DataTypes & key_types,
-        const ColumnPtr & default_values_column) const = 0;
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        const std::vector<size_t> & key_index_map,
+        const std::string & attribute_name [[maybe_unused]],
+        const DataTypePtr & attribute_type [[maybe_unused]],
+        DefaultOrFilter default_or_filter [[maybe_unused]]) const = 0;
 
     /** Get multiple columns from dictionary.
       *
       * Default implementation just calls getColumn multiple times.
       * Subclasses can provide custom more efficient implementation.
       */
+    /// proton : starts. Revise the getColumns / getColumn / hasKeys / interfaces to accept ColumnsWithTypeAndName
+    /// and const std::vector<size_t> & key_index_map to avoid splitting them into columns and types.
+    /// Child overrides can split them when necessary, since in quite few scenarios, it is not necessary
+    using RefDefaults = std::reference_wrapper<const Columns>;
+    using DefaultsOrFilter = std::variant<RefDefaults, RefFilter>;
     virtual Columns getColumns(
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        const std::vector<size_t> & key_index_map,
+        const Strings & attribute_names,
+        const DataTypes & attribute_types,
+        DefaultsOrFilter defaults_or_filter) const
+    {
+        bool is_short_circuit = std::holds_alternative<RefFilter>(defaults_or_filter);
+        assert(is_short_circuit || std::holds_alternative<RefDefaults>(defaults_or_filter));
+
+        size_t attribute_names_size = attribute_names.size();
+
+        Columns result;
+        result.reserve(attribute_names_size);
+
+        for (size_t i = 0; i < attribute_names_size; ++i)
+        {
+            const auto & attribute_name = attribute_names[i];
+            const auto & attribute_type = attribute_types[i];
+
+            DefaultOrFilter var = is_short_circuit ? DefaultOrFilter{std::get<RefFilter>(defaults_or_filter).get()}
+                                                   : std::get<RefDefaults>(defaults_or_filter).get()[i];
+            result.emplace_back(getColumn(key_columns_with_types, key_index_map, attribute_name, attribute_type, var));
+        }
+
+        return result;
+    }
+
+    /**
+     * Analogous to getColumn, but for dictGetAll
+     */
+    virtual ColumnPtr getColumnAllValues(
+        const std::string & attribute_name [[maybe_unused]],
+        const DataTypePtr & result_type [[maybe_unused]],
+        const Columns & key_columns [[maybe_unused]],
+        const DataTypes & key_types [[maybe_unused]],
+        const ColumnPtr & default_values_column [[maybe_unused]],
+        size_t limit [[maybe_unused]]) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "Method getColumnAllValues is not supported for {} dictionary.",
+                        getDictionaryID().getNameForLogs());
+    }
+
+    /**
+     * Analogous to getColumns, but for dictGetAll
+     */
+    virtual Columns getColumnsAllValues(
         const Strings & attribute_names,
         const DataTypes & result_types,
         const Columns & key_columns,
         const DataTypes & key_types,
-        const Columns & default_values_columns) const
+        const Columns & default_values_columns,
+        size_t limit) const
     {
         size_t attribute_names_size = attribute_names.size();
 
@@ -199,7 +271,8 @@ public:
             const auto & result_type = result_types[i];
             const auto & default_values_column = default_values_columns[i];
 
-            result.emplace_back(getColumn(attribute_name, result_type, key_columns, key_types, default_values_column));
+            result.emplace_back(getColumnAllValues(
+                attribute_name, result_type, key_columns, key_types, default_values_column, limit));
         }
 
         return result;
@@ -207,11 +280,11 @@ public:
 
     /** Subclass must validate key columns and key types and return ColumnUInt8 that
       * is bitmask representation of is key in dictionary or not.
-      * If key is in dictionary then value of associated row will be true, otherwise false.
+      * If key is in dictionary then value of associated row will be 1, otherwise 0.
       */
     virtual ColumnUInt8::Ptr hasKeys(
-        const Columns & key_columns,
-        const DataTypes & key_types) const = 0;
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        const std::vector<size_t> & key_index_map) const = 0;
 
     virtual bool hasHierarchy() const { return false; }
 
@@ -279,42 +352,32 @@ public:
         return std::static_pointer_cast<const IDictionary>(IExternalLoadable::shared_from_this());
     }
 
-    void setDictionaryComment(String new_comment)
-    {
-        std::lock_guard lock{name_mutex};
-        dictionary_comment = std::move(new_comment);
-    }
-
     String getDictionaryComment() const
     {
-        std::lock_guard lock{name_mutex};
+        std::lock_guard lock{mutex};
         return dictionary_comment;
     }
 
     /// IKeyValueEntity implementation
-    Names getPrimaryKey() const  override { return getStructure().getKeysNames(); }
+    Names getPrimaryKey() const override { return getStructure().getKeysNames(); }
 
-    Chunk getByKeys(const ColumnsWithTypeAndName & keys, PaddedPODArray<UInt8> & out_null_map, const Names & result_names) const override
+    Chunk getByKeys(
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        PaddedPODArray<UInt8> & out_null_map,
+        const Names & result_names,
+        const std::vector<size_t> & key_index_map,
+        bool add_defaults_if_missing) const override /// proton updates: add_defaults_if_missing
     {
-        if (keys.empty())
+        if (key_columns_with_types.empty())
             return Chunk(getSampleBlock(result_names).cloneEmpty().getColumns(), 0);
 
         const auto & dictionary_structure = getStructure();
-
-        /// Split column keys and types into separate vectors, to use in `IDictionary::getColumns`
-        Columns key_columns;
-        DataTypes key_types;
-        for (const auto & key : keys)
-        {
-            key_columns.emplace_back(key.column);
-            key_types.emplace_back(key.type);
-        }
 
         /// Fill null map
         {
             out_null_map.clear();
 
-            auto mask = hasKeys(key_columns, key_types);
+            auto mask = hasKeys(key_columns_with_types, key_index_map);
             const auto & mask_data = mask->getData();
 
             out_null_map.resize(mask_data.size(), 0);
@@ -346,21 +409,34 @@ public:
 
         Columns default_cols(result_types.size());
         for (size_t i = 0; i < result_types.size(); ++i)
-            /// Dictinonary may have non-standart default values specified
+            /// Dictionary may have non-standard default values specified
             default_cols[i] = result_types[i]->createColumnConstWithDefaultValue(out_null_map.size());
 
-        Columns result_columns = getColumns(attribute_names, result_types, key_columns, key_types, default_cols);
+        Columns result_columns = getColumns(key_columns_with_types, key_index_map, attribute_names, result_types, default_cols);
 
+        /// proton: starts. Fix key columns order in insertion
+        Columns key_and_attr_columns;
+        key_and_attr_columns.reserve(key_columns_with_types.size() + result_columns.size());
         /// Result block should consist of key columns and then attributes
-        for (const auto & key_col : key_columns)
+        for (auto idx : key_index_map)
         {
             /// Insert default values for keys that were not found
+            const auto & key_col = key_columns_with_types[idx].column;
             ColumnPtr filtered_key_col = JoinCommon::filterWithBlanks(key_col, out_null_map);
-            result_columns.insert(result_columns.begin(), filtered_key_col);
+            key_and_attr_columns.push_back(std::move(filtered_key_col));
+        }
+        key_and_attr_columns.insert(key_and_attr_columns.end(), result_columns.begin(), result_columns.end());
+
+        if (!add_defaults_if_missing)
+        {
+            /// Remove default rows
+            for (auto & col : key_and_attr_columns)
+                col = col->filter(out_null_map, -1);
         }
 
-        size_t num_rows = result_columns[0]->size();
-        return Chunk(std::move(result_columns), num_rows);
+        size_t num_rows = key_and_attr_columns[0]->size();
+        return Chunk(std::move(key_and_attr_columns), num_rows);
+        /// proton: ends
     }
 
     Block getSampleBlock(const Names & result_names) const override
@@ -392,12 +468,64 @@ public:
         return sample_block;
     }
 
-private:
-    mutable std::mutex name_mutex;
-    mutable StorageID dictionary_id;
+    /// Internally called by ExternalDictionariesLoader.
+    /// In order to update the dictionary ID change its configuration first and then call ExternalDictionariesLoader::reloadConfig().
+    void updateDictionaryID(const StorageID & new_dictionary_id)
+    {
+        std::lock_guard lock{mutex};
+        assert((new_dictionary_id.uuid == dictionary_id.uuid) && (dictionary_id.uuid != UUIDHelpers::Nil));
+        dictionary_id = new_dictionary_id;
+    }
 
-protected:
-    String dictionary_comment;
+    /// Internally called by ExternalDictionariesLoader.
+    /// In order to update the dictionary comment change its configuration first and then call ExternalDictionariesLoader::reloadConfig().
+    void updateDictionaryComment(const String & new_dictionary_comment)
+    {
+        std::lock_guard lock{mutex};
+        dictionary_comment = new_dictionary_comment;
+    }
+
+private:
+    mutable std::mutex mutex;
+    StorageID dictionary_id TSA_GUARDED_BY(mutex);
+    String dictionary_comment TSA_GUARDED_BY(mutex);
 };
+
+/// proton : starts. added, return primary key ordered key columns
+inline Columns getOrderedKeyColumns(const ColumnsWithTypeAndName & key_columns_with_types, const std::vector<size_t> & key_index_map)
+{
+    Columns columns;
+    columns.reserve(key_columns_with_types.size());
+    for (auto idx : key_index_map)
+        columns.push_back(key_columns_with_types[idx].column);
+
+    return columns;
+}
+
+inline DataTypes getOrderedKeyTypes(const ColumnsWithTypeAndName & key_columns_with_types, const std::vector<size_t> & key_index_map)
+{
+    DataTypes types;
+    types.reserve(key_columns_with_types.size());
+    for (auto idx : key_index_map)
+        types.push_back(key_columns_with_types[idx].type);
+
+    return types;
+}
+
+inline std::pair<ColumnsWithTypeAndName, std::vector<size_t>> getKeyColumnsWithTypes(const Columns & key_columns, const DataTypes & key_types)
+{
+    ColumnsWithTypeAndName keys;
+    keys.reserve(key_columns.size());
+    for (size_t i = 0, num_keys = key_columns.size(); i < num_keys; ++i)
+        keys.emplace_back(key_columns[i], key_types[i], "");
+
+    std::vector<size_t> key_index_map;
+    key_index_map.resize(key_columns.size());
+    std::iota(key_index_map.begin(), key_index_map.end(), 0);
+
+    return {std::move(keys), std::move(key_index_map)};
+}
+
+/// proton : ends
 
 }

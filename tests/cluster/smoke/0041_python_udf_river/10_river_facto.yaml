@@ -1,0 +1,68 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value map(string, string));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_facto(value map(string, string)) RETURNS bool LANGUAGE PYTHON AS
+      $$
+      from river import facto
+
+      def test_facto(value):
+          dataset = (
+              ({'user': 'Alice', 'item': 'Superman'}, True),
+              ({'user': 'Alice', 'item': 'Terminator'}, True),
+              ({'user': 'Alice', 'item': 'Star Wars'}, True),
+              ({'user': 'Alice', 'item': 'Notting Hill'}, False),
+              ({'user': 'Alice', 'item': 'Harry Potter '}, True),
+              ({'user': 'Bob', 'item': 'Superman'}, True),
+              ({'user': 'Bob', 'item': 'Terminator'}, True),
+              ({'user': 'Bob', 'item': 'Star Wars'}, True),
+              ({'user': 'Bob', 'item': 'Notting Hill'}, False)
+          )
+          model = facto.FFMClassifier(
+              n_factors=10,
+              intercept=.5,
+              seed=42,
+          )
+          for x, y in dataset:
+              model.learn_one(x, y)
+          res = [model.predict_one(dict(v)) for v in value if len(v) > 0]
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-10-1
+    type: stream
+    query: select test_facto(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: bool
+      - name: value
+        type: map(string, string)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(value) values ({'user': 'Bob', 'item': 'Harry Potter'});
+
+  - type: check
+    target_name: python-udf13-10-1
+    expected_result:
+      - [True, {'user': 'Bob', 'item': 'Harry Potter'}]

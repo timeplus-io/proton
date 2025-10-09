@@ -19,12 +19,11 @@
 #include <utility>
 #include <memory>
 #include <base/types.h>
-#include <Common/logger_useful.h>
 
 /// proton : starts
 #include <Interpreters/DatabaseAndTableWithAlias.h>
-#include <Interpreters/Streaming/JoinStreamDescription.h>
-#include <Interpreters/Streaming/RangeAsofJoinContext.h>
+#include <Interpreters/Streaming/HashJoin/JoinStreamDescription.h>
+#include <Interpreters/Streaming/HashJoin/RangeAsofJoinContext.h>
 /// proton : ends
 
 namespace DB
@@ -56,6 +55,8 @@ public:
     {
         Names key_names_left;
         Names key_names_right; /// Duplicating right key names are qualified
+
+        Names key_names_restored;
 
         ASTPtr on_filter_condition_left;
         ASTPtr on_filter_condition_right;
@@ -150,6 +151,7 @@ private:
     size_t data_block_size = 0;
     String left_alignment_key_column;
     String right_alignment_key_column;
+    bool emit_changelog = false;
     /// proton : ends
 
     /// All columns which can be read from joined table. Duplicating names are qualified.
@@ -168,11 +170,23 @@ private:
     /// Original name -> name. Only renamed columns.
     std::unordered_map<String, String> renames;
 
+    /// Map column name to actual key name that can be an alias.
+    /// Example: SELECT r.id as rid from t JOIN r ON t.id = rid
+    /// Map: r.id -> rid
+    /// Required only for StorageJoin to map join keys back to original column names.
+    /// (workaround for ExpressionAnalyzer)
+    std::unordered_map<String, String> right_key_aliases;
+    std::unordered_map<String, String> reversed_right_key_aliases;
+
     VolumePtr tmp_volume;
 
     std::shared_ptr<StorageJoin> right_storage_join;
 
     std::shared_ptr<const IKeyValueEntity> right_kv_storage;
+
+    /// proton : starts. Used for streaming cross join
+    std::shared_ptr<IStorage> right_cross_join_storage;
+    /// proton : ends.
 
     std::string right_storage_name;
 
@@ -192,8 +206,6 @@ private:
     template <typename LeftNamesAndTypes, typename RightNamesAndTypes>
     void inferJoinKeyCommonType(const LeftNamesAndTypes & left, const RightNamesAndTypes & right, bool allow_right, bool strict);
 
-    NamesAndTypesList correctedColumnsAddedByJoin() const;
-
 public:
     TableJoin() = default;
 
@@ -205,19 +217,24 @@ public:
         : size_limits(limits)
         , default_max_bytes(0)
         , join_use_nulls(use_nulls)
-        , join_algorithm(JoinAlgorithm::HASH)
+        , join_algorithm(JoinAlgorithm::DEFAULT)
     {
         clauses.emplace_back().key_names_right = key_names_right;
         table_join.kind = kind;
         table_join.strictness = strictness;
     }
 
+    TableJoin(const TableJoin & rhs) = default;
+
     JoinKind kind() const { return table_join.kind; }
+    void setKind(JoinKind kind) { table_join.kind = kind; }
     JoinStrictness strictness() const { return table_join.strictness; }
     void setStrictness(JoinStrictness join_strictness) { table_join.strictness = join_strictness; }
     bool sameStrictnessAndKind(JoinStrictness, JoinKind) const;
     const SizeLimits & sizeLimits() const { return size_limits; }
     VolumePtr getTemporaryVolume() { return tmp_volume; }
+
+    ActionsDAGPtr createJoinedBlockActions(ContextPtr context) const;
 
     bool isEnabledAlgorithm(JoinAlgorithm val) const
     {
@@ -234,8 +251,17 @@ public:
     bool allowParallelHashJoin() const;
 
     bool joinUseNulls() const { return join_use_nulls; }
-    bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
-    bool forceNullableLeft() const { return join_use_nulls && isRightOrFull(table_join.kind); }
+
+    bool forceNullableRight() const
+    {
+        return join_use_nulls && isLeftOrFull(kind());
+    }
+
+    bool forceNullableLeft() const
+    {
+        return join_use_nulls && isRightOrFull(kind());
+    }
+
     size_t defaultMaxBytes() const { return default_max_bytes; }
     size_t maxJoinedBlockRows() const { return max_joined_block_rows; }
     size_t maxRowsInRightBlock() const { return partial_merge_join_rows_in_right_blocks; }
@@ -323,10 +349,13 @@ public:
 
     /// StorageJoin overrides key names (cause of different names qualification)
     void setRightKeys(const Names & keys) { getOnlyClause().key_names_right = keys; }
+    void setLeftKeys(const Names & keys) { getOnlyClause().key_names_left = keys; }
 
     Block getRequiredRightKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;
 
     String renamedRightColumnName(const String & name) const;
+    String renamedRightColumnNameWithAlias(const String & name) const;
+    String restoreRightColumnNameForAlias(const String & alias) const;
 
     void resetKeys();
     void resetToCross();
@@ -339,14 +368,22 @@ public:
 
     void setStorageJoin(std::shared_ptr<const IKeyValueEntity> storage);
     void setStorageJoin(std::shared_ptr<StorageJoin> storage);
+    /// proton : starts
+    void setCrossJoinStorage(std::shared_ptr<IStorage> storage);
+    std::shared_ptr<IStorage> getCrossJoinStorage() { return right_cross_join_storage; }
+    /// proton: ends.
 
     std::shared_ptr<StorageJoin> getStorageJoin() { return right_storage_join; }
 
-    bool isSpecialStorage() const { return !right_storage_name.empty() || right_storage_join || right_kv_storage; }
+    bool isSpecialStorage() const { return !right_storage_name.empty() || right_storage_join || right_kv_storage || right_cross_join_storage; }
 
     std::shared_ptr<const IKeyValueEntity> getStorageKeyValue() { return right_kv_storage; }
 
+    NamesAndTypesList correctedColumnsAddedByJoin() const;
+
     /// proton : starts
+    void setEmitChangeLog(bool emit_changelog_) { emit_changelog = emit_changelog_; }
+    bool emitChangeLog() const noexcept { return emit_changelog; }
     void setDataBlockSize(size_t data_block_size_) noexcept { data_block_size = data_block_size_; }
     size_t dataBlockSize() const noexcept { return data_block_size; }
     void addAlignmentKeys(const ASTPtr & left_table_ast, const ASTPtr & right_table_ast);
@@ -367,6 +404,7 @@ public:
     const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const noexcept { return range_asof_join_ctx; }
     void validateRangeAsof(Int64 max_range) const;
     bool isRangeJoin() const noexcept { return range_asof_join_ctx.type != Streaming::RangeType::None; }
+    bool isLatestJoin() const noexcept { return table_join.strictness == JoinStrictness::Any && table_join.is_latest_alias;}
 
     /// For bidirectional hash join
     Block getRequiredLeftKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;

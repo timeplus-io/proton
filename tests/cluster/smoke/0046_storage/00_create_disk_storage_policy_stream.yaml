@@ -1,0 +1,156 @@
+description: |
+  Test create storage policies and disks in the storage tier concept
+  Main Steps:
+  1.Create a Disk
+  2.Create a Storage Policy
+  3.Verify Disk exist in system table 'system.disks'
+  4.Verify Storage Policy exist in system table 'system.storage_policies'
+  5.Create a Stream to apply Storage Policy
+  6.Ingest data into Stream
+  7.Verify the data moves according to the TTL policy in system table 'system.parts'
+
+steps:
+  - type: minio
+    name: delete
+    bucket: test
+
+  - type: minio
+    name: create
+    bucket: test
+
+  - type: query
+    sql: DROP STREAM IF EXISTS hcs_00;
+
+  - type: query
+    sql: DROP STORAGE POLICY IF EXISTS hcs_minio_00;
+
+  - type: query
+    sql: DROP DISK IF EXISTS minio_00;
+
+  # Create Disk & Storage Policy
+  - type: query
+    sql: |
+      CREATE DISK minio_00 disk(
+        type = 's3',
+        endpoint = 'http://minio:9000/test/example00/',
+        access_key_id = 'minioroot',
+        secret_access_key = 'minioroot'
+      );
+
+  - type: query
+    sql: |
+      CREATE STORAGE POLICY hcs_minio_00 as $$
+      volumes:
+          hot:
+              disk: default
+          cold:
+              disk: minio_00
+      moving_factor: 0.1
+      $$;
+
+  - type: stream
+    name: storage-0-1
+    query: select name, path, type, is_remote from system.disks where name='minio_00';
+    schema:
+      - name: name
+        type: string
+      - name: path
+        type: string
+      - name: type
+        type: string
+      - name: is_remote
+        type: uint8
+
+  - type: stream
+    name: storage-0-2
+    query: select * from system.storage_policies where policy_name = 'hcs_minio_00';
+    schema:
+      - name: policy_name
+        type: string
+      - name: volume_name
+        type: string
+      - name: volume_priority
+        type: uint64
+      - name: disks
+        type: array(string)
+      - name: volume_type
+        type: string
+      - name: max_data_part_size
+        type: uint64
+      - name: move_factor
+        type: float32
+      - name: prefer_not_to_merge
+        type: uint8
+
+  - type: check
+    target_name: storage-0-1
+    expected_result:
+      - ['minio_00', '/var/lib/proton/disks/minio_00/', 'ObjectStorage', 1]
+
+  - type: check
+    target_name: storage-0-2
+    expected_result:
+      - ['hcs_minio_00', 'hot', 1, ['default'], 'JBOD', 0, 0.1, 0]
+      - ['hcs_minio_00', 'cold', 2, ['minio_00'], 'JBOD', 0, 0.1, 0]
+
+  # Create Stream
+  - type: query
+    sql: |
+      CREATE STREAM hcs_00
+      (
+        i32 int32,
+        s string
+      )
+      TTL to_datetime(_tp_time) + interval 5 second TO VOLUME 'cold'
+      SETTINGS storage_policy = 'hcs_minio_00', index_granularity = 8192;
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into hcs_00 (i32, s) values (1, 'hcs1');
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: storage-0-3
+    query: SELECT partition, name, disk_name FROM system.parts WHERE table = 'hcs_00';
+    schema:
+      - name: partition
+        type: string
+      - name: name
+        type: string
+      - name: disk_name
+        type: string
+
+  - type: check
+    target_name: storage-0-3
+    expected_result:
+      - [any_value, any_value, 'default']
+
+  - type: wait
+    time: 4
+
+  - type: query
+    sql: insert into hcs_00 (i32, s) values (2, 'hcs2');
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: storage-0-4
+    query: SELECT partition, name, disk_name FROM system.parts WHERE table = 'hcs_00';
+    schema:
+      - name: partition
+        type: string
+      - name: name
+        type: string
+      - name: disk_name
+        type: string
+
+  - type: check
+    target_name: storage-0-4
+    expected_result:
+      - [any_value, any_value, 'minio_00']
+      - [any_value, any_value, 'default']

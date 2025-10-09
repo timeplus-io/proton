@@ -344,7 +344,7 @@ ASTPtr parseQueryAndMovePosition(
     if (res)
         return res;
 
-    throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
+    throw Exception::createDeprecated(error_message, ErrorCodes::SYNTAX_ERROR);
 }
 
 

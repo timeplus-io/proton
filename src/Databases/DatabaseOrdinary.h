@@ -2,6 +2,11 @@
 
 #include <Databases/DatabaseOnDisk.h>
 #include <Common/ThreadPool.h>
+/// proton: starts
+#include <Cluster/Protocol/AlertDescriptor.h>
+
+#include <unordered_map>
+/// proton: ends
 
 
 namespace DB
@@ -27,14 +32,16 @@ public:
 
     void loadTablesMetadata(ContextPtr context, ParsedTablesMetadata & metadata, bool is_startup) override;
 
-    void loadTableFromMetadata(ContextMutablePtr local_context, const String & file_path, const QualifiedTableName & name, const ASTPtr & ast, bool force_restore) override;
+    void loadTableFromMetadata(ContextMutablePtr local_context, const QualifiedTableName & name, const ParsedTableMetadata & parsed_meta_data, bool force_restore) override;
 
     void startupTables(ThreadPool & thread_pool, bool force_restore, bool force_attach) override;
 
     void alterTable(
         ContextPtr context,
         const StorageID & table_id,
-        const StorageInMemoryMetadata & metadata) override;
+        const StorageInMemoryMetadata & metadata,
+        String alter_command,
+        std::vector<String> alter_command_asts) override;
 
 protected:
     virtual void commitAlterTable(
@@ -43,6 +50,16 @@ protected:
         const String & table_metadata_path,
         const String & statement,
         ContextPtr query_context);
+
+private:
+    /// proton : starts
+    std::unordered_map<std::string, cluster::protocol::AlertDescriptorPtr> alert_descriptors;
+
+    void loadTablesMetadataFromMetaStore(const ContextPtr & local_context, ParsedTablesMetadata & metadata);
+
+    void loadAlertsMetadata(ContextPtr local_context, ParsedTablesMetadata & metadata);
+    void loadAlert(const QualifiedTableName & name, ContextMutablePtr local_context);
+    /// proton : ends
 };
 
 }

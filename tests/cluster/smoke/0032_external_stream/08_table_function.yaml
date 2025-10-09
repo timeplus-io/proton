@@ -1,0 +1,96 @@
+description: |
+ Test table function
+ Main steps:
+  1. Query external stream with stream function
+  2. Query external stream with table function
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  # create topic
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  # create external stream
+  - type: query
+    sql: drop stream if exists test32_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test32_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow'
+  - type: wait
+    time: 2
+
+  # query and insert
+  - type: query
+    sql: insert into test32_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: external-stream-8-1
+    query: select id, value from test32_external
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test32_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: external-stream-8-2
+    query: select id, value from table(test32_external)
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: check
+    target_name: external-stream-8-1
+    expected_result:
+      - [2, 'bbbb']
+
+  - type: check
+    target_name: external-stream-8-2
+    expected_result:
+      - [1, 'aaaa']
+      - [2, 'bbbb']

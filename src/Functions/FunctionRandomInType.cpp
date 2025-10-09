@@ -61,7 +61,7 @@ DataGenerator createDataGenerator()
             || TYPE_INDEX == TypeIndex::UInt32 || TYPE_INDEX == TypeIndex::UInt64 || TYPE_INDEX == TypeIndex::UInt128
             || TYPE_INDEX == TypeIndex::UInt256 || TYPE_INDEX == TypeIndex::Float32 || TYPE_INDEX == TypeIndex::Float64
             || TYPE_INDEX == TypeIndex::Date || TYPE_INDEX == TypeIndex::Date32 || TYPE_INDEX == TypeIndex::DateTime
-            || TYPE_INDEX == TypeIndex::UUID || TYPE_INDEX == TypeIndex::IPv4 || TYPE_INDEX == TypeIndex::IPv6)
+            || TYPE_INDEX == TypeIndex::UUID)
         {
             auto & data = assert_cast<DB::ColumnVector<TYPE> &>(*res).getData();
             data.resize(rows_num);
@@ -87,6 +87,13 @@ DataGenerator createDataGenerator()
             size_t length = std::min(sizeof(UInt64), assert_cast<ColumnFixedString &>(*res).getN());
             for (size_t idx = 0; idx < rows_num; idx++)
                 res->insertData(reinterpret_cast<const char *>(&unique_ids[idx]), length);
+        }
+        else if constexpr (TYPE_INDEX == TypeIndex::IPv4 || TYPE_INDEX == TypeIndex::IPv6)
+        {
+            auto & data = assert_cast<DB::ColumnVector<TYPE> &>(*res).getData();
+            data.resize(rows_num);
+            for (size_t idx = 0; idx < rows_num; idx++)
+                data[idx] = static_cast<TYPE::UnderlyingType>(unique_ids[idx]);
         }
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support type '{}'", TypeName<TYPE>);

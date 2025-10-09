@@ -1,0 +1,68 @@
+tags:
+  - changelog(table)
+  - global aggregation
+  - without group by
+description: changelog(table) global Aggregation without group by
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_append_stream_2 (id int, name string, val
+      float, ts datetime);
+  - type: wait
+    time: 1
+
+  - name: "1445"
+    type: stream
+    query:
+      select count(), min(val), max(val), sum(val), avg(val) from changelog(test14_append_stream_2,
+      id, name) emit periodic 1s;
+    schema:
+      - name: count()
+        type: uint64
+      - name: min(val)
+        type: float32
+      - name: max(val)
+        type: float32
+      - name: sum(val)
+        type: float64
+      - name: avg(val)
+        type: float64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'a', 11.1
+      ,'2020-02-02 20:00:00') (2, 'a', 22.2 ,'2020-02-02 20:00:01');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'a', 33.3
+      ,'2020-02-02 20:00:02') (2, 'a', 44.4 ,'2020-02-02 20:00:03');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 22.2
+      ,'2020-02-02 20:00:04') (2, 'b', 44.4 ,'2020-02-02 20:00:05');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 33.3
+      ,'2020-02-02 20:00:05');
+
+  - type: check
+    target_name: "1445"
+    expected_result:
+      - [2, 11.1, 22.2, 33.3, 16.65]
+      - [2, 33.3, 44.4, 77.7, 38.85]
+      - [4, 22.2, 44.4, 144.3, 36.075]
+      - [4, 33.3, 44.4, 155.4, 38.85]

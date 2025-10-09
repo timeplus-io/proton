@@ -1,0 +1,68 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getSem(x int, y int) RETURNS array(float) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      from scipy.stats import sem
+
+      class getSem:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.sem = 0
+
+          def serialize(self):
+              data = {}
+              data['sem'] = self.sem
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.sem = data['sem']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              X = np.stack((xs, ys), axis=1)
+              self.sem = sem(X).tolist()
+
+          def finalize(self):
+              return self.sem
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-37-1
+    type: stream
+    query: select getSem(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (0,1)(2,3)(4,5)(6,7);
+
+  - type: check
+    target_name: python-udf4-37-1
+    expected_result:
+      - [[1.29099445, 1.29099445]]

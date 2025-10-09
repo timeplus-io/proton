@@ -1,0 +1,205 @@
+tags:
+  - versioned_kv_join_versioned_kv
+description: version_kv to versioned_kv inner join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node: 
+      - p1
+    sql: drop stream if exists test15_vk_left_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: drop stream if exists test15_vk_right_stream
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: create stream test15_vk_left_stream (i int64, s string) primary key s settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - type: query
+    node: 
+      - p1
+    sql: create stream test15_vk_right_stream (ii int64, ss string) primary key ss settings mode='versioned_kv'
+  - type: wait
+    time: 2
+
+  - name: "1504"
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select i, ii, s, _tp_delta from test15_vk_left_stream join test15_vk_right_stream on s=ss emit changelog
+    schema:
+      - name: i
+        type: int64
+      - name: ii
+        type: int64
+      - name: s
+        type: string
+      - name: _tp_delta
+        type: int8
+  
+  - name: "1504-2"
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select i, ii, s from test15_vk_left_stream join test15_vk_right_stream on s=ss
+    schema:
+      - name: i
+        type: int64
+      - name: ii
+        type: int64
+      - name: s
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii, ss) values (1, 's1')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    node: 
+      - p1
+    sql: insert into test15_vk_left_stream(i, s) values (0, 's1')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1504"
+    expected_result:
+      - - 0
+        - 1
+        - s1
+        - 1
+
+  - type: check
+    target_name: "1504-2"
+    expected_result:
+      - - 0
+        - 1
+        - s1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test15_vk_left_stream(i, s) values (2, 's1')
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: "1504"
+    expected_result:
+      - - 0
+        - 1
+        - s1
+        - -1
+      - - 2
+        - 1
+        - s1
+        - 1
+
+  - type: check
+    target_name: "1504-2"
+    expected_result:
+      - - 2
+        - 1
+        - s1
+
+  - name: input_1500
+    type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test15_vk_right_stream(ii, ss) values (3, 's1')
+    schema:
+      - name: ii
+        type: int64
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: "1504"
+    expected_result:
+      - - 2
+        - 1
+        - s1
+        - -1
+      - - 2
+        - 3
+        - s1
+        - 1
+
+  - type: check
+    target_name: "1504-2"
+    expected_result:
+      - - 2
+        - 3
+        - s1
+
+  - type: wait
+    time: 2
+
+  - name: 1504-1
+    type: stream
+    node: 
+      - p1
+    query: select i, s from table(test15_vk_left_stream) union select ii, ss from table(test15_vk_right_stream)
+    schema:
+      - name: i
+        type: int64
+      - name: s
+        type: string
+
+  - type: check
+    target_name: 1504-1
+    mode: random
+    expected_result:
+      - - 2
+        - s1
+      - - 3
+        - s1

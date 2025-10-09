@@ -6,9 +6,9 @@
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
-#include <Storages/Streaming/StorageMaterializedView.h>
-#include <Storages/Streaming/StorageRandom.h>
-#include <Storages/Streaming/StorageStream.h>
+#include <Storages/MatView/StorageMaterializedView.h>
+#include <Storages/Random/StorageRandom.h>
+#include <Storages/Stream/StorageStream.h>
 
 namespace DB
 {
@@ -20,7 +20,6 @@ void collectCreateTelemetry(const StoragePtr & storage, ContextPtr context)
     {
         collector.add<CreateStreamTelemetryElementBuilder>([&](auto & builder) {
             builder.withShards(stream->getShards())
-                .withRepliactionFactor(stream->getReplicationFactor())
                 .withStorageType(stream->getStorageType())
                 .withMode(stream->getEngineMode());
         });
@@ -65,7 +64,8 @@ void collectCreateTelemetry(const StoragePtr & storage, ContextPtr context)
     else if (auto materialized_view = storage->as<StorageMaterializedView>())
     {
         collector.add<CreateMaterializedViewTelemetryElementBuilder>([&](auto & builder) {
-            builder.isExternalTarget(!materialized_view->getExternalTargetTableID().empty());
+            builder.isExternalTarget(materialized_view->getExternalTargetTableID().has_value())
+                .withShards(materialized_view->getShards());
 
             if (auto target = materialized_view->tryGetTargetTable())
             {

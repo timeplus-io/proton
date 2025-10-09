@@ -17,19 +17,26 @@ TEST(HierarchyDictionariesUtils, getHierarchy)
 
         auto is_key_valid_func = [&](auto key) { return child_to_parent.find(key) != nullptr; };
 
+        UInt64 hierarchy_null_value_key = 0;
         auto get_parent_key_func = [&](auto key)
         {
+            std::optional<UInt64> result;
             auto it = child_to_parent.find(key);
-            std::optional<UInt64> value = (it != nullptr ? std::make_optional(it->getMapped()) : std::nullopt);
-            return value;
+            if (it == nullptr)
+                return result;
+
+            UInt64 parent_key = it->getMapped();
+            if (parent_key == hierarchy_null_value_key)
+                return result;
+
+            result = parent_key;
+            return result;
         };
 
-        UInt64 hierarchy_null_value_key = 0;
         PaddedPODArray<UInt64> keys = {1, 2, 3, 4, 5};
 
         auto result = DB::detail::getHierarchy(
             keys,
-            hierarchy_null_value_key,
             is_key_valid_func,
             get_parent_key_func);
 
@@ -49,19 +56,26 @@ TEST(HierarchyDictionariesUtils, getHierarchy)
 
         auto is_key_valid_func = [&](auto key) { return child_to_parent.find(key) != nullptr; };
 
+        UInt64 hierarchy_null_value_key = 0;
         auto get_parent_key_func = [&](auto key)
         {
+            std::optional<UInt64> result;
             auto it = child_to_parent.find(key);
-            std::optional<UInt64> value = (it != nullptr ? std::make_optional(it->getMapped()) : std::nullopt);
-            return value;
+            if (it == nullptr)
+                return result;
+
+            UInt64 parent_key = it->getMapped();
+            if (parent_key == hierarchy_null_value_key)
+                return result;
+
+            result = parent_key;
+            return result;
         };
 
-        UInt64 hierarchy_null_value_key = 0;
         PaddedPODArray<UInt64> keys = {1, 2, 3};
 
         auto result = DB::detail::getHierarchy(
             keys,
-            hierarchy_null_value_key,
             is_key_valid_func,
             get_parent_key_func);
 
@@ -87,21 +101,28 @@ TEST(HierarchyDictionariesUtils, getIsInHierarchy)
 
         auto is_key_valid_func = [&](auto key) { return child_to_parent.find(key) != nullptr; };
 
+        UInt64 hierarchy_null_value_key = 0;
         auto get_parent_key_func = [&](auto key)
         {
+            std::optional<UInt64> result;
             auto it = child_to_parent.find(key);
-            std::optional<UInt64> value = (it != nullptr ? std::make_optional(it->getMapped()) : std::nullopt);
-            return value;
+            if (it == nullptr)
+                return result;
+
+            UInt64 parent_key = it->getMapped();
+            if (parent_key == hierarchy_null_value_key)
+                return result;
+
+            result = parent_key;
+            return result;
         };
 
-        UInt64 hierarchy_null_value_key = 0;
         PaddedPODArray<UInt64> keys = {1, 2, 3, 4, 5};
         PaddedPODArray<UInt64> keys_in = {1, 1, 1, 2, 5};
 
         PaddedPODArray<UInt8> actual = DB::detail::getIsInHierarchy(
             keys,
             keys_in,
-            hierarchy_null_value_key,
             is_key_valid_func,
             get_parent_key_func);
 
@@ -119,21 +140,28 @@ TEST(HierarchyDictionariesUtils, getIsInHierarchy)
             return child_to_parent.find(key) != nullptr;
         };
 
+        UInt64 hierarchy_null_value_key = 0;
         auto get_parent_key_func = [&](auto key)
         {
+            std::optional<UInt64> result;
             auto it = child_to_parent.find(key);
-            std::optional<UInt64> value = (it != nullptr ? std::make_optional(it->getMapped()) : std::nullopt);
-            return value;
+            if (it == nullptr)
+                return result;
+
+            UInt64 parent_key = it->getMapped();
+            if (parent_key == hierarchy_null_value_key)
+                return result;
+
+            result = parent_key;
+            return result;
         };
 
-        UInt64 hierarchy_null_value_key = 0;
         PaddedPODArray<UInt64> keys = {1, 2, 3};
         PaddedPODArray<UInt64> keys_in = {1, 2, 3};
 
         PaddedPODArray<UInt8> actual = DB::detail::getIsInHierarchy(
             keys,
             keys_in,
-            hierarchy_null_value_key,
             is_key_valid_func,
             get_parent_key_func);
 
@@ -145,7 +173,7 @@ TEST(HierarchyDictionariesUtils, getIsInHierarchy)
 TEST(HierarchyDictionariesUtils, getDescendants)
 {
     {
-        HashMap<UInt64, PaddedPODArray<UInt64>> parent_to_child;
+        DictionaryHierarchicalParentToChildIndex::ParentToChildIndex parent_to_child;
         parent_to_child[0].emplace_back(1);
         parent_to_child[1].emplace_back(2);
         parent_to_child[1].emplace_back(3);
@@ -193,7 +221,7 @@ TEST(HierarchyDictionariesUtils, getDescendants)
         }
     }
     {
-        HashMap<UInt64, PaddedPODArray<UInt64>> parent_to_child;
+        DictionaryHierarchicalParentToChildIndex::ParentToChildIndex parent_to_child;
         parent_to_child[1].emplace_back(2);
         parent_to_child[2].emplace_back(1);
 

@@ -1,0 +1,5 @@
+name: changelog_stream13
+description: Tests covering the changelog stream query combinator(distinct) smoke
+  cases.
+tags:
+- smoke

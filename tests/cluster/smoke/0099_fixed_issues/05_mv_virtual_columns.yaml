@@ -1,0 +1,103 @@
+tags:
+  - materialized view
+  - bug
+description: (#1934) materialized view support virtual columns like to a stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop view if exists test_mv_1934
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test_stream_1934
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_stream_1934
+        (
+          value int
+        )
+
+  - type: query
+    sql: create materialized view test_mv_1934 as select count() from test_stream_1934
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_stream_1934(value) values
+    schema:
+      - name: value
+        type: int32
+    inputs:
+      - [1]
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_stream_1934(value) values
+    schema:
+      - name: value
+        type: int32
+    inputs:
+      - [2]
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_stream_1934(value) values
+    schema:
+      - name: value
+        type: int32
+    inputs:
+      - [3]
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: 9900
+    query: select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_sn >= 3
+    schema:
+      - name: count()
+        type: uint64
+      - name: _tp_shard
+        type: int32
+      - name: _tp_sn
+        type: int64
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: 9901
+    query: select `count()`, _tp_shard, _tp_sn from test_mv_1934 where _tp_time >= now() - 1m
+    schema:
+      - name: count()
+        type: uint64
+      - name: _tp_shard
+        type: int32
+      - name: _tp_sn
+        type: int64
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: drop view if exists test_mv_1934
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: 9900
+    expected_result:
+      - [1, 0, 3]
+      - [2, 0, 4]
+      - [3, 0, 5]
+
+  - type: check
+    target_name: 9901
+    expected_result:
+      - [1, 0, 3]
+      - [2, 0, 4]
+      - [3, 0, 5]

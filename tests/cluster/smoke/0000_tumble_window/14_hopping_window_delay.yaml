@@ -1,0 +1,81 @@
+tags:
+  - hopping window
+  - delay
+description: stream hopping window count(*) w/delay, tumble window aggregate by max and group by id, window_start, window_end
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select location, count(*), window_start, window_end from hop(test_smoke, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after window close with delay interval 2 second
+    schema:
+      - name: location
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: stream
+    name: 101-1
+    query: select location, count(*), window_start, window_end from hop(test_smoke, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark with delay interval 2 second
+    schema:
+      - name: location
+        type: string
+      - name: count()
+        type: uint64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 51, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:00']
+      - ['dev1', 'ca', 99, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:02']
+      - ['dev1', 'ca', 87, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:01']
+      - ['dev2', 'ca', 66, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:03']
+      - ['dev2', 'ca', 33, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:07']
+      - ['dev2', 'ca', 46, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:06']
+      - ['dev2', 'ca', 98, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:05']
+      - ['dev2', 'ca', 101, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:08']
+      - ['dev2', 'ca', 101, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:07']
+      - ['dev2', 'ca', 56, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:10']
+      - ['dev1', 'ca', 22, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:11']
+      - ['dev1', 'ca', 51, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:00:14']
+      - ['dev2', 'ca', 62, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:11']
+      - ['dev2', 'ca', 47, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:00:15']
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['ca', '2', '2020-02-02 19:59:57', '2020-02-02 20:00:02']
+      - ['ca', '4', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+      - ['ca', '5', '2020-02-02 20:00:03', '2020-02-02 20:00:08']
+      - ['ca', '5', '2020-02-02 20:00:06', '2020-02-02 20:00:11']
+
+  - type: check
+    target_name: 101-1
+    expected_result:
+      - ['ca', '2', '2020-02-02 19:59:57', '2020-02-02 20:00:02']
+      - ['ca', '4', '2020-02-02 20:00:00', '2020-02-02 20:00:05']
+      - ['ca', '5', '2020-02-02 20:00:03', '2020-02-02 20:00:08']
+      - ['ca', '5', '2020-02-02 20:00:06', '2020-02-02 20:00:11']

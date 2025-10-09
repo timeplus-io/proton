@@ -26,7 +26,7 @@ ChangelogTransform::ChangelogTransform(
     : IProcessor({input_header}, {output_header}, ProcessorID::ChangelogTransformID)
 /// , source_chunks(metrics)
 /// , last_log_ts(MonotonicMilliseconds::now())
-///, logger(&Poco::Logger::get("ChangelogTransform"))
+///, logger(getLogger("ChangelogTransform"))
 {
     /// assert(!key_column_names.empty());
     delta_column_position = input_header.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG);
@@ -133,14 +133,9 @@ void ChangelogTransform::work()
     const auto & delta_flags = assert_cast<const ColumnInt8 &>(chunk_columns[delta_column_position]->assumeMutableRef()).getData();
 
     /// Fast path: process all same `_tp_delta` chunk
-    if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta > 0; }))
+    if (auto first_delta = delta_flags[0];
+        std::all_of(delta_flags.begin() + 1, delta_flags.end(), [first_delta](auto delta) { return delta == first_delta; }))
     {
-        transformChunk(input_data.chunk);
-        return;
-    }
-    else if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta < 0; }))
-    {
-        input_data.chunk.setConsecutiveDataFlag();
         transformChunk(input_data.chunk);
         return;
     }
@@ -177,10 +172,6 @@ void ChangelogTransform::work()
         chunk_output.addColumn(col->cut(start_pos, delta_flags.size() - start_pos));
 
     chunk_output.setChunkContext(input_data.chunk.getChunkContext());
-    /// FIXME: for now, retracted data always need next consecutive data
-    if (delta_flags[start_pos] < 0)
-        chunk_output.setConsecutiveDataFlag();
-
     transformChunk(chunk_output);
 
     input_data.chunk.clear();

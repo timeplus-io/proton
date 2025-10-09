@@ -1,6 +1,11 @@
 #include <Processors/Streaming/ResizeProcessor.h>
 
+#include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
+
+#include <fmt/format.h>
+
+#include <ranges>
 
 namespace DB
 {
@@ -13,9 +18,10 @@ namespace Streaming
 {
 ShrinkResizeProcessor::ShrinkResizeProcessor(const Block & header, size_t num_inputs)
     : IProcessor(InputPorts(num_inputs, header), OutputPorts(1, header), ProcessorID::StreamingShrinkResizeProcessorID)
-    , log(&Poco::Logger::get("ShrinkResizeProcessor"))
+    , logger(getLogger("ShrinkResizeProcessor"))
 {
     assert(num_inputs > 0);
+    ckpt_aligning_stopwatch.reset();
 }
 
 IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_inputs, const PortNumbers & /*updated_outputs*/)
@@ -24,6 +30,7 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
     {
         initialized = true;
 
+        input_ports.reserve(inputs.size());
         for (auto & input : inputs)
         {
             assert(input.getOutputPort().getProcessor().isStreaming());
@@ -84,18 +91,30 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
             input_port.port->setNeeded();
     }
 
+    checkAndLogSlowCheckpointAligning();
+
     if (!inputs_with_data.empty())
     {
         auto & input_with_data = input_ports[inputs_with_data.front()];
         inputs_with_data.pop();
 
-        auto data = input_with_data.port->pullData(true);
+        auto data = input_with_data.port->pullData(/*set_not_needed=*/true);
         if (updateAndAlignWatermark(input_with_data, data.chunk) || updateAndRequestCheckpoint(input_with_data, data.chunk))
         {
             /// Do nothing
         }
         else
+        {
+            /// Historical start/end mark from multiple inputs may conflict and will no longer take effect.
+            data.chunk.clearHistoricalDataStartAndEnd();
             input_with_data.status = InputStatus::NeedData;
+        }
+
+        if (input_with_data.port->isFinished())
+        {
+            input_with_data.status = InputStatus::Finished;
+            ++num_finished_inputs;
+        }
 
         output.pushData(std::move(data));
         return Status::PortFull;
@@ -127,7 +146,7 @@ bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_
     else
     {
         if (unlikely(new_watermark < aligned_watermark))
-            LOG_INFO(log, "Found outdated watermark. aligned watermark={}, but got watermark = {}", aligned_watermark, new_watermark);
+            LOG_INFO(logger, "Found outdated watermark. aligned watermark={}, but got watermark = {}", aligned_watermark, new_watermark);
     }
 
     input_with_data.status = InputStatus::NeedData;
@@ -148,7 +167,9 @@ bool ShrinkResizeProcessor::updateAndRequestCheckpoint(InputPortWithStatus & inp
     if (!input_with_data.requested_checkpoint)
     {
         input_with_data.requested_checkpoint = true;
-        ++num_requested_checkpoint;
+        /// Start the stopwatch when the first checkpoint request came in
+        if (num_requested_checkpoint++ == 0)
+            ckpt_aligning_stopwatch.restart();
     }
 
     /// When all inputs request checkpoint, propagate the request and reset all checkpoint request
@@ -159,6 +180,8 @@ bool ShrinkResizeProcessor::updateAndRequestCheckpoint(InputPortWithStatus & inp
             input.status = InputStatus::NeedData;
         });
         num_requested_checkpoint = 0;
+        ckpt_aligning_stopwatch.reset();
+        last_ckpt_aligning_log_ts = 0;
     }
     else
     {
@@ -166,6 +189,37 @@ bool ShrinkResizeProcessor::updateAndRequestCheckpoint(InputPortWithStatus & inp
         chunk.clearRequestCheckpoint();
     }
     return true;
+}
+
+void ShrinkResizeProcessor::checkAndLogSlowCheckpointAligning()
+{
+    auto elapsed_ms = ckpt_aligning_stopwatch.elapsedMilliseconds();
+    if (elapsed_ms < 1'000)
+        return;
+
+    if (auto now = MonotonicMilliseconds::now(); now - last_ckpt_aligning_log_ts >= 5'000)
+    {
+        auto status = fmt::format(
+            "{}",
+            fmt::join(
+                input_ports | std::views::transform([](const auto & input) { return input.requested_checkpoint ? '1' : '0'; }), ", "));
+        LOG_WARNING(
+            logger,
+            "Slow checkpoint alignment detected({}/{}): [{}] , elapsed {} ms",
+            static_cast<uint8_t>(num_requested_checkpoint),
+            input_ports.size(),
+            status,
+            elapsed_ms);
+        last_ckpt_aligning_log_ts = now;
+
+        for (auto & input : input_ports)
+        {
+            if (input.requested_checkpoint)
+                input.port->setNotNeeded();
+            else
+                input.port->setNeeded();
+        }
+    }
 }
 
 ExpandResizeProcessor::ExpandResizeProcessor(const Block & header, size_t num_outputs)
@@ -328,9 +382,9 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
 
 StrictResizeProcessor::StrictResizeProcessor(const Block & header, size_t num_inputs_and_outputs)
     : IProcessor(
-        InputPorts(num_inputs_and_outputs, header),
-        OutputPorts(num_inputs_and_outputs, header),
-        ProcessorID::StreamingStrictResizeProcessorID)
+          InputPorts(num_inputs_and_outputs, header),
+          OutputPorts(num_inputs_and_outputs, header),
+          ProcessorID::StreamingStrictResizeProcessorID)
 {
     assert(num_inputs_and_outputs > 0);
 }
@@ -417,12 +471,12 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
         inputs_with_data.pop();
 
         if (input_with_data.waiting_output == -1)
-            throw Exception("No associated output for input with data.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "No associated output for input with data.");
 
         auto & waiting_output = output_ports[input_with_data.waiting_output];
 
         if (waiting_output.status == OutputStatus::NotActive)
-            throw Exception("Invalid status NotActive for associated output.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid status NotActive for associated output.");
 
         if (waiting_output.status != OutputStatus::Finished)
         {

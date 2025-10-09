@@ -118,7 +118,7 @@ public:
 
         if (arguments.size() >= 3)
         {
-            if (!isUnsignedInteger(arguments[2]))
+            if (!isUInt(arguments[2]))
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                     "Illegal type {} of argument of function {}",
@@ -133,7 +133,17 @@ public:
         /// proton: ends.
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override
+    {
+        /// proton: starts
+        if constexpr (result_is_bool)
+            return DataTypeFactory::instance().get("bool");
+        else
+            return std::make_shared<DataTypeNumber<ResultType>>();
+        /// proton: ends
+    }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         /// proton: starts.
         // using ResultType = typename Impl::ResultType;

@@ -7,7 +7,7 @@ create stream data_01292 (
 
 insert into data_01292 values (1);
 
-optimize table data_01292 final;
+optimize stream data_01292 final;
 
 select * from data_01292 where key > 0;
 

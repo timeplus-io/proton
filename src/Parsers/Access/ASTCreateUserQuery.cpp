@@ -23,7 +23,7 @@ namespace
     }
 
 
-    void formatAuthenticationData(const AuthenticationData & auth_data, bool show_password, const IAST::FormatSettings & settings)
+    void formatAuthenticationData(const AuthenticationData & auth_data, const IAST::FormatSettings & settings)
     {
         auto auth_type = auth_data.getType();
         if (auth_type == AuthenticationType::NO_PASSWORD)
@@ -37,8 +37,7 @@ namespace
         String by_keyword = "BY";
         std::optional<String> by_value;
 
-        if (
-            show_password ||
+        if (settings.show_secrets ||
             auth_type == AuthenticationType::LDAP ||
             auth_type == AuthenticationType::KERBEROS
         )
@@ -79,7 +78,7 @@ namespace
 
                 case AuthenticationType::NO_PASSWORD: [[fallthrough]];
                 case AuthenticationType::MAX:
-                    throw Exception("AST: Unexpected authentication type " + toString(auth_type), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "AST: Unexpected authentication type {}", toString(auth_type));
             }
         }
 
@@ -259,7 +258,7 @@ void ASTCreateUserQuery::formatImpl(const FormatSettings & format, FormatState &
         formatRenameTo(*new_name, format);
 
     if (auth_data)
-        formatAuthenticationData(*auth_data, show_password, format);
+        formatAuthenticationData(*auth_data, format);
 
     if (hosts)
         formatHosts(nullptr, *hosts, format);
@@ -280,4 +279,18 @@ void ASTCreateUserQuery::formatImpl(const FormatSettings & format, FormatState &
     if (grantees)
         formatGrantees(*grantees, format);
 }
+
+bool ASTCreateUserQuery::hasSecretParts() const
+{
+    if (auth_data)
+    {
+        auto auth_type = auth_data->getType();
+        if ((auth_type == AuthenticationType::PLAINTEXT_PASSWORD)
+            || (auth_type == AuthenticationType::SHA256_PASSWORD)
+            || (auth_type == AuthenticationType::DOUBLE_SHA1_PASSWORD))
+            return true;
+    }
+    return childrenHaveSecretParts();
+}
+
 }

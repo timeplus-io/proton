@@ -1,8 +1,13 @@
 #pragma once
 
+#include <Interpreters/StorageID.h>
+#include <Storages/ExternalTable/ExternalTableSettings.h>
+#include <Storages/IStorage_fwd.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageInMemoryMetadata.h>
+
 #include <boost/core/noncopyable.hpp>
-#include "Storages/ExternalTable/IExternalTable.h"
-#include "Storages/ExternalTable/ExternalTableSettings.h"
+
 
 namespace DB
 {
@@ -13,9 +18,14 @@ class ExternalTableFactory final : private boost::noncopyable
 public:
     static ExternalTableFactory & instance();
 
-    using Creator = std::function<IExternalTablePtr(const String & /*name*/, ExternalTableSettingsPtr /*settings*/)>;
+    using Creator = std::function<StoragePtr(
+        const StorageID & table_id,
+        const StorageInMemoryMetadata & storage_metadata,
+        std::unique_ptr<ExternalTableSettings> settings_,
+        bool attach,
+        ContextPtr context_)>;
 
-    IExternalTablePtr getExternalTable(const String & name, ExternalTableSettingsPtr settings) const;
+    [[nodiscard]] StoragePtr getExternalTable(const StorageFactory::Arguments &) const;
     void registerExternalTable(const String & type, Creator creator);
 
 private:

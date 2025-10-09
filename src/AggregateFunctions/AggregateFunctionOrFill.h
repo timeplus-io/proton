@@ -30,16 +30,14 @@ private:
     AggregateFunctionPtr nested_function;
 
     size_t size_of_data;
-    DataTypePtr inner_type;
     bool inner_nullable;
 
 public:
     AggregateFunctionOrFill(AggregateFunctionPtr nested_function_, const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionHelper<AggregateFunctionOrFill>{arguments, params}
+        : IAggregateFunctionHelper<AggregateFunctionOrFill>{arguments, params, createResultType(nested_function_->getResultType())}
         , nested_function{nested_function_}
-        , size_of_data {nested_function->sizeOfData()}
-        , inner_type {nested_function->getReturnType()}
-        , inner_nullable {inner_type->isNullable()}
+        , size_of_data{nested_function->sizeOfData()}
+        , inner_nullable{nested_function->getResultType()->isNullable()}
     {
         // nothing
     }
@@ -119,7 +117,7 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const IColumn ** columns,
-        Arena * arena,
+        const std::vector<Arena *> & arenas,
         ssize_t if_argument_pos = -1,
         const IColumn * delta_col = nullptr) const override
     {
@@ -129,12 +127,12 @@ public:
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (flags[i] && places[i])
-                    add(places[i] + place_offset, columns, i, arena);
+                    add(places[i] + place_offset, columns, i, arenas.size() == 1 ? arenas[0] : arenas[i - row_begin]);
             }
         }
         else
         {
-            nested_function->addBatch(row_begin, row_end, places, place_offset, columns, arena, if_argument_pos, delta_col);
+            nested_function->addBatch(row_begin, row_end, places, place_offset, columns, arenas, if_argument_pos, delta_col);
             for (size_t i = row_begin; i < row_end; ++i)
                 if (places[i])
                     (places[i] + place_offset)[size_of_data] = 1;
@@ -228,9 +226,11 @@ public:
         AggregateDataPtr * places,
         size_t place_offset,
         const AggregateDataPtr * rhs,
+        ThreadPool & thread_pool,
+        std::atomic<bool> & is_cancelled,
         Arena * arena) const override
     {
-        nested_function->mergeBatch(row_begin, row_end, places, place_offset, rhs, arena);
+        nested_function->mergeBatch(row_begin, row_end, places, place_offset, rhs, thread_pool, is_cancelled, arena);
         for (size_t i = row_begin; i < row_end; ++i)
             (places[i] + place_offset)[size_of_data] |= rhs[i][size_of_data];
     }
@@ -249,22 +249,22 @@ public:
         readChar(place[size_of_data], buf);
     }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypePtr & inner_type_)
     {
         if constexpr (UseNull)
         {
             // -OrNull
 
-            if (inner_nullable)
-                return inner_type;
+            if (inner_type_->isNullable())
+                return inner_type_;
 
-            return std::make_shared<DataTypeNullable>(inner_type);
+            return std::make_shared<DataTypeNullable>(inner_type_);
         }
         else
         {
             // -OrDefault
 
-            return inner_type;
+            return inner_type_;
         }
     }
 

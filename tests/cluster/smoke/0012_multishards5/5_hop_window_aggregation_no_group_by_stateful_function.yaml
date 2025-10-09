@@ -1,0 +1,192 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_aggregation
+- window_aggregation
+- hop_window_aggregation
+- no_group_by
+- stateful_function
+description: hop window aggregation no group by, stateful function
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_5;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_5(i float, k1 int, k2 string, timestamp datetime64(3) default now64(3)) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create view test13_view1_5 as
+      select to_float(i + k1) as i,
+             k1,
+             k2,
+             timestamp
+      from test13_multishard_5;
+  
+  - type: wait
+    time: 1
+  
+  - name: '1345'
+    type: stream
+    query: |
+      select max(i) as mx,
+             min(i) as mn,
+             count(i) as cnt,
+             window_start as s
+      from hop(test13_view1_5, timestamp, 2s, 5s)
+      group by window_start,
+               window_end;
+    schema: 
+      - name: mx
+        type: float32
+      - name: mn
+        type: float32
+      - name: cnt
+        type: uint64
+      - name: s
+        type: datetime64(3)
+        
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(0, 0, 'a', '2021-11-02 20:00:01');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(0, 1, 'b', '2021-11-02 20:00:02');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(0, 2, 'a', '2021-11-02 20:00:03');
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(0, 3, 'b', '2021-11-02 20:00:04');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(0, 4, 'a', '2021-11-02 20:00:05');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 0, 'b', '2021-11-02 20:00:06');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 1, 'a', '2021-11-02 20:00:07');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 2, 'b', '2021-11-02 20:00:08');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 3, 'a', '2021-11-02 20:00:09');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 4, 'b', '2021-11-02 20:00:10');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 4, 'b', '2021-11-02 20:00:11');
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_5(i, k1, k2, timestamp)
+      values(5, 4, 'b', '2021-11-02 20:00:12');
+
+  - type: check
+    target_name: '1345'
+    expected_result:
+    - [1, 0, 2, '2021-11-02 19:59:58']
+    - [3, 0, 4, '2021-11-02 20:00:00']
+    - [5, 1, 5, '2021-11-02 20:00:02']
+    - [7, 3, 5, '2021-11-02 20:00:04']

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <TableFunctions/ITableFunction.h>
+#include <Core/Streaming/DataStreamSemantic.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
@@ -8,7 +8,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/StorageSnapshot.h>
-#include <Core/Streaming/DataStreamSemantic.h>
+#include <TableFunctions/ITableFunction.h>
 
 namespace DB
 {
@@ -32,7 +32,8 @@ protected:
     StoragePtr
     executeImpl(const ASTPtr & func_ast, ContextPtr context, const String & table_name, ColumnsDescription cached_columns) const override;
 
-    TableFunctionDescriptionMutablePtr createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const;
+    TableFunctionDescriptionMutablePtr
+    createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context, size_t exclude_last_n_args = 0) const;
     virtual NamesAndTypesList getAdditionalResultColumns(const ColumnsWithTypeAndName &) const { return {}; }
 
 private:

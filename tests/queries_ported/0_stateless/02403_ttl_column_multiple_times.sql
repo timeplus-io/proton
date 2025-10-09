@@ -17,11 +17,11 @@ SELECT * FROM ttl_table;
 
 SYSTEM START MERGES ttl_table;
 
-OPTIMIZE TABLE ttl_table FINAL;
+OPTIMIZE STREAM ttl_table FINAL;
 
 SELECT * FROM ttl_table;
 
-OPTIMIZE TABLE ttl_table FINAL;
+OPTIMIZE STREAM ttl_table FINAL;
 
 SELECT * FROM ttl_table;
 

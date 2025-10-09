@@ -7,14 +7,14 @@ namespace Streaming
 class UserDefinedEmitStrategyAggregatingTransformWithSubstream final : public AggregatingTransformWithSubstream
 {
 public:
-    UserDefinedEmitStrategyAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_);
+    UserDefinedEmitStrategyAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_, size_t id);
 
     ~UserDefinedEmitStrategyAggregatingTransformWithSubstream() override = default;
 
-    String getName() const override { return "UserDefinedEmitStrategyAggregatingTransformWithSubstream"; }
+    String getName() const override;
 
 private:
-    void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
+    void finalize(const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 };
 }
 }

@@ -1,0 +1,35 @@
+tags:
+- emit changelog
+- changelog aggr
+
+description: global aggregation query with two level hash table, covering aggregating
+  changelog and emit changelog
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: 3100
+  type: stream
+  query: with cte as (select i % 100 + 1 as key, count() from test_31_rstream group by key emit changelog settings group_by_two_level_threshold=50, max_block_size=100) select count() from cte limit 3
+  schema:
+    - name: count()
+      type: uint64
+
+- name: 3101
+  type: stream
+  query: with cte1 as (select i % 100 + 1 as key from test_31_rstream), cte2 as (select key, count() from changelog(cte1, key) group by key emit changelog settings group_by_two_level_threshold=50, max_block_size=100) select count() from cte2 limit 1
+  schema:
+    - name: count()
+      type: uint64
+
+- type: check
+  target_name: 3100
+  expected_result:
+  - [100]
+  - [100]
+  - [100]
+
+- type: check
+  target_name: 3101
+  expected_result:
+  - [100]

@@ -1,0 +1,47 @@
+tags:
+- func
+- process-text
+description: process text with function trim
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists trim_stream
+  
+- type: wait
+  time: 1
+  
+- type: query
+  sql: create stream trim_stream (id int, location string)
+  
+- type: wait
+  time: 1
+  
+- name: '800'
+  type: stream
+  query: select id, location, length(location) as length_before_trim, trim(location)
+    as trim_location, length(trim_location) as length_after_trim from trim_stream
+  schema:
+    - name: id
+      type: int32
+    - name: location
+      type: string
+    - name: length_before_trim
+      type: uint64
+    - name: trim_location
+      type: string
+    - name: length_after_trim
+      type: uint64
+
+- type: wait
+  time: 2
+  
+- type: query
+  sql: insert into trim_stream(id, location) values (1, ' abcd '), (2, ' efg ')
+
+- type: check
+  target_name: '800'
+  expected_result:
+  - ['1', ' abcd ', '6', abcd, '4']
+  - ['2', ' efg ', '5', efg, '3']

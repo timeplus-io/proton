@@ -1,0 +1,72 @@
+tags:
+- emit changelog
+- changelog aggr
+- query_state
+description: subscribe to two level global aggregation query, then recover from checkpointed.
+cluster:
+- p1k1
+# - p3k1 # skip due to subscribe unsupport in cluster scenario
+steps:
+- type: query
+  sql: drop stream if exists test_31_multishards_stream
+
+- type: query
+  sql: create stream test_31_multishards_stream(i int, v string) settings shards=3
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test_31_multishards_stream(i, v) select i % 100 + 1, v from test_31_rstream settings max_block_size=100, max_events=10000
+- type: wait
+  time: 1
+
+- name: 3101
+  type: stream
+  query_id: '3101'
+  query: subscribe to with cte as (select i as key, count() from changelog(test_31_multishards_stream, i) where _tp_time > earliest_ts() group by key emit changelog settings group_by_two_level_threshold=50) select count() from cte settings checkpoint_interval=2
+  schema:
+    - name: count()
+      type: uint64
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '3101' sync
+- type: wait
+  time: 6
+
+- name: 3101-1
+  type: stream
+  query: recover from '3101'
+  schema:
+    - name: count()
+      type: uint64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test_31_multishards_stream(i, v) values
+  schema:
+    - name: i
+      type: int32
+    - name: v
+      type: string
+  inputs:
+    - [101, 'test']
+- type: wait
+  time: 5
+
+- type: query
+  sql: unsubscribe to '3101'
+- type: wait
+  time: 2
+
+- type: check
+  target_name: 3101
+  expected_result:
+  - [100]
+
+- type: check
+  target_name: 3101-1
+  expected_result:
+  - [101]

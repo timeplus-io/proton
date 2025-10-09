@@ -1,0 +1,57 @@
+tags:
+  - global aggregation
+  - subquery
+description: global aggregation from subquery(global aggregation)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_append_stream_2 (id int, name string, val
+      float, ts datetime);
+  - type: wait
+    time: 1
+
+  - name: "1449"
+    type: stream
+    query:
+      with subquery as (select * from changelog(test14_append_stream_2, id, name))select
+      id, count(*), min(val), max(val) from subquery group by id emit periodic 1s;
+    schema:
+      - name: id
+        type: int32
+      - name: count(*)
+        type: uint64
+      - name: min(val)
+        type: float32
+      - name: max(val)
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'a', 11.1
+      ,'2020-02-02 20:00:00');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'b', 22.2
+      ,'2020-02-02 20:00:02');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      insert into test14_append_stream_2 (id, name, val, ts) values (1, 'a', 33.3
+      ,'2020-02-02 20:00:04');
+
+  - type: check
+    target_name: "1449"
+    expected_result:
+      - [1, 1, 11.1, 11.1]
+      - [1, 2, 11.1, 22.2]
+      - [1, 2, 22.2, 33.3]

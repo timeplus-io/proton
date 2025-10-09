@@ -29,6 +29,10 @@ public:
 
     void setLevel(const std::string & name, int level);
 
+    /// proton: starts.
+    int getLevel(const std::string & name);
+    /// proton: ends.
+
 private:
     void logSplit(const Poco::Message & msg);
     void tryLogSplit(const Poco::Message & msg);

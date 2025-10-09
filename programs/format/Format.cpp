@@ -17,6 +17,7 @@
 
 #include <Interpreters/Context.h>
 #include <Functions/FunctionFactory.h>
+#include <Databases/registerDatabases.h>
 #include <Functions/registerFunctions.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
@@ -57,8 +58,17 @@ int mainFormat(int argc, char ** argv)
         ("seed", po::value<std::string>(), "seed (arbitrary string) that determines the result of obfuscation")
     ;
 
+    Settings cmd_settings;
+    for (const auto & field : cmd_settings.all())
+    {
+        std::string_view name = field.getName();
+        if (name == "max_parser_depth" || name == "max_query_size")
+            cmd_settings.addProgramOption(desc, name, field);
+    }
+
     boost::program_options::variables_map options;
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), options);
+    po::notify(options);
 
     if (options.count("help"))
     {
@@ -108,13 +118,18 @@ int mainFormat(int argc, char ** argv)
 
             if (options.count("seed"))
             {
-                std::string seed;
                 hash_func.update(options["seed"].as<std::string>());
             }
+
+            SharedContextHolder shared_context = Context::createShared();
+            auto context = Context::createGlobal(shared_context.get());
+            auto context_const = WithContext(context).getContext();
+            context->makeGlobalContext();
 
             registerFunctions();
             registerAggregateFunctions();
             registerTableFunctions();
+            registerDatabases();
             registerStorages();
             registerFormats();
 
@@ -140,6 +155,7 @@ int mainFormat(int argc, char ** argv)
 
             WriteBufferFromFileDescriptor out(STDOUT_FILENO);
             obfuscateQueries(query, out, obfuscated_words_map, used_nouns, hash_func, is_known_identifier);
+            out.finalize();
         }
         else
         {
@@ -149,14 +165,14 @@ int mainFormat(int argc, char ** argv)
             ParserQuery parser(end);
             do
             {
-                ASTPtr res = parseQueryAndMovePosition(parser, pos, end, "query", multiple, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+                ASTPtr res = parseQueryAndMovePosition(
+                    parser, pos, end, "query", multiple, cmd_settings.max_query_size, cmd_settings.max_parser_depth);
                 /// For insert query with data(INSERT INTO ... VALUES ...), will lead to format fail,
                 /// should throw exception early and make exception message more readable.
                 if (const auto * insert_query = res->as<ASTInsertQuery>(); insert_query && insert_query->data)
                 {
-                    throw Exception(
-                        "Can't format ASTInsertQuery with data, since data will be lost",
-                        DB::ErrorCodes::INVALID_FORMAT_INSERT_QUERY_WITH_DATA);
+                    throw Exception(DB::ErrorCodes::INVALID_FORMAT_INSERT_QUERY_WITH_DATA,
+                        "Can't format ASTInsertQuery with data, since data will be lost");
                 }
                 if (!quiet)
                 {
@@ -164,7 +180,7 @@ int mainFormat(int argc, char ** argv)
                     {
                         WriteBufferFromOStream res_buf(std::cout, 4096);
                         formatAST(*res, res_buf, hilite, oneline);
-                        res_buf.next();
+                        res_buf.finalize();
                         if (multiple)
                             std::cout << "\n;\n";
                         std::cout << std::endl;
@@ -188,7 +204,7 @@ int mainFormat(int argc, char ** argv)
                             res_cout.write(*s_pos++);
                         }
 
-                        res_cout.next();
+                        res_cout.finalize();
                         if (multiple)
                             std::cout << " \\\n;\n";
                         std::cout << std::endl;
@@ -222,6 +238,5 @@ int mainFormat(int argc, char ** argv)
         std::cerr << getCurrentExceptionMessage(true) << '\n';
         return getCurrentExceptionCode();
     }
-
     return 0;
 }

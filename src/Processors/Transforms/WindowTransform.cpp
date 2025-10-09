@@ -1073,7 +1073,7 @@ void WindowTransform::appendChunk(Chunk & chunk)
         // Initialize output columns.
         for (auto & ws : workspaces)
         {
-            block.output_columns.push_back(ws.aggregate_function->getReturnType()
+            block.output_columns.push_back(ws.aggregate_function->getResultType()
                 ->createColumn());
             block.output_columns.back()->reserve(block.rows);
         }
@@ -1444,8 +1444,8 @@ struct WindowFunction
 {
     std::string name;
 
-    WindowFunction(const std::string & name_, const DataTypes & argument_types_, const Array & parameters_)
-        : IAggregateFunctionHelper<WindowFunction>(argument_types_, parameters_)
+    WindowFunction(const std::string & name_, const DataTypes & argument_types_, const Array & parameters_, const DataTypePtr & result_type_)
+        : IAggregateFunctionHelper<WindowFunction>(argument_types_, parameters_, result_type_)
         , name(name_)
     {}
 
@@ -1475,11 +1475,8 @@ struct WindowFunctionRank final : public WindowFunction
 {
     WindowFunctionRank(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : WindowFunction(name_, argument_types_, parameters_)
+        : WindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeUInt64>())
     {}
-
-    DataTypePtr getReturnType() const override
-    { return std::make_shared<DataTypeUInt64>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -1497,11 +1494,8 @@ struct WindowFunctionDenseRank final : public WindowFunction
 {
     WindowFunctionDenseRank(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : WindowFunction(name_, argument_types_, parameters_)
+        : WindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeUInt64>())
     {}
-
-    DataTypePtr getReturnType() const override
-    { return std::make_shared<DataTypeUInt64>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -1575,7 +1569,8 @@ namespace recurrent_detail
 
     template<typename T> void setValueToOutputColumn(const WindowTransform * /*transform*/, size_t /*function_index*/, T /*value*/)
     {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "setValueToOutputColumn() is not implemented for {} type", typeid(T).name());
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                        "setValueToOutputColumn() is not implemented for {} type", typeid(T).name());
     }
 
     template<> void setValueToOutputColumn<Float64>(const WindowTransform * transform, size_t function_index, Float64 value)
@@ -1606,8 +1601,8 @@ template<size_t state_size>
 struct RecurrentWindowFunction : public WindowFunction
 {
     RecurrentWindowFunction(const std::string & name_,
-            const DataTypes & argument_types_, const Array & parameters_)
-        : WindowFunction(name_, argument_types_, parameters_)
+            const DataTypes & argument_types_, const Array & parameters_, const DataTypePtr & result_type_)
+        : WindowFunction(name_, argument_types_, parameters_, result_type_)
     {
     }
 
@@ -1663,7 +1658,7 @@ struct WindowFunctionExponentialTimeDecayedSum final : public RecurrentWindowFun
 
     WindowFunctionExponentialTimeDecayedSum(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : RecurrentWindowFunction(name_, argument_types_, parameters_)
+        : RecurrentWindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeFloat64>())
     {
         if (parameters_.size() != 1)
         {
@@ -1693,11 +1688,6 @@ struct WindowFunctionExponentialTimeDecayedSum final : public RecurrentWindowFun
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }
-    }
-
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeFloat64>();
     }
 
     bool allocatesMemoryInArena() const override { return false; }
@@ -1731,7 +1721,7 @@ struct WindowFunctionExponentialTimeDecayedMax final : public RecurrentWindowFun
 
     WindowFunctionExponentialTimeDecayedMax(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : RecurrentWindowFunction(name_, argument_types_, parameters_)
+        : RecurrentWindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeFloat64>())
     {
         if (parameters_.size() != 1)
         {
@@ -1761,11 +1751,6 @@ struct WindowFunctionExponentialTimeDecayedMax final : public RecurrentWindowFun
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }
-    }
-
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeFloat64>();
     }
 
     bool allocatesMemoryInArena() const override { return false; }
@@ -1798,7 +1783,7 @@ struct WindowFunctionExponentialTimeDecayedCount final : public RecurrentWindowF
 
     WindowFunctionExponentialTimeDecayedCount(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : RecurrentWindowFunction(name_, argument_types_, parameters_)
+        : RecurrentWindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeFloat64>())
     {
         if (parameters_.size() != 1)
         {
@@ -1820,11 +1805,6 @@ struct WindowFunctionExponentialTimeDecayedCount final : public RecurrentWindowF
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }
-    }
-
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeFloat64>();
     }
 
     bool allocatesMemoryInArena() const override { return false; }
@@ -1858,7 +1838,7 @@ struct WindowFunctionExponentialTimeDecayedAvg final : public RecurrentWindowFun
 
     WindowFunctionExponentialTimeDecayedAvg(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : RecurrentWindowFunction(name_, argument_types_, parameters_)
+        : RecurrentWindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeFloat64>())
     {
         if (parameters_.size() != 1)
         {
@@ -1888,11 +1868,6 @@ struct WindowFunctionExponentialTimeDecayedAvg final : public RecurrentWindowFun
                 ARGUMENT_TIME,
                 argument_types[ARGUMENT_TIME]->getName());
         }
-    }
-
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeFloat64>();
     }
 
     bool allocatesMemoryInArena() const override { return false; }
@@ -1925,11 +1900,8 @@ struct WindowFunctionRowNumber final : public WindowFunction
 {
     WindowFunctionRowNumber(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : WindowFunction(name_, argument_types_, parameters_)
+        : WindowFunction(name_, argument_types_, parameters_, std::make_shared<DataTypeUInt64>())
     {}
-
-    DataTypePtr getReturnType() const override
-    { return std::make_shared<DataTypeUInt64>(); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -1949,7 +1921,7 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
 {
     WindowFunctionLagLeadInFrame(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
-        : WindowFunction(name_, argument_types_, parameters_)
+        : WindowFunction(name_, argument_types_, parameters_, createResultType(argument_types_, name_))
     {
         if (!parameters.empty())
         {
@@ -2005,7 +1977,16 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
         }
     }
 
-    DataTypePtr getReturnType() const override { return argument_types[0]; }
+    static DataTypePtr createResultType(const DataTypes & argument_types_, const std::string & name_)
+    {
+        if (argument_types_.empty())
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} takes at least one argument", name_);
+        }
+
+        return argument_types_[0];
+    }
 
     bool allocatesMemoryInArena() const override { return false; }
 

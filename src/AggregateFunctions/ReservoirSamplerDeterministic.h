@@ -186,7 +186,11 @@ public:
             /// change the serialization format.
 
             Element elem;
-            memset(&elem, 0, sizeof(elem));
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-warning-option"  /// Remove after clang20
+#pragma clang diagnostic ignored "-Wnontrivial-memcall"
+            memset(&elem, 0, sizeof(elem)); /// NOLINT(bugprone-undefined-memory-manipulation)
+#pragma clang diagnostic pop
             elem = samples[i];
 
             DB::writePODBinary(elem, buf);
@@ -235,7 +239,7 @@ private:
         if (skip_degree_ == skip_degree)
             return;
         if (skip_degree_ > detail::MAX_SKIP_DEGREE)
-            throw DB::Exception{"skip_degree exceeds maximum value", DB::ErrorCodes::MEMORY_LIMIT_EXCEEDED};
+            throw DB::Exception(DB::ErrorCodes::MEMORY_LIMIT_EXCEEDED, "skip_degree exceeds maximum value");
         skip_degree = skip_degree_;
         if (skip_degree == detail::MAX_SKIP_DEGREE)
             skip_mask = static_cast<UInt32>(-1);

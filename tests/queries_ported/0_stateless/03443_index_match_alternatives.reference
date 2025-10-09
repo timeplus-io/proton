@@ -1,0 +1,26 @@
+-- Without index
+John
+John
+John
+John
+-- With index
+John
+John
+John
+John
+-- Assert selected granules
+Granules: 3/3
+Granules: 3/3
+Granules: 3/3
+
+Granules: 3/3
+Granules: 3/3
+Granules: 3/3
+
+Granules: 3/3
+Granules: 3/3
+Granules: 3/3
+
+Granules: 3/3
+Granules: 3/3
+Granules: 3/3

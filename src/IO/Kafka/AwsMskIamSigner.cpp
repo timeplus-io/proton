@@ -2,13 +2,13 @@
 
 #if USE_AWS_MSK_IAM
 
-#    include "config_version.h"
+#    include <Common/Base64.h>
+#    include <Common/Exception.h>
+#    include <Common/config_version.h>
+#    include <Common/logger_useful.h>
 
 #    include <IO/S3/Client.h>
 #    include <IO/S3/Credentials.h>
-#    include <Common/Base64.h>
-#    include <Common/Exception.h>
-#    include <Common/logger_useful.h>
 
 #    include <aws/core/auth/AWSCredentialsProvider.h>
 #    include <aws/core/auth/signer/AWSAuthV4Signer.h>
@@ -56,7 +56,7 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> pickCredentialsProvider(const
             const auto creds = cp->GetAWSCredentials();
             if (!creds.IsEmpty())
             {
-                LOG_INFO(&Poco::Logger::get("AWS_MSK_IAM"), "The {}th provider from the provider chain has been picked", i);
+                LOG_INFO(getLogger("AWS_MSK_IAM"), "The {}th provider from the provider chain has been picked", i);
                 provider = cp;
                 break;
             }

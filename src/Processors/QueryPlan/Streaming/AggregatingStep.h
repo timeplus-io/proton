@@ -1,34 +1,29 @@
 #pragma once
 
-#include <Interpreters/Streaming/Aggregator.h>
+#include <Core/Streaming/Watermark.h>
+#include <Interpreters/Streaming/Aggregator/IAggregator.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
-namespace DB
+namespace DB::Streaming
 {
 
-namespace Streaming
-{
-struct AggregatingTransformParams;
-using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
-
-enum class EmittedAggregatedKind;
+struct EmitParams;
 
 /// Streaming Aggregation. See StreamingAggregatingTransform.
-class AggregatingStep : public ITransformingStep
+class AggregatingStep final : public ITransformingStep
 {
 public:
     AggregatingStep(
         const DataStream & input_stream_,
-        Aggregator::Params params_,
-        bool final_,
+        IAggregatorParamsPtr params_,
+        std::shared_ptr<const Streaming::EmitParams> watermark_params_,
         size_t merge_threads_,
-        size_t temporary_data_merge_threads_,
         bool emit_version_,
         bool emit_changelog_,
-        bool emit_repeat_,
-        Streaming::EmitMode watermark_emit_mode_);
+        bool keys_already_sharded_,
+        bool aggregation_backfill_key_unique_);
 
-    String getName() const override { return "StreamingAggregating"; }
+    String getName() const override;
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
 
@@ -37,20 +32,22 @@ public:
     void describeActions(FormatSettings &) const override;
     void describePipeline(FormatSettings & settings) const override;
 
-    const Aggregator::Params & getParams() const { return params; }
+    const IAggregatorParams & getParams() const { return *params; }
 
 private:
-    Aggregator::Params params;
-    bool final;
+    void updateOutputStream() override;
+
+    IAggregatorParamsPtr params;
+    std::shared_ptr<const Streaming::EmitParams> emit_params;
+
     size_t merge_threads;
-    size_t temporary_data_merge_threads;
 
     bool emit_version;
     bool emit_changelog;
-    bool emit_repeat;
-    Streaming::EmitMode emit_mode;
+    bool keys_already_sharded;
+    bool aggregation_backfill_key_unique;
 
     Processors aggregating;
 };
-}
+
 }

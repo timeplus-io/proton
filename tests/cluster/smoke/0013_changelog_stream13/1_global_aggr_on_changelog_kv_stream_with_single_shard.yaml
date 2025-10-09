@@ -1,0 +1,83 @@
+tags:
+- global aggr distinct
+- changelog_kv
+- single shard
+- checkpoint
+description: sum_distinct and count_distinct for changelog_kv stream with single shard.
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists v_12181727;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream v_12181727(id int, val int) primary key id settings mode='changelog_kv';
+- type: wait
+  time: 2
+
+- name: '12181727213'
+  type: stream
+  query: select sum_distinct(val), sum(val), count_distinct(val), count(val) from v_12181727;
+  schema:
+  - name: sum_distinct(val)
+    type: int64
+  - name: sum(val)
+    type: int64
+  - name: count_distinct(val)
+    type: uint64
+  - name: count(val)
+    type: uint64
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into v_12181727(id, val) values
+  schema:
+  - name: id
+    type: int32
+  - name: val
+    type: int32
+  inputs:
+  - [6, 60]
+  - [5, 50]
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into v_12181727(id, val, _tp_delta) values
+  schema:
+  - name: id
+    type: int32
+  - name: val
+    type: int32
+  - name: _tp_delta
+    type: int8
+  inputs:
+  - [5, 50, -1]
+  - [7, 60, 1]
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into v_12181727(id, val, _tp_delta) values
+  schema:
+  - name: id
+    type: int32
+  - name: val
+    type: int32
+  - name: _tp_delta
+    type: int8
+  inputs:
+  - [6, 60, -1]
+  - [7, 60, -1]
+  - [5, 50, 1]
+
+- type: check
+  target_name: '12181727213'
+  expected_result:
+  - [110, 110, 2, 2]
+  - [60, 120, 1, 2]
+  - [50, 50, 1, 1]

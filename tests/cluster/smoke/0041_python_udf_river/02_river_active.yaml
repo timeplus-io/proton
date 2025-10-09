@@ -1,0 +1,83 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.active function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x map(string, string), y bool);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getActive(x map(string, string), y bool) RETURNS string LANGUAGE PYTHON AS $$
+      import pickle
+      from river import active, datasets, feature_extraction, linear_model, metrics
+
+      class getActive:
+          def __init__(self):
+              self.metric = ''
+
+          def serialize(self):
+              data = {}
+              data['metric'] = self.metric
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.metric = data['metric']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              metric = metrics.Accuracy()
+              model = (
+                  feature_extraction.TFIDF(on='body') |
+                  linear_model.LogisticRegression()
+              )
+              model = active.EntropySampler(model, seed=4)
+              for x, y in zip(xs, ys):
+                  x = dict(x)
+                  if x.get('body','') == '':
+                    continue
+                  y_pred, ask = model.predict_one(x)
+                  metric.update(y, y_pred)
+                  if ask:
+                      model.learn_one(x, y)
+                  self.metric = str(metric)
+
+          def finalize(self):
+              return self.metric
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-2-1
+    type: stream
+    query: select getActive(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into uda_stream(x, y) values
+        ({'body': 'aaa'}, False) ({'body': 'aaa1'}, False)
+        ({'body': 'aaa2'}, True) ({'body': 'bbb'}, False)
+        ({'body': 'bbb1'}, True);
+
+  - type: check
+    target_name: python-udf13-2-1
+    expected_result:
+      - ['Accuracy: 60.00%']

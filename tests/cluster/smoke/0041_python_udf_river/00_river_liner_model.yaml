@@ -1,0 +1,59 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (xs map(string, float), ys bool);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_liner_model(xs map(string, float), ys bool) RETURNS array(tuple(bool, float32)) LANGUAGE PYTHON AS
+      $$
+      from river import linear_model
+
+      def test_liner_model(xs, ys):
+          res = []
+          model = linear_model.LogisticRegression()
+          for x, y in zip(xs, ys):
+              x = dict(x)
+              predict = model.predict_proba_one(x)
+              predict = list(zip(predict.keys(), predict.values()))
+              res.append(predict)
+              model.learn_one(x, y)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-0-1
+    type: stream
+    query: select test_liner_model(xs, ys) as res, xs, ys from udf_stream;
+    schema:
+      - name: res
+        type: array(tuple(bool, float32))
+      - name: xs
+        type: map(string, float32)
+      - name: ys
+        type: bool
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(xs, ys) values ({'https': 0.0, 'is_popular': 0.5}, True) ({'https': 0.0, 'is_popular': 0.5}, True);
+
+  - type: check
+    target_name: python-udf13-0-1
+    expected_result:
+      - [[[False, 0.5], [True, 0.5]], {'https': 0.0, 'is_popular': 0.5}, True]
+      - [[[False, 0.4984375050862432], [True, 0.5015624949137568]], {'https': 0.0, 'is_popular': 0.5}, True]

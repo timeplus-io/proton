@@ -1,0 +1,35 @@
+tags:
+  - syntax exception
+
+description: stream query expected exception:stream query group by w/ both window_start and window_end lacked
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: select id, max(value) from tumble(test_smoke, timestamp, interval 5 second) group by id emit stream after window close
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+
+  - type: stream
+    name: 101-1
+    query: select id, max(value) from tumble(test_smoke, timestamp, interval 5 second) group by id emit stream after watermark
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['error_code:2002']
+
+  - type: check
+    target_name: 101-1
+    expected_result:
+      - ['error_code:2002']

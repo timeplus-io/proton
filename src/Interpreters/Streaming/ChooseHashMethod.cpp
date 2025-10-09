@@ -6,9 +6,7 @@
 #include <Core/ColumnNumbers.h>
 #include <Common/HashMapsTemplate.h>
 
-namespace DB
-{
-namespace Streaming
+namespace DB::Streaming
 {
 std::pair<HashType, std::vector<size_t>> chooseHashMethod(const ColumnRawPtrs & key_columns)
 {
@@ -50,7 +48,7 @@ std::pair<HashType, std::vector<size_t>> chooseHashMethod(const ColumnRawPtrs & 
         else if (size_of_field == 32)
             type = HashType::keys256;
         else
-            throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16, 32.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16, 32.");
 
         return {type, std::move(key_sizes)};
     }
@@ -69,11 +67,26 @@ std::pair<HashType, std::vector<size_t>> chooseHashMethod(const ColumnRawPtrs & 
                 && typeid_cast<const ColumnString *>(&assert_cast<const ColumnConst *>(key_columns[0])->getDataColumn()))))
         return {HashType::key_string, std::move(key_sizes)};
 
+    if (keys_size == 1)
+    {
+        auto is_string_column = [](const IColumn * column_ptr) -> bool
+        {
+            if (const auto * lc_column_ptr = typeid_cast<const ColumnLowCardinality *>(column_ptr))
+                return typeid_cast<const ColumnString *>(lc_column_ptr->getDictionary().getNestedColumn().get());
+            return typeid_cast<const ColumnString *>(column_ptr);
+        };
+
+        const auto * key_column = key_columns[0];
+        if (is_string_column(key_column) ||
+            (isColumnConst(*key_column) && is_string_column(assert_cast<const ColumnConst *>(key_column)->getDataColumnPtr().get())))
+            return {HashType::key_string, std::move(key_sizes)};
+    }
+
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
         return {HashType::key_fixed_string, std::move(key_sizes)};
 
     /// Otherwise, will use set of cryptographic hashes of unambiguously serialized values.
     return {HashType::hashed, std::move(key_sizes)};
 }
-}
+
 }

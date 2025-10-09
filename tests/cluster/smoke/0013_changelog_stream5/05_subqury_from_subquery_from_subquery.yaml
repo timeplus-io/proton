@@ -1,0 +1,73 @@
+tags:
+  - subquery/view/materilized_view_UDA
+  - group_by_primary_key
+  - bug
+description: subqury from subquery from subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_subquery_5(i int, k1 int, k2 string);
+
+  - type: wait
+    time: 2
+
+  - name: "1417"
+    type: stream
+    query: |
+      with cte1 as (
+        with cte2 as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
+        select * from cte2
+      )select lag(i, 2), k2, _tp_delta from cte1;
+    schema:
+      - name: lag(i, 2)
+        type: int32
+      - name: k2
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (4, 3, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (2, 3, 'a');
+
+  - type: wait
+    time: 2
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (5, 5, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (2, 2, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (8, 5, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_5(i, k1, k2) values (8, 2, 'b');
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: "1417"
+    expected_result:
+      - [0, 0, nan, 3]
+      - [8, 2, 5, 2]
+      - [0, 0, nan, 5]

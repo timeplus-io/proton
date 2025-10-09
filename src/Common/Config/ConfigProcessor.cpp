@@ -1,3 +1,4 @@
+#include "config.h"
 #include "ConfigProcessor.h"
 #include "YAMLParser.h"
 
@@ -10,15 +11,16 @@
 #include <Poco/DOM/Text.h>
 #include <Poco/DOM/Attr.h>
 #include <Poco/DOM/Comment.h>
+#include <Poco/XML/XMLWriter.h>
 #include <Poco/Util/XMLConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Exception.h>
 #include <Common/getResource.h>
+#include <Common/logger_useful.h>
 #include <base/errnoToString.h>
 #include <base/sort.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <Common/ZooKeeper/KeeperException.h>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 
@@ -59,23 +61,16 @@ ConfigProcessor::ConfigProcessor(
     , name_pool(new Poco::XML::NamePool(65521))
     , dom_parser(name_pool)
 {
-    if (log_to_console && !Poco::Logger::has("ConfigProcessor"))
+    if (log_to_console && !hasLogger("ConfigProcessor"))
     {
         channel_ptr = new Poco::ConsoleChannel;
-        log = &Poco::Logger::create("ConfigProcessor", channel_ptr.get(), Poco::Message::PRIO_TRACE);
+        log = createLogger("ConfigProcessor", channel_ptr.get(), Poco::Message::PRIO_TRACE);
     }
     else
     {
-        log = &Poco::Logger::get("ConfigProcessor");
+        log = getLogger("ConfigProcessor");
     }
 }
-
-ConfigProcessor::~ConfigProcessor()
-{
-    if (channel_ptr) /// This means we have created a new console logger in the constructor.
-        Poco::Logger::destroy("ConfigProcessor");
-}
-
 
 /// Vector containing the name of the element and a sorted list of attribute names and values
 /// (except "remove" and "replace" attributes).
@@ -91,9 +86,8 @@ static ElementIdentifier getElementIdentifier(Node * element)
 {
     const NamedNodeMapPtr attrs = element->attributes();
     std::vector<std::pair<std::string, std::string>> attrs_kv;
-    for (size_t i = 0, size = attrs->length(); i < size; ++i)
+    for (const Node * node = attrs->item(0); node; node = node->nextSibling())
     {
-        const Node * node = attrs->item(i);
         std::string name = node->nodeName();
         const auto * subst_name_pos = std::find(ConfigProcessor::SUBSTITUTION_ATTRS.begin(), ConfigProcessor::SUBSTITUTION_ATTRS.end(), name);
         if (name == "replace" || name == "remove" ||
@@ -117,10 +111,8 @@ static ElementIdentifier getElementIdentifier(Node * element)
 
 static Node * getRootNode(Document * document)
 {
-    const NodeListPtr children = document->childNodes();
-    for (size_t i = 0, size = children->length(); i < size; ++i)
+    for (Node * child = document->firstChild(); child; child = child->nextSibling())
     {
-        Node * child = children->item(i);
         /// Besides the root element there can be comment nodes on the top level.
         /// Skip them.
         if (child->nodeType() == Node::ELEMENT_NODE)
@@ -133,6 +125,46 @@ static Node * getRootNode(Document * document)
 static bool allWhitespace(const std::string & s)
 {
     return s.find_first_not_of(" \t\n\r") == std::string::npos;
+}
+
+static void deleteAttributesRecursive(Node * root)
+{
+    const NodeListPtr children = root->childNodes();
+    std::vector<Node *> children_to_delete;
+
+    for (Node * child = children->item(0); child; child = child->nextSibling())
+    {
+        if (child->nodeType() == Node::ELEMENT_NODE)
+        {
+            Element & child_element = dynamic_cast<Element &>(*child);
+
+            if (child_element.hasAttribute("replace"))
+                child_element.removeAttribute("replace");
+
+            if (child_element.hasAttribute("remove"))
+                children_to_delete.push_back(child);
+            else
+                deleteAttributesRecursive(child);
+        }
+    }
+
+    for (auto * child : children_to_delete)
+    {
+        root->removeChild(child);
+    }
+}
+
+static void mergeAttributes(Element & config_element, Element & with_element)
+{
+    auto * with_element_attributes = with_element.attributes();
+
+    for (size_t i = 0; i < with_element_attributes->length(); ++i)
+    {
+        auto * attr = with_element_attributes->item(i);
+        config_element.setAttribute(attr->nodeName(), attr->getNodeValue());
+    }
+
+    with_element_attributes->release();
 }
 
 void ConfigProcessor::mergeRecursive(XMLDocumentPtr config, Node * config_root, const Node * with_root)
@@ -155,10 +187,10 @@ void ConfigProcessor::mergeRecursive(XMLDocumentPtr config, Node * config_root, 
         node = next_node;
     }
 
-    for (size_t i = 0, size = with_nodes->length(); i < size; ++i)
+    Node * next_with_node = nullptr;
+    for (Node * with_node = with_nodes->item(0); with_node; with_node = next_with_node)
     {
-        Node * with_node = with_nodes->item(i);
-
+        next_with_node = with_node->nextSibling();
         bool merged = false;
         bool remove = false;
         if (with_node->nodeType() == Node::ELEMENT_NODE)
@@ -189,6 +221,9 @@ void ConfigProcessor::mergeRecursive(XMLDocumentPtr config, Node * config_root, 
                 }
                 else
                 {
+                    Element & config_element = dynamic_cast<Element &>(*config_node);
+
+                    mergeAttributes(config_element, with_element);
                     mergeRecursive(config, config_node, with_node);
                 }
                 merged = true;
@@ -196,6 +231,10 @@ void ConfigProcessor::mergeRecursive(XMLDocumentPtr config, Node * config_root, 
         }
         if (!merged && !remove)
         {
+            /// Since we didn't find a pair to this node in default config, we will paste it as is.
+            /// But it may have some child nodes which have attributes like "replace" or "remove".
+            /// They are useless in preprocessed configuration.
+            deleteAttributesRecursive(with_node);
             NodePtr new_node = config->importNode(with_node, true);
             config_root->appendChild(new_node);
         }
@@ -297,9 +336,11 @@ void ConfigProcessor::doIncludesRecursive(
             if (node->nodeName() == "include")
             {
                 const NodeListPtr children = node_to_include->childNodes();
-                for (size_t i = 0, size = children->length(); i < size; ++i)
+                Node * next_child = nullptr;
+                for (Node * child = children->item(0); child; child = next_child)
                 {
-                    NodePtr new_node = config->importNode(children->item(i), true);
+                    next_child = child->nextSibling();
+                    NodePtr new_node = config->importNode(child, true);
                     node->parentNode()->insertBefore(new_node, node);
                 }
 
@@ -321,16 +362,20 @@ void ConfigProcessor::doIncludesRecursive(
                 }
 
                 const NodeListPtr children = node_to_include->childNodes();
-                for (size_t i = 0, size = children->length(); i < size; ++i)
+                Node * next_child = nullptr;
+                for (Node * child = children->item(0); child; child = next_child)
                 {
-                    NodePtr new_node = config->importNode(children->item(i), true);
+                    next_child = child->nextSibling();
+                    NodePtr new_node = config->importNode(child, true);
                     node->appendChild(new_node);
                 }
 
                 const NamedNodeMapPtr from_attrs = node_to_include->attributes();
-                for (size_t i = 0, size = from_attrs->length(); i < size; ++i)
+                Node * next_attr = nullptr;
+                for (Node * attr = from_attrs->item(0); attr; attr = next_attr)
                 {
-                    element.setAttributeNode(dynamic_cast<Attr *>(config->importNode(from_attrs->item(i), true)));
+                    next_attr = attr->nextSibling();
+                    element.setAttributeNode(dynamic_cast<Attr *>(config->importNode(attr, true)));
                 }
 
                 included_something = true;
@@ -353,7 +398,7 @@ void ConfigProcessor::doIncludesRecursive(
         XMLDocumentPtr env_document;
         auto get_env_node = [&](const std::string & name) -> const Node *
         {
-            const char * env_val = std::getenv(name.c_str());
+            const char * env_val = std::getenv(name.c_str()); // NOLINT(concurrency-mt-unsafe) // this is safe on Linux glibc/Musl, but potentially not safe on other platforms
             if (env_val == nullptr)
                 return nullptr;
 
@@ -370,9 +415,12 @@ void ConfigProcessor::doIncludesRecursive(
     else
     {
         NodeListPtr children = node->childNodes();
-        Node * child = nullptr;
-        for (size_t i = 0; (child = children->item(i)); ++i)
+        Node * next_child = nullptr;
+        for (Node * child = children->item(0); child; child = next_child)
+        {
+            next_child = child->nextSibling();
             doIncludesRecursive(config, include_from, child, zk_changed_event);
+        }
     }
 }
 
@@ -446,7 +494,7 @@ XMLDocumentPtr ConfigProcessor::processConfig(
     else
     {
         /// These embedded files added during build with some cmake magic.
-        /// Look at the end of programs/sever/CMakeLists.txt.
+        /// Look at the end of programs/server/CMakeLists.txt.
         std::string embedded_name;
         if (path == "config.xml")
             embedded_name = "embedded.xml";
@@ -583,6 +631,10 @@ void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config,
                 new_path.erase(0, main_config_path.size());
             std::replace(new_path.begin(), new_path.end(), '/', '_');
 
+            /// If we have config file in YAML format, the preprocessed config will inherit .yaml extension
+            /// but will contain config in XML format, so some tools like clickhouse extract-from-config won't work
+            new_path = fs::path(new_path).replace_extension(".xml").string();
+
             if (preprocessed_dir.empty())
             {
                 if (!loaded_config.configuration->has("path"))
@@ -611,7 +663,11 @@ void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config,
             if (!preprocessed_path_parent.empty())
                 fs::create_directories(preprocessed_path_parent);
         }
-        DOMWriter().writeNode(preprocessed_path, loaded_config.preprocessed_xml);
+        DOMWriter writer;
+        writer.setNewLine("\n");
+        writer.setIndent("    ");
+        writer.setOptions(Poco::XML::XMLWriter::PRETTY_PRINT);
+        writer.writeNode(preprocessed_path, loaded_config.preprocessed_xml);
         LOG_DEBUG(log, "Saved preprocessed configuration to '{}'.", preprocessed_path);
     }
     catch (Poco::Exception & e)

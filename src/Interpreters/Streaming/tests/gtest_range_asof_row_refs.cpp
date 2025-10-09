@@ -1,8 +1,8 @@
 #include <Columns/ColumnDecimal.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
-#include <Interpreters/Streaming/RangeAsofJoinContext.h>
-#include <Interpreters/Streaming/RowRefs.h>
+#include <Interpreters/Streaming/HashJoin/MemoryHashJoin/RowRefs.h>
+#include <Interpreters/Streaming/HashJoin/RangeAsofJoinContext.h>
 
 #include <gtest/gtest.h>
 

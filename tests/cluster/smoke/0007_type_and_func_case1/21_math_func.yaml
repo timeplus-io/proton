@@ -1,0 +1,90 @@
+tags:
+  - func
+  - math
+description: math function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - name: '800'
+    type: stream
+    query: select abs(-10) as a, round(1.4) as b, exp(2) as c, exp2(2) as d, exp10(2) as e , pow(2, 2) as f, power(3,3) as g
+    schema:
+      - name: a
+        type: uint8
+      - name: b
+        type: float64
+      - name: c
+        type: float64
+      - name: d
+        type: float64
+      - name: e
+        type: float64
+      - name: f
+        type: float64
+      - name: g
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - name: '801'
+    type: stream
+    query: select log(2) as a, log2(4) as b, log10(10) as c, sqrt(4) as d, cbrt(2) as e, lgamma(2) as f, tgamma(2) as g
+    schema:
+      - name: a
+        type: float64
+      - name: b
+        type: float64
+      - name: c
+        type: float64
+      - name: d
+        type: float64
+      - name: e
+        type: float64
+      - name: f
+        type: float64
+      - name: g
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - name: '802'
+    type: stream
+    query: select sin(0) as a, cos(0) as b, tan(1) as c , asin(1) as d, acos(0) as e, atan(1) as f, degrees(3.14) as g, radians(180) as h
+    schema:
+      - name: a
+        type: float64
+      - name: b
+        type: float64
+      - name: c
+        type: float64
+      - name: d
+        type: float64
+      - name: e
+        type: float64
+      - name: f
+        type: float64
+      - name: g
+        type: float64
+      - name: h
+        type: float64
+    
+  - type: check
+    target_name: '800'
+    expected_result:
+      - [ '10', '1', '7.38905609893065', '4', '100', '4', '27' ]
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ '0.6931471805599453', '2', '1', '2', '1.2599210498948734', '0', '1' ]
+
+  - type: check
+    target_name: '802'
+    expected_result:
+      - [ '0', '1', '1.5574077246549023', '1.5707963267948966', '1.5707963267948966', '0.7853981633974483', '179.9087476710785', '3.141592653589793' ]

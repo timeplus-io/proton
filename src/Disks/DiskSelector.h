@@ -18,6 +18,8 @@ using DiskSelectorPtr = std::shared_ptr<const DiskSelector>;
 class DiskSelector
 {
 public:
+    static constexpr auto TMP_INTERNAL_DISK_PREFIX = "__tmp_internal_";
+
     DiskSelector() = default;
     DiskSelector(const DiskSelector & from) = default;
 
@@ -26,11 +28,12 @@ public:
     DiskSelectorPtr updateFromConfig(
         const Poco::Util::AbstractConfiguration & config,
         const String & config_prefix,
-        ContextPtr context
-    ) const;
+        ContextPtr context) const;
 
     /// Get disk by name
     DiskPtr get(const String & name) const;
+
+    DiskPtr tryGet(const String & name) const;
 
     /// Get all disks with names
     const DisksMap & getDisksMap() const;
@@ -38,6 +41,20 @@ public:
     void addToDiskMap(const String & name, DiskPtr disk);
 
     void shutdown();
+
+    /// proton: starts
+    /// load Disks from MetaStore, return 'true' if 'default' disk is stored in MetaStore
+    bool loadDisksFromMetaStore(ContextPtr context);
+
+    /// Check whether the disk is used by any stream
+    bool isBusy(const String & name) const;
+
+    /// remove the disk which takes effect after restart of proton
+    void removeFromDiskMap(const String & name);
+    /// proton: ends
+
+    inline static const String DEFAULT_DISK_NAME = "default";
+    inline static const String LOCAL_DISK_NAME = "local";
 
 private:
     DisksMap disks;

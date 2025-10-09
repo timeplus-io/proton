@@ -3,18 +3,21 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/SessionWindowHelper.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
 namespace Streaming
 {
-SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_)
+SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstream(
+    Block header, AggregatingTransformParamsPtr params_, size_t id)
     : WindowAggregatingTransformWithSubstream(
-        std::move(header),
-        std::move(params_),
-        "SessionAggregatingTransformWithSubstream",
-        ProcessorID::SessionAggregatingTransformWithSubstreamID)
-    , window_params(params->params.window_params->as<SessionWindowParams &>())
+          std::move(header),
+          std::move(params_),
+          id,
+          "SessionAggregatingTransformWithSubstream",
+          ProcessorID::SessionAggregatingTransformWithSubstreamID)
+    , window_params(params->params->window_params->as<SessionWindowParams &>())
 {
     const auto & input_header = getInputs().front().getHeader();
     if (input_header.has(ProtonConsts::STREAMING_WINDOW_START))
@@ -28,9 +31,8 @@ SessionAggregatingTransformWithSubstream::SessionAggregatingTransformWithSubstre
     session_end_col_pos = input_header.getPositionByName(ProtonConsts::STREAMING_SESSION_END);
 }
 
-SubstreamContextPtr SessionAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
+void SessionAggregatingTransformWithSubstream::initSubstreamContext(const SubstreamAggregatedDataPtr & substream_ctx)
 {
-    auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
     if (!substream_ctx->hasField())
         substream_ctx->setField(
             {SessionInfoQueue{},
@@ -38,11 +40,10 @@ SubstreamContextPtr SessionAggregatingTransformWithSubstream::getOrCreateSubstre
              [](const std::any & field, WriteBuffer & wb, VersionType) { serialize(std::any_cast<const SessionInfoQueue &>(field), wb); },
              /// Field deserializer
              [](std::any & field, ReadBuffer & rb, VersionType) { deserialize(std::any_cast<SessionInfoQueue &>(field), rb); }});
-    return substream_ctx;
 }
 
 std::pair<bool, bool>
-SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
+SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamAggregatedDataPtr & substream_ctx)
 {
     auto columns = chunk.detachColumns();
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
@@ -52,6 +53,9 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
 
     auto num_rows = columns.at(0)->size();
     chunk.setColumns(std::move(columns), num_rows);
+
+    if (num_rows == 0)
+        return {false, false};
 
     auto result = AggregatingTransformWithSubstream::executeOrMergeColumns(chunk, substream_ctx);
     if (!sessions.empty())
@@ -88,23 +92,35 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
     return result;
 }
 
-WindowsWithBuckets SessionAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const
+WindowsWithBuckets SessionAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamAggregatedDataPtr & substream_ctx) const
 {
     return SessionWindowHelper::getWindowsWithBuckets(substream_ctx->getField<SessionInfoQueue>());
 }
 
-Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const
+Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamAggregatedDataPtr & substream_ctx) const
 {
     /// The finalized sessions already are removed, so we don't care it.
     return {INVALID_WATERMARK, INVALID_WATERMARK};
 }
 
-void SessionAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
+void SessionAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamAggregatedDataPtr & substream_ctx)
 {
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
     Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions, watermark);
-    params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);
+    params->aggregator->removeBucketsBefore(*substream_ctx->variants, last_expired_time_bucket, transform_id);
+}
+
+String SessionAggregatingTransformWithSubstream::getName() const
+{
+    switch (params->aggregatorType())
+    {
+        case AggregatorType::Memory:
+            return "SessionAggregatingTransformWithSubstream";
+        case AggregatorType::Hybrid:
+            return "HybridSessionAggregatingTransformWithSubstream";
+    }
 }
 
 }
+
 }

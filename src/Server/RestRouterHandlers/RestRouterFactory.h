@@ -1,31 +1,34 @@
 #pragma once
 
-#include "APISpecHandler.h"
-#include "ClusterInfoHandler.h"
-#include "ColumnRestRouterHandler.h"
-#include "DatabaseRestRouterHandler.h"
-#include "ExternalStreamRestRouterHandler.h"
-#include "IngestRawStoreHandler.h"
-#include "IngestRestRouterHandler.h"
-#include "IngestStatusHandler.h"
-#include "MetaStoreHandler.h"
-#include "PingHandler.h"
-#include "PipelineMetricHandler.h"
-#include "RawstoreTableRestRouterHandler.h"
-#include "RestRouterHandler.h"
-#include "SQLAnalyzerRestRouterHandler.h"
-#include "SQLFormatHandler.h"
-#include "SearchHandler.h"
-#include "StorageInfoHandler.h"
-#include "SystemCommandHandler.h"
-#include "TabularTableRestRouterHandler.h"
-#include "TelemetryHandler.h"
-#include "UDFHandler.h"
-
-#include <re2/re2.h>
+#include <Server/RestRouterHandlers/APISpecHandler.h>
+#include <Server/RestRouterHandlers/ClusterInfoHandler.h>
+#include <Server/RestRouterHandlers/DatabaseRestRouterHandler.h>
+#include <Server/RestRouterHandlers/DependenciesHandler.h>
+#include <Server/RestRouterHandlers/ExternalStreamRestRouterHandler.h>
+#include <Server/RestRouterHandlers/IngestRawStoreHandler.h>
+#include <Server/RestRouterHandlers/IngestRestRouterHandler.h>
+#include <Server/RestRouterHandlers/LogLevelHandler.h>
+#include <Server/RestRouterHandlers/PingHandler.h>
+#include <Server/RestRouterHandlers/PipelineMetricHandler.h>
+#if USE_PYTHON_UDF
+#include <Server/RestRouterHandlers/PythonPackageHandler.h>
+#endif
+#include <Server/RestRouterHandlers/IngestV2RestRouterHandler.h>
+#include <Server/RestRouterHandlers/PythonStatusHandler.h>
+#include <Server/RestRouterHandlers/RawstoreTableRestRouterHandler.h>
+#include <Server/RestRouterHandlers/RestRouterHandler.h>
+#include <Server/RestRouterHandlers/SQLAnalyzerRestRouterHandler.h>
+#include <Server/RestRouterHandlers/SQLFormatHandler.h>
+#include <Server/RestRouterHandlers/SearchHandler.h>
+#include <Server/RestRouterHandlers/StorageInfoHandler.h>
+#include <Server/RestRouterHandlers/TabularTableRestRouterHandler.h>
+#include <Server/RestRouterHandlers/TabularTableV2RestRouterHandler.h>
+#include <Server/RestRouterHandlers/TelemetryHandler.h>
+#include <Server/RestRouterHandlers/UDFHandler.h>
 #include <Common/escapeForFileName.h>
 
-#include <unordered_map>
+#include <re2/re2.h>
+
 
 namespace DB
 {
@@ -48,9 +51,11 @@ public:
     static void registerRestRouterHandlers()
     {
         constexpr auto * stream_name_regex = "(?P<stream>[_%\\.\\-\\w]+)";
+        constexpr auto * database_name_regex = "(?P<database>[\\w]+)";
 
         auto & factory = RestRouterFactory::instance();
-        for (const auto * prefix : {"proton", "timeplusd"})
+
+        for (const auto * prefix : {"timeplusd", "proton"})
         {
             factory.registerRouterHandler(
                 fmt::format("/{}/v1/ingest/streams/{}(\\?mode=\\w+){{0,1}}", prefix, stream_name_regex),
@@ -58,6 +63,12 @@ public:
                 [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                     return std::make_shared<IngestRestRouterHandler>(query_context);
                 });
+
+            /// /proton/v2/ingest/{database}/streams/...  -> requires database in path
+            factory.registerRouterHandler(
+                fmt::format("/{}/v2/ingest/{}/streams/{}(\\?mode=\\w+){{0,1}}", prefix, database_name_regex, stream_name_regex),
+                "POST",
+                [](ContextMutablePtr query_context) { return std::make_shared<IngestV2RestRouterHandler>(query_context); });
 
             factory.registerRouterHandler(
                 fmt::format("/{}/v1/ingest/rawstores/{}(\\?mode=\\w+){{0,1}}", prefix, stream_name_regex),
@@ -78,13 +89,6 @@ public:
                 "POST",
                 [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                     return std::make_shared<DB::PipelineMetricHandler>(query_context);
-                });
-
-            factory.registerRouterHandler(
-                fmt::format("/{}/v1/ingest/statuses", prefix),
-                "POST",
-                [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                    return std::make_shared<IngestStatusHandler>(query_context);
                 });
 
             factory.registerRouterHandler(
@@ -111,6 +115,31 @@ public:
                 [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                     return std::make_shared<TabularTableRestRouterHandler>(query_context);
                 });
+
+            /// V2 DDL GET - /v2/ddl/{database}/streams/({stream})
+            /// List all streams
+            factory.registerRouterHandler(
+                fmt::format("/{}/v2/ddl/(?P<database>[%\\w]+)/streams/?(?:\\?[\\w\\-=&#]+)?$", prefix),
+                "GET",
+                [](ContextMutablePtr query_context) { return std::make_shared<TabularTableV2RestRouterHandler>(query_context); });
+
+            /// Get specific stream
+            factory.registerRouterHandler(
+                fmt::format("/{}/v2/ddl/(?P<database>[%\\w]+)/streams/(?P<stream>[%\\-\\.\\w]+)(?:\\?[\\w\\-=&#]+)?$", prefix),
+                "GET",
+                [](ContextMutablePtr query_context) { return std::make_shared<TabularTableV2RestRouterHandler>(query_context); });
+
+            /// V2 DDL POST - /v2/ddl/{database}/streams
+            factory.registerRouterHandler(
+                fmt::format("/{}/v2/ddl/{}/streams/?(?:\\?[\\w\\-=&#]+)?$", prefix, database_name_regex),
+                "POST",
+                [](ContextMutablePtr query_context) { return std::make_shared<TabularTableV2RestRouterHandler>(query_context); });
+
+            /// V2 DDL PATCH/DELETE - /v2/ddl/{database}/streams/{stream}
+            factory.registerRouterHandler(
+                fmt::format("/{}/v2/ddl/{}/streams/{}(?:\\?[\\w\\-=&#]+)?$", prefix, database_name_regex, stream_name_regex),
+                "PATCH/DELETE",
+                [](ContextMutablePtr query_context) { return std::make_shared<TabularTableV2RestRouterHandler>(query_context); });
 
             factory.registerRouterHandler(
                 fmt::format("/{}/v1/ddl/externalstreams(\\?[\\w\\-=&#]+){{0,1}}", prefix),
@@ -209,13 +238,17 @@ public:
                     return std::make_shared<DB::StorageInfoHandler>(query_context);
                 });
 
-            /// POST /proton/v1/system?<params>
+            /// GET: /proton/v1/dependencies[/{database}[/{stream}]]
             factory.registerRouterHandler(
-                fmt::format("/{}/v1/system(\\?[\\w\\-=&#]+){{0,1}}", prefix),
-                "POST",
+                fmt::format(
+                    "/{}/v1/dependencies(/?(\\?[\\w\\-=&#]+){{0,1}}$|/(?P<database>[%\\w]+)(/?(\\?[\\w\\-=&#]+){{0,1}}$|/"
+                    "(?P<stream>[%\\-\\.\\w]+)(\\?[\\w\\-=&#]+){{0,1}})(\\?[\\w\\-=&#]+){{0,1}})",
+                    prefix),
+                "GET",
                 [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                    return std::make_shared<DB::SystemCommandHandler>(query_context);
+                    return std::make_shared<DependenciesHandler>(query_context);
                 });
+
 
             /// GET/POST: /proton/v1/telemetry
             factory.registerRouterHandler(
@@ -225,27 +258,38 @@ public:
                     return std::make_shared<DB::TelemetryHandler>(query_context);
                 });
 
+            /// GET: /proton/v1/is_python_enabled
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/python_status", prefix),
+                "GET",
+                [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                    return std::make_shared<DB::PythonStatusHandler>(query_context);
+                });
+
+            /// GET/POST: /proton/v1/log_level
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/log_level", prefix),
+                "GET/POST",
+                [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                    return std::make_shared<DB::LogLevelHandler>(query_context);
+                });
+
             factory.registerRouterHandler(
                 fmt::format("/{}/apis", prefix),
                 "GET",
                 [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                     return std::make_shared<DB::APISpecHandler>(query_context);
                 });
-        }
-    }
 
-    static void registerMetaStoreRestRouterHandlers()
-    {
-        auto & factory = RestRouterFactory::instance();
-#if USE_NURAFT
-        /// GET/POST/DELETE: /proton/metastore/{namespace} [/{key}] [?{params}]
-        factory.registerRouterHandler(
-            "/proton/metastore/[\\w\\W]+",
-            "GET/POST/DELETE",
-            [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                return std::make_shared<DB::MetaStoreHandler>(query_context);
-            });
+#if USE_PYTHON_UDF
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/python_packages(/?(\\?[\\w\\-=&#]+){{0,1}}$|/(?P<name>[%\\w]+))", prefix),
+                "GET/POST/DELETE",
+                [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                    return std::make_shared<DB::PythonPackageHandler>(query_context);
+                });
 #endif
+        }
     }
 
 public:

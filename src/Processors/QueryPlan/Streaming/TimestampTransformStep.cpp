@@ -17,6 +17,7 @@ DB::ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = true,
+            .preserves_substream = true,
         },
         {
             .preserves_number_of_rows = true,
@@ -37,6 +38,12 @@ void TimestampTransformStep::transformPipeline(QueryPipelineBuilder & pipeline, 
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         return std::make_shared<TimestampTransform>(header, getOutputStream().header, timestamp_func_desc, backfill);
     });
+}
+
+void TimestampTransformStep::updateOutputStream()
+{
+    auto & output_header = output_stream->header;
+    output_stream = createOutputStream(input_streams.front(), std::move(output_header), getDataStreamTraits());
 }
 }
 }

@@ -1,0 +1,52 @@
+tags:
+- udf
+description: UDA, exception - finalize
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: exception_f
+    arguments:
+    - name: value
+      type: float32
+    is_aggregation: true
+    return_type: float32
+    source: '{initialize:function(){},process:function(prices){},finalize:function(){throw
+      new Error(''js exception'');}}'
+- type: wait
+  time: 5
+
+- name: udf-15
+  type: stream
+  query: select s, exception_f(f32) from udf_types group by s order by s
+  schema:
+  - name: s
+    type: string
+  - name: exception_f(f32)
+    type: float32
+- type: wait
+  time: 2
+
+- type: rest
+  url: /proton/v1/ingest/streams/udf_types
+  method: POST
+  data:
+    columns:
+    - i
+    - i8
+    - f32
+    - s
+    - dt
+    data:
+    - [1, 1, 1.0, s1, '2020-02-02 20:00:00']
+
+- type: check
+  target_name: udf-15
+  expected_result:
+  - ["error_code:2533"]

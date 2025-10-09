@@ -1,0 +1,22 @@
+description: |
+  (#8747) Got telemetry SSL exception "Failed to send telemetry: SSL Exception: error:0A000086:SSL routines::certificate"
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: wait
+    time: 2
+
+  - type: command
+    name: fixed-issue-29
+    node: [p1]
+    shell: |
+      log_file=/var/log/proton-server/proton-server.log
+      log_check=$(grep 'error:0A000086:SSL routines::certificate verify failed' $log_file)
+      echo "$log_check"
+
+  - type: check
+    target_name: fixed-issue-29
+    expected_result: [""]

@@ -19,11 +19,21 @@ public:
     bool or_replace = false;
     bool if_not_exists = false;
 
+    enum class Language
+    {
+        SQL,
+        JavaScript,
+        Python,
+        Remote,
+        Unknown
+    };
+
     /// proton: starts
     bool is_aggregation = false;
-    String lang = "SQL";
+    Language lang = Language::Unknown;
     ASTPtr arguments;
     ASTPtr return_type;
+    ASTPtr udf_settings = nullptr;
     /// proton: ends
 
     String getID(char delim) const override { return "CreateFunctionQuery" + (delim + getFunctionName()); }
@@ -39,11 +49,16 @@ public:
     /// proton: starts
     Poco::JSON::Object::Ptr toJSON() const;
 
-    /// If it is a JavaScript UDF
-    bool isJavaScript() const noexcept { return lang == "JavaScript"; }
+    String getSource() const;
+    bool isAggregation() const;
+    String getReturnType() const;
+    ASTPtr settings () const { return udf_settings; }
 
-    /// If it is a JavaScript UDF
-    bool isRemote() const noexcept { return lang == "Remote"; }
+    bool isJavaScript() const noexcept { return lang == Language::JavaScript; }
+    bool isPython() const noexcept { return lang == Language::Python; }
+    bool isRemote() const noexcept { return lang == Language::Remote; }
+    bool isUDF() const noexcept { return isJavaScript() || isPython() || isRemote(); }
+    bool isSQL() const noexcept { return lang == Language::SQL; }
     /// proton: ends
 };
 

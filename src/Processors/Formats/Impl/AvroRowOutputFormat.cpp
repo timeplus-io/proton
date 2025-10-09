@@ -10,6 +10,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -26,12 +27,14 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
 
+#include <Common/re2.h>
+
 #include <DataFile.hh>
 #include <Encoder.hh>
 #include <Node.hh>
 #include <Schema.hh>
 
-#include <re2/re2.h>
+#include <boost/algorithm/string.hpp>
 
 /// proton: starts
 #include <Formats/Avro/OutputStreamWriteBufferAdapter.h>
@@ -71,7 +74,43 @@ private:
     const RE2 string_to_string_regexp;
 };
 
-AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeFn(DataTypePtr data_type, size_t & type_name_increment, const String & column_name)
+namespace
+{
+
+template <typename DecimalType>
+AvroSerializer::SchemaWithSerializeFn createDecimalSchemaWithSerializeFn(const DataTypePtr & data_type)
+{
+    auto schema = avro::BytesSchema();
+    const auto & provided_type = assert_cast<const DecimalType &>(*data_type);
+    auto logical_type = avro::LogicalType(avro::LogicalType::DECIMAL);
+    logical_type.setScale(provided_type.getScale());
+    logical_type.setPrecision(provided_type.getPrecision());
+    schema.root()->setLogicalType(logical_type);
+    return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                const auto & col = assert_cast<const typename DecimalType::ColumnType &>(column);
+                WriteBufferFromOwnString buf;
+                writeBinaryBigEndian(col.getElement(row_num).value, buf);
+                encoder.encodeBytes(reinterpret_cast<const uint8_t *>(buf.str().data()), buf.str().size());
+            }};
+}
+
+template <typename BigIntegerType>
+AvroSerializer::SchemaWithSerializeFn createBigIntegerSchemaWithSerializeFn(const DataTypePtr & data_type, size_t type_name_increment)
+{
+    auto schema = avro::FixedSchema(sizeof(BigIntegerType), boost::algorithm::to_lower_copy(data_type->getName()) + std::to_string(type_name_increment));
+    return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+    {
+        const auto & col = assert_cast<const ColumnVector<BigIntegerType> &>(column);
+        WriteBufferFromOwnString buf;
+        writeBinary(col.getElement(row_num), buf);
+        encoder.encodeFixed(reinterpret_cast<const uint8_t *>(buf.str().data()), buf.str().size());
+    }};
+}
+
+}
+
+AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeFn(const DataTypePtr & data_type, size_t & type_name_increment, const String & column_name)
 {
     ++type_name_increment;
 
@@ -139,6 +178,14 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             {
                 encoder.encodeDouble(assert_cast<const ColumnFloat64 &>(column).getElement(row_num));
             }};
+        case TypeIndex::Int128:
+            return createBigIntegerSchemaWithSerializeFn<Int128>(data_type, type_name_increment);
+        case TypeIndex::UInt128:
+            return createBigIntegerSchemaWithSerializeFn<UInt128>(data_type, type_name_increment);
+        case TypeIndex::Int256:
+            return createBigIntegerSchemaWithSerializeFn<Int256>(data_type, type_name_increment);
+        case TypeIndex::UInt256:
+            return createBigIntegerSchemaWithSerializeFn<UInt256>(data_type, type_name_increment);
         case TypeIndex::Date:
         {
             auto schema = avro::IntSchema();
@@ -146,6 +193,16 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
                 UInt16 date = assert_cast<const DataTypeDate::ColumnType &>(column).getElement(row_num);
+                encoder.encodeInt(date);
+            }};
+        }
+        case TypeIndex::Date32:
+        {
+            auto schema = avro::IntSchema();
+            schema.root()->setLogicalType(avro::LogicalType(avro::LogicalType::DATE));
+            return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                Int32 date = assert_cast<const ColumnInt32 &>(column).getElement(row_num);
                 encoder.encodeInt(date);
             }};
         }
@@ -159,13 +216,29 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             else if (provided_type.getScale() == 6)
                 schema.root()->setLogicalType(avro::LogicalType(avro::LogicalType::TIMESTAMP_MICROS));
             else
-                break;
+                return createDecimalSchemaWithSerializeFn<DataTypeDateTime64>(data_type);
 
             return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
                 const auto & col = assert_cast<const DataTypeDateTime64::ColumnType &>(column);
                 encoder.encodeLong(col.getElement(row_num));
             }};
+        }
+        case TypeIndex::Decimal32:
+        {
+            return createDecimalSchemaWithSerializeFn<DataTypeDecimal32>(data_type);
+        }
+        case TypeIndex::Decimal64:
+        {
+            return createDecimalSchemaWithSerializeFn<DataTypeDecimal64>(data_type);
+        }
+        case TypeIndex::Decimal128:
+        {
+            return createDecimalSchemaWithSerializeFn<DataTypeDecimal128>(data_type);
+        }
+        case TypeIndex::Decimal256:
+        {
+            return createDecimalSchemaWithSerializeFn<DataTypeDecimal256>(data_type);
         }
         case TypeIndex::String:
             if (traits->isStringAsString(column_name))
@@ -339,13 +412,13 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         {
             const auto & map_type = assert_cast<const DataTypeMap &>(*data_type);
             const auto & keys_type = map_type.getKeyType();
-            if (!isStringOrFixedString(keys_type))
-                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Avro Maps support only keys with type String, got {}", keys_type->getName());
+            auto keys_serialization = keys_type->getDefaultSerialization();
 
-            auto keys_serializer = [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            auto keys_serializer = [keys_serialization, this](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
-                const StringRef & s = column.getDataAt(row_num);
-                encoder.encodeString(s.toString());
+                WriteBufferFromOwnString buf;
+                keys_serialization->serializeText(column, row_num, buf, settings);
+                encoder.encodeString(buf.str());
             };
 
             const auto & values_type = map_type.getValueType();
@@ -383,8 +456,8 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
 }
 
 
-AvroSerializer::AvroSerializer(const ColumnsWithTypeAndName & columns, std::unique_ptr<AvroSerializerTraits> traits_)
-    : traits(std::move(traits_))
+AvroSerializer::AvroSerializer(const ColumnsWithTypeAndName & columns, std::unique_ptr<AvroSerializerTraits> traits_, const FormatSettings & settings_)
+    : traits(std::move(traits_)), settings(settings_)
 {
     avro::RecordSchema record_schema("row");
 
@@ -437,10 +510,10 @@ static avro::Codec getCodec(const std::string & codec_name)
 }
 
 AvroRowOutputFormat::AvroRowOutputFormat(
-    WriteBuffer & out_, const Block & header_, const RowOutputFormatParams & params_, const FormatSettings & settings_)
-    : IRowOutputFormat(header_, out_, params_, ProcessorID::AvroRowOutputFormatID)
+    WriteBuffer & out_, const Block & header_, const FormatSettings & settings_)
+    : IRowOutputFormat(header_, out_, ProcessorID::AvroRowOutputFormatID)
     , settings(settings_)
-    , serializer(header_.getColumnsWithTypeAndName(), std::make_unique<AvroSerializerTraits>(settings))
+    , serializer(header_.getColumnsWithTypeAndName(), std::make_unique<AvroSerializerTraits>(settings), settings)
 {
 }
 
@@ -472,56 +545,14 @@ void AvroRowOutputFormat::write(const Columns & columns, size_t row_num)
     file_writer_ptr->incr();
 }
 
-void AvroRowOutputFormat::writeSuffix()
+void AvroRowOutputFormat::finalizeImpl()
+{
+    file_writer_ptr->close();
+}
+
+void AvroRowOutputFormat::resetFormatterImpl()
 {
     file_writer_ptr.reset();
-}
-
-void AvroRowOutputFormat::consume(DB::Chunk chunk)
-{
-    if (params.callback)
-        consumeImplWithCallback(std::move(chunk));
-    else
-        consumeImpl(std::move(chunk));
-}
-
-void AvroRowOutputFormat::consumeImpl(DB::Chunk chunk)
-{
-    auto num_rows = chunk.getNumRows();
-    const auto & columns = chunk.getColumns();
-
-    for (size_t row = 0; row < num_rows; ++row)
-    {
-        write(columns, row);
-    }
-
-}
-
-void AvroRowOutputFormat::consumeImplWithCallback(DB::Chunk chunk)
-{
-    auto num_rows = chunk.getNumRows();
-    const auto & columns = chunk.getColumns();
-
-    for (size_t row = 0; row < num_rows;)
-    {
-        size_t current_row = row;
-        /// used by WriteBufferToKafkaProducer to obtain auxiliary data
-        ///   from the starting row of a file
-
-        writePrefixIfNot();
-        for (size_t row_in_file = 0;
-             row_in_file < settings.avro.output_rows_in_file && row < num_rows;
-             ++row, ++row_in_file)
-        {
-            write(columns, row);
-        }
-
-        file_writer_ptr->flush();
-        writeSuffix();
-        need_write_prefix = true;
-
-        params.callback(columns, current_row);
-    }
 }
 
 void registerOutputFormatAvro(FormatFactory & factory)
@@ -529,7 +560,6 @@ void registerOutputFormatAvro(FormatFactory & factory)
     factory.registerOutputFormat("Avro", [](
         WriteBuffer & buf,
         const Block & sample,
-        const RowOutputFormatParams & params,
         const FormatSettings & settings) -> OutputFormatPtr
     {
             /// proton: starts
@@ -541,16 +571,16 @@ void registerOutputFormatAvro(FormatFactory & factory)
             {
                 /// Schema is part of the data
                 if (settings.schema.format_schema.empty())
-                    return std::make_shared<AvroRowOutputFormat>(buf, sample, params, settings);
+                    return std::make_shared<AvroRowOutputFormat>(buf, sample, settings);
 
                 /// Using a separate schema
-                return std::make_shared<AvroSchemaRowOutputFormat>(buf, sample, params, FormatSchemaInfo(settings, "Avro", false), settings);
+                return std::make_shared<AvroSchemaRowOutputFormat>(buf, sample, FormatSchemaInfo(settings, "Avro", false), settings);
             }
 
             if (!settings.schema.format_schema.empty())
                 throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "schema_registry_url and format_schema cannot be used at the same time");
 
-            return std::make_shared<AvroConfluentRowOutputFormat>(buf, sample, params, settings);
+            return std::make_shared<AvroConfluentRowOutputFormat>(buf, sample, settings);
             /// proton: ends
         });
     factory.markFormatHasNoAppendSupport("Avro");

@@ -2,10 +2,10 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/IdentifierSemantic.h>
-#include <Storages/IStorage.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Processors/QueryPlan/SourceStepWithFilter.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 
 namespace DB
@@ -83,35 +83,18 @@ bool removeJoin(ASTSelectQuery & select, TreeRewriterResult & rewriter_result, C
 }
 
 Block getHeaderForProcessingStage(
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        const SelectQueryInfo & query_info,
-        ContextPtr context,
-        QueryProcessingStage::Enum processed_stage)
+    const Names & column_names,
+    const StorageSnapshotPtr & storage_snapshot,
+    const SelectQueryInfo & query_info,
+    ContextPtr context,
+    QueryProcessingStage::Enum processed_stage)
 {
     switch (processed_stage)
     {
         case QueryProcessingStage::FetchColumns:
         {
             Block header = storage_snapshot->getSampleBlockForColumns(column_names);
-
-            if (query_info.prewhere_info)
-            {
-                auto & prewhere_info = *query_info.prewhere_info;
-
-                if (prewhere_info.row_level_filter)
-                {
-                    header = prewhere_info.row_level_filter->updateHeader(std::move(header));
-                    header.erase(prewhere_info.row_level_column_name);
-                }
-
-                if (prewhere_info.prewhere_actions)
-                    header = prewhere_info.prewhere_actions->updateHeader(std::move(header));
-
-                if (prewhere_info.remove_prewhere_column)
-                    header.erase(prewhere_info.prewhere_column_name);
-            }
-            return header;
+            return SourceStepWithFilter::applyPrewhereActions(header, query_info.prewhere_info);
         }
         case QueryProcessingStage::WithMergeableState:
         case QueryProcessingStage::Complete:
@@ -132,7 +115,7 @@ Block getHeaderForProcessingStage(
             return InterpreterSelectQuery(query, context, std::move(pipe), SelectQueryOptions(processed_stage).analyze()).getSampleBlock();
         }
     }
-    throw Exception("Logical Error: unknown processed stage.", ErrorCodes::LOGICAL_ERROR);
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical Error: unknown processed stage.");
 }
 
 }

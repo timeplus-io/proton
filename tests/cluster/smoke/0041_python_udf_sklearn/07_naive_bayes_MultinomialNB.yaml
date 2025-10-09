@@ -1,0 +1,74 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, xx int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getMultinomialNB(x int, xx int, y int) RETURNS int LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      from sklearn.naive_bayes import MultinomialNB
+
+      class getMultinomialNB:
+          def __init__(self):
+              self.multinomial_nb = 0
+
+          def serialize(self):
+              data = {}
+              data['multinomial_nb'] = self.multinomial_nb
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.multinomial_nb = data['multinomial_nb']
+
+          def merge(self, other):
+              self.multinomial_nb = self.multinomial_nb
+
+          def process(self, xs, xxs, ys):
+              X = np.stack((xs, xxs), axis=1)
+              y = np.array(ys)
+              if len(X) > 1:
+                  clf = MultinomialNB()
+                  clf.fit(X, y)
+                  tmp_multinomial_nb = clf.predict(X[2:3])[0]
+                  self.multinomial_nb = int(tmp_multinomial_nb)
+
+          def finalize(self):
+              return self.multinomial_nb
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf6-7-1
+    type: stream
+    query: select getMultinomialNB(x, xx, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, xx, y) values
+          (3, 4, 1)(0, 1, 2)(3, 0, 3)
+          (0, 1, 4)(4, 4, 5)(1, 2, 6);
+
+  - type: check
+    target_name: python-udf6-7-1
+    expected_result:
+      - [3]

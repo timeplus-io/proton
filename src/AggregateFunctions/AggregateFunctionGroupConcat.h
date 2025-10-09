@@ -57,7 +57,7 @@ public:
 
     String getName() const override;
 
-    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeString>(); }
+    static DataTypePtr createResultType() { return std::make_shared<DataTypeString>(); }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena) const override;
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override;

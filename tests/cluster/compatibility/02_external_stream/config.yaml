@@ -1,0 +1,5 @@
+name: external_stream
+description: Test covers the external stream query compatibility cases.
+tags:
+  - compatibility
+  - external_stream

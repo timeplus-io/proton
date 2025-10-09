@@ -39,7 +39,7 @@ public:
 	~HTTPServerConnectionFactory();
 		/// Destroys the HTTPServerConnectionFactory.
 
-	TCPServerConnection* createConnection(const StreamSocket& socket);
+	std::shared_ptr<TCPServerConnection> createConnection(const StreamSocket& socket);
 		/// Creates an instance of HTTPServerConnection
 		/// using the given StreamSocket.
 	

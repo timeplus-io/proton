@@ -1,0 +1,29 @@
+tags:
+  - syntax exception
+  - bug
+description: stream query expected exception:global stream query w/ PERIODIC INTERVAL but no aggreagation
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: 101
+    query: SELECT * FROM test_smoke WHERE value >25 EMIT STREAM PERIODIC INTERVAL 2 SECOND
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp
+        type: datetime64(3)
+      - name: _tp_time
+        type: datetime64(3)
+
+  - type: check
+    target_name: 101
+    expected_result:
+      - ['error_code:62']

@@ -12,11 +12,14 @@ namespace ErrorCodes
 CubeTransform::CubeTransform(Block header, AggregatingTransformParamsPtr params_)
     : IAccumulatingTransform(std::move(header), appendGroupingSetColumn(params_->getHeader()), ProcessorID::CubeTransformID)
     , params(std::move(params_))
-    , keys(params->params.keys)
     , aggregates_mask(getAggregatesMask(params->getHeader(), params->params.aggregates))
 {
+    keys.reserve(params->params.keys_size);
+    for (const auto & key : params->params.keys)
+        keys.emplace_back(input.getHeader().getPositionByName(key));
+
     if (keys.size() >= 8 * sizeof(mask))
-        throw Exception("Too many keys are used for CubeTransform.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Too many keys are used for CubeTransform.");
 }
 
 Chunk CubeTransform::merge(Chunks && chunks, bool final)
@@ -25,7 +28,7 @@ Chunk CubeTransform::merge(Chunks && chunks, bool final)
     for (auto & chunk : chunks)
         rollup_blocks.emplace_back(getInputPort().getHeader().cloneWithColumns(chunk.detachColumns()));
 
-    auto rollup_block = params->aggregator.mergeBlocks(rollup_blocks, final);
+    auto rollup_block = params->aggregator.mergeBlocks(rollup_blocks, final, is_cancelled);
     auto num_rows = rollup_block.rows();
     return Chunk(rollup_block.getColumns(), num_rows);
 }

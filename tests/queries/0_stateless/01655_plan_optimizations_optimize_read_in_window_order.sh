@@ -14,8 +14,8 @@ $CLICKHOUSE_CLIENT -q "create table ${name} engine=MergeTree order by tuple() as
 $CLICKHOUSE_CLIENT -q "create table ${name}_n engine=MergeTree order by n as select * from ${name} order by n"
 $CLICKHOUSE_CLIENT -q "create table ${name}_n_x engine=MergeTree order by (n, x) as select * from ${name} order by n, x"
 
-$CLICKHOUSE_CLIENT -q "optimize table ${name}_n final"
-$CLICKHOUSE_CLIENT -q "optimize table ${name}_n_x final"
+$CLICKHOUSE_CLIENT -q "optimize stream ${name}_n final"
+$CLICKHOUSE_CLIENT -q "optimize stream ${name}_n_x final"
 
 echo 'Partial sorting plan'
 echo '  optimize_read_in_window_order=0'

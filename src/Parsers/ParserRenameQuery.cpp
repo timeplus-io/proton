@@ -123,11 +123,13 @@ bool ParserRenameQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     }
 
     String cluster_str;
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// proton: starts
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+    /// proton: ends
 
     auto query = std::make_shared<ASTRenameQuery>();
     query->cluster = cluster_str;

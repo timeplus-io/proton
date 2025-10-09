@@ -1,0 +1,128 @@
+tags:
+- query_state
+- data_enrichment_join
+- left-join
+description: append-only left asof JOIN append-only state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream3;
+- type: query
+  sql: drop stream if exists test19_right_stream3;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream3(i int, k string);
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_right_stream3(j int, kk string);
+- type: wait
+  time: 1
+
+- name: '19358'
+  type: stream
+  query_id: '19358'
+  query: subscribe to select i, k, j, kk FROM test19_left_stream3 left asof join test19_right_stream3
+    ON k = kk AND i <= j settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_right_stream3(j, kk) VALUES
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [1, 'a']
+  - [3, 'a']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3(i, k) VALUES
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [2, 'a']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19358'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_right_stream3(j, kk) VALUES
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [2, 'b']
+  - [4, 'b']
+
+- name: 19358-1
+  type: stream
+  query: recover from '19358'
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3(i, k) VALUES
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [3, 'b']
+  - [5, 'a']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19358' sync
+
+- type: query
+  sql: unsubscribe to '19358'
+
+- type: check
+  target_name: '19358'
+  expected_result:
+  - [2, a, 3, a]
+
+- type: check
+  target_name: 19358-1
+  expected_result:
+  - [3, b, 4, b]
+  - [5, a, 0, '']

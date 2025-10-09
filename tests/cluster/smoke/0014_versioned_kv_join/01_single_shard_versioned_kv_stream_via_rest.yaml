@@ -1,0 +1,34 @@
+tags:
+  - changelog_stream
+  - restapi
+description: single shard versioned_kv stream creation via rest
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test15_versioned_kv_stream_rest
+  - type: wait
+    time: 1
+
+  - type: rest
+    name: 1
+    url: /proton/v1/ddl/streams
+    method: POST
+    query_id: "1501"
+    data:
+      name: test15_versioned_kv_stream_rest
+      type: table
+      columns:
+        - name: i
+          type: int64
+        - name: k
+          type: string
+      shards: 3
+      mode: changelog_kv
+      primary_key: k
+      
+  - type: check
+    target_name: 1
+    expected_result:
+      - request_id: "1501"

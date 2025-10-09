@@ -1,3 +1,5 @@
+SET formatdatetime_parsedatetime_m_is_month_name=true;
+
 SELECT DATE_FORMAT(to_datetime('2018-01-02 22:33:44'), '%a'), DATE_FORMAT(to_date('2018-01-02'), '%a');
 SELECT DATE_FORMAT(to_datetime('2018-01-02 22:33:44'), '%b'), DATE_FORMAT(to_date('2018-01-02'), '%b');
 SELECT DATE_FORMAT(to_datetime('2018-01-02 22:33:44'), '%c'), DATE_FORMAT(to_date('2018-01-02'), '%c');

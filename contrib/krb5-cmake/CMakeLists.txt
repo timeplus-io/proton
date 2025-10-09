@@ -220,10 +220,10 @@ set(ALL_SRCS
     "${KRB5_SOURCE_DIR}/lib/crypto/krb/prf_rc4.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/krb/s2k_pbkdf2.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/aes.c"
+    "${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/camellia.c"
     # "${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/des.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/rc4.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/des3.c"
-    #"${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/camellia.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/openssl/sha256.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/openssl/hmac.c"
     "${KRB5_SOURCE_DIR}/lib/crypto/openssl/pbkdf2.c"
@@ -577,12 +577,6 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
     list(APPEND ALL_SRCS "${CMAKE_CURRENT_BINARY_DIR}/include_private/kcmrpc.c")
 endif()
-
-if (ENABLE_EXTERNAL_OPENSSL)
-    list(REMOVE_ITEM ALL_SRCS "${KRB5_SOURCE_DIR}/lib/crypto/openssl/enc_provider/aes.c")
-    list(APPEND ALL_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/aes.c")
-endif ()
-
 
 target_sources(_krb5 PRIVATE
     ${ALL_SRCS}

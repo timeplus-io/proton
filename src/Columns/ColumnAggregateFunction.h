@@ -51,13 +51,13 @@ using ConstArenas = std::vector<ConstArenaPtr>;
   *  specifying which individual values should be destroyed and which ones should not.
   * Clearly, this method would have a substantially non-zero price.
   */
-class ColumnAggregateFunction final : public COWHelper<IColumn, ColumnAggregateFunction>
+class ColumnAggregateFunction final : public COWHelper<IColumnHelper<ColumnAggregateFunction>, ColumnAggregateFunction>
 {
 public:
     using Container = PaddedPODArray<AggregateDataPtr>;
 
 private:
-    friend class COWHelper<IColumn, ColumnAggregateFunction>;
+    friend class COWHelper<IColumnHelper<ColumnAggregateFunction>, ColumnAggregateFunction>;
 
     /// Arenas used by function states that are created elsewhere. We own these
     /// arenas in the sense of extending their lifetime, but do not modify them.
@@ -107,7 +107,7 @@ private:
 public:
     ~ColumnAggregateFunction() override;
 
-    void set(const AggregateFunctionPtr & func_, size_t version_);
+    void set(const AggregateFunctionPtr & func_, std::optional<size_t> version_ = std::nullopt);
 
     AggregateFunctionPtr getAggregateFunction() { return func; }
     AggregateFunctionPtr getAggregateFunction() const { return func; }
@@ -144,14 +144,21 @@ public:
 
     bool isDefaultAt(size_t) const override
     {
-        throw Exception("Method isDefaultAt is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method isDefaultAt is not supported for ColumnAggregateFunction");
     }
 
     StringRef getDataAt(size_t n) const override;
 
     void insertData(const char * pos, size_t length) override;
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertFrom(const IColumn & from, size_t n) override;
+#else
+    using IColumn::insertFrom;
+
+    void doInsertFrom(const IColumn & from, size_t n) override;
+#endif
+
 
     void insertFrom(ConstAggregateDataPtr place);
 
@@ -163,6 +170,8 @@ public:
     Arena & createOrGetArena();
 
     void insert(const Field & x) override;
+
+    bool tryInsert(const Field & x) override;
 
     void insertDefault() override;
 
@@ -188,7 +197,11 @@ public:
 
     void protect() override;
 
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertRangeFrom(const IColumn & from, size_t start, size_t length) override;
+#else
+    void doInsertRangeFrom(const IColumn & from, size_t start, size_t length) override;
+#endif
 
     void popBack(size_t n) override;
 
@@ -207,31 +220,48 @@ public:
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
-    void gather(ColumnGathererStream & gatherer_stream) override;
-
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     int compareAt(size_t, size_t, const IColumn &, int) const override
+#else
+    int doCompareAt(size_t, size_t, const IColumn &, int) const override
+#endif
     {
         return 0;
     }
 
+    bool equal(size_t, size_t, const IColumn &, int) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method equal is not supported for ColumnAggregateFunction");
+    }
+
+    bool equal(size_t, const Field &, int) const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method equal is not supported for ColumnAggregateFunction");
+    }
+
     void compareColumn(const IColumn &, size_t, PaddedPODArray<UInt64> *, PaddedPODArray<Int8> &, int, int) const override
     {
-        throw Exception("Method compareColumn is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method compareColumn is not supported for ColumnAggregateFunction");
     }
 
     bool hasEqualValues() const override
     {
-        throw Exception("Method hasEqualValues is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method hasEqualValues is not supported for ColumnAggregateFunction");
     }
 
     double getRatioOfDefaultRows(double) const override
     {
-        throw Exception("Method getRatioOfDefaultRows is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
+        return 0.0;
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        return 0;
     }
 
     void getIndicesOfNonDefaultRows(Offsets &, size_t, size_t) const override
     {
-        throw Exception("Method getIndicesOfNonDefaultRows is not supported for ColumnAggregateFunction", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getIndicesOfNonDefaultRows is not supported for ColumnAggregateFunction");
     }
 
     void getPermutation(PermutationSortDirection direction, PermutationSortStability stability,

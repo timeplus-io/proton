@@ -18,10 +18,10 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 {
     auto res = std::make_shared<ASTTableExpression>();
 
-    /// proton: starts. don't allows aliases without AS keyword.
-    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), false).parse(pos, res->subquery, expected)
-        && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(true), false).parse(pos, res->table_function, expected)
-        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), false)
+    /// proton: starts. allows aliases without AS keyword.
+    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), true).parse(pos, res->subquery, expected)
+        && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(true, true), true).parse(pos, res->table_function, expected) /// proton: update
+        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true)
                 .parse(pos, res->database_and_table_name, expected))
     /// proton: ends.
         return false;
@@ -194,11 +194,11 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
 
             if (table_join->strictness != JoinStrictness::Unspecified
                 && table_join->kind == JoinKind::Cross)
-                throw Exception("You must not specify ANY or ALL for CROSS JOIN.", ErrorCodes::SYNTAX_ERROR);
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "You must not specify ANY or ALL for CROSS JOIN.");
 
             if ((table_join->strictness == JoinStrictness::Semi || table_join->strictness == JoinStrictness::Anti) &&
                 (table_join->kind != JoinKind::Left && table_join->kind != JoinKind::Right))
-                throw Exception("SEMI|ANTI JOIN should be LEFT or RIGHT.", ErrorCodes::SYNTAX_ERROR);
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "SEMI|ANTI JOIN should be LEFT or RIGHT.");
 
             if (!ParserKeyword("JOIN").ignore(pos, expected))
                 return false;

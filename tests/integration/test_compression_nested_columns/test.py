@@ -43,8 +43,15 @@ def test_nested_compression_codec(start_cluster):
             column_array Array(Array(UInt64)) CODEC(T64, LZ4),
             column_bad LowCardinality(Int64) CODEC(Delta)
         ) ENGINE = ReplicatedMergeTree('/t', '{}') ORDER BY tuple() PARTITION BY key
-        SETTINGS min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0;
-        """.format(i), settings={"allow_suspicious_codecs" : "1", "allow_suspicious_low_cardinality_types" : "1"})
+        SETTINGS min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0, replace_long_file_name_to_hash = 0;
+        """.format(
+                i
+            ),
+            settings={
+                "allow_suspicious_codecs": "1",
+                "allow_suspicious_low_cardinality_types": "1",
+            },
+        )
 
     node1.query("INSERT INTO compression_table VALUES (1, 1, [[77]], 32)")
 

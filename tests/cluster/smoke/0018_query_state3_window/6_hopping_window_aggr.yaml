@@ -1,0 +1,102 @@
+tags:
+  - query_state
+description: hopping window aggregation state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream3
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream3 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1970'
+    query_id: '1970'
+    type: stream
+    query: subscribe to select emit_version(), id, max(value), window_start, window_end
+      from hop(test19_state_stream3, timestamp, interval 3 second, interval 5 second)
+      group by id, window_start, window_end emit stream settings checkpoint_interval=1
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: id
+        type: string
+      - name: max(value)
+        type: float32
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev2',
+      'ca', 58.3, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev6',
+      'ca', 66, '2020-02-02 20:00:04')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev6',
+      'ca', 69, '2020-02-02 20:00:06')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev8',
+      'ca', 68, '2020-02-02 20:00:07')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream3(id, location, value, timestamp) values ('dev8',
+      'ca', 67, '2020-02-02 20:00:10')
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id = '1970'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1970'
+  
+  - type: check
+    target_name: '1970'
+    mode: random
+    expected_result:
+      - [ '0', dev1, '57.3', '2020-02-02 19:59:57', '2020-02-02 20:00:02' ]
+      - [ '1', dev1, '57.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '1', dev2, '58.3', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '1', dev6, '66', '2020-02-02 20:00:00', '2020-02-02 20:00:05' ]
+      - [ '2', dev2, '58.3', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]
+      - [ '2', dev6, '69', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]
+      - [ '2', dev8, '68', '2020-02-02 20:00:03', '2020-02-02 20:00:08' ]

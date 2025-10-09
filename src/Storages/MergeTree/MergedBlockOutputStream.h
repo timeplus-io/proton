@@ -20,10 +20,11 @@ public:
         const NamesAndTypesList & columns_list_,
         const MergeTreeIndices & skip_indices,
         CompressionCodecPtr default_codec_,
-        const MergeTreeTransactionPtr & txn,
+        TransactionID tid,
         bool reset_columns_ = false,
         bool blocks_are_granules_size = false,
-        const WriteSettings & write_settings = {});
+        const WriteSettings & write_settings = {},
+        const MergeTreeIndexGranularity & computed_index_granularity = {});
 
     Block getHeader() const { return metadata_snapshot->getSampleBlock(); }
 
@@ -44,9 +45,9 @@ public:
         std::unique_ptr<Impl> impl;
 
         explicit Finalizer(std::unique_ptr<Impl> impl_);
-        ~Finalizer();
         Finalizer(Finalizer &&) noexcept;
         Finalizer & operator=(Finalizer &&) noexcept;
+        ~Finalizer();
 
         void finish();
     };

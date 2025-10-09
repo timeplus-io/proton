@@ -25,6 +25,9 @@ struct ConnectionParameters
 
     ConnectionParameters() {}
     ConnectionParameters(const Poco::Util::AbstractConfiguration & config);
+    ConnectionParameters(const Poco::Util::AbstractConfiguration & config, std::string host, std::optional<UInt16> port);
+
+    static UInt16 getPortFromConfig(const Poco::Util::AbstractConfiguration & config);
 };
 
 }

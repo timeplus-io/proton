@@ -1,22 +1,26 @@
 #pragma once
 
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
 
 #include <Columns/ColumnArray.h>
 
-#include <Common/assert_cast.h>
+#include <Common/ArenaUtils.h>
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/HashTable/HashMap.h>
-#include <Common/ArenaUtils.h>
 #include <Common/SpaceSaving.h>
+#include <Common/assert_cast.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
+
+/// proton: starts.
+#include <AggregateFunctions/KeyHolderHelpers.h>
+/// proton: ends.
 
 
 namespace DB
@@ -25,8 +29,8 @@ struct Settings;
 
 namespace ErrorCodes
 {
-    extern const int ARGUMENT_OUT_OF_BOUND;
-    extern const int NOT_IMPLEMENTED;
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int NOT_IMPLEMENTED;
 }
 
 
@@ -67,7 +71,7 @@ public:
     };
 
     //default memory limit=100*1024*1024 byte=100M;
-    explicit SpaceSavingForTopKExact(UInt64 memory_limit_bytes_ = 100 * 1024 * 1024):memory_limit_bytes(memory_limit_bytes_) { }
+    explicit SpaceSavingForTopKExact(UInt64 memory_limit_bytes_ = 100 * 1024 * 1024) : memory_limit_bytes(memory_limit_bytes_) { }
 
     ~SpaceSavingForTopKExact() { destroyElements(); }
 
@@ -75,10 +79,7 @@ public:
 
     void clear() { return destroyElements(); }
 
-    void insert(const TKey & key, UInt64 increment = 1, UInt64 error = 0)
-    {
-        checkAndPushCounter(key,increment,error);
-    }
+    void insert(const TKey & key, UInt64 increment = 1, UInt64 error = 0) { checkAndPushCounter(key, increment, error); }
 
     void merge(const Self & rhs)
     {
@@ -108,7 +109,7 @@ public:
         }
 
         if (unlikely(used_memory + size > memory_limit_bytes))
-            throw Exception("top_k_exact reached maxium memory", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+            throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "top_k_exact reached maxium memory");
         used_memory += size;
 
         auto * c = new Counter(arena.emplace(key), increment, error, hash);
@@ -217,7 +218,7 @@ private:
 template <typename T>
 struct AggregateFunctionTopKExactData
 {
-    explicit AggregateFunctionTopKExactData(UInt64 memory_limit_bytes = 100 * 1024 * 1024):value(memory_limit_bytes){}   
+    explicit AggregateFunctionTopKExactData(UInt64 memory_limit_bytes = 100 * 1024 * 1024) : value(memory_limit_bytes) { }
     using Set = SpaceSavingForTopKExact<T, HashCRC32<T>>;
 
     Set value;
@@ -233,15 +234,27 @@ protected:
 
 public:
     AggregateFunctionTopKExact(UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionTopKExactData<T>, AggregateFunctionTopKExact<T, is_weighted>>(argument_types_, params)
-        , threshold(threshold_), memory_limit_bytes(memory_limit_bytes_) {}
+        : IAggregateFunctionDataHelper<AggregateFunctionTopKExactData<T>, AggregateFunctionTopKExact<T, is_weighted>>(
+              argument_types_, params, std::make_shared<DataTypeArray>(argument_types_[0]))
+        , threshold(threshold_)
+        , memory_limit_bytes(memory_limit_bytes_)
+    {
+    }
+
+    AggregateFunctionTopKExact(
+        UInt64 threshold_,
+        UInt64 memory_limit_bytes_,
+        const DataTypes & argument_types_,
+        const Array & params,
+        const DataTypePtr & result_type_)
+        : IAggregateFunctionDataHelper<AggregateFunctionTopKExactData<T>, AggregateFunctionTopKExact<T, is_weighted>>(
+              argument_types_, params, result_type_)
+        , threshold(threshold_)
+        , memory_limit_bytes(memory_limit_bytes_)
+    {
+    }
 
     String getName() const override { return is_weighted ? "top_k_exact_weighted" : "top_k_exact"; }
-
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(this->argument_types[0]);
-    }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -301,7 +314,7 @@ public:
 struct AggregateFunctionTopKExactGenericData
 {
     using Set = SpaceSavingForTopKExact<StringRef, StringRefHash>;
-    explicit AggregateFunctionTopKExactGenericData(UInt64 memory_limit_bytes = 100 * 1024 *1024):value(memory_limit_bytes){}
+    explicit AggregateFunctionTopKExactGenericData(UInt64 memory_limit_bytes = 100 * 1024 * 1024) : value(memory_limit_bytes) { }
     Set value;
 };
 
@@ -309,35 +322,48 @@ struct AggregateFunctionTopKExactGenericData
  *  For such columns top_k() can be implemented more efficiently (especially for small numeric arrays).
  */
 template <bool is_plain_column, bool is_weighted>
-class AggregateFunctionTopKExactGeneric
-    : public IAggregateFunctionDataHelper<AggregateFunctionTopKExactGenericData, AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>>
+class AggregateFunctionTopKExactGeneric : public IAggregateFunctionDataHelper<
+                                              AggregateFunctionTopKExactGenericData,
+                                              AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>>
 {
 protected:
     using State = AggregateFunctionTopKExactGenericData;
 
     UInt64 threshold;
     UInt64 memory_limit_bytes; //default memory size is 100MB
-    DataTypePtr & input_data_type;
 
     static void deserializeAndInsert(StringRef str, IColumn & data_to);
 
 public:
     AggregateFunctionTopKExactGeneric(
         UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionTopKExactGenericData, AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>>(argument_types_, params)
-        , threshold(threshold_), memory_limit_bytes(memory_limit_bytes_), input_data_type(this->argument_types[0]) {}
+        : IAggregateFunctionDataHelper<
+              AggregateFunctionTopKExactGenericData,
+              AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>>(argument_types_, params, createResultType(argument_types_))
+        , threshold(threshold_)
+        , memory_limit_bytes(memory_limit_bytes_)
+    {
+    }
+
+    AggregateFunctionTopKExactGeneric(
+        UInt64 threshold_,
+        UInt64 memory_limit_bytes_,
+        const DataTypes & argument_types_,
+        const Array & params,
+        const DataTypePtr & result_type_)
+        : IAggregateFunctionDataHelper<
+              AggregateFunctionTopKExactGenericData,
+              AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>>(argument_types_, params, result_type_)
+        , threshold(threshold_)
+        , memory_limit_bytes(memory_limit_bytes_)
+    {
+    }
 
     String getName() const override { return is_weighted ? "top_k_exact_weighted" : "top_k_exact"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(input_data_type);
-    }
+    static DataTypePtr createResultType(const DataTypes & argument_types_) { return std::make_shared<DataTypeArray>(argument_types_[0]); }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return false; }
 
     void create(AggregateDataPtr __restrict place) const override /// NOLINT
     {
@@ -349,7 +375,7 @@ public:
         this->data(place).value.write(buf);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
     {
         auto & set = this->data(place).value;
         set.clear();
@@ -357,40 +383,26 @@ public:
         // Specialized here because there's no deserialiser for StringRef
         size_t size = 0;
         readVarUInt(size, buf);
+        String tmp_value;
         for (size_t i = 0; i < size; ++i)
         {
-            auto ref = readStringBinaryInto(*arena, buf);
+            readStringBinary(tmp_value, buf);
             UInt64 count;
             UInt64 error;
             readVarUInt(count, buf);
             readVarUInt(error, buf);
-            set.insert(ref, count, error);
-            arena->rollback(ref.size);
+            set.insert(std::move(tmp_value), count, error);
         }
-
     }
 
-    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         auto & set = this->data(place).value;
-        if constexpr (is_plain_column)
-        {
-            if constexpr (is_weighted)
-                set.insert(columns[0]->getDataAt(row_num), columns[1]->getUInt(row_num));
-            else
-                set.insert(columns[0]->getDataAt(row_num));
-        }
+        
+        if constexpr (is_weighted)
+            set.insert(getKeyHolder<is_plain_column>(*columns[0], row_num), columns[1]->getUInt(row_num));
         else
-        {
-            const char * begin = nullptr;
-            StringRef str_serialized = columns[0]->serializeValueIntoArena(row_num, *arena, begin);
-            if constexpr (is_weighted)
-                set.insert(str_serialized, columns[1]->getUInt(row_num));
-            else
-                set.insert(str_serialized);
-
-            arena->rollback(str_serialized.size);
-        }
+            set.insert(getKeyHolder<is_plain_column>(*columns[0], row_num));
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -424,15 +436,30 @@ template <typename T, bool is_weighted>
 class AggregateFunctionTopKExactWithCount : public AggregateFunctionTopKExact<T, is_weighted>
 {
 public:
-    using AggregateFunctionTopKExact<T, is_weighted>::AggregateFunctionTopKExact;
+    AggregateFunctionTopKExactWithCount(
+        UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
+        : AggregateFunctionTopKExact<T, is_weighted>(
+              threshold_, memory_limit_bytes_, argument_types_, params, createResultType(argument_types_))
+    {
+    }
+
+    AggregateFunctionTopKExactWithCount(
+        UInt64 threshold_,
+        UInt64 memory_limit_bytes_,
+        const DataTypes & argument_types_,
+        const Array & params,
+        const DataTypePtr & result_type_)
+        : AggregateFunctionTopKExact<T, is_weighted>(threshold_, memory_limit_bytes_, argument_types_, params, result_type_)
+    {
+    }
 
     String getName() const override { return is_weighted ? "top_k_exact_weighted_with_count" : "top_k_exact_with_count"; }
 
     /// Result: (top_value, count)
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypes & argument_types_)
     {
         return std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeTuple>(DataTypes{this->argument_types[0], std::make_shared<DataTypeUInt64>()}));
+            std::make_shared<DataTypeTuple>(DataTypes{argument_types_[0], std::make_shared<DataTypeUInt64>()}));
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
@@ -461,15 +488,20 @@ template <bool is_plain_column, bool is_weighted>
 class AggregateFunctionTopKExactGenericWithCount : public AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>
 {
 public:
-    using AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>::AggregateFunctionTopKExactGeneric;
+    AggregateFunctionTopKExactGenericWithCount(
+        UInt64 threshold_, UInt64 memory_limit_bytes_, const DataTypes & argument_types_, const Array & params)
+        : AggregateFunctionTopKExactGeneric<is_plain_column, is_weighted>(
+              threshold_, memory_limit_bytes_, argument_types_, params, createResultType(argument_types_))
+    {
+    }
 
     String getName() const override { return is_weighted ? "top_k_exact_weighted_with_count" : "top_k_exact_with_count"; }
 
     /// Result: (top_value, count)
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypes & argument_types_)
     {
         return std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeTuple>(DataTypes{this->input_data_type, std::make_shared<DataTypeUInt64>()}));
+            std::make_shared<DataTypeTuple>(DataTypes{argument_types_[0], std::make_shared<DataTypeUInt64>()}));
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override

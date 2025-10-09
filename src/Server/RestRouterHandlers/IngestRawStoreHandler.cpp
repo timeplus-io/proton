@@ -1,6 +1,6 @@
-#include "IngestRawStoreHandler.h"
-#include "JSONHelper.h"
-#include "SchemaValidator.h"
+#include <Server/RestRouterHandlers/IngestRawStoreHandler.h>
+#include <Server/RestRouterHandlers/JSONHelper.h>
+#include <Server/RestRouterHandlers/SchemaValidator.h>
 
 #include <IO/ConcatReadBuffer.h>
 #include <IO/ReadBufferFromString.h>
@@ -12,9 +12,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int INCORRECT_DATA;
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int BAD_REQUEST_PARAMETER;
+extern const int INCORRECT_DATA;
+extern const int INVALID_CONFIG_PARAMETER;
+extern const int BAD_REQUEST_PARAMETER;
 }
 
 std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) const
@@ -29,12 +29,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
 
     if (hasQueryParameter("mode"))
     {
-        const auto & mode = getQueryParameter("mode");
-        auto ingest_mode = toIngestMode(mode);
-        if (ingest_mode != IngestMode::INVALID)
-            query_context->setIngestMode(ingest_mode);
-        else
-            return {jsonErrorResponse("No support ingest mode: " + mode, ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+        query_context->setIngestMode(ingestMode(getQueryParameter("mode"), IngestMode::Sync));
     }
 
     query_context->setSetting("output_format_parallel_formatting", false);
@@ -43,8 +38,8 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     String query = "INSERT into " + database + ".`" + table + "` FORMAT RawStoreEachRow ";
 
     /// Request body can be compressed using algorithm specified in the Content-Encoding header.
-    auto input_maybe_compressed = wrapReadBufferWithCompressionMethod(
-        wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
+    auto input_maybe_compressed
+        = wrapReadBufferWithCompressionMethod(wrapReadBufferReference(input), chooseCompressionMethod({}, getContentEncoding()));
 
     /// Parse JSON into ReadBuffers
     PODArray<char> parse_buf;
@@ -54,7 +49,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     {
         LOG_ERROR(
             log,
-            "Ingest to database {}, rawstore {} failed with invalid JSON request, exception = {}",
+            "Ingest to database {}, rawstore {} failed with invalid JSON request: {}, exception = {}",
             database,
             table,
             error,
@@ -70,7 +65,7 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
         {
             LOG_ERROR(
                 log,
-                "Ingest to database {}, rawstore {} failed with invalid request, exception = {}",
+                "Ingest to database {}, rawstore {} failed with invalid request: {}, exception = {}",
                 database,
                 table,
                 error,
@@ -84,10 +79,9 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
     {
         LOG_ERROR(
             log,
-            "Ingest to database {}, rawstore {} failed with invalid request, exception = {}",
+            "Ingest to database {}, rawstore {} failed with invalid request: missing 'data' field, exception = {}",
             database,
             table,
-            "Invalid Request, missing 'data' field",
             ErrorCodes::INCORRECT_DATA);
         return {jsonErrorResponse("Invalid Request, missing 'data' field", ErrorCodes::INCORRECT_DATA), HTTPResponse::HTTP_BAD_REQUEST};
     }
@@ -104,12 +98,6 @@ std::pair<String, Int32> IngestRawStoreHandler::execute(ReadBuffer & input) cons
 
     Poco::JSON::Object resp;
     resp.set("request_id", query_context->getCurrentQueryId());
-    const auto & poll_id = query_context->getQueryStatusPollId();
-    if (!poll_id.empty())
-    {
-        resp.set("poll_id", poll_id);
-        resp.set("channel", query_context->getChannel());
-    }
     std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
     resp.stringify(resp_str_stream, 0);
 

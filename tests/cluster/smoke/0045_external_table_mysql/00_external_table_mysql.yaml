@@ -1,0 +1,94 @@
+tags:
+  - mysql
+
+description: |
+  Test MySQL external table
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "DROP DATABASE IF EXISTS testdb;" mysql
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "CREATE DATABASE testdb;" mysql
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(255));" testdb
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_mysql mysql -u root --password=rootpassword -e "INSERT INTO products (id, name) VALUES (1, 'p111');" testdb
+
+  - type: query
+    sql: DROP STREAM IF EXISTS mysql_test1;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS mysql_test2;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE EXTERNAL TABLE mysql_test1
+      SETTINGS type='mysql', address='mysql:3306', user='root', password='rootpassword', database='testdb', table='products', replace_query=true;
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE EXTERNAL TABLE mysql_test2
+      SETTINGS type='mysql', address='mysql:3306', user='root', password='rootpassword', database='testdb', table='products', on_duplicate_clause='UPDATE name = CONCAT(name, \'_dup\')';
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      INSERT INTO mysql_test1(id, name) VALUES(1, 'p111_replaced') (2, 'p222_new');
+
+  - type: wait
+    time: 1
+
+  - name: mysql-0-1
+    node: [p1]
+    type: stream
+    query: SELECT * FROM mysql_test1;
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: nullable(string)
+
+  - type: check
+    target_name: mysql-0-1
+    expected_result:
+      - [1, 'p111_replaced']
+      - [2, 'p222_new']
+
+  - type: query
+    node: [p1]
+    sql: |
+      INSERT INTO mysql_test2(id, name) VALUES(1, 'p111') (2, 'p222');
+
+  - type: wait
+    time: 1
+
+  - name: mysql-0-2
+    node: [p1]
+    type: stream
+    query: SELECT * FROM mysql_test2;
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: nullable(string)
+
+  - type: check
+    target_name: mysql-0-2
+    expected_result:
+      - [1, 'p111_replaced_dup']
+      - [2, 'p222_new_dup']

@@ -96,6 +96,8 @@ public:
     Names getNames() const;
     DataTypes getDataTypes() const;
     Names getDataTypeNames() const;
+    Names getClickHouseDataTypeNames() const; /// Added by proton to get ClickHouse compatible data types
+    std::unordered_map<String, size_t> getNamesToIndexesMap() const;
 
     /// Returns number of rows from first column in block, not equal to nullptr. If no columns, returns 0.
     size_t rows() const;
@@ -148,6 +150,9 @@ public:
     /** Get a block with columns that have been rearranged in the order of their names. */
     Block sortColumns() const;
 
+    /** See IColumn::shrinkToFit() */
+    Block shrinkToFit() const;
+
     void clear();
     void swap(Block & other) noexcept;
 
@@ -157,7 +162,6 @@ public:
       */
     void updateHash(SipHash & hash) const;
 
-    std::unordered_map<String, size_t> getNamesToIndexesMap() const;
     Serializations getSerializations() const;
 
     /// proton: starts
@@ -180,6 +184,10 @@ public:
     Block deepClone() const;
 
     bool hasWatermark() const { return info.hasWatermark(); }
+    Int64 watermark() const noexcept { return info.watermark(); }
+
+    bool hasSN() const { return info.hasSN(); }
+    Int64 getSN() const { return info.getSN(); }
 
     bool hasDynamicSubcolumns() const;
 
@@ -190,11 +198,12 @@ public:
     void insertRow(size_t row_num, Block & target_block) const;
     int compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, const std::vector<size_t> & skip_columns) const;
     /// Reuse BlockInfo.watermark for min/max timestamp
-    Int64 minTimestamp() const noexcept { return info.watermark_lower_bound; }
-    Int64 maxTimestamp() const noexcept { return info.watermark; }
-    Int64 watermark() const noexcept { return info.watermark; }
-    void setMinTimestamp(Int64 min_ts) noexcept { info.watermark_lower_bound = min_ts; }
-    void setMaxTimestamp(Int64 max_ts) noexcept { info.watermark = max_ts; }
+    Int64 minTimestamp() const noexcept { return info.hasMinTimestamp() ? info.minTimestamp() : Streaming::INVALID_WATERMARK; }
+    Int64 maxTimestamp() const noexcept { return info.hasMaxTimestamp() ? info.maxTimestamp() : Streaming::INVALID_WATERMARK; }
+    void setMinTimestamp(Int64 min_ts) noexcept { info.setMinTimestamp(min_ts); }
+    void setMaxTimestamp(Int64 max_ts) noexcept { info.setMaxTimestamp(max_ts); }
+    void setRetract() noexcept { info.setRetract(); }
+    bool isRetract() const noexcept { return info.isRetract(); }
     /// proton: ends
 
 private:
@@ -251,5 +260,6 @@ Block materializeBlock(const Block & block);
 void materializeBlockInplace(Block & block);
 
 Block concatenateBlocks(const std::vector<Block> & blocks);
+Block concatenateBlocks(const std::list<Block> & blocks);
 
 }

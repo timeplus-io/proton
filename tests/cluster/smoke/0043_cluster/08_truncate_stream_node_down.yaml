@@ -1,0 +1,114 @@
+name: truncate-stream-restart-test
+description: Test TRUNCATE STREAM log behavior after node restart
+tags:
+  - raft
+  - stream
+  - probe_bug
+  - skip # https://github.com/timeplus-io/probe/issues/281
+cluster:
+  - p3k1
+
+steps:
+  # Create and prepare stream
+  - type: query
+    node: [p1]
+    sql: drop stream if exists test_truncate_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: create stream test_truncate_stream(id int)
+
+  - type: wait
+    time: 1
+
+  # Insert some test data
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: INSERT INTO test_truncate_stream (id) SELECT number FROM system.numbers LIMIT 100
+
+  - type: wait
+    time: 2
+
+  # Perform truncate operation
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: TRUNCATE STREAM test_truncate_stream
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [s1]
+    shell: docker stop $(docker ps -a --format '{{.Names}}' --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep timeplus | sort | sed -n '2p')
+
+  - type: wait
+    time: 5
+
+  - name: cluster-4-2
+    type: health_check
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    protocol: tcp
+
+  - type: check
+    target_name: cluster-4-2
+    expected_result:
+    - ['false']
+
+  - type: command
+    node: [s1]
+    shell: docker start $(docker ps -a --format '{{.Names}}' --filter 'label=com.docker.compose.project=smoke_<<.CONTAINER_NAME_PREFIX>>' | grep timeplus | sort | sed -n '2p')
+
+  - type: wait
+    time: 10
+
+  - name: cluster-4-5
+    type: health_check
+    protocol: tcp
+
+  - type: check
+    target_name: cluster-4-5
+    expected_result:
+    - ['true']
+
+  - type: wait
+    time: 2
+
+  # Check log for TRUNCATE STREAM occurrences
+  - name: check-truncate-log
+    type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    shell: |
+      COUNT=$(grep "TRUNCATE STREAM" /var/log/proton-server/proton-server.log | wc -l)
+      if [ "$COUNT" -eq 1 ]; then
+        echo "pass"
+      else
+        echo "error: TRUNCATE STREAM appeared $COUNT times, expected 1"
+      fi
+
+  - type: check
+    target_name: check-truncate-log
+    expected_result: ["pass"]
+
+  # Cleanup
+  - type: query
+    node: [p1]
+    sql: drop stream if exists test_truncate_stream

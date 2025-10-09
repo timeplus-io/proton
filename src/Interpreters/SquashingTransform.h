@@ -31,6 +31,8 @@ public:
     Block add(Block && block);
     Block add(const Block & block);
 
+    bool isEmpty() const { return accumulated_block.rows() == 0; } /// proton: added
+
 private:
     size_t min_block_size_rows;
     size_t min_block_size_bytes;

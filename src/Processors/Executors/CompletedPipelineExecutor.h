@@ -1,6 +1,12 @@
 #pragma once
+
+/// proton: starts.
+#include <Checkpoint/CheckpointContextFwd.h>
+/// proton: ends.
+
 #include <functional>
 #include <memory>
+
 
 namespace DB
 {
@@ -20,6 +26,10 @@ public:
     /// If returns true, query would be cancelled.
     void setCancelCallback(std::function<bool()> is_cancelled, size_t interactive_timeout_ms_);
 
+    /// proton: starts.
+    void registerCheckpoint(CheckpointContextPtr ckpt_ctx);
+    /// proton: ends.
+
     void execute();
     struct Data;
 
@@ -27,6 +37,7 @@ private:
     QueryPipeline & pipeline;
     std::function<bool()> is_cancelled_callback;
     size_t interactive_timeout_ms = 0;
+    CheckpointContextPtr ckpt_ctx;
     std::unique_ptr<Data> data;
 };
 

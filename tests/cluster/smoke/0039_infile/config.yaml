@@ -1,0 +1,4 @@
+name: infile
+description: Tests covering the infile feature.
+tags:
+  - smoke

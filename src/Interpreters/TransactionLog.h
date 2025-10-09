@@ -147,8 +147,8 @@ private:
 
     CSN getCSNImpl(const TIDHash & tid_hash) const;
 
-    ContextPtr global_context;
-    Poco::Logger * log;
+    const ContextPtr global_context;
+    LoggerPtr const log;
 
     /// The newest snapshot available for reading
     std::atomic<CSN> latest_snapshot;

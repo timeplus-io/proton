@@ -1,0 +1,54 @@
+description: Verify external stream with system tables
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test_sys
+
+  - type: kafka
+    name: create
+    topic: test_sys
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: query
+    sql: drop stream if exists ext_stream_sys
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ext_stream_sys (
+          actor string,
+          created_at string,
+          id string,
+          payload string,
+          repo string,
+          type string
+      )
+      SETTINGS type='kafka', 
+              brokers='k1:9092',
+              topic='test_sys';
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: select_system_tables
+    query: select create_table_query from system.tables where name='ext_stream_sys';
+    schema:
+    - name: create_table_query
+      type: string
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: select_system_tables
+    expected_result:
+      - ["CREATE EXTERNAL STREAM default.ext_stream_sys\n(\n  `actor` string,\n  `created_at` string,\n  `id` string,\n  `payload` string,\n  `repo` string,\n  `type` string\n)\nENGINE = ExternalStream\nSETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'test_sys'"]
+

@@ -326,7 +326,10 @@ int parseCreate(
     ParserKeyword s_stream("STREAM");
     /// proton: ends
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserKeyword s_on("ON");
+    /// proton: starts
+    /// ParserKeyword s_on("ON");
+    /// proton: ends
+
     ParserCompoundIdentifier table_name_p(true);
 
     ASTPtr table;
@@ -346,12 +349,14 @@ int parseCreate(
     if (!table_name_p.parse(pos, table, expected))
         return handleErrors(pos.max(), last_pos, end, expected, nullptr, error_message, queries, PipeType::create);
 
-    String cluster_str;
-    if (s_on.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return handleErrors(pos.max(), last_pos, end, expected, nullptr, error_message, queries, PipeType::create);
-    }
+    /// proton: starts
+    /// String cluster_str;
+    /// if (s_on.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return handleErrors(pos.max(), last_pos, end, expected, nullptr, error_message, queries, PipeType::create);
+    /// }
+    /// proton: ends
 
     auto emsg = "Invalid syntax, only `CREATE STREAM IF NOT EXISTS <database>.<table> ON CLUSTER <cluster>` is allowed in the last pipe";
 
@@ -531,6 +536,6 @@ ASTPtr parseQueryPipe(IParser & parser, const char * pos, const char * end, size
     if (res != nullptr)
         return res;
 
-    throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);
+    throw Exception::createRuntime(ErrorCodes::SYNTAX_ERROR, error_message);
 }
 }

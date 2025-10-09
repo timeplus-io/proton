@@ -1,0 +1,70 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getRegressionLinearModelWLS(x int, y int) RETURNS array(float64) LANGUAGE PYTHON AS $$
+      import pickle
+      import statsmodels.api as sm
+
+      class getRegressionLinearModelWLS:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.wls = 0
+
+          def serialize(self):
+              data = {}
+              data['wls'] = self.wls
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.wls = data['wls']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              X = sm.add_constant(xs)
+              wls_model = sm.WLS(ys,X, weights=list(xs))
+              results = wls_model.fit()
+              self.wls = results.tvalues.tolist()
+
+          def finalize(self):
+              return self.wls
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf5-6-1
+    type: stream
+    query: select getRegressionLinearModelWLS(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float64)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) select number, number * 2 from numbers(1, 7);
+
+  - type: check
+    target_name: python-udf5-6-1
+    expected_result:
+      - [[any_value, any_value]] # CI reference: -1.687798770122581 2.513850657603629e+15 (vary between local and CI, so check roughly)

@@ -1,0 +1,10 @@
+{
+  # Symbols marked as 'local' are not exported by the DSO and thus may not
+  # be used by client applications.
+  # This ensures we hide symbols of static dependencies
+  local:
+    extern "C++" {
+      *arrow*;
+      *grpc_core*;
+    };
+};

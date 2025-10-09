@@ -1,0 +1,67 @@
+tags:
+- query_state
+- tail
+description: tail query from view state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop view if exists test19_state_view6
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test19_state_stream6
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test19_state_stream6 (id string, location string, value float,
+    timestamp datetime64(3) default now64(3))
+- type: wait
+  time: 1
+
+- type: query
+  sql: create view if not exists test19_state_view6 as select id, value from test19_state_stream6
+- type: wait
+  name: 1
+
+- name: '19150'
+  type: stream
+  query_id: '19150'
+  query: subscribe to select id, value from test19_state_view6 settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: string
+  - name: value
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_state_stream6(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')
+  schema:
+  - name: id
+    type: string
+  - name: location
+    type: string
+  - name: value
+    type: float32
+  - name: timestamp
+    type: datetime64(3)
+  inputs:
+  - [dev1, 'ca', 57.3, '2020-02-02 20:00:00']
+- type: wait
+  time: 3
+
+- type: query
+  sql: unsubscribe to '19150'
+
+- type: check
+  target_name: '19150'
+  expected_result:
+  - [dev1, 57.3]

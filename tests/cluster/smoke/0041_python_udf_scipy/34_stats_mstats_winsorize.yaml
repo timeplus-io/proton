@@ -1,0 +1,60 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_mstats_winsorize(value int) RETURNS int64 LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      from scipy.stats.mstats import winsorize
+
+      def test_mstats_winsorize(value):
+          arr = np.array(value)
+          res = winsorize(arr, limits=[0.1, 0.2])
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-34-1
+    type: stream
+    query: select test_mstats_winsorize(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: int64
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values 
+          (10)(4)(9)(8)(5)(3)(7)(2)(1)(6);
+
+  - type: check
+    target_name: python-udf4-34-1
+    expected_result:
+      - [8, 10]
+      - [4, 4]
+      - [8, 9]
+      - [8, 8]
+      - [5, 5]
+      - [3, 3]
+      - [7, 7]
+      - [2, 2]
+      - [2, 1]
+      - [6, 6]

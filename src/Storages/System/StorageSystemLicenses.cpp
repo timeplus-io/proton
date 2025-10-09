@@ -1,7 +1,8 @@
-#include "StorageSystemLicenses.h"
+#include <Storages/System/StorageSystemLicenses.h>
+
+#include <DataTypes/DataTypeString.h>
 
 #include <algorithm>
-#include <DataTypes/DataTypeString.h>
 
 
 extern const char * library_licenses[];

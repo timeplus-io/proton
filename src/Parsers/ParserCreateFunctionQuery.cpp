@@ -1,19 +1,18 @@
 #include <Parsers/ParserCreateFunctionQuery.h>
 
 #include <Parsers/ASTCreateFunctionQuery.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTIdentifier.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserSetQuery.h>
 
 /// proton: starts
+#include "config.h"
+
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/Streaming/ParserArguments.h>
 #include <Parsers/ParserKeyValuePairsSet.h>
-
-#include <Poco/JSON/Object.h>
 /// proton: ends
 
 
@@ -25,8 +24,10 @@ namespace ErrorCodes
 {
 extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
 extern const int UNKNOWN_FUNCTION;
+extern const int BAD_ARGUMENTS;
 }
 /// proton: ends
+
 bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
@@ -49,14 +50,23 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ASTPtr auth_header;
     ASTPtr auth_key;
     ASTPtr execution_timeout;
+#if USE_PYTHON_UDF
+    ParserKeyword s_python_type("LANGUAGE PYTHON");
+#endif
+    ParserKeyword s_settings("SETTINGS");
     ParserArguments arguments_p;
     ParserDataType return_p;
-    ParserStringLiteral js_src_p;
+    ParserStringLiteral src_p;
+    ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
+
     /// proton: ends
 
     ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserKeyword s_on("ON");
+    /// proton: starts
+    /// ParserKeyword s_on("ON");
+    /// proton: ends
+
     ParserIdentifier function_name_p;
     ParserKeyword s_as("AS");
     ParserLambdaExpression lambda_p;
@@ -67,10 +77,12 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     ASTPtr arguments;
     ASTPtr return_type;
+    ASTPtr settings;
     bool is_aggregation = false;
     bool is_javascript_func = false;
+    bool is_python_func = false;
+    bool is_remote_func = false;
     bool is_new_syntax = false;
-    bool is_remote = false;
     /// proton: ends
 
     String cluster_str;
@@ -89,7 +101,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         if (s_aggr_function.ignore(pos, expected))
             is_aggregation = true;
         else if (s_remote.ignore(pos, expected))
-            is_remote = true;
+            is_remote_func = true;
         else
             return false;
     }
@@ -104,29 +116,37 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     if (arguments_p.parse(pos, arguments, expected))
         is_new_syntax = true;
-    /// proton: ends
 
-    if (s_on.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
+    /// if (s_on.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
 
-    /// proton: starts
     if (is_new_syntax && s_returns.ignore(pos, expected))
     {
-        if (!return_p.parse(pos, return_type, expected))
+        if(!return_p.parse(pos, return_type, expected))
             return false;
 
         if (s_javascript_type.ignore(pos, expected))
             is_javascript_func = true;
+#if USE_PYTHON_UDF
+        else if (s_python_type.ignore(pos, expected))
+            is_python_func = true;
+#endif
 
-        if (!is_remote && !s_as.ignore(pos, expected))
+        if (!is_remote_func && !s_as.ignore(pos, expected))
             return false;
 
         /// Parse source code and function_core will be 'ASTLiteral'
-        if (is_javascript_func && !js_src_p.parse(pos, function_core, expected))
+        if ((is_javascript_func || is_python_func) && !src_p.parse(pos, function_core, expected))
             return false;
+        
+        if (s_settings.ignore(pos, expected))
+        {
+            if (!settings_p.parse(pos, settings, expected))
+                return false;
+        }
     }
     else
     {
@@ -137,16 +157,16 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         if (!lambda_p.parse(pos, function_core, expected))
             return false;
     }
-    if (is_remote)
+
+    if (is_remote_func)
     {
         if (is_aggregation)
         {
-            throw Exception("Remote udf can not be an aggregate function", ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
+            throw Exception(ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE, "Remote udf can not be an aggregate function");
         }
         ParserKeyValuePairsSet kv_pairs_list;
         if (!kv_pairs_list.parse(pos, kv_list, expected))
             return false;
-        
         /// check if the parameters are valid and no unsupported or unknown parameters.
         std::optional<String> ast_url;
         std::optional<String> ast_auth_method;
@@ -159,7 +179,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
             auto key = kv_pair->first;
             auto pair_value = kv_pair->second->as<ASTLiteral>()->value;
             if (!kv_pair)
-                throw Exception("Key-value pair expected", ErrorCodes::UNKNOWN_FUNCTION);
+                throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Key-value pair expected");
             
             if (key == "url")
             {
@@ -169,7 +189,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
             {
                 ast_auth_method = pair_value.safeGet<String>();
                 if (ast_auth_method.value() != "none" && ast_auth_method.value() != "auth_header")
-                    throw Exception("Unknown auth method", ErrorCodes::UNKNOWN_FUNCTION);
+                    throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown auth method");
             }
             else if (key == "auth_header")
             {
@@ -186,29 +206,29 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         }
         /// check if URL is set
         if (!ast_url)
-            throw Exception("URL is required for remote function", ErrorCodes::UNKNOWN_FUNCTION);
+            throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "URL is required for remote function");
         /// check if auth_method is "auth_header" or "none"
         if (ast_auth_method)
         {
             if (ast_auth_method.value() == "auth_header")
             {
                 if (!ast_auth_header  || !ast_auth_key)
-                    throw Exception("Auth header and auth key are required for auth_header auth method", ErrorCodes::UNKNOWN_FUNCTION);
+                    throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Auth header and auth key are required for auth_header auth method");
             }
             else if (ast_auth_method.value() == "none")
             {
                 if (ast_auth_header || ast_auth_key)
-                    throw Exception("Auth method is 'none', but auth header or auth key is set.", ErrorCodes::UNKNOWN_FUNCTION);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Auth method is 'none', but auth header or auth key is set.");
             }
             else
             {
-                throw Exception("Unknown auth method " + ast_auth_method.value(), ErrorCodes::UNKNOWN_FUNCTION);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown auth method {}", ast_auth_method.value());
             }
         }
         else
         {
             if (ast_auth_header || ast_auth_key)
-                throw Exception("Auth method is 'none', but auth header or auth key is set.", ErrorCodes::UNKNOWN_FUNCTION);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Auth method is 'none', but auth header or auth key is set.");
         }
         function_core = std::move(kv_list);
     }
@@ -229,9 +249,20 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
     /// proton: starts
     create_function_query->is_aggregation = is_aggregation;
-    create_function_query->lang = is_javascript_func ? "JavaScript" : is_remote ? "Remote" : "SQL";
+    if (is_javascript_func)
+        create_function_query->lang = ASTCreateFunctionQuery::Language::JavaScript;
+#if USE_PYTHON_UDF
+    else if (is_python_func)
+        create_function_query->lang = ASTCreateFunctionQuery::Language::Python;
+#endif
+    else if (is_remote_func)
+        create_function_query->lang = ASTCreateFunctionQuery::Language::Remote;
+    else
+        create_function_query->lang = ASTCreateFunctionQuery::Language::SQL;
+
     create_function_query->arguments = std::move(arguments);
     create_function_query->return_type = std::move(return_type);
+    create_function_query->udf_settings = settings;
     /// proton: ends
 
     return true;

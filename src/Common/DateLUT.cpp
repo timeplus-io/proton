@@ -157,6 +157,17 @@ const DateLUTImpl & DateLUT::getImplementation(const std::string & time_zone) co
     return *it->second;
 }
 
+const DateLUTImpl & DateLUT::getImplementation(int64_t offset) const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    auto it = impls.emplace(std::to_string(offset), nullptr).first;
+    if (!it->second)
+        it->second = std::unique_ptr<DateLUTImpl>(new DateLUTImpl(offset));
+
+    return *it->second;
+}
+
 DateLUT & DateLUT::getInstance()
 {
     static DateLUT ret;

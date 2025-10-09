@@ -18,6 +18,10 @@
 #include <tmmintrin.h>
 #endif
 
+/// proton: starts.
+#include <span>
+/// proton: ends.
+
 namespace DB
 {
 namespace ErrorCodes
@@ -25,6 +29,10 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+/// proton: starts. Use span view instead of 'const ColumnRawPtrs &' and 'const Sizes &'
+using ColumnRawPtrsSpan = std::span<const IColumn * const>;
+using SizesSpan = std::span<size_t const>;
+/// proton: ends.
 using Sizes = std::vector<size_t>;
 
 /// When packing the values of nullable columns at a given row, we have to
@@ -82,7 +90,7 @@ void fillFixedBatch(size_t num_rows, const T * source, T * dest)
 /// out[1] : [--------****----]
 /// ...
 template<typename T, typename Key>
-void fillFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes, PaddedPODArray<Key> & out, size_t & offset)
+void fillFixedBatch(size_t keys_size, ColumnRawPtrsSpan key_columns, SizesSpan key_sizes, PaddedPODArray<Key> & out, size_t & offset)
 {
     for (size_t i = 0; i < keys_size; ++i)
     {
@@ -94,7 +102,7 @@ void fillFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const S
 
             /// Note: here we violate strict aliasing.
             /// It should be ok as log as we do not reffer to any value from `out` before filling.
-            const char * source = static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<sizeof(T)>();
+            const char * source = static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<sizeof(T)>();
             T * dest = reinterpret_cast<T *>(reinterpret_cast<char *>(out.data()) + offset);
             fillFixedBatch<T, sizeof(Key) / sizeof(T)>(num_rows, reinterpret_cast<const T *>(source), dest);
             offset += sizeof(T);
@@ -105,7 +113,7 @@ void fillFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const S
 /// Pack into a binary blob of type T a set of fixed-size keys. Granted that all the keys fit into the
 /// binary blob. Keys are placed starting from the longest one.
 template <typename T>
-void packFixedBatch(size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes, PaddedPODArray<T> & out)
+void packFixedBatch(size_t keys_size, ColumnRawPtrsSpan key_columns, SizesSpan key_sizes, PaddedPODArray<T> & out)
 {
     size_t offset = 0;
     fillFixedBatch<UInt128>(keys_size, key_columns, key_sizes, out, offset);
@@ -122,7 +130,7 @@ using KeysNullMap = std::array<UInt8, getBitmapSize<T>()>;
 /// binary blob, they are disposed in it consecutively.
 template <typename T, bool has_low_cardinality = false>
 static inline T ALWAYS_INLINE packFixed(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes,
+    size_t i, size_t keys_size, ColumnRawPtrsSpan key_columns, SizesSpan key_sizes,
     const ColumnRawPtrs * low_cardinality_positions [[maybe_unused]] = nullptr,
     const Sizes * low_cardinality_sizes [[maybe_unused]] = nullptr)
 {
@@ -144,7 +152,7 @@ static inline T ALWAYS_INLINE packFixed(
                     case sizeof(UInt16): index = assert_cast<const ColumnUInt16 *>(positions)->getElement(i); break;
                     case sizeof(UInt32): index = assert_cast<const ColumnUInt32 *>(positions)->getElement(i); break;
                     case sizeof(UInt64): index = assert_cast<const ColumnUInt64 *>(positions)->getElement(i); break;
-                    default: throw Exception("Unexpected size of index type for low cardinality column.", ErrorCodes::LOGICAL_ERROR);
+                    default: throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected size of index type for low cardinality column.");
                 }
             }
         }
@@ -153,33 +161,33 @@ static inline T ALWAYS_INLINE packFixed(
         {
             case 1:
                 {
-                    memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<1>() + index, 1);
+                    memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<1>() + index, 1);
                     offset += 1;
                 }
                 break;
             case 2:
                 if constexpr (sizeof(T) >= 2)   /// To avoid warning about memcpy exceeding object size.
                 {
-                    memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<2>() + index * 2, 2);
+                    memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<2>() + index * 2, 2);
                     offset += 2;
                 }
                 break;
             case 4:
                 if constexpr (sizeof(T) >= 4)
                 {
-                    memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<4>() + index * 4, 4);
+                    memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<4>() + index * 4, 4);
                     offset += 4;
                 }
                 break;
             case 8:
                 if constexpr (sizeof(T) >= 8)
                 {
-                    memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<8>() + index * 8, 8);
+                    memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<8>() + index * 8, 8);
                     offset += 8;
                 }
                 break;
             default:
-                memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(column)->getRawDataBegin<1>() + index * key_sizes[j], key_sizes[j]);
+                memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<1>() + index * key_sizes[j], key_sizes[j]);
                 offset += key_sizes[j];
         }
     }
@@ -190,7 +198,7 @@ static inline T ALWAYS_INLINE packFixed(
 /// Similar as above but supports nullable values.
 template <typename T>
 static inline T ALWAYS_INLINE packFixed(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, const Sizes & key_sizes,
+    size_t i, size_t keys_size, ColumnRawPtrsSpan key_columns, SizesSpan key_sizes,
     const KeysNullMap<T> & bitmap)
 {
     union
@@ -204,7 +212,7 @@ static inline T ALWAYS_INLINE packFixed(
     static constexpr auto bitmap_size = std::tuple_size<KeysNullMap<T>>::value;
     static constexpr bool has_bitmap = bitmap_size > 0;
 
-    if (has_bitmap)
+    if constexpr (has_bitmap)
     {
         memcpy(bytes + offset, bitmap.data(), bitmap_size * sizeof(UInt8));
         offset += bitmap_size;
@@ -229,23 +237,23 @@ static inline T ALWAYS_INLINE packFixed(
         switch (key_sizes[j])
         {
             case 1:
-                memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(key_columns[j])->getRawDataBegin<1>() + i, 1);
+                memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(key_columns[j])->getRawDataBegin<1>() + i, 1);
                 offset += 1;
                 break;
             case 2:
-                memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(key_columns[j])->getRawDataBegin<2>() + i * 2, 2);
+                memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(key_columns[j])->getRawDataBegin<2>() + i * 2, 2);
                 offset += 2;
                 break;
             case 4:
-                memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(key_columns[j])->getRawDataBegin<4>() + i * 4, 4);
+                memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(key_columns[j])->getRawDataBegin<4>() + i * 4, 4);
                 offset += 4;
                 break;
             case 8:
-                memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(key_columns[j])->getRawDataBegin<8>() + i * 8, 8);
+                memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(key_columns[j])->getRawDataBegin<8>() + i * 8, 8);
                 offset += 8;
                 break;
             default:
-                memcpy(bytes + offset, static_cast<const ColumnVectorHelper *>(key_columns[j])->getRawDataBegin<1>() + i * key_sizes[j], key_sizes[j]);
+                memcpy(bytes + offset, static_cast<const ColumnFixedSizeHelper *>(key_columns[j])->getRawDataBegin<1>() + i * key_sizes[j], key_sizes[j]);
                 offset += key_sizes[j];
         }
     }
@@ -256,7 +264,7 @@ static inline T ALWAYS_INLINE packFixed(
 
 /// Hash a set of keys into a UInt128 value.
 static inline UInt128 ALWAYS_INLINE hash128(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns)
+    size_t i, size_t keys_size, ColumnRawPtrsSpan key_columns)
 {
     UInt128 key;
     SipHash hash;
@@ -292,7 +300,7 @@ static inline StringRef * ALWAYS_INLINE placeKeysInPool(
 /** Serialize keys into a continuous chunk of memory.
   */
 static inline StringRef ALWAYS_INLINE serializeKeysToPoolContiguous(
-    size_t i, size_t keys_size, const ColumnRawPtrs & key_columns, Arena & pool)
+    size_t i, size_t keys_size, ColumnRawPtrsSpan key_columns, Arena & pool)
 {
     const char * begin = nullptr;
 

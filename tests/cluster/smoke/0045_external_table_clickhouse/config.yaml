@@ -1,0 +1,21 @@
+name: external_table_clickhouse
+description: Tests clickhouse external table feature.
+tags:
+  - smoke
+  - external_table
+  - clickhouse
+
+setup:
+  scope: case
+  steps:
+  - type: query
+    sql: DROP VIEW IF EXISTS ch_gen_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS source;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS sink_ch_ext;

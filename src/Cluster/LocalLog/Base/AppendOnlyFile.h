@@ -1,0 +1,145 @@
+#pragma once
+
+#include <Cluster/Base/ByteVector.h>
+#include <Cluster/Common/CallResult.h>
+#include <Cluster/LocalLog/Base/Utils.h>
+
+#include <flatbuffers/flatbuffers.h>
+
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include <memory>
+#include <span>
+
+namespace DB
+{
+class WriteBuffer;
+}
+
+namespace cluster::nlog
+{
+/// AppendOnlyFile is a file class for reading, appending, mapping a file
+/// AppendOnlyFile is multi-thread safe for reading and it doesn't buffering any read data
+/// AppendOnlyFile is not multi-thread safe for writing and it doesn't buffering any write data.
+/// It is simplified / tailed / optimized for NativeLog append-only use cases only
+class AppendOnlyFile final
+{
+public:
+    AppendOnlyFile(const fs::path & filename_, uint64_t initial_file_size, bool preallocate);
+    AppendOnlyFile(const fs::path & filename_, bool file_already_exists, bool read_only_, uint64_t initial_file_size, bool preallocate);
+
+    ~AppendOnlyFile();
+
+    /// \return 0 on success, otherwise OS error code
+    int close();
+
+    /// Please note this append returns OS level error code instead of DB::ErrorCodes
+    /// Once we have the error code mapping, revisit this comment
+    /// \return bytes appended and / or OS error code
+    CallResult<size_t> append(const std::vector<ByteVector> & batch_data, size_t bytes_to_write) const;
+
+    CallResult<size_t> append(const std::vector<std::span<char>> & batch_data, size_t bytes_to_write) const;
+
+    CallResult<size_t> append(const std::vector<flatbuffers::DetachedBuffer> & batch_data, size_t bytes_to_write) const;
+
+    /// Append a sequence of bytes to this channel from the given data buffer
+    /// It keeps writes the data until all data has been written or throw exception if error happens
+    /// The file is grown if necessary to accommodate the written bytes, and then the file offset
+    /// is updated with the number of bytes actually written.
+    /// \return bytes appended and / or OS error code
+    CallResult<size_t> append(const char * data, uint64_t bytes_to_write) const;
+
+    /// \return bytes appended and / or OS error code
+    CallResult<size_t> append(std::span<char> data) const;
+
+    /// Reads a sequence of bytes from this channel into the given buffer, starting
+    /// from the given file offset.
+    /// It keeps reading until requested bytes has been read or EOF is hit.
+    /// It throws exception if error happens during read.
+    /// This method doesn't modify this channel's offset nor the file descriptor underlying
+    /// \param dst The target buffer into which bytes are copied
+    /// \param bytes_to_read The maximum number of bytes to read
+    /// \param offset The starting offset of the current channel
+    /// \return The number of bytes read, possibly zero, or error code if the given offset is greater
+    /// than or equal to the file's current size
+    CallResult<uint64_t> read(char * dst, uint64_t bytes_to_read, uint64_t offset) const;
+
+    CallResult<uint64_t> read(std::span<char> dst, uint64_t offset) const;
+
+    /// Transfer bytes from this channel's file to the given writable target file descriptor
+    /// for example a socket or another file descriptor. The underlying implementation will use
+    /// Linux sendfile / splice / io_uring system calls to avoid data copy between the source file
+    /// and the target file. If the given offset is greater than the file's current size, then no
+    /// bytes are transferred.
+    /// This method doesn't modify the channel's offset nor the offset of the underlying file
+    /// descriptor. It will update the offset of the target file descriptor
+    /// \param offset Start offset of the current channel file
+    /// \param count The maximum number of bytes to be copied.
+    /// \param target_fd The target file descriptor to copy to
+    /// \return The number of bytes, possibly zero, that were actually copied
+    int64_t zeroCopyTo(uint64_t offset, uint64_t count, int32_t target_fd) const;
+
+    /// Transfer bytes into this channel's file from the source file descriptor.
+    /// The method may or may not transfer all of the requested bytes. If the given offset is
+    /// greater than the source file's current size, then no bytes are transferred.
+    /// This method doesn't modify this channel's offset or the offset of underlying file
+    /// descriptor. It will update the offset of the source file descriptor
+    /// \param source_fd The source file descriptor to copy from
+    /// \param offset The starting offset of the source file descriptor
+    /// \param count The maximum number of bytes to be copied from
+    /// \return The number of bytes, possibly zero, that were actually copied
+    int64_t zeroCopyFrom(int32_t source_fd, uint64_t offset, uint64_t count) const;
+
+    CallResult<uint64_t> sendTo(uint64_t start_offset, uint64_t count, DB::WriteBuffer & wb) const;
+
+    /// Returns the current size of the channel's backing file in bytes
+    CallResult<uint64_t> size() const;
+
+    /// Last modified time in milliseconds
+    CallResult<int64_t> lastModified() const;
+
+    bool isReadOnly() const noexcept { return read_only; }
+
+    /// Flush any updates to this channel's file to be written to the storage device
+    /// that contains it
+    /// \param include_metadata If true, data and metadata of the underlying file will
+    /// be flushed, otherwise only data is flushed
+    /// \return 0 on success, OS error code on failure
+    int sync(bool include_metadata) const { return flushFile(fd, include_metadata); }
+
+    /// \syncTail flushes the data in [offset, file-end] to disk storage
+    /// \return 0 on success, OS error code on failure
+    int syncTail(uint64_t offset) const { return flushFileTail(fd, offset); }
+
+    /// Truncate file to exactly `position` size
+    /// \return 0 on success, OS error code on failure
+    int truncate(uint64_t position) const;
+
+    const fs::path & getFilename() const { return filename; }
+
+    void renameTo(fs::path new_file, std::error_code & err)
+    {
+        fs::rename(filename, new_file, err);
+        if (!err)
+            filename.swap(new_file);
+    }
+
+    void remove(std::error_code & err) { fs::remove(filename, err); }
+
+    void updateParentDir(const fs::path & parent_dir) { filename = parent_dir / filename.filename(); }
+
+private:
+    template <typename ByteRange>
+    inline CallResult<size_t> append(const std::vector<ByteRange> & batch_data, size_t bytes_to_write) const;
+
+    inline struct stat stat() const;
+
+private:
+    fs::path filename;
+    bool read_only;
+    int32_t fd;
+};
+
+using AppendOnlyFilePtr = std::shared_ptr<AppendOnlyFile>;
+}

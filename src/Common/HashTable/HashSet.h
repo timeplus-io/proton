@@ -40,6 +40,8 @@ public:
     using Base = HashTable<Key, TCell, Hash, Grower, Allocator>;
     using typename Base::LookupResult;
 
+    using Base::Base;
+
     void merge(const Self & rhs)
     {
         if (!this->hasZero() && rhs.hasZero())
@@ -87,6 +89,13 @@ public:
     using Base = TwoLevelHashTable<Key, TCell, Hash, Grower, Allocator, HashSetTable<Key, TCell, Hash, Grower, Allocator>>;
 
     using Base::Base;
+
+    template <typename... Args>
+    void merge(const HashSetTable<Key, Args...> & rhs)
+    {
+        for (auto it = rhs.begin(), end = rhs.end(); it != end; ++it)
+            this->insert(it->getValue());
+    }
 
     /// Writes its content in a way that it will be correctly read by HashSetTable.
     /// Used by uniqExact to preserve backward compatibility.

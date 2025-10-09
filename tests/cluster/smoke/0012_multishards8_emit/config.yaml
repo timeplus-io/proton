@@ -1,0 +1,5 @@
+name: multishards8_emit
+description: Tests covering the multishard stream query smoke cases.
+tags:
+  - smoke
+  - multishards

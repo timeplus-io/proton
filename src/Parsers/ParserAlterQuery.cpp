@@ -1,23 +1,21 @@
-#include <Common/typeid_cast.h>
-#include <Parsers/ParserAlterQuery.h>
+#include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserPartition.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTIndexDeclaration.h>
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/parseDatabaseAndTableName.h>
+#include <Common/typeid_cast.h>
 
 
 namespace DB
 {
 
-bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     auto command = std::make_shared<ASTAlterCommand>();
     node = command;
@@ -37,6 +35,10 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_materialize_ttl("MATERIALIZE TTL");
     ParserKeyword s_modify_setting("MODIFY SETTING");
     ParserKeyword s_reset_setting("RESET SETTING");
+    /// proton: starts.
+    ParserKeyword s_modify_query_setting("MODIFY QUERY SETTING");
+    ParserKeyword s_reset_query_setting("RESET QUERY SETTING");
+    /// proton: ends.
     ParserKeyword s_modify_query("MODIFY QUERY");
 
     ParserKeyword s_add_index("ADD INDEX");
@@ -107,6 +109,10 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_remove_ttl("REMOVE TTL");
     ParserKeyword s_remove_sample_by("REMOVE SAMPLE BY");
 
+    /// proton : starts
+    ParserKeyword s_with_clear("WITH CLEAR");
+    /// proton : ends
+
     ParserCompoundIdentifier parser_name;
     ParserStringLiteral parser_string_literal;
     ParserIdentifier parser_remove_property;
@@ -118,11 +124,13 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserPartition parser_partition;
     ParserExpression parser_exp_elem;
     ParserList parser_assignment_list(
-        std::make_unique<ParserAssignment>(), std::make_unique<ParserToken>(TokenType::Comma),
+        std::make_unique<ParserAssignment>(),
+        std::make_unique<ParserToken>(TokenType::Comma),
         /* allow_empty = */ false);
     ParserSetQuery parser_settings(true);
     ParserList parser_reset_setting(
-        std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma),
+        std::make_unique<ParserIdentifier>(),
+        std::make_unique<ParserToken>(TokenType::Comma),
         /* allow_empty = */ false);
     ParserNameList values_p;
     ParserSelectWithUnionQuery select_p;
@@ -142,11 +150,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
             break;
         }
-        default:
-            break;
-        /// proton: starts
+        /// proton : starts
         case ASTAlterQuery::AlterObjectType::STREAM:
-        /// proton: ends
         {
             if (s_add_column.ignore(pos, expected))
             {
@@ -156,13 +161,16 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!parser_col_decl.parse(pos, command->col_decl, expected))
                     return false;
 
-                if (s_first.ignore(pos, expected))
-                    command->first = true;
-                else if (s_after.ignore(pos, expected))
-                {
-                    if (!parser_name.parse(pos, command->column, expected))
-                        return false;
-                }
+                /// proton : starts. always add as the last column
+                command->first = false;
+                /// if (s_first.ignore(pos, expected))
+                ///     command->first = false;
+                /// else if (s_after.ignore(pos, expected))
+                /// {
+                ///    if (!parser_name.parse(pos, command->column, expected))
+                ///        return false;
+                /// }
+                /// proton : ends
 
                 command->type = ASTAlterCommand::ADD_COLUMN;
             }
@@ -263,13 +271,16 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!parser_idx_decl.parse(pos, command->index_decl, expected))
                     return false;
 
-                if (s_first.ignore(pos, expected))
-                    command->first = true;
-                else if (s_after.ignore(pos, expected))
-                {
-                    if (!parser_name.parse(pos, command->index, expected))
-                        return false;
-                }
+                /// proton : starts. always add as the last column
+                command->first = false;
+                /// if (s_first.ignore(pos, expected))
+                ///    command->first = false;
+                /// else if (s_after.ignore(pos, expected))
+                /// {
+                ///    if (!parser_name.parse(pos, command->index, expected))
+                ///        return false;
+                /// }
+                /// proton : ends
 
                 command->type = ASTAlterCommand::ADD_INDEX;
             }
@@ -318,7 +329,15 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     if (!parser_partition.parse(pos, command->partition, expected))
                         return false;
                 }
+
+                /// proton : starts
+                if (s_with_clear.ignore(pos, expected))
+                    command->clear_index = true;
+                /// proton : ends
             }
+            /// proton: starts
+            /// PROJECTION SUPPORT DISABLED: Remove projection ALTER commands to disable projection support at AST level
+            /*
             else if (s_add_projection.ignore(pos, expected))
             {
                 if (s_if_not_exists.ignore(pos, expected))
@@ -383,6 +402,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                         return false;
                 }
             }
+            */
+            /// proton: ends
             else if (s_move_part.ignore(pos, expected))
             {
                 if (!parser_string_literal.parse(pos, command->partition, expected))
@@ -642,13 +663,16 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 }
                 else
                 {
-                    if (s_first.ignore(pos, expected))
-                        command->first = true;
-                    else if (s_after.ignore(pos, expected))
-                    {
-                        if (!parser_name.parse(pos, command->column, expected))
-                            return false;
-                    }
+                    /// proton : starts
+                    command->first = false;
+                    /// if (s_first.ignore(pos, expected))
+                    ///    command->first = true;
+                    /// else if (s_after.ignore(pos, expected))
+                    /// {
+                    ///    if (!parser_name.parse(pos, command->column, expected))
+                    ///        return false;
+                    /// }
+                    /// proton : ends
                 }
                 command->type = ASTAlterCommand::MODIFY_COLUMN;
             }
@@ -750,6 +774,20 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     return false;
                 command->type = ASTAlterCommand::RESET_SETTING;
             }
+            /// proton: starts.
+            else if (s_modify_query_setting.ignore(pos, expected))
+            {
+                if (!parser_settings.parse(pos, command->settings_changes, expected))
+                    return false;
+                command->type = ASTAlterCommand::MODIFY_QUERY_SETTING;
+            }
+            else if (s_reset_query_setting.ignore(pos, expected))
+            {
+                if (!parser_reset_setting.parse(pos, command->settings_resets, expected))
+                    return false;
+                command->type = ASTAlterCommand::RESET_QUERY_SETTING;
+            }
+            /// proton: ends.
             else if (s_modify_query.ignore(pos, expected))
             {
                 if (!select_p.parse(pos, command->select, expected))
@@ -765,7 +803,12 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             }
             else
                 return false;
+
+            break;
         }
+        /// proton : ends
+        default:
+            break;
     }
 
     if (command->col_decl)
@@ -811,7 +854,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 }
 
 
-bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     auto command_list = std::make_shared<ASTExpressionList>();
     node = command_list;
@@ -826,27 +869,33 @@ bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
             return false;
 
         command_list->children.push_back(command);
-    }
-    while (s_comma.ignore(pos, expected, false));
+    } while (s_comma.ignore(pos, expected, false));
 
     return true;
 }
 
 
-bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     auto query = std::make_shared<ASTAlterQuery>();
     node = query;
 
     /// proton: starts
     ParserKeyword s_alter_stream("ALTER STREAM");
+    ParserKeyword s_alter_view("ALTER VIEW");
     /// proton: ends
     ParserKeyword s_alter_database("ALTER DATABASE");
 
     ASTAlterQuery::AlterObjectType alter_object_type;
     /// proton: starts
+    bool is_view = false;
     if (s_alter_stream.ignore(pos, expected))
     {
+        alter_object_type = ASTAlterQuery::AlterObjectType::STREAM;
+    }
+    else if (s_alter_view.ignore(pos, expected))
+    {
+        is_view = true;
         alter_object_type = ASTAlterQuery::AlterObjectType::STREAM;
     }
     /// proton: ends
@@ -867,13 +916,15 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, 
         if (!parseDatabaseAndTableAsAST(pos, expected, query->database, query->table))
             return false;
 
-        String cluster_str;
-        if (ParserKeyword{"ON"}.ignore(pos, expected))
-        {
-            if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-                return false;
-        }
-        query->cluster = cluster_str;
+        /// proton: starts.
+        /// String cluster_str;
+        /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+        /// {
+        ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+        ///         return false;
+        /// }
+        /// query->cluster = cluster_str;
+        /// proton: ends.
     }
 
     ParserAlterCommandList p_command_list(alter_object_type);
@@ -883,6 +934,9 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, 
 
     query->set(query->command_list, command_list);
     query->alter_object = alter_object_type;
+    /// proton: starts.
+    query->is_view = is_view;
+    /// proton: ends.
 
     if (query->database)
         query->children.push_back(query->database);

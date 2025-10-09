@@ -18,4 +18,9 @@ std::pair<String, Int32> ClusterInfoHandler::executeGet(const Poco::JSON::Object
 {
     return {jsonErrorResponse("Internal server error", ErrorCodes::UNSUPPORTED), HTTPResponse::HTTP_INTERNAL_SERVER_ERROR};
 }
+
+String ClusterInfoHandler::getClusterInfoLocally() const
+{
+    return "{}";
+}
 }

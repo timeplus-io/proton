@@ -27,10 +27,10 @@ inline SequenceRange parseSequenceRange(const String & s, String::size_type lpos
     {
         auto comma_pos = s.find(',', lpos);
         if (comma_pos == String::npos)
-            throw Exception("Invalid sequences " + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid sequences {}", s);
 
         if (comma_pos > rpos)
-            throw Exception("Invalid sequences " + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid sequences {}", s);
 
         switch (i)
         {
@@ -94,10 +94,10 @@ inline IdempotentKey parseIdempotentKey(const String & s, String::size_type lpos
 
     auto comma_pos = s.find(',', lpos);
     if (comma_pos == String::npos)
-        throw Exception("Invalid idempotent key" + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid idempotent key {}", s);
 
     if (comma_pos >= rpos)
-        throw Exception("Invalid idempotent key" + s, ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid idempotent key {}", s);
 
     key.first = parseIntStrict<Int64>(s, lpos, comma_pos);
     key.second = String{s, comma_pos + 1, rpos - comma_pos - 1};
@@ -138,7 +138,7 @@ std::shared_ptr<IdempotentKeys> readIdempotentKeys(ReadBuffer & in)
     return idempotent_keys;
 }
 
-SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, Poco::Logger * log)
+SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, LoggerPtr log)
 {
     if (sequence_ranges.empty())
         return {};
@@ -200,7 +200,7 @@ SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 commi
 }
 
 inline std::shared_ptr<IdempotentKeys>
-mergeIdempotentKeys(const std::set<IdempotentKey> & idempotent_keys, UInt64 max_idempotent_keys, Poco::Logger * log)
+mergeIdempotentKeys(const std::set<IdempotentKey> & idempotent_keys, UInt64 max_idempotent_keys, LoggerPtr log)
 {
     if (idempotent_keys.empty())
         return nullptr;
@@ -235,7 +235,7 @@ mergeIdempotentKeys(const std::set<IdempotentKey> & idempotent_keys, UInt64 max_
 }
 
 inline void collectMissingSequenceRangeBefore(
-    const SequenceRange & prev, size_t prev_index, Int64 next_expecting_sn, Poco::Logger * log, SequenceRanges & missing_ranges)
+    const SequenceRange & prev, size_t prev_index, Int64 next_expecting_sn, LoggerPtr log, SequenceRanges & missing_ranges)
 {
     if (prev_index != 0)
         return;
@@ -252,7 +252,7 @@ inline void collectMissingSequenceRangeBefore(
 }
 
 inline void collectMissingSequenceRangeBetween(
-    const SequenceRange & prev, const SequenceRange & cur, Poco::Logger * log, SequenceRanges & missing_ranges)
+    const SequenceRange & prev, const SequenceRange & cur, LoggerPtr log, SequenceRanges & missing_ranges)
 {
     if (prev.start_sn != cur.start_sn && prev.end_sn + 1 != cur.start_sn)
     {
@@ -265,7 +265,7 @@ inline void collectMissingSequenceRangeBetween(
 }
 
 inline void collectMissingPartsSequenceRange(
-    const SequenceRanges & sequence_ranges, size_t prev_index, size_t cur_index, Poco::Logger * log, SequenceRanges & missing_ranges)
+    const SequenceRanges & sequence_ranges, size_t prev_index, size_t cur_index, LoggerPtr log, SequenceRanges & missing_ranges)
 {
     Int32 next_expecting_part_index = 0;
     std::vector<String> missed_parts;
@@ -315,7 +315,7 @@ inline void collectMissingSequenceRanges(
     size_t prev_index,
     size_t cur_index,
     Int32 parts,
-    Poco::Logger * log,
+    LoggerPtr log,
     Int64 & next_expecting_sn,
     SequenceRanges & missing_ranges)
 {
@@ -499,7 +499,7 @@ String sequenceRangesToString(const SequenceRanges & sequence_ranges)
 
 /// Data in parameter `sequences` will be reordered when merging
 SequenceInfoPtr
-mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, Poco::Logger * log)
+mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, LoggerPtr log)
 {
     if (sequences.empty())
         return nullptr;
@@ -526,7 +526,7 @@ mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, 
 }
 
 /// The `sequence_ranges` are assumed to have sequence numbers which are great than `committed`
-std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed, Poco::Logger * log)
+std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed, LoggerPtr log)
 {
     if (sequence_ranges.empty())
         return {{}, committed + 1, committed + 1};

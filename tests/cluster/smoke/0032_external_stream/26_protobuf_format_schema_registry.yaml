@@ -1,0 +1,136 @@
+tags:
+- protobuf
+- bug
+
+description: |
+  Test kafka external stream with protobufSingle format and kafka_schema_registry_url setting
+  Steps:
+    1.create kafka topic
+    2.create kafka schema registry
+    3.check kafka schema registry exist with "curl -s http://localhost:8081/subjects"
+    4.create external stream
+    5.insert data into external stream
+    6.query external stream with settings seek_to='earliest'
+    7.query external stream
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+  # kafka topic: drop and create
+  - type: kafka
+    name: delete
+    topic: proto-ingest26
+
+  - type: kafka
+    name: create
+    topic: proto-ingest26
+    settings:
+      partitions: 3
+      replication: 1
+  - type: wait
+    time: 1
+
+  # kafka schema registry: delete and create
+  - type: command
+    node: [k1]
+    shell: curl -X DELETE http://localhost:8081/subjects/proto-ingest26-value # soft delete of all versions of the schema
+
+  - type: command
+    node: [k1]
+    shell: curl -X DELETE http://localhost:8081/subjects/proto-ingest26-value?permanent=true  # hard delete of all versions of the schema
+
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [k1]
+    shell: |
+      curl -s \
+        -X POST \
+        "http://localhost:8081/subjects/proto-ingest26-value/versions" \
+        -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        -d '{"schemaType": "PROTOBUF",
+            "schema": "syntax = \"proto3\"; message User { string model = 1; int32 make = 2; }"}'
+  - type: wait
+    time: 1
+
+  - name: external-stream-26-1
+    type: command
+    node: [k1]
+    shell: curl -s http://localhost:8081/subjects/proto-ingest26-value/versions
+
+  - type: check
+    target_name: external-stream-26-1
+    expected_result: ['[1]']
+
+  - type: query
+    sql: DROP STREAM IF EXISTS proto_ingest_ext;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM proto_ingest_ext(
+        model string,
+        make int32
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'proto-ingest26',
+      data_format = 'ProtobufSingle',
+      kafka_schema_registry_url = 'http://k1:8081';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into avro_ingest_ext(model, make) settings force_refresh_schema=true values ('model1', 1) ('model2', 2) ('model3', 3);
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: external-stream-26-2
+    query: select model, make from proto_ingest_ext settings seek_to='earliest';
+    schema:
+      - name: model
+        type: string
+      - name: make
+        type: int32
+
+  - type: stream
+    name: external-stream-26-3
+    query: select model, make from proto_ingest_ext;
+    schema:
+      - name: model
+        type: string
+      - name: make
+        type: int32
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into avro_ingest_ext(model, make) settings force_refresh_schema=true values ('model4', 4) ('model5', 5) ('model6', 6);
+
+  - type: check
+    target_name: external-stream-26-2
+    mode: random
+    expected_result:
+      - ['model1', 1]
+      - ['model2', 2]
+      - ['model3', 3]
+      - ['model4', 4]
+      - ['model5', 5]
+      - ['model6', 6]
+
+  - type: check
+    target_name: external-stream-26-3
+    mode: random
+    expected_result:
+      - ['model4', 4]
+      - ['model5', 5]
+      - ['model6', 6]

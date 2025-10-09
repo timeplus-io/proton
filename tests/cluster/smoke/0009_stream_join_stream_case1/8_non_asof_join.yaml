@@ -1,0 +1,22 @@
+tags:
+  - stream_join_stream
+  - cluster_table_bug
+description: non asof join with inequality join clause for table join is not supported
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: 1031-1
+    type: stream
+    query: select s, ss from table(test10_left_stream1) as test10_left_stream1 join
+      table(test10_right_stream1) as test10_right_stream1 on i=ii and ts < tts
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+
+  - type: check
+    target_name: 1031-1
+    expected_result:
+      - [ error_code:403 ]

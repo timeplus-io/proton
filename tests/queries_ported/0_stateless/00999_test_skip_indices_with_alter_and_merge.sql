@@ -14,7 +14,7 @@ INSERT INTO test_vertical_merge SELECT number, number + 5, number * 12 from numb
 
 SELECT count() from test_vertical_merge WHERE val2 <= 2400;
 
-OPTIMIZE TABLE test_vertical_merge FINAL;
+OPTIMIZE STREAM test_vertical_merge FINAL;
 
 SELECT count() from test_vertical_merge WHERE val2 <= 2400;
 

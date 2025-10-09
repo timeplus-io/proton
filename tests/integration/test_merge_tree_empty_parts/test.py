@@ -17,9 +17,14 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
+
 def test_empty_parts_alter_delete(started_cluster):
-    node1.query("CREATE TABLE empty_parts_delete (d Date, key UInt64, value String) \
-        ENGINE = ReplicatedMergeTree('/clickhouse/tables/empty_parts_delete', 'r1', d, key, 8192)")
+    node1.query(
+        "CREATE TABLE empty_parts_delete (d Date, key UInt64, value String) "
+        "ENGINE = ReplicatedMergeTree('/clickhouse/tables/empty_parts_delete', 'r1') "
+        "PARTITION BY toYYYYMM(d) ORDER BY key "
+        "SETTINGS old_parts_lifetime = 1"
+    )
 
     node1.query("INSERT INTO empty_parts_delete VALUES (toDate('2020-10-10'), 1, 'a')")
     node1.query("ALTER TABLE empty_parts_delete DELETE WHERE 1 SETTINGS mutations_sync = 2")
@@ -28,8 +33,12 @@ def test_empty_parts_alter_delete(started_cluster):
     assert_eq_with_retry(node1, "SELECT count() FROM system.parts WHERE table = 'empty_parts_delete' AND active", "0")
 
 def test_empty_parts_summing(started_cluster):
-    node1.query("CREATE TABLE empty_parts_summing (d Date, key UInt64, value Int64) \
-        ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/empty_parts_summing', 'r1', d, key, 8192)")
+    node1.query(
+        "CREATE TABLE empty_parts_summing (d Date, key UInt64, value Int64) "
+        "ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/empty_parts_summing', 'r1') "
+        "PARTITION BY toYYYYMM(d) ORDER BY key "
+        "SETTINGS old_parts_lifetime = 1"
+    )
 
     node1.query("INSERT INTO empty_parts_summing VALUES (toDate('2020-10-10'), 1, 1)")
     node1.query("INSERT INTO empty_parts_summing VALUES (toDate('2020-10-10'), 1, -1)")

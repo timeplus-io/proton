@@ -24,9 +24,13 @@ public:
 
     void appendColumnName(WriteBuffer & ostr) const override;
     void setPattern(String pattern);
+    const String & getPattern() const;
     const std::shared_ptr<re2::RE2> & getMatcher() const;
     bool isColumnMatching(const String & column_name) const;
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    ASTPtr expression;
+    ASTPtr transformers;
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
@@ -45,7 +49,10 @@ public:
     void appendColumnName(WriteBuffer & ostr) const override;
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
+    ASTPtr expression;
     ASTPtr column_list;
+    ASTPtr transformers;
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };
@@ -62,6 +69,9 @@ public:
     void setPattern(String pattern);
     void setMatcher(std::shared_ptr<re2::RE2> matcher);
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    ASTPtr qualifier;
+    ASTPtr transformers;
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
@@ -80,7 +90,10 @@ public:
     void appendColumnName(WriteBuffer & ostr) const override;
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
+    ASTPtr qualifier;
     ASTPtr column_list;
+    ASTPtr transformers;
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };

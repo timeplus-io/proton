@@ -1,0 +1,13 @@
+syntax = "proto2";
+
+enum Level {
+  A = 0;
+  B = 1;
+  C = 2;
+}
+
+message TestEnum {
+  optional Level level_one = 1;
+  optional Level level_two = 2;
+  optional Level level_three = 3;
+}

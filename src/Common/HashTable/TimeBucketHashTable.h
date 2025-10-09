@@ -7,6 +7,12 @@
 
 #include <Common/HashTable/HashTable.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
+#include <Common/PackedTimeBucket.h>
+
+namespace DB::ErrorCodes
+{
+extern const int NOT_IMPLEMENTED;
+}
 
 template <size_t initial_size_degree = 8>
 struct TimeBucketHashTableGrower : public HashTableGrower<initial_size_degree>
@@ -17,19 +23,20 @@ struct TimeBucketHashTableGrower : public HashTableGrower<initial_size_degree>
 
 
 /**
- * why need WindowOffset? what is it?
- * In query such as 'select ... from tumble(stream, 5s) group by window_start, col', if the toatal length of group by key are fixed,
+ * why need BucketOffset? what is it?
+ * In query such as 'select ... from tumble(stream, 5s) group by window_start, col', if the total length of group by key are fixed,
  * and the col are nullable columns, in function 'packFixed', it will put the KeysNullMap(indicates which column of this row of data is null) in the front of the key,
- * then put the window time key and other group by key behind it.But in TimeBucketHashTable::windowKey, we assume the window time key is in the front of the key, 
+ * then put the time bucket key and other group by key behind it. But in TimeBucketHashTable::getBucket, we assume the time bucket key is in the front of the key,
  * The key's layout is like:
  *  |           key                |
  *  +-----------------+------------+
- *  | col, window time| KeysNullMap|
+ *  | col, time bucket| KeysNullMap|
  *  +-----------------+------------+ low bit
- *                    |WindowOffset|
+ *                    |BucketOffset|
  * 
- * so we need to add a WindowOffset to indicate the length of the KeysNullMap, then we can get the window time key correctly.
- * PS: The WindowOffset will only work in this situation(group by window_start and other nullable column), other situation will not be 0, and it will not affect the result.
+ * so we need to add a bucket offset to indicate the length of the KeysNullMap, then we can get the time bucket key correctly.
+ * PS: The BucketOffset will only work in this situation(group by window_start and other nullable column) or packed grouped by integral columns,
+ * other situation will not be 0, and it will not affect the result.
 */
 template <
     typename Key,
@@ -37,8 +44,7 @@ template <
     typename Hash,
     typename Grower,
     typename Allocator,
-    typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>,
-    size_t WindowOffset = 0>
+    typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>>
 class TimeBucketHashTable : private boost::noncopyable, protected Hash /// empty base optimization
 {
 protected:
@@ -48,7 +54,8 @@ protected:
     using HashValue = size_t;
     using Self = TimeBucketHashTable;
 
-    size_t win_key_size;
+    size_t bucket_key_bytes = 0;
+    size_t bucket_key_offset = 0;
 
 public:
     using Impl = ImplTable;
@@ -61,27 +68,28 @@ public:
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
     template <typename T>
-    ALWAYS_INLINE Int64 windowKey(T key)
+    ALWAYS_INLINE Int64 getBucket(T key)
     {
-        /// window time key is always: 4 or 8 bytes
-        /// window time key are always lower bits of integral type of T
-        /// key & 0xFFFF or 0xFFFFFFFF or 0xFFFFFFFFFFFFFFFF
-
-        return (key >> (8 * WindowOffset)) & ((0xFFull << ((win_key_size - 1) << 3)) + ((1ull << ((win_key_size - 1) << 3)) - 1));
+        return DB::decodeTimeBucket(key, bucket_key_bytes, bucket_key_offset);
     }
 
-    ALWAYS_INLINE Int64 windowKey(StringRef key)
+    ALWAYS_INLINE Int64 getBucket(StringRef key)
     {
-        /// deserialize the first win_key_size bytes
-        if (win_key_size == 8)
+        /// Deserialize the first bucket_key_bytes
+        if (bucket_key_bytes == 8)
         {
             assert(key.size > 8);
             return unalignedLoad<Int64>(key.data);
         }
-        else if (win_key_size == 4)
+        else if (bucket_key_bytes == 4)
         {
             assert(key.size > 4);
             return unalignedLoad<UInt32>(key.data);
+        }
+        else if (bucket_key_bytes == 2)
+        {
+            assert(key.size > 2);
+            return unalignedLoad<UInt16>(key.data);
         }
 
         UNREACHABLE();
@@ -126,15 +134,25 @@ public:
     /// FIXME, choose a better perf data structure
     /// Usually we don't have too many time buckets
     std::map<Int64, Impl> impls;
-    std::unordered_map<Int64, bool/*updated*/> updated_buckets;
+    std::unordered_map<Int64, bool /*updated*/> updated_buckets;
     Impl sentinel;
 
     TimeBucketHashTable() { }
 
-    void setWinKeySize(size_t win_key_size_)
+    void setBucketKeyBytesAndOffset(size_t bucket_key_bytes_, size_t bucket_key_offset_)
     {
-        assert(win_key_size_ == 4 || win_key_size_ == 8);
-        win_key_size = win_key_size_;
+        if (bucket_key_bytes_ == 2 || bucket_key_bytes_ == 4 || bucket_key_bytes_ == 8)
+        {
+            bucket_key_bytes = bucket_key_bytes_;
+            bucket_key_offset = bucket_key_offset_;
+        }
+        else
+        {
+            throw DB::Exception(
+                DB::ErrorCodes::NOT_IMPLEMENTED,
+                "Time bucket key is expected to have 2, or 4 or 8 bytes, and it has {} bytes",
+                bucket_key_bytes_);
+        }
     }
 
     /// Copy the data from another (normal) hash table. It should have the same hash function.
@@ -279,15 +297,15 @@ public:
     template <typename KeyHolder>
     void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash_value)
     {
-        auto window = windowKey(keyHolderGetKey(key_holder));
-        impls[window].emplace(key_holder, it, inserted, hash_value);
-        updated_buckets[window] = true; /// updated
+        auto bucket = getBucket(keyHolderGetKey(key_holder));
+        impls[bucket].emplace(key_holder, it, inserted, hash_value);
+        updated_buckets[bucket] = true; /// updated
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
     {
-        auto window = windowKey(x);
-        return impls[window].find(x, hash_value);
+        auto bucket = getBucket(x);
+        return impls[bucket].find(x, hash_value);
     }
 
     ConstLookupResult ALWAYS_INLINE find(Key x, size_t hash_value) const
@@ -417,13 +435,12 @@ public:
     /// after the current watermark
     /// Return {removed, last_removed_watermark, remaining_size}
     template <typename MappedDestroyFunc>
-    std::tuple<size_t, Int64, size_t>
-    removeBucketsBefore(Int64 max_bucket, MappedDestroyFunc && mapped_destroy)
+    std::tuple<size_t, Int64, size_t> removeBucketsBefore(Int64 max_bucket, MappedDestroyFunc && mapped_destroy)
     {
         Int64 last_removed_watermark = 0;
         size_t removed = 0;
 
-        for (auto it = impls.begin(), it_end = impls.end(); it != it_end;)
+        for (auto it = impls.begin(); it != impls.end();)
         {
             if (it->first <= max_bucket)
             {
@@ -437,7 +454,9 @@ public:
                 it = impls.erase(it);
             }
             else
+            {
                 break;
+            }
         }
 
         auto new_size = impls.size();

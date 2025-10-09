@@ -1,0 +1,51 @@
+description: test two roles
+
+steps:
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP ROLE if exists admin;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP ROLE if exists select_only;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROLE admin;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROLE select_only;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: GRANT ALL ON *.* TO admin;
+
+  - type: wait
+    time: 1
+
+  - name: '101'
+    type: stream
+    user: proton
+    password: proton@t+
+    query: show roles;
+    schema:
+        - name: name
+          type: string
+
+  - type: check
+    target_name: '101'
+    expected_result:
+      - ['admin']
+      - ['select_only']

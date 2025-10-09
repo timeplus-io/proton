@@ -1,13 +1,10 @@
 #pragma once
 
-#include <Common/logger_useful.h>
-
 #include <Poco/Net/StreamSocket.h>
 
-#include "config.h"
+#include <Common/callOnce.h>
 #include <Client/IServerConnection.h>
 #include <Core/Defines.h>
-
 
 #include <IO/ReadBufferFromPocoSocket.h>
 
@@ -18,8 +15,9 @@
 
 #include <Storages/MergeTree/RequestResponse.h>
 
-#include <atomic>
 #include <optional>
+
+#include "config.h"
 
 namespace DB
 {
@@ -34,7 +32,6 @@ using Connections = std::vector<ConnectionPtr>;
 
 class NativeReader;
 class NativeWriter;
-
 
 /** Connection with database server, to use by client.
   * How to use - see Core/Protocol.h
@@ -109,7 +106,7 @@ public:
 
     void sendData(const Block & block, const String & name/* = "" */, bool scalar/* = false */) override;
 
-    void sendMergeTreeReadTaskResponse(const PartitionReadResponse & response) override;
+    void sendMergeTreeReadTaskResponse(const ParallelReadResponse & response) override;
 
     void sendExternalTablesData(ExternalTablesData & data) override;
 
@@ -156,9 +153,6 @@ public:
             in->setAsyncCallback(std::move(async_callback));
     }
 
-    /// proton: starts
-    void setCompatibleWithClickHouse();
-    /// proton: ends
 private:
     String host;
     UInt16 port;
@@ -171,6 +165,8 @@ private:
     String cluster;
     String cluster_secret;
     String salt;
+    /// For DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_V2
+    std::optional<UInt64> nonce;
 
     /// Address is resolved during the first connection (or the following reconnects)
     /// Use it only for logging purposes
@@ -233,16 +229,18 @@ private:
         {
         }
 
-        Poco::Logger * get()
+        LoggerPtr get()
         {
-            if (!log)
-                log = &Poco::Logger::get("Connection (" + parent.getDescription() + ")");
+            callOnce(log_initialized, [&] {
+                log = getLogger("Connection (" + parent.getDescription() + ")");
+            });
 
             return log;
         }
 
     private:
-        std::atomic<Poco::Logger *> log;
+        OnceFlag log_initialized;
+        LoggerPtr log;
         Connection & parent;
     };
 
@@ -253,7 +251,7 @@ private:
     void connect(const ConnectionTimeouts & timeouts);
     void sendHello();
     void sendAddendum();
-    void receiveHello();
+    void receiveHello(const Poco::Timespan & handshake_timeout);
 
 #if USE_SSL
     void sendClusterNameAndSalt();
@@ -268,7 +266,8 @@ private:
     std::vector<String> receiveMultistringMessage(UInt64 msg_type) const;
     std::unique_ptr<Exception> receiveException() const;
     Progress receiveProgress() const;
-    PartitionReadRequest receivePartitionReadRequest() const;
+    ParallelReadRequest receiveParallelReadRequest() const;
+    InitialAllRangesAnnouncement receiveInitialParallelReadAnnounecement() const;
     ProfileInfo receiveProfileInfo() const;
 
     void initInputBuffers();
@@ -277,10 +276,6 @@ private:
     void initBlockProfileEventsInput();
 
     [[noreturn]] void throwUnexpectedPacket(UInt64 packet_type, const char * expected) const;
-
-    /// proton: starts
-    bool compatible_with_clickhouse {false};
-    /// proton: ends
 };
 
 class AsyncCallbackSetter

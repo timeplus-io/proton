@@ -1,0 +1,36 @@
+tags:
+- create random
+- unstable
+- bug
+description: set eps in query time, test eps
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id int default rand()%4) engine Random()
+    settings eps=1000
+- type: wait
+  time: 3
+
+- name: '2228'
+  type: stream
+  query: select count(1) from tumble(test22_create_random, 1s) group by window_start
+    limit 5 settings eps=10000
+  schema:
+  - name: count()
+    type: uint64
+
+- type: check
+  target_name: '2228'
+  expected_result:
+  - [10000]
+  - [10000]
+  - [10000]
+  - [10000]
+  - [10000]

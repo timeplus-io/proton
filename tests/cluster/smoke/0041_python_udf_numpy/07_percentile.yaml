@@ -1,0 +1,65 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.percentile function - population percentileiance
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getPercentile(x int, y int) RETURNS float LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getPercentile:
+          def __init__(self):
+              self.percentile = 0
+
+          def serialize(self):
+              data = {}
+              data['percentile'] = self.percentile
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.percentile = data['percentile']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              arr = np.vstack((xs, ys))
+              self.percentile = float(np.percentile(arr, 50))
+
+          def finalize(self):
+              return self.percentile
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-7-1
+    type: stream
+    query: select getPercentile(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (10,3) (7,2) (4,1);
+
+  - type: check
+    target_name: python-udf2-7-1
+    expected_result:
+      - [3.5]

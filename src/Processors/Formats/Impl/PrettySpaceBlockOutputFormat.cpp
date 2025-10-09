@@ -114,7 +114,6 @@ void registerOutputFormatPrettySpace(FormatFactory & factory)
     factory.registerOutputFormat("PrettySpace", [](
         WriteBuffer & buf,
         const Block & sample,
-        const RowOutputFormatParams &,
         const FormatSettings & format_settings)
     {
         return std::make_shared<PrettySpaceBlockOutputFormat>(buf, sample, format_settings);
@@ -125,7 +124,6 @@ void registerOutputFormatPrettySpace(FormatFactory & factory)
     factory.registerOutputFormat("PrettySpaceNoEscapes", [](
         WriteBuffer & buf,
         const Block & sample,
-        const RowOutputFormatParams &,
         const FormatSettings & format_settings)
     {
         FormatSettings changed_settings = format_settings;

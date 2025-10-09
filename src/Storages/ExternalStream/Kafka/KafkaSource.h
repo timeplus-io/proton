@@ -5,11 +5,11 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Processors/Streaming/ISource.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
+#include <Storages/ExternalStream/ExternalStreamSource.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageSnapshot.h>
 #include <Common/Stopwatch.h>
 #include <Common/TimeBasedThrottler.h>
-#include <Storages/ExternalStream/ExternalStreamSource.h>
 
 struct rd_kafka_message_s;
 
@@ -30,7 +30,7 @@ public:
         const StorageSnapshotPtr & storage_snapshot_,
         const String & data_format,
         const FormatSettings & format_settings,
-        const String & topic,
+        String topic_,
         DB::Kafka::ConsumerPtr consumer_,
         Int32 shard_,
         Int64 offset_,
@@ -38,25 +38,25 @@ public:
         size_t max_block_size_,
         UInt64 consumer_stall_timeout_ms,
         ExternalStreamCounterPtr external_stream_counter_,
-        Poco::Logger * logger_,
-        ContextPtr query_context_);
+        ContextPtr query_context_,
+        LoggerPtr logger_);
 
     ~KafkaSource() override;
 
     String getName() const override { return "KafkaSource"; }
 
-    String description() const override { return fmt::format("topic={},partition={}", consumer->topicName(), shard); }
+    std::pair<Int64, Int64> sequenceRange() const override;
 
     Chunk generate() override;
 
 protected:
-    void onCancel() override;
+    void onCancel() noexcept override;
 
 private:
     class StallDetector
     {
     public:
-        StallDetector(DB::Kafka::Consumer &, Int32 partition_, Int64 initial_offset, UInt64 timeout_ms_, Poco::Logger *);
+        StallDetector(DB::Kafka::Consumer &, Int32 partition_, Int64 initial_offset, UInt64 timeout_ms_, LoggerPtr);
         /// Checks if the consumer is stalled, if so, recreate it.
         void checkAndHandleStall();
 
@@ -74,7 +74,7 @@ private:
         Int64 recorded_latest_sn{0};
         Stopwatch timer;
         Stopwatch caught_up_timer;
-        Poco::Logger * logger;
+        LoggerPtr logger;
     };
 
     /// \brief Parse a Kafka message with the input format.
@@ -88,35 +88,39 @@ private:
 
     void getPhysicalHeader() override;
 
+    Strings doFetchData(const Streaming::SequenceRange &) override;
+
     const String topic;
 
     std::vector<std::function<Field(const rd_kafka_message_s *)>> virtual_col_value_functions;
     std::vector<DataTypePtr> virtual_col_types;
 
+    bool ignore_format_errors = false;
     bool request_virtual_columns = false;
 
-    std::vector<std::pair<Chunk, Int64>> result_chunks_with_sns;
-    std::vector<std::pair<Chunk, Int64>>::iterator iter;
+    std::vector<std::pair<Chunk, Streaming::SequenceRange>> result_chunks_with_sns;
+    std::vector<std::pair<Chunk, Streaming::SequenceRange>>::iterator iter;
     MutableColumns current_batch;
 
     UInt32 record_consume_batch_count = 1000;
     Int32 record_consume_timeout_ms = 100;
 
-    Int32 shard;
     Int64 offset;
     Int64 high_watermark;
     DB::Kafka::ConsumerPtr consumer;
 
+    std::atomic_flag start_consume_flag;
+
     /// Indicates that the source has already consumed all messages it is supposed to read [for non-streaming queries].
     bool reached_the_end = false;
+    /// Exception caught during consuming messages.
+    std::optional<Exception> consume_exception;
 
     std::unique_ptr<TimeBasedThrottler> watermark_error_log_throttler;
 
     StallDetector stall_detector;
 
     ExternalStreamCounterPtr external_stream_counter;
-
-    Poco::Logger * logger;
 };
 
 }

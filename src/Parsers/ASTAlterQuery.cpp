@@ -122,8 +122,12 @@ const char * ASTAlterCommand::typeToString(ASTAlterCommand::Type type)
         case NO_TYPE: return "NO_TYPE";
         case MODIFY_DATABASE_SETTING: return "MODIFY_DATABASE_SETTING";
         case MODIFY_COMMENT: return "MODIFY_COMMENT";
+        /// proton: starts.
+        case MODIFY_QUERY_SETTING: return "MODIFY_QUERY_SETTING";
+        case RESET_QUERY_SETTING: return "RESET_QUERY_SETTING";
+        /// proton: ends.
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
@@ -246,6 +250,11 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");
             partition->formatImpl(settings, state, frame);
         }
+
+        /// proton : starts
+        if (clear_index)
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH CLEAR" << (settings.hilite ? hilite_none : "");
+        /// proton : ends
     }
     else if (type == ASTAlterCommand::ADD_CONSTRAINT)
     {
@@ -259,6 +268,9 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
                       << (settings.hilite ? hilite_none : "");
         constraint->formatImpl(settings, state, frame);
     }
+    /// proton: starts
+    /// PROJECTION SUPPORT DISABLED: Remove projection formatting to be consistent with disabled projection parsing
+    /*
     else if (type == ASTAlterCommand::ADD_PROJECTION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "ADD PROJECTION " << (if_not_exists ? "IF NOT EXISTS " : "")
@@ -294,6 +306,8 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
             partition->formatImpl(settings, state, frame);
         }
     }
+    */
+    /// proton: ends
     else if (type == ASTAlterCommand::DROP_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << (detach ? "DETACH" : "DROP") << (part ? " PART " : " PARTITION ")
@@ -481,8 +495,20 @@ void ASTAlterCommand::formatImpl(const FormatSettings & settings, FormatState & 
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO ";
         rename_to->formatImpl(settings, state, frame);
     }
+    /// proton: starts.
+    else if (type == ASTAlterCommand::MODIFY_QUERY_SETTING)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "MODIFY QUERY SETTING " << (settings.hilite ? hilite_none : "");
+        settings_changes->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::RESET_QUERY_SETTING)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "RESET QUERY SETTING " << (settings.hilite ? hilite_none : "");
+        settings_resets->formatImpl(settings, state, frame);
+    }
+    /// proton: ends.
     else
-        throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+        throw Exception(ErrorCodes::UNEXPECTED_AST_STRUCTURE, "Unexpected type of ALTER");
 }
 
 bool ASTAlterQuery::isOneCommandTypeOnly(const ASTAlterCommand::Type & type) const
@@ -559,11 +585,18 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
     {
         /// proton: starts
         case AlterObjectType::STREAM:
-            settings.ostr << "ALTER STREAM ";
+        {
+            if (is_view)
+                settings.ostr << "ALTER VIEW ";
+            else
+                settings.ostr << "ALTER STREAM ";
             break;
+        }
         case AlterObjectType::DATABASE:
+        {
             settings.ostr << "ALTER DATABASE ";
             break;
+        }
         /// proton: ends
         default:
             break;

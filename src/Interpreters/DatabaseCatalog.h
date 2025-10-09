@@ -6,6 +6,7 @@
 #include <Databases/TablesLoader.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Common/SharedMutex.h>
 
 #include <boost/noncopyable.hpp>
 #include <Poco/Logger.h>
@@ -17,7 +18,6 @@
 #include <memory>
 #include <mutex>
 #include <set>
-#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <filesystem>
@@ -38,6 +38,10 @@ using DatabaseAndTable = std::pair<DatabasePtr, StoragePtr>;
 using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 using DiskPtr = std::shared_ptr<IDisk>;
 
+///proton: starts
+class IStoragePolicy;
+using StoragePolicyPtr = std::shared_ptr<const IStoragePolicy>;
+///proton: ends
 /// Table -> set of table-views that make SELECT from it.
 using ViewDependencies = std::map<StorageID, std::set<StorageID>>;
 using Dependencies = std::vector<StorageID>;
@@ -62,7 +66,7 @@ public:
 
     DDLGuard(
         Map & map_,
-        std::shared_mutex & db_mutex_,
+        SharedMutex & db_mutex_,
         std::unique_lock<std::mutex> guards_lock_,
         const String & elem,
         const String & database_name);
@@ -73,7 +77,7 @@ public:
 
 private:
     Map & map;
-    std::shared_mutex & db_mutex;
+    SharedMutex & db_mutex;
     Map::iterator it;
     std::unique_lock<std::mutex> guards_lock;
     std::unique_lock<std::mutex> table_lock;
@@ -83,6 +87,8 @@ private:
 
 using DDLGuardPtr = std::unique_ptr<DDLGuard>;
 
+class FutureSetFromSubquery;
+using FutureSetFromSubqueryPtr = std::shared_ptr<FutureSetFromSubquery>;
 
 /// Creates temporary table in `_temporary_and_external_tables` with randomly generated unique StorageID.
 /// Such table can be accessed from everywhere by its ID.
@@ -115,6 +121,7 @@ struct TemporaryTableHolder : boost::noncopyable, WithContext
 
     IDatabase * temporary_tables = nullptr;
     UUID id = UUIDHelpers::Nil;
+    FutureSetFromSubqueryPtr future_set;
 };
 
 ///TODO maybe remove shared_ptr from here?
@@ -142,7 +149,7 @@ public:
     /// Get an object that protects the table from concurrently executing multiple DDL operations.
     DDLGuardPtr getDDLGuard(const String & database, const String & table);
     /// Get an object that protects the database from concurrent DDL queries all tables in the database
-    std::unique_lock<std::shared_mutex> getExclusiveDDLGuardForDatabase(const String & database);
+    std::unique_lock<SharedMutex> getExclusiveDDLGuardForDatabase(const String & database);
 
 
     void assertDatabaseExists(const String & database_name) const;
@@ -205,6 +212,17 @@ public:
 
     bool hasUUIDMapping(const UUID & uuid);
 
+    /// proton: starts
+    void addStoragePolicyInUse(StorageID storage_id, const StoragePolicyPtr & storage_policy);
+    void removeStoragePolicyInUse(StorageID storage_id, const StoragePolicyPtr & storage_policy);
+
+    void addDisksInUse(const String & storage_policy_name, const std::vector<String> & disk_names);
+    void removeDisksInUse(const String & storage_policy_name, const std::vector<String> & disk_names);
+    /// proton: ends
+
+    std::vector<String> getStoragesByStoragePolicy(const String & storage_policy_name) const;
+    std::vector<String> getStoragesByDisk(const String & disk_name) const;
+
     static String getPathForUUID(const UUID & uuid);
     static String getPathForUUIDLegacy(const UUID & uuid);
 
@@ -221,7 +239,8 @@ public:
 
     TableNamesSet tryRemoveLoadingDependencies(const StorageID & table_id, bool check_dependencies, bool is_drop_database = false);
     TableNamesSet tryRemoveLoadingDependenciesUnlocked(const QualifiedTableName & removing_table, bool check_dependencies, bool is_drop_database = false);
-    void checkTableCanBeRemovedOrRenamed(const StorageID & table_id) const;
+    void checkTableCanBeRemovedOrRenamed(
+        const StorageID & table_id, bool check_view_dependencies, bool check_loading_dependencies, bool is_drop_database = false) const;
 
     void updateLoadingDependencies(const StorageID & table_id, TableNamesSet && new_dependencies);
 
@@ -237,12 +256,29 @@ private:
 
     void shutdownImpl();
 
+    void checkTableCanBeRemovedOrRenamedUnlocked(
+        const StorageID & removing_table, bool check_view_dependencies, bool check_loading_dependencies, bool is_drop_database) const
+        TSA_REQUIRES(databases_mutex);
 
     struct UUIDToStorageMapPart
     {
         std::unordered_map<UUID, DatabaseAndTable> map;
         mutable std::mutex mutex;
     };
+
+    /// proton: starts.
+    struct UsedByIndex
+    {
+        mutable std::mutex mutex;
+        std::unordered_map<String, std::set<String>> map;
+    };
+
+    /// To track which storages use a given storage policy
+    UsedByIndex storage_policies_in_use;
+
+    /// To track which storages use a given disk
+    UsedByIndex disks_in_use;
+    /// proton: ends
 
     static constexpr UInt64 bits_for_first_level = 4;
     using UUIDToStorageMap = std::array<UUIDToStorageMapPart, 1ull << bits_for_first_level>;
@@ -280,7 +316,7 @@ private:
 
     DependenciesInfos loading_dependencies;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Do not allow simultaneous execution of DDL requests on the same table.
     /// database name -> database guard -> (table name mutex, counter),
@@ -288,7 +324,7 @@ private:
     /// For the duration of the operation, an element is placed here, and an object is returned,
     /// which deletes the element in the destructor when counter becomes zero.
     /// In case the element already exists, waits when query will be executed in other thread. See class DDLGuard below.
-    using DatabaseGuard = std::pair<DDLGuard::Map, std::shared_mutex>;
+    using DatabaseGuard = std::pair<DDLGuard::Map, SharedMutex>;
     using DDLGuards = std::map<String, DatabaseGuard>;
     DDLGuards ddl_guards;
     /// If you capture mutex and ddl_guards_mutex, then you need to grab them strictly in this order.

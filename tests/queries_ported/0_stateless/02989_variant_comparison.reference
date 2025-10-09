@@ -1,0 +1,299 @@
+order by v1 nulls first
+\N
+\N
+\N
+\N
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,4]
+abc
+abc
+abc
+abc
+abc
+abd
+42
+42
+42
+42
+42
+43
+order by v1 nulls last
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,4]
+abc
+abc
+abc
+abc
+abc
+abd
+42
+42
+42
+42
+42
+43
+\N
+\N
+\N
+\N
+order by v2 nulls first
+\N
+\N
+\N
+\N
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,4]
+abc
+abc
+abc
+abc
+abc
+abd
+42
+42
+42
+42
+42
+43
+order by v2 nulls last
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,3]
+[1,2,4]
+abc
+abc
+abc
+abc
+abc
+abd
+42
+42
+42
+42
+42
+43
+\N
+\N
+\N
+\N
+order by v1, v2 nulls first
+[1,2,3]	\N
+[1,2,3]	[1,2,3]
+[1,2,3]	[1,2,4]
+[1,2,3]	abc
+[1,2,3]	42
+[1,2,4]	[1,2,3]
+abc	\N
+abc	[1,2,3]
+abc	abc
+abc	abd
+abc	42
+abd	abc
+42	\N
+42	[1,2,3]
+42	abc
+42	42
+42	43
+43	42
+\N	\N
+\N	[1,2,3]
+\N	abc
+\N	42
+order by v1, v2 nulls last
+[1,2,3]	[1,2,3]
+[1,2,3]	[1,2,4]
+[1,2,3]	abc
+[1,2,3]	42
+[1,2,3]	\N
+[1,2,4]	[1,2,3]
+abc	[1,2,3]
+abc	abc
+abc	abd
+abc	42
+abc	\N
+abd	abc
+42	[1,2,3]
+42	abc
+42	42
+42	43
+42	\N
+43	42
+\N	[1,2,3]
+\N	abc
+\N	42
+\N	\N
+order by v2, v1 nulls first
+\N	[1,2,3]
+[1,2,3]	[1,2,3]
+[1,2,4]	[1,2,3]
+abc	[1,2,3]
+42	[1,2,3]
+[1,2,3]	[1,2,4]
+\N	abc
+[1,2,3]	abc
+abc	abc
+abd	abc
+42	abc
+abc	abd
+\N	42
+[1,2,3]	42
+abc	42
+42	42
+43	42
+42	43
+\N	\N
+[1,2,3]	\N
+abc	\N
+42	\N
+order by v2, v1 nulls last
+[1,2,3]	[1,2,3]
+[1,2,4]	[1,2,3]
+abc	[1,2,3]
+42	[1,2,3]
+\N	[1,2,3]
+[1,2,3]	[1,2,4]
+[1,2,3]	abc
+abc	abc
+abd	abc
+42	abc
+\N	abc
+abc	abd
+[1,2,3]	42
+abc	42
+42	42
+43	42
+\N	42
+42	43
+[1,2,3]	\N
+abc	\N
+42	\N
+\N	\N
+v1 = v2
+[1,2,3]	[1,2,3]	true
+[1,2,3]	[1,2,4]	false
+[1,2,3]	abc	false
+[1,2,3]	42	false
+[1,2,3]	\N	false
+[1,2,4]	[1,2,3]	false
+abc	[1,2,3]	false
+abc	abc	true
+abc	abd	false
+abc	42	false
+abc	\N	false
+abd	abc	false
+42	[1,2,3]	false
+42	abc	false
+42	42	true
+42	43	false
+42	\N	false
+43	42	false
+\N	[1,2,3]	false
+\N	abc	false
+\N	42	false
+\N	\N	true
+v1 < v2
+[1,2,3]	[1,2,3]	false
+[1,2,3]	[1,2,4]	true
+[1,2,3]	abc	true
+[1,2,3]	42	true
+[1,2,3]	\N	true
+[1,2,4]	[1,2,3]	false
+abc	[1,2,3]	false
+abc	abc	false
+abc	abd	true
+abc	42	true
+abc	\N	true
+abd	abc	false
+42	[1,2,3]	false
+42	abc	false
+42	42	false
+42	43	true
+42	\N	true
+43	42	false
+\N	[1,2,3]	false
+\N	abc	false
+\N	42	false
+\N	\N	false
+v1 <= v2
+[1,2,3]	[1,2,3]	true
+[1,2,3]	[1,2,4]	true
+[1,2,3]	abc	true
+[1,2,3]	42	true
+[1,2,3]	\N	true
+[1,2,4]	[1,2,3]	false
+abc	[1,2,3]	false
+abc	abc	true
+abc	abd	true
+abc	42	true
+abc	\N	true
+abd	abc	false
+42	[1,2,3]	false
+42	abc	false
+42	42	true
+42	43	true
+42	\N	true
+43	42	false
+\N	[1,2,3]	false
+\N	abc	false
+\N	42	false
+\N	\N	true
+v1 > v2
+[1,2,3]	[1,2,3]	false
+[1,2,3]	[1,2,4]	false
+[1,2,3]	abc	false
+[1,2,3]	42	false
+[1,2,3]	\N	false
+[1,2,4]	[1,2,3]	true
+abc	[1,2,3]	true
+abc	abc	false
+abc	abd	false
+abc	42	false
+abc	\N	false
+abd	abc	true
+42	[1,2,3]	true
+42	abc	true
+42	42	false
+42	43	false
+42	\N	false
+43	42	true
+\N	[1,2,3]	true
+\N	abc	true
+\N	42	true
+\N	\N	false
+v1 >= v2
+[1,2,3]	[1,2,3]	true
+[1,2,3]	[1,2,4]	true
+[1,2,3]	abc	true
+[1,2,3]	42	true
+[1,2,3]	\N	true
+[1,2,4]	[1,2,3]	true
+abc	[1,2,3]	true
+abc	abc	true
+abc	abd	true
+abc	42	true
+abc	\N	true
+abd	abc	true
+42	[1,2,3]	true
+42	abc	true
+42	42	true
+42	43	true
+42	\N	true
+43	42	true
+\N	[1,2,3]	true
+\N	abc	true
+\N	42	true
+\N	\N	true

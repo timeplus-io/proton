@@ -1,0 +1,217 @@
+tags:
+  - udf
+  - bug # (#7908) Code: 2624. DB::Exception: Received from localhost:8463. DB::Exception: UDF running error, detail message: 'ParallelExt' object has no attribute '_backend_args'
+
+description: |
+  Test covering udf qlib model training and prediction, including experiment management
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_qlib_model(value string) RETURNS array(float32) LANGUAGE PYTHON AS
+      $$
+      import qlib
+      from qlib.constant import REG_CN
+      from qlib.contrib.model.gbdt import LGBModel
+      from qlib.contrib.data.handler import Alpha158
+      from qlib.utils import init_instance_by_config
+
+      provider_uri = '/var/lib/proton/.qlib/qlib_data/cn_data'
+      qlib.init(provider_uri=provider_uri, region=REG_CN)
+
+      benchmark = "SH000300"
+
+      def test_qlib_model(value):
+          res = []
+          for v in value:
+              if len(v) == 0:
+                  continue
+
+              data_handler_config = {
+                  "start_time": "2015-01-01",
+                  "end_time": "2015-12-31",
+                  "fit_start_time": "2015-02-01",
+                  "fit_end_time": "2015-11-30",
+                  "instruments": v,
+              }
+
+              task = {
+                  "model": {
+                      "class": "LGBModel",
+                      "module_path": "qlib.contrib.model.gbdt",
+                      "kwargs": {
+                          "loss": "mse",
+                          "colsample_bytree": 0.8879,
+                          "learning_rate": 0.0421,
+                          "subsample": 0.8789,
+                          "lambda_l1": 205.6999,
+                          "lambda_l2": 580.9768,
+                          "max_depth": 8,
+                          "num_leaves": 210,
+                          "num_threads": 20,
+                      },
+                  },
+                  "dataset": {
+                      "class": "DatasetH",
+                      "module_path": "qlib.data.dataset",
+                      "kwargs": {
+                          "handler": {
+                              "class": "Alpha158",
+                              "module_path": "qlib.contrib.data.handler",
+                              "kwargs": data_handler_config,
+                          },
+                          "segments": {
+                              "train": ("2015-01-01", "2015-04-28"),
+                              "valid": ("2015-05-01", "2015-08-31"),
+                              "test": ("2015-09-01", "2015-12-31"),
+                          },
+                      },
+                  },
+              }
+
+              model = init_instance_by_config(task["model"])
+              dataset = init_instance_by_config(task["dataset"])
+
+              model.fit(dataset)
+              pred = model.predict(dataset, segment="valid").head()
+
+              res.append(pred)
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_qlib_model_exp(value string) RETURNS array(array(float32)) LANGUAGE PYTHON AS
+      $$
+      import qlib
+      from qlib.constant import REG_CN
+      from qlib.contrib.model.gbdt import LGBModel
+      from qlib.contrib.data.handler import Alpha158
+      from qlib.utils import init_instance_by_config, flatten_dict
+      from qlib.workflow import R
+      from qlib.workflow.record_temp import SignalRecord, PortAnaRecord
+
+      provider_uri = '/var/lib/proton/.qlib/qlib_data/cn_data'
+      qlib.init(provider_uri=provider_uri, region=REG_CN)
+
+      benchmark = "SH000300"
+
+      def test_qlib_model_exp(value):
+          res = []
+          for v in value:
+              if len(v) == 0:
+                  continue
+
+              data_handler_config = {
+                  "start_time": "2015-01-01",
+                  "end_time": "2015-12-31",
+                  "fit_start_time": "2015-02-01",
+                  "fit_end_time": "2015-11-30",
+                  "instruments": v,
+              }
+
+              task = {
+                  "model": {
+                      "class": "LGBModel",
+                      "module_path": "qlib.contrib.model.gbdt",
+                      "kwargs": {
+                          "loss": "mse",
+                          "colsample_bytree": 0.8879,
+                          "learning_rate": 0.0421,
+                          "subsample": 0.8789,
+                          "lambda_l1": 205.6999,
+                          "lambda_l2": 580.9768,
+                          "max_depth": 8,
+                          "num_leaves": 210,
+                          "num_threads": 20,
+                      },
+                  },
+                  "dataset": {
+                      "class": "DatasetH",
+                      "module_path": "qlib.data.dataset",
+                      "kwargs": {
+                          "handler": {
+                              "class": "Alpha158",
+                              "module_path": "qlib.contrib.data.handler",
+                              "kwargs": data_handler_config,
+                          },
+                          "segments": {
+                              "train": ("2015-01-01", "2015-04-28"),
+                              "valid": ("2015-05-01", "2015-08-31"),
+                              "test": ("2015-09-01", "2015-12-31"),
+                          },
+                      },
+                  },
+              }
+
+              # model initialization
+              model = init_instance_by_config(task["model"])
+              dataset = init_instance_by_config(task["dataset"])
+
+              # start exp
+              with R.start(experiment_name="workflow"):
+                  # train
+                  R.log_params(**flatten_dict(task))
+                  model.fit(dataset)
+
+                  # prediction
+                  recorder = R.get_recorder()
+                  sr = SignalRecord(model, dataset, recorder)
+                  sr.generate()
+
+                  signal = sr.load("pred.pkl").head()
+
+                  res.append(signal.values.tolist())
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf-1
+    type: stream
+    query: select test_qlib_model(value) as res from udf_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - name: python-udf-2
+    type: stream
+    query: select test_qlib_model_exp(value) as res from udf_stream;
+    schema:
+      - name: res
+        type: array(array(float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream (value) values ('csi300');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream (value) values ('csi500');
+
+  - type: check
+    target_name: python-udf-1
+    expected_result:
+      - [[0.004303981335018188, -1.2948001405077093e-09, -0.009648683174785825, -0.0049550279277268345, -1.2948001405077093e-09]]
+      - [[-0.013031127297482521, 1.1211550415235576e-09, 0.012620767539502182, -0.06289724896113519, -0.004973096790074304]]
+
+  - type: check
+    target_name: python-udf-2
+    expected_result:
+      - [[[-1.2948001405077093e-09], [-1.2948001405077093e-09], [0.004899556793042782], [-1.2948001405077093e-09], [-1.2948001405077093e-09]]]
+      - [[[0.037391653561961016], [0.060481950360807904], [0.08590401787587001], [0.02296783116360954], [0.22945071993045976]]]

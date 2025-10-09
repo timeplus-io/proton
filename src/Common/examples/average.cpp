@@ -499,7 +499,6 @@ Float NO_INLINE really_unrolled(const PODArray<UInt8> & keys, const PODArray<Flo
 }
 #pragma clang diagnostic pop
 
-
 struct State4
 {
     Float sum[4]{};

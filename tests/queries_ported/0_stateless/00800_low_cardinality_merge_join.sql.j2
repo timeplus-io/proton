@@ -1,0 +1,34 @@
+{% for join_algorithm in ['partial_merge', 'full_sorting_merge', 'grace_hash'] -%}
+
+SET join_algorithm = '{{ join_algorithm }}';
+
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s2 USING val ORDER BY val;
+SELECT '-';
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS val FROM system.one) as s2 ON val + 0 = val * 1 ORDER BY val; -- { serverError 352 }
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(dummy) AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(dummy) AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT dummy AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT dummy AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(dummy)) AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(dummy) AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(dummy) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(dummy)) AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(dummy)) AS val FROM system.one) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(dummy)) AS rval FROM system.one) as s2 ON val + 0 = rval * 1 ORDER BY val;
+SELECT '-';
+SELECT * FROM (SELECT number AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT number AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+SELECT * FROM (SELECT to_low_cardinality(number) AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT number AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+SELECT * FROM (SELECT number AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(number) AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+SELECT * FROM (SELECT to_low_cardinality(number) AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(number) AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(number)) AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(number) AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+SELECT * FROM (SELECT to_low_cardinality(number) AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(number)) AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+SELECT * FROM (SELECT to_low_cardinality(to_nullable(number)) AS l FROM system.numbers LIMIT 3) as s1 ANY LEFT JOIN (SELECT to_low_cardinality(to_nullable(number)) AS r FROM system.numbers LIMIT 3) as s2 ON l + 1 = r * 1 ORDER BY l;
+
+{% endfor -%}

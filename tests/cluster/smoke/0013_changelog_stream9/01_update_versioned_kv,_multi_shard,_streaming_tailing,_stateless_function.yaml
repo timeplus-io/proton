@@ -1,0 +1,89 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - streaming_tailing
+  - stateless_function
+description: update versioned_kv, multi_shard, streaming_tailing, stateless_function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      create stream if not exists test14_multishard_9(i float, k1 int, k2 string) primary key k2
+      settings mode='versioned_kv', shards=3;
+
+  - type: wait
+    time: 2
+
+  - name: "1461"
+    type: stream
+    query: |
+      select concat(upper(k2), to_string(i)),
+             k1,
+             k2
+      from test14_multishard_9;
+    schema: 
+      - name: concat(upper(k2), to_string(i))
+        type: string
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (2, 1, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (1, 2, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (3, 3, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (2, 4, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (5, 5, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_9(i, k1, k2)
+      values (5, 1, 'b');
+
+  - type: check
+    target_name: "1461"
+    expected_result:
+      - [A2, 1, a]
+      - [A1, 2, a]
+      - [B3, 3, b]
+      - [B2, 4, b]
+      - [C5, 5, c]
+      - [B5, 1, b]

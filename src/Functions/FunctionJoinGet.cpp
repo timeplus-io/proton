@@ -44,9 +44,9 @@ getJoin(const ColumnsWithTypeAndName & arguments, ContextPtr context)
         join_name = name_col->getValue<String>();
     }
     else
-        throw Exception(
-            "Illegal type " + arguments[0].type->getName() + " of first argument of function joinGet, expected a const string.",
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of first argument of function joinGet, expected a const string.",
+                        arguments[0].type->getName());
 
     auto qualified_name = QualifiedTableName::parseFromString(join_name);
     if (qualified_name.database.empty())
@@ -56,7 +56,7 @@ getJoin(const ColumnsWithTypeAndName & arguments, ContextPtr context)
     auto storage_join = std::dynamic_pointer_cast<StorageJoin>(table);
     if (!storage_join)
         /// proton: starts
-        throw Exception("Stream " + join_name + " should have engine StorageJoin", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Stream {} should have engine StorageJoin", join_name);
         /// proton: ends
 
     String attr_name;
@@ -65,9 +65,9 @@ getJoin(const ColumnsWithTypeAndName & arguments, ContextPtr context)
         attr_name = name_col->getValue<String>();
     }
     else
-        throw Exception(
-            "Illegal type " + arguments[1].type->getName() + " of second argument of function joinGet, expected a const string.",
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of second argument of function joinGet, expected a const string.",
+                        arguments[1].type->getName());
     return std::make_pair(storage_join, attr_name);
 }
 

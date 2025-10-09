@@ -97,9 +97,9 @@ private:
     size_t linear_growth_threshold;
 
     /// Last contiguous MemoryChunk of memory.
+    const size_t page_size;
     MemoryChunk * head;
     size_t size_in_bytes;
-    size_t page_size;
 
     /// proton: starts. Make arena time-aware for streaming processing to allow
     /// free MemoryChunk according to timestamp
@@ -166,7 +166,7 @@ private:
 
     /// proton: starts
     /// Add next contiguous MemoryChunk of memory with size not less than specified.
-    void NO_INLINE addMemoryChunk(size_t min_size)
+    void PRESERVE_MOST NO_INLINE addMemoryChunk(size_t min_size)
     {
         if (recycle_enabled)
         {
@@ -232,9 +232,12 @@ private:
 
 public:
     explicit Arena(size_t initial_size_ = 4096, size_t growth_factor_ = 2, size_t linear_growth_threshold_ = 128 * 1024 * 1024)
-        : growth_factor(growth_factor_), linear_growth_threshold(linear_growth_threshold_),
-        head(new MemoryChunk(initial_size_, nullptr, std::numeric_limits<Int64>::min(), 0)), size_in_bytes(head->size()),
-        page_size(static_cast<size_t>(::getPageSize())), chunks(1)
+        : growth_factor(growth_factor_)
+        , linear_growth_threshold(linear_growth_threshold_)
+        , page_size(static_cast<size_t>(::getPageSize()))
+        , head(new MemoryChunk(roundUpToPageSize(initial_size_, page_size), nullptr, std::numeric_limits<Int64>::min(), 0))
+        , size_in_bytes(head->size())
+        , chunks(1)
     {
     }
 
@@ -433,10 +436,10 @@ public:
     }
 
     /// proton: starts
-    size_t numOfChunks() const
-    {
-        return chunks;
-    }
+    size_t numOfChunks() const noexcept { return chunks; }
+
+    /// head chunk is the last added and biggest chunk since chunk list is reversed
+    size_t headChunkSize() const noexcept { return head->size(); }
 
     void setPaddingLeft(size_t pad_left_)
     {
@@ -453,10 +456,7 @@ public:
         ASAN_UNPOISON_MEMORY_REGION(head->begin, pad_left);
     }
 
-    void enableRecycle(bool enable_recycle)
-    {
-        recycle_enabled = enable_recycle;
-    }
+    void enableRecycle(bool enable_recycle) { recycle_enabled = enable_recycle; }
 
     void setCurrentTimestamp(Int64 timestamp)
     {
@@ -476,6 +476,8 @@ public:
         size_t head_chunk_size = 0;
         size_t free_list_hits = 0;
         size_t free_list_misses = 0;
+        size_t chunks_in_free_lists = 0;
+        size_t size_in_bytes_in_free_lists = 0;
     };
 
     Stats free(Int64 timestamp)
@@ -531,6 +533,8 @@ public:
         stats.chunks = chunks;
         stats.free_list_hits = free_list_hits;
         stats.free_list_misses = free_list_misses;
+        stats.chunks_in_free_lists = chunks_in_free_lists;
+        stats.size_in_bytes_in_free_lists = size_in_bytes_in_free_lists;
 
         return stats;
     }

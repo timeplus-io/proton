@@ -1,0 +1,15 @@
+name: query_state6
+description: Tests covering query state checkpointing smoke test cases
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: wait
+    time: 1
+  - type: query
+    sql: drop view if exists test19_state_view6
+  - type: wait
+    time: 1
+  - type: query
+    sql: drop stream if exists test19_state_stream6

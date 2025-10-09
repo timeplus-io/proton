@@ -1,0 +1,101 @@
+tags:
+  - multishards
+  - append_only
+  - streaming_tailing
+  - stateless_function
+description: multishards append only basic test stateless function add
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_7;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_7(i float, k1 int, k2 string) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - name: '1362'
+    type: stream
+    query: |
+      select if(i > k1, i, k1),
+             i,
+             k1,
+             k2
+      from test13_multishard_7;
+    schema:
+      - name: if(greater(i, k1), i, k1)
+        type: float64
+      - name: i
+        type: float32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+        
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (1, 6, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (2, 5, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (3, 4, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (4, 3, 'd');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (5, 2, 'e');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_multishard_7 (i, k1, k2)
+      values (6, 1, 'f');
+
+  - type: check
+    target_name: '1362'
+    expected_result:
+      - [ 6, 1, 6, a ]
+      - [ 5, 2, 5, b ]
+      - [ 4, 3, 4, c ]
+      - [ 4, 4, 3, d ]
+      - [ 5, 5, 2, e ]
+      - [ 6, 6, 1, f ]

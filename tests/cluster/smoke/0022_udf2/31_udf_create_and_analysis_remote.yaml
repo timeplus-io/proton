@@ -1,0 +1,61 @@
+tags:
+- udf2
+- restapi
+description: SQL - CREATE Remote UDF
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: wait
+  time: 1
+
+#tear down
+- type: query
+  sql: DROP FUNCTION IF EXISTS chat;
+- type: wait
+  time: 1
+
+- name: udf-31-0
+  type: query
+  sql: |
+        CREATE OR REPLACE REMOTE FUNCTION chat(input string, temperature float64) RETURNS string 
+             URL 'http://chatservice:5001/chat'
+             AUTH_METHOD 'none'
+             EXECUTION_TIMEOUT 60000;
+- type: wait
+  time: 5
+
+- name: udf-31-1
+  type: rest
+  url: /proton/v1/sqlanalyzer
+  method: POST
+  data:
+    query: "select chat('why the sea is blue',1)"
+
+- type: check
+  target_name: udf-31-1
+  expected_result:
+    - group_by_columns: []
+      has_aggr: false
+      has_subquery: false
+      has_table_join: false
+      has_union: false
+      is_streaming: false
+      original_query: "select chat('why the sea is blue',1)"
+      query_type: "SELECT"
+      required_columns:
+      - column: "dummy"
+        column_type: "uint8"
+        database: "system"
+        is_view: false
+        table: "one"
+      result_columns:
+      - column: "chat('why the sea is blue', 1)"
+        column_type: "string"
+      rewritten_query: "select chat('why the sea is blue',1)"
+
+#tear down
+- type: query
+  sql: DROP FUNCTION IF EXISTS chat;
+- type: wait
+  time: 1

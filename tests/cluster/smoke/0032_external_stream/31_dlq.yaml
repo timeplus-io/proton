@@ -1,0 +1,103 @@
+tags:
+- materialized view
+
+description: Test working with DLQ
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: smoke-32-28-dlq
+
+  - type: kafka
+    name: create
+    topic: smoke-32-28-dlq
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: query
+    sql: drop view if exists smoke32_28_dlq_mv
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists smoke32_28_dlq
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream smoke32_28_dlq
+      (
+        raw string
+      )
+      settings type = 'kafka', brokers = 'k1:9092', topic = 'smoke-32-28-dlq'
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view smoke32_28_dlq_mv as
+      select raw:i::int, raw:s::string from smoke32_28_dlq
+      settings enable_dlq=true, recovery_policy='best_effort';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into smoke32_28_dlq(raw) values 
+      ('{"i": 1, "s": "one"}')('{"i": 2, "s": "two"}');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into smoke32_28_dlq(raw) values
+      ('{"i": "bad", "s": "three"}')
+      ('{"i": 4, "s": "four"}');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: alter view smoke32_28_dlq_mv modify query setting enable_dlq=false
+
+  - type: query
+    sql: |
+      insert into smoke32_28_dlq(raw) values
+      ('{"i": "bad", "s": "five"}')
+      ('{"i": 6, "s": "six"}');
+
+  - type: wait
+    time: 10 # make sure data are flushed into the DLQ stream
+
+  - type: stream
+    name: smoke-32-28-01
+    query: select database, view_name, position(error, 'Cannot parse string \'bad\' as int32') > 0 as error_check, messages.source_name, messages.source_desc, messages.sn_range.start, messages.sn_range.end, messages.raw_data from table(system.mat_view_dlq)
+    schema:
+    - name: database
+      type: low_cardinality(string)
+    - name: view_name
+      type: string
+    - name: error_check
+      type: bool
+    - name: messages.source_name
+      type: array(low_cardinality(string))
+    - name: messages.source_desc
+      type: array(string)
+    - name: messages.sn_range.start
+      type: array(uint64)
+    - name: messages.sn_range.end
+      type: array(uint64)
+    - name: messages.raw_data
+      type: array(array(string))
+
+  - type: check
+    target_name: smoke-32-28-01
+    expected_result:
+    - ['default', 'smoke32_28_dlq_mv', true, ['KafkaSource'], ['topic=smoke-32-28-dlq,partition=0'], [2], [3], [['{"i": "bad", "s": "three"}', '{"i": 4, "s": "four"}']]]

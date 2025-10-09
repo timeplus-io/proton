@@ -39,7 +39,7 @@ bool areCredentialsEmptyOrExpired(const Aws::Auth::AWSCredentials & credentials,
 AWSEC2MetadataClient::AWSEC2MetadataClient(const Aws::Client::ClientConfiguration & client_configuration, const char * endpoint_)
     : Aws::Internal::AWSHttpResourceClient(client_configuration)
     , endpoint(endpoint_)
-    , logger(&Poco::Logger::get("AWSEC2InstanceProfileConfigLoader"))
+    , logger(getLogger("AWSEC2InstanceProfileConfigLoader"))
 {
 }
 
@@ -162,7 +162,7 @@ Aws::String AWSEC2MetadataClient::getCurrentRegion() const
 std::shared_ptr<AWSEC2MetadataClient> InitEC2MetadataClient(const Aws::Client::ClientConfiguration & client_configuration)
 {
     Aws::String ec2_metadata_service_endpoint = Aws::Environment::GetEnv("AWS_EC2_METADATA_SERVICE_ENDPOINT");
-    auto * logger = &Poco::Logger::get("AWSEC2InstanceProfileConfigLoader");
+    auto logger = getLogger("AWSEC2InstanceProfileConfigLoader");
     if (ec2_metadata_service_endpoint.empty())
     {
         Aws::String ec2_metadata_service_endpoint_mode = Aws::Environment::GetEnv("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE");
@@ -200,7 +200,7 @@ std::shared_ptr<AWSEC2MetadataClient> InitEC2MetadataClient(const Aws::Client::C
 AWSEC2InstanceProfileConfigLoader::AWSEC2InstanceProfileConfigLoader(const std::shared_ptr<AWSEC2MetadataClient> & client_, bool use_secure_pull_)
     : client(client_)
     , use_secure_pull(use_secure_pull_)
-    , logger(&Poco::Logger::get("AWSEC2InstanceProfileConfigLoader"))
+    , logger(getLogger("AWSEC2InstanceProfileConfigLoader"))
 {
 }
 
@@ -242,7 +242,7 @@ bool AWSEC2InstanceProfileConfigLoader::LoadInternal()
 AWSInstanceProfileCredentialsProvider::AWSInstanceProfileCredentialsProvider(const std::shared_ptr<AWSEC2InstanceProfileConfigLoader> & config_loader)
     : ec2_metadata_config_loader(config_loader)
     , load_frequency_ms(Aws::Auth::REFRESH_THRESHOLD)
-    , logger(&Poco::Logger::get("AWSInstanceProfileCredentialsProvider"))
+    , logger(getLogger("AWSInstanceProfileCredentialsProvider"))
 {
     LOG_INFO(logger, "Creating Instance with injected EC2MetadataClient and refresh rate.");
 }
@@ -287,7 +287,7 @@ void AWSInstanceProfileCredentialsProvider::refreshIfExpired()
 
 AwsAuthSTSAssumeRoleWebIdentityCredentialsProvider::AwsAuthSTSAssumeRoleWebIdentityCredentialsProvider(
     DB::S3::PocoHTTPClientConfiguration & aws_client_configuration, uint64_t expiration_window_seconds_)
-    : logger(&Poco::Logger::get("AwsAuthSTSAssumeRoleWebIdentityCredentialsProvider"))
+    : logger(getLogger("AwsAuthSTSAssumeRoleWebIdentityCredentialsProvider"))
     , expiration_window_seconds(expiration_window_seconds_)
 {
     // check environment variables
@@ -420,7 +420,7 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(
         const Aws::Auth::AWSCredentials & credentials,
         CredentialsConfiguration credentials_configuration)
 {
-    auto * logger = &Poco::Logger::get("S3CredentialsProviderChain");
+    auto logger = getLogger("S3CredentialsProviderChain");
 
     /// we don't provide any credentials to avoid signing
     if (credentials_configuration.no_sign_request)

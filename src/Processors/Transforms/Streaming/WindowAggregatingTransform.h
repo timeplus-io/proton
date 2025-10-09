@@ -15,7 +15,6 @@ public:
         ManyAggregatedDataPtr many_data_,
         size_t current_variant_,
         size_t max_threads_,
-        size_t temporary_data_merge_threads_,
         const String & log_name,
         ProcessorID pid_);
 

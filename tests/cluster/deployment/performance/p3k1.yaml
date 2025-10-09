@@ -1,0 +1,57 @@
+p1:
+  host: p1
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 8463
+    http_port: 3218
+    tcp_snap_port: 7587
+    http_snap_port: 8123
+    postgres_port: 5432
+    prometheus_port: 9363
+p2:
+  host: p2
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 8463
+    http_port: 3218
+    tcp_snap_port: 7587
+    http_snap_port: 8123
+    postgres_port: 5432
+    prometheus_port: 9363
+p3:
+  host: p3
+  proton:
+    cluster_id:
+    role:
+      - metadata
+      - data
+    username: default
+    password: 
+    database: default
+    tcp_port: 8463
+    http_port: 3218
+    tcp_snap_port: 7587
+    http_snap_port: 8123
+    postgres_port: 5432
+    prometheus_port: 9363
+k1:
+  host: k1
+  kafka:
+    brokers:
+    - "k1:9092"
+    tls: false
+    sasl: plaintext
+    username: user
+    password: password

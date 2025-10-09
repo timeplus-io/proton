@@ -1,0 +1,49 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_stats_percentileofscore(value int) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      from scipy import stats
+
+      def test_stats_percentileofscore(value):
+        res = stats.percentileofscore([1, 2, 3, 4], value)
+        return res.tolist()
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf4-0-1
+    type: stream
+    query: select test_stats_percentileofscore(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (1)(2)(3);
+
+  - type: check
+    target_name: python-udf4-0-1
+    expected_result:
+      - [25.0, 1]
+      - [50.0, 2]
+      - [75.0, 3]

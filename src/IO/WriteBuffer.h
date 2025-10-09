@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <memory>
-#include <iostream>
 #include <cassert>
-#include <cstring>
 
 #include <Common/Exception.h>
 #include <Common/LockMemoryExceptionInThread.h>
@@ -18,9 +16,9 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int CANNOT_WRITE_AFTER_END_OF_BUFFER;
+    extern const int CANNOT_WRITE_AFTER_BUFFER_CANCELED;
     extern const int LOGICAL_ERROR;
 }
-
 
 /** A simple abstract class for buffered data writing (char sequences) somewhere.
   * Unlike std::ostream, it provides access to the internal buffer,
@@ -33,17 +31,20 @@ class WriteBuffer : public BufferBase
 public:
     using BufferBase::set;
     using BufferBase::position;
-    WriteBuffer(Position ptr, size_t size) : BufferBase(ptr, size, 0) {}
     void set(Position ptr, size_t size) { BufferBase::set(ptr, size, 0); }
 
     /** write the data in the buffer (from the beginning of the buffer to the current position);
       * set the position to the beginning; throw an exception, if something is wrong
       */
-    inline void next()
+    void next()
     {
+        if (canceled)
+            return;
+
         if (!offset())
             return;
-        bytes += offset();
+
+        auto bytes_in_buffer = offset();
 
         try
         {
@@ -55,30 +56,31 @@ public:
               * so that later (for example, when the stack was expanded) there was no second attempt to write data.
               */
             pos = working_buffer.begin();
+            bytes += bytes_in_buffer;
+
             throw;
         }
 
+        bytes += bytes_in_buffer;
         pos = working_buffer.begin();
-
-        afterNext(); /// proton: updated
     }
 
-    /** it is desirable in the derived classes to place the finalize() call in the destructor,
-      * so that the last data is written (if finalize() wasn't called explicitly)
-      */
-    virtual ~WriteBuffer() = default;
+    /// Calling finalize() in the destructor of derived classes is a bad practice.
+    virtual ~WriteBuffer();
 
-    inline void nextIfAtEnd()
+    void nextIfAtEnd()
     {
         if (!hasPendingData())
             next();
     }
 
-
     void write(const char * from, size_t n)
     {
         if (finalized)
             throw Exception{ErrorCodes::LOGICAL_ERROR, "Cannot write to finalized buffer"};
+
+        if (canceled)
+            throw Exception{ErrorCodes::CANNOT_WRITE_AFTER_BUFFER_CANCELED, "Cannot write to canceled buffer"};
 
         size_t bytes_copied = 0;
 
@@ -95,11 +97,13 @@ public:
         }
     }
 
-
     inline void write(char x)
     {
         if (finalized)
             throw Exception{ErrorCodes::LOGICAL_ERROR, "Cannot write to finalized buffer"};
+
+        if (canceled)
+            throw Exception{ErrorCodes::LOGICAL_ERROR, "Cannot write to canceled buffer"};
 
         nextIfAtEnd();
         *pos = x;
@@ -121,7 +125,9 @@ public:
         if (finalized)
             return;
 
-        /// finalize() is often called from destructors.
+        if (canceled)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot finalize buffer after cancellation.");
+
         LockMemoryExceptionInThread lock(VariableContext::Global);
         try
         {
@@ -131,10 +137,14 @@ public:
         catch (...)
         {
             pos = working_buffer.begin();
-            finalized = true;
+
+            cancel();
+
             throw;
         }
     }
+
+    void cancel() noexcept;
 
     /// Wait for data to be reliably written. Mainly, call fsync for fd.
     /// May be called after finalize() if needed.
@@ -144,27 +154,93 @@ public:
     }
 
 protected:
-    virtual void finalizeImpl()
+    WriteBuffer(Position ptr, size_t size) : BufferBase(ptr, size, 0) {}
+
+    virtual void finalizeImpl() { next(); }
+
+    virtual void cancelImpl() noexcept
     {
-        next();
     }
 
     bool finalized = false;
+    bool canceled = false;
 
 private:
     /** Write the data in the buffer (from the beginning of the buffer to the current position).
       * Throw an exception if something is wrong.
       */
-    virtual void nextImpl() { throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER); }
-
-    /// proton: starts
-    /// Allows a subclass to do some work when `next` is done, i.e. after the data in the buffer was written.
-    virtual void afterNext() {}
-    /// proton: ends
+    virtual void nextImpl()
+    {
+        throw Exception(ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER, "Cannot write after end of buffer.");
+    }
 };
 
 
 using WriteBufferPtr = std::shared_ptr<WriteBuffer>;
 
+
+class WriteBufferFromPointer : public WriteBuffer
+{
+public:
+    WriteBufferFromPointer(Position ptr, size_t size) : WriteBuffer(ptr, size) {}
+
+private:
+    void finalizeImpl() override
+    {
+        /// no op
+    }
+
+    void sync() override
+    {
+        /// no on
+    }
+};
+
+
+// AutoCanceledWriteBuffer cancel the buffer in d-tor when it has not been finalized before d-tor
+// AutoCanceledWriteBuffer could not be inherited.
+// Otherwise cancel method could not call proper cancelImpl ьуерщв because inheritor is destroyed already.
+// But the ussage of final inheritance is avoided in favor to keep the possibility to use std::make_shared.
+template<class Base>
+class AutoCanceledWriteBuffer final : public Base
+{
+    static_assert(std::derived_from<Base, WriteBuffer>);
+
+public:
+    using Base::Base;
+
+    ~AutoCanceledWriteBuffer() override
+    {
+        if (!this->finalized && !this->canceled)
+            this->cancel();
+    }
+};
+
+
+/// That class is applied only in 2 folloving cases
+// case 1 - HTTPServerResponse. The external interface HTTPResponse forces that.
+// case 2 - WriteBufferFromVector, WriteBufferFromString. It is safe to make them autofinaliziable.
+// AutoFinalizedWriteBuffer could not be inherited due to a restriction on polymorphics call in d-tor.
+template<class Base>
+class AutoFinalizedWriteBuffer final : public Base
+{
+    static_assert(std::derived_from<Base, WriteBuffer>);
+
+public:
+    using Base::Base;
+
+    ~AutoFinalizedWriteBuffer() override
+    {
+        try
+        {
+            if (!this->finalized && !this->canceled)
+                this->finalize();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+};
 
 }

@@ -1,0 +1,154 @@
+tags:
+- replay_stream
+- join
+description: replay stream join stream table
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test29_stream_1
+
+- type: query
+  sql: drop stream if exists test29_stream_2
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test29_stream_1 (id int, value int);
+
+- type: query
+  sql: create stream test29_stream_2 (id int, value int);
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_1(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [1, 2]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_1(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [3, 2]
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test29_stream_1(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [2, 1]
+  
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_1(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [2, 2]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_2(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [2, 3]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_2(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [1, 6]
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream_2(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [9, 4]
+  
+- type: wait
+  time: 5
+
+- type: query
+  sql: insert into test29_stream_2(id, value) values
+  schema:
+    - name: id
+      type: int32
+    - name: value
+      type: int32
+  inputs:
+    - [2, 5]
+  
+- type: wait
+  time: 1
+
+- name: 2904
+  type: stream
+  query: with cte as (select id, value from test29_stream_1 where _tp_time > earliest_timestamp()
+    settings replay_speed=1) select a.id, a.value, b.id, b.value from cte as a join
+    table(test29_stream_2) as b on a.id=b.id;
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  - name: b.id
+    type: int32
+  - name: b.value
+    type: int32
+
+- type: check
+  target_name: 2904
+  mode: random
+  expected_result:
+  - [1, 2, 1, 6]
+  - [2, 1, 2, 3]
+  - [2, 1, 2, 5]
+  - [2, 2, 2, 3]
+  - [2, 2, 2, 5]

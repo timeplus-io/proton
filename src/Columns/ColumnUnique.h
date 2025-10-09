@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Columns/IColumnUnique.h>
-#include <Columns/IColumnImpl.h>
 #include <Columns/ReverseIndex.h>
 
 #include <Columns/ColumnVector.h>
@@ -56,6 +55,7 @@ public:
     void nestedRemoveNullable() override;
 
     size_t uniqueInsert(const Field & x) override;
+    bool tryUniqueInsert(const Field & x, size_t & index) override;
     size_t uniqueInsertFrom(const IColumn & src, size_t n) override;
     MutableColumnPtr uniqueInsertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     IColumnUnique::IndexesWithOverflow uniqueInsertRangeWithOverflow(const IColumn & src, size_t start, size_t length,
@@ -79,14 +79,28 @@ public:
     Float32 getFloat32(size_t n) const override { return getNestedColumn()->getFloat32(n); }
     bool getBool(size_t n) const override { return getNestedColumn()->getBool(n); }
     bool isNullAt(size_t n) const override { return is_nullable && n == getNullValueIndex(); }
+    void collectSerializedValueSizes(PaddedPODArray<UInt64> & sizes, const UInt8 * is_null) const override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
+    /// proton: starts.
+    void serializeValueIntoBuffer(size_t n, WriteBuffer & wb) const override;
+    /// proton: ends.
+    char * serializeValueIntoMemory(size_t n, char * memory) const override;
     const char * skipSerializedInArena(const char * pos) const override;
     void updateHashWithValue(size_t n, SipHash & hash_func) const override
     {
         return getNestedColumn()->updateHashWithValue(n, hash_func);
     }
 
+/// proton: starts
+    bool equal(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
+    bool equal(size_t n, const Field & rhs, int nan_direction_hint) const override;
+/// proton: ends
+
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
+#else
+    int doCompareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
+#endif
 
     void getExtremes(Field & min, Field & max) const override { column_holder->getExtremes(min, max); }
     bool valuesHaveFixedSize() const override { return column_holder->valuesHaveFixedSize(); }
@@ -128,7 +142,7 @@ public:
         callback(column_holder);
     }
 
-    void forEachSubcolumn(IColumn::MutableColumnCallback callback) override
+    void forEachMutableSubcolumn(IColumn::MutableColumnCallback callback) override
     {
         callback(column_holder);
         reverse_index.setColumn(getRawColumnPtr());
@@ -142,10 +156,10 @@ public:
         column_holder->forEachSubcolumnRecursively(callback);
     }
 
-    void forEachSubcolumnRecursively(IColumn::RecursiveMutableColumnCallback callback) override
+    void forEachMutableSubcolumnRecursively(IColumn::RecursiveMutableColumnCallback callback) override
     {
         callback(*column_holder);
-        column_holder->forEachSubcolumnRecursively(callback);
+        column_holder->forEachMutableSubcolumnRecursively(callback);
         reverse_index.setColumn(getRawColumnPtr());
         if (is_nullable)
             nested_column_nullable = ColumnNullable::create(column_holder, nested_null_mask);
@@ -161,6 +175,11 @@ public:
     double getRatioOfDefaultRows(double) const override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'getRatioOfDefaultRows' not implemented for ColumnUnique");
+    }
+
+    UInt64 getNumberOfDefaultRows() const override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'getNumberOfDefaultRows' not implemented for ColumnUnique");
     }
 
     void getIndicesOfNonDefaultRows(IColumn::Offsets &, size_t, size_t) const override
@@ -268,9 +287,9 @@ ColumnUnique<ColumnType>::ColumnUnique(MutableColumnPtr && holder, bool is_nulla
     : column_holder(std::move(holder)), is_nullable(is_nullable_), reverse_index(numSpecialValues(is_nullable_), 0)
 {
     if (column_holder->size() < numSpecialValues())
-        throw Exception("Too small holder column for ColumnUnique.", ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Too small holder column for ColumnUnique.");
     if (isColumnNullable(*column_holder))
-        throw Exception("Holder column for ColumnUnique can't be nullable.", ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Holder column for ColumnUnique can't be nullable.");
 
     reverse_index.setColumn(getRawColumnPtr());
     createNullMask();
@@ -293,7 +312,7 @@ void ColumnUnique<ColumnType>::createNullMask()
             nested_column_nullable = ColumnNullable::create(column_holder, nested_null_mask);
         }
         else
-            throw Exception("Null mask for ColumnUnique is already created.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Null mask for ColumnUnique is already created.");
     }
 }
 
@@ -303,7 +322,7 @@ void ColumnUnique<ColumnType>::updateNullMask()
     if (is_nullable)
     {
         if (!nested_null_mask)
-            throw Exception("Null mask for ColumnUnique is was not created.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Null mask for ColumnUnique is was not created.");
 
         size_t size = getRawColumnPtr()->size();
 
@@ -340,7 +359,7 @@ template <typename ColumnType>
 size_t ColumnUnique<ColumnType>::getNullValueIndex() const
 {
     if (!is_nullable)
-        throw Exception("ColumnUnique can't contain null values.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "ColumnUnique can't contain null values.");
 
     return 0;
 }
@@ -348,46 +367,34 @@ size_t ColumnUnique<ColumnType>::getNullValueIndex() const
 template <typename ColumnType>
 size_t ColumnUnique<ColumnType>::uniqueInsert(const Field & x)
 {
-    class FieldVisitorGetData : public StaticVisitor<>
-    {
-    public:
-        StringRef res;
-
-        [[noreturn]] static void throwUnsupported()
-        {
-            throw Exception("Unsupported field type", ErrorCodes::LOGICAL_ERROR);
-        }
-
-        [[noreturn]] void operator() (const Null &) { throwUnsupported(); }
-        [[noreturn]] void operator() (const Array &) { throwUnsupported(); }
-        [[noreturn]] void operator() (const Tuple &) { throwUnsupported(); }
-        [[noreturn]] void operator() (const Map &) { throwUnsupported(); }
-        [[noreturn]] void operator() (const Object &) { throwUnsupported(); }
-        [[noreturn]] void operator() (const AggregateFunctionStateData &) { throwUnsupported(); }
-        void operator() (const String & x) { res = {x.data(), x.size()}; }
-        void operator() (const UInt64 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const UInt128 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const UInt256 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const Int64 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const Int128 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const Int256 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const UUID & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const IPv4 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const IPv6 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const Float64 & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const DecimalField<Decimal32> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const DecimalField<Decimal64> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const DecimalField<Decimal128> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const DecimalField<Decimal256> & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-        void operator() (const bool & x) { res = {reinterpret_cast<const char *>(&x), sizeof(x)}; }
-    };
-
     if (x.isNull())
         return getNullValueIndex();
 
-    FieldVisitorGetData visitor;
-    applyVisitor(visitor, x);
-    return uniqueInsertData(visitor.res.data, visitor.res.size);
+    auto single_value_column = column_holder->cloneEmpty();
+    single_value_column->insert(x);
+    auto single_value_data = single_value_column->getDataAt(0);
+
+    return uniqueInsertData(single_value_data.data, single_value_data.size);
+}
+
+template <typename ColumnType>
+bool ColumnUnique<ColumnType>::tryUniqueInsert(const Field & x, size_t & index)
+{
+    if (x.isNull())
+    {
+        if (!is_nullable)
+            return false;
+        index = getNullValueIndex();
+        return true;
+    }
+
+    auto single_value_column = column_holder->cloneEmpty();
+    if (!single_value_column->tryInsert(x))
+        return false;
+
+    auto single_value_data = single_value_column->getDataAt(0);
+    index = uniqueInsertData(single_value_data.data, single_value_data.size);
+    return true;
 }
 
 template <typename ColumnType>
@@ -417,6 +424,20 @@ size_t ColumnUnique<ColumnType>::uniqueInsertData(const char * pos, size_t lengt
 }
 
 template <typename ColumnType>
+void ColumnUnique<ColumnType>::collectSerializedValueSizes(PaddedPODArray<UInt64> & sizes, const UInt8 * is_null) const
+{
+    /// nullable is handled internally.
+    chassert(is_null == nullptr);
+    if (IColumn::empty())
+        return;
+
+    if (is_nullable)
+        column_holder->collectSerializedValueSizes(sizes, assert_cast<const ColumnUInt8 &>(*nested_null_mask).getData().data());
+    else
+        column_holder->collectSerializedValueSizes(sizes, nullptr);
+}
+
+template <typename ColumnType>
 StringRef ColumnUnique<ColumnType>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
 {
     if (is_nullable)
@@ -438,6 +459,37 @@ StringRef ColumnUnique<ColumnType>::serializeValueIntoArena(size_t n, Arena & ar
 
 
     return column_holder->serializeValueIntoArena(n, arena, begin);
+}
+
+template <typename ColumnType>
+void ColumnUnique<ColumnType>::serializeValueIntoBuffer(size_t n, WriteBuffer & wb) const
+{
+    if (is_nullable)
+    {
+        UInt8 flag = (n == getNullValueIndex() ? 1 : 0);
+        writeBinary<UInt8>(flag, wb);
+
+        if (n == getNullValueIndex())
+            return;
+    }
+
+    column_holder->serializeValueIntoBuffer(n, wb);
+}
+
+template <typename ColumnType>
+char * ColumnUnique<ColumnType>::serializeValueIntoMemory(size_t n, char * memory) const
+{
+    if (is_nullable)
+    {
+        UInt8 flag = (n == getNullValueIndex() ? 1 : 0);
+        unalignedStore<UInt8>(memory, flag);
+        ++memory;
+
+        if (n == getNullValueIndex())
+            return memory;
+    }
+
+    return column_holder->serializeValueIntoMemory(n, memory);
 }
 
 template <typename ColumnType>
@@ -474,11 +526,15 @@ size_t ColumnUnique<ColumnType>::uniqueDeserializeAndInsertFromArena(const char 
 template <typename ColumnType>
 const char * ColumnUnique<ColumnType>::skipSerializedInArena(const char *) const
 {
-    throw Exception("Method skipSerializedInArena is not supported for " + this->getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method skipSerializedInArena is not supported for {}", this->getName());
 }
 
 template <typename ColumnType>
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
 int ColumnUnique<ColumnType>::compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const
+#else
+int ColumnUnique<ColumnType>::doCompareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const
+#endif
 {
     if (is_nullable)
     {
@@ -499,6 +555,48 @@ int ColumnUnique<ColumnType>::compareAt(size_t n, size_t m, const IColumn & rhs,
     return getNestedColumn()->compareAt(n, m, *column_unique.getNestedColumn(), nan_direction_hint);
 }
 
+template <typename ColumnType>
+bool ColumnUnique<ColumnType>::equal(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const
+{
+    if (is_nullable)
+    {
+        /// See ColumnNullable::compareAt
+        bool lval_is_null = n == getNullValueIndex();
+        bool rval_is_null = m == getNullValueIndex();
+
+        if (unlikely(lval_is_null || rval_is_null))
+        {
+            if (lval_is_null && rval_is_null)
+                return true;
+            else
+                return false;
+        }
+    }
+
+    const auto & column_unique = static_cast<const IColumnUnique &>(rhs);
+    return getNestedColumn()->equal(n, m, *column_unique.getNestedColumn(), nan_direction_hint);
+}
+
+template <typename ColumnType>
+bool ColumnUnique<ColumnType>::equal(size_t n, const DB::Field & rhs, int nan_direction_hint) const
+{
+    if (is_nullable)
+    {
+        bool lval_is_null = n == getNullValueIndex();
+        bool rval_is_null = rhs.getType() == Field::Types::Which::Null;
+
+        if (unlikely(lval_is_null || rval_is_null))
+        {
+            if (lval_is_null && rval_is_null)
+                return true;
+            else
+                return false;
+        }
+    }
+
+    return getNestedColumn()->equal(n, rhs, nan_direction_hint);
+}
+
 template <typename IndexType>
 static void checkIndexes(const ColumnVector<IndexType> & indexes, size_t max_dictionary_size)
 {
@@ -507,9 +605,8 @@ static void checkIndexes(const ColumnVector<IndexType> & indexes, size_t max_dic
     {
         if (data[i] >= max_dictionary_size)
         {
-            throw Exception("Found index " + toString(data[i]) + " at position " + toString(i)
-                            + " which is grated or equal than dictionary size " + toString(max_dictionary_size),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Found index {} at position {} which is grated or equal "
+                            "than dictionary size {}", toString(data[i]), toString(i), toString(max_dictionary_size));
         }
     }
 }
@@ -539,8 +636,8 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
         if (next_position > std::numeric_limits<IndexType>::max())
         {
             if (sizeof(SuperiorIndexType) == sizeof(IndexType))
-                throw Exception("Can't find superior index type for type " + demangle(typeid(IndexType).name()),
-                                ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find superior index type for type {}",
+                                demangle(typeid(IndexType).name()));
 
             auto expanded_column = ColumnVector<SuperiorIndexType>::create(length);
             auto & expanded_data = expanded_column->getData();
@@ -569,8 +666,8 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
         src_column = typeid_cast<const ColumnType *>(&src);
 
     if (src_column == nullptr)
-        throw Exception("Invalid column type for ColumnUnique::insertRangeFrom. Expected " + column_holder->getName() +
-                        ", got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Invalid column type for ColumnUnique::insertRangeFrom. "
+                        "Expected {}, got {}", column_holder->getName(), src.getName());
 
     auto column = getRawColumnPtr();
 
@@ -647,7 +744,7 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeFrom(const IColumn &
     if (!positions_column)
         positions_column = call_for_type(UInt64());
     if (!positions_column)
-        throw Exception("Can't find index type for ColumnUnique", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find index type for ColumnUnique");
 
     updateNullMask();
 
@@ -664,7 +761,7 @@ IColumnUnique::IndexesWithOverflow ColumnUnique<ColumnType>::uniqueInsertRangeWi
     auto overflowed_keys = column_holder->cloneEmpty();
     auto overflowed_keys_ptr = typeid_cast<ColumnType *>(overflowed_keys.get());
     if (!overflowed_keys_ptr)
-        throw Exception("Invalid keys type for ColumnUnique.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid keys type for ColumnUnique.");
 
     auto call_for_type = [this, &src, start, length, overflowed_keys_ptr, max_dictionary_size](auto x) -> MutableColumnPtr
     {
@@ -693,7 +790,7 @@ IColumnUnique::IndexesWithOverflow ColumnUnique<ColumnType>::uniqueInsertRangeWi
     if (!positions_column)
         positions_column = call_for_type(UInt64());
     if (!positions_column)
-        throw Exception("Can't find index type for ColumnUnique", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find index type for ColumnUnique");
 
     updateNullMask();
 

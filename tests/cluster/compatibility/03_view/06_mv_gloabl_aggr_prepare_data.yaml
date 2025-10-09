@@ -1,0 +1,56 @@
+tags:
+  - prepare
+  - global aggregation
+
+description: prepare data for mv global aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop view if exists aggr_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists aggr_source_stream;
+
+  - type: query
+    sql: drop stream if exists aggr_target_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream aggr_source_stream(id string, location string, value float32, json string, 
+      timestamp datetime64(3) DEFAULT now64(3));
+
+  - type: query
+    sql: |
+      create stream aggr_target_stream(id string, min float32, max float32);
+    
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view aggr_mv into aggr_target_stream as select id, min(value) as min, 
+      max(value) as max from aggr_source_stream group by id;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into aggr_source_stream(id, location, value, json, timestamp) values
+      ('dev1', 'ca', 60, '{"create_time":"2024-01-01 00:00:01"}', '2024-01-01 00:00:11.001')
+      ('dev1', 'ca', 31, '{"create_time":"2024-01-01 00:00:02"}', '2024-01-01 00:00:12.002')
+      ('dev2', 'ca', 58, '{"create_time":"2024-01-01 00:00:03"}', '2024-01-01 00:00:13.003')
+      ('dev2', 'ca', 77, '{"create_time":"2024-01-01 00:00:08"}', '2024-01-01 00:00:18.008');
+
+  - type: wait
+    time: 1

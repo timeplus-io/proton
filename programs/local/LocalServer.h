@@ -40,8 +40,10 @@ protected:
 
     void addOptions(OptionsDescription & options_description) override;
     void processOptions(const OptionsDescription & options_description, const CommandLineOptions & options,
-                        const std::vector<Arguments> &) override;
+                        const std::vector<Arguments> &, const std::vector<Arguments> &) override;
     void processConfig() override;
+    void readArguments(int argc, char ** argv, Arguments & common_arguments, std::vector<Arguments> &, std::vector<Arguments> &) override;
+
 
     void updateLoggerLevel(const String & logs_level) override;
 

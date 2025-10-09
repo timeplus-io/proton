@@ -3,8 +3,8 @@
 #include <Interpreters/Context.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Server/HTTP/HTTPRequestHandler.h>
-#include <Common/logger_useful.h>
 #include <base/types.h>
+#include <Common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
 #include <Poco/File.h>
@@ -19,16 +19,16 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_REQUEST_PARAMETER;
-    extern const int UNKNOWN_TYPE_OF_QUERY;
-    extern const int UNKNOWN_EXCEPTION;
+extern const int BAD_REQUEST_PARAMETER;
+extern const int UNKNOWN_TYPE_OF_QUERY;
+extern const int UNKNOWN_EXCEPTION;
 }
 
 class RestRouterHandler : private boost::noncopyable
 {
 public:
     RestRouterHandler(ContextMutablePtr query_context_, const String & router_name)
-        : query_context(query_context_), log(&Poco::Logger::get(router_name))
+        : query_context(query_context_), log(getLogger(router_name))
     {
         database = query_context->getCurrentDatabase();
     }
@@ -44,19 +44,13 @@ public:
     {
         auto iter = path_parameters.find(name);
         if (iter != path_parameters.end())
-        {
             return iter->second;
-        }
         else
-        {
             return default_value;
-        }
     }
 
-    void setupDistributedQueryParameters(const std::map<String, String> & parameters, const Poco::JSON::Object::Ptr & payload = nullptr) const;
-
-
-    inline bool isDistributedDDL() const { return query_context->isDistributedEnv() && getQueryParameterBool("distributed_ddl", true); }
+    void
+    setupDistributedQueryParameters(const std::map<String, String> & parameters, const Poco::JSON::Object::Ptr & payload = nullptr) const;
 
     void setPathParameter(const String & name, const String & value) { path_parameters[name] = value; }
 
@@ -89,6 +83,27 @@ public:
 
     bool hasQueryParameter(const String & name) const { return query_parameters->has(name); }
 
+    void setCurrentDatabase(String && current_database)
+    {
+        if (!current_database.empty() && current_database != database)
+        {
+            database.swap(current_database);
+            query_context->setCurrentDatabase(current_database);
+        }
+    }
+
+    void setQueryURI(Poco::URI && query_uri_) { query_uri = std::move(query_uri_); }
+
+    void setAcceptedEncoding(String && accepted_encoding_) { accepted_encoding.swap(accepted_encoding_); }
+
+    void setContentEncoding(String && content_encoding_) { content_encoding.swap(content_encoding_); }
+
+    void setContentLength(Int64 content_length_) { content_length = content_length_; }
+
+    void setPathParameters(std::unordered_map<String, String> && path_parameters_) { path_parameters.swap(path_parameters_); }
+
+    void setQueryParameters(std::shared_ptr<HTMLForm> query_parameters_) { query_parameters.swap(query_parameters_); }
+
 public:
     static String jsonErrorResponse(const String & error_msg, int error_code, const String & query_id)
     {
@@ -118,8 +133,7 @@ protected:
         return jsonErrorResponse("Internal server error", error_code);
     }
 
-    String processQuery(
-        const String & query, const std::function<void(Block &&)> & callback = [](Block &&) {}) const;
+    String processQuery(const String & query, const std::function<void(Block &&)> & callback = [](Block &&) {}) const;
 
     String processQuery(const String & query, Poco::JSON::Object & resp, const std::function<void(Block &&)> & callback) const;
 
@@ -184,16 +198,10 @@ private:
     }
 
     /// Return http response payload and http code
-    virtual std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & /* payload */) const
-    {
-        return handleNotImplemented();
-    }
+    virtual std::pair<String, Int32> executeGet(const Poco::JSON::Object::Ptr & /* payload */) const { return handleNotImplemented(); }
 
     /// Return http response payload and http code
-    virtual std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & /* payload */) const
-    {
-        return handleNotImplemented();
-    }
+    virtual std::pair<String, Int32> executePost(const Poco::JSON::Object::Ptr & /* payload */) const { return handleNotImplemented(); }
 
     virtual std::pair<String, Int32> executeDelete(const Poco::JSON::Object::Ptr & /* payload */) const { return handleNotImplemented(); }
 
@@ -211,14 +219,12 @@ private:
         content_encoding = request.get("Content-Encoding", "");
         content_length = request.getContentLength64();
         setupQueryParams(request);
-
-        if (isDistributedDDL())
-        {
-            setupRawQuery(request);
-        }
     }
 
-    void setupQueryParams(const HTTPServerRequest & request) { query_parameters = std::make_unique<HTMLForm>(query_context->getSettingsRef(), request); }
+    void setupQueryParams(const HTTPServerRequest & request)
+    {
+        query_parameters = std::make_shared<HTMLForm>(query_context->getSettingsRef(), request);
+    }
 
     void setupRawQuery(const HTTPServerRequest & request)
     {
@@ -227,16 +233,17 @@ private:
     }
 
 protected:
-    ContextMutablePtr query_context;
-    Poco::Logger * log;
-
-    Poco::URI query_uri;
-    std::unordered_map<String, String> path_parameters;
-    std::unique_ptr<HTMLForm> query_parameters;
-    String accepted_encoding;
-    String content_encoding;
+    mutable Poco::URI query_uri;
+    mutable std::unordered_map<String, String> path_parameters;
+    mutable std::shared_ptr<HTMLForm> query_parameters;
+    mutable String accepted_encoding;
+    mutable String content_encoding;
     Int64 content_length;
     String database;
+
+protected:
+    ContextMutablePtr query_context;
+    LoggerPtr log;
 };
 
 using RestRouterHandlerPtr = std::shared_ptr<RestRouterHandler>;

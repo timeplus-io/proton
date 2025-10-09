@@ -1,7 +1,5 @@
 #pragma once
 
-#include <variant>
-
 #include <Common/Epoll.h>
 #include <Common/Fiber.h>
 #include <Common/FiberStack.h>
@@ -19,10 +17,10 @@ class ConnectionEstablisher
 public:
     using TryResult = PoolWithFailoverBase<IConnectionPool>::TryResult;
 
-    ConnectionEstablisher(IConnectionPool * pool_,
+    ConnectionEstablisher(ConnectionPoolPtr pool_,
                           const ConnectionTimeouts * timeouts_,
-                          const Settings * settings_,
-                          Poco::Logger * log,
+                          const Settings & settings_,
+                          LoggerPtr log,
                           const QualifiedTableName * table_to_check = nullptr);
 
     /// Establish connection and save it in result, write possible exception message in fail_message.
@@ -34,15 +32,14 @@ public:
     bool isFinished() const { return is_finished; }
 
 private:
-    IConnectionPool * pool;
+    ConnectionPoolPtr pool;
     const ConnectionTimeouts * timeouts;
-    const Settings * settings;
-    Poco::Logger * log;
+    const Settings & settings;
+    LoggerPtr log;
     const QualifiedTableName * table_to_check;
 
     bool is_finished;
     AsyncCallback async_callback = {};
-
 };
 
 #if defined(OS_LINUX)
@@ -58,11 +55,11 @@ class ConnectionEstablisherAsync
 public:
     using TryResult = PoolWithFailoverBase<IConnectionPool>::TryResult;
 
-    ConnectionEstablisherAsync(IConnectionPool * pool_,
+    ConnectionEstablisherAsync(ConnectionPoolPtr pool_,
                           const ConnectionTimeouts * timeouts_,
-                          const Settings * settings_,
-                          Poco::Logger * log_,
-                          const QualifiedTableName * table_to_check = nullptr);
+                          const Settings & settings_,
+                          LoggerPtr log_,
+                          const QualifiedTableName * table_to_check_ = nullptr);
 
     /// Resume establishing connection. If the process was not finished,
     /// return file descriptor (you can add it in epoll and poll it,

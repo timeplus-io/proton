@@ -1,0 +1,116 @@
+tags:
+  - test14_changelog_kv_stream
+description: single shard changelog_kv stream creation and query
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node:
+      - p1
+    sql: insert into test14_changelog_kv_stream(i, s) values (1, 'a')
+    schema: 
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test14_changelog_kv_stream(i, s) values (2, 'b')
+    schema: 
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test14_changelog_kv_stream(i, s, _tp_delta) values (1, 'a', -1), (2, 'b', -1), (3, 'b', 1), (4, 'c', 1)
+    schema: 
+      - name: i
+        type: int64
+      - name: s
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 3
+
+  - name: "14104"
+    node:
+      - p1
+    type: stream
+    query: select i, s, _tp_delta from test14_changelog_kv_stream;
+    schema: 
+      - name: i
+        type: int64
+      - name: s
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - type: check
+    target_name: "14104"
+    mode: random
+    expected_result:
+      - - 3
+        - b
+        - 1
+      - - 4
+        - c
+        - 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test14_changelog_kv_stream(i, s) values (5, 'd')
+    schema: 
+      - name: i
+        type: int64
+      - name: s
+        type: string
+  
+  - type: check
+    target_name: "14104"
+    expected_result:
+      - - 5
+        - d
+        - 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test14_changelog_kv_stream(i, s, _tp_delta) values (4, 'c', -1)
+    schema: 
+      - name: i
+        type: int64
+      - name: s
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - type: check
+    target_name: "14104"
+    expected_result:
+      - - 4
+        - c
+        - -1

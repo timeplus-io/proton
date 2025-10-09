@@ -1,0 +1,33 @@
+name: query_state11
+description: Tests covering query state checkpointing smoke test cases
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists multishard_join
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream multishard_join (name string, type string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into multishard_join(name, type) values
+    schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+    inputs:
+    - [s1, 'roof']
+    - [s2, 'field']
+    - [s3, 'window']
+    - [s4, 'wall']
+    - [s5, 'roof']
+    - [s6, 'window']
+    - [s7, 'wall']
+    - [s8, 'floor']

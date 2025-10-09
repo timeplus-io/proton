@@ -6,6 +6,7 @@
 #include <QueryPipeline/QueryPipeline.h>
 #include <QueryPipeline/ReadProgressCallback.h>
 #include <Common/setThreadName.h>
+#include <Common/CurrentThread.h>
 #include <Common/ThreadPool.h>
 #include <Common/scope_guard_safe.h>
 
@@ -26,7 +27,7 @@ struct PullingAsyncPipelineExecutor::Data
     LazyOutputFormat * lazy_format = nullptr;
     std::atomic_bool is_finished = false;
     std::atomic_bool has_exception = false;
-    ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    ExecuteMode exec_mode = ExecuteMode::Normal;
     ThreadFromGlobalPool thread;
     Poco::Event finish_event;
 
@@ -76,14 +77,14 @@ static void threadFunction(PullingAsyncPipelineExecutor::Data & data, ThreadGrou
 {
     SCOPE_EXIT_SAFE(
         if (thread_group)
-            CurrentThread::detachQueryIfNotDetached();
+            CurrentThread::detachFromGroupIfNotDetached();
     );
     setThreadName("QueryPullPipeEx");
 
     try
     {
         if (thread_group)
-            CurrentThread::attachTo(thread_group);
+            CurrentThread::attachToGroup(thread_group);
 
         data.executor->execute(num_threads, data.exec_mode);
     }
@@ -174,6 +175,20 @@ bool PullingAsyncPipelineExecutor::pull(Block & block, uint64_t milliseconds)
             block.info.is_overflows = agg_info->is_overflows;
         }
     }
+
+    /// proton: starts.
+    if (auto chunk_ctx = chunk.getChunkContext())
+    {
+        if (chunk_ctx->hasWatermark())
+            block.info.setWatermark(chunk_ctx->getWatermark());
+
+        if (chunk_ctx->hasAppendTime())
+            block.info.setAppendTime(chunk_ctx->getAppendTime());
+
+        if (chunk_ctx->hasSN())
+            block.info.setSN(chunk_ctx->getSN());
+    }
+    /// proton: ends.
 
     return true;
 }

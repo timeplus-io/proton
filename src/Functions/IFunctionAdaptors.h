@@ -23,11 +23,13 @@ protected:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const final
     {
+        checkFunctionArgumentSizes(arguments, input_rows_count);
         return function->executeImpl(arguments, result_type, input_rows_count);
     }
 
     ColumnPtr executeDryRunImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const final
     {
+        checkFunctionArgumentSizes(arguments, input_rows_count);
         return function->executeImplDryRun(arguments, result_type, input_rows_count);
     }
 
@@ -48,28 +50,52 @@ private:
 class FunctionToFunctionBaseAdaptor final : public IFunctionBase
 {
 public:
+    /// proton: starts.
+    using FunctionCreator = std::function<std::shared_ptr<IFunction>()>;
+    /// For stateless functions, we can provide IFunction directly.
     FunctionToFunctionBaseAdaptor(std::shared_ptr<IFunction> function_, DataTypes arguments_, DataTypePtr result_type_)
-            : function(std::move(function_)), arguments(std::move(arguments_)), result_type(std::move(result_type_)) {}
+            : function(std::move(function_)), arguments(std::move(arguments_)), result_type(std::move(result_type_))
+    {
+        if (function->isStateful())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "need to provide function_creator for stateful function");
+    }
+    /// For stateful functions, we need provide FunctionCreator to create new stateful function via prepare(...)
+    FunctionToFunctionBaseAdaptor(FunctionCreator function_creator_, DataTypes arguments_, DataTypePtr result_type_)
+        : function(function_creator_())
+        , stateful_func_creater(std::move(function_creator_))
+        , arguments(std::move(arguments_))
+        , result_type(std::move(result_type_))
+    {
+        assert(stateful_func_creater);
+    }
+    /// proton: ends.
 
     String getName() const override { return function->getName(); }
 
     const DataTypes & getArgumentTypes() const override { return arguments; }
     const DataTypePtr & getResultType() const override { return result_type; }
 
+    const FunctionPtr & getFunction() const { return function; }
+
 #if USE_EMBEDDED_COMPILER
 
-    bool isCompilable() const override { return function->isCompilable(getArgumentTypes()); }
+    bool isCompilable() const override { return function->isCompilable(getArgumentTypes(), getResultType()); }
 
-    llvm::Value * compile(llvm::IRBuilderBase & builder, Values values) const override
+    llvm::Value * compile(llvm::IRBuilderBase & builder, const ValuesWithType & compile_arguments) const override
     {
-        return function->compile(builder, getArgumentTypes(), std::move(values));
+        return function->compile(builder, compile_arguments, getResultType());
     }
 
 #endif
 
     ExecutableFunctionPtr prepare(const ColumnsWithTypeAndName & /*arguments*/) const override
     {
-        return std::make_unique<FunctionToExecutableFunctionAdaptor>(function);
+        /// proton: starts.
+        if (stateful_func_creater)
+            return std::make_unique<FunctionToExecutableFunctionAdaptor>(stateful_func_creater());
+        else
+            return std::make_unique<FunctionToExecutableFunctionAdaptor>(function);
+        /// proton: ends.
     }
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
@@ -99,6 +125,9 @@ public:
     }
 private:
     std::shared_ptr<IFunction> function;
+    /// proton: starts.
+    FunctionCreator stateful_func_creater;
+    /// proton: ends.
     DataTypes arguments;
     DataTypePtr result_type;
 };
@@ -124,6 +153,8 @@ public:
     String getName() const override { return function->getName(); }
     bool isStateful() const override { return function->isStateful(); }
     bool isVariadic() const override { return function->isVariadic(); }
+    bool isShortCircuit(IFunctionBase::ShortCircuitSettings & settings, size_t number_of_arguments) const override { return function->isShortCircuit(settings, number_of_arguments); }
+
     size_t getNumberOfArguments() const override { return function->getNumberOfArguments(); }
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return function->getArgumentsThatAreAlwaysConstant(); }
@@ -140,6 +171,8 @@ public:
     bool useDefaultImplementationForLowCardinalityColumns() const override { return function->useDefaultImplementationForLowCardinalityColumns(); }
     bool useDefaultImplementationForSparseColumns() const override { return function->useDefaultImplementationForSparseColumns(); }
     bool canBeExecutedOnLowCardinalityDictionary() const override { return function->canBeExecutedOnLowCardinalityDictionary(); }
+    bool useDefaultImplementationForDynamic() const override { return function->useDefaultImplementationForDynamic(); }
+    DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override { return function->getReturnTypeForDefaultImplementationForDynamic(); }
 
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const override
     {
@@ -149,7 +182,7 @@ public:
 
         /// proton: starts.
         if (stateful_func_creater)
-            return std::make_unique<FunctionToFunctionBaseAdaptor>(stateful_func_creater(), data_types, result_type);
+            return std::make_unique<FunctionToFunctionBaseAdaptor>(stateful_func_creater, data_types, result_type);
         /// proton: ends.
 
         return std::make_unique<FunctionToFunctionBaseAdaptor>(function, data_types, result_type);

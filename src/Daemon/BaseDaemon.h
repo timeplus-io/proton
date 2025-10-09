@@ -17,7 +17,6 @@
 #include <Poco/Net/SocketAddress.h>
 #include <Poco/Version.h>
 #include <base/types.h>
-#include <Common/logger_useful.h>
 #include <base/getThreadId.h>
 #include <Daemon/GraphiteWriter.h>
 #include <Common/Config/ConfigProcessor.h>

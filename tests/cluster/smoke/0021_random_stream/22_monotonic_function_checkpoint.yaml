@@ -1,0 +1,99 @@
+tags:
+- monotonic test
+description: monotonic function is stateful, so it supports checkpoint
+cluster:
+- p1k1
+# - p3k1 # subscribe to no support for cluster
+steps:
+- type: query
+  sql: drop stream if exists test22_stream
+- type: wait
+  time: 2
+
+- type: query
+  sql: create stream test22_stream(id int, value int)
+- type: wait
+  time: 2
+
+- name: '2230'
+  type: stream
+  query_id: '2230'
+  query: subscribe to select id, value, monotonic(100) from test22_stream settings checkpoint_interval=1
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  - name: monotonic(100)
+    type: int64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test22_stream(id, value) values
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  inputs:
+  - [1, 1]
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '2230'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test22_stream(id, value) values
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  inputs:
+  - [2, 2]
+
+- name: 2230-1
+  type: stream
+  query: recover from '2230'
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  - name: monotonic(100)
+    type: int64
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test22_stream(id, value) values
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  inputs:
+  - [3, 3]
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id='2230' sync
+
+- type: query
+  sql: unsubscribe to '2230'
+
+- type: check
+  target_name: '2230'
+  expected_result:
+  - [1, 1, 100]
+
+- type: check
+  target_name: 2230-1
+  expected_result:
+  - [2, 2, 101]
+  - [3, 3, 102]

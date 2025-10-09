@@ -22,6 +22,11 @@ void registerTableFunctions()
     registerTableFunctionS3(factory);
     registerTableFunctionS3Cluster(factory);
     registerTableFunctionCOS(factory);
+    /// proton: starts
+    ///registerTableFunctionHudi(factory);
+    ///registerTableFunctionDeltaLake(factory);
+    /// proton: ends
+    registerTableFunctionIceberg(factory);
 #endif
 
     registerTableFunctionView(factory);
@@ -37,6 +42,9 @@ void registerTableFunctions()
     Streaming::registerTableFunctionSession(factory);
     Streaming::registerTableFunctionDedup(factory);
     Streaming::registerTableFunctionChangelog(factory);
+    Streaming::registerTableFunctionRowify(factory);
+
+    registerTableFunctionPythonCall(factory);
     /// proton: ends
 }
 

@@ -3,6 +3,7 @@
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
+#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropFunctionQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -18,6 +19,9 @@
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTWatchQuery.h>
+#include <Parsers/ASTCreateNamedCollectionQuery.h>
+#include <Parsers/ASTDropNamedCollectionQuery.h>
+#include <Parsers/ASTAlterNamedCollectionQuery.h>
 #include <Parsers/MySQL/ASTCreateQuery.h>
 #include <Parsers/ASTTransactionControl.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
@@ -43,6 +47,10 @@
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateFunctionQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterCreateNamedCollectionQuery.h>
+#include <Interpreters/InterpreterDropNamedCollectionQuery.h>
+#include <Interpreters/InterpreterAlterNamedCollectionQuery.h>
+#include <Interpreters/InterpreterDeleteQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDescribeCacheQuery.h>
 #include <Interpreters/InterpreterDropFunctionQuery.h>
@@ -89,16 +97,48 @@
 #include <Common/typeid_cast.h>
 
 /// proton : starts
-#include <Parsers/ASTCreateFormatSchemaQuery.h>
-#include <Parsers/ASTDropFormatSchemaQuery.h>
-#include <Parsers/ASTShowCreateFormatSchemaQuery.h>
-#include <Parsers/ASTShowFormatSchemasQuery.h>
-#include <Parsers/Streaming/ASTUnsubscribeQuery.h>
+#include <Interpreters/InterpreterCreateAlertQuery.h>
+#include <Interpreters/InterpreterCreateDiskQuery.h>
 #include <Interpreters/InterpreterCreateFormatSchemaQuery.h>
+#include <Interpreters/InterpreterCreateStoragePolicyQuery.h>
+#include <Interpreters/InterpreterCreateTaskQuery.h>
+#include <Interpreters/InterpreterDropAlertQuery.h>
+#include <Interpreters/InterpreterDropDiskQuery.h>
 #include <Interpreters/InterpreterDropFormatSchemaQuery.h>
+#include <Interpreters/InterpreterDropStoragePolicyQuery.h>
+#include <Interpreters/InterpreterDropTaskQuery.h>
+#include <Interpreters/InterpreterShowAlertsQuery.h>
+#include <Interpreters/InterpreterShowCreateAlertQuery.h>
 #include <Interpreters/InterpreterShowCreateFormatSchemaQuery.h>
+#include <Interpreters/InterpreterShowCreateFunctionQuery.h>
+#include <Interpreters/InterpreterShowCreateTaskQuery.h>
+#include <Interpreters/InterpreterShowDisksQuery.h>
 #include <Interpreters/InterpreterShowFormatSchemasQuery.h>
+#include <Interpreters/InterpreterShowFunctionsQuery.h>
+#include <Interpreters/InterpreterShowStoragePoliciesQuery.h>
+#include <Interpreters/InterpreterShowTasksQuery.h>
 #include <Interpreters/Streaming/InterpreterUnsubscribeQuery.h>
+#include <Parsers/ASTCreateAlertQuery.h>
+#include <Parsers/ASTCreateDiskQuery.h>
+#include <Parsers/ASTCreateFormatSchemaQuery.h>
+#include <Parsers/ASTCreateStoragePolicyQuery.h>
+#include <Parsers/ASTCreateTaskQuery.h>
+#include <Parsers/ASTDropAlertQuery.h>
+#include <Parsers/ASTDropDiskQuery.h>
+#include <Parsers/ASTDropFormatSchemaQuery.h>
+#include <Parsers/ASTDropStoragePolicyQuery.h>
+#include <Parsers/ASTDropTaskQuery.h>
+#include <Parsers/ASTShowAlertsQuery.h>
+#include <Parsers/ASTShowCreateAlertQuery.h>
+#include <Parsers/ASTShowCreateFormatSchemaQuery.h>
+#include <Parsers/ASTShowCreateFunctionQuery.h>
+#include <Parsers/ASTShowCreateTaskQuery.h>
+#include <Parsers/ASTShowDisksQuery.h>
+#include <Parsers/ASTShowFormatSchemasQuery.h>
+#include <Parsers/ASTShowFunctionsQuery.h>
+#include <Parsers/ASTShowStoragePoliciesQuery.h>
+#include <Parsers/ASTShowTasksQuery.h>
+#include <Parsers/Streaming/ASTUnsubscribeQuery.h>
 /// proton : ends
 
 namespace ProfileEvents
@@ -121,8 +161,6 @@ namespace ErrorCodes
 
 std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMutablePtr context, const SelectQueryOptions & options)
 {
-    OpenTelemetrySpanHolder span("InterpreterFactory::get()");
-
     ProfileEvents::increment(ProfileEvents::Query);
 
     if (query->as<ASTSelectQuery>())
@@ -134,7 +172,7 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTSelectWithUnionQuery>())
     {
         auto interpreter = std::make_unique<InterpreterSelectWithUnionQuery>(query, context, options);
-        
+
         if(!options.is_internal && !context->getSettingsRef().is_internal)
         {
             ProfileEvents::increment(ProfileEvents::SelectQuery);
@@ -242,6 +280,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterAlterQuery>(query, context);
     }
+    else if (query->as<ASTAlterNamedCollectionQuery>())
+    {
+        return std::make_unique<InterpreterAlterNamedCollectionQuery>(query, context);
+    }
     else if (query->as<ASTCheckQuery>())
     {
         return std::make_unique<InterpreterCheckQuery>(query, context);
@@ -281,6 +323,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDropAccessEntityQuery>())
     {
         return std::make_unique<InterpreterDropAccessEntityQuery>(query, context);
+    }
+    else if (query->as<ASTDropNamedCollectionQuery>())
+    {
+        return std::make_unique<InterpreterDropNamedCollectionQuery>(query, context);
     }
     else if (query->as<ASTGrantQuery>())
     {
@@ -335,18 +381,90 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterShowCreateFormatSchemaQuery>(query, context);
     }
+    else if (query->as<ASTShowCreateFunctionQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateFunctionQuery>(query, context);
+    }
+    else if (query->as<ASTShowFunctionsQuery>())
+    {
+        return std::make_unique<InterpreterShowFunctionsQuery>(query, context);
+    }
+    else if (query->as<ASTCreateDiskQuery>())
+    {
+        return std::make_unique<InterpreterCreateDiskQuery>(query, context);
+    }
+    else if (query->as<ASTDropDiskQuery>())
+    {
+        return std::make_unique<InterpreterDropDiskQuery>(query, context);
+    }
+    else if (query->as<ASTShowDisksQuery>())
+    {
+        return std::make_unique<InterpreterShowDisksQuery>(query, context);
+    }
+    else if (query->as<ASTCreateStoragePolicyQuery>())
+    {
+        return std::make_unique<InterpreterCreateStoragePolicyQuery>(query, context);
+    }
+    else if (query->as<ASTDropStoragePolicyQuery>())
+    {
+        return std::make_unique<InterpreterDropStoragePolicyQuery>(query, context);
+    }
+    else if (query->as<ASTShowStoragePoliciesQuery>())
+    {
+        return std::make_unique<InterpreterShowStoragePoliciesQuery>(query, context);
+    }
+    else if (query->as<ASTCreateAlertQuery>() != nullptr)
+    {
+        return std::make_unique<InterpreterCreateAlertQuery>(query, context);
+    }
+    else if (query->as<ASTShowAlertsQuery>() != nullptr)
+    {
+        return std::make_unique<InterpreterShowAlertsQuery>(query, context);
+    }
+    else if (query->as<ASTShowCreateAlertQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateAlertQuery>(query, context);
+    }
+    else if (query->as<ASTDropAlertQuery>() != nullptr)
+    {
+        return std::make_unique<InterpreterDropAlertQuery>(query, context);
+    }
+    else if (query->as<ASTCreateTaskQuery>() != nullptr)
+    {
+        return std::make_unique<InterpreterCreateTaskQuery>(query, context);
+    }
+    else if (query->as<ASTDropTaskQuery>() != nullptr)
+    {
+        return std::make_unique<InterpreterDropTaskQuery>(query, context);
+    }
+    else if (query->as<ASTShowTasksQuery>() != nullptr)
+    {
+        return std::make_unique<InterpreterShowTasksQuery>(query, context);
+    }
+    else if (query->as<ASTShowCreateTaskQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateTaskQuery>(query, context);
+    }
     // proton: ends
     else if (query->as<ASTDropFunctionQuery>())
     {
         return std::make_unique<InterpreterDropFunctionQuery>(query, context);
     }
+    else if (query->as<ASTCreateNamedCollectionQuery>())
+    {
+        return std::make_unique<InterpreterCreateNamedCollectionQuery>(query, context);
+    }
     else if (query->as<ASTBackupQuery>())
     {
         return std::make_unique<InterpreterBackupQuery>(query, context);
     }
+    else if (query->as<ASTDeleteQuery>())
+    {
+        return std::make_unique<InterpreterDeleteQuery>(query, context);
+    }
     else
     {
-        throw Exception("Unknown type of query: " + query->getID(), ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
+        throw Exception(ErrorCodes::UNKNOWN_TYPE_OF_QUERY, "Unknown type of query: {}", query->getID());
     }
 }
 }

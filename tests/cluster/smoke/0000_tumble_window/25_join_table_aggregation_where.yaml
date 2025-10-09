@@ -1,0 +1,65 @@
+tags:
+  - join
+  - cluster_table_bug
+description: stream table join table w/ aggregation and where
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_smoke;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_smoke(id string, location string, value float32, json string, timestamp datetime64(3) DEFAULT now64(3))
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_smoke(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:00']
+      - ['dev1', 'ca', 66, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 58.3, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:05']
+      - ['dev4', 'ca', 59, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:02']
+      - ['dev8', 'ca', 77, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:08']
+      - ['dev3', 'ca', 57.3, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:00']
+      - ['dev5', 'ca', 66, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:01']
+      - ['dev2', 'ca', 76, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:05']
+      - ['dev6', 'ca', 80, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:03']
+      - ['dev8', 'ca', 67, '\"create_time\":\"2021-11-02 20:00:01\"', '2020-02-02 20:01:02']
+      - ['dev9', 'ca', 77, '\"create_time\":\"2021-11-02 20:00:10\"', '2020-02-02 20:01:08']
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: 101
+    query: select a.id, b.type, max(value) from table(test_smoke) as a join table(test_smoke_d) as b on a.id = b.id where b.type = 'field' or b.type = 'roof' group by a.id, b.type
+    schema:
+      - name: id
+        type: string
+      - name: type
+        type: string
+      - name: max(value)
+        type: float32
+
+  - type: check
+    target_name: 101
+    mode: random
+    expected_result:
+      - ['dev1', 'roof', 66]
+      - ['dev5', 'roof', 66]
+      - ['dev2', 'field', 76]

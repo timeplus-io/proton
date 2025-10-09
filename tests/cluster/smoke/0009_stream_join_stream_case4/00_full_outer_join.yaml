@@ -1,0 +1,58 @@
+description: Full Outer Join
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: stream
+    name: 3200
+    query_id: '3200'
+    query: |
+      SELECT A.id, A.name, B.id, B.type, B.value FROM left_Stream A FULL OUTER JOIN right_Stream B ON A.id = B.id;
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: string
+      - name: B.id
+        type: int32
+      - name: B.type
+        type: string
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO right_Stream (id, value, department_id, type) VALUES
+      (1, 'X1', 1, 'A'),
+      (2, 'Y1', 2, 'B'),
+      (3, 'X2', 3, 'A'),
+      (1, 'X3', 4, 'C');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO left_Stream (id, name, department_id, manager_id, type) VALUES
+      (1, 'Alice', 1, NULL, 'A'),
+      (2, 'Bob', 2, NULL, 'B'),
+      (3, 'Charlie', 3, NULL, 'A'),
+      (4, 'Daddy', 4, NULL, 'D');
+
+  - type: check
+    target_name: 3200
+    expected_result:
+      - [0, '', 1, 'A', 'X1']
+      - [0, '', 2, 'B', 'Y1']
+      - [0, '', 3, 'A', 'X2']
+      - [0, '', 1, 'C', 'X3']
+      - [1, 'Alice', 1, 'A', 'X1']
+      - [1, 'Alice', 1, 'C', 'X3']
+      - [2, 'Bob', 2, 'B', 'Y1']
+      - [3, 'Charlie', 3, 'A', 'X2']
+      - [4, 'Daddy', 0, '', '']

@@ -1,0 +1,29 @@
+name: python_udf_scipy
+description: Tests covering the python udf scipy library
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - scipy
+arch:
+  - x86_64
+
+setup:
+  scope: suite
+  steps:
+    # scipy
+    - type: query
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'scipy';
+
+    - type: wait
+      time: 15
+
+    - type: command
+      name: python-udf4-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "scipy") | length > 0'
+    
+    - type: check
+      target_name: python-udf4-1
+      expected_result: ['true']

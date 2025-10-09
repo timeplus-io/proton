@@ -1,0 +1,5 @@
+name: udf
+description: Test covers the udf query compatibility cases.
+tags:
+  - compatibility
+  - udf

@@ -1,0 +1,4 @@
+name: nullable
+description: Tests covering the nullable
+tags:
+  - smoke

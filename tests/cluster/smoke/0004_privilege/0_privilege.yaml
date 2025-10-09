@@ -1,0 +1,114 @@
+tags:
+  - todo
+
+description: create a table test_privilege, ingest columns same/difference as sequence of show create
+
+steps:
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: drop role if exists select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: drop user if exists user_select_only;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create user user_select_only identified with sha256_password by 'password';
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create role select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: grant select on default.* to select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: grant select_only to user_select_only;
+
+  - type: query
+    sql: drop stream if exists test_privilege;
+
+  - type: wait
+    time: 1
+
+  - name: '500'
+    type: stream
+    user: user_select_only
+    password: password
+    query: create stream test_privilege (id string, location string, value float, timestamp datetime64(3) default now64(3));
+
+  - type: query
+    sql: create stream test_privilege (id string, location string, value float, timestamp datetime64(3) default now64(3));
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_privilege (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11');
+
+  - type: query
+    sql: insert into test_privilege (id, value, location, timestamp) values ('dev2', 100, 'ca', '2020-01-01 11:11:11');
+
+  - type: query
+    sql: insert into test_privilege (id, value, timestamp) values ('dev3', 100, '2020-01-01 11:11:11');
+  
+  - name: '502'
+    type: stream
+    user: user_select_only
+    password: password
+    query: insert into test_privilege (id, value, timestamp) values ('dev7', 100, '2020-01-01 11:11:11');
+
+  - name: '503'
+    type: stream
+    user: user_select_only
+    password: password
+    query: drop stream if exists test_privilege;
+
+  - name: '504'
+    type: stream
+    user: user_select_only
+    password: password
+    query: select id, location, value, timestamp from test_privilege settings seek_to = 'earliest';
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: timestamp
+        type: datetime64(3)
+
+  - type: check
+    target_name: '500'
+    expected_result:
+      - [ error_code:497 ]
+
+  - type: check
+    target_name: '502'
+    expected_result:
+      - [ error_code:497 ]
+
+  - type: check
+    target_name: '503'
+    expected_result:
+      - [ error_code:497 ]
+
+  - type: check
+    target_name: '504'
+    expected_result:
+      - [ dev1, ca, 100, '2020-01-01 11:11:11' ]
+      - [ dev2, ca, 100, '2020-01-01 11:11:11' ]
+      - [ dev3, '', 100, '2020-01-01 11:11:11' ]

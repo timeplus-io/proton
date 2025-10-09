@@ -1,0 +1,58 @@
+tags:
+  - cte
+description: table function shall work with simple CTE (no aggreagtion)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists cte_stream
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: create stream cte_stream(i int)
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into cte_stream(i) values (1),(2),(3)
+
+  - type: wait
+    time: 2
+
+  - name: '1100'
+    type: stream
+    query: with cte as (select i + 1, to_string(i) from cte_stream) select * from table(cte)
+    schema:
+      - name: plus(i, 1)
+        type: int64
+      - name: to_string(i)
+        type: string
+
+  - type: wait
+    time: 2
+
+  - name: '1101'
+    type: stream
+    query: with cte as (select count() from cte_stream) select * from table(cte)
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: '1100'
+    expected_result:
+      - [ 2, '1' ]
+      - [ 3, '2' ]
+      - [ 4, '3' ]
+
+  - type: check
+    target_name: '1101'
+    expected_result:
+      - [ error_code:36 ]

@@ -1,0 +1,39 @@
+tags:
+  - func
+  - process-text
+description: process text with function trim
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists extract_all_groups_stream
+
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create stream extract_all_groups_stream (id int, location string)
+
+  - type: wait
+    time: 1
+
+  - name: '800'
+    type: stream
+    query: select extract_all_groups(location, '("[^"]+"|\w+)=("[^"]+"|\w+)') as groups
+      from extract_all_groups_stream
+    schema:
+      - name: groups
+        type: array(array(string))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into extract_all_groups_stream(id, location) values (1, 'v1=111, v2=222,
+      v3=333')
+
+  - type: check
+    target_name: '800'
+    expected_result:
+      - [ [ [ 'v1', '111' ], [ 'v2', '222' ], [ 'v3', '333' ] ] ]

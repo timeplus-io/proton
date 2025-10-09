@@ -4,12 +4,12 @@
 
 #if USE_PULSAR
 
-#    include <Processors/Executors/StreamingFormatExecutor.h>
-#    include <Storages/ExternalStream/Pulsar/PulsarSink.h>
-#    include <Storages/ExternalStream/Pulsar/PulsarSource.h>
-#    include <Storages/ExternalStream/StorageExternalStreamImpl.h>
+#include <Processors/Executors/StreamingFormatExecutor.h>
+#include <Storages/ExternalStream/Pulsar/PulsarSink.h>
+#include <Storages/ExternalStream/Pulsar/PulsarSource.h>
+#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 
-#    include <pulsar/Client.h>
+#include <pulsar/Client.h>
 
 namespace DB
 {
@@ -22,14 +22,23 @@ using VirtualHeader = std::map<size_t, std::pair<DataTypePtr, std::function<Fiel
 
 class Pulsar final : public StorageExternalStreamImpl
 {
+    friend PulsarSource;
+
 public:
-    Pulsar(IStorage * storage, ExternalStreamSettingsPtr settings_, bool attach, ExternalStreamCounterPtr counter, ContextPtr context);
+    Pulsar(
+        StorageID storage_id,
+        StorageInMemoryMetadata metadata,
+        ExternalStreamSettingsPtr settings_,
+        bool attach,
+        ExternalStreamCounterPtr counter,
+        ContextPtr context);
     ~Pulsar() override = default;
 
     String getName() const override { return "PulsarExternalStream"; }
 
     void startup() override;
-    void shutdown() override;
+    void shutdown(bool dropping) override;
+    std::optional<String> preferredColumn() const override;
 
     NamesAndTypesList getVirtuals() const override;
 
@@ -60,11 +69,14 @@ private:
 
     pulsar::ClientConfiguration createClientConfig();
 
-    pulsar::Reader createReader(const ContextPtr & context, const String & partition);
+    pulsar::Reader
+    createReader(const ContextPtr & context, const String & partition, std::optional<pulsar::MessageId> start_message_id = {});
     pulsar::Producer createProducer(const ContextPtr & context);
 
     NamesAndTypesList virtual_column_names_and_types;
     VirtualColumns virtual_columns;
+
+    const String partition_prefix;
 
     std::atomic_flag pulsar_logger_set;
     pulsar::Client client;

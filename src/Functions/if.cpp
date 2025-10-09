@@ -1,11 +1,31 @@
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnMap.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
+#include <Columns/ColumnVariant.h>
+#include <Columns/ColumnDynamic.h>
+#include <Columns/ColumnVector.h>
+#include <Columns/MaskOperations.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeVariant.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NumberTraits.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionIfBase.h>
+#include <Functions/GatherUtils/Algorithms.h>
+#include <Functions/IFunction.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/castColumn.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnString.h>
@@ -14,16 +34,12 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnVariant.h>
 #include <Columns/MaskOperations.h>
-#include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
-#include <Functions/IFunction.h>
-#include <Functions/FunctionHelpers.h>
-#include <Functions/GatherUtils/Algorithms.h>
-#include <Functions/FunctionIfBase.h>
-#include <Interpreters/castColumn.h>
-#include <Functions/FunctionFactory.h>
+#include <Common/typeid_cast.h>
 
+#include <type_traits>
 
 namespace DB
 {
@@ -42,37 +58,45 @@ using namespace GatherUtils;
 /** Selection function by condition: if(cond, then, else).
   * cond - UInt8
   * then, else - numeric types for which there is a general type, or dates, datetimes, or strings, or arrays of these types.
-  */
+  * For better performance, try to use branch free code for numeric types(i.e. cond ? a : b --> !!cond * a + !cond * b)
+*/
+
+template <typename ResultType>
+concept is_native_int_or_decimal_v
+    = std::is_integral_v<ResultType> || (is_decimal<ResultType> && sizeof(ResultType) <= 8);
+
+// This macro performs a branch-free conditional assignment for floating point types.
+// It uses bitwise operations to avoid branching, which can be beneficial for performance.
+#define BRANCHFREE_IF_FLOAT(TYPE, vc, va, vb, vr) \
+    using UIntType = typename NumberTraits::Construct<false, false, sizeof(TYPE)>::Type; \
+    using IntType = typename NumberTraits::Construct<true, false, sizeof(TYPE)>::Type; \
+    auto mask = static_cast<UIntType>(static_cast<IntType>(vc) - 1); \
+    auto new_a = static_cast<ResultType>(va); \
+    auto new_b = static_cast<ResultType>(vb); \
+    UIntType uint_a; \
+    std::memcpy(&uint_a, &new_a, sizeof(UIntType)); \
+    UIntType uint_b; \
+    std::memcpy(&uint_b, &new_b, sizeof(UIntType)); \
+    UIntType tmp = (~mask & uint_a) | (mask & uint_b); \
+    (vr) = *(reinterpret_cast<ResultType *>(&tmp));
 
 template <typename ArrayCond, typename ArrayA, typename ArrayB, typename ArrayResult, typename ResultType>
 inline void fillVectorVector(const ArrayCond & cond, const ArrayA & a, const ArrayB & b, ArrayResult & res)
 {
-    size_t size = cond.size();
-    bool a_is_short = a.size() < size;
-    bool b_is_short = b.size() < size;
 
-    if (a_is_short && b_is_short)
+    size_t size = cond.size();
+    for (size_t i = 0; i < size; ++i)
     {
-        size_t a_index = 0, b_index = 0;
-        for (size_t i = 0; i < size; ++i)
-            res[i] = cond[i] ? static_cast<ResultType>(a[a_index++]) : static_cast<ResultType>(b[b_index++]);
-    }
-    else if (a_is_short)
-    {
-        size_t a_index = 0;
-        for (size_t i = 0; i < size; ++i)
-            res[i] = cond[i] ? static_cast<ResultType>(a[a_index++]) : static_cast<ResultType>(b[i]);
-    }
-    else if (b_is_short)
-    {
-        size_t b_index = 0;
-        for (size_t i = 0; i < size; ++i)
-            res[i] = cond[i] ? static_cast<ResultType>(a[i]) : static_cast<ResultType>(b[b_index++]);
-    }
-    else
-    {
-        for (size_t i = 0; i < size; ++i)
+        if constexpr (is_native_int_or_decimal_v<ResultType>)
+            res[i] = !!cond[i] * static_cast<ResultType>(a[i]) + (!cond[i]) * static_cast<ResultType>(b[i]);
+        else if constexpr (std::is_floating_point_v<ResultType>)
+        {
+            BRANCHFREE_IF_FLOAT(ResultType, cond[i], a[i], b[i], res[i])
+        }
+        else
+        {
             res[i] = cond[i] ? static_cast<ResultType>(a[i]) : static_cast<ResultType>(b[i]);
+        }
     }
 }
 
@@ -80,16 +104,15 @@ template <typename ArrayCond, typename ArrayA, typename B, typename ArrayResult,
 inline void fillVectorConstant(const ArrayCond & cond, const ArrayA & a, B b, ArrayResult & res)
 {
     size_t size = cond.size();
-    bool a_is_short = a.size() < size;
-    if (a_is_short)
+    for (size_t i = 0; i < size; ++i)
     {
-        size_t a_index = 0;
-        for (size_t i = 0; i < size; ++i)
-            res[i] = cond[i] ? static_cast<ResultType>(a[a_index++]) : static_cast<ResultType>(b);
-    }
-    else
-    {
-        for (size_t i = 0; i < size; ++i)
+        if constexpr (is_native_int_or_decimal_v<ResultType>)
+            res[i] = !!cond[i] * static_cast<ResultType>(a[i]) + (!cond[i]) * static_cast<ResultType>(b);
+        else if constexpr (std::is_floating_point_v<ResultType>)
+        {
+            BRANCHFREE_IF_FLOAT(ResultType, cond[i], a[i], b, res[i])
+        }
+        else
             res[i] = cond[i] ? static_cast<ResultType>(a[i]) : static_cast<ResultType>(b);
     }
 }
@@ -98,17 +121,47 @@ template <typename ArrayCond, typename A, typename ArrayB, typename ArrayResult,
 inline void fillConstantVector(const ArrayCond & cond, A a, const ArrayB & b, ArrayResult & res)
 {
     size_t size = cond.size();
-    bool b_is_short = b.size() < size;
-    if (b_is_short)
+    for (size_t i = 0; i < size; ++i)
     {
-        size_t b_index = 0;
+        if constexpr (is_native_int_or_decimal_v<ResultType>)
+            res[i] = !!cond[i] * static_cast<ResultType>(a) + (!cond[i]) * static_cast<ResultType>(b[i]);
+        else if constexpr (std::is_floating_point_v<ResultType>)
+        {
+            BRANCHFREE_IF_FLOAT(ResultType, cond[i], a, b[i], res[i])
+        }
+        else
+            res[i] = cond[i] ? static_cast<ResultType>(a) : static_cast<ResultType>(b[i]);
+    }
+}
+
+template <typename ArrayCond, typename A, typename B, typename ArrayResult, typename ResultType>
+inline void fillConstantConstant(const ArrayCond & cond, A a, B b, ArrayResult & res)
+{
+    size_t size = cond.size();
+
+    /// We manually optimize the loop for types like (U)Int128|256 or Decimal128/256 to avoid branches
+    if constexpr (is_over_big_int<ResultType>)
+    {
+        alignas(64) const ResultType ab[2] = {static_cast<ResultType>(a), static_cast<ResultType>(b)};
         for (size_t i = 0; i < size; ++i)
-            res[i] = cond[i] ? static_cast<ResultType>(a) : static_cast<ResultType>(b[b_index++]);
+        {
+            res[i] = ab[!cond[i]];
+        }
+    }
+    else if constexpr (std::is_same_v<ResultType, Decimal32> || std::is_same_v<ResultType, Decimal64>)
+    {
+        ResultType new_a = static_cast<ResultType>(a);
+        ResultType new_b = static_cast<ResultType>(b);
+        for (size_t i = 0; i < size; ++i)
+        {
+            /// Reuse new_a and new_b to achieve auto-vectorization
+            res[i] = cond[i] ? new_a : new_b;
+        }
     }
     else
     {
         for (size_t i = 0; i < size; ++i)
-            res[i] = cond[i] ? static_cast<ResultType>(a) : static_cast<ResultType>(b[i]);
+            res[i] = cond[i] ? static_cast<ResultType>(a) : static_cast<ResultType>(b);
     }
 }
 
@@ -215,9 +268,16 @@ class FunctionIf : public FunctionIfBase
 {
 public:
     static constexpr auto name = "if";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIf>(); }
+    static FunctionPtr create(ContextPtr context)
+    {
+        return std::make_shared<FunctionIf>(context->getSettingsRef().allow_experimental_variant_type && context->getSettingsRef().use_variant_as_common_type);
+    }
+
+    explicit FunctionIf(bool use_variant_when_no_common_type_ = false) : FunctionIfBase(), use_variant_when_no_common_type(use_variant_when_no_common_type_) {}
 
 private:
+    bool use_variant_when_no_common_type = false;
+
     template <typename T0, typename T1>
     static UInt32 decimalScale(const ColumnsWithTypeAndName & arguments [[maybe_unused]])
     {
@@ -226,7 +286,7 @@ private:
             UInt32 left_scale = getDecimalScale(*arguments[1].type);
             UInt32 right_scale = getDecimalScale(*arguments[2].type);
             if (left_scale != right_scale)
-                throw Exception("Conditional functions with different decimal scales", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Conditional functions with different decimal scales");
             return left_scale;
         }
         else
@@ -626,13 +686,17 @@ private:
     }
 
     static ColumnPtr executeGeneric(
-        const ColumnUInt8 * cond_col, const ColumnsWithTypeAndName & arguments, size_t input_rows_count)
+        const ColumnUInt8 * cond_col, const ColumnsWithTypeAndName & arguments, size_t input_rows_count, bool use_variant_when_no_common_type)
     {
         /// Convert both columns to the common type (if needed).
         const ColumnWithTypeAndName & arg1 = arguments[1];
         const ColumnWithTypeAndName & arg2 = arguments[2];
 
-        DataTypePtr common_type = getLeastSupertype(DataTypes{arg1.type, arg2.type});
+        DataTypePtr common_type;
+        if (use_variant_when_no_common_type)
+            common_type = getLeastSupertypeOrVariant(DataTypes{arg1.type, arg2.type});
+        else
+            common_type = getLeastSupertype(DataTypes{arg1.type, arg2.type});
 
         ColumnPtr col_then = castColumn(arg1, common_type);
         ColumnPtr col_else = castColumn(arg2, common_type);
@@ -642,9 +706,6 @@ private:
 
         bool then_is_const = isColumnConst(*col_then);
         bool else_is_const = isColumnConst(*col_else);
-
-        bool then_is_short = col_then->size() < cond_col->size();
-        bool else_is_short = col_else->size() < cond_col->size();
 
         const auto & cond_array = cond_col->getData();
 
@@ -665,37 +726,34 @@ private:
         {
             const IColumn & then_nested_column = assert_cast<const ColumnConst &>(*col_then).getDataColumn();
 
-            size_t else_index = 0;
             for (size_t i = 0; i < input_rows_count; ++i)
             {
                 if (cond_array[i])
                     result_column->insertFrom(then_nested_column, 0);
                 else
-                    result_column->insertFrom(*col_else, else_is_short ? else_index++ : i);
+                    result_column->insertFrom(*col_else, i);
             }
         }
         else if (else_is_const)
         {
             const IColumn & else_nested_column = assert_cast<const ColumnConst &>(*col_else).getDataColumn();
 
-            size_t then_index = 0;
             for (size_t i = 0; i < input_rows_count; ++i)
             {
                 if (cond_array[i])
-                    result_column->insertFrom(*col_then, then_is_short ? then_index++ : i);
+                    result_column->insertFrom(*col_then, i);
                 else
                     result_column->insertFrom(else_nested_column, 0);
             }
         }
         else
         {
-            size_t then_index = 0, else_index = 0;
             for (size_t i = 0; i < input_rows_count; ++i)
             {
                 if (cond_array[i])
-                    result_column->insertFrom(*col_then, then_is_short ? then_index++ : i);
+                    result_column->insertFrom(*col_then, i);
                 else
-                    result_column->insertFrom(*col_else, else_is_short ? else_index++ : i);
+                    result_column->insertFrom(*col_else, i);
             }
         }
 
@@ -754,8 +812,7 @@ private:
                     new_cond_column = ColumnConst::create(new_cond_column, column_size);
             }
             else
-                throw Exception("Illegal column " + arg_cond.column->getName() + " of " + getName() + " condition",
-                                ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of {} condition", arg_cond.column->getName(), getName());
 
             ColumnsWithTypeAndName temporary_columns
             {
@@ -808,6 +865,10 @@ private:
 
     ColumnPtr executeForNullableThenElse(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
     {
+        /// If result type is Variant, we don't need to remove Nullable.
+        if (isVariant(result_type))
+            return nullptr;
+
         const ColumnWithTypeAndName & arg_cond = arguments[0];
         const ColumnWithTypeAndName & arg_then = arguments[1];
         const ColumnWithTypeAndName & arg_else = arguments[2];
@@ -885,9 +946,6 @@ private:
         if (then_is_null && else_is_null)
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
 
-        bool then_is_short = arg_then.column->size() < arg_cond.column->size();
-        bool else_is_short = arg_else.column->size() < arg_cond.column->size();
-
         const ColumnUInt8 * cond_col = typeid_cast<const ColumnUInt8 *>(arg_cond.column.get());
         const ColumnConst * cond_const_col = checkAndGetColumnConst<ColumnVector<UInt8>>(arg_cond.column.get());
 
@@ -906,11 +964,19 @@ private:
             {
                 arg_else_column = arg_else_column->convertToFullColumnIfConst();
                 auto result_column = IColumn::mutate(std::move(arg_else_column));
-                if (else_is_short)
-                    result_column->expand(cond_col->getData(), true);
                 if (isColumnNullable(*result_column))
                 {
                     assert_cast<ColumnNullable &>(*result_column).applyNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column));
+                    return result_column;
+                }
+                else if (auto * variant_column = typeid_cast<ColumnVariant *>(result_column.get()))
+                {
+                    variant_column->applyNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column).getData());
+                    return result_column;
+                }
+                else if (auto * dynamic_column = typeid_cast<ColumnDynamic *>(result_column.get()))
+                {
+                    dynamic_column->applyNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column).getData());
                     return result_column;
                 }
                 else
@@ -924,9 +990,8 @@ private:
                     return makeNullableColumnIfNot(arg_else_column);
             }
             else
-                throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                    + ". Must be ColumnUInt8 or ColumnConstBool.",
-                    ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}. "
+                    "Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName());
         }
 
         /// If else is NULL, we create Nullable column with null mask OR-ed with negated condition.
@@ -944,12 +1009,20 @@ private:
             {
                 arg_then_column = arg_then_column->convertToFullColumnIfConst();
                 auto result_column = IColumn::mutate(std::move(arg_then_column));
-                if (then_is_short)
-                    result_column->expand(cond_col->getData(), false);
 
                 if (isColumnNullable(*result_column))
                 {
                     assert_cast<ColumnNullable &>(*result_column).applyNegatedNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column));
+                    return result_column;
+                }
+                else if (auto * variant_column = typeid_cast<ColumnVariant *>(result_column.get()))
+                {
+                    variant_column->applyNegatedNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column).getData());
+                    return result_column;
+                }
+                else if (auto * dynamic_column = typeid_cast<ColumnDynamic *>(result_column.get()))
+                {
+                    dynamic_column->applyNegatedNullMap(assert_cast<const ColumnUInt8 &>(*arg_cond.column).getData());
                     return result_column;
                 }
                 else
@@ -975,9 +1048,8 @@ private:
                     return result_type->createColumn()->cloneResized(input_rows_count);
             }
             else
-                throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                    + ". Must be ColumnUInt8 or ColumnConstBool.",
-                    ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}. "
+                    "Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName());
         }
 
         return nullptr;
@@ -1019,14 +1091,13 @@ public:
     bool useDefaultImplementationForNothing() const override { return false; }
     bool isShortCircuit(ShortCircuitSettings & settings, size_t /*number_of_arguments*/) const override
     {
-        settings.enable_lazy_execution_for_first_argument = false;
+        settings.arguments_with_disabled_lazy_execution.insert(0);
         settings.enable_lazy_execution_for_common_descendants_of_arguments = false;
         settings.force_enable_lazy_execution = false;
         return true;
     }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
     ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t /*number_of_arguments*/) const override { return {0}; }
-
     bool canBeExecutedOnLowCardinalityDictionary() const override { return false; }
 
     /// Get result types by argument types. If the function does not apply to these arguments, throw an exception.
@@ -1040,8 +1111,11 @@ public:
                 removeNullable(arguments[0]), arguments[1], arguments[2]});
 
         if (!WhichDataType(arguments[0]).isUInt8())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument (condition) of function if. Must be uint8 or bool.",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of first argument (condition) of function if. "
+                "Must be uint8 or bool", arguments[0]->getName());
+
+        if (use_variant_when_no_common_type)
+            return getLeastSupertypeOrVariant(DataTypes{arguments[1], arguments[2]});
 
         return getLeastSupertype(DataTypes{arguments[1], arguments[2]});
     }
@@ -1087,9 +1161,8 @@ public:
         }
 
         if (!cond_col)
-            throw Exception("Illegal column " + arg_cond.column->getName() + " of first argument of function " + getName()
-                + ". Must be ColumnUInt8 or ColumnConstBool.",
-                ErrorCodes::ILLEGAL_COLUMN);
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of first argument of function {}. "
+                "Must be ColumnUInt8 or ColumnConstUInt8.", arg_cond.column->getName(), getName());
 
         auto call = [&](const auto & types) -> bool
         {
@@ -1116,7 +1189,7 @@ public:
             || (res = executeGenericArray(cond_col, arguments, result_type))
             || (res = executeTuple(arguments, result_type, input_rows_count))))
         {
-            return executeGeneric(cond_col, arguments, input_rows_count);
+            return executeGeneric(cond_col, arguments, input_rows_count, use_variant_when_no_common_type);
         }
 
         return res;

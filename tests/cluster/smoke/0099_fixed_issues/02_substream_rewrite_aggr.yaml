@@ -1,0 +1,80 @@
+tags:
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: (#1395) rewrited aggregate function with substream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_substream_1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_substream_1
+        (
+          id int, 
+          value int
+        )
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: 9900
+    query_id: '9900'
+    query: select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from test_substream_1 partition by id order by id limit 2
+    schema:
+      - name: id
+        type: int32
+      - name: min_k(value, 1)
+        type: array(int32)
+      - name: max_k(value, 1)
+        type: array(int32)
+      - name: top_k(value, 1)
+        type: array(int32)
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_substream_1(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: int32
+    inputs:
+      - [1, 1]
+      - [2, 2]
+      - [2, 1]
+      - [1, 2]
+      - [2, 1]
+      - [1, 2]
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 9901
+    query_id: '9901'
+    query: select id, min_k(value, 1), max_k(value, 1), top_k(value, 1) from table(test_substream_1) partition by id group by id order by id
+    schema:
+      - name: id
+        type: int32
+      - name: min_k(value, 1)
+        type: array(int32)
+      - name: max_k(value, 1)
+        type: array(int32)
+      - name: top_k(value, 1)
+        type: array(int32)
+  
+  - type: check
+    target_name: 9900
+    expected_result:
+      - [1, [1], [2], [2]]
+      - [2, [1], [2], [1]]
+
+  - type: check
+    target_name: 9901
+    expected_result:
+      - [1, [1], [2], [2]]
+      - [2, [1], [2], [1]]

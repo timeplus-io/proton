@@ -1,0 +1,58 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (valuea int, valueb float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_equals(valuea int, valueb float) RETURNS bool LANGUAGE PYTHON AS
+      $$
+      def custom_equals(x, y):
+          if x == y and type(x) == y:
+              return True
+          return False
+
+      def test_equals(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              temp_equals = custom_equals(a, b)
+              res.append(temp_equals)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-4-1
+    type: stream
+    query: select test_equals(valuea, valueb) as res, valuea, valueb from udf_stream;
+    schema:
+      - name: res
+        type: bool
+      - name: valuea
+        type: int32
+      - name: valueb
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(valuea, valueb) values (1, 1.0)(2, 2)(3, 3.1);
+
+  - type: check
+    target_name: python-udf1-4-1
+    expected_result:
+      - [False, 1, 1.0]
+      - [False, 2, 2]
+      - [False, 3, 3.1]

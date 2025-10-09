@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_round(value float) RETURNS float LANGUAGE PYTHON AS
+      $$
+      def test_round(value):
+          res = [round(x, 2) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-14-1
+    type: stream
+    query: select test_round(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: value
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (2.6)(2.67)(2.675);
+
+  - type: check
+    target_name: python-udf1-14-1
+    expected_result:
+      - [2.6, 2.6]
+      - [2.67, 2.67]
+      - [2.67, 2.675]

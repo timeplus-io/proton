@@ -48,7 +48,7 @@ public:
 	virtual ~TCPServerConnectionFactory();
 		/// Destroys the TCPServerConnectionFactory.
 
-	virtual TCPServerConnection* createConnection(const StreamSocket& socket) = 0;
+	virtual std::shared_ptr<TCPServerConnection> createConnection(const StreamSocket& socket) = 0;
 		/// Creates an instance of a subclass of TCPServerConnection,
 		/// using the given StreamSocket.
 
@@ -76,9 +76,9 @@ public:
 	{
 	}
 	
-	TCPServerConnection* createConnection(const StreamSocket& socket)
+	std::shared_ptr<TCPServerConnection> createConnection(const StreamSocket& socket)
 	{
-		return new S(socket);
+		return std::make_shared<S>(socket);
 	}
 };
 

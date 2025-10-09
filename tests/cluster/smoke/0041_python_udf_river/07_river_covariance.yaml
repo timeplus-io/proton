@@ -1,0 +1,75 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.active function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x float, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getCovariance(x float, y float) RETURNS string LANGUAGE PYTHON AS $$
+      import pickle
+      from river import covariance
+
+      class getCovariance:
+          def __init__(self):
+              self.cov = ''
+
+          def serialize(self):
+              data = {}
+              data['cov'] = self.cov
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.cov = data['cov']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys):
+              dataset = []
+              for x, y in zip(xs, ys):
+                  dataset.append({"red":x,"green":y})
+              cov = covariance.EmpiricalCovariance()
+              for d in dataset:
+                  cov.update(d)
+                  self.cov = str(cov["red","green"])
+
+          def finalize(self):
+              return self.cov
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf13-7-1
+    type: stream
+    query: select getCovariance(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into uda_stream(x, y) values
+        (0.37, 0.95) (0.73, 0.59)
+        (0.15, 0.15) (0.05, 0.86)
+        (0.6, 0.7) (0.02, 0.96);
+
+  - type: check
+    target_name: python-udf13-7-1
+    expected_result:
+      - ['Cov: -0.01206']

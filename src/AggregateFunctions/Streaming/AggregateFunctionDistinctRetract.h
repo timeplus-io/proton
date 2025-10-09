@@ -3,10 +3,12 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/Streaming/CountedValueMap.h>
 
-#include <IO/WriteBuffer.h>
-#include <IO/WriteHelpers.h>
+#include <Common/serde.h>
+
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -18,43 +20,58 @@ constexpr uint32_t INTERNAL_MAP_SIZE = 0xFFFFFFFF;
 
 struct AggregateFunctionDistinctRetractGenericData
 {
-    /// proton: starts.
     /// When creating, the hash table must be small.
     using Map = CountedValueMap<StringRef, false>; /// map<key(without delta_col), uint32>
     using Self = AggregateFunctionDistinctRetractGenericData;
     Map map;
+
     std::vector<std::pair<std::string, int8_t>> extra_data_since_last_finalize; /// first element is key, second one is delta_col
-    bool use_extra_data = false;  /// Optimized, only streaming global aggregation query need to use extra data after first finalization.
-    /// proton: ends.
+
+    bool use_extra_data = false; /// not used, but is kept for backward compatibility
+
+    NO_SERDE std::vector<uintptr_t> merged_places;
 
     AggregateFunctionDistinctRetractGenericData() : map(INTERNAL_MAP_SIZE) { }
 
-    void merge(const Self & rhs, Arena *)
+    void merge(const Self & rhs)
     {
-        /// proton: starts.
-        if (rhs.use_extra_data)
+        for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
         {
-            for (const auto & [key, delta_col] : rhs.extra_data_since_last_finalize)
+            const auto & pairs = *next;
+            if (rhs.map.contains(pairs.first))
             {
-                bool inserted = map.insert(key);
-                if (use_extra_data && inserted)
-                    extra_data_since_last_finalize.emplace_back(key, delta_col);
+                bool is_new_data = std::find_if(
+                                       (rhs.extra_data_since_last_finalize).begin(),
+                                       (rhs.extra_data_since_last_finalize).end(),
+                                       [pairs](const std::pair<std::string, int8_t> & elem) {
+                                           return elem.first == pairs.first && elem.second == pairs.second;
+                                       })
+                    != (rhs.extra_data_since_last_finalize).end();
+                if (is_new_data)
+                    ++next;
+                else
+                    next = extra_data_since_last_finalize.erase(next);
+            }
+            else
+            {
+                ++next;
             }
         }
-        else if (use_extra_data)
+
+        /// Merge and deduplicate rhs' extra data
+        for (const auto & [key, delta_col] : rhs.extra_data_since_last_finalize)
         {
-            for (const auto & [key, count] : rhs.map)
-            {
-                bool inserted = map.insert(key, count);
-                if (inserted)
-                    extra_data_since_last_finalize.emplace_back(key.toString(), +1);
-            }
+            bool inserted = map.insert(key, delta_col);
+            if (inserted)
+                extra_data_since_last_finalize.emplace_back(key, delta_col);
         }
-        else
-        {
-            map.merge(rhs.map);
-        }
-        /// proton: ends.
+
+        map.merge(rhs.map);
+
+        uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(), merged_place);
+        if (find_place == merged_places.end())
+            merged_places.emplace_back(merged_place);
     }
 
     void serialize(WriteBuffer & buf) const
@@ -70,20 +87,20 @@ struct AggregateFunctionDistinctRetractGenericData
         writeBoolText(use_extra_data, buf);
     }
 
-    void deserialize(ReadBuffer & buf, Arena * arena)
+    void deserialize(ReadBuffer & buf)
     {
         map.clear();
 
         size_t map_size;
         readVarUInt(map_size, buf);
 
+        StringRef val;
         uint32_t count;
         for (size_t i = 0; i < map_size; ++i)
         {
-            StringRef ref = readStringBinaryInto(*arena, buf);
+            val = readStringBinaryInto(*map.getArena().getArenaWithFreeLists(), buf);
             readVarUInt(count, buf);
-            map.insert(ref, count);
-            arena->rollback(ref.size);
+            map.insert</*preallocated=*/true>(std::move(val), count);
         }
 
         readVectorBinary(extra_data_since_last_finalize, buf);
@@ -98,8 +115,19 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
         /// proton: starts.
         auto iter = map.emplace(key);
         bool is_new_inserted_key = (iter != map.end() && iter->second == 1);
-        if (use_extra_data && is_new_inserted_key)
-            extra_data_since_last_finalize.emplace_back(key.toString(), +1); /// insert a copy versioned key
+        if (is_new_inserted_key)
+        {
+            std::pair<std::string, int8_t> target = {key.toString(), -1};
+            auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), target);
+            if (it == extra_data_since_last_finalize.end())
+            {
+                extra_data_since_last_finalize.emplace_back(key.toString(), +1); /// insert a copy versioned key
+            }
+            else
+            {
+                extra_data_since_last_finalize.erase(it);
+            }
+        }
         /// proton: ends.
     }
 
@@ -108,7 +136,7 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
         /// proton: starts.
         [[maybe_unused]] bool erase_success = map.erase(key);
         assert(erase_success);
-        if (use_extra_data && !map.contains(key))
+        if (!map.contains(key))
             extra_data_since_last_finalize.emplace_back(key.toString(), -1);
         /// proton: ends.
     }
@@ -120,32 +148,16 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
         for (size_t i = 0; i < argument_size; ++i)
             argument_columns[i] = argument_types[i]->createColumn();
 
-        /// proton: starts.
-        if (use_extra_data)
+        for (const auto & [key, delta_col] : extra_data_since_last_finalize)
         {
-            for (const auto & [key, delta_col] : extra_data_since_last_finalize)
-            {
-                /// serialize key
-                const char * begin = key.c_str();
-                for (size_t i = 0; i < argument_size - 1; ++i)
-                    begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
+            /// serialize key
+            const char * begin = key.c_str();
+            for (size_t i = 0; i < argument_size - 1; ++i)
+                begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
 
-                /// insert delta_col
-                argument_columns.back()->insert(delta_col);
-            }
+            /// insert delta_col
+            argument_columns.back()->insert(delta_col);
         }
-        else
-        {
-            for (const auto & [key, _] : map)
-            {
-                const char * begin = key.data;
-                for (size_t i = 0; i < argument_size - 1; ++i)
-                    begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
-
-                argument_columns.back()->insert(Int8(1));
-            }
-        }
-        /// proton: ends.
 
         return argument_columns;
     }
@@ -162,62 +174,42 @@ protected:
     size_t prefix_size;
     size_t arguments_num;
 
-    AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept
-    {
-        return place + prefix_size;
-    }
+    AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
-    ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept
-    {
-        return place + prefix_size;
-    }
+    ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
 public:
     AggregateFunctionDistinctRetract(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
-    : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinctRetract>(arguments, params_)
-    , nested_func(nested_func_)
-    , arguments_num(arguments.size())
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinctRetract>(arguments, params_, nested_func_->getResultType())
+        , nested_func(nested_func_)
+        , arguments_num(arguments.size())
     {
         size_t nested_size = nested_func->alignOfData();
         prefix_size = (sizeof(Data) + nested_size - 1) / nested_size * nested_size;
     }
 
-    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const char * begin = nullptr;
-        StringRef value(begin, 0);
+        WriteBufferFromOwnString buf;
         /// We do not serialize the `delta_col` because it is meaningless; calling the `add()` function with only +1 is sufficient.
         for (size_t i = 0; i < arguments_num - 1; ++i)
-        {
-            auto cur_ref = columns[i]->serializeValueIntoArena(row_num, *arena, begin);
-            value.data = cur_ref.data - value.size;
-            value.size += cur_ref.size;
-        }
+            columns[i]->serializeValueIntoBuffer(row_num, buf);
 
-        this->data(place).add(value);
-        /// Rollback the operation since the arena in this function serves as a data serialization buffer.
-        arena->rollback(value.size);
+        this->data(place).add(buf.str());
     }
 
-    void negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    void negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const char * begin = nullptr;
-        StringRef value(begin, 0);
+        WriteBufferFromOwnString buf;
         for (size_t i = 0; i < arguments_num - 1; ++i)
-        {
-            auto cur_ref = columns[i]->serializeValueIntoArena(row_num, *arena, begin);
-            value.data = cur_ref.data - value.size;
-            value.size += cur_ref.size;
-        }
+            columns[i]->serializeValueIntoBuffer(row_num, buf);
 
-        this->data(place).negate(value);
-
-        arena->rollback(value.size);
+        this->data(place).negate(buf.str());
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
-        this->data(place).merge(this->data(rhs), arena);
+        this->data(place).merge(this->data(rhs));
         nested_func->merge(getNestedPlace(place), getNestedPlace(rhs), arena);
     }
 
@@ -229,14 +221,15 @@ public:
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
-        this->data(place).deserialize(buf, arena);
+        this->data(place).deserialize(buf);
         nested_func->deserialize(getNestedPlace(place), buf, std::nullopt /* version */, arena);
     }
 
     template <bool MergeResult>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
     {
-        auto arguments = this->data(place).getArguments(this->argument_types);
+        auto & data = this->data(place);
+        auto arguments = data.getArguments(this->argument_types);
         ColumnRawPtrs arguments_raw(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
             arguments_raw[i] = arguments[i].get();
@@ -257,10 +250,22 @@ public:
         else
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
-        /// proton: starts. Next finalization will use extra data, used buf streaming global aggregation query.
-        this->data(place).use_extra_data = true;
-        this->data(place).extra_data_since_last_finalize.clear();
-        /// proton: ends.
+        /// Clear all the extra data in related blocks
+        for (auto & merged_place : data.merged_places)
+            this->data(reinterpret_cast<AggregateDataPtr>(merged_place)).extra_data_since_last_finalize.clear();
+
+        if (!data.merged_places.empty())
+            nested_func->addBatchSinglePlace(
+                0,
+                arguments[0]->size(),
+                getNestedPlace(reinterpret_cast<AggregateDataPtr>(data.merged_places[0])),
+                arguments_raw.data(),
+                arena,
+                -1 /* if_argument_pos */,
+                *(arguments_raw.end() - 1) /* delta_col */);
+
+        data.extra_data_since_last_finalize.clear();
+        data.merged_places.clear();
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
@@ -273,10 +278,7 @@ public:
         insertResultIntoImpl<true>(place, to, arena);
     }
 
-    size_t sizeOfData() const override
-    {
-        return prefix_size + nested_func->sizeOfData();
-    }
+    size_t sizeOfData() const override { return prefix_size + nested_func->sizeOfData(); }
 
     void create(AggregateDataPtr __restrict place) const override
     {
@@ -290,10 +292,7 @@ public:
         nested_func->destroy(getNestedPlace(place));
     }
 
-    bool hasTrivialDestructor() const override
-    {
-        return std::is_trivially_destructible_v<Data> && nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return std::is_trivially_destructible_v<Data> && nested_func->hasTrivialDestructor(); }
 
     void destroyUpToState(AggregateDataPtr __restrict place) const noexcept override
     {
@@ -301,40 +300,17 @@ public:
         nested_func->destroyUpToState(getNestedPlace(place));
     }
 
-    String getName() const override
-    {
-        return nested_func->getName() + "_distinct_retract";
-    }
+    String getName() const override { return nested_func->getName() + "_distinct_retract"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return nested_func->getReturnType();
-    }
+    bool allocatesMemoryInArena() const override { return nested_func->allocatesMemoryInArena(); }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool isState() const override { return nested_func->isState(); }
 
-    bool isState() const override
-    {
-        return nested_func->isState();
-    }
+    bool isVersioned() const override { return nested_func->isVersioned(); }
 
-    bool isVersioned() const override
-    {
-        return nested_func->isVersioned();
-    }
+    size_t getVersionFromRevision(size_t revision) const override { return nested_func->getVersionFromRevision(revision); }
 
-    size_t getVersionFromRevision(size_t revision) const override
-    {
-        return nested_func->getVersionFromRevision(revision);
-    }
-
-    size_t getDefaultVersion() const override
-    {
-        return nested_func->getDefaultVersion();
-    }
+    size_t getDefaultVersion() const override { return nested_func->getDefaultVersion(); }
 
     AggregateFunctionPtr getNestedFunction() const override { return nested_func; }
 };

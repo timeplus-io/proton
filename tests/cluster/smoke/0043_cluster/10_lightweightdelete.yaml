@@ -1,0 +1,173 @@
+tags:
+  - distributed
+  - lightweightdelete
+  - materialized-view
+
+description: |
+  Tests covering lightweight delete operations in a distributed environment
+  Main steps:
+    1. Create stream with lightweight delete enabled
+    2. Create materialized view based on the stream
+    3. Insert data into the stream
+    4. Perform lightweight delete operations
+    5. Verify data after delete operations
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  # Cleanup before test
+  - type: query
+    sql: drop view if exists delete_test_mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists delete_test;
+  - type: wait
+    time: 1
+
+  # Create main stream with lightweight delete enabled
+  - type: query
+    sql: |
+      CREATE STREAM delete_test (
+        id uint32,
+        value string,
+        timestamp datetime64(3)
+      )
+  - type: wait
+    time: 1
+
+  # Create materialized view
+  - type: query
+    sql: CREATE MATERIALIZED VIEW delete_test_mv AS SELECT * FROM delete_test;
+  - type: wait
+    time: 2
+
+  # Insert test data
+  - type: query
+    sql: |
+      INSERT INTO delete_test (id, value, timestamp)
+      SELECT 
+        number as id,
+        concat('value_', to_string(number)) as value,
+        now() as timestamp
+      FROM numbers(1000);
+  - type: wait
+    time: 2
+
+  # Perform lightweight delete
+  - type: query
+    sql: ALTER STREAM delete_test UPDATE _row_exists = 0 WHERE id % 2 = 0;
+  - type: wait
+    time: 5
+
+  # Verify data after delete on node p1
+  - name: delete-check-1
+    type: stream
+    query: SELECT count() as cnt FROM table(delete_test);
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: delete-check-1
+    expected_result:
+      - [500]
+
+  # Verify all remaining ids are odd
+  - name: delete-check-2
+    type: stream
+    query: SELECT count() as cnt FROM table(delete_test) WHERE id % 2 = 0;
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: delete-check-2
+    expected_result:
+      - [0]
+
+  # Insert new data after delete
+  - type: query
+    sql: |
+      INSERT INTO delete_test (id, value, timestamp)
+      VALUES (2000, 'new_value', now());
+  - type: wait
+    time: 2
+
+  # Verify new data insertion works after delete
+  - name: insert-check
+    type: stream
+    query: SELECT count() as cnt FROM table(delete_test_mv) WHERE id = 2000;
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: insert-check
+    expected_result:
+      - [1]
+
+  # Perform lightweight delete again
+  - type: query
+    sql: DELETE FROM delete_test WHERE id % 2 = 1;
+  - type: wait
+    time: 5
+
+  # Verify data after delete on node p1
+  - name: delete-check-3
+    type: stream
+    query: SELECT count() as cnt FROM table(delete_test);
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: delete-check-3
+    expected_result:
+      - [1]
+
+  # Verify all remaining ids are odd
+  - name: delete-check-4
+    type: stream
+    query: SELECT count() as cnt FROM table(delete_test) WHERE id % 2 = 1;
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: delete-check-4
+    expected_result:
+      - [0]
+
+  # Insert new data after delete
+  - type: query
+    sql: |
+      INSERT INTO delete_test (id, value, timestamp)
+      VALUES (2003, 'new_value', now());
+  - type: wait
+    time: 2
+
+  # Verify new data insertion works after delete
+  - name: insert-check
+    type: stream
+    query: SELECT count() as cnt FROM table(delete_test_mv) WHERE id = 2003;
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: insert-check
+    expected_result:
+      - [1]
+
+  # Cleanup
+  - type: query
+    sql: drop view if exists delete_test_mv;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists delete_test;

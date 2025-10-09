@@ -1,0 +1,176 @@
+tags:
+- append_only
+- hybrid hash mode
+- materialized view
+
+description: global aggr over global over append-only stream, covering outer aggr with/without group by and memory/hybird hash mode
+
+steps:
+- type: query
+  sql: drop view if exists test_31_mv1;
+
+- type: query
+  sql: drop view if exists test_31_mv2;
+
+- type: query
+  sql: drop view if exists test_31_mv3;
+
+- type: query
+  sql: drop view if exists test_31_mv4;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test_31_mv_stream;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    create stream test_31_mv_stream (
+      i int32,
+      s string,
+      f float32,
+      dt datetime64(3) DEFAULT now64(3)
+    );
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    create materialized view test_31_mv1 as
+    select count(), min(sum)
+    from (select i, s, max(dt), sum(f) as sum from test_31_mv_stream group by s, i emit periodic 1ms)
+    settings default_hash_table='memory';
+
+- type: query
+  sql: |
+    create materialized view test_31_mv2 as
+    select i, count(), min(sum)
+    from (select i, s, max(dt), sum(f) as sum from test_31_mv_stream group by s, i emit periodic 1ms) group by i
+    settings default_hash_table='memory';
+
+- type: query
+  sql: |
+    create materialized view test_31_mv3 as
+    select count(), min(sum)
+    from (select i, s, max(dt), sum(f) as sum from test_31_mv_stream group by s, i emit periodic 1ms)
+    settings default_hash_table='hybrid';
+
+- type: query
+  sql: |
+    create materialized view test_31_mv4 as
+    select i, count(), min(sum)
+    from (select i, s, max(dt), sum(f) as sum from test_31_mv_stream group by s, i emit periodic 1ms) group by i
+    settings default_hash_table='hybrid';
+
+- type: wait
+  time: 4
+
+- name: 3100
+  type: stream
+  query: select * except (_tp_time) from test_31_mv1;
+  schema:
+    - name: count()
+      type: uint64
+    - name: min(sum)
+      type: float64
+
+- name: 3101
+  type: stream
+  query: select * except (_tp_time) from test_31_mv2;
+  schema:
+    - name: i
+      type: int32
+    - name: count()
+      type: uint64
+    - name: min(sum)
+      type: float64
+
+- name: 3102
+  type: stream
+  query: select * except (_tp_time) from test_31_mv3;
+  schema:
+    - name: count()
+      type: uint64
+    - name: min(sum)
+      type: float64
+
+- name: 3103
+  type: stream
+  query: select * except (_tp_time) from test_31_mv4;
+  schema:
+    - name: i
+      type: int32
+    - name: count()
+      type: uint64
+    - name: min(sum)
+      type: float64
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    insert into test_31_mv_stream (i, s, f, dt) values
+    (1, 's1', 11.1, '2025-01-01 20:00:00')
+    (2, 's2', 22.1, '2025-01-01 20:00:01');
+
+- type: query
+  sql: |
+    insert into test_31_mv_stream (i, s, f, dt) values
+    (1, 's1', 11.2, '2025-01-01 20:00:02')
+    (1, 's2', 11.3, '2025-01-01 20:00:03')
+    (2, 's2', 22.2, '2025-01-01 20:00:04')
+    (2, 's2', 22.3, '2025-01-01 20:00:05');
+
+- type: query
+  sql: |
+    insert into test_31_mv_stream (i, s, f, dt) values
+    (1, 's1', 11.4, '2025-01-01 20:00:06')
+    (1, 's2', 11.5, '2025-01-01 20:00:07')
+    (2, 's2', 22.4, '2025-01-01 20:00:08')
+    (2, 's2', 22.5, '2025-01-01 20:00:09')
+    (3, 's3', 33.1, '2025-01-01 20:00:10')
+    (3, 's4', 33.2, '2025-01-01 20:00:11')
+    (3, 's5', 33.3, '2025-01-01 20:00:12');
+
+- type: check
+  target_name: 3100
+  expected_result:
+  - [2, 11.1]
+  - [3, 11.3]
+  - [6, 22.8]
+
+- type: check
+  target_name: 3101
+  expected_result:
+  - [2, 1, 22.1]
+  - [1, 1, 11.1]
+  - [2, 1, 66.6]
+  - [1, 2, 11.3]
+  - [3, 3, 33.1]
+  - [2, 1, 111.5]
+  - [1, 2, 22.8]
+
+- type: check
+  target_name: 3102
+  expected_result:
+  - [2, 11.1]
+  - [3, 11.3]
+  - [6, 22.8]
+
+- type: check
+  target_name: 3103
+  mode: random
+  expected_result:
+  - [2, 1, 22.1]
+  - [1, 1, 11.1]
+  - [2, 1, 66.6]
+  - [1, 2, 11.3]
+  - [3, 3, 33.1]
+  - [2, 1, 111.5]
+  - [1, 2, 22.8]

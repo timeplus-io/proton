@@ -1,0 +1,82 @@
+tags:
+  - dedup
+description: create a stream t_dedup, and create a view with dedup, tumble on the
+  view to check dedup
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop view if exists dedup_v
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists t_dedup
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_dedup(id int, value int, time datetime64(3,'UTC'))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create view dedup_v as
+      select id, value, time, to_string(time) as time_string
+      from dedup(t_dedup, id, value, to_string(time))
+
+  - type: wait
+    time: 1
+  
+  - name: 801-1
+    type: stream
+    query: |
+      select emit_version(), id, count()
+      from tumble(dedup_v, time, 5s)
+      group by id, window_end
+    schema:
+      - name: emit_version()
+        type: int64
+      - name: id
+        type: int32
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into t_dedup(id, value, time)
+      values
+      (1, 10, '2020-01-01 00:00:00'),
+      (2, 10, '2020-01-01 00:00:00'),
+      (3, 10, '2020-01-01 00:00:00'),
+      (1, 10, '2020-01-01 00:00:00'),
+      (2, 10, '2020-01-01 00:00:00'),
+      (3, 10, '2020-01-01 00:00:00'),
+      (1, 10, '2020-01-01 00:00:05'),
+      (1, 10, '2020-01-01 00:00:06')
+
+  - type: check
+    target_name: 801-1
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - [ '0', '3', 1 ]
+      - [ '0', '2', 1 ]
+      - [ '0', '1', 1 ]
+
+  - type: query
+    sql: drop view if exists dedup_v
+
+  - type: wait
+    time: 2
+

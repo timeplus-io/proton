@@ -51,7 +51,7 @@ private:
     ChunkList output_chunks;
 
     /// int64_t last_log_ts = 0;
-    /// Poco::Logger * logger;
+    /// LoggerPtr logger;
 };
 }
 }

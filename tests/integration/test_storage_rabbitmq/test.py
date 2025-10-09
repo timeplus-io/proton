@@ -2279,7 +2279,914 @@ def test_rabbitmq_predefined_configuration(rabbitmq_cluster):
             break
 
 
-if __name__ == '__main__':
-    cluster.start()
-    input("Cluster created, press any key to destroy...")
-    cluster.shutdown()
+def test_format_with_prefix_and_suffix(rabbitmq_cluster):
+    instance.query(
+        """
+        CREATE TABLE test.rabbitmq (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                     rabbitmq_exchange_name = 'insert',
+                     rabbitmq_exchange_type = 'direct',
+                     rabbitmq_routing_key_list = 'custom',
+                     rabbitmq_format = 'CustomSeparated';
+    """
+    )
+
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    consumer_connection = pika.BlockingConnection(parameters)
+
+    consumer = consumer_connection.channel()
+    result = consumer.queue_declare(queue="")
+    queue_name = result.method.queue
+    consumer.queue_bind(exchange="insert", queue=queue_name, routing_key="custom")
+
+    instance.query(
+        "INSERT INTO test.rabbitmq select number*10 as key, number*100 as value from numbers(2) settings format_custom_result_before_delimiter='<prefix>\n', format_custom_result_after_delimiter='<suffix>\n'"
+    )
+
+    insert_messages = []
+
+    def onReceived(channel, method, properties, body):
+        insert_messages.append(body.decode())
+        if len(insert_messages) == 2:
+            channel.stop_consuming()
+
+    consumer.basic_consume(onReceived, queue_name)
+    consumer.start_consuming()
+    consumer_connection.close()
+
+    assert (
+        "".join(insert_messages)
+        == "<prefix>\n0\t0\n<suffix>\n<prefix>\n10\t100\n<suffix>\n"
+    )
+
+
+def test_max_rows_per_message(rabbitmq_cluster):
+    num_rows = 5
+
+    instance.query(
+        """
+        DROP TABLE IF EXISTS test.view;
+        DROP TABLE IF EXISTS test.rabbit;
+
+        CREATE TABLE test.rabbit (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                     rabbitmq_format = 'CustomSeparated',
+                     rabbitmq_exchange_name = 'custom',
+                     rabbitmq_exchange_type = 'direct',
+                     rabbitmq_routing_key_list = 'custom1',
+                     rabbitmq_max_rows_per_message = 3,
+                     format_custom_result_before_delimiter = '<prefix>\n',
+                     format_custom_result_after_delimiter = '<suffix>\n';
+
+        CREATE MATERIALIZED VIEW test.view Engine=Log AS
+            SELECT key, value FROM test.rabbit;
+    """
+    )
+
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    consumer_connection = pika.BlockingConnection(parameters)
+
+    consumer = consumer_connection.channel()
+    result = consumer.queue_declare(queue="")
+    queue_name = result.method.queue
+    consumer.queue_bind(exchange="custom", queue=queue_name, routing_key="custom1")
+
+    instance.query(
+        f"INSERT INTO test.rabbit select number*10 as key, number*100 as value from numbers({num_rows}) settings format_custom_result_before_delimiter='<prefix>\n', format_custom_result_after_delimiter='<suffix>\n'"
+    )
+
+    insert_messages = []
+
+    def onReceived(channel, method, properties, body):
+        insert_messages.append(body.decode())
+        if len(insert_messages) == 2:
+            channel.stop_consuming()
+
+    consumer.basic_consume(onReceived, queue_name)
+    consumer.start_consuming()
+    consumer_connection.close()
+
+    assert len(insert_messages) == 2
+
+    assert (
+        "".join(insert_messages)
+        == "<prefix>\n0\t0\n10\t100\n20\t200\n<suffix>\n<prefix>\n30\t300\n40\t400\n<suffix>\n"
+    )
+
+    attempt = 0
+    rows = 0
+    while attempt < 100:
+        rows = int(instance.query("SELECT count() FROM test.view"))
+        if rows == num_rows:
+            break
+        attempt += 1
+
+    assert rows == num_rows
+
+    result = instance.query("SELECT * FROM test.view")
+    assert result == "0\t0\n10\t100\n20\t200\n30\t300\n40\t400\n"
+
+
+def test_row_based_formats(rabbitmq_cluster):
+    num_rows = 10
+
+    for format_name in [
+        "TSV",
+        "TSVWithNamesAndTypes",
+        "TSKV",
+        "CSV",
+        "CSVWithNamesAndTypes",
+        "CustomSeparatedWithNamesAndTypes",
+        "Values",
+        "JSON",
+        "JSONEachRow",
+        "JSONCompactEachRow",
+        "JSONCompactEachRowWithNamesAndTypes",
+        "JSONObjectEachRow",
+        "Avro",
+        "RowBinary",
+        "RowBinaryWithNamesAndTypes",
+        "MsgPack",
+    ]:
+        print(format_name)
+
+        instance.query(
+            f"""
+            DROP TABLE IF EXISTS test.view;
+            DROP TABLE IF EXISTS test.rabbit;
+
+            CREATE TABLE test.rabbit (key UInt64, value UInt64)
+                ENGINE = RabbitMQ
+                SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                         rabbitmq_format = '{format_name}',
+                         rabbitmq_exchange_name = '{format_name}',
+                         rabbitmq_exchange_type = 'direct',
+                         rabbitmq_routing_key_list = '{format_name}',
+                         rabbitmq_max_rows_per_message = 5;
+    
+            CREATE MATERIALIZED VIEW test.view Engine=Log AS
+                SELECT key, value FROM test.rabbit;
+        """
+        )
+
+        credentials = pika.PlainCredentials("root", "clickhouse")
+        parameters = pika.ConnectionParameters(
+            rabbitmq_cluster.rabbitmq_ip,
+            rabbitmq_cluster.rabbitmq_port,
+            "/",
+            credentials,
+        )
+        consumer_connection = pika.BlockingConnection(parameters)
+
+        consumer = consumer_connection.channel()
+        result = consumer.queue_declare(queue="")
+        queue_name = result.method.queue
+        consumer.queue_bind(
+            exchange=format_name, queue=queue_name, routing_key=format_name
+        )
+
+        instance.query(
+            f"INSERT INTO test.rabbit SELECT number * 10 as key, number * 100 as value FROM numbers({num_rows});"
+        )
+
+        insert_messages = 0
+
+        def onReceived(channel, method, properties, body):
+            nonlocal insert_messages
+            insert_messages += 1
+            if insert_messages == 2:
+                channel.stop_consuming()
+
+        consumer.basic_consume(onReceived, queue_name)
+        consumer.start_consuming()
+        consumer_connection.close()
+
+        assert insert_messages == 2
+
+        attempt = 0
+        rows = 0
+        while attempt < 100:
+            rows = int(instance.query("SELECT count() FROM test.view"))
+            if rows == num_rows:
+                break
+            attempt += 1
+
+        assert rows == num_rows
+
+        expected = ""
+        for i in range(num_rows):
+            expected += str(i * 10) + "\t" + str(i * 100) + "\n"
+
+        result = instance.query("SELECT * FROM test.view")
+        assert result == expected
+
+
+def test_block_based_formats_1(rabbitmq_cluster):
+    instance.query(
+        """
+        CREATE TABLE test.rabbitmq (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                     rabbitmq_exchange_name = 'PrettySpace',
+                     rabbitmq_exchange_type = 'direct',
+                     rabbitmq_routing_key_list = 'PrettySpace',
+                     rabbitmq_format = 'PrettySpace';
+    """
+    )
+
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    consumer_connection = pika.BlockingConnection(parameters)
+
+    consumer = consumer_connection.channel()
+    result = consumer.queue_declare(queue="")
+    queue_name = result.method.queue
+    consumer.queue_bind(
+        exchange="PrettySpace", queue=queue_name, routing_key="PrettySpace"
+    )
+
+    instance.query(
+        "INSERT INTO test.rabbitmq SELECT number * 10 as key, number * 100 as value FROM numbers(5) settings max_block_size=2, optimize_trivial_insert_select=0;"
+    )
+    insert_messages = []
+
+    def onReceived(channel, method, properties, body):
+        insert_messages.append(body.decode())
+        if len(insert_messages) == 3:
+            channel.stop_consuming()
+
+    consumer.basic_consume(onReceived, queue_name)
+    consumer.start_consuming()
+    consumer_connection.close()
+
+    assert len(insert_messages) == 3
+
+    data = []
+    for message in insert_messages:
+        splitted = message.split("\n")
+        assert splitted[0] == " \x1b[1mkey\x1b[0m   \x1b[1mvalue\x1b[0m"
+        assert splitted[1] == ""
+        assert splitted[-1] == ""
+        data += [line.split() for line in splitted[2:-1]]
+
+    assert data == [
+        ["0", "0"],
+        ["10", "100"],
+        ["20", "200"],
+        ["30", "300"],
+        ["40", "400"],
+    ]
+
+
+def test_block_based_formats_2(rabbitmq_cluster):
+    num_rows = 100
+
+    for format_name in [
+        "JSONColumns",
+        "Native",
+        "Arrow",
+        "Parquet",
+        "ORC",
+        "JSONCompactColumns",
+    ]:
+
+        print(format_name)
+
+        instance.query(
+            f"""
+            DROP TABLE IF EXISTS test.view;
+            DROP TABLE IF EXISTS test.rabbit;
+
+            CREATE TABLE test.rabbit (key UInt64, value UInt64)
+                ENGINE = RabbitMQ
+                SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                         rabbitmq_format = '{format_name}',
+                         rabbitmq_exchange_name = '{format_name}',
+                         rabbitmq_exchange_type = 'direct',
+                         rabbitmq_routing_key_list = '{format_name}';
+    
+            CREATE MATERIALIZED VIEW test.view Engine=Log AS
+                SELECT key, value FROM test.rabbit;
+        """
+        )
+
+        credentials = pika.PlainCredentials("root", "clickhouse")
+        parameters = pika.ConnectionParameters(
+            rabbitmq_cluster.rabbitmq_ip,
+            rabbitmq_cluster.rabbitmq_port,
+            "/",
+            credentials,
+        )
+        consumer_connection = pika.BlockingConnection(parameters)
+
+        consumer = consumer_connection.channel()
+        result = consumer.queue_declare(queue="")
+        queue_name = result.method.queue
+        consumer.queue_bind(
+            exchange=format_name, queue=queue_name, routing_key=format_name
+        )
+
+        instance.query(
+            f"INSERT INTO test.rabbit SELECT number * 10 as key, number * 100 as value FROM numbers({num_rows}) settings max_block_size=12, optimize_trivial_insert_select=0;"
+        )
+
+        insert_messages = 0
+
+        def onReceived(channel, method, properties, body):
+            nonlocal insert_messages
+            insert_messages += 1
+            if insert_messages == 9:
+                channel.stop_consuming()
+
+        consumer.basic_consume(onReceived, queue_name)
+        consumer.start_consuming()
+        consumer_connection.close()
+
+        assert insert_messages == 9
+
+        attempt = 0
+        rows = 0
+        while attempt < 100:
+            rows = int(instance.query("SELECT count() FROM test.view"))
+            if rows == num_rows:
+                break
+            attempt += 1
+
+        assert rows == num_rows
+
+        result = instance.query("SELECT * FROM test.view ORDER by key")
+        expected = ""
+        for i in range(num_rows):
+            expected += str(i * 10) + "\t" + str(i * 100) + "\n"
+        assert result == expected
+
+
+def test_rabbitmq_flush_by_block_size(rabbitmq_cluster):
+    instance.query(
+        """
+         DROP TABLE IF EXISTS test.view;
+         DROP TABLE IF EXISTS test.consumer;
+
+         CREATE TABLE test.rabbitmq (key UInt64, value UInt64)
+             ENGINE = RabbitMQ
+             SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                      rabbitmq_exchange_name = 'flush_by_block',
+                      rabbitmq_queue_base = 'flush_by_block',
+                      rabbitmq_max_block_size = 100,
+                      rabbitmq_flush_interval_ms = 640000, /* should not flush by time during test */
+                      rabbitmq_format = 'JSONEachRow';
+
+         CREATE TABLE test.view (key UInt64, value UInt64)
+             ENGINE = MergeTree()
+             ORDER BY key;
+
+         CREATE MATERIALIZED VIEW test.consumer TO test.view AS
+             SELECT * FROM test.rabbitmq;
+
+        SYSTEM STOP MERGES;
+     """
+    )
+
+    cancel = threading.Event()
+
+    def produce():
+        credentials = pika.PlainCredentials("root", "clickhouse")
+        parameters = pika.ConnectionParameters(
+            rabbitmq_cluster.rabbitmq_ip,
+            rabbitmq_cluster.rabbitmq_port,
+            "/",
+            credentials,
+        )
+        connection = pika.BlockingConnection(parameters)
+
+        while not cancel.is_set():
+            try:
+                channel = connection.channel()
+                channel.basic_publish(
+                    exchange="flush_by_block",
+                    routing_key="",
+                    body=json.dumps({"key": 0, "value": 0}),
+                )
+            except Exception as e:
+                logging.debug(f"Got error: {str(e)}")
+
+    produce_thread = threading.Thread(target=produce)
+    produce_thread.start()
+
+    deadline = time.monotonic() + DEFAULT_TIMEOUT_SEC
+    while time.monotonic() < deadline:
+        if (
+            int(
+                instance.query(
+                    "SELECT count() FROM system.parts WHERE database = 'test' AND table = 'view' AND name = 'all_1_1_0'"
+                )
+            )
+            != 0
+        ):
+            break
+        time.sleep(0.5)
+    else:
+        pytest.fail(
+            f"Time limit of {DEFAULT_TIMEOUT_SEC} seconds reached. The part 'all_1_1_0' is still missing."
+        )
+
+    cancel.set()
+    produce_thread.join()
+
+    # more flushes can happens during test, we need to check only result of first flush (part named all_1_1_0).
+    result = instance.query("SELECT count() FROM test.view WHERE _part='all_1_1_0'")
+    # logging.debug(result)
+
+    instance.query(
+        """
+         DROP TABLE test.consumer;
+         DROP TABLE test.view;
+         DROP TABLE test.rabbitmq;
+     """
+    )
+
+    # 100 = first poll should return 100 messages (and rows)
+    # not waiting for stream_flush_interval_ms
+    assert (
+        int(result) == 100
+    ), "Messages from rabbitmq should be flushed when block of size rabbitmq_max_block_size is formed!"
+
+
+def test_rabbitmq_flush_by_time(rabbitmq_cluster):
+    instance.query(
+        """
+        DROP TABLE IF EXISTS test.view;
+        DROP TABLE IF EXISTS test.consumer;
+
+        CREATE TABLE test.rabbitmq (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                     rabbitmq_exchange_name = 'flush_by_time',
+                     rabbitmq_queue_base = 'flush_by_time',
+                     rabbitmq_max_block_size = 100,
+                     rabbitmq_flush_interval_ms = 5000,
+                     rabbitmq_format = 'JSONEachRow';
+
+        CREATE TABLE test.view (key UInt64, value UInt64, ts DateTime64(3) MATERIALIZED now64(3))
+            ENGINE = MergeTree()
+            ORDER BY key;
+    """
+    )
+
+    cancel = threading.Event()
+
+    def produce():
+        credentials = pika.PlainCredentials("root", "clickhouse")
+        parameters = pika.ConnectionParameters(
+            rabbitmq_cluster.rabbitmq_ip,
+            rabbitmq_cluster.rabbitmq_port,
+            "/",
+            credentials,
+        )
+        connection = pika.BlockingConnection(parameters)
+
+        while not cancel.is_set():
+            try:
+                channel = connection.channel()
+                channel.basic_publish(
+                    exchange="flush_by_time",
+                    routing_key="",
+                    body=json.dumps({"key": 0, "value": 0}),
+                )
+                logging.debug("Produced a message")
+                time.sleep(0.8)
+            except Exception as e:
+                logging.debug(f"Got error: {str(e)}")
+
+    produce_thread = threading.Thread(target=produce)
+    produce_thread.start()
+
+    instance.query(
+        """
+        CREATE MATERIALIZED VIEW test.consumer TO test.view AS
+            SELECT * FROM test.rabbitmq;
+    """
+    )
+
+    deadline = time.monotonic() + DEFAULT_TIMEOUT_SEC
+    while time.monotonic() < deadline:
+        time.sleep(0.2)
+        total_count = instance.query(
+            "SELECT count() FROM system.parts WHERE database = 'test' AND table = 'view'"
+        )
+        logging.debug(f"kssenii total count: {total_count}")
+        count = int(
+            instance.query(
+                "SELECT count() FROM system.parts WHERE database = 'test' AND table = 'view' AND name = 'all_1_1_0'"
+            )
+        )
+        logging.debug(f"kssenii count: {count}")
+        if count > 0:
+            break
+    else:
+        pytest.fail(
+            f"Time limit of {DEFAULT_TIMEOUT_SEC} seconds reached. The part 'all_1_1_0' is still missing."
+        )
+
+    time.sleep(12)
+    result = instance.query("SELECT uniqExact(ts) FROM test.view")
+
+    cancel.set()
+    produce_thread.join()
+
+    instance.query(
+        """
+        DROP TABLE test.consumer;
+        DROP TABLE test.view;
+        DROP TABLE test.rabbitmq;
+    """
+    )
+
+    assert int(result) == 3
+
+
+def test_rabbitmq_handle_error_mode_stream(rabbitmq_cluster):
+    instance.query(
+        """
+        DROP TABLE IF EXISTS test.rabbitmq;
+        DROP TABLE IF EXISTS test.view;
+        DROP TABLE IF EXISTS test.data;
+        DROP TABLE IF EXISTS test.errors;
+        DROP TABLE IF EXISTS test.errors_view;
+
+        CREATE TABLE test.rabbit (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = '{}:5672',
+                     rabbitmq_exchange_name = 'select',
+                     rabbitmq_commit_on_select = 1,
+                     rabbitmq_format = 'JSONEachRow',
+                     rabbitmq_row_delimiter = '\\n',
+                     rabbitmq_handle_error_mode = 'stream';
+
+
+        CREATE TABLE test.errors (error Nullable(String), broken_message Nullable(String))
+             ENGINE = MergeTree()
+             ORDER BY tuple();
+
+        CREATE MATERIALIZED VIEW test.errors_view TO test.errors AS
+                SELECT _error as error, _raw_message as broken_message FROM test.rabbit where not isNull(_error);
+
+        CREATE TABLE test.data (key UInt64, value UInt64)
+             ENGINE = MergeTree()
+             ORDER BY key;
+
+        CREATE MATERIALIZED VIEW test.view TO test.data AS
+                SELECT key, value FROM test.rabbit;
+        """.format(
+            rabbitmq_cluster.rabbitmq_host
+        )
+    )
+
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+
+    messages = []
+    num_rows = 50
+    for i in range(num_rows):
+        if i % 2 == 0:
+            messages.append(json.dumps({"key": i, "value": i}))
+        else:
+            messages.append("Broken message " + str(i))
+
+    for message in messages:
+        channel.basic_publish(exchange="select", routing_key="", body=message)
+
+    connection.close()
+    # The order of messages in select * from test.rabbitmq is not guaranteed, so sleep to collect everything in one select
+    time.sleep(1)
+
+    deadline = time.monotonic() + DEFAULT_TIMEOUT_SEC
+    rows = 0
+    while time.monotonic() < deadline:
+        rows = int(instance.query("SELECT count() FROM test.data"))
+        if rows == num_rows:
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail(
+            f"Time limit of {DEFAULT_TIMEOUT_SEC} seconds reached. The number of rows did not match {num_rows}."
+        )
+
+    assert rows == num_rows
+
+    result = instance.query("SELECT * FROM test.data ORDER by key")
+    expected = "0\t0\n" * (num_rows // 2)
+    for i in range(num_rows):
+        if i % 2 == 0:
+            expected += str(i) + "\t" + str(i) + "\n"
+
+    assert result == expected
+
+    deadline = time.monotonic() + DEFAULT_TIMEOUT_SEC
+    errors_count = 0
+    while time.monotonic() < deadline:
+        errors_count = int(instance.query("SELECT count() FROM test.errors"))
+        if errors_count == num_rows / 2:
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail(
+            f"Time limit of {DEFAULT_TIMEOUT_SEC} seconds reached. The number of errors ({errors_count}) did not match the expected {num_rows}."
+        )
+
+    assert errors_count == num_rows / 2
+
+    broken_messages = instance.query(
+        "SELECT broken_message FROM test.errors order by broken_message"
+    )
+    expected = []
+    for i in range(num_rows):
+        if i % 2 != 0:
+            expected.append("Broken message " + str(i) + "\n")
+
+    expected = "".join(sorted(expected))
+    assert broken_messages == expected
+
+
+def test_attach_broken_table(rabbitmq_cluster):
+    table_name = f"rabbit_queue_{uuid.uuid4().hex}"
+    instance.query(
+        f"ATTACH TABLE {table_name} UUID '{uuid.uuid4()}' (`payload` String) ENGINE = RabbitMQ SETTINGS rabbitmq_host_port = 'nonexisting:5671', rabbitmq_format = 'JSONEachRow', rabbitmq_username = 'test', rabbitmq_password = 'test'"
+    )
+
+    error = instance.query_and_get_error(f"SELECT * FROM {table_name}")
+    assert "CANNOT_CONNECT_RABBITMQ" in error
+    error = instance.query_and_get_error(f"INSERT INTO {table_name} VALUES ('test')")
+    assert "CANNOT_CONNECT_RABBITMQ" in error
+
+
+def test_rabbitmq_nack_failed_insert(rabbitmq_cluster):
+    table_name = f"nack_failed_insert_{uuid.uuid4().hex}"
+    exchange = f"{table_name}_exchange"
+
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+
+    channel.exchange_declare(exchange="deadl")
+
+    result = channel.queue_declare(queue="deadq")
+    queue_name = result.method.queue
+    channel.queue_bind(exchange="deadl", routing_key="", queue=queue_name)
+
+    instance3.query(
+        f"""
+        CREATE TABLE test.{table_name} (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = '{rabbitmq_cluster.rabbitmq_host}:5672',
+                     rabbitmq_flush_interval_ms=1000,
+                     rabbitmq_exchange_name = '{exchange}',
+                     rabbitmq_format = 'JSONEachRow',
+                    rabbitmq_queue_settings_list='x-dead-letter-exchange=deadl';
+
+        DROP TABLE IF EXISTS test.view;
+        CREATE TABLE test.view (key UInt64, value UInt64)
+            ENGINE = MergeTree()
+            ORDER BY key;
+
+        DROP TABLE IF EXISTS test.consumer;
+        CREATE MATERIALIZED VIEW test.consumer TO test.view AS
+            SELECT * FROM test.{table_name};
+        """
+    )
+
+    num_rows = 25
+    for i in range(num_rows):
+        message = json.dumps({"key": i, "value": i}) + "\n"
+        channel.basic_publish(exchange=exchange, routing_key="", body=message)
+
+    instance3.wait_for_log_line(
+        "Failed to push to views. Error: Code: 252. DB::Exception: Too many parts"
+    )
+
+    try:
+        instance3.replace_in_config(
+            "/etc/clickhouse-server/config.d/mergetree.xml",
+            "parts_to_throw_insert>0",
+            "parts_to_throw_insert>10",
+        )
+        instance3.restart_clickhouse()
+
+        count = [0]
+
+        def on_consume(channel, method, properties, body):
+            channel.basic_publish(exchange=exchange, routing_key="", body=body)
+            count[0] += 1
+            if count[0] == num_rows:
+                channel.stop_consuming()
+
+        channel.basic_consume(queue_name, on_consume)
+        channel.start_consuming()
+
+        deadline = time.monotonic() + DEFAULT_TIMEOUT_SEC
+        count = 0
+        while time.monotonic() < deadline:
+            count = int(instance3.query("SELECT count() FROM test.view"))
+            if count == num_rows:
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail(
+                f"Time limit of {DEFAULT_TIMEOUT_SEC} seconds reached. The count did not match {num_rows}."
+            )
+
+        assert count == num_rows
+
+        instance3.query(
+            f"""
+            DROP TABLE test.consumer;
+            DROP TABLE test.view;
+            DROP TABLE test.{table_name};
+        """
+        )
+        connection.close()
+    finally:
+        # Restore the original configuration so that other tests (this one included if executed
+        # again) behave as expected by the initial configuration
+        instance3.replace_in_config(
+            "/etc/clickhouse-server/config.d/mergetree.xml",
+            "parts_to_throw_insert>10",
+            "parts_to_throw_insert>0",
+        )
+        instance3.restart_clickhouse()
+
+
+def test_rabbitmq_reject_broken_messages(rabbitmq_cluster):
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+
+    deadletter_exchange = "deadletter_exchange_handle_error_mode_stream"
+    deadletter_queue = "deadletter_queue_handle_error_mode_stream"
+    channel.exchange_declare(exchange=deadletter_exchange)
+
+    result = channel.queue_declare(queue=deadletter_queue)
+    channel.queue_bind(
+        exchange=deadletter_exchange, routing_key="", queue=deadletter_queue
+    )
+
+    instance.query(
+        f"""
+        DROP TABLE IF EXISTS test.rabbitmq;
+        DROP TABLE IF EXISTS test.view;
+        DROP TABLE IF EXISTS test.data;
+        DROP TABLE IF EXISTS test.errors;
+        DROP TABLE IF EXISTS test.errors_view;
+
+        CREATE TABLE test.rabbit (key UInt64, value UInt64)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = '{rabbitmq_cluster.rabbitmq_host}:5672',
+                     rabbitmq_exchange_name = 'select',
+                     rabbitmq_commit_on_select = 1,
+                     rabbitmq_format = 'JSONEachRow',
+                     rabbitmq_row_delimiter = '\\n',
+                     rabbitmq_handle_error_mode = 'stream',
+                     rabbitmq_queue_settings_list='x-dead-letter-exchange={deadletter_exchange}';
+
+
+        CREATE TABLE test.errors (error Nullable(String), broken_message Nullable(String))
+             ENGINE = MergeTree()
+             ORDER BY tuple();
+
+        CREATE MATERIALIZED VIEW test.errors_view TO test.errors AS
+                SELECT _error as error, _raw_message as broken_message FROM test.rabbit where not isNull(_error);
+
+        CREATE TABLE test.data (key UInt64, value UInt64)
+             ENGINE = MergeTree()
+             ORDER BY key;
+
+        CREATE MATERIALIZED VIEW test.view TO test.data AS
+                SELECT key, value FROM test.rabbit;
+        """
+    )
+
+    messages = []
+    num_rows = 50
+    for i in range(num_rows):
+        if i % 2 == 0:
+            messages.append(json.dumps({"key": i, "value": i}))
+        else:
+            messages.append("Broken message " + str(i))
+
+    for message in messages:
+        channel.basic_publish(exchange="select", routing_key="", body=message)
+
+    time.sleep(1)
+
+    deadline = time.monotonic() + DEFAULT_TIMEOUT_SEC
+    rows = 0
+    while time.monotonic() < deadline:
+        rows = int(instance.query("SELECT count() FROM test.data"))
+        if rows == num_rows:
+            break
+        time.sleep(1)
+    else:
+        pytest.fail(
+            f"Time limit of {DEFAULT_TIMEOUT_SEC} seconds reached. The number of rows did not match {num_rows}."
+        )
+
+    assert rows == num_rows
+
+    dead_letters = []
+
+    def on_dead_letter(channel, method, properties, body):
+        dead_letters.append(body)
+        if len(dead_letters) == num_rows / 2:
+            channel.stop_consuming()
+
+    channel.basic_consume(deadletter_queue, on_dead_letter)
+    channel.start_consuming()
+
+    assert len(dead_letters) == num_rows / 2
+
+    i = 1
+    for letter in dead_letters:
+        assert f"Broken message {i}" in str(letter)
+        i += 2
+
+    connection.close()
+
+
+def test_rabbitmq_json_type(rabbitmq_cluster):
+    instance.query(
+        """
+        SET enable_json_type=1;
+        CREATE TABLE test.rabbitmq (data JSON)
+            ENGINE = RabbitMQ
+            SETTINGS rabbitmq_host_port = 'rabbitmq1:5672',
+                     rabbitmq_exchange_name = 'json_type',
+                     rabbitmq_format = 'JSONAsObject',
+                     rabbitmq_commit_on_select = 1,
+                     rabbitmq_flush_interval_ms=1000,
+                     rabbitmq_max_block_size=100,
+                     rabbitmq_queue_base = 'json_type',
+                     rabbitmq_row_delimiter = '\\n';
+        CREATE TABLE test.view (a Int64)
+            ENGINE = MergeTree()
+            ORDER BY a;
+        CREATE MATERIALIZED VIEW test.consumer TO test.view AS
+            SELECT data.a::Int64 as a FROM test.rabbitmq;
+        """
+    )
+
+    credentials = pika.PlainCredentials("root", "clickhouse")
+    parameters = pika.ConnectionParameters(
+        rabbitmq_cluster.rabbitmq_ip, rabbitmq_cluster.rabbitmq_port, "/", credentials
+    )
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+
+    messages = [
+        '{"a" : 1}',
+        '{"a" : 2}',
+    ]
+
+    for message in messages:
+        channel.basic_publish(exchange="json_type", routing_key="", body=message)
+    connection.close()
+
+    while int(instance.query("SELECT count() FROM test.view")) < 2:
+        time.sleep(1)
+
+    result = instance.query("SELECT * FROM test.view ORDER BY a;")
+
+    expected = """\
+1
+2
+"""
+
+    assert TSV(result) == TSV(expected)
+
+    instance.query(
+        """
+        DROP TABLE test.view;
+        DROP TABLE test.consumer;
+        DROP TABLE test.rabbitmq;
+    """
+    )
+

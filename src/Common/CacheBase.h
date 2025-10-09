@@ -12,7 +12,6 @@
 #include <mutex>
 #include <unordered_map>
 
-#include <Common/logger_useful.h>
 #include <base/defines.h>
 
 
@@ -58,7 +57,7 @@ public:
         }
         else
         {
-            throw Exception("Undeclared cache policy name: " + cache_policy_name, ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Undeclared cache policy name: {}", cache_policy_name);
         }
     }
 

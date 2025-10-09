@@ -15,7 +15,7 @@ SELECT '========';
 
 CHECK TABLE mt_table;
 
-OPTIMIZE TABLE mt_table FINAL;
+OPTIMIZE STREAM mt_table FINAL;
 
 SELECT '========';
 
@@ -31,7 +31,7 @@ SELECT '========';
 
 INSERT INTO mt_table VALUES (to_date('2019-02-03'), 7, 'jump'), (to_date('2019-02-03'), 8, 'around');
 
-OPTIMIZE TABLE mt_table FINAL;
+OPTIMIZE STREAM mt_table FINAL;
 
 CHECK TABLE mt_table PARTITION 201902;
 

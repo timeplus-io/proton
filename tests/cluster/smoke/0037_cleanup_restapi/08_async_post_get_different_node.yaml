@@ -1,0 +1,216 @@
+tags:
+  - cleanup
+
+description: |
+  Tests covering the async post and get request on different node scenario.
+  (#4316) Got inconsistent response via BatchStreamDDL in sometimes (reproduce <=2.0.45)
+  Main steps:
+  - create 1 stream, 1 mv, 1 target stream
+  - insert data into stream
+  - call POST batch_action restapi with recreate type async on p1
+  - call GET batch_action restapi on p2
+  - insert data into stream
+  - call POST batch_action restapi with pause type async on p3
+  - call GET batch_action restapi on p1
+  - call POST batch_action restapi with unpause type async on p2
+  - call GET batch_action restapi on p3
+  - call POST batch_action restapi with delete type async on p1
+  - call GET batch_action restapi on p2
+
+cluster:
+  - p3k1
+
+steps:
+  # create stream & target stream & mv 
+  - type: query
+    sql: create stream test37_stream(id int, value string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test37_target(id string, value string)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create materialized view test37_mv into test37_target as select to_string(id) as id, value from test37_stream
+  - type: wait
+    time: 2
+
+  # insert data
+  - type: query
+    sql: insert into test37_stream(id, value) values (1, 'aaaa')
+  - type: wait
+    time: 1
+
+  # cleanup recreate
+  - name: cleanup-8-1
+    type: rest
+    node:
+      - p1
+    query_id: cleanup-8-1
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: recreate
+      stream_list:
+        - test37_stream
+        - test37_mv
+        - test37_target
+      synchronous: false
+  - type: wait
+    time: 3
+
+  - name: cleanup-8-2
+    type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=1_cleanup-8-1
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: cleanup-8-2
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - any_value
+        - any_value
+        - any_value
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-8-1
+
+  # cleanup pause
+  - type: query
+    sql: insert into test37_stream(id, value) values (2, 'bbbb')
+  - type: wait
+    time: 1
+
+  - name: cleanup-8-3
+    type: rest
+    node:
+      - p1
+    query_id: cleanup-8-3
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: pause
+      stream_list:
+        - test37_mv
+      synchronous: false
+  - type: wait
+    time: 3
+
+  - name: cleanup-8-4
+    type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=1_cleanup-8-3
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: cleanup-8-4
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - test37_mv
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-8-3
+
+  # unpause
+  - name: cleanup-8-5
+    type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    method: POST
+    query_id: cleanup-8-5
+    url: /proton/v1/batch_action/streams
+    data:
+      type: unpause
+      stream_list:
+        - test37_mv
+      synchronous: false
+  - type: wait
+    time: 1
+
+  - name: cleanup-8-6
+    type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=2_cleanup-8-5
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: cleanup-8-6
+    expected_result:
+      - status: success
+        elapsed_ms: any_value
+        finished_tables:
+          - test37_mv
+        code: 0
+        request_datetime: any_value
+        request_id: cleanup-8-5
+
+  # cleanup delete
+  - name: cleanup-8-7
+    type: rest
+    node:
+      - p1
+    query_id: cleanup-8-7
+    method: POST
+    url: /proton/v1/batch_action/streams
+    data:
+      type: recreate
+      stream_list:
+        - test37_stream
+        - test37_mv
+        - test37_target
+      synchronous: false
+  - type: wait
+    time: 3
+
+  - name: cleanup-8-8
+    type: rest
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    method: GET
+    url: /proton/v1/batch_action/statuses?poll_id=1_cleanup-8-7
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: cleanup-8-8
+    expected_result:
+    - status: success
+      elapsed_ms: any_value
+      finished_tables:
+        - any_value
+        - any_value
+        - any_value
+      code: 0
+      request_datetime: any_value
+      request_id: cleanup-8-7

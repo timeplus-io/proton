@@ -1,12 +1,13 @@
 #include <Interpreters/Streaming/SubstituteStreamingFunction.h>
 
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <Common/ProtonCommon.h>
-#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
 #include <boost/algorithm/string.hpp>
 
@@ -71,12 +72,14 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"p95", ""},
     {"p99", ""},
     {"moving_sum", ""},
-    {"group_uniq_array", "group_uniq_array_retract"}
+    {"group_uniq_array", "__group_uniq_array_retract"},
+    {"group_array", "__group_array_retract"},
+    {"group_array_sorted", "__group_array_sorted_retract"},
 };
 
-std::optional<String> StreamingFunctionData::supportChangelog(const String & function_name)
+std::optional<String> StreamingFunctionData::supportChangelog(const String & func_name, const String & func_name_lower)
 {
-    auto iter = changelog_func_map.find(function_name);
+    auto iter = changelog_func_map.find(func_name_lower);
 
     /// Support combinator suffix, for example:
     /// `count`                 => `__count_retract`
@@ -84,7 +87,7 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
     /// `count_distinct`        => `__count_retract_distinct_retract`
     /// `count_distinct_if`     => `__count_retract_distinct_retract_if`
     String combinator_suffix;
-    auto nested_func_name = function_name;
+    auto nested_func_name = func_name_lower;
     while (iter == changelog_func_map.end())
     {
         if (auto combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(nested_func_name))
@@ -93,7 +96,7 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
             /// TODO: support more combinators
             if (combinator_name != "_if" && combinator_name != "_distinct" && combinator_name != "_distinct_retract")
                 throw Exception(
-                    ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
+                    ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", func_name);
 
             nested_func_name = nested_func_name.substr(0, nested_func_name.size() - combinator_name.size());
 
@@ -113,12 +116,13 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
             return iter->second + combinator_suffix;
         else
             throw Exception(
-                ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
+                ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", func_name);
     }
 
     /// UDA by default support changelog
-    if (UserDefinedFunctionFactory::isAggregateFunctionName(function_name))
-        return function_name;
+    /// Must use original function name to fix UDA not found (such as `algo_future_unclosedQty`)
+    if (UserDefinedFunctionFactory::isAggregateFunctionName(func_name))
+        return func_name;
 
     return {};
 }
@@ -131,6 +135,9 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         return;
     }
 
+    if (func.is_window_function)
+        return;
+
     if (streaming)
     {
         auto func_name_lower = Poco::toLower(func.name);
@@ -138,11 +145,14 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         if (iter != func_map.end())
             return substitueFunction(func, iter->second);
 
+        if (!AggregateFunctionFactory::instance().isAggregateFunctionName(func.name))
+            return;
+
         if (is_changelog)
         {
             /// Whether the function support 'retract' for changelog, also return the alias name of
             /// function used in rewritten query
-            auto func_alias_name = supportChangelog(func_name_lower);
+            auto func_alias_name = supportChangelog(func.name, func_name_lower);
             if (func_alias_name.has_value())
             {
                 if (!func_alias_name->empty())

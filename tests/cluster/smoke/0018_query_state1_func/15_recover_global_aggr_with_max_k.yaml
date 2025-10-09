@@ -1,0 +1,82 @@
+tags:
+  - query_state
+description: recover global aggregation with function max_k from a state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream1 (id string, location string, value int,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1935'
+    query_id: '1935'
+    type: stream
+    query: subscribe to select max_k(value, 2, id) from test19_state_stream1 emit periodic
+      1s settings checkpoint_interval=1
+    schema:
+      - name: max_k(value, 2, id)
+        type: array(tuple(int32, string))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, location, value, timestamp) values ('dev1',
+      'ca', 57, '2020-02-02 20:00:00'), ('dev1', 'ca', 66, '2020-02-02 20:00:01'), ('dev2',
+      'ca', 58, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1935'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, location, value, timestamp) values ('dev4',
+      'ca', 80, '2020-02-02 20:00:05'), ('dev8', 'ca', 55, '2020-02-02 20:00:07'), ('dev8',
+      'ca', 66, '2020-02-02 20:00:09')
+
+  - type: wait
+    time: 3
+
+  - name: 1935-1
+    query_id: 1935-1
+    type: stream
+    query: recover from '1935'
+    schema:
+      - name: max_k(value, 2, id)
+        type: array(tuple(int32, string))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id='1935' sync
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1935'
+
+  - type: check
+    target_name: '1935'
+    expected_result:
+      - [ [ [ 66, 'dev1' ], [ 58, 'dev2' ] ] ]
+
+  - type: check
+    target_name: '1935-1'
+    expected_result:
+      - [ [ [ 80, 'dev4' ], [ 66, 'dev1' ] ] ]

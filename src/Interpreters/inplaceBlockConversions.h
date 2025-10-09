@@ -1,12 +1,10 @@
 #pragma once
 
+#include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Common/COW.h>
 
 #include <memory>
-#include <string>
-#include <unordered_map>
-
 
 namespace DB
 {
@@ -44,6 +42,8 @@ void fillMissingColumns(
     Columns & res_columns,
     size_t num_rows,
     const NamesAndTypesList & requested_columns,
+    const NamesAndTypesList & available_columns,
+    const NameSet & partially_read_columns,
     StorageMetadataPtr metadata_snapshot);
 
 }

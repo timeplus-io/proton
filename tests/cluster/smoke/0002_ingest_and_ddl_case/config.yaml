@@ -1,0 +1,4 @@
+name: ingest_and_ddl
+description: Tests covering the steam query smoke cases.
+tags:
+  - smoke

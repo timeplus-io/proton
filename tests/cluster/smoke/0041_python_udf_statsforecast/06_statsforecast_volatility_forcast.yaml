@@ -1,0 +1,114 @@
+tags:
+  - uda
+
+description: Test covering python uda test on statsforecast function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (ds date, y1 float, y2 float, y3 float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION volatilityTester(ds date, y1 float, y2 float, y3 float) RETURNS array(float) LANGUAGE PYTHON AS
+      $$
+
+      import pandas as pd
+      import numpy as np
+      from statsforecast import StatsForecast
+      from statsforecast.models import GARCH, ARCH, Naive
+      from utilsforecast.losses import mae
+
+      class volatilityTester:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, dss, y1s, y2s, y3s):
+              if len(dss) < 5:
+                  return
+
+              models = [
+                  ARCH(1), 
+                  ARCH(2), 
+                  GARCH(1,1),
+                  GARCH(1,2),
+                  GARCH(2,2),
+                  GARCH(2,1),
+                  Naive()
+              ]
+              sf = StatsForecast(
+                  models = models, 
+                  freq = 'MS',
+                  n_jobs = -1
+              )
+
+              unique_ids = ['d1']*len(dss) + ['d2']*len(dss) + ['d3']*len(dss)
+              dss = pd.to_datetime(dss).tolist()*3
+              ys = y1s + y2s + y3s
+              df = pd.DataFrame(zip(unique_ids, dss, ys),
+                                columns=['unique_id', 'ds', 'y'])
+
+              df['rt'] = df['y'].div(df.groupby('unique_id')['y'].shift(1))
+              df['rt'] = np.log(df['rt'])
+              returns = df[['unique_id', 'ds', 'rt']]
+              returns = returns.rename(columns={'rt':'y'})
+
+              cv_df = sf.cross_validation(
+                  df = returns,
+                  h = 2,
+                  step_size = 1,
+                  n_windows = 1
+              )
+              cv_df.rename(columns = {'y' : 'actual'}, inplace = True)
+              models = cv_df.columns.drop(['unique_id', 'ds', 'cutoff', 'actual'])
+
+              mae_cv = mae(cv_df, models=models, target_col='actual').set_index('unique_id')
+              d2_model = mae_cv.idxmin(axis=1)['d2']
+              forecasts = sf.forecast(df=returns, h=3, level=[80])
+              self.res = forecasts.head()[str(d2_model)].tolist()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 3
+
+  - name: python-udf11-6-1
+    type: stream
+    query: select volatilityTester(ds, y1, y2, y3) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(ds, y1, y2, y3) values
+          ('2024-01-01', 39.3, 72.5, 58.3) 
+          ('2024-01-02', 41.9, 75.6, 55.1)
+          ('2024-01-03', 39.6, 72.3, 51.4)
+          ('2024-01-04', 39.3, 78.3, 50.7)
+          ('2024-01-05', 44.1, 81.4, 54.1);
+
+  - type: check
+    target_name: python-udf11-6-1
+    timeout: 100 # address build need more time
+    expected_result:
+      - [[0.11884941, -0.044760734, -0.038645048, 0.08435374, -0.03176907]]

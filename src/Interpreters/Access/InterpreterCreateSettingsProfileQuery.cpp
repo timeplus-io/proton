@@ -41,7 +41,7 @@ namespace
 BlockIO InterpreterCreateSettingsProfileQuery::execute()
 {
     auto & query = query_ptr->as<ASTCreateSettingsProfileQuery &>();
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     if (query.alter)
         getContext()->checkAccess(AccessType::ALTER_SETTINGS_PROFILE);
     else
@@ -49,11 +49,16 @@ BlockIO InterpreterCreateSettingsProfileQuery::execute()
 
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)
-        settings_from_query = SettingsProfileElements{*query.settings, access_control};
+    {
+        settings_from_query = SettingsProfileElements{*query.settings, *access_control};
+
+        if (!query.attach)
+            getContext()->checkSettingsConstraints(*settings_from_query);
+    }
 
     std::optional<RolesOrUsersSet> roles_from_query;
     if (query.to_roles)
-        roles_from_query = RolesOrUsersSet{*query.to_roles, access_control, getContext()->getUserID()};
+        roles_from_query = RolesOrUsersSet{*query.to_roles, *access_control, getContext()->getUserID()};
 
     if (query.alter)
     {
@@ -65,11 +70,11 @@ BlockIO InterpreterCreateSettingsProfileQuery::execute()
         };
         if (query.if_exists)
         {
-            auto ids = access_control.find<SettingsProfile>(query.names);
-            access_control.tryUpdate(ids, update_func);
+            auto ids = access_control->find<SettingsProfile>(query.names);
+            access_control->tryUpdate(ids, update_func);
         }
         else
-            access_control.update(access_control.getIDs<SettingsProfile>(query.names), update_func);
+            access_control->update(access_control->getIDs<SettingsProfile>(query.names), update_func);
     }
     else
     {
@@ -82,11 +87,11 @@ BlockIO InterpreterCreateSettingsProfileQuery::execute()
         }
 
         if (query.if_not_exists)
-            access_control.tryInsert(new_profiles);
+            access_control->tryInsert(new_profiles);
         else if (query.or_replace)
-            access_control.insertOrReplace(new_profiles);
+            access_control->insertOrReplace(new_profiles);
         else
-            access_control.insert(new_profiles);
+            access_control->insert(new_profiles);
     }
 
     return {};

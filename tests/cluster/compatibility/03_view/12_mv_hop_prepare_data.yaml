@@ -1,0 +1,59 @@
+tags:
+  - prepare
+  - hopping window
+
+description: prepare data for mv hop window aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop view if exists hop_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists hop_source_stream;
+
+  - type: query
+    sql: drop stream if exists hop_target_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream hop_source_stream(id string, location string, value float32, json string, 
+      timestamp datetime64(3) DEFAULT now64(3));
+
+  - type: query
+    sql: |
+      create stream hop_target_stream(emit_version int64, id string, max float32, 
+      win_start datetime64(3), win_end datetime64(3));
+    
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view hop_mv into hop_target_stream as select emit_version() as 
+      emit_version, id, max(value) as max, window_start as win_start, window_end as win_end 
+      from hop(hop_source_stream, timestamp, interval 3 second, interval 5 second) 
+      group by id, window_start, window_end emit stream;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into hop_source_stream(id, location, value, json, timestamp) values
+      ('dev1', 'ca', 60, '{"create_time":"2024-01-01 20:00:00"}', '2024-01-01 20:00:00.000')
+      ('dev1', 'ca', 31, '{"create_time":"2024-01-01 20:00:03"}', '2024-01-01 20:00:03.000')
+      ('dev2', 'ca', 58, '{"create_time":"2024-01-01 20:00:02"}', '2024-01-01 20:00:02.000')
+      ('dev2', 'ca', 77, '{"create_time":"2024-01-01 20:00:05"}', '2024-01-01 20:00:05.000');
+
+  - type: wait
+    time: 1

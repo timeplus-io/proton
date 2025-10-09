@@ -18,73 +18,81 @@
 #define Foundation_RefCountedObject_INCLUDED
 
 
-#include "Poco/Foundation.h"
 #include "Poco/AtomicCounter.h"
+#include "Poco/Foundation.h"
+
+#include <atomic>
 
 
-namespace Poco {
+namespace Poco
+{
 
 
 class Foundation_API RefCountedObject
-	/// A base class for objects that employ
-	/// reference counting based garbage collection.
-	///
-	/// Reference-counted objects inhibit construction
-	/// by copying and assignment.
+/// A base class for objects that employ
+/// reference counting based garbage collection.
+///
+/// Reference-counted objects inhibit construction
+/// by copying and assignment.
 {
 public:
-	RefCountedObject();
-		/// Creates the RefCountedObject.
-		/// The initial reference count is one.
+    RefCountedObject();
+    /// Creates the RefCountedObject.
+    /// The initial reference count is one.
 
-	void duplicate() const;
-		/// Increments the object's reference count.
-		
-	void release() const throw();
-		/// Decrements the object's reference count
-		/// and deletes the object if the count
-		/// reaches zero.
-		
-	int referenceCount() const;
-		/// Returns the reference count.
+    size_t duplicate() const;
+    /// Increments the object's reference count, returns reference count before call.
+
+    size_t release() const throw();
+    /// Decrements the object's reference count
+    /// and deletes the object if the count
+    /// reaches zero, returns reference count before call.
+
+    size_t referenceCount() const;
+    /// Returns the reference count.
 
 protected:
-	virtual ~RefCountedObject();
-		/// Destroys the RefCountedObject.
+    virtual ~RefCountedObject();
+    /// Destroys the RefCountedObject.
 
 private:
-	RefCountedObject(const RefCountedObject&);
-	RefCountedObject& operator = (const RefCountedObject&);
+    RefCountedObject(const RefCountedObject &);
+    RefCountedObject & operator=(const RefCountedObject &);
 
-	mutable AtomicCounter _counter;
+    mutable std::atomic<size_t> _counter;
 };
 
 
 //
 // inlines
 //
-inline int RefCountedObject::referenceCount() const
+inline size_t RefCountedObject::referenceCount() const
 {
-	return _counter.value();
+    return _counter.load(std::memory_order_acquire);
 }
 
 
-inline void RefCountedObject::duplicate() const
+inline size_t RefCountedObject::duplicate() const
 {
-	++_counter;
+    return _counter.fetch_add(1, std::memory_order_acq_rel);
 }
 
 
-inline void RefCountedObject::release() const throw()
+inline size_t RefCountedObject::release() const throw()
 {
-	try
-	{
-		if (--_counter == 0) delete this;
-	}
-	catch (...)
-	{
-		poco_unexpected();
-	}
+    size_t reference_count_before = _counter.fetch_sub(1, std::memory_order_acq_rel);
+
+    try
+    {
+        if (reference_count_before == 1)
+            delete this;
+    }
+    catch (...)
+    {
+        poco_unexpected();
+    }
+
+    return reference_count_before;
 }
 
 

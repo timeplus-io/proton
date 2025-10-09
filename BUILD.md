@@ -1,8 +1,6 @@
 # Build From Source
 
-Proton requires the Clang compiler and related LLVM toolchain. GCC is not supported.
-
-## Ubuntu/Debian Linux - x86
+## Ubuntu Linux - x86
 
 ### Build with docker container
 
@@ -14,7 +12,7 @@ Proton requires the Clang compiler and related LLVM toolchain. GCC is not suppor
 
 #### Install toolchain
 
-- clang-19 /clang++-19 or above (minimum supported version: Clang 16, GCC not supported)
+- clang-19 /clang++-19 or above
 - cmake 3.20 or above
 - ninja
 
@@ -38,19 +36,6 @@ $ cd proton
 $ mkdir -p build && cd build && cmake ..
 $ ninja
 ```
-
-#### Issue: `Could NOT find Threads (missing: Threads_FOUND)`
-
-**Possible Solution:**
-
-1. Install the required packages:
-
-   ```sh
-   apt-get install -y build-essential cmake libc6-dev libpthread-stubs0-dev linux-libc-dev
-   ```
-
-2. Clean the build folder and rerun the CMake command.
-
 
 ## Redhat Linux - x86
 
@@ -119,8 +104,6 @@ $ ninja
 
 ### Build with docker container
 
-Not supported.
-
 ### Bare metal build
 
 #### Install toolchain
@@ -145,8 +128,6 @@ $ ninja
 ## MacOS - Apple Silicon
 
 ### Build with docker container
-
-Not supported.
 
 ### Bare metal build
 
@@ -174,6 +155,35 @@ Xcode 15.1
 Build version 15C5042i
 ```
 
+
+Below's a concise version of the Xcode installation steps:
+
+
+
+##### Install Xcode Beta 15.1 Beta 2
+
+1. **Download Xcode Beta:**
+   Download Xcode 15.1 Beta 2 from the official apple xcode link or choose another version from [xcodereleases.com](https://xcodereleases.com/).
+
+2. **Install Xcode Beta:**
+   Extract the XIP file by double-clicking it and then drag the `Xcode-beta` app into the `/Applications` folder.
+
+3. **Select Xcode Beta Version:**
+   In the terminal, run:
+   ```shell
+   sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
+   ```
+
+4. **Verify Installation:**
+   Check the version to ensure it's correctly installed:
+   ```shell
+   /usr/bin/xcodebuild -version
+   ```
+   You should see:
+   ```plaintext
+   Xcode 15.1
+   Build version 15C5042i
+   ```
 
 #### Step 2: Install Dependencies with Homebrew
 

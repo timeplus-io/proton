@@ -241,6 +241,7 @@ detectLanguageUnknown
 detectProgrammingLanguage
 detectTonality
 divide
+divideOrNull
 dotProduct
 dumpColumnStructure
 e
@@ -367,6 +368,7 @@ indexOf
 initialQueryID
 initializeAggregation
 intDiv
+intDivOrNull
 intDivOrZero
 intExp10
 intExp2
@@ -418,16 +420,10 @@ makeDateTime
 makeDateTime64
 map
 mapAdd
-mapApply
-mapContains
-mapContainsKeyLike
-mapExtractKeyLike
-mapFilter
-mapKeys
+mapFromArrays
 mapPopulateSeries
 mapSubtract
 mapUpdate
-mapValues
 match
 materialize
 max2
@@ -439,6 +435,7 @@ minSampleSizeConversion
 minus
 modulo
 moduloLegacy
+moduloOrNull
 moduloOrZero
 monthName
 multiFuzzyMatchAllIndices

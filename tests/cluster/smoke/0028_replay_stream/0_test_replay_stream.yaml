@@ -1,0 +1,52 @@
+tags:
+- local-run
+- replay_stream
+description: Check if the interval for data insertion is equal to the interval for
+  output, allowable error within 10ms.Also check the data interval whether equal to
+  the insert interval,allowable error within 200ms(because you can't control the the
+  insert interval accurately)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test29_stream
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test29_stream (id int, value int)
+
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test29_stream(id, value) values (1, 2);
+  
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test29_stream(id, value) values (3, 2);
+
+- name: 2900
+  type: stream
+  query: with cte as (select id, value, date_diff('millisecond', to_datetime64(lag(_tp_append_time, 1)/1000, 3, 'UTC'), to_datetime64(_tp_append_time/1000, 3, 'UTC')) as insert_interval,
+          date_diff('millisecond',lag(now64(), 1), now64()) as output_time_diff, _tp_time from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1)
+          select id, value, abs(insert_interval-2000) < 200, abs(insert_interval-output_time_diff) < 200 from cte;
+  schema:
+  - name: id
+    type: int32
+  - name: value
+    type: int32
+  - name: less(abs(minus(insert_interval, 2000)), 200)
+    type: bool
+  - name: less(abs(minus(insert_interval, output_time_diff)), 200)
+    type: bool
+
+- type: check
+  target_name: 2900
+  expected_result:
+  - ['1', '2', any_value, any_value]
+  - ['3', '2', 'True', 'True']

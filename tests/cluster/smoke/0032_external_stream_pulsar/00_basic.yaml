@@ -1,0 +1,335 @@
+description: basic cases for pulsar external stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_00
+
+  - type: pulsar
+    name: create
+    topic: test_00
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_00
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_00
+      (
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uuid_c uuid,
+        string_c string,
+        float_c float,
+        decimal_c decimal32(3),
+        date_c date,
+        datetime_c datetime('UTC'),
+        enum_c enum('a'=1, 'b'=2, 'z'=26),
+        tuple_c tuple(s string, i int),
+        ipv4_c ipv4,
+        ipv6_c ipv6,
+        map_c map(string, int),
+        array_c array(int)
+      )
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='test_00';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_00 values (
+        11, 12, 13, 14, 15, 16, 17, 18, '928c88b9-f37a-41d5-bef5-9cb3663c2445', '{@string-0}', 12345.123, 123456.123, '2022-03-25',
+      '2022-03-25 18:18:18', 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1, 2, 3])
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-00-streaming-query
+    query: select _tp_shard, * from ex_pulsar_00
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: int8_c
+        type: int8
+      - name: int16_c
+        type: int16
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint8_c
+        type: uint8
+      - name: uint16_c
+        type: uint16
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: uuid_c
+        type: uuid
+      - name: string_c
+        type: string
+      - name: float_c
+        type: float32
+      - name: decimal_c
+        type: decimal(9,3)
+      - name: date_c 
+        type: date
+      - name: datetime_c
+        type: datetime
+      - name: enum_c
+        type: enum8('a'=1, 'b'=2, 'z'=26)
+      - name: tuple_c
+        type: tuple(s string, i int32)
+      - name: ipv4_c
+        type: ipv4
+      - name: ipv6_c
+        type: ipv6
+      - name: map_c
+        type: map(string, int32)
+      - name: array_c
+        type: array(int32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_00 values (
+        1, 2, 3, 4, 5, 6, 7, 8, '928c88b9-f37a-41d5-bef5-9cb3663c2445', '{@string}', 12345.123, 123456.123, '2022-03-24',
+      '2022-03-24 17:17:17', 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1, 2, 3])
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-00-table-query
+    query: select _tp_shard, * from table(ex_pulsar_00)
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: int8_c
+        type: int8
+      - name: int16_c
+        type: int16
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint8_c
+        type: uint8
+      - name: uint16_c
+        type: uint16
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: uuid_c
+        type: uuid
+      - name: string_c
+        type: string
+      - name: float_c
+        type: float32
+      - name: decimal_c
+        type: decimal(9,3)
+      - name: date_c 
+        type: date
+      - name: datetime_c
+        type: datetime
+      - name: enum_c
+        type: enum8('a'=1, 'b'=2, 'z'=26)
+      - name: tuple_c
+        type: tuple(s string, i int32)
+      - name: ipv4_c
+        type: ipv4
+      - name: ipv6_c
+        type: ipv6
+      - name: map_c
+        type: map(string, int32)
+      - name: array_c
+        type: array(int32)
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: pulsar-00-seek-to-earliest
+    query: select _tp_shard, * from ex_pulsar_00 settings seek_to='earliest'
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: int8_c
+        type: int8
+      - name: int16_c
+        type: int16
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint8_c
+        type: uint8
+      - name: uint16_c
+        type: uint16
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: uuid_c
+        type: uuid
+      - name: string_c
+        type: string
+      - name: float_c
+        type: float32
+      - name: decimal_c
+        type: decimal(9,3)
+      - name: date_c 
+        type: date
+      - name: datetime_c
+        type: datetime
+      - name: enum_c
+        type: enum8('a'=1, 'b'=2, 'z'=26)
+      - name: tuple_c
+        type: tuple(s string, i int32)
+      - name: ipv4_c
+        type: ipv4
+      - name: ipv6_c
+        type: ipv6
+      - name: map_c
+        type: map(string, int32)
+      - name: array_c
+        type: array(int32)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pulsar-00-streaming-query
+    expected_result:
+      - - -1
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string}"
+        - "12345.123"
+        - "123456.123"
+        - "2022-03-24"
+        - "2022-03-24 17:17:17"
+        - a
+        - {s: a, i: 0}
+        - 192.168.168.168
+        - 2a02:aa08:e000:3100::20
+        - {'key1': 111}
+        - [1, 2, 3]
+
+  - type: check
+    target_name: pulsar-00-table-query
+    expected_result:
+      - - -1
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string-0}"
+        - "12345.123"
+        - "123456.123"
+        - "2022-03-25"
+        - "2022-03-25 18:18:18"
+        - a
+        - {s: a, i: 0}
+        - 192.168.168.168
+        - 2a02:aa08:e000:3100::20
+        - {'key1': 111}
+        - [1, 2, 3]
+      - - -1
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string}"
+        - "12345.123"
+        - "123456.123"
+        - "2022-03-24"
+        - "2022-03-24 17:17:17"
+        - a
+        - {s: a, i: 0}
+        - 192.168.168.168
+        - 2a02:aa08:e000:3100::20
+        - {'key1': 111}
+        - [1, 2, 3]
+ 
+  - type: check
+    target_name: pulsar-00-seek-to-earliest
+    expected_result:
+      - - -1
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string-0}"
+        - "12345.123"
+        - "123456.123"
+        - "2022-03-25"
+        - "2022-03-25 18:18:18"
+        - a
+        - {s: a, i: 0}
+        - 192.168.168.168
+        - 2a02:aa08:e000:3100::20
+        - {'key1': 111}
+        - [1, 2, 3]
+      - - -1
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string}"
+        - "12345.123"
+        - "123456.123"
+        - "2022-03-24"
+        - "2022-03-24 17:17:17"
+        - a
+        - {s: a, i: 0}
+        - 192.168.168.168
+        - 2a02:aa08:e000:3100::20
+        - {'key1': 111}
+        - [1, 2, 3]
+
+  - type: query
+    sql: drop stream ex_pulsar_00

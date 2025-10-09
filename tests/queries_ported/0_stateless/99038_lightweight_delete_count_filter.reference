@@ -1,0 +1,22 @@
+(append only) before delete:
+3
+Expression ((Projection + Before ORDER BY))
+  MergingAggregated
+    ReadFromPreparedSource (Optimized trivial count)
+(append only) after delete:
+2
+Expression ((Projection + Before ORDER BY))
+  Aggregating
+    Expression (Before GROUP BY)
+      ReadFromMergeTree (default.99038_sales)
+(mergetree) before delete:
+3
+Expression ((Projection + Before ORDER BY))
+  MergingAggregated
+    ReadFromPreparedSource (Optimized trivial count)
+(mergetree) after delete:
+2
+Expression ((Projection + Before ORDER BY))
+  Aggregating
+    Expression (Before GROUP BY)
+      ReadFromMergeTree (default.99038_ss)

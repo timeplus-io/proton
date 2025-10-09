@@ -21,7 +21,7 @@ CREATE DICTIONARY geoip (
         state string,
         city string
 ) PRIMARY KEY cidr
-SOURCE (ClickHouse (table 'geoip_t' user 'proton' password 'proton@t+' ))
+SOURCE (Timeplus (stream 'geoip_t' user 'proton' password 'proton@t+' ))
 LIFETIME (MIN 300 MAX 360)
 LAYOUT (IP_TRIE());
 

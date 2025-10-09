@@ -28,11 +28,11 @@ namespace ErrorCodes
 
 static void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server);
 /// proton: starts
-static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false);
+static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false, bool is_clickhouse_compatible_ = false);
 /// proton: ends
 
 HTTPRequestHandlerFactoryMain::HTTPRequestHandlerFactoryMain(const std::string & name_)
-    : log(&Poco::Logger::get(name_)), name(name_)
+    : log(getLogger(name_)), name(name_)
 {
 }
 
@@ -62,7 +62,7 @@ std::unique_ptr<HTTPRequestHandler> HTTPRequestHandlerFactoryMain::createRequest
 
 /// proton: starts
 static inline auto createHandlersFactoryFromConfig(
-    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false)
+    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false, bool is_clickhouse_compatible_ = false)
 /// proton: ends
 {
     auto main_handler_factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
@@ -75,7 +75,7 @@ static inline auto createHandlersFactoryFromConfig(
         if (key == "defaults")
         {
             /// proton: starts
-            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics, snapshot_mode_);
+            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics, snapshot_mode_, is_clickhouse_compatible_);
             /// proton: ends
         }
         else if (startsWith(key, "rule"))
@@ -83,8 +83,8 @@ static inline auto createHandlersFactoryFromConfig(
             const auto & handler_type = server.config().getString(prefix + "." + key + ".handler.type", "");
 
             if (handler_type.empty())
-                throw Exception("Handler type in config is not specified here: " + prefix + "." + key + ".handler.type",
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+                throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Handler type in config is not specified here: "
+                    "{}.{}.handler.type", prefix, key);
 
             if (handler_type == "static")
                 main_handler_factory->addHandler(createStaticHandlerFactory(server, prefix + "." + key));
@@ -95,12 +95,12 @@ static inline auto createHandlersFactoryFromConfig(
             else if (handler_type == "prometheus")
                 main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key));
             else
-                throw Exception("Unknown handler type '" + handler_type + "' in config here: " + prefix + "." + key + ".handler.type",
-                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+                throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Unknown handler type '{}' in config here: {}.{}.handler.type",
+                    handler_type, prefix, key);
         }
         else
-            throw Exception("Unknown element in config: " + prefix + "." + key + ", must be 'rule' or 'defaults'",
-                ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+            throw Exception(ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG, "Unknown element in config: "
+                "{}.{}, must be 'rule' or 'defaults'", prefix, key);
     }
 
     return main_handler_factory;
@@ -108,20 +108,20 @@ static inline auto createHandlersFactoryFromConfig(
 
 static inline HTTPRequestHandlerFactoryPtr
 /// proton: starts
-createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false)
+createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics, bool snapshot_mode_ = false, bool is_clickhouse_compatible_ = false)
 /// proton: ends
 {
     if (server.config().has("http_handlers"))
     {
         /// proton: starts
-        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics, snapshot_mode_);
+        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics, snapshot_mode_, is_clickhouse_compatible_);
         /// proton: ends
     }
     else
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
         /// proton: starts
-        addDefaultHandlersFactory(*factory, server, async_metrics, snapshot_mode_);
+        addDefaultHandlersFactory(*factory, server, async_metrics, snapshot_mode_, is_clickhouse_compatible_);
         /// proton: ends
         return factory;
     }
@@ -161,7 +161,7 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, Asynchronous
         return createHTTPHandlerFactory(server, name, async_metrics);
     /// proton: starts. turn on snapshot_mode
     else if (name == "SnapshotHTTPHandler-factory")
-        return createHTTPHandlerFactory(server, name, async_metrics, true);
+        return createHTTPHandlerFactory(server, name, async_metrics, true, true);
     /// proton: ends
     else if (name == "InterserverIOHTTPHandler-factory" || name == "InterserverIOHTTPSHandler-factory")
         return createInterserverHTTPHandlerFactory(server, name);
@@ -172,16 +172,16 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, Asynchronous
         return factory;
     }
 
-    throw Exception("LOGICAL ERROR: Unknown HTTP handler factory name.", ErrorCodes::LOGICAL_ERROR);
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "LOGICAL ERROR: Unknown HTTP handler factory name.");
 }
 
 /// proton: starts.
-HTTPRequestHandlerFactoryPtr createMetaStoreHandlerFactory(IServer & server, const std::string & name)
+HTTPRequestHandlerFactoryPtr createKeyValueServiceHandlerFactory(IServer & server, const std::string & name)
 {
     auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
     for (const auto * prefix : {"timeplusd", "proton"})
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "metastore");
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "metastore", false, false);
         rest_handler->attachNonStrictPath(fmt::format("/{}/metastore", prefix));
         factory->addHandler(rest_handler);
     }
@@ -206,28 +206,36 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
 }
 
 /// proton: starts
-void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_)
-/// proton: ends
+void addDefaultHandlersFactory(
+    HTTPRequestHandlerFactoryMain & factory,
+    IServer & server,
+    AsynchronousMetrics & async_metrics,
+    bool snapshot_mode_,
+    bool is_clickhouse_compatible_mode_)
 {
     addCommonDefaultHandlersFactory(factory, server);
 
-    /// proton: start. Add rest request process handler
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "proton");
+        bool snapshot_mode_copy = snapshot_mode_;
+        bool is_clickhouse_compatible_mode_copy = is_clickhouse_compatible_mode_;
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(
+            server, "proton", std::move(snapshot_mode_copy), std::move(is_clickhouse_compatible_mode_copy));
         rest_handler->attachNonStrictPath("/proton");
         factory.addHandler(rest_handler);
     }
 
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "timeplusd");
+        bool snapshot_mode_copy = snapshot_mode_;
+        bool is_clickhouse_compatible_mode_copy = is_clickhouse_compatible_mode_;
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(
+            server, "timeplusd", std::move(snapshot_mode_copy), std::move(is_clickhouse_compatible_mode_copy));
         rest_handler->attachNonStrictPath("/timeplusd");
         factory.addHandler(rest_handler);
     }
-    /// proton: end.
-
-    /// proton: starts
-    auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, "query", std::move(snapshot_mode_));
+    auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(
+        server, "query", std::move(snapshot_mode_), std::move(is_clickhouse_compatible_mode_));
     /// proton: ends
+
     query_handler->allowPostAndGetParamsAndOptionsRequest();
     factory.addHandler(query_handler);
 

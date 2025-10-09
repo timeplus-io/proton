@@ -1,0 +1,123 @@
+create stream test (json nullable(json(a uint32, b array(uint32), c nullable(uint32), d tuple(e uint32, f nullable(uint32))))) engine=Memory;
+1	nullable(uint32)
+\N	nullable(uint32)
+1	nullable(uint32)
+\N	nullable(uint32)
+[1,2,3]	array(uint32)
+[]	array(uint32)
+[1,2,3]	array(uint32)
+[]	array(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+(1,NULL)	tuple(e uint32, f nullable(uint32))
+(0,NULL)	tuple(e uint32, f nullable(uint32))
+(1,NULL)	tuple(e uint32, f nullable(uint32))
+(0,NULL)	tuple(e uint32, f nullable(uint32))
+1	nullable(uint32)
+\N	nullable(uint32)
+1	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+42	dynamic
+\N	dynamic
+42	dynamic
+\N	dynamic
+42	nullable(int64)
+\N	nullable(int64)
+42	nullable(int64)
+\N	nullable(int64)
+[1,2,3]	dynamic
+\N	dynamic
+[1,2,3]	dynamic
+\N	dynamic
+[1,2,3]	array(nullable(int64))
+[]	array(nullable(int64))
+[1,2,3]	array(nullable(int64))
+[]	array(nullable(int64))
+create stream test (json nullable(json(a uint32, b array(uint32), c nullable(uint32), d tuple(e uint32, f nullable(uint32))))) engine=MergeTree order by tuple_cast() settings min_rows_for_wide_part=100000000, min_bytes_for_wide_part=1000000000;
+1	nullable(uint32)
+\N	nullable(uint32)
+1	nullable(uint32)
+\N	nullable(uint32)
+[1,2,3]	array(uint32)
+[]	array(uint32)
+[1,2,3]	array(uint32)
+[]	array(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+(1,NULL)	tuple(e uint32, f nullable(uint32))
+(0,NULL)	tuple(e uint32, f nullable(uint32))
+(1,NULL)	tuple(e uint32, f nullable(uint32))
+(0,NULL)	tuple(e uint32, f nullable(uint32))
+1	nullable(uint32)
+\N	nullable(uint32)
+1	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+42	dynamic
+\N	dynamic
+42	dynamic
+\N	dynamic
+42	nullable(int64)
+\N	nullable(int64)
+42	nullable(int64)
+\N	nullable(int64)
+[1,2,3]	dynamic
+\N	dynamic
+[1,2,3]	dynamic
+\N	dynamic
+[1,2,3]	array(nullable(int64))
+[]	array(nullable(int64))
+[1,2,3]	array(nullable(int64))
+[]	array(nullable(int64))
+create stream test (json nullable(json(a uint32, b array(uint32), c nullable(uint32), d tuple(e uint32, f nullable(uint32))))) engine=MergeTree order by tuple_cast() settings min_rows_for_wide_part=1, min_bytes_for_wide_part=1;
+1	nullable(uint32)
+\N	nullable(uint32)
+1	nullable(uint32)
+\N	nullable(uint32)
+[1,2,3]	array(uint32)
+[]	array(uint32)
+[1,2,3]	array(uint32)
+[]	array(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+(1,NULL)	tuple(e uint32, f nullable(uint32))
+(0,NULL)	tuple(e uint32, f nullable(uint32))
+(1,NULL)	tuple(e uint32, f nullable(uint32))
+(0,NULL)	tuple(e uint32, f nullable(uint32))
+1	nullable(uint32)
+\N	nullable(uint32)
+1	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+\N	nullable(uint32)
+42	dynamic
+\N	dynamic
+42	dynamic
+\N	dynamic
+42	nullable(int64)
+\N	nullable(int64)
+42	nullable(int64)
+\N	nullable(int64)
+[1,2,3]	dynamic
+\N	dynamic
+[1,2,3]	dynamic
+\N	dynamic
+[1,2,3]	array(nullable(int64))
+[]	array(nullable(int64))
+[1,2,3]	array(nullable(int64))
+[]	array(nullable(int64))

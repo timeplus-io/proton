@@ -110,7 +110,7 @@ void TCPServerDispatcher::run()
 					beginConnection();
 					if (!_stopped)
 					{
-						std::unique_ptr<TCPServerConnection> pConnection(_pConnectionFactory->createConnection(pCNf->socket()));
+						std::shared_ptr<TCPServerConnection> pConnection(_pConnectionFactory->createConnection(pCNf->socket()));
 						poco_check_ptr(pConnection.get());
 						pConnection->start();
 					}

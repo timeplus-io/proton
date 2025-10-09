@@ -1,8 +1,10 @@
+#include <Interpreters/SystemLog.h>
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/CrashLog.h>
 #include <Interpreters/MetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/BlobStorageLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/QueryThreadLog.h>
 #include <Interpreters/QueryViewsLog.h>
@@ -10,9 +12,10 @@
 #include <Interpreters/TextLog.h>
 #include <Interpreters/TraceLog.h>
 #include <Interpreters/ProcessorsProfileLog.h>
-#include <Interpreters/ZooKeeperLog.h>
 #include <Interpreters/TransactionsInfoLog.h>
 #include <Interpreters/FilesystemCacheLog.h>
+#include <Interpreters/FilesystemReadPrefetchesLog.h>
+#include <Interpreters/AsynchronousInsertLog.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterInsertQuery.h>
@@ -34,8 +37,22 @@
 #include <base/scope_guard.h>
 
 ///proton: starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/MaterializedViewDeadLetterQueue.h>
 #include <Interpreters/PipelineMetricLog.h>
+#include <Interpreters/StreamMetricLog.h>
+#include <Interpreters/StreamStateLog.h>
+#include <Interpreters/executeSelectQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIndexDeclaration.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/queryToString.h>
+#include <Storages/StorageMergeTree.h>
+#include <Storages/Stream/StorageStream.h>
+#include <Common/ProtonCommon.h>
 ///proton: ends
 
 
@@ -46,6 +63,9 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int LOGICAL_ERROR;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int UNKNOWN_STREAM;
+    extern const int NOT_A_LEADER;
 }
 
 namespace
@@ -69,12 +89,14 @@ std::shared_ptr<TSystemLog> createSystemLog(
 {
     if (!config.has(config_prefix))
     {
-        LOG_DEBUG(&Poco::Logger::get("SystemLog"),
+        LOG_DEBUG(getLogger("SystemLog"),
                 "Not creating {}.{} since corresponding section '{}' is missing from config",
                 default_database_name, default_table_name, config_prefix);
 
         return {};
     }
+    LOG_DEBUG(getLogger("SystemLog"),
+              "Creating {}.{} from {}", default_database_name, default_table_name, config_prefix);
 
     String database = config.getString(config_prefix + ".database", default_database_name);
     String table = config.getString(config_prefix + ".table", default_table_name);
@@ -82,7 +104,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
     if (database != default_database_name)
     {
         /// System tables must be loaded before other tables, but loading order is undefined for all databases except `system`
-        LOG_ERROR(&Poco::Logger::get("SystemLog"), "Custom database name for a system table specified in config."
+        LOG_ERROR(getLogger("SystemLog"), "Custom database name for a system table specified in config."
             " Table `{}` will be created in `system` database instead of `{}`", table, database);
         database = default_database_name;
     }
@@ -91,13 +113,12 @@ std::shared_ptr<TSystemLog> createSystemLog(
     if (config.has(config_prefix + ".engine"))
     {
         if (config.has(config_prefix + ".partition_by"))
-            throw Exception("If 'engine' is specified for system table, "
-                "PARTITION BY parameters should be specified directly inside 'engine' and 'partition_by' setting doesn't make sense",
-                ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                            "If 'engine' is specified for system table, PARTITION BY parameters should "
+                            "be specified directly inside 'engine' and 'partition_by' setting doesn't make sense");
         if (config.has(config_prefix + ".ttl"))
-            throw Exception("If 'engine' is specified for system table, "
-                            "TTL parameters should be specified directly inside 'engine' and 'ttl' setting doesn't make sense",
-                            ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "If 'engine' is specified for system table, "
+                                                       "TTL parameters should be specified directly inside 'engine' and 'ttl' setting doesn't make sense");
         engine = config.getString(config_prefix + ".engine");
     }
     else
@@ -124,9 +145,13 @@ std::shared_ptr<TSystemLog> createSystemLog(
 }
 
 
-/// returns CREATE STREAM query, but with removed:
-/// - UUID
-/// - SETTINGS (for MergeTree)
+/// Remove the dynamic settings from the create query comparison.
+void cleanStreamSettings(ASTSetQuery * )
+{
+}
+/// proton : ends
+
+/// returns CREATE TABLE query, but with removed UUID
 /// That way it can be used to compare with the SystemLog::getCreateTableQuery()
 ASTPtr getCreateTableQueryClean(const StorageID & table_id, ContextPtr context)
 {
@@ -135,14 +160,8 @@ ASTPtr getCreateTableQueryClean(const StorageID & table_id, ContextPtr context)
     auto & old_create_query_ast = old_ast->as<ASTCreateQuery &>();
     /// Reset UUID
     old_create_query_ast.uuid = UUIDHelpers::Nil;
-    /// Existing table has default settings (i.e. `index_granularity = 8192`), reset them.
-    if (ASTStorage * storage = old_create_query_ast.storage)
-    {
-        storage->reset(storage->settings);
-    }
     return old_ast;
 }
-
 }
 
 ///
@@ -157,7 +176,9 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log");
     text_log = createSystemLog<TextLog>(global_context, "system", "text_log", config, "text_log");
     metric_log = createSystemLog<MetricLog>(global_context, "system", "metric_log", config, "metric_log");
-    cache_log = createSystemLog<FilesystemCacheLog>(global_context, "system", "filesystem_cache_log", config, "filesystem_cache_log");
+    filesystem_cache_log = createSystemLog<FilesystemCacheLog>(global_context, "system", "filesystem_cache_log", config, "filesystem_cache_log");
+    filesystem_read_prefetches_log = createSystemLog<FilesystemReadPrefetchesLog>(
+        global_context, "system", "filesystem_read_prefetches_log", config, "filesystem_read_prefetches_log");
     asynchronous_metric_log = createSystemLog<AsynchronousMetricLog>(
         global_context, "system", "asynchronous_metric_log", config,
         "asynchronous_metric_log");
@@ -166,13 +187,17 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         "opentelemetry_span_log");
     /// proton: starts
     pipeline_metric_log = createSystemLog<PipelineMetricLog>(global_context, "system", "pipeline_metric_log", config, "pipeline_metric_log");
+    stream_metric_log = createSystemLog<StreamMetricLog>(global_context, "system", "stream_metric_log", config, "stream_metric_log");
+    stream_state_log = createSystemLog<StreamStateLog>(global_context, "system", "stream_state_log", config, "stream_state_log");
+    mv_dlq = createSystemLog<MaterializedViewDeadLetterQueue>(global_context, "system", "mat_view_dlq", config, "mat_view_dlq");
     /// proton: ends
     query_views_log = createSystemLog<QueryViewsLog>(global_context, "system", "query_views_log", config, "query_views_log");
-    zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log");
     session_log = createSystemLog<SessionLog>(global_context, "system", "session_log", config, "session_log");
     processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log");
+    asynchronous_insert_log = createSystemLog<AsynchronousInsertLog>(global_context, "system", "asynchronous_insert_log", config, "asynchronous_insert_log");
     transactions_info_log = createSystemLog<TransactionsInfoLog>(
         global_context, "system", "transactions_info_log", config, "transactions_info_log");
+    blob_storage_log = createSystemLog<BlobStorageLog>(global_context, "system", "blob_storage_log", config, "blob_storage_log");
 
     if (query_log)
         logs.emplace_back(query_log.get());
@@ -195,11 +220,15 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     /// proton: starts
     if (pipeline_metric_log)
         logs.emplace_back(pipeline_metric_log.get());
+    if (stream_metric_log)
+        logs.emplace_back(stream_metric_log.get());
+    if (stream_state_log)
+        logs.emplace_back(stream_state_log.get());
+    if (mv_dlq)
+        logs.emplace_back(mv_dlq.get());
     /// proton: ends
     if (query_views_log)
         logs.emplace_back(query_views_log.get());
-    if (zookeeper_log)
-        logs.emplace_back(zookeeper_log.get());
     if (session_log)
     {
         logs.emplace_back(session_log.get());
@@ -207,10 +236,16 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     }
     if (processors_profile_log)
         logs.emplace_back(processors_profile_log.get());
-    if (cache_log)
-        logs.emplace_back(cache_log.get());
+    if (asynchronous_insert_log)
+        logs.emplace_back(asynchronous_insert_log.get());
+    if (filesystem_cache_log)
+        logs.emplace_back(filesystem_cache_log.get());
+    if (filesystem_read_prefetches_log)
+        logs.emplace_back(filesystem_read_prefetches_log.get());
     if (transactions_info_log)
         logs.emplace_back(transactions_info_log.get());
+    if (blob_storage_log)
+        logs.emplace_back(blob_storage_log.get());
 
     try
     {
@@ -238,6 +273,21 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
                                                                 DEFAULT_PIPELINE_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
         pipeline_metric_log->startCollectMetric(collect_interval_milliseconds);
     }
+
+    if (stream_metric_log)
+    {
+        int64_t collect_interval_milliseconds = config.getInt64("stream_metric_log.collect_interval_milliseconds",
+                                                                DEFAULT_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
+        stream_metric_log->startCollectMetrics(collect_interval_milliseconds);
+    }
+
+    if (stream_state_log)
+    {
+        int64_t collect_interval_milliseconds
+            = config.getInt64("stream_state_log.collect_interval_milliseconds", DEFAULT_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
+        stream_state_log->startCollectStates(collect_interval_milliseconds);
+    }
+
     /// proton: ends.
 
     if (crash_log)
@@ -275,7 +325,7 @@ SystemLog<LogElement>::SystemLog(
     , flush_interval_milliseconds(flush_interval_milliseconds_)
 {
     assert(database_name_ == DatabaseCatalog::SYSTEM_DATABASE);
-    log = &Poco::Logger::get("SystemLog (" + database_name_ + "." + table_name_ + ")");
+    log = getLogger("SystemLog (" + database_name_ + "." + table_name_ + ")");
 }
 
 template <typename LogElement>
@@ -285,7 +335,7 @@ void SystemLog<LogElement>::shutdown()
 
     auto table = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
     if (table)
-        table->flushAndShutdown();
+        table->flushAndShutdown(/*dropping=*/false);
 }
 
 template <typename LogElement>
@@ -295,6 +345,49 @@ void SystemLog<LogElement>::savingThreadFunction()
 
     std::vector<LogElement> to_flush;
     bool exit_this_thread = false;
+
+    if (is_force_prepare_tables)
+    {
+        /// FIXME: Here is a very foolish bug. If a subclass sets `is_force_prepare_tables = true`,
+        /// then this thread will attempt to call `prepareTables` to create tables,
+        /// while the System database in `Server.cpp` has not been initialized yet.
+        /// As a result, when `startupSystemTables()` is called, it will try to create a directory,
+        /// and a warning will be logged. There is some sort of race condition here.
+        /// However, it was always the case that tables would be created at the time of the first flush,
+        /// so this problem was never discovered. For now, we will simulate the previous behavior,
+        /// but this bug needs to be fixed in the future.
+        const size_t max_wait_ms = 10000; /// Maximum 10 seconds wait
+        const size_t check_interval_ms = 50; /// Check every 50ms
+        size_t waited_ms = 0;
+
+        while (waited_ms < max_wait_ms)
+        {
+            try
+            {
+                /// Try to get the System database - if it exists, we're ready
+                auto system_db = DatabaseCatalog::instance().tryGetDatabase(DatabaseCatalog::SYSTEM_DATABASE);
+                if (system_db)
+                {
+                    LOG_DEBUG(log, "System database ready after {} ms", waited_ms);
+                    break;
+                }
+            }
+            catch (...)
+            {
+                /// Database catalog might not be ready yet, continue waiting
+            }
+
+            if (waited_ms > 1000 && waited_ms % 1000 == 0)
+                LOG_WARNING(log, "Still waiting for System database after {} ms...", waited_ms);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(check_interval_ms));
+            waited_ms += check_interval_ms;
+        }
+
+        if (waited_ms >= max_wait_ms)
+            LOG_ERROR(log, "System database not ready after {} ms timeout. This may cause table creation issues.", max_wait_ms);
+    }
+
     while (!exit_this_thread)
     {
         try
@@ -331,7 +424,17 @@ void SystemLog<LogElement>::savingThreadFunction()
             {
                 if (should_prepare_tables_anyway)
                 {
-                    prepareTable();
+                    try
+                    {
+                        prepareTable();
+                    }
+                    catch (const Exception & e)
+                    {
+                        LOG_WARNING(log, "Failed to create system table={}, error={}", table_id.getNameForLogs(), e.displayText());
+                        /// To avoid busy loop
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                        continue;
+                    }
                     LOG_TRACE(log, "Stream created (force)");
 
                     std::lock_guard lock(mutex);
@@ -344,9 +447,17 @@ void SystemLog<LogElement>::savingThreadFunction()
                 flushImpl(to_flush, to_flush_end);
             }
         }
+        /// proton: starts.
+        catch (const Exception & e)
+        {
+            /// To avoid busy loop
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            tryLogCurrentException(log, fmt::format("Failed to flush {} system log: {}", table_id.getNameForLogs(), e.displayText()));
+        }
+        /// proton: ends.
         catch (...)
         {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
+            tryLogCurrentException(log);
         }
     }
     LOG_TRACE(log, "Terminating");
@@ -371,7 +482,12 @@ void SystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, 
         auto log_element_names_and_types = LogElement::getNamesAndTypes();
 
         for (const auto & name_and_type : log_element_names_and_types)
+        {
+            if (name_and_type.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+                continue;
+
             log_element_columns.emplace_back(name_and_type.type, name_and_type.name);
+        }
 
         Block block(std::move(log_element_columns)); /// NOLINT(performance-move-const-arg)
 
@@ -394,6 +510,7 @@ void SystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, 
 
         /// proton: starts. Disable light ingest for system log
         insert_context->setSetting("enable_light_ingest", false);
+        insert_context->setSetting("async_insert", true);
         /// proton: ends
 
         InterpreterInsertQuery interpreter(query_ptr, insert_context);
@@ -405,9 +522,18 @@ void SystemLog<LogElement>::flushImpl(const std::vector<LogElement> & to_flush, 
         executor.push(block);
         executor.finish();
     }
+    /// proton: starts.
+    catch (const Exception & e)
+    {
+        if (e.code() == ErrorCodes::UNKNOWN_STREAM)
+            LOG_WARNING(log, "Failed to flush system log: {}", e.displayText());
+        else
+            tryLogCurrentException(log, e.displayText());
+    }
+    /// proton: ends.
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentException(log);
     }
 
     {
@@ -426,8 +552,10 @@ void SystemLog<LogElement>::prepareTable()
 {
     String description = table_id.getNameForLogs();
 
-    auto table = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
-    if (table)
+    StoragePtr table = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
+
+    /// Not implement rename for stream yet
+    if (table && table->as<StorageMergeTree>())
     {
         if (old_create_query.empty())
         {
@@ -460,9 +588,9 @@ void SystemLog<LogElement>::prepareTable()
 
             rename->elements.emplace_back(elem);
 
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
-                "Existing table {} for system log has obsolete or different structure. Renaming it to {}.\nOld: {}\nNew: {}\n.",
+                "Existing table {} for system log has obsolete or different structure. Renaming it to {}.\nOld: {}\nNew: {}\n",
                 description,
                 backQuoteIfNeed(to.table),
                 old_create_query,
@@ -478,6 +606,100 @@ void SystemLog<LogElement>::prepareTable()
         else if (!is_prepared)
             LOG_DEBUG(log, "Will use existing table {} for {}", description, LogElement::name());
     }
+    /// proton: starts.
+    /// FIXME: The current stream does not support the rename logic,
+    /// so after adding the _tp_sn column, the stream needs to be dropped and recreated.
+    /// Once rename is supported, remove this logic.
+    else if (table && table->as<StorageStream>())
+    {
+        auto storage_metadata = table->getInMemoryMetadataPtr();
+        assert(storage_metadata);
+
+        auto local_context = getContext();
+        if (old_create_query.empty())
+        {
+            ASTPtr old_ast = getCreateTableQueryClean(table_id, local_context);
+            auto & old_create_query_ast = old_ast->as<ASTCreateQuery &>();
+            if (old_create_query_ast.storage != nullptr)
+                cleanStreamSettings(old_create_query_ast.storage->settings);
+            old_create_query = serializeAST(*old_ast);
+            if (old_create_query.empty())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty CREATE QUERY for {}", backQuoteIfNeed(table_id.table_name));
+        }
+
+        ParserCreateQuery create_query_parser;
+        ASTPtr create_ast = parseQuery(
+            create_query_parser,
+            create_query.data(),
+            create_query.data() + create_query.size(),
+            "CREATE query for SystemLog " + table_id.getFullNameNotQuoted(),
+            0,
+            DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
+        /// Since for Storage stream, we will `fix` the schema with default settings, indexes etc,
+        /// we do the same thing here otherwise the create_query won't be equal to the old_create_query
+        auto & create_query_ast = create_ast->as<ASTCreateQuery &>();
+        InterpreterCreateQuery::completeTableCreationAST(create_query_ast, Context::createCopy(local_context));
+        if (create_query_ast.storage && create_query_ast.storage->settings)
+            cleanStreamSettings(create_query_ast.storage->settings);
+
+        auto complete_create_query = serializeAST(create_query_ast);
+
+        if (old_create_query != complete_create_query)
+        {
+            LOG_INFO(
+                log,
+                "Existing stream {} for system log has obsolete or different structure. \nOld: {}\nNew: {}\n",
+                description,
+                old_create_query,
+                complete_create_query);
+
+            {
+                auto query_context = Context::createCopy(context);
+                query_context->makeQueryContext();
+
+                String query = fmt::format("DROP STREAM IF EXISTS {}", table_id.getFullTableName());
+                executeNonInsertQuery(
+                    query,
+                    query_context,
+                    [&](Block &&) {
+                        LOG_DEBUG(
+                            log,
+                            "Existing table {} for system log has obsolete or different structure. Dropping it.",
+                            table_id.getFullTableName());
+                    },
+                    true);
+            }
+
+            /// The required table will be created.
+            table = nullptr;
+        }
+        else
+        {
+            /// proton: starts
+            /// For existing StorageStream tables that match the schema,
+            /// ensure they are properly initialized by calling startup()
+            /// This is critical for system log streams recovered from metadata
+            if (auto * stream_table = table->as<StorageStream>())
+            {
+                try
+                {
+                    /// The startup method initializes stream_shards via init()
+                    /// StorageStream::startup() now handles re-initialization if needed
+                    stream_table->startup();
+                    LOG_DEBUG(log, "Ensured startup for existing system log stream table {}", description);
+                }
+                catch (const Exception & e)
+                {
+                    LOG_ERROR(log, "Failed to startup existing system log stream table {}: {}", 
+                             description, e.displayText());
+                    throw;
+                }
+            }
+            /// proton: ends
+        }
+    }
+    /// proton: ends.
 
     if (!table)
     {
@@ -487,7 +709,8 @@ void SystemLog<LogElement>::prepareTable()
         auto query_context = Context::createCopy(context);
         query_context->makeQueryContext();
 
-        auto create_query_ast = getCreateTableQuery();
+        ASTPtr create_query_ast = getCreateTableQuery();
+
         InterpreterCreateQuery interpreter(create_query_ast, query_context);
         interpreter.setInternal(true);
         interpreter.execute();
@@ -519,7 +742,19 @@ ASTPtr SystemLog<LogElement>::getCreateTableQuery()
     ASTPtr storage_ast = parseQuery(
         storage_parser, storage_def.data(), storage_def.data() + storage_def.size(),
         "Storage to create table for " + LogElement::name(), 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
     create->set(create->storage, storage_ast);
+
+    /// Write additional (default) settings for MergeTree engine to make it make it possible to compare ASTs
+    /// and recreate tables on settings changes.
+    const auto & engine = create->storage->engine->as<ASTFunction &>();
+    /// proton: starts. Add default settings (index_granularity) for Stream.
+    if (endsWith(engine.name, "MergeTree") || engine.name == "Stream")
+    /// proton: ends
+    {
+        auto storage_settings = std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+        storage_settings->loadFromQuery(*create->storage, getContext());
+    }
 
     return create;
 }

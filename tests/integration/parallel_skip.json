@@ -3,5 +3,9 @@
   "test_host_ip_change/test.py::test_ip_change_drop_dns_cache",
   "test_host_ip_change/test.py::test_ip_change_update_dns_cache",
   "test_host_ip_change/test.py::test_user_access_ip_change[node0]",
-  "test_host_ip_change/test.py::test_user_access_ip_change[node1]"
+  "test_host_ip_change/test.py::test_user_access_ip_change[node1]",
+
+   "test_http_failover/test.py::test_url_destination_host_with_multiple_addrs",
+   "test_http_failover/test.py::test_url_invalid_hostname",
+   "test_http_failover/test.py::test_url_ip_change"
 ]

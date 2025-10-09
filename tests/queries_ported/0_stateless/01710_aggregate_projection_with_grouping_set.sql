@@ -1,3 +1,7 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
+
 drop stream if exists test;
 
 create stream test(dim1 string, dim2 string, projection p1 (select dim1, dim2, count() group by dim1, dim2)) engine MergeTree order by dim1;

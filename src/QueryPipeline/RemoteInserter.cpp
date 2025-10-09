@@ -7,6 +7,7 @@
 #include <Common/CurrentThread.h>
 #include <Interpreters/InternalTextLogsQueue.h>
 #include <IO/ConnectionTimeouts.h>
+#include <Core/Settings.h>
 
 
 namespace DB
@@ -28,11 +29,6 @@ RemoteInserter::RemoteInserter(
 {
     ClientInfo modified_client_info = client_info_;
     modified_client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-    if (CurrentThread::isInitialized())
-    {
-        modified_client_info.client_trace_context
-            = CurrentThread::get().thread_trace_context;
-    }
 
     /** Send query and receive "header", that describes stream structure.
       * Header is needed to know, what structure is required for blocks to be passed to 'write' method.
@@ -91,11 +87,16 @@ void RemoteInserter::write(Block block)
         if (packet_type && *packet_type == Protocol::Server::Exception)
         {
             Packet packet = connection.receivePacket();
+            packet.exception->addMessage("Received exception from remote server"); /// proton: added
             packet.exception->rethrow();
         }
 
         throw;
     }
+    /// proton: starts
+    /// Remote server could send logs and profile events
+    receiveLogsAndProfileEvents();
+    /// proton: ends
 }
 
 
@@ -154,5 +155,45 @@ RemoteInserter::~RemoteInserter()
         }
     }
 }
+
+/// proton: starts
+void RemoteInserter::receiveLogsAndProfileEvents()
+{
+    LoggerPtr logger = getLogger("RemoteInserter");
+    auto packet_type = connection.checkPacket(0);
+
+    while (packet_type)
+    {
+        Packet packet = connection.receivePacket();
+
+        switch (packet.type)
+        {
+            case Protocol::Server::Log:
+                if (auto log_queue = CurrentThread::getInternalTextLogsQueue())
+                    log_queue->pushBlock(std::move(packet.block));
+                break;
+
+            case Protocol::Server::ProfileEvents:
+                if (auto profile_events_queue = CurrentThread::getInternalProfileEventsQueue())
+                    if (!profile_events_queue->push(std::move(packet.block)))
+                        LOG_WARNING(logger, "Got a ProfileEvents packet from remote server, but failed to push it to the internal profile events queue");
+                break;
+
+            case Protocol::Server::Exception:
+                packet.exception->addMessage("Received exception from remote server");
+                packet.exception->rethrow();
+                break;
+
+            default:
+                throw NetException(
+                    ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
+                    "Unexpected packet from server (expected Exception, Log or ProfileEvents. Got {})",
+                    Protocol::Server::toString(packet.type));
+        }
+
+        packet_type = connection.checkPacket(0);
+    }
+}
+/// proton: ends
 
 }

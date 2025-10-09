@@ -1,0 +1,100 @@
+description: When the enable.idempotence set to true, the producer will ensure that messages are successfully 
+                produced exactly once and in the original produce order.
+             message.timeout.ms - Local message timeout.
+             queue.buffering.max.messages - Maximum number of messages allowed on the producer queue.
+             queue.buffering.max.kbytes - Maximum total message size sum allowed on the producer queue.
+             queue.buffering.max.ms - Delay in milliseconds to wait for messages in the producer queue to accumulate before constructing message batches (MessageSets) to transmit to brokers.
+             message.max.bytes - Maximum Kafka protocol request message size.
+             message.copy.max.bytes - Maximum size for message to be copied to buffer. Messages larger than this will be passed by reference (zero-copy) at the expense of larger iovecs. Type:integer
+             receive.message.max.bytes - Maximum Kafka protocol response message size. This serves as a safety precaution to avoid memory exhaustion in case of protocol hickups. This value must be at least fetch.max.bytes + 512 to allow for protocol overhead; the value is adjusted automatically unless the configuration property is explicitly set. Type:integer
+             max.in.flight.requests.per.connection - Maximum number of in-flight requests per broker connection. This is a generic property applied to all broker communication, however it is primarily relevant to produce requests. In particular, note that other mechanisms limit the number of outstanding consumer fetch request per broker to one. Type:integer
+             max.in.flight(`max.in.flight` must be set <= 5 when `enable.idempotence` is true) - Alias for max.in.flight.requests.per.connection:Maximum number of in-flight requests per broker connection. This is a generic property applied to all broker communication, however it is primarily relevant to produce requests. In particular, note that other mechanisms limit the number of outstanding consumer fetch request per broker to one. Type:integer
+             metadata.request.timeout.ms(no support) - Non-topic request timeout in milliseconds. This is for metadata requests, etc. Type:integer
+             topic.metadata.refresh.interval.ms - Period of time in milliseconds at which topic and broker metadata is refreshed in order to proactively discover any new brokers, topics, partitions or partition leader changes. Use -1 to disable the intervalled refresh (not recommended). If there are no locally referenced topics (no topic objects created, no messages produced, no subscription or no assignment) then only the broker list will be refreshed every interval but no more often than every 10s. Type:integer
+             metadata.max.age.ms - Metadata cache max age. Defaults to topic.metadata.refresh.interval.ms * 3 Type:integer
+             topic.metadata.refresh.fast.interval.ms - When a topic loses its leader a new metadata request will be enqueued with this initial interval, exponentially increasing until the topic metadata has been refreshed. This is used to recover quickly from transitioning leader brokers. Type:integer
+             topic.metadata.refresh.fast.cnt - DEPRECATED No longer used. Type:integer
+             topic.metadata.refresh.sparse - Sparse metadata requests (consumes less network bandwidth) Type:boolean
+             topic.metadata.propagation.max.ms - Apache Kafka topic creation is asynchronous and it takes some time for a new topic to propagate throughout the cluster to all brokers. If a client requests topic metadata after manual topic creation but before the topic has been fully propagated to the broker the client is requesting metadata from, the topic will seem to be non-existent and the client will mark the topic as such, failing queued produced messages with ERR__UNKNOWN_TOPIC. This setting delays marking a topic as non-existent until the configured propagation max time has passed. The maximum propagation time is calculated from the time the topic is first referenced in the client, e.g., on produce(). Type:integer
+
+
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test01
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: create
+    topic: test01
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test00_external
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: create external stream test00_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test01', 
+        properties='enable.idempotence=true;queue.buffering.max.messages= 100;queue.buffering.max.kbytes=1024;
+        message.max.bytes=10000;message.copy.max.bytes= 10000;
+        max.in.flight.requests.per.connection= 1000;max.in.flight= 5;queue.buffering.max.ms=1000;
+        topic.metadata.refresh.interval.ms=360000;metadata.max.age.ms=1000; 
+        topic.metadata.refresh.fast.interval.ms= 10000;topic.metadata.refresh.fast.cnt=100;
+        topic.metadata.refresh.sparse=true;topic.metadata.propagation.max.ms= 1000; message.timeout.ms=6000'
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: streaming-00-query
+    query: select * from test00_external
+    schema: 
+        - name: id
+          type: int32
+        - name: value
+          type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test00_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [2, 'bbbb']
+
+  - type: check
+    target_name: streaming-00-query
+    expected_result:
+      - [1, 'aaaa']
+      - [2, 'bbbb']

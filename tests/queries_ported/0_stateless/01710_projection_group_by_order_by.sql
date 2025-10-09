@@ -1,3 +1,6 @@
+-- Tags: disabled
+-- https://github.com/timeplus-io/proton-enterprise/issues/9989
+
 DROP STREAM IF EXISTS t;
 drop stream if exists tp;
 

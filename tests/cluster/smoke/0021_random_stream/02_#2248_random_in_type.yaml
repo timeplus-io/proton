@@ -1,0 +1,32 @@
+tags:
+- random_in_type
+description: create random stream with random_in_type function
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id uint8 default random_in_type('uint8'))
+- type: wait
+  time: 2
+
+- name: '2207'
+  type: stream
+  query: select id >= 0 and id < 256 from test22_create_random limit 5
+  schema:
+  - name: and(greater_or_equals(id, 0), less(id, 256))
+    type: bool
+
+- type: check
+  target_name: '2207'
+  expected_result:
+  - ['True']
+  - ['True']
+  - ['True']
+  - ['True']
+  - ['True']

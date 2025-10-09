@@ -19,7 +19,7 @@ SELECT sum(value), min(min_value), max(max_value), uniq_exact(key) FROM test_ttl
 SELECT sum(value), min(min_value), max(max_value), uniq_exact(key) FROM test_ttl_group_by01763 where key = 3 ;
 SELECT sum(value), min(min_value), max(max_value), uniq_exact(key) FROM test_ttl_group_by01763 where key = 3 and ts <= today() - interval 30 day ;
 
-OPTIMIZE TABLE test_ttl_group_by01763 FINAL;
+OPTIMIZE STREAM test_ttl_group_by01763 FINAL;
 
 SELECT sum(value), min(min_value), max(max_value), uniq_exact(key) FROM test_ttl_group_by01763;
 SELECT sum(value), min(min_value), max(max_value), uniq_exact(key) FROM test_ttl_group_by01763 where key = 3 ;

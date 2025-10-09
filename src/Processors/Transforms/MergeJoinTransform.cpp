@@ -16,6 +16,7 @@
 #include <Core/SortCursor.h>
 #include <Core/SortDescription.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/FullSortingMergeJoin.h>
 #include <Interpreters/TableJoin.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Processors/Transforms/MergeJoinTransform.h>
@@ -43,7 +44,7 @@ FullMergeJoinCursorPtr createCursor(const Block & block, const Names & columns)
 }
 
 template <bool has_left_nulls, bool has_right_nulls>
-int nullableCompareAt(const IColumn & left_column, const IColumn & right_column, size_t lhs_pos, size_t rhs_pos, int null_direction_hint = 1)
+int nullableCompareAt(const IColumn & left_column, const IColumn & right_column, size_t lhs_pos, size_t rhs_pos, int null_direction_hint)
 {
     if constexpr (has_left_nulls && has_right_nulls)
     {
@@ -88,35 +89,36 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
 }
 
 int ALWAYS_INLINE compareCursors(const SortCursorImpl & lhs, size_t lpos,
-                                 const SortCursorImpl & rhs, size_t rpos)
+                                 const SortCursorImpl & rhs, size_t rpos,
+                                 int null_direction_hint)
 {
     for (size_t i = 0; i < lhs.sort_columns_size; ++i)
     {
         /// TODO(@vdimir): use nullableCompareAt only if there's nullable columns
-        int cmp = nullableCompareAt<true, true>(*lhs.sort_columns[i], *rhs.sort_columns[i], lpos, rpos);
+        int cmp = nullableCompareAt<true, true>(*lhs.sort_columns[i], *rhs.sort_columns[i], lpos, rpos, null_direction_hint);
         if (cmp != 0)
             return cmp;
     }
     return 0;
 }
 
-int ALWAYS_INLINE compareCursors(const SortCursorImpl & lhs, const SortCursorImpl & rhs)
+int ALWAYS_INLINE compareCursors(const SortCursorImpl & lhs, const SortCursorImpl & rhs, int null_direction_hint)
 {
-    return compareCursors(lhs, lhs.getRow(), rhs, rhs.getRow());
+    return compareCursors(lhs, lhs.getRow(), rhs, rhs.getRow(), null_direction_hint);
 }
 
-bool ALWAYS_INLINE totallyLess(SortCursorImpl & lhs, SortCursorImpl & rhs)
+bool ALWAYS_INLINE totallyLess(SortCursorImpl & lhs, SortCursorImpl & rhs, int null_direction_hint)
 {
     /// The last row of left cursor is less than the current row of the right cursor.
-    int cmp = compareCursors(lhs, lhs.rows - 1, rhs, rhs.getRow());
+    int cmp = compareCursors(lhs, lhs.rows - 1, rhs, rhs.getRow(), null_direction_hint);
     return cmp < 0;
 }
 
-int ALWAYS_INLINE totallyCompare(SortCursorImpl & lhs, SortCursorImpl & rhs)
+int ALWAYS_INLINE totallyCompare(SortCursorImpl & lhs, SortCursorImpl & rhs, int null_direction_hint)
 {
-    if (totallyLess(lhs, rhs))
+    if (totallyLess(lhs, rhs, null_direction_hint))
         return -1;
-    if (totallyLess(rhs, lhs))
+    if (totallyLess(rhs, lhs, null_direction_hint))
         return 1;
     return 0;
 }
@@ -273,10 +275,10 @@ MergeJoinAlgorithm::MergeJoinAlgorithm(
     size_t max_block_size_)
     : table_join(table_join_)
     , max_block_size(max_block_size_)
-    , log(&Poco::Logger::get("MergeJoinAlgorithm"))
+    , log(getLogger("MergeJoinAlgorithm"))
 {
     if (input_headers.size() != 2)
-        throw Exception("MergeJoinAlgorithm requires exactly two inputs", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "MergeJoinAlgorithm requires exactly two inputs");
 
     auto strictness = table_join->getTableJoin().strictness();
     if (strictness != JoinStrictness::Any && strictness != JoinStrictness::All)
@@ -300,6 +302,23 @@ MergeJoinAlgorithm::MergeJoinAlgorithm(
         size_t right_idx = input_headers[1].getPositionByName(right_key);
         left_to_right_key_remap[left_idx] = right_idx;
     }
+
+    const auto *smjPtr = typeid_cast<const FullSortingMergeJoin *>(table_join.get());
+    if (smjPtr)
+    {
+        null_direction_hint = smjPtr->getNullDirection();
+    }
+
+}
+
+void MergeJoinAlgorithm::logElapsed(double seconds)
+{
+    LOG_TRACE(log,
+        "Finished pocessing in {} seconds"
+        ", left: {} blocks, {} rows; right: {} blocks, {} rows"
+        ", max blocks loaded to memory: {}",
+        seconds, stat.num_blocks[0], stat.num_rows[0], stat.num_blocks[1], stat.num_rows[1],
+        stat.max_blocks_loaded);
 }
 
 static void prepareChunk(Chunk & chunk)
@@ -329,10 +348,10 @@ void MergeJoinAlgorithm::initialize(Inputs inputs)
 void MergeJoinAlgorithm::consume(Input & input, size_t source_num)
 {
     if (input.skip_last_row)
-        throw Exception("skip_last_row is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "skip_last_row is not supported");
 
     if (input.permutation)
-        throw DB::Exception("permutation is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "permutation is not supported");
 
     if (input.chunk)
     {
@@ -354,7 +373,8 @@ struct AllJoinImpl
                      size_t max_block_size,
                      PaddedPODArray<UInt64> & left_map,
                      PaddedPODArray<UInt64> & right_map,
-                     std::unique_ptr<AllJoinState> & state)
+                     std::unique_ptr<AllJoinState> & state,
+                     int null_direction_hint)
     {
         right_map.clear();
         right_map.reserve(max_block_size);
@@ -370,7 +390,7 @@ struct AllJoinImpl
             lpos = left_cursor->getRow();
             rpos = right_cursor->getRow();
 
-            cmp = compareCursors(left_cursor.cursor, right_cursor.cursor);
+            cmp = compareCursors(left_cursor.cursor, right_cursor.cursor, null_direction_hint);
             if (cmp == 0)
             {
                 size_t lnum = nextDistinct(left_cursor.cursor);
@@ -504,7 +524,7 @@ MergeJoinAlgorithm::Status MergeJoinAlgorithm::allJoin(JoinKind kind)
 {
     PaddedPODArray<UInt64> idx_map[2];
 
-    dispatchKind<AllJoinImpl>(kind, *cursors[0], *cursors[1], max_block_size, idx_map[0], idx_map[1], all_join_state);
+    dispatchKind<AllJoinImpl>(kind, *cursors[0], *cursors[1], max_block_size, idx_map[0], idx_map[1], all_join_state, null_direction_hint);
     assert(idx_map[0].size() == idx_map[1].size());
 
     Chunk result;
@@ -563,7 +583,8 @@ struct AnyJoinImpl
                      FullMergeJoinCursor & right_cursor,
                      PaddedPODArray<UInt64> & left_map,
                      PaddedPODArray<UInt64> & right_map,
-                     AnyJoinState & state)
+                     AnyJoinState & state,
+                     int null_direction_hint)
     {
         assert(enabled);
 
@@ -586,7 +607,7 @@ struct AnyJoinImpl
             lpos = left_cursor->getRow();
             rpos = right_cursor->getRow();
 
-            cmp = compareCursors(left_cursor.cursor, right_cursor.cursor);
+            cmp = compareCursors(left_cursor.cursor, right_cursor.cursor, null_direction_hint);
             if (cmp == 0)
             {
                 if constexpr (isLeftOrFull(kind))
@@ -710,7 +731,7 @@ MergeJoinAlgorithm::Status MergeJoinAlgorithm::anyJoin(JoinKind kind)
     PaddedPODArray<UInt64> idx_map[2];
     size_t prev_pos[] = {current_left.getRow(), current_right.getRow()};
 
-    dispatchKind<AnyJoinImpl>(kind, *cursors[0], *cursors[1], idx_map[0], idx_map[1], any_join_state);
+    dispatchKind<AnyJoinImpl>(kind, *cursors[0], *cursors[1], idx_map[0], idx_map[1], any_join_state, null_direction_hint);
 
     assert(idx_map[0].empty() || idx_map[1].empty() || idx_map[0].size() == idx_map[1].size());
     size_t num_result_rows = std::max(idx_map[0].size(), idx_map[1].size());
@@ -803,7 +824,7 @@ IMergingAlgorithm::Status MergeJoinAlgorithm::merge()
     }
 
     /// check if blocks are not intersecting at all
-    if (int cmp = totallyCompare(cursors[0]->cursor, cursors[1]->cursor); cmp != 0)
+    if (int cmp = totallyCompare(cursors[0]->cursor, cursors[1]->cursor, null_direction_hint); cmp != 0)
     {
         if (cmp < 0)
         {
@@ -847,14 +868,14 @@ MergeJoinTransform::MergeJoinTransform(
         /* empty_chunk_on_finish_= */ true,
         ProcessorID::MergeJoinTransformID,
         table_join, input_headers, max_block_size)
-    , log(&Poco::Logger::get("MergeJoinTransform"))
+    , log(getLogger("MergeJoinTransform"))
 {
     LOG_TRACE(log, "Use MergeJoinTransform");
 }
 
 void MergeJoinTransform::onFinish()
 {
-    algorithm.logElapsed(total_stopwatch.elapsedSeconds(), true);
+    algorithm.logElapsed(total_stopwatch.elapsedSeconds());
 }
 
 }

@@ -43,7 +43,7 @@ public:
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
 
     /// proton: starts
-    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    void deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const override;
     /// proton: ends
 };
 

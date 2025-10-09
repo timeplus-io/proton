@@ -1,0 +1,101 @@
+tags:
+  - changelog
+description: (#172) Covering query json subcolumn and _tp_delta over changelog(stream)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test_stream_17
+
+  - type: query
+    sql: create stream test_stream_17(id int, raw json)
+  - type: wait
+    time: 2
+
+  # - type: query
+  #   sql: insert into test_stream_17(id, raw) values
+  #   schema:
+  #     - name: id
+  #       type: int32
+  #     - name: raw
+  #       type: json
+  #   inputs:
+  #     - [1, '{\"projectId\": \"111\"}']
+  # - type: wait
+  #   time: 1
+
+  # - type: stream
+  #   name: 9900
+  #   query: select id, raw.projectId AS projectId_json, _tp_delta from changelog(test_stream_17, id) where _tp_time > earliest_ts()
+  #   schema:
+  #     - name: id
+  #       type: int32
+  #     - name: projectId_json
+  #       type: string
+  #     - name: _tp_delta
+  #       type: int32
+  # - type: wait
+  #   time: 1
+
+  # - type: query
+  #   sql: drop stream if exists test_stream_17_vk
+
+  # - type: query
+  #   sql: create stream test_stream_17_vk
+  #       (
+  #         id int,
+  #         raw json
+  #       )
+  #       primary key id settings mode='versioned_kv'
+  # - type: wait
+  #   time: 2
+
+  # - type: query
+  #   sql: insert into test_stream_17_vk(id, raw) values
+  #   schema:
+  #     - name: id
+  #       type: int32
+  #     - name: raw
+  #       type: json
+  #   inputs:
+  #     - [1, '{"projectId": "111"}']
+  # - type: wait
+  #   time: 1
+
+  # - type: stream
+  #   name: 9901
+  #   query: select t1.id, t1.raw.projectId, t2.raw.projectId, _tp_delta from changelog(test_stream_17, id) as t1 join changelog(test_stream_17_vk) as t2 on t1.id = t2.id where t1._tp_time > earliest_ts()
+  #   schema:
+  #     - name: t1.id
+  #       type: int32
+  #     - name: t1.raw.projectId
+  #       type: string
+  #     - name: t1.raw.projectId
+  #       type: string
+  #     - name: _tp_delta
+  #       type: int32
+  # - type: wait
+  #   time: 2
+
+  # - type: query
+  #   sql: insert into test_stream_17_vk(id, raw) values
+  #   schema:
+  #     - name: id
+  #       type: int32
+  #     - name: raw
+  #       type: json
+  #   inputs:
+  #     - [1, '{"projectId": "222"}']
+
+  # - type: check
+  #   target_name: 9900
+  #   expected_result:
+  #     - [1, "111", 1]
+
+  # - type: check
+  #   target_name: 9901
+  #   expected_result:
+  #     - [1, "111", "111", 1]
+  #     - [1, "111", "111", -1]
+  #     - [1, "111", "222", 1]

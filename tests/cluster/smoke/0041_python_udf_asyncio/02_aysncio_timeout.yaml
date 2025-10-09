@@ -1,0 +1,139 @@
+tags:
+  - udf
+  - uda
+
+description: Test covering asyncio wait and wait_for 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (id int, value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_async_wait_for(id int, value string) RETURNS string LANGUAGE PYTHON AS $$
+      import asyncio
+
+      async def say_after(delay, what):
+          await asyncio.sleep(delay)
+          return what
+
+      async def say_after_wait_for(delay, what):
+          try:
+              res = await asyncio.wait_for(say_after(delay, what), timeout=1.5)
+              return res
+          except asyncio.TimeoutError:
+              return "timeout"
+
+      def test_async_wait_for(id, value):
+          results = []
+          for i, v in zip(id, value):
+              try:
+                  result = asyncio.run(say_after_wait_for(i,v))
+                  results.append(result)
+              except Exception as e:
+                  results.append(e)
+          return results
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION asyncWaitFor(id int, value string) RETURNS array(array(string)) LANGUAGE PYTHON AS $$
+      import asyncio
+      import pickle
+
+      async def say_after(delay, what):
+          await asyncio.sleep(delay)
+          return what
+
+      class asyncWaitFor:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              data = {}
+              data['res'] = self.res
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.res = data['res']
+
+          def merge(self, other):
+              pass
+
+          def process(self, ids, values):
+              async def say_after_task(ids, values):
+                  tasks = []
+                  for i, v in zip(ids, values):
+                      task = asyncio.create_task(say_after(i, v))
+                      tasks.append(task)
+                  done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                  return [await t for t in done]
+              
+              try:
+                  result = asyncio.run(say_after_task(ids, values))
+                  self.res.append(result)
+              except Exception as e:
+                  self.res.append(e)
+
+          def finalize(self):
+              return self.res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf-2-1
+    type: stream
+    query: select test_async_wait_for(id, value) as res, id, value from test41_stream;
+    schema:
+      - name: res
+        type: string
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - name: python-udf-2-2
+    type: stream
+    query: select asyncWaitFor(id, value) as res from test41_stream;
+    schema:
+      - name: res
+        type: array(array(string))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(id, value) values (0, 'hello0') (1, 'hello1');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test41_stream(id, value) values (2, 'hello2') (3, 'hello3');
+
+  - type: check
+    target_name: python-udf-2-1
+    expected_result:
+      - ['hello0', 0, 'hello0']
+      - ['hello1', 1, 'hello1']
+      - ['timeout', 2, 'hello2']
+      - ['timeout', 3, 'hello3']
+
+  - type: check
+    target_name: python-udf-2-2
+    expected_result:
+      - [[['hello0']]]
+      - [[['hello0'], ['hello2']]]

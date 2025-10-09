@@ -1,0 +1,119 @@
+tags:
+  - prepare
+  - checkpoint
+
+description: prepare data for mv global aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop view if exists ckpt_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists ckpt_source_stream;
+
+  - type: query
+    sql: drop stream if exists ckpt_target_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream ckpt_source_stream(id string, location string, value float32, json string, 
+      timestamp datetime64(3) DEFAULT now64(3));
+
+  - type: query
+    sql: |
+      create stream ckpt_target_stream(id string, location string, value float32, json string);
+    
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view ckpt_mv into ckpt_target_stream as select id, location, value, 
+      json from ckpt_source_stream settings checkpoint_interval=1;
+
+  - type: wait
+    time: 2
+
+  - type: generator
+    name: cpkt-1
+    batch_size: 2000
+    buffer_size: 5000
+    concurrency: 10
+    interval_ms: 175
+    dataset: compa_03_ckpt.bin
+    format: native
+    primary_key: id
+    schema:
+      - name: id
+        type: string
+        rule:
+          type: random_string
+          params:
+            min_len: 1
+            max_len: 5
+      - name: location
+        type: string
+        rule:
+          type: random_string
+          params:
+            min_len: 5
+            max_len: 10
+      - name: value
+        type: float32
+        rule:
+          type: random_float
+          params:
+            min: 1.0
+            max: 100.0
+      - name: json
+        type: string
+        rule:
+          type: random_string
+          params:
+            min_len: 5
+            max_len: 10
+      - name: timestamp
+        type: datetime64(3)
+        rule:
+          type: current_time
+
+  - type: proton_dataloader
+    source: cpkt-1
+    sink: ckpt_source_stream
+    concurrency: 10
+
+  - type: wait
+    time: 5
+
+  - name: view-18-1
+    type: stream
+    query: select uuid from table(system.stream_state_log) where name='ckpt_mv' limit 1
+    schema:
+      - name: uuid
+        type: uuid
+  - type: wait
+    time: 2
+
+  - name: view-18-2
+    type: command
+    node: [p1]
+    target_name: view-18-1
+    param: mv-uuid
+    shell: |
+      /bin/bash -c '
+      ckpt_folder=$(ls /var/lib/proton/checkpoint/.mv-{mv-uuid} | grep -v .ckpt | tail -n 1);
+      if [[ $ckpt_folder =~ ^[0-9]+$ ]]; then echo "checkpoint happen"; else echo "fail"; fi'
+
+  - type: check
+    target_name: view-18-2
+    expected_result: ["checkpoint happen"]

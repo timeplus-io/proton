@@ -1,0 +1,175 @@
+tags:
+  - external_stream
+  - materialized view
+ # - skip
+description: |
+  Test External Stream with builtin data types -> MV with nested select query -> Target Stream
+  Steps:
+    1. create kafka topic
+    2. create external stream with data format Protobuf and created format schema
+    3. create a materialized view with target stream with nested select query
+    4. query target stream
+    5. produce kafka message with protobuf format
+    6. check query result
+  
+  Block by issue: https://github.com/timeplus-io/proton-enterprise/issues/4350
+  Fix version > 2.1.5, skip now
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  # kafka topic: drop and create
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 1
+
+  # stream & mv: drop and create
+  - type: query
+    sql: DROP VIEW IF EXISTS test_mv
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_target_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP FORMAT SCHEMA IF EXISTS schema_name1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA schema_name1 AS
+      $$
+        syntax = "proto3";
+        message Sch1 {
+          int64 id = 1;
+          float value = 2;
+        }
+      $$
+      TYPE Protobuf
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: CREATE EXTERNAL STREAM test_external_stream
+          (
+            id int64, 
+            value float
+          )
+          SETTINGS type = 'kafka',
+              brokers = 'k1:9092',
+              topic = 'test',
+              data_format = 'Protobuf',
+              format_schema = 'schema_name1:Sch1'
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM test_target_stream
+      (
+        id string,
+        cnt int32,
+        min float,
+        max float
+      )
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test_mv INTO test_target_stream AS
+      WITH transformed AS
+        (
+          SELECT
+            to_string(id) AS id, value
+          FROM
+            test_external_stream
+        )
+      SELECT
+        id, count(*) AS cnt, min(value) AS min, max(value) AS max
+      FROM
+        transformed
+      GROUP BY
+        id
+
+  - type: wait
+    time: 2
+
+  - name: external-stream-1-0
+    type: stream
+    query: SELECT id, cnt, min, max FROM test_target_stream
+    schema:
+    - name: id
+      type: string
+    - name: cnt
+      type: int32
+    - name: min
+      type: float32
+    - name: max
+      type: float32
+  - type: wait
+    time: 1
+
+  # kafka message: format protobuf and produce kafka message
+  - type: protobuf_format
+    name: format
+    proto: |
+      syntax = "proto3";
+      message Sch1 {
+        int64 id = 1;
+        float value = 2;
+      }
+    class: Sch1
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: float32
+    inputs:
+      - [1, 11.1]
+      - [2, 22.1]
+      - [2, 22.2]
+      - [3, 33.1]
+      - [3, 33.2]
+      - [3, 33.3]
+    buffer_size: 2 # >=2
+  - type: wait
+    time: 1
+
+  - type: kafka_dataloader
+    source: format
+    sink: test
+    concurrency: 1
+
+  - type: wait
+    time: 3
+  
+  - type: check
+    target_name: external-stream-1-0
+    mode: random
+    expected_result:
+    - ['1', 1, 11.1, 11.1]
+    - ['2', 2, 22.1, 22.2]
+    - ['3', 3, 33.1, 33.3]

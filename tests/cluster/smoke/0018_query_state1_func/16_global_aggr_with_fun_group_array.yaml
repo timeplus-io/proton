@@ -1,0 +1,51 @@
+tags:
+  - query_state
+description: global aggregation with function group_array state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test19_state_stream1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test19_state_stream1 (id string, location string, value float,
+      timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1936'
+    query_id: '1936'
+    type: stream
+    query: subscribe to select group_array(id) from test19_state_stream1 emit periodic
+      1s settings checkpoint_interval=1
+    schema:
+      - name: group_array(id)
+        type: array(string)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test19_state_stream1(id, location, value, timestamp) values ('dev1',
+      'ca', 57.3, '2020-02-02 20:00:00'), ('dev2', 'ca', 58.3, '2020-02-02 20:00:03')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1936'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1936'
+  
+  - type: check
+    target_name: '1936'
+    expected_result:
+      - [ [ 'dev1', 'dev2' ] ]

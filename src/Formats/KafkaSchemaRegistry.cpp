@@ -28,7 +28,7 @@ KafkaSchemaRegistry::KafkaSchemaRegistry(
     , certificate_file(certificate_file_)
     , ca_location(ca_location_)
     , Verification_mode(skip_cert_check ? Poco::Net::Context::VERIFY_NONE : Poco::Net::Context::VERIFY_RELAXED)
-    , logger(&Poco::Logger::get("KafkaSchemaRegistry"))
+    , logger(getLogger("KafkaSchemaRegistry"))
 {
     assert(!base_url.empty());
 
@@ -51,7 +51,10 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id) const
             Poco::URI url(base_url, std::format("schemas/ids/{}", id));
             LOG_TRACE(logger, "Fetching schema id = {}", id);
 
-            ConnectionTimeouts timeouts({5, 0}, {5, 0}, {5, 0});
+            auto timeouts = ConnectionTimeouts()
+                .withConnectionTimeout(5)
+                .withSendTimeout(5)
+                .withReceiveTimeout(5);
 
             Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
             request.setHost(url.getHost());
@@ -97,9 +100,9 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id) const
     }
 }
 
-std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForTopic(const String & topic_name) const
+std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const String & subject) const
 {
-    auto subject_name = topic_name + "-value";
+    auto subject_name = subject + "-value";
     auto latest_schema_version = fetchLatestSubjectVersion(subject_name);
     try
     {
@@ -108,7 +111,10 @@ std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForTopic(const S
             Poco::URI url(base_url, std::format("subjects/{}/versions/{}", subject_name, latest_schema_version));
             LOG_TRACE(logger, "Fetching subject = {} versions = {}", subject_name, latest_schema_version);
 
-            ConnectionTimeouts timeouts({5, 0}, {5, 0}, {5, 0});
+            auto timeouts = ConnectionTimeouts()
+                .withConnectionTimeout(5)
+                .withSendTimeout(5)
+                .withReceiveTimeout(5);
 
             Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
             request.setHost(url.getHost());
@@ -150,7 +156,7 @@ std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForTopic(const S
     }
     catch (Exception & e)
     {
-        e.addMessage(std::format("while fetching latest schema for topic {}", topic_name));
+        e.addMessage(std::format("while fetching latest schema for subject {}", subject));
         throw;
     }
 }
@@ -164,7 +170,10 @@ UInt32 KafkaSchemaRegistry::fetchLatestSubjectVersion(const String & subject_nam
             Poco::URI url(base_url, std::format("subjects/{}/versions", subject_name));
             LOG_TRACE(logger, "Fetching subject versions for {}", subject_name);
 
-            ConnectionTimeouts timeouts({5, 0}, {5, 0}, {5, 0});
+            auto timeouts = ConnectionTimeouts()
+                .withConnectionTimeout(5)
+                .withSendTimeout(5)
+                .withReceiveTimeout(5);
 
             Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
             request.setHost(url.getHost());

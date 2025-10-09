@@ -1,0 +1,21 @@
+tags:
+  - stream_join_stream
+description: stream to stream doesn't support right join
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '1021'
+    type: stream
+    query: select s, ss from test10_left_stream right join test10_right_stream on i=ii
+      and date_diff('second', ts, tts) between -10 and 10
+    schema:
+      - name: s
+        type: string
+      - name: ss
+        type: string
+  
+  - type: check
+    target_name: '1021'
+    expected_result:
+      - [ error_code:48 ]

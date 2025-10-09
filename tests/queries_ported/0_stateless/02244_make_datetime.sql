@@ -20,7 +20,7 @@ select make_datetime(1984, 1, 41, 0, 0, 0, 'UTC');
 select make_datetime(1984, 1, 1, 25, 0, 0, 'UTC');
 select make_datetime(1984, 1, 1, 0, 70, 0, 'UTC');
 select make_datetime(1984, 1, 1, 0, 0, 70, 'UTC');
-select make_datetime(1984, 1, 1, 0, 0, 0, 'not a timezone'); -- { serverError 1000 }
+select make_datetime(1984, 1, 1, 0, 0, 0, 'not a timezone'); -- { serverError BAD_ARGUMENTS }
 
 select make_datetime(1984, 1, 1, 0, 0, 0, 'UTC');
 select make_datetime(1983, 2, 29, 0, 0, 0, 'UTC');

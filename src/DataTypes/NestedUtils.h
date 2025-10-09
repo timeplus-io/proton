@@ -7,6 +7,8 @@
 namespace DB
 {
 
+class ColumnsDescription;
+
 namespace Nested
 {
     std::string concatenateName(const std::string & nested_table_name, const std::string & nested_field_name);
@@ -18,8 +20,9 @@ namespace Nested
     /// Returns the prefix of the name to the first '.'. Or the name is unchanged if there is no dot.
     std::string extractTableName(const std::string & nested_name);
 
-    /// Replace Array(Tuple(...)) columns to a multiple of Array columns in a form of `column_name.element_name`.
-    /// only for named tuples that actually represent Nested structures.
+    /// Flat a column of nested type into columns
+    /// 1) For named tuples，t Tuple(x .., y ..., ...), replace it with t.x ..., t.y ... , ...
+    /// 2) For an Array with named Tuple element column, a Array(Tuple(x ..., y ..., ...)), replace it with multiple Array Columns, a.x ..., a.y ..., ...
     Block flatten(const Block & block);
 
     /// Collect Array columns in a form of `column_name.element_name` to single Array(Tuple(...)) column.
@@ -36,6 +39,25 @@ namespace Nested
 
     /// Extract all column names that are nested for specifying table.
     Names getAllNestedColumnsForTable(const Block & block, const std::string & table_name);
+
+    /// Returns true if @column_name is a subcolumn (of Array type) of any Nested column in @columns.
+    bool isSubcolumnOfNested(const String & column_name, const ColumnsDescription & columns);
 }
+
+/// Use this class to extract element columns from columns of nested type in a block, e.g. named Tuple.
+/// It can extract a column from a multiple nested type column, e.g. named Tuple in named Tuple
+/// Keeps some intermediate data to avoid rebuild them multi-times.
+class NestedColumnExtractHelper
+{
+public:
+    explicit NestedColumnExtractHelper(const Block & block_, bool case_insentive_);
+    std::optional<ColumnWithTypeAndName> extractColumn(const String & column_name);
+private:
+    std::optional<ColumnWithTypeAndName>
+    extractColumn(const String & original_column_name, const String & column_name_prefix, const String & column_name_suffix);
+    const Block & block;
+    bool case_insentive;
+    std::map<String, BlockPtr> nested_tables;
+};
 
 }

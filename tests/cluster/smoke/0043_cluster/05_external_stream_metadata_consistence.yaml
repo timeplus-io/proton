@@ -1,0 +1,70 @@
+tags:
+  - raft
+
+description: Test metadata consistence on external stream in raft cluster
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists test43_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: CREATE EXTERNAL STREAM test43_stream (row string) settings type='kafka', brokers='stream-store:9092', topic='test', data_format='JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - name: cluster-3-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: show streams where name = 'test43_stream'
+    schema:
+      - name: name
+        type: string
+
+  - name: cluster-3-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    query: show streams where name = 'test43_stream'
+    schema:
+      - name: name
+        type: string
+
+  - type: check
+    target_name: cluster-3-1
+    expected_result:
+    - ['test43_stream']
+
+  - type: check
+    target_name: cluster-3-2
+    expected_result:
+    - ['test43_stream']

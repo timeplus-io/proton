@@ -27,7 +27,6 @@ if (COMPILER_CLANG)
     no_warning(sign-conversion)
     no_warning(implicit-int-conversion)
     no_warning(implicit-int-float-conversion)
-    no_warning(shorten-64-to-32)
     no_warning(ctad-maybe-unsupported) # clang 9+, linux-only
     no_warning(disabled-macro-expansion)
     no_warning(documentation-unknown-command)
@@ -47,9 +46,6 @@ if (COMPILER_CLANG)
     no_warning(thread-safety-negative) # experimental flag, too many false positives
     no_warning(enum-constexpr-conversion) # breaks magic-enum library in clang-16
     no_warning(unsafe-buffer-usage) # too aggressive
-    no_warning(switch-default) # conflicts with "defaults in a switch covering all enum values" in clang-18
-    no_warning(deprecated-declarations) # conflicts with "type is deprecated" in clang-18
-    no_warning(missing-field-initializers) # conflicts with "missing field initializer" in clang-18
-    no_warning(thread-safety-reference-return) # conflicts with "returning variable by reference requires holding mutex exclusively" in clang-18
+    no_warning(switch-default) # conflicts with "defaults in a switch covering all enum values"
     # TODO Enable conversion, sign-conversion, double-promotion warnings.
 endif ()

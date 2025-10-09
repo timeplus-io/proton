@@ -1,0 +1,21 @@
+tags:
+  - window_aggregation
+description: (#5033) disable using keywords window_start/window_end as alias
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '103'
+    type: stream
+    query: |
+      SELECT
+      date_add(window_end, 8h) as window_end,
+      count()
+      FROM
+      tumble(stream, 2s)
+      group by window_end
+
+  - type: check
+    target_name: '103'
+    expected_result: 
+      - ['error_code:62']

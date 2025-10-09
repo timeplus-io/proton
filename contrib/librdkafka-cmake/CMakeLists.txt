@@ -5,92 +5,122 @@ if (NOT ENABLE_KAFKA)
     return()
 endif()
 
-set(RDKAFKA_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/librdkafka/src")
+set(RDKAFKA_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/confluentinc-librdkafka/src")
 
 set(SRCS
-  "${RDKAFKA_SOURCE_DIR}/crc32c.c"
-#  "${RDKAFKA_SOURCE_DIR}/lz4.c"
-#  "${RDKAFKA_SOURCE_DIR}/lz4frame.c"
-#  "${RDKAFKA_SOURCE_DIR}/lz4hc.c"
-  "${RDKAFKA_SOURCE_DIR}/rdaddr.c"
-  "${RDKAFKA_SOURCE_DIR}/rdavl.c"
-  "${RDKAFKA_SOURCE_DIR}/rdbuf.c"
-  "${RDKAFKA_SOURCE_DIR}/rdcrc32.c"
-  "${RDKAFKA_SOURCE_DIR}/rddl.c"
-  "${RDKAFKA_SOURCE_DIR}/rdfnv1a.c"
-  "${RDKAFKA_SOURCE_DIR}/rdgz.c"
-  "${RDKAFKA_SOURCE_DIR}/rdhdrhistogram.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_admin.c" # looks optional
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_assignment.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_assignor.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_aux.c" # looks optional
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_background.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_broker.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_buf.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_cert.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_cgrp.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_conf.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_coord.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_error.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_event.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_feature.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_header.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_idempotence.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_interceptor.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_lz4.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_metadata.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_metadata_cache.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_mock.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_mock_cgrp.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_mock_handlers.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_msg.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_msgset_reader.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_msgset_writer.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_offset.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_op.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_partition.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_pattern.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_plugin.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_queue.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_range_assignor.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_request.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_roundrobin_assignor.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl.c"
-#  "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_cyrus.c"        # optionally included below
-#  "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_oauthbearer.c"  # optionally included below
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_plain.c"
-#  "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_scram.c"        # optionally included below
-#  "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_win32.c"
-#  "${RDKAFKA_SOURCE_DIR}/rdkafka_ssl.c"               # optionally included below
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_sticky_assignor.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_subscription.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_timer.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_topic.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_transport.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_txnmgr.c"
-  "${RDKAFKA_SOURCE_DIR}/rdkafka_zstd.c"
-  "${RDKAFKA_SOURCE_DIR}/rdlist.c"
-  "${RDKAFKA_SOURCE_DIR}/rdlog.c"
-  "${RDKAFKA_SOURCE_DIR}/rdmap.c"
-  "${RDKAFKA_SOURCE_DIR}/rdmurmur2.c"
-  "${RDKAFKA_SOURCE_DIR}/rdports.c"
-  "${RDKAFKA_SOURCE_DIR}/rdrand.c"
-  "${RDKAFKA_SOURCE_DIR}/rdregex.c"
-  "${RDKAFKA_SOURCE_DIR}/rdstring.c"
-  "${RDKAFKA_SOURCE_DIR}/rdunittest.c"
-  "${RDKAFKA_SOURCE_DIR}/rdvarint.c"
-  "${RDKAFKA_SOURCE_DIR}/rdxxhash.c"
-  # "${RDKAFKA_SOURCE_DIR}/regexp.c"
-  "${RDKAFKA_SOURCE_DIR}/snappy.c"
-  "${RDKAFKA_SOURCE_DIR}/tinycthread.c"
-  "${RDKAFKA_SOURCE_DIR}/tinycthread_extra.c"
+    "${RDKAFKA_SOURCE_DIR}/crc32c.c"
+    "${RDKAFKA_SOURCE_DIR}/rdaddr.c"
+    "${RDKAFKA_SOURCE_DIR}/rdavl.c"
+    "${RDKAFKA_SOURCE_DIR}/rdbuf.c"
+    "${RDKAFKA_SOURCE_DIR}/rdcrc32.c"
+    "${RDKAFKA_SOURCE_DIR}/rdfnv1a.c"
+    "${RDKAFKA_SOURCE_DIR}/rdbase64.c"
+    "${RDKAFKA_SOURCE_DIR}/rdgz.c" # zlib - always enabled
+    "${RDKAFKA_SOURCE_DIR}/rdkafka.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_assignor.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_broker.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_buf.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_cgrp.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_conf.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_event.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_feature.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_lz4.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_metadata.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_metadata_cache.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_msg.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_msgset_reader.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_msgset_writer.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_offset.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_op.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_partition.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_pattern.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_queue.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_range_assignor.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_request.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_roundrobin_assignor.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_plain.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_sticky_assignor.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_subscription.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_zstd.c" # zstd - always enabled
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_assignment.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_timer.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_topic.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_transport.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_interceptor.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_header.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_admin.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_aux.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_background.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_idempotence.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_txnmgr.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_cert.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_coord.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_mock.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_mock_handlers.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_mock_cgrp.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_error.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_fetcher.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_telemetry.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_telemetry_decode.c"
+    "${RDKAFKA_SOURCE_DIR}/rdkafka_telemetry_encode.c"
+    "${RDKAFKA_SOURCE_DIR}/nanopb/pb_encode.c"
+    "${RDKAFKA_SOURCE_DIR}/nanopb/pb_decode.c"
+    "${RDKAFKA_SOURCE_DIR}/nanopb/pb_common.c"
+    "${RDKAFKA_SOURCE_DIR}/opentelemetry/metrics.pb.c"
+    "${RDKAFKA_SOURCE_DIR}/opentelemetry/common.pb.c"
+    "${RDKAFKA_SOURCE_DIR}/opentelemetry/resource.pb.c"
+    "${RDKAFKA_SOURCE_DIR}/rdlist.c"
+    "${RDKAFKA_SOURCE_DIR}/rdlog.c"
+    "${RDKAFKA_SOURCE_DIR}/rdmurmur2.c"
+    "${RDKAFKA_SOURCE_DIR}/rdports.c"
+    "${RDKAFKA_SOURCE_DIR}/rdrand.c"
+    "${RDKAFKA_SOURCE_DIR}/rdregex.c"
+    "${RDKAFKA_SOURCE_DIR}/rdstring.c"
+    "${RDKAFKA_SOURCE_DIR}/rdunittest.c"
+    "${RDKAFKA_SOURCE_DIR}/rdvarint.c"
+    "${RDKAFKA_SOURCE_DIR}/rdmap.c"
+    "${RDKAFKA_SOURCE_DIR}/snappy.c"
+    "${RDKAFKA_SOURCE_DIR}/tinycthread.c"
+    "${RDKAFKA_SOURCE_DIR}/tinycthread_extra.c"
+    "${RDKAFKA_SOURCE_DIR}/rdxxhash.c"
+    "${RDKAFKA_SOURCE_DIR}/cJSON.c"
 )
+
+# LibDL {
+try_compile(
+    WITH_LIBDL
+    "${CMAKE_CURRENT_BINARY_DIR}/try_compile"
+    "${proton_SOURCE_DIR}/contrib/confluentinc-librdkafka/packaging/cmake/try_compile/dlopen_test.c"
+    LINK_LIBRARIES "${CMAKE_DL_LIBS}"
+)
+if(WITH_LIBDL)
+    message (STATUS "librdkafka with plugins support")
+    set(WITH_PLUGINS 1)
+    list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rddl.c")
+    list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rdkafka_plugin.c")
+else()
+    message (STATUS "librdkafka without plugins support")
+    set(WITH_PLUGINS 0)
+endif()
+# }
 
 if(TARGET ch_contrib::sasl2)
     message (STATUS "librdkafka with SASL support")
     set(WITH_SASL_CYRUS 1)
 endif()
+
+if(TARGET ch_contrib::curl)
+    message (STATUS "librdkafka with CURL support")
+    set(WITH_CURL 1)
+    list(APPEND sources rdhttp.c)
+endif()
+
+# if(TARGET ch_contrib::lz4)
+#     message (STATUS "librdkafka with lz4 support")
+#     set(WITH_LZ4_EXT 1)
+#     list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/lz4.c" "${RDKAFKA_SOURCE_DIR}/lz4frame.c" "${RDKAFKA_SOURCE_DIR}/lz4hc.c")
+# endif()
 
 message (STATUS "librdkafka with SSL support")
 set(WITH_SSL 1)
@@ -99,6 +129,10 @@ if(WITH_SASL_CYRUS)
    set(WITH_SASL_OAUTHBEARER 1)
 endif()
 list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rdkafka_ssl.c")
+
+if(WITH_CURL)
+   set(WITH_OAUTHBEARER_OIDC 1)
+endif()
 
 if(WITH_SASL_CYRUS)
   list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_cyrus.c") # needed to support Kerberos, requires cyrus-sasl
@@ -110,6 +144,10 @@ endif()
 
 if(WITH_SASL_OAUTHBEARER)
   list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_oauthbearer.c")
+endif()
+
+if(WITH_OAUTHBEARER_OIDC)
+    list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_oauthbearer_oidc.c")
 endif()
 
 add_library(_rdkafka ${SRCS})
@@ -129,6 +167,10 @@ target_link_libraries(_rdkafka
 )
 if(WITH_SASL_CYRUS)
     target_link_libraries(_rdkafka PRIVATE ch_contrib::sasl2)
+endif()
+
+if(TARGET ch_contrib::curl)
+    target_link_libraries(_rdkafka PRIVATE ch_contrib::curl)
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/auxdir")

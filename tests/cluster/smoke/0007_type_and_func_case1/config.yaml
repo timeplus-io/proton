@@ -1,0 +1,18 @@
+name: type_and_func1
+description: Tests covering the steam query smoke cases.
+tags:
+- smoke
+setup:
+  scope: case
+  steps:
+    - type: query
+      sql: drop view if exists lags_v1;
+
+    - type: query
+      sql: drop view if exists lags_mv1;
+
+    - type: query
+      sql: drop view if exists bool_v1;
+
+    - type: query
+      sql: drop view if exists bool_mv1;

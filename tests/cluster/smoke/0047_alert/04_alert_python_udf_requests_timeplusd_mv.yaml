@@ -1,0 +1,155 @@
+tags:
+  - python udf
+  - materialized view
+  - system_command
+
+description: |
+  Test create alert to send requests to proton with materialized view
+  Main Steps:
+  1.Create 3 stream: source, monitor, action
+  2.Create materialized view from source stream into monitor stream
+  3.Create python udf to send request ingest data into action stream
+  4.Create alert to select monitor stream call python udf 
+  5.Ingest data into source stream to trigger alert
+  6.Check monitor and action stream data
+  7.System resume mv and ingest data into source stream
+  8.System resume mv and ingest data into source stream
+  9.Check monitor and action stream new data from last checkpoint
+
+steps:
+  - type: query
+    sql: CREATE STREAM source(id int64, value string);
+
+  - type: query
+    sql: CREATE STREAM monitor(id int64, cnt uint64);
+
+  - type: query
+    sql: CREATE STREAM action(id int64, cnt uint64);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW mv INTO monitor AS
+      SELECT id, count(value) As cnt
+      FROM source
+      GROUP BY id;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION requests_Proton(id int64, cnt uint64) RETURNS uint64 LANGUAGE PYTHON AS $$
+      import json
+      import requests
+      def requests_Proton(id, cnt):
+          for i, c in zip(id, cnt):
+              requests.post("http://p1:8123/proton/v1/ingest/streams/action", data=json.dumps({"columns":["id","cnt"],"data":[[i, c]]}))
+          return cnt
+      $$
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE ALERT test
+      BATCH 10 EVENTS WITH TIMEOUT 3s
+      LIMIT 1 ALERTS PER 6s
+      CALL requests_Proton
+      AS SELECT id, cnt FROM monitor;
+
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: alert-4-1
+    query: select id, cnt from monitor;
+    schema:
+      - name: id
+        type: int64
+      - name: cnt
+        type: uint64
+
+  - type: stream
+    name: alert-4-2
+    query: select id, cnt from action;
+    schema:
+      - name: id
+        type: int64
+      - name: cnt
+        type: uint64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO source(id, value) values 
+      (1, 's1') (2, 's1') (2, 's1');
+
+  - type: check
+    target_name: alert-4-1
+    mode: random
+    expected_result:
+      - [1, 1]
+      - [2, 2]
+
+  - type: check
+    target_name: alert-4-2
+    mode: random
+    expected_result:
+      - [1, 1]
+      - [2, 2]
+
+  - type: query
+    sql: SYSTEM PAUSE MATERIALIZED VIEW mv;
+
+  - type: wait
+    time: 7
+
+  - type: query
+    sql: INSERT INTO source(id, value) values (3, 's2');
+
+  - type: check
+    target_name: alert-4-1
+    expected_result: []
+
+  - type: check
+    target_name: alert-4-2
+    expected_result: []
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: SYSTEM RESUME MATERIALIZED VIEW mv;
+
+  - type: wait
+    time: 7
+
+  - type: query
+    sql: |
+      INSERT INTO source(id, value) values 
+      (1, 's3') (2, 's3') (3, 's3');
+
+  - type: check
+    target_name: alert-4-1
+    mode: random
+    expected_result:
+      - [1, 1]
+      - [2, 2]
+      - [3, 1]
+      - [1, 2]
+      - [2, 3]
+      - [3, 2]
+      
+  - type: check
+    target_name: alert-4-2
+    mode: random
+    expected_result:
+      - [1, 1]
+      - [2, 2]
+      - [3, 1]
+      - [1, 2]
+      - [2, 3]
+      - [3, 2]

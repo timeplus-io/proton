@@ -19,7 +19,7 @@ on: # yamllint disable-line rule:truthy
 jobs:
   prepare_sanitizer_build:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
+    if: github.event.schedule == '00 23 * * 5' 
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -30,7 +30,13 @@ jobs:
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-16 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            # python udf arm nonsupport: https://github.com/timeplus-io/proton-enterprise/issues/6944
+            enable_python=""
+            if [ "$ARCH" == "arm" ]; then
+              enable_python="--disable-python-udf"
+            fi
+
+            ./docker/packager/packager --package-type binary --docker-image-version clang-19 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -39,7 +45,7 @@ jobs:
 
             # Don't need to upload ccache to S3 at the moment
             tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            # aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
 
             # clean ccache and build footprint
             rm -rf $GITHUB_WORKSPACE/ccache
@@ -49,8 +55,8 @@ jobs:
             # build unit test docker image
             cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
             cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-            docker build . -t ghcr.io/timeplus-io/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
-            docker push ghcr.io/timeplus-io/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker build . -t timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
             docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
             cd $GITHUB_WORKSPACE/docker/server
@@ -60,15 +66,14 @@ jobs:
             cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
             rm -rf resources/protos/google/protobuf/unittest_*
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
-            docker push ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_unit_test:
     runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -78,7 +83,7 @@ jobs:
             ln -s /usr/bin/python3 /usr/bin/python
             apt-get update
             systemctl stop unattended-upgrades
-            apt install python3-venv -y
+            apt install python3-venv jq -y
             python -m venv env
             source env/bin/activate
 
@@ -90,55 +95,49 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_smoke_test:
     runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
-            cd $GITHUB_WORKSPACE/tests/stream
-            export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        # run smoke test
+        export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        export PROTON_REPO=timeplus/proton_testing
 
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$PROTON_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$PROTON_VERSION
 
-            pip install --upgrade pip
+        cd $GITHUB_WORKSPACE/tests/cluster/
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
 
-            # FIXME: remove this line after pyyaml community fixed install bug
-            pip install pyyaml==5.3.1
-
-            # FIXME(yokofly): docker 7.0.0 introduce a breaking change
-            # https://github.com/docker/docker-py/issues/3194
-            pip install docker==6.1.3
-
-            pip install -r helpers/requirements.txt
-            python ci_runner.py --debug --settings=redp,nativelog
-
-            cat $GITHUB_WORKSPACE/tests/stream/.status
-            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
+        # set aggregation mode based on weekday 
+        DAY_OF_WEEK=$(date +%u)
+        if [[ "$DAY_OF_WEEK" == "2" || "$DAY_OF_WEEK" == "4" || "$DAY_OF_WEEK" == "6" ]]; then
+          bash run.sh hybrid
+        else
+          bash run.sh
+        fi
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateless_test:
     runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
+            mkdir $GITHUB_WORKSPACE/output
 
             # make virtualenv
             ln -s /usr/bin/python3 /usr/bin/python
             apt-get update
             systemctl stop unattended-upgrades
-            apt install python3-venv -y
+            apt install python3-venv jq -y
             python -m venv env
             source env/bin/activate
 
             pip install -r requirements.txt
             export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            export PROTON_REPO=timeplus/proton_testing
+            chown -R 101 $GITHUB_WORKSPACE
             python functional_tests_check.py stateless
     steps:
       - name: display command
@@ -146,29 +145,80 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateful_test:
     runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
+            mkdir $GITHUB_WORKSPACE/output
 
             # make virtualenv
             ln -s /usr/bin/python3 /usr/bin/python
             apt-get update
             systemctl stop unattended-upgrades
-            apt install python3-venv -y
+            apt install python3-venv jq -y
             python -m venv env
             source env/bin/activate
 
             pip install -r requirements.txt
             export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            export PROTON_REPO=timeplus/proton_testing
+            chown -R 101 $GITHUB_WORKSPACE
             python functional_tests_check.py stateful
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_compatibility_test:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '00 23 * * 5' # Friday 11:00 PM UTC (Saturday 7:00 AM ShangHai)
+    outputs:
+      versions: ${{ steps.get-versions.outputs.versions }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4.1.6
+        with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          submodules: false
+      - name: Get Last version
+        id: get-versions
+        run: |
+          export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+          export PROTON_REPO=timeplus/proton_testing
+
+          cd $GITHUB_WORKSPACE/tests/proton_ci
+          pip install -r requirements.txt
+
+          # get versions
+          python run_compatibility_test.py
+          TEST_VERSIONS=$(cat baseline_versions.txt)
+          echo "versions=$TEST_VERSIONS" | tee -a "$GITHUB_OUTPUT"
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+  prepare_sanitizer_performance_test:
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        export PROTON_REPO=timeplus/proton_testing
+
+        # pull docker image
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$PROTON_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$PROTON_VERSION
+
+        # download docker-compose
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+
+        # run performance test
+        echo "run performance test"
+        cd $GITHUB_WORKSPACE/tests/cluster/
+        bash perf.sh
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_build:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -179,7 +229,13 @@ jobs:
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            # python udf arm nonsupport: https://github.com/timeplus-io/proton-enterprise/issues/6944
+            enable_python=""
+            if [ "$ARCH" == "arm" ]; then
+              enable_python="--disable-python-udf"
+            fi
+
+            ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -188,7 +244,7 @@ jobs:
 
             # Don't need to upload ccache to S3 at the moment
             tar -zcf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            # aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+            aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
 
             # clean ccache and build footprint
             rm -rf $GITHUB_WORKSPACE/ccache
@@ -203,63 +259,57 @@ jobs:
             cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
             rm -rf resources/protos/google/protobuf/unittest_*
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:testing-$ARCH-$GITHUB_SHA
-            docker push ghcr.io/timeplus-io/proton:testing-$ARCH-$GITHUB_SHA
+            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton_testing:testing-$ARCH-$GITHUB_SHA
+
+            # push release image weekly for testing
+            date=$(date +'%Y%m%d')
+            docker tag timeplus/proton_testing:testing-$ARCH-$GITHUB_SHA timeplus/proton:develop-$ARCH-$date
+            docker push timeplus/proton:develop-$ARCH-$date
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_smoke_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
-            cd $GITHUB_WORKSPACE/tests/stream
-            export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+        # run smoke test
+        export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+        export PROTON_REPO=timeplus/proton_testing
 
-            # make virtualenv
-            ln -s /usr/bin/python3 /usr/bin/python
-            apt-get update
-            systemctl stop unattended-upgrades
-            apt install python3-venv -y
-            python -m venv env
-            source env/bin/activate
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$PROTON_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$PROTON_VERSION
 
-            pip install --upgrade pip
-
-            # FIXME: remove this line after pyyaml community fixed install bug
-            pip install pyyaml==5.3.1
-
-            # FIXME(yokofly): docker 7.0.0 introduce a breaking change
-            # https://github.com/docker/docker-py/issues/3194
-            pip install docker==6.1.3
-
-            pip install -r helpers/requirements.txt
-            python ci_runner.py --debug --settings=redp,nativelog
-
-            cat $GITHUB_WORKSPACE/tests/stream/.status
-            cat $GITHUB_WORKSPACE/tests/stream/.status | grep nativelog:ExitCode.OK | grep redp:ExitCode.OK
+        cd $GITHUB_WORKSPACE/tests/cluster/
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        bash run.sh
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_stateless_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
+            mkdir $GITHUB_WORKSPACE/output
 
             # make virtualenv
             ln -s /usr/bin/python3 /usr/bin/python
             apt-get update
             systemctl stop unattended-upgrades
-            apt install python3-venv -y
+            apt install python3-venv jq -y
             python -m venv env
             source env/bin/activate
 
             pip install -r requirements.txt
             export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+            export PROTON_REPO=timeplus/proton_testing
+            chown -R 101 $GITHUB_WORKSPACE
             python functional_tests_check.py stateless
     steps:
       - name: display command
@@ -267,29 +317,74 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_stateful_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
+    if: github.event.schedule == '00 23 * * 5'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
+            mkdir $GITHUB_WORKSPACE/output
 
             # make virtualenv
             ln -s /usr/bin/python3 /usr/bin/python
             apt-get update
             systemctl stop unattended-upgrades
-            apt install python3-venv -y
+            apt install python3-venv jq -y
             python -m venv env
             source env/bin/activate
 
             pip install -r requirements.txt
             export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+            export PROTON_REPO=timeplus/proton_testing
+            chown -R 101 $GITHUB_WORKSPACE
             python functional_tests_check.py stateful
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release_compatibility_test:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '00 23 * * 5'
+    outputs:
+      command: |
+        export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+        export PROTON_REPO=timeplus/proton_testing
+
+        cd $GITHUB_WORKSPACE/tests/proton_ci
+        pip install -r requirements.txt
+
+        # get versions
+        python run_compatibility_test.py
+        TEST_VERSIONS=$(cat baseline_versions.txt)
+        echo "versions=$TEST_VERSIONS" | tee -a "$GITHUB_OUTPUT"
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  prepare_release_performance_test:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '00 23 * * 5'
+    outputs:
+      command: |
+        export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
+        export PROTON_REPO=timeplus/proton_testing
+
+        # pull docker image
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$PROTON_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$PROTON_VERSION
+
+        # download docker-compose
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+
+        # run performance test
+        echo "run performance test"
+        cd $GITHUB_WORKSPACE/tests/cluster/
+        bash perf.sh
     steps:
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_address_build:
     runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -300,7 +395,13 @@ jobs:
             mkdir $GITHUB_WORKSPACE/ccache
             echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-16 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            # python udf arm nonsupport: https://github.com/timeplus-io/proton-enterprise/issues/6944
+            enable_python=""
+            if [ "$ARCH" == "arm" ]; then
+              enable_python="--disable-python-udf"
+            fi
+
+            ./docker/packager/packager --package-type binary --docker-image-version clang-19 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -308,7 +409,7 @@ jobs:
             fi
 
             tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
 
             # clean ccache and build footprint
             rm -rf $GITHUB_WORKSPACE/ccache
@@ -318,8 +419,8 @@ jobs:
             # build unit test docker image
             cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
             cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-            docker build . -t ghcr.io/timeplus-io/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
-            docker push ghcr.io/timeplus-io/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker build . -t timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton-unit-test:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
             docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
             cd $GITHUB_WORKSPACE/docker/server
@@ -329,28 +430,13 @@ jobs:
             cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
             rm -rf resources/protos/google/protobuf/unittest_*
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
-            docker push ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_sanitizer_clean_up:
-    runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
-    outputs:
-      command: |
-          bash tests/ci/worker/sanitizer_clean_up.sh
-    steps:
-      - name: display command
-        run: |
-          echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_release_clean_up:
-    runs-on: ubuntu-latest
-    if: github.repository == 'timeplus-io/proton'
-    outputs:
-      command: |
-          bash tests/ci/worker/release_clean_up.sh
+            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker push timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+  
+            # push address sanitizer image daily for testing
+            date=$(date +'%Y%m%d')
+            docker tag timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA timeplus/proton:develop-$SANITIZER-$ARCH-$date
+            docker push timeplus/proton:develop-$SANITIZER-$ARCH-$date
     steps:
       - name: display command
         run: |
@@ -366,119 +452,151 @@ jobs:
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      upjob: build_address_x64
       command: |
         ${{ needs.prepare_address_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_address_x64:
     needs: [prepare_sanitizer_unit_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 60
+      upjob: unit_test_address_x64
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_address_x64:
     needs: [prepare_sanitizer_smoke_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.9xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '60'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_address_x64
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_address_x64:
     needs: [prepare_sanitizer_stateless_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_address_x64
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_address_x64:
     needs: [prepare_sanitizer_stateful_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_address_x64
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  performance_test_address_x64:
+    needs: [prepare_sanitizer_performance_test, build_address_x64]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c7i.8xlarge
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      sanitizer: "address"
+      arch: ${{ vars.X64_ARCH }}
+      tag: 'sanitizer'
+      timeout: 60
+      upjob: performance_test_address_x64
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_sanitizer_performance_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_thread_x64:
     needs: prepare_sanitizer_build
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -490,121 +608,128 @@ jobs:
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      upjob: build_thread_x64
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_thread_x64:
     needs: [prepare_sanitizer_unit_test, build_thread_x64]
+    if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/8701
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_thread_x64
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_thread_x64:
     needs: [prepare_sanitizer_smoke_test, build_thread_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '60'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_thread_x64
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_thread_x64:
     needs: [prepare_sanitizer_stateless_test, build_thread_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_thread_x64
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_thread_x64:
     needs: [prepare_sanitizer_stateful_test, build_thread_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.4xlarge # thread build need more resource
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_thread_x64
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_memory_x64:
     needs: prepare_sanitizer_build
+    if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7740
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -614,121 +739,127 @@ jobs:
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      upjob: build_memory_x64
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_memory_x64:
     needs: [prepare_sanitizer_unit_test, build_memory_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_memory_x64
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_memory_x64:
     needs: [prepare_sanitizer_smoke_test, build_memory_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '60'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_memory_x64
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_memory_x64:
     needs: [prepare_sanitizer_stateless_test, build_memory_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_memory_x64
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_memory_x64:
     needs: [prepare_sanitizer_stateful_test, build_memory_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_memory_x64
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_undefined_x64:
     needs: prepare_sanitizer_build
+    if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7738
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -738,119 +869,124 @@ jobs:
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
+      upjob: build_undefined_x64
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_undefined_x64:
     needs: [prepare_sanitizer_unit_test, build_undefined_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_undefined_x64
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_undefined_x64:
     needs: [prepare_sanitizer_smoke_test, build_undefined_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '60'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_undefined_x64
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_undefined_x64:
     needs: [prepare_sanitizer_stateless_test, build_undefined_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_undefined_x64
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_undefined_x64:
     needs: [prepare_sanitizer_stateful_test, build_undefined_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_undefined_x64
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_release_x64:
     needs: prepare_release_build
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -862,96 +998,152 @@ jobs:
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
+      upjob: build_release_x64
       command: |
         ${{ needs.prepare_release_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_release_x64:
     needs: [prepare_release_smoke_test, build_release_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '60'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_release_x64
       command: |
         ${{ needs.prepare_release_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_release_x64:
     needs: [prepare_release_stateless_test, build_release_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_release_x64
       command: |
         ${{ needs.prepare_release_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_release_x64:
     needs: [prepare_release_stateful_test, build_release_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: 'release'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_release_x64
       command: |
         ${{ needs.prepare_release_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  compatibility_test_release_x64:
+    needs: [prepare_compatibility_test, build_release_x64]
+    if: ${{ needs.prepare_compatibility_test.outputs.versions != '[]' }}
+    strategy:
+      fail-fast: false # Turn off due to no dependencies between individual instances of matrix
+      matrix:
+        versions: ${{ fromJson(needs.prepare_compatibility_test.outputs.versions) }}
+    uses: timeplus-io/proton/.github/workflows/compatibility_test.yml@develop
+    with:
+      arch: ${{ vars.X64_ARCH }}
+      target: testing-${{ vars.X64_ARCH }}-$GITHUB_SHA
+      source: ${{ matrix.versions }}
+      repo: timeplus/proton_testing
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  performance_test_release_x64:
+    needs: [prepare_release_performance_test, build_release_x64]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c7i.8xlarge
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      sanitizer: ""
+      arch: ${{ vars.X64_ARCH }}
+      tag: 'release'
+      timeout: 30
+      upjob: performance_test_release_x64
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_release_performance_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_address_arm:
     needs: prepare_sanitizer_build
+    if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7784
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -961,44 +1153,46 @@ jobs:
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      upjob: build_address_arm
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_address_arm:
     needs: [prepare_sanitizer_unit_test, build_address_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_address_arm
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_address_arm:
     needs: [prepare_sanitizer_smoke_test, build_address_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1010,45 +1204,47 @@ jobs:
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_address_arm
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_address_arm:
     needs: [prepare_sanitizer_stateless_test, build_address_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_address_arm
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_address_arm:
     needs: [prepare_sanitizer_stateful_test, build_address_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1060,20 +1256,49 @@ jobs:
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_address_arm
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  performance_test_address_arm:
+    if: false # current benchmark based on x86, disable performance on arm now
+    needs: [prepare_sanitizer_performance_test, build_address_arm]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6g.4xlarge
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      sanitizer: "address"
+      arch: ${{ vars.ARM_ARCH }}
+      tag: 'sanitizer'
+      timeout: 30
+      upjob: performance_test_address_arm
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_sanitizer_performance_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_thread_arm:
     # temporarily disable tsan on arm due to ASLR stall
     if: false
@@ -1087,44 +1312,46 @@ jobs:
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      upjob: build_thread_arm
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_thread_arm:
     needs: [prepare_sanitizer_unit_test, build_thread_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_thread_arm
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_thread_arm:
     needs: [prepare_sanitizer_smoke_test, build_thread_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1136,45 +1363,47 @@ jobs:
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_thread_arm
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_thread_arm:
     needs: [prepare_sanitizer_stateless_test, build_thread_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_thread_arm
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_thread_arm:
     needs: [prepare_sanitizer_stateful_test, build_thread_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1186,20 +1415,21 @@ jobs:
       sanitizer: "thread"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_thread_arm
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_memory_arm:
     # temporarily disable msan on arm due to ASLR stall
     if: false
@@ -1213,44 +1443,46 @@ jobs:
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      upjob: build_memory_arm
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_memory_arm:
     needs: [prepare_sanitizer_unit_test, build_memory_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_memory_arm
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_memory_arm:
     needs: [prepare_sanitizer_smoke_test, build_memory_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1262,45 +1494,47 @@ jobs:
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_memory_arm
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_memory_arm:
     needs: [prepare_sanitizer_stateless_test, build_memory_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_memory_arm
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_memory_arm:
     needs: [prepare_sanitizer_stateful_test, build_memory_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1312,22 +1546,24 @@ jobs:
       sanitizer: "memory"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_memory_arm
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_undefined_arm:
     needs: prepare_sanitizer_build
+    if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7738
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -1337,44 +1573,46 @@ jobs:
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
+      upjob: build_undefined_arm
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_undefined_arm:
     needs: [prepare_sanitizer_unit_test, build_undefined_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
+      ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '40'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
       timeout: 30
+      upjob: unit_test_undefined_arm
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_undefined_arm:
     needs: [prepare_sanitizer_smoke_test, build_undefined_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1386,45 +1624,47 @@ jobs:
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_undefined_arm
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_undefined_arm:
     needs: [prepare_sanitizer_stateless_test, build_undefined_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_undefined_arm
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_undefined_arm:
     needs: [prepare_sanitizer_stateful_test, build_undefined_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1436,20 +1676,21 @@ jobs:
       sanitizer: "undefined"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_undefined_arm
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_release_arm:
     needs: prepare_release_build
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1461,19 +1702,20 @@ jobs:
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
+      upjob: build_release_arm
       command: |
         ${{ needs.prepare_release_build.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_release_arm:
     needs: [prepare_release_smoke_test, build_release_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1485,45 +1727,47 @@ jobs:
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
-      timeout: 30
+      timeout: 80
+      upjob: smoke_test_release_arm
       command: |
         ${{ needs.prepare_release_smoke_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_release_arm:
     needs: [prepare_release_stateless_test, build_release_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
-      ec2-volume-size: '40'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
-      timeout: 30
+      timeout: 50
+      upjob: stateless_test_release_arm
       command: |
         ${{ needs.prepare_release_stateless_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_release_arm:
     needs: [prepare_release_stateful_test, build_release_arm]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -1535,184 +1779,71 @@ jobs:
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: 'release'
-      timeout: 30
+      timeout: 40
+      upjob: stateful_test_release_arm
       command: |
         ${{ needs.prepare_release_stateful_test.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
-  clean_passed_test_image_address_x64:
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  performance_test_release_arm:
+    if: false # current benchmark based on x86, disable performance on arm now
+    needs: [prepare_release_performance_test, build_release_arm]
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6g.4xlarge
+      ec2-image-id: ${{ vars.ARM_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      sanitizer: ""
+      arch: ${{ vars.ARM_ARCH }}
+      tag: 'release'
+      timeout: 30
+      upjob: performance_test_release_arm
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_release_performance_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+
+  clean_passed_test_image:
     needs:
-      - prepare_sanitizer_clean_up
       - unit_test_address_x64
       - smoke_test_address_x64
       - stateless_test_address_x64
       - stateful_test_address_x64
+      - performance_test_address_x64
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: delete testing image
         run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "address"
-          ARCH: ${{ vars.X64_ARCH }}
-  clean_passed_test_image_thread_x64:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_thread_x64
-      - smoke_test_thread_x64
-      - stateless_test_thread_x64
-      - stateful_test_thread_x64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "thread"
-          ARCH: ${{ vars.X64_ARCH }}
-  clean_passed_test_image_memory_x64:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_memory_x64
-      - smoke_test_memory_x64
-      - stateless_test_memory_x64
-      - stateful_test_memory_x64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "memory"
-          ARCH: ${{ vars.X64_ARCH }}
-  clean_passed_test_image_undefined_x64:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_undefined_x64
-      - smoke_test_undefined_x64
-      - stateless_test_undefined_x64
-      - stateful_test_undefined_x64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "undefined"
-          ARCH: ${{ vars.X64_ARCH }}
-  clean_passed_test_image_release_x64:
-    needs:
-      - prepare_release_clean_up
-      - smoke_test_release_x64
-      - stateless_test_release_x64
-      - stateful_test_release_x64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_release_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          ARCH: ${{ vars.X64_ARCH }}
-  clean_passed_test_image_address_arm:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_address_arm
-      - smoke_test_address_arm
-      - stateless_test_address_arm
-      - stateful_test_address_arm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "address"
-          ARCH: ${{ vars.ARM_ARCH }}
-  clean_passed_test_image_thread_arm:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_thread_arm
-      - smoke_test_thread_arm
-      - stateless_test_thread_arm
-      - stateful_test_thread_arm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "thread"
-          ARCH: ${{ vars.ARM_ARCH }}
-  clean_passed_test_image_memory_arm:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_memory_arm
-      - smoke_test_memory_arm
-      - stateless_test_memory_arm
-      - stateful_test_memory_arm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "memory"
-          ARCH: ${{ vars.ARM_ARCH }}
-  clean_passed_test_image_undefined_arm:
-    needs:
-      - prepare_sanitizer_clean_up
-      - unit_test_undefined_arm
-      - smoke_test_undefined_arm
-      - stateless_test_undefined_arm
-      - stateful_test_undefined_arm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_sanitizer_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SANITIZER: "undefined"
-          ARCH: ${{ vars.ARM_ARCH }}
-  clean_passed_test_image_release_arm:
-    needs:
-      - prepare_release_clean_up
-      - smoke_test_release_arm
-      - stateless_test_release_arm
-      - stateful_test_release_arm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: delete testing image
-        run: |
-          ${{ needs.prepare_release_clean_up.outputs.command }}
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          ARCH: ${{ vars.ARM_ARCH }}
+          echo "try to delete image with tag testing-$SANITIZER-$ARCH-$GITHUB_SHA"
 
+          curl -L \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GH_PERSONAL_ACCESS_TOKEN" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_delete_image.yml/dispatches \
+          -d "{\"ref\":\"develop\",\"inputs\":{\"tag\":\"testing-$SANITIZER-$ARCH-$GITHUB_SHA\",\"repo\":\"timeplus/proton_testing\"}}"
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          SANITIZER: "address"
+          ARCH: ${{ vars.X64_ARCH }}

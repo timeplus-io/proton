@@ -12,7 +12,7 @@ namespace DB
 class MergingAggregatedTransform final : public IAccumulatingTransform
 {
 public:
-    MergingAggregatedTransform(Block header_, AggregatingTransformParamsPtr params_, size_t max_threads_);
+    MergingAggregatedTransform(Block header_, AggregatingTransformParamsPtr params_);
     String getName() const override { return "MergingAggregatedTransform"; }
 
 protected:
@@ -21,8 +21,7 @@ protected:
 
 private:
     AggregatingTransformParamsPtr params;
-    Poco::Logger * log = &Poco::Logger::get("MergingAggregatedTransform");
-    size_t max_threads;
+    LoggerPtr log = getLogger("MergingAggregatedTransform");
 
     AggregatedDataVariants data_variants;
     Aggregator::BucketToBlocks bucket_to_blocks;

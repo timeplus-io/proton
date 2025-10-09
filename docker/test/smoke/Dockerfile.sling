@@ -1,0 +1,37 @@
+# docker build . -f Dockerfile.sling -t timeplus/sling-cli:$SLING_VERSION-$SLING_VERSION_SUFFIX
+FROM ubuntu:22.04
+
+USER 0:0
+
+ARG SLING_ZIP
+ARG USERNAME=default
+
+RUN apt-get update \
+ && env DEBIAN_FRONTEND=noninteractive \
+    apt-get install --yes --no-install-recommends \
+    openssh-server sudo vim jq unzip \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# set ssh service
+RUN useradd -ms /bin/bash "$USERNAME" \
+ && usermod -aG sudo "$USERNAME" \
+ && mkdir -p /run/sshd \
+ && chmod 0755 /run/sshd
+
+RUN sed -i'' 's|#PermitRootLogin prohibit-password|PermitRootLogin prohibit-password|g' /etc/ssh/sshd_config \
+ && sed -i'' 's|#PubkeyAuthentication yes|PubkeyAuthentication yes|g' /etc/ssh/sshd_config \
+ && sed -i'' 's|#PasswordAuthentication yes|PasswordAuthentication yes|g' /etc/ssh/sshd_config \
+ && echo 'AuthorizedKeysFile .ssh/authorized_keys2 /home/$USERNAME/.ssh/authorized_keys2' >> /etc/ssh/sshd_config \
+ && echo 'timeplus ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/timeplus
+
+# set sling
+COPY ${SLING_ZIP} .
+
+RUN unzip ${SLING_ZIP} -d /tmp \
+  && mv /tmp/sling /usr/local/bin/sling \
+  && rm -rf ${SLING_ZIP} /tmp/*
+
+EXPOSE 22
+
+CMD ["/usr/sbin/sshd", "-D"]

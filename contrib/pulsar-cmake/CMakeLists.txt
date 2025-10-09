@@ -1,18 +1,21 @@
 # Needed when using Apache Pulsar external stream
-option (ENABLE_PULSAR "Enable Pulsar" ${ENABLE_LIBRARIES})
+if (OS_DARWIN)
+    # the vendored libcurl does not compile on MacOS yet, disable Pulsar by default.
+    option (ENABLE_PULSAR "Enable Pulsar" 0)
+else()
+    option (ENABLE_PULSAR "Enable Pulsar" ${ENABLE_LIBRARIES})
+endif()
 
 if (NOT ENABLE_PULSAR)
     message(STATUS "Not using pulsar")
     return()
 endif()
 
-if (NOT ENABLE_CURL)
-    message(FATAL_ERROR "Pulsar requires curl")
-endif()
-
 if (OS_DARWIN)
     message(FATAL_ERROR "Pulsar is not supported on MacOS yet")
 endif()
+
+set(CMAKE_CXX_STANDARD 17)
 
 set(PULSAR_CLIENT_CPP_DIR "${CMAKE_CURRENT_LIST_DIR}/pulsar-client-cpp")
 set(PROTOC_PATH protoc)
@@ -58,6 +61,8 @@ set_target_properties (_pulsar PROPERTIES VERSION ${PULSAR_CLIENT_VERSION})
 target_include_directories(_pulsar SYSTEM PUBLIC "${PULSAR_CLIENT_CPP_DIR}/include")
 target_include_directories(_pulsar SYSTEM PUBLIC "${PULSAR_CLIENT_CPP_DIR}")
 target_include_directories(_pulsar SYSTEM PUBLIC "${LIB_AUTOGEN_DIR}")
+
+add_definitions(-DHAS_ZSTD -DHAS_SNAPPY)
 
 target_link_libraries(_pulsar PRIVATE boost::headers_only)
 target_link_libraries(_pulsar PRIVATE ch_contrib::curl)

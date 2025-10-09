@@ -1,0 +1,52 @@
+tags:
+  - functions
+  - streaming functions
+description: function neighbor for streaming
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: 602-1
+    type: stream
+    query: |
+      select value,
+        neighbor(value, -3) as prev_3,
+        neighbor(value, -3, 0) as prev_3_0
+      from test6_stream_only1
+    schema:
+      - name: value
+        type: float32
+      - name: prev_3
+        type: float32
+      - name: prev_3_0
+        type: float32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev1', 'ca', 1, '2021-11-02 20:00:01', '2020-02-02 20:00:01')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev2', 'ca', 2, '2021-11-02 20:00:10', '2020-02-02 20:01:02')
+        ('dev2', 'ca', 3, '2021-11-02 20:00:10', '2020-02-02 20:00:02')
+        ('dev2', 'ca', 4, '2021-11-02 20:00:10', '2020-02-02 20:01:02')
+
+  - type: query
+    sql: |
+      insert into test6_stream_only1 (id, location, value, json, timestamp) values
+        ('dev3', 'ca', 5, '2021-11-02 20:00:10', '2020-02-02 20:01:03')
+
+  - type: check
+    target_name: 602-1
+    expected_result:
+      - [ 1, 0, 0 ]
+      - [ 2, 0, 0 ]
+      - [ 3, 0, 0 ]
+      - [ 4, 1, 1 ]
+      - [ 5, 2, 2 ]
+

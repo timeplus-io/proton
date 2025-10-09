@@ -1,9 +1,8 @@
 #pragma once
 
+#include <Core/Types.h>
 #include <base/types.h>
-#include <Common/HashTable/Hash.h>
 
-#include <absl/container/flat_hash_map.h>
 #include <fmt/format.h>
 
 namespace DB
@@ -17,9 +16,6 @@ namespace Streaming
 
 using SubstreamID = UInt128;
 const SubstreamID INVALID_SUBSTREAM_ID{};
-
-template <typename T>
-using SubstreamHashMap = absl::flat_hash_map<Streaming::SubstreamID, T, UInt128TrivialHash>;
 
 void serialize(const SubstreamID & id, WriteBuffer & wb);
 void deserialize(SubstreamID & id, ReadBuffer & rb);
@@ -36,14 +32,14 @@ struct fmt::formatter<DB::Streaming::SubstreamID>
 
         /// Only support {}.
         if (it != end && *it != '}')
-            throw format_error("Invalid format");
+            throw fmt::format_error("Invalid format");
 
         return it;
     }
 
     template <typename FormatContext>
-    auto format(const DB::Streaming::SubstreamID & x, FormatContext & ctx)
+    auto format(const DB::Streaming::SubstreamID & x, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{{{}-{}}}", x.items[0], x.items[1]);
+        return fmt::format_to(ctx.out(), "{{{}-{}}}", x.items[0], x.items[1]);
     }
 };

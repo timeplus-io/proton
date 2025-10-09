@@ -25,8 +25,8 @@ struct MergeTreeIndexGranuleFullText final : public IMergeTreeIndexGranule
 
     bool empty() const override { return !has_elems; }
 
-    String index_name;
-    BloomFilterParameters params;
+    const String index_name;
+    const BloomFilterParameters params;
 
     std::vector<BloomFilter> bloom_filters;
     bool has_elems;
@@ -62,7 +62,7 @@ class MergeTreeConditionFullText final : public IMergeTreeIndexCondition
 {
 public:
     MergeTreeConditionFullText(
-            const SelectQueryInfo & query_info,
+            const ActionsDAGPtr & filter_actions_dag,
             ContextPtr context,
             const Block & index_sample_block,
             const BloomFilterParameters & params_,
@@ -122,17 +122,17 @@ private:
 
     using RPN = std::vector<RPNElement>;
 
-    bool traverseAtomAST(const ASTPtr & node, Block & block_with_constants, RPNElement & out);
+    bool extractAtomFromTree(const RPNBuilderTreeNode & node, RPNElement & out);
 
-    bool traverseASTEquals(
+    bool traverseTreeEquals(
         const String & function_name,
-        const ASTPtr & key_ast,
+        const RPNBuilderTreeNode & key_node,
         const DataTypePtr & value_type,
         const Field & value_field,
         RPNElement & out);
 
     bool getKey(const std::string & key_column_name, size_t & key_column_num);
-    bool tryPrepareSetBloomFilter(const ASTs & args, RPNElement & out);
+    bool tryPrepareSetBloomFilter(const RPNBuilderTreeNode & left_argument, const RPNBuilderTreeNode & right_argument, RPNElement & out);
 
     static bool createFunctionEqualsCondition(
         RPNElement & out, const Field & value, const BloomFilterParameters & params, TokenExtractorPtr token_extractor);
@@ -142,9 +142,6 @@ private:
     BloomFilterParameters params;
     TokenExtractorPtr token_extractor;
     RPN rpn;
-
-    /// Sets from syntax analyzer.
-    PreparedSetsPtr prepared_sets;
 };
 
 class MergeTreeIndexFullText final : public IMergeTreeIndex
@@ -164,7 +161,7 @@ public:
     MergeTreeIndexAggregatorPtr createIndexAggregator() const override;
 
     MergeTreeIndexConditionPtr createIndexCondition(
-            const SelectQueryInfo & query, ContextPtr context) const override;
+            const ActionsDAGPtr & filter_dag, ContextPtr context) const override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & node) const override;
 

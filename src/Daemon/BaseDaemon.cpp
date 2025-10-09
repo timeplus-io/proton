@@ -1,10 +1,9 @@
-#ifdef HAS_RESERVED_IDENTIFIER
 #pragma clang diagnostic ignored "-Wreserved-identifier"
-#endif
 
 #include <Daemon/BaseDaemon.h>
 #include <Daemon/SentryWriter.h>
 #include <base/errnoToString.h>
+#include <base/defines.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -30,6 +29,7 @@
 #include <Poco/Util/Application.h>
 #include <Poco/Exception.h>
 #include <Poco/ErrorHandler.h>
+#include <Poco/Environment.h>
 
 #include <Common/ErrorHandlers.h>
 #include <base/argsToConfig.h>
@@ -60,7 +60,7 @@
 #include <Loggers/OwnFormattingChannel.h>
 #include <Loggers/OwnPatternFormatter.h>
 
-#include "config_version.h"
+#include <Common/config_version.h>
 
 #if defined(OS_DARWIN)
 #   pragma clang diagnostic ignored "-Wunused-macros"
@@ -194,7 +194,7 @@ public:
     static constexpr int SanitizerTrap = -3;
 
     explicit SignalListener(BaseDaemon & daemon_)
-        : log(&Poco::Logger::get("BaseDaemon"))
+        : log(getLogger("BaseDaemon"))
         , daemon(daemon_)
     {
     }
@@ -277,7 +277,7 @@ public:
     }
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     BaseDaemon & daemon;
 
     void onTerminate(std::string_view message, UInt32 thread_num) const
@@ -296,7 +296,7 @@ private:
             if (next_pos != std::string_view::npos)
                 size = next_pos - pos;
 
-            LOG_FATAL(log, "{}", message.substr(pos, size));
+            LOG_FATAL(log, fmt::runtime(message.substr(pos, size)));
             pos = next_pos;
         }
     }
@@ -316,8 +316,9 @@ private:
         /// in case of double fault.
 
         LOG_FATAL(log, "########## Short fault info ############");
-        LOG_FATAL(log, "(version {}{}, build id: {}, git hash: {}) (from thread {}) Received signal {}",
+        LOG_FATAL(log, "(version {}{}, build id: {}, git hash: {}, architecture: {}) (from thread {}) Received signal {}",
                 VERSION_STRING, VERSION_OFFICIAL, daemon.build_id, daemon.git_hash,
+                Poco::Environment::osArchitecture(),
                 thread_num, sig);
 
         std::string signal_description = "Unknown signal";
@@ -369,12 +370,8 @@ private:
         /// It will allow client to see failure messages directly.
         if (thread_ptr)
         {
-            query_id = std::string(thread_ptr->getQueryId());
-
-            if (auto thread_group = thread_ptr->getThreadGroup())
-            {
-                query = thread_group->one_line_query;
-            }
+            query_id = thread_ptr->getQueryId();
+            query = thread_ptr->getQueryForLog();
 
             if (auto logs_queue = thread_ptr->getInternalTextLogsQueue())
             {
@@ -646,7 +643,13 @@ void BaseDaemon::closeFDs()
         for (const auto & fd : fds)
         {
             if (fd > 2 && fd != signal_pipe.fds_rw[0] && fd != signal_pipe.fds_rw[1])
-                ::close(fd);
+            {
+                int err = ::close(fd);
+                /// NOTE: it is OK to ignore error here since at least one fd
+                /// is already closed (for proc_path), and there can be some
+                /// tricky cases, likely.
+                (void)err;
+            }
         }
     }
     else
@@ -659,8 +662,16 @@ void BaseDaemon::closeFDs()
 #endif
             max_fd = 256; /// bad fallback
         for (int fd = 3; fd < max_fd; ++fd)
+        {
             if (fd != signal_pipe.fds_rw[0] && fd != signal_pipe.fds_rw[1])
-                ::close(fd);
+            {
+                int err = ::close(fd);
+                /// NOTE: it is OK to get EBADF here, since it is simply
+                /// iterator over all possible fds, without any checks does
+                /// this process has this fd or not.
+                (void)err;
+            }
+        }
     }
 }
 
@@ -763,7 +774,10 @@ void BaseDaemon::initialize(Application & self)
             if ((fd = creat(stderr_path.c_str(), 0600)) == -1 && errno != EEXIST)
                 throw Poco::OpenFileException("File " + stderr_path + " (logger.stderr) is not writable");
             if (fd != -1)
-                ::close(fd);
+            {
+                int err = ::close(fd);
+                chassert(!err || errno == EINTR);
+            }
         }
 
         if (!freopen(stderr_path.c_str(), "a+", stderr))
@@ -995,7 +1009,7 @@ void BaseDaemon::handleSignal(int signal_id)
         onInterruptSignals(signal_id);
     }
     else
-        throw Exception(std::string("Unsupported signal: ") + strsignal(signal_id), 0); // NOLINT(concurrency-mt-unsafe) // it is not thread-safe but ok in this context
+        throw DB::Exception::createDeprecated(std::string("Unsupported signal: ") + strsignal(signal_id), 0); // NOLINT(concurrency-mt-unsafe) // it is not thread-safe but ok in this context
 }
 
 void BaseDaemon::onInterruptSignals(int signal_id)

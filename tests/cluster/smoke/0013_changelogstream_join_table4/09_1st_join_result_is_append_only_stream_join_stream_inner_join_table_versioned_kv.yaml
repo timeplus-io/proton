@@ -1,0 +1,222 @@
+tags:
+  - append_only
+  - table(versioned_kv)
+  - multiple stream join
+description: 1st join result is append_only(stream join stream) inner join table(versioned_kv)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: create stream test14_stream1_4(i int64, j int64, k string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_table2_4(i2 int64, j2 int64, k2 string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_stream3_4(i3 int64, j3 int64, k3 string) primary
+      key j3 settings mode='versioned_kv';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_stream3_4(i3, j3, k3) values(4, 2, 'c');
+    schema: 
+      - name: i3
+        type: int64
+      - name: j3
+        type: int64
+      - name: k3
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_4(i3, j3, k3) values(6, 3, '7');
+    schema: 
+      - name: i3
+        type: int64
+      - name: j3
+        type: int64
+      - name: k3
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_4(i3, j3, k3) values(1, 7, 'a');
+    schema: 
+      - name: i3
+        type: int64
+      - name: j3
+        type: int64
+      - name: k3
+        type: string  
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_4(i3, j3, k3) values(3, 2, 'e');
+    schema: 
+      - name: i3
+        type: int64
+      - name: j3
+        type: int64
+      - name: k3
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream3_4(i3, j3, k3) values(3, 7, 'd');
+    schema: 
+      - name: i3
+        type: int64
+      - name: j3
+        type: int64
+      - name: k3
+        type: string
+  - type: wait
+    time: 5
+
+  - name: "14172"
+    type: stream
+    query:
+      with t as (select * from test14_stream1_4 join test14_table2_4 on test14_stream1_4.j
+      = test14_table2_4.j2) select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_4)
+      as k on t.j = k.j3;
+    schema: 
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+      - name: i2
+        type: int64
+      - name: j2
+        type: int64
+      - name: k2
+        type: string
+      - name: i3
+        type: int64
+      - name: j3
+        type: int64
+      - name: k3
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table2_4(i2, j2, k2) values(8, 2, 'a');
+    schema: 
+      - name: i2
+        type: int64
+      - name: j2
+        type: int64
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream1_4(i, j, k) values(1, 2, 'a');
+    schema: 
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+
+  - type: check
+    target_name: "14172"
+    expected_result:
+      - ["1", "2", a, "8", "2", a, "3", "2", e]
+
+  - type: query
+    sql: insert into test14_stream1_4(i, j, k) values(1, 3, 'a');
+    schema: 
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table2_4(i2, j2, k2) values(6, 3, 'f');
+    schema: 
+      - name: i2
+        type: int64
+      - name: j2
+        type: int64
+      - name: k2
+        type: string
+
+  - type: check
+    target_name: "14172"
+    expected_result:
+      - ["1", "3", a, "6", "3", f, "6", "3", "7"]
+
+  - type: query
+    sql: insert into test14_stream1_4(i, j, k) values(1, 2, 'a');
+    schema: 
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+
+  - type: check
+    target_name: "14172"
+    expected_result:
+      - ["1", "2", a, "8", "2", a, "3", "2", e]
+
+  - type: query
+    sql: insert into test14_stream1_4(i, j, k) values(1, 7, 'a');
+    schema: 
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table2_4(i2, j2, k2) values(1, 5, 'b');
+    schema: 
+      - name: i2
+        type: int64
+      - name: j2
+        type: int64
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_table2_4(i2, j2, k2) values(4, 2, 'a');
+    schema: 
+      - name: i2
+        type: int64
+      - name: j2
+        type: int64
+      - name: k2
+        type: string
+
+  - type: check
+    target_name: "14172"
+    expected_result:
+      - ["1", "2", a, "4", "2", a, "3", "2", e]
+      - ["1", "2", a, "4", "2", a, "3", "2", e]

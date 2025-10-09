@@ -1,0 +1,88 @@
+0	uint64
+1	uint64
+2	uint64
+0	uint64
+1	uint64
+2	uint64
+0
+1
+2
+0
+1
+2
+1970-01-01
+1970-01-02
+1970-01-03
+0	uint64
+1	uint64
+2	uint64
+0	uint64
+\N	none
+2	uint64
+0	uint64
+str_1	string
+[0,1]	array(uint64)
+\N	none
+4	uint64
+str_5	string
+0	uint64
+str_1	string
+[0,1]	array(uint64)
+\N	none
+4	uint64
+str_5	string
+0	uint64
+str_1	string
+[0,1]	array(uint64)
+\N	none
+4	uint64
+str_5	string
+0	uint64
+str_1	string
+[0,1]	array(uint64)
+\N	none
+4	uint64
+str_5	string
+0
+1
+2
+0
+1
+2
+0	uint64
+str_1	string
+[0,1]	array(uint64)
+\N	none
+4	uint64
+str_5	string
+0	uint64
+1970-01-02	date32
+[0,1]	array(uint64)
+\N	none
+4	uint64
+1970-01-06	date32
+0
+42
+42.42
+1
+0
+\N
+42
+42.42
+1
+0
+
+42
+42.42
+true
+e10
+\N
+42
+42.42
+true
+e10
+\N
+42
+\N
+1
+\N

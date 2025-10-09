@@ -1,7 +1,10 @@
 #pragma once
 
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
+#include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
+#include <DataTypes/IDataType.h>
+#include <base/Decimal.h>
 #include <base/types.h>
+#include <Common/LoggingFormatStringHelpers.h>
 
 #include <span>
 #include <v8.h>
@@ -19,7 +22,9 @@ namespace V8
 /// - row_num: the source row to convert, if row_num = -1, means convert all rows
 /// - argv: the result v8 variants
 std::vector<v8::Local<v8::Value>> prepareArguments(
-    v8::Isolate * isolate, const std::span<const DB::UserDefinedFunctionConfiguration::Argument> arguments, const MutableColumns & columns);
+    v8::Isolate * isolate,
+    const std::span<const cluster::protocol::UserDefinedFunctionDescriptor::Argument> arguments,
+    const MutableColumns & columns);
 
 /// convert the v8 variant to corresponding DataType and insert into to column
 /// - is_result_array: the result is multiple values or single value, normally for UDF and UDA with own emit strategy, it is true
@@ -30,7 +35,7 @@ void throwException(v8::Isolate * isolate, v8::TryCatch & try_catch, int code, c
 {
     if (try_catch.Exception()->IsNull() && try_catch.Message().IsEmpty())
     {
-        throw Exception(fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...), code);
+        throw Exception::createDeprecated(fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...), code);
     }
     else
     {
@@ -49,8 +54,8 @@ void compileSource(
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func);
 
 /// Run func in the specified v8 context
-inline void run(
-    v8::Isolate * isolate,
+inline void
+run(v8::Isolate * isolate,
     const v8::Persistent<v8::Context> & context,
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &)> func)
 {
@@ -71,6 +76,24 @@ void validateAggregationFunctionSource(
 void validateStatelessFunctionSource(const std::string & func_name, const std::string & source);
 
 /// Check v8 heap size and throw exception if exceeds limit
-void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes);
+void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes, bool log_v8_memory, LoggerPtr logger);
+
+std::string getHeapStatisticsString(v8::HeapStatistics & heap_statistics);
+
+/// Common NearHeapLimitCallback for both UDA and UDF
+size_t nearHeapLimitCallback(void * isolate_, size_t current_heap_limit, size_t initial_heap_limit);
+
+/// Common FatalErrorHandle for both UDA and UDF
+void fatalErrorHandle(const char * location, const char * message);
+
+/// Transform unix timestamp to v8::Date
+v8::Local<v8::Value> toV8Date(v8::Isolate * isolate, double dt);
+
+/// Convert Date/Date32/Datetime to DateTime64
+template <typename In>
+DateTime64::NativeType toDateTime64(In source);
+
+/// Convert the timestamp from source_scale to target_scale
+DateTime64 toDateTime64(int64_t value, uint32_t source_scale, uint32_t target_scale);
 }
 }

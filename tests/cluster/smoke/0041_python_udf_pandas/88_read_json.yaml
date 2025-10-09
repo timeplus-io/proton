@@ -1,0 +1,51 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_read_json(value string) RETURNS array(array(string)) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+      from io import StringIO
+  
+      def test_read_json(value):
+          res = [pd.read_json(StringIO(v), orient='index').values.tolist() for v in value if len(v) > 0]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-88-1
+    type: stream
+    query: select test_read_json(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(string))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          ('{"row1":{"col1":"a","col2":"c"},"row2":{"col1":"b","col2":"d"}}')
+          ('{"row1":{"col1":"e","col2":"g"},"row2":{"col1":"f","col2":"h"}}');
+
+  - type: check
+    target_name: python-udf3-88-1
+    expected_result:
+      - [[['a', 'c'], ['b', 'd']]]
+      - [[['e', 'g'], ['f', 'h']]]

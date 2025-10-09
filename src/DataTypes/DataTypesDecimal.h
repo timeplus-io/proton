@@ -4,6 +4,8 @@
 #include <base/extended_types.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/IDataType.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDecimalBase.h>
 #include <DataTypes/DataTypeDateTime64.h>
 
@@ -116,8 +118,7 @@ inline ReturnType convertDecimalsImpl(const typename FromDataType::FieldType & v
         if (common::mulOverflow(static_cast<MaxNativeType>(value.value), converted_value, converted_value))
         {
             if constexpr (throw_exception)
-                throw Exception(std::string(ToDataType::family_name) + " convert overflow",
-                                ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "{} convert overflow", std::string(ToDataType::family_name));
             else
                 return ReturnType(false);
         }
@@ -131,8 +132,7 @@ inline ReturnType convertDecimalsImpl(const typename FromDataType::FieldType & v
             converted_value > std::numeric_limits<typename ToFieldType::NativeType>::max())
         {
             if constexpr (throw_exception)
-                throw Exception(std::string(ToDataType::family_name) + " convert overflow",
-                                ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "{} convert overflow", std::string(ToDataType::family_name));
             else
                 return ReturnType(false);
         }

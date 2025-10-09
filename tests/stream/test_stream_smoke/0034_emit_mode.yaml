@@ -257,42 +257,42 @@ tests:
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select min(i), max(i), count() from test_35_stream emit periodic 1s on update;
+            query: select min(i), max(i), count() from test_35_stream emit on update with batch 1s;
 
           - client: python
             query_id: emit-mode-3-2
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select i, count() from test_35_stream group by i emit periodic 1s on update;
+            query: select i, count() from test_35_stream group by i emit on update with batch 1s;
 
           - client: python
             query_id: emit-mode-3-3
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select window_start, window_end, min(i), max(i), count() from tumble(test_35_stream, 10s) group by window_start, window_end emit periodic 1s on update;
+            query: select window_start, window_end, min(i), max(i), count() from tumble(test_35_stream, 10s) group by window_start, window_end emit on update with batch 1s;
 
           - client: python
             query_id: emit-mode-3-4
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select window_start, window_end, i, count() from tumble(test_35_stream, 10s) group by window_start, window_end, i emit periodic 1s on update;
+            query: select window_start, window_end, i, count() from tumble(test_35_stream, 10s) group by window_start, window_end, i emit on update with batch 1s;
 
           - client: python
             query_id: emit-mode-3-5
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit periodic 1s on update;
+            query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit on update with batch 1s;
 
           - client: python
             query_id: emit-mode-3-6
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select window_start, window_end, min(i), max(i), count() from session(test_35_stream, 5m) group by window_start, window_end emit periodic 1s on update;
+            query: select window_start, window_end, min(i), max(i), count() from session(test_35_stream, 5m) group by window_start, window_end emit on update with batch 1s;
 
           - client: python
             depends_on: emit-mode-3-6

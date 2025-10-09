@@ -4,26 +4,17 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 #include <Processors/ISimpleTransform.h>
-#include <Common/serde.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/SipHash.h>
+#include <Common/serde.h>
 
-namespace DB
-{
-/**
- * DedupTransform dedup input column(s) according to the dedup keys
- */
-
-class ColumnTuple;
-
-namespace Streaming
+namespace DB::Streaming
 {
 struct KeySet
 {
-    KeySet(UInt32 max_entries_, Int32 timeout_sec_, UInt32 limit_args_)
-        : limit_args(limit_args_), max_entries(max_entries_), timeout_interval_ms(timeout_sec_ * 1000)
-    {
-    }
+    /// \param max_entries_ if it is == 0, no max entries limit
+    /// \param timeout_sec_ if it is <= 0, no timeout limit
+    KeySet(UInt32 max_entries_, Int32 timeout_sec_) : max_entries(max_entries_), timeout_interval_ms(timeout_sec_ * 1000) { }
 
     IColumn::Filter populateKeySetsAndCalculateResults(const ColumnsWithTypeAndName & arguments, size_t & rows);
 
@@ -32,14 +23,15 @@ struct KeySet
 
 private:
     /// FIXME, if dedup column is integer, use them directly
-    UInt32 limit_args;
     UInt32 max_entries;
     Int32 timeout_interval_ms;
 
     using Key = UInt128;
 
     /// When creating, the hash table must be small.
-    using Set = HashSet<Key, UInt128TrivialHash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
+    using Set = HashSet<Key, UInt128Hash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
+
+    mutable std::mutex mutex;
 
     Set key_set;
 
@@ -48,17 +40,16 @@ private:
         explicit KeyTime(UInt128 key_) : key(key_), time(MonotonicMilliseconds::now()) { }
         explicit KeyTime(UInt128 key_, Int64 time_) : key(key_), time(time_) { }
 
-        bool timedOut(Int32 timeout_) const { return timeout_ > 0 && MonotonicMilliseconds::now() - time > timeout_; }
+        bool timedOut(Int32 timeout_) const noexcept { return MonotonicMilliseconds::now() - time > timeout_; }
 
         UInt128 key;
         Int64 time;
     };
 
     std::deque<KeyTime> keys;
-
-    mutable std::mutex mutex;
 };
 
+/// DedupTransform dedup input column(s) according to the dedup keys
 class DedupTransform final : public ISimpleTransform
 {
 public:
@@ -70,13 +61,14 @@ public:
 
     void transform(Chunk & chunk) override;
 
+    bool hasState() const override { return true; }
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;
 
 private:
     /// Calculate the positions of columns required by timestamp expr
     void init(const Block & input_header, const Block & output_header);
-    void initKeySet(const Block & transformed_header);
+    void initKeySet();
 
 private:
     ContextPtr context;
@@ -90,5 +82,5 @@ private:
 
     SERDE std::unique_ptr<KeySet> key_set;
 };
-}
+
 }

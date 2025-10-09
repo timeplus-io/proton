@@ -1,0 +1,27 @@
+tags:
+  - validate
+  - UDA
+  
+description: extra tests
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: insert into uda_stream (f32) SELECT number FROM numbers(20);
+  - type: wait
+    time: 1
+
+  - name: udf-3-2
+    type: stream
+    query: select test_sec_large(f32) from uda_stream settings seek_to='earliest';
+    schema:
+    - name: test_sec_large(f32)
+      type: float32
+
+  - type: check
+    target_name: udf-3-2
+    expected_result:
+      - [18.0]

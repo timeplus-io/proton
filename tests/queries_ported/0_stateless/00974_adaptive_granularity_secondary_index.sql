@@ -19,7 +19,7 @@ SELECT
     concat('hhhhhhhhhhhhhhhhhhhhhhhhh', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'yyyyyyyyyyyyyyyyyyyyyyyyyy', to_string(rand()))
 FROM numbers(1000);
 
-OPTIMIZE TABLE indexed_table FINAL;
+OPTIMIZE STREAM indexed_table FINAL;
 
 SELECT count() FROM indexed_table WHERE log_message like '%x%';
 
@@ -49,7 +49,7 @@ SELECT
   concat('hhhhhhhhhhhhhhhhhhhhhhhhh', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'yyyyyyyyyyyyyyyyyyyyyyyyyy', to_string(rand()))
   FROM numbers(1000);
 
-OPTIMIZE TABLE another_indexed_table FINAL;
+OPTIMIZE STREAM another_indexed_table FINAL;
 
 SELECT count() FROM another_indexed_table WHERE log_message like '%x%';
 

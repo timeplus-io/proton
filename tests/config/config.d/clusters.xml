@@ -5,26 +5,40 @@
                  <replica>
                      <default_database>shard_0</default_database>
                      <host>localhost</host>
-                     <port>9000</port>
+                     <port>8463</port>
                  </replica>
              </shard>
              <shard>
                  <replica>
                      <default_database>shard_1</default_database>
                      <host>localhost</host>
-                     <port>9000</port>
+                     <port>8463</port>
                  </replica>
              </shard>
         </test_cluster_two_shards_different_databases>
+        <test_cluster_two_shards_localhost>
+             <shard>
+                 <replica>
+                     <host>localhost</host>
+                     <port>8463</port>
+                 </replica>
+             </shard>
+             <shard>
+                 <replica>
+                     <host>localhost</host>
+                     <port>8463</port>
+                 </replica>
+             </shard>
+        </test_cluster_two_shards_localhost>
         <test_cluster_one_shard_two_replicas>
              <shard>
                  <replica>
                      <host>127.0.0.1</host>
-                     <port>9000</port>
+                     <port>8463</port>
                  </replica>
                  <replica>
                      <host>127.0.0.2</host>
-                     <port>9000</port>
+                     <port>8463</port>
                  </replica>
              </shard>
         </test_cluster_one_shard_two_replicas>
@@ -33,12 +47,12 @@
                  <replica>
                      <default_database>shard_0</default_database>
                      <host>localhost</host>
-                     <port>9000</port>
+                     <port>8463</port>
                  </replica>
                  <replica>
                      <default_database>shard_1</default_database>
                      <host>localhost</host>
-                     <port>9000</port>
+                     <port>8463</port>
                  </replica>
              </shard>
         </test_cluster_two_replicas_different_databases>
@@ -47,15 +61,62 @@
             <shard>
                 <replica>
                     <host>127.0.0.1</host>
-                    <port>9000</port>
+                    <port>8463</port>
                 </replica>
             </shard>
             <shard>
                 <replica>
                     <host>127.0.0.2</host>
-                    <port>9000</port>
+                    <port>8463</port>
                 </replica>
             </shard>
         </test_cluster_interserver_secret>
+        <test_cluster_two_shards_different_databases_with_local>
+            <shard>
+                <replica>
+                    <host>127.0.0.1</host>
+                    <port>8463</port>
+                </replica>
+            </shard>
+            <shard>
+                <replica>
+                    <default_database>shard_1</default_database>
+                    <host>127.0.0.2</host>
+                    <port>8463</port>
+                </replica>
+            </shard>
+        </test_cluster_two_shards_different_databases_with_local>
+        <test_cluster_one_shard_three_replicas_localhost>
+            <shard>
+                <internal_replication>false</internal_replication>
+                <replica>
+                    <host>127.0.0.1</host>
+                    <port>8463</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.2</host>
+                    <port>8463</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.3</host>
+                    <port>8463</port>
+                </replica>
+            </shard>
+            <!--shard>
+                <internal_replication>false</internal_replication>
+                <replica>
+                    <host>127.0.0.1</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.2</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>127.0.0.3</host>
+                    <port>9000</port>
+                </replica>
+            </shard-->
+        </test_cluster_one_shard_three_replicas_localhost>
     </remote_servers>
 </proton>

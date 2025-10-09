@@ -1,0 +1,87 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - streaming_tailing
+  - UDF
+description: add into versioned_kv, multi_shard, streaming_tailing, UDF
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_14_8_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        function test_14_8_add_five(value) {
+            for (let i = 0; i < value.length; i++) {
+                value[i] = value[i] + 5;
+            }
+            return value;
+        }
+      $$;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream if not exists test14_multishard_8(i float, k1 int, k2 string) primary key k2
+      settings mode='versioned_kv', shards=3;
+  - type: wait
+    time: 2
+
+  - name: "1458"
+    type: stream
+    query: |
+      select test_14_8_add_five(i),
+             k1,
+             k2
+      from test14_multishard_8;
+    schema:
+      - name: test_14_8_add_five(i)
+        type: float32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_multishard_8(i, k1, k2)
+      values (2, 1, 'a');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (1, 1, 'b');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (3, 1, 'c');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (2, 1, 'd');
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test14_multishard_8(i, k1, k2)
+      values (5, 1, 'e');
+
+  - type: check
+    target_name: "1458"
+    expected_result:
+      - [7, 1, a]
+      - [6, 1, b]
+      - [8, 1, c]
+      - [7, 1, d]
+      - [10, 1, e]

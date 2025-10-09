@@ -27,22 +27,23 @@ bool FieldVisitorSum::operator() (Null &) const
     return false;
 }
 
-bool FieldVisitorSum::operator() (String &) const { throw Exception("Cannot sum strings", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (Array &) const { throw Exception("Cannot sum arrays", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (Tuple &) const { throw Exception("Cannot sum tuples", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (Map &) const { throw Exception("Cannot sum maps", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (Object &) const { throw Exception("Cannot sum objects", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (UUID &) const { throw Exception("Cannot sum uuids", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (IPv4 &) const { throw Exception("Cannot sum ipv4s", ErrorCodes::LOGICAL_ERROR); }
-bool FieldVisitorSum::operator() (IPv6 &) const { throw Exception("Cannot sum ipv6s", ErrorCodes::LOGICAL_ERROR); }
+bool FieldVisitorSum::operator() (String &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum strings"); }
+bool FieldVisitorSum::operator() (Array &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum arrays"); }
+bool FieldVisitorSum::operator() (Tuple &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum tuples"); }
+bool FieldVisitorSum::operator() (Map &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum maps"); }
+bool FieldVisitorSum::operator() (Object &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum objects"); }
+bool FieldVisitorSum::operator() (UUID &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum uuids"); }
+bool FieldVisitorSum::operator() (IPv4 &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum ipv4s"); }
+bool FieldVisitorSum::operator() (IPv6 &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum ipv6s"); }
+bool FieldVisitorSum::operator() (CustomType & x) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum custom_type {}", x.getTypeName()); }
 
 
 bool FieldVisitorSum::operator() (AggregateFunctionStateData &) const
 {
-    throw Exception("Cannot sum AggregateFunctionStates", ErrorCodes::LOGICAL_ERROR);
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum AggregateFunctionStates");
 }
 
-bool FieldVisitorSum::operator() (bool &) const { throw Exception("Cannot sum bools", ErrorCodes::LOGICAL_ERROR); }
+bool FieldVisitorSum::operator() (bool &) const { throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot sum bools"); }
 
 }
 

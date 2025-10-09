@@ -1,0 +1,171 @@
+tags:
+  - local-run
+  - system_command
+  - todo # add last step after fix: https://github.com/timeplus-io/proton-enterprise/issues/4605
+
+description: |
+  Tests covering the pause default database scenario.
+  Main steps:
+  - system pause stream
+  - system recover stream twice
+  - system resume stream
+
+cluster:
+  - p3k1
+
+steps:
+  # create stream & insert data
+  - type: query
+    sql: drop view if exists test36_mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test36_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test36_stream(metric string)
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test36_stream(metric) values ('test1')
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test36_stream(metric) values ('test2')
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test36_stream(metric) values ('test3')
+  - type: wait
+    time: 1
+
+  # system pause stream
+  - type: query
+    sql: system pause stream test36_stream 0;
+  - type: wait
+    time: 1
+
+  - name: recover-1-1
+    type: stream
+    query_id: recover-1-1
+    query: |
+      SELECT
+        max(_tp_sn), count()
+      FROM
+        test36_stream
+      SETTINGS
+        seek_to='earliest', enable_backfill_from_historical_store=0;
+    schema:
+      - name: max(_tp_sn)
+        type: int64
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: recover-1-1
+    expected_result:
+      - [4, 3]
+
+  - type: stream
+    name: recover-1-2
+    query: insert into test36_stream(metric) values('test4')
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: recover-1-2
+    expected_result:
+      - ['error_code:2619']
+
+  # system recover stream
+  - type: query
+    sql: system recover stream test36_stream 0
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: system recover stream test36_stream 0
+  - type: wait
+    time: 1
+
+  - name: recover-1-3
+    type: stream
+    query_id: recover-1-3
+    query: |
+      SELECT
+        max(_tp_sn), count()
+      FROM
+        test36_stream
+      SETTINGS
+        seek_to='earliest', enable_backfill_from_historical_store=0;
+    schema:
+      - name: max(_tp_sn)
+        type: int64
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 7
+
+  - type: check
+    target_name: recover-1-3
+    expected_result:
+      - [2, 1]
+
+  # system unpause stream
+  - type: query
+    sql: system unpause stream test36_stream 0
+  - type: wait
+    time: 40 # wait long before bug fix: https://github.com/timeplus-io/proton-enterprise/issues/4605
+
+  - type: query
+    sql: insert into test36_stream(metric) values ('test5')
+  - type: wait
+    time: 1
+
+  - name: recover-1-4
+    type: stream
+    query_id: recover-1-4
+    query: |
+      SELECT
+        max(_tp_sn), count()
+      FROM
+        test36_stream
+      SETTINGS
+        seek_to='earliest', enable_backfill_from_historical_store=0;
+    schema:
+      - name: max(_tp_sn)
+        type: int64
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: recover-1-4
+    expected_result:
+      - [3, 2]
+
+  # - name: recover-1-5
+  #   type: stream
+  #   query_id: recover-1-5
+  #   query: SELECT metric FROM table(test36_stream)
+  #   schema:
+  #     - name: metric
+  #       type: string
+  # - type: wait
+  #   time: 3
+
+  # - type: check
+  #   target_name: recover-1-5
+  #   mode: random
+  #   expected_result:
+  #     - ['test1']
+  #     - ['test2']
+  #     - ['test3']
+  #     - ['test5']

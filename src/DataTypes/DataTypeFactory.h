@@ -39,6 +39,12 @@ public:
     DataTypePtr get(const String & family_name, const ASTPtr & parameters, bool compatible_with_clickhouse = false) const; /// proton: updated
     DataTypePtr get(const ASTPtr & ast, bool compatible_with_clickhouse = false) const; /// proton: updated
     DataTypePtr getCustom(DataTypeCustomDescPtr customization) const;
+    DataTypePtr getCustom(const String & base_name, DataTypeCustomDescPtr customization) const;
+
+    /// Return nullptr in case of error.
+    DataTypePtr tryGet(const String & full_name, bool compatible_with_clickhouse = false) const; /// proton: updated
+    DataTypePtr tryGet(const String & family_name, const ASTPtr & parameters, bool compatible_with_clickhouse = false) const; /// proton: updated
+    DataTypePtr tryGet(const ASTPtr & ast, bool compatible_with_clickhouse = false) const; /// proton: updated
 
     /// Register a type family by its name.
     void registerDataType(const String & family_name, Value creator, CaseSensitiveness case_sensitiveness = CaseSensitive);
@@ -53,7 +59,14 @@ public:
     void registerSimpleDataTypeCustom(const String & name, SimpleCreatorWithCustom creator, CaseSensitiveness case_sensitiveness = CaseSensitive);
 
 private:
-    const Value & findCreatorByName(const String & family_name) const;
+    template <bool nullptr_on_error>
+    DataTypePtr getImpl(const String & full_name, bool compatible_with_clickhouse = false) const; /// proton: updated
+    template <bool nullptr_on_error>
+    DataTypePtr getImpl(const String & family_name, const ASTPtr & parameters, bool compatible_with_clickhouse = false) const; /// proton: updated
+    template <bool nullptr_on_error>
+    DataTypePtr getImpl(const ASTPtr & ast, bool compatible_with_clickhouse = false) const; /// proton: updated
+    template <bool nullptr_on_error>
+    const Value * findCreatorByName(const String & family_name) const;
 
     DataTypesDictionary data_types;
 
@@ -91,6 +104,8 @@ void registerDataTypeLowCardinality(DataTypeFactory & factory);
 void registerDataTypeDomainBool(DataTypeFactory & factory);
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory);
 void registerDataTypeDomainGeo(DataTypeFactory & factory);
-void registerDataTypeObject(DataTypeFactory & factory);
+void registerDataTypeVariant(DataTypeFactory & factory);
+void registerDataTypeDynamic(DataTypeFactory & factory);
+void registerDataTypeJSON(DataTypeFactory & factory);
 
 }

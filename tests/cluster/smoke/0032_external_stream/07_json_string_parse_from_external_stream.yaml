@@ -1,0 +1,52 @@
+description: create external stream external1, and run stream query to parse json field from field raw of external1 and insert data into redpanda topic test and verify result
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: kafka
+  name: delete
+  topic: external_stream_test
+- type: wait
+  time: 1
+
+- type: kafka
+  name: create
+  topic: external_stream_test
+  settings:
+    partitions: 3
+    replication: 1
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists external1
+- type: wait
+  time: 2
+
+- name: '9700'
+  type: query
+  sql: create external stream external1 (raw string) settings type='kafka', brokers='k1:9092', topic = 'external_stream_test'
+- type: wait
+  time: 2
+
+- name: '9701'
+  type: stream
+  query: select raw:value from external1
+  schema:
+  - name: raw:value
+    type: string
+- type: wait
+  time: 2
+
+- type: kafka
+  name: produce
+  topic: external_stream_test 
+  format: JSONEachRow
+  messages:
+  - value: "powershell.exe"
+    string_c: "{42FC7E13-CB3E-5C05-0000-0010A0125101}"
+
+- type: check
+  target_name: '9701'
+  expected_result:
+  - ["powershell.exe"]

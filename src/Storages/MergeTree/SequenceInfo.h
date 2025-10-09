@@ -1,14 +1,10 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <base/types.h>
+
 #include <vector>
 #include <cassert>
-
-
-namespace Poco
-{
-class Logger;
-}
 
 namespace DB
 {
@@ -144,9 +140,9 @@ using SequenceInfoPtr = std::shared_ptr<SequenceInfo>;
 
 /// Merge SequenceInfo into one according to last committed sn and max idempotent keys
 SequenceInfoPtr
-mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, Poco::Logger * log);
+mergeSequenceInfo(std::vector<SequenceInfoPtr> & sequences, Int64 committed_sn, UInt64 max_idempotent_keys, LoggerPtr log);
 
 /// Find missing sequence ranges according to committed sn and
 /// return missing sequence ranges, next expecting sn and max committed sn + 1
-std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, Poco::Logger * log);
+std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & sequence_ranges, Int64 committed_sn, LoggerPtr log);
 }

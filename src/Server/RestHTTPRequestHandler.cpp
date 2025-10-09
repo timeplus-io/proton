@@ -152,18 +152,22 @@ std::chrono::steady_clock::duration parseSessionTimeout(const Poco::Util::Abstra
 
         ReadBufferFromString buf(session_timeout_str);
         if (!tryReadIntText(session_timeout, buf) || !buf.eof())
-            throw Exception("Invalid session timeout: '" + session_timeout_str + "'", ErrorCodes::INVALID_SESSION_TIMEOUT);
+            throw Exception(ErrorCodes::INVALID_SESSION_TIMEOUT, "Invalid session timeout: '{}'", session_timeout_str);
 
         if (session_timeout > max_session_timeout)
             throw Exception(
-                "Session timeout '" + session_timeout_str + "' is larger than max_session_timeout: " + toString(max_session_timeout)
-                    + ". Maximum session timeout could be modified in configuration file.",
-                ErrorCodes::INVALID_SESSION_TIMEOUT);
+                ErrorCodes::INVALID_SESSION_TIMEOUT,
+                "Session timeout '{}' is larger than max_session_timeout: {}. Maximum session timeout could be modified in configuration "
+                "file.",
+                session_timeout_str,
+                max_session_timeout);
     }
 
     return std::chrono::seconds(session_timeout);
 }
 }
+
+RestHTTPRequestHandler::~RestHTTPRequestHandler() = default;
 
 bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLForm & params, HTTPServerResponse & response)
 {
@@ -186,9 +190,9 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
             /// It is prohibited to mix different authorization schemes.
             if (params.has("user") || params.has("password"))
                 throw Exception(
+                    ErrorCodes::AUTHENTICATION_FAILED,
                     "Invalid authentication: it is not allowed to use Authorization HTTP header and authentication via parameters "
-                    "simultaneously",
-                    ErrorCodes::AUTHENTICATION_FAILED);
+                    "simultaneously");
 
             std::string scheme;
             std::string auth_info;
@@ -205,13 +209,12 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
                 spnego_challenge = auth_info;
 
                 if (spnego_challenge.empty())
-                    throw Exception("Invalid authentication: SPNEGO challenge is empty", ErrorCodes::AUTHENTICATION_FAILED);
+                    throw Exception(ErrorCodes::AUTHENTICATION_FAILED, "Invalid authentication: SPNEGO challenge is empty");
             }
             else
             {
                 throw Exception(
-                    "Invalid authentication: '" + scheme + "' HTTP Authorization scheme is not supported",
-                    ErrorCodes::AUTHENTICATION_FAILED);
+                    ErrorCodes::AUTHENTICATION_FAILED, "Invalid authentication: '{}' HTTP Authorization scheme is not supported", scheme);
             }
         }
         else
@@ -227,18 +230,18 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
         /// It is prohibited to mix different authorization schemes.
         if (request.hasCredentials() || params.has("user") || params.has("password") || params.has("quota_key"))
             throw Exception(
-                "Invalid authentication: it is not allowed to use HTTP headers and other authentication methods simultaneously",
-                ErrorCodes::AUTHENTICATION_FAILED);
+                ErrorCodes::AUTHENTICATION_FAILED,
+                "Invalid authentication: it is not allowed to use HTTP headers and other authentication methods simultaneously");
     }
 
-    if (spnego_challenge.empty()) // I.e., now using user name and password strings ("Basic").
+    if (spnego_challenge.empty()) // I.e., now using username and password strings ("Basic").
     {
         if (!request_credentials)
             request_credentials = std::make_unique<BasicCredentials>();
 
         auto * basic_credentials = dynamic_cast<BasicCredentials *>(request_credentials.get());
         if (!basic_credentials)
-            throw Exception("Invalid authentication: unexpected 'Basic' HTTP Authorization scheme", ErrorCodes::AUTHENTICATION_FAILED);
+            throw Exception(ErrorCodes::AUTHENTICATION_FAILED, "Invalid authentication: unexpected 'Basic' HTTP Authorization scheme");
 
         basic_credentials->setUserName(user);
         basic_credentials->setPassword(password);
@@ -251,7 +254,7 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
         auto * gss_acceptor_context = dynamic_cast<GSSAcceptorContext *>(request_credentials.get());
         if (!gss_acceptor_context)
             throw Exception(
-                "Invalid authentication: unexpected 'Negotiate' HTTP Authorization scheme expected", ErrorCodes::AUTHENTICATION_FAILED);
+                ErrorCodes::AUTHENTICATION_FAILED, "Invalid authentication: unexpected 'Negotiate' HTTP Authorization scheme expected");
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunreachable-code"
@@ -264,7 +267,7 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
         if (!gss_acceptor_context->isFailed() && !gss_acceptor_context->isReady())
         {
             if (spnego_response.empty())
-                throw Exception("Invalid authentication: 'Negotiate' HTTP Authorization failure", ErrorCodes::AUTHENTICATION_FAILED);
+                throw Exception(ErrorCodes::AUTHENTICATION_FAILED, "Invalid authentication: 'Negotiate' HTTP Authorization failure");
 
             response.setStatusAndReason(HTTPResponse::HTTP_UNAUTHORIZED);
             response.send();
@@ -298,7 +301,12 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
 
     try
     {
-        session->authenticate(*request_credentials, request.clientAddress());
+        /// proton: starts. Issue: https://github.com/timeplus-io/proton-enterprise/issues/4740
+        /// Bypass some request check
+        bool bypass_auth = request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET && isBypassUri(request.getURI());
+        if (!bypass_auth)
+            session->authenticate(*request_credentials, request.clientAddress());
+        /// proton: ends
     }
     catch (const Authentication::Require<BasicCredentials> & required_credentials)
     {
@@ -419,6 +427,12 @@ void RestHTTPRequestHandler::processQuery(
         request.get("x-timeplus-query-id", request.get("x-proton-request-id", request.get("x-proton-query-id", "")))));
     response.add("x-timeplus-query-id", context->getCurrentQueryId());
 
+    if (is_snapshot_mode)
+        context->setSetting("query_mode", Field("table"));
+
+    if (is_clickhouse_compatible_mode)
+        context->setSetting("is_clickhouse_compatible", Field(true));
+
     /// Setup idempotent key if it is passed by user
     String idem_key = request.get("x-timeplus-idempotent-id", request.get("x-proton-idempotent-id", ""));
     if (!idem_key.empty())
@@ -451,8 +465,13 @@ void RestHTTPRequestHandler::processQuery(
     LOG_DEBUG(log, "End of processing query_id={} user={}", context->getCurrentQueryId(), context->getUserName());
 }
 
-RestHTTPRequestHandler::RestHTTPRequestHandler(IServer & server_, const String & name)
-    : server(server_), default_settings(server.context()->getSettingsRef()), log(&Poco::Logger::get(name))
+RestHTTPRequestHandler::RestHTTPRequestHandler(
+    IServer & server_, const String & name, bool is_snapshot_mode_, bool is_clickhouse_compatible_mode_)
+    : server(server_)
+    , default_settings(server.context()->getSettingsRef())
+    , is_snapshot_mode(is_snapshot_mode_)
+    , is_clickhouse_compatible_mode(is_clickhouse_compatible_mode_)
+    , log(getLogger(name))
 {
 }
 
@@ -470,7 +489,7 @@ String RestHTTPRequestHandler::getDatabaseByUser(const String & user) const
     if (database.empty())
     {
         throw Exception(
-            "Unknown database: Cannot find database information corresponding to user '" + user + "' ", ErrorCodes::UNKNOWN_DATABASE);
+            ErrorCodes::UNKNOWN_DATABASE, "Unknown database: Cannot find database information corresponding to user '{}'", user);
     }
 
     return database;

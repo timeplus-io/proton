@@ -1,8 +1,10 @@
-#include "InterpreterUnsubscribeQuery.h"
+#include <Interpreters/Streaming/InterpreterUnsubscribeQuery.h>
 
-#include <Parsers/Streaming/ASTUnsubscribeQuery.h>
-#include <Parsers/ASTLiteral.h>
+#include <Bootstrap/Globals.h>
+#include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/Streaming/ASTUnsubscribeQuery.h>
 
 namespace DB
 {
@@ -17,11 +19,18 @@ BlockIO InterpreterUnsubscribeQuery::execute()
 {
     auto * literal = query_ptr->as<Streaming::ASTUnsubscribeQuery>()->query_id->as<ASTLiteral>();
     if (!literal)
-        throw Exception(ErrorCodes::SYNTAX_ERROR, "Unsubscribe query requires a string query ID, for example, UNSUBSCRIBE TO 'my-query-id'");
+        throw Exception(
+            ErrorCodes::SYNTAX_ERROR, "Unsubscribe query requires a string query ID, for example, UNSUBSCRIBE TO 'my-query-id'");
 
     auto query_id = literal->value.get<String>();
+
     if (!query_id.empty())
-        CheckpointCoordinator::instance(getContext()).removeCheckpoint(query_id);
+    {
+        /// Unsubscribe query only supports with local filesystem checkpoint storage
+        auto & coordinator = Globals::getCheckpointCoordinator();
+        auto ckpt_ctx = std::make_shared<CheckpointContext>(query_id, coordinator.getCheckpointStorage(CheckpointStorageType::LocalFileSystem), &coordinator);
+        coordinator.removeCheckpoint(std::move(ckpt_ctx));
+    }
 
     return {};
 }

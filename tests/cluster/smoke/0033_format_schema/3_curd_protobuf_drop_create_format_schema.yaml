@@ -1,0 +1,226 @@
+tags:
+- protobuf
+- bug # https://github.com/timeplus-io/proton-enterprise/issues/8475
+
+description: |
+  Test drop and re-create protobuf format schema, cover drop w/wo type specified
+  Steps:
+    1.create format schema
+    2.check create success with "show format schemas"
+    3.drop format schema with "drop format schema type protobuf"
+    4.check drop success with "show format schemas"
+    5.create format schema
+    6.check recreate success with "show format schemas"
+    7.check recreate content with "show create format schema"
+    8.drop format schema "drop format schema"
+    9.repeat step 4-8
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_format_schema_03;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE FORMAT SCHEMA test_format_schema_03 AS
+    $$
+    syntax = "proto3";
+
+    message SearchRequest {
+      string query = 1;
+      int32 page_number = 2;
+      int32 results_per_page = 3;
+    }
+    $$
+    TYPE Protobuf;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-3-1
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: wait
+  time: 1
+
+# drop with type specified
+- type: query
+  sql: DROP FORMAT SCHEMA test_format_schema_03 TYPE Protobuf;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-3-2
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE FORMAT SCHEMA test_format_schema_03 AS
+    $$
+    syntax = "proto3";
+
+    message SearchRequest {
+      string query1 = 1;
+      string page_number = 2;
+    }
+    $$
+    TYPE Protobuf;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-3-3
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: stream
+  name: fmt-3-4
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_03;
+  schema:
+    - name: statement
+      type: string
+
+- type: wait
+  time: 1
+
+- type: check
+  target_name: fmt-3-1
+  expected_result:
+    - [ 'test_format_schema_03', 'Protobuf' ]
+
+- type: check
+  target_name: fmt-3-2
+  expected_result:
+    - []
+
+- type: check
+  target_name: fmt-3-3
+  expected_result:
+    - [ 'test_format_schema_03', 'Protobuf' ]
+
+- type: check
+  target_name: fmt-3-4
+  expected_result:
+     -
+      - |-
+        CREATE FORMAT SCHEMA test_format_schema_03 AS
+        $$
+        syntax = "proto3";
+
+        message SearchRequest {
+          string query1 = 1;
+          string page_number = 2;
+        }
+        $$
+        TYPE Protobuf
+
+# drop without type specified
+- type: query
+  sql: DROP FORMAT SCHEMA test_format_schema_03;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-3-5
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE FORMAT SCHEMA test_format_schema_03 AS
+    $$
+    syntax = "proto3";
+
+    message SearchRequest {
+      string query = 1;
+      int32 page_number = 2;
+      int32 results_per_page = 3;
+    }
+    $$
+    TYPE Protobuf;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-3-6
+  query: SHOW FORMAT SCHEMAS;
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: stream
+  name: fmt-3-7
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_03;
+  schema:
+    - name: statement
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_format_schema_03;
+
+- type: check
+  target_name: fmt-3-5
+  expected_result:
+    - []
+
+- type: check
+  target_name: fmt-3-6
+  expected_result:
+    - [ 'test_format_schema_03', 'Protobuf' ]
+
+- type: check
+  target_name: fmt-3-7
+  expected_result:
+     -
+      - |-
+        CREATE FORMAT SCHEMA test_format_schema_03 AS
+        $$
+        syntax = "proto3";
+
+        message SearchRequest {
+          string query = 1;
+          int32 page_number = 2;
+          int32 results_per_page = 3;
+        }
+        $$
+        TYPE Protobuf

@@ -1,0 +1,65 @@
+tags:
+  - validate
+  - global aggregation
+  - skip # https://github.com/timeplus-io/proton-enterprise/issues/6984
+  
+description: extra tests on mv global aggregation
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+
+  - type: query
+    sql: |
+      insert into aggr_source_stream(id, location, value, json, timestamp) values
+      ('dev1', 'ca', 83, '{"create_time":"2024-01-01 00:00:04"}', '2024-01-01 00:00:14.004')
+      ('dev2', 'ca', 27, '{"create_time":"2024-01-01 00:00:05"}', '2024-01-01 00:00:15.005')
+      ('dev3', 'ca', 94, '{"create_time":"2024-01-01 00:00:06"}', '2024-01-01 00:00:16.006')
+      ('dev3', 'ca', 67, '{"create_time":"2024-01-01 00:00:07"}', '2024-01-01 00:00:17.007');
+
+  - type: wait
+    time: 2
+
+  - name: view-6-3
+    type: stream
+    query: select * except (_tp_time) from aggr_mv settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: min
+        type: float32
+      - name: max
+        type: float32
+
+  - type: check
+    target_name: view-6-3
+    mode: random
+    expected_result:
+      - ['dev2', 58, 77]
+      - ['dev1', 31, 60]
+      - ['dev3', 67, 94]
+      - ['dev2', 27, 77]
+      - ['dev1', 31, 83]
+
+  - name: view-6-4
+    type: stream
+    query: select * except (_tp_time) from aggr_target_stream settings seek_to='earliest';
+    schema:
+      - name: id
+        type: string
+      - name: min
+        type: float32
+      - name: max
+        type: float32
+
+  - type: check
+    target_name: view-6-4
+    mode: random
+    expected_result:
+      - ['dev2', 58, 77]
+      - ['dev1', 31, 60]
+      - ['dev3', 67, 94]
+      - ['dev2', 27, 77]
+      - ['dev1', 31, 83]

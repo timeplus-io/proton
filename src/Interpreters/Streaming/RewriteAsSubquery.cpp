@@ -16,6 +16,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int ALIAS_REQUIRED;
+extern const int UNSUPPORTED;
 }
 
 namespace Streaming
@@ -24,17 +25,40 @@ namespace
 {
 bool rewriteAsChangelogQuery(ASTSelectWithUnionQuery & query)
 {
-    if (query.list_of_selects->children.size() != 1)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Only expect one select query to rewrite as changelog query");
+    std::vector<ASTSelectQuery *> non_changelog_selects;
+    for (auto & child : query.list_of_selects->children)
+    {
+        auto & select = child->as<ASTSelectQuery &>();
+        auto emit_query = select.emit();
+        if (emit_query
+            && emit_query->as<ASTEmitQuery &>().stream_mode.value_or(ASTEmitQuery::StreamMode::STREAM)
+                == ASTEmitQuery::StreamMode::CHANGELOG)
+            continue;
 
-    auto & select_query = query.list_of_selects->children[0]->as<ASTSelectQuery &>();
+        non_changelog_selects.emplace_back(&select);
+    }
+
+    if (non_changelog_selects.empty())
+        return true;
+
+    /// FIXME, support rewrite multiple selects
+    if (query.list_of_selects->children.size() != 1)
+        throw Exception(
+            ErrorCodes::UNSUPPORTED,
+            "Expected exactly one SELECT query to rewrite as a changelog query implicitly, but found {} queries in the union query. "
+            "Consider adding 'EMIT CHANGELOG' for each SELECT query manually",
+            query.list_of_selects->children.size());
+
+    assert(non_changelog_selects.size() == 1);
+
+    auto & select_query = *non_changelog_selects.front();
 
     /// Emit changelog
     auto emit_query = select_query.emit();
     if (!emit_query)
         emit_query = std::make_shared<ASTEmitQuery>();
 
-    if (emit_query->as<ASTEmitQuery &>().stream_mode == ASTEmitQuery::StreamMode::CHANGELOG)
+    if (emit_query->as<ASTEmitQuery &>().stream_mode.value_or(ASTEmitQuery::StreamMode::STREAM) == ASTEmitQuery::StreamMode::CHANGELOG)
         return false;
 
     emit_query->as<ASTEmitQuery &>().stream_mode = ASTEmitQuery::StreamMode::CHANGELOG;

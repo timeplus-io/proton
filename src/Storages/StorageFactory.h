@@ -29,9 +29,14 @@ public:
 
     static StorageFactory & instance();
 
+    /// Helper function to validate if a specific storage supports a setting
+    /// Used to validate if table settings belong to the engine or the query before the start of the query interpretation
+    using HasBuiltinSettingFn = bool(std::string_view);
+
     struct Arguments
     {
         const String & engine_name;
+        /// Mutable to allow replacing constant expressions with literals, and other transformations.
         ASTs & engine_args;
         ASTStorage * storage_def;
         const ASTCreateQuery & query;
@@ -44,11 +49,10 @@ public:
         const ColumnsDescription & columns;
         const ConstraintsDescription & constraints;
         bool attach;
-        /// proton: starts. 'is_virtual' is true when it is a virtual materialized view.
-        bool is_virtual;
-        bool is_random;
-        /// proton: ends
         bool has_force_restore_data_flag;
+        /// proton: starts
+        Int32 schema_version;
+        /// proton: ends
         const String & comment;
 
         ContextMutablePtr getContext() const;
@@ -63,6 +67,7 @@ public:
         bool supports_skipping_indices = false;
         bool supports_projections = false;
         bool supports_sort_order = false;
+        /// See also IStorage::supportsTTL()
         bool supports_ttl = false;
         /// See also IStorage::supportsReplication()
         bool supports_replication = false;
@@ -72,6 +77,8 @@ public:
         bool supports_parallel_insert = false;
         bool supports_schema_inference = false;
         AccessType source_access_type = AccessType::NONE;
+
+        HasBuiltinSettingFn * has_builtin_setting_fn = nullptr;
     };
 
     using CreatorFn = std::function<StoragePtr(const Arguments & arguments)>;
@@ -90,7 +97,8 @@ public:
         ContextMutablePtr context,
         const ColumnsDescription & columns,
         const ConstraintsDescription & constraints,
-        bool has_force_restore_data_flag) const;
+        bool has_force_restore_data_flag,
+        Int32 schema_version) const;
 
     /// Register a table engine by its name.
     /// No locking, you must register all engines before usage of get.
@@ -105,6 +113,7 @@ public:
         .supports_parallel_insert = false,
         .supports_schema_inference = false,
         .source_access_type = AccessType::NONE,
+        .has_builtin_setting_fn = nullptr,
     });
 
     const Storages & getAllStorages() const

@@ -12,7 +12,6 @@ namespace DB
 class ASTSystemQuery : public IAST, public ASTQueryWithOnCluster
 {
 public:
-
     enum class Type : UInt64
     {
         UNKNOWN,
@@ -30,11 +29,16 @@ public:
 #endif
         DROP_FILESYSTEM_CACHE,
         DROP_SCHEMA_CACHE,
+        DROP_FORMAT_SCHEMA_CACHE,
+#if USE_AWS_S3
+        DROP_S3_CLIENT_CACHE,
+#endif
         STOP_LISTEN_QUERIES,
         START_LISTEN_QUERIES,
         RESTART_REPLICAS,
         RESTART_REPLICA,
         RESTORE_REPLICA,
+        WAIT_LOADING_PARTS,
         DROP_REPLICA,
         SYNC_REPLICA,
         RELOAD_DICTIONARY,
@@ -55,12 +59,6 @@ public:
         START_FETCHES,
         STOP_MOVES,
         START_MOVES,
-        /// proton: starts. For failed node recovery
-        START_MAINTAIN,
-        STOP_MAINTAIN,
-        REPLACE_REPLICA,
-        ADD_REPLICA,
-        /// proton: ends
         STOP_REPLICATED_SENDS,
         START_REPLICATED_SENDS,
         STOP_REPLICATION_QUEUES,
@@ -71,6 +69,29 @@ public:
         START_DISTRIBUTED_SENDS,
         START_THREAD_FUZZER,
         STOP_THREAD_FUZZER,
+        /// proton : starts.
+        /// For stream recovery
+        PAUSE_STREAM,
+        RECOVER_STREAM,
+        RESUME_STREAM,
+
+        /// For materialized view recovery
+        PAUSE_MATERIALIZED_VIEW,
+        RESUME_MATERIALIZED_VIEW,
+        ABORT_MATERIALIZED_VIEW,
+        RECOVER_MATERIALIZED_VIEW,
+
+        SET_LOG_LEVEL,
+
+        SHOW_LOGGERS,
+
+        PAUSE_TASK,
+        RESUME_TASK,
+
+        INSTALL_PYTHON_PACKAGE,
+        UNINSTALL_PYTHON_PACKAGE,
+        LIST_PYTHON_PACKAGES,
+        /// proton : ends.
         END
     };
 
@@ -95,10 +116,11 @@ public:
     String target_function;
     String replica;
     String replica_zk_path;
-    /// proton: starts. shard number for 'ADD REPLICA' command
-    Int8 shard = -1;
-    /// old replica identity fro 'REPLACE REPLICA' command
-    String old_replica;
+    /// proton: starts
+    UInt32 shard = 0;
+    bool is_permanent = false;
+    UInt64 from_node = 0;
+    UInt64 to_node = 0;
     /// proton: ends
     bool is_drop_whole_replica{};
     String storage_policy;
@@ -106,9 +128,17 @@ public:
     String disk;
     UInt64 seconds{};
 
-    String filesystem_cache_path;
+    String filesystem_cache_name;
 
     String schema_cache_storage;
+
+    String schema_cache_format;
+
+    String log_level;
+    String logger_name;
+
+    String python_package_name;
+    String python_package_version;
 
     String getID(char) const override { return "SYSTEM query"; }
 
@@ -128,12 +158,11 @@ public:
         return removeOnCluster<ASTSystemQuery>(clone(), new_database);
     }
 
-    virtual QueryKind getQueryKind() const override { return QueryKind::System; }
+    QueryKind getQueryKind() const override { return QueryKind::System; }
 
 protected:
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
-
 
 }

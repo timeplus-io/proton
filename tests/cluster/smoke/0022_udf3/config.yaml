@@ -1,0 +1,5 @@
+name: udf3
+description: Test SQL UDF.
+tags:
+- smoke
+- udf

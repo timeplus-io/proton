@@ -1,0 +1,81 @@
+tags:
+- materialized view with target stream
+- restapi
+
+description: |
+  1. create a materialized view with target stream
+  2. rm checkpoint folder
+  3. get the materialized view info from prometheus
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+
+- type: query
+  sql: drop view if exists mv
+- type: query
+  sql: drop view if exists rd_mv;
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists rd
+- type: query
+  sql: drop stream if exists target
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    create random stream rd
+    (
+      id string default to_string(rand() % 100),
+      value string default 'abcd'
+    );
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    create stream target
+    (
+      id int64,
+      value string
+    )
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    create materialized view mv into target as select to_int64(id), value from rd;
+- type: wait
+  time: 5
+
+- type: command
+  node:
+    - p1
+  shell: |
+    rm -rf /var/lib/proton/checkpoint/*
+
+- type: rest
+  node:
+    - p1
+  method: GET
+  port: prometheus_port
+  url: /metrics
+
+- type: wait
+  time: 5
+
+- name: '2400'
+  type: health_check
+  node:
+    - p1
+  protocol: tcp
+
+- type: check
+  target_name: '2400'
+  expected_result:
+  - ['true']

@@ -1,0 +1,52 @@
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_humanize(value int) RETURNS string LANGUAGE PYTHON AS
+      $$
+      import arrow
+
+      def test_humanize(value):
+          present = arrow.utcnow()
+          res = []
+          for v in value:
+              future = present.shift(minutes=v)
+              hum = future.humanize(present, only_distance=True, granularity=["hour", "minute"])
+              res.append(hum)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf7-2-1
+    type: stream
+    query: select test_humanize(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (55)(66);
+
+  - type: check
+    target_name: python-udf7-2-1
+    expected_result:
+      - ['0 hours and 55 minutes', 55]
+      - ['an hour and 6 minutes', 66]

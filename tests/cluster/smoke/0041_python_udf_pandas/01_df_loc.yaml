@@ -1,0 +1,51 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (max_speed int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_df_loc(max_speed int) RETURNS int64 LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_df_loc(max_speed):
+          df = pd.DataFrame(max_speed, columns=['max_speed'])
+          res = df.loc[:,'max_speed']
+          return res.to_list()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-1-1
+    type: stream
+    query: select test_df_loc(max_speed) as res, max_speed from udf_stream;
+    schema:
+      - name: res
+        type: int64
+      - name: max_speed
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(max_speed) values (1)(4)(7);
+
+  - type: check
+    target_name: python-udf3-1-1
+    expected_result:
+      - [1, 1]
+      - [4, 4]
+      - [7, 7]

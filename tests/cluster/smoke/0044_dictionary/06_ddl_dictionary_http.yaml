@@ -1,0 +1,88 @@
+description: |
+  Test ddl dictionary with source HTTP
+  Main steps:
+  1.Create CSV file in proton container under '/var/lib/proton/user_files/' directory
+  2.Start an HTTP server with Python to access CSV file in proton container under '/var/lib/proton/user_files/' directory.
+  3.Create dictionary with source HTTP
+  4.Verify dictionary connectivity via dict_get
+  5.Drop dictionary
+
+steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      cd /var/lib/proton/user_files &&
+      rm -rf smoke_dict_11.csv && 
+      echo '1,p111' > smoke_dict_11.csv &&
+      ps -ef | grep 'python3 -m http.server 8080' | grep -v grep | awk '{print $2}' | xargs -r kill &&
+      bash -c 'nohup python3 -m http.server 8080 > smoke_dict_11.log  2>&1 &'
+
+  - type: query
+    sql: DROP DICTIONARY IF EXISTS http_flat;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      CREATE DICTIONARY http_flat(id uint64 DEFAULT 0, value string DEFAULT 'qqq')
+      PRIMARY KEY id
+      SOURCE(HTTP(
+        url 'http://localhost:8080/smoke_dict_11.csv'
+        format 'CSV'
+      ))
+      LIFETIME(MIN 1 MAX 10)
+      LAYOUT(FLAT());
+
+  - type: wait
+    time: 1
+
+  - name: dict-6-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('http_flat', 'value', '1');
+    schema:
+      - name: dict_get('http_flat', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-6-1
+    expected_result:
+      - ['p111']
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: DROP DICTIONARY http_flat;
+
+  - type: wait
+    time: 1
+
+  - name: dict-6-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: SELECT dict_get('http_flat', 'value', '1');
+    schema:
+      - name: dict_get('http_flat', 'value', '1')
+        type: string
+
+  - type: check
+    target_name: dict-6-2
+    expected_result:
+      - ['error_code:36']

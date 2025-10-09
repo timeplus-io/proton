@@ -5,7 +5,7 @@
 #include <Disks/ObjectStorages/DiskObjectStorageRemoteMetadataRestoreHelper.h>
 #include <Disks/ObjectStorages/DiskObjectStorageTransaction.h>
 #include <Disks/ObjectStorages/IMetadataStorage.h>
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 namespace CurrentMetrics
 {
@@ -29,23 +29,20 @@ class DiskObjectStorage : public IDisk
 public:
     DiskObjectStorage(
         const String & name_,
-        const String & object_storage_root_path_,
-        const String & log_name,
+        const String & object_key_prefix_,
         MetadataStoragePtr metadata_storage_,
         ObjectStoragePtr object_storage_,
-        bool send_metadata_,
-        uint64_t thread_pool_size_);
+        const Poco::Util::AbstractConfiguration & config,
+        const String & config_prefix);
 
     /// Create fake transaction
     DiskTransactionPtr createTransaction() override;
 
-    DataSourceDescription getDataSourceDescription() const override { return object_storage->getDataSourceDescription(); }
+    DataSourceDescription getDataSourceDescription() const override { return data_source_description; }
 
     bool supportZeroCopyReplication() const override { return true; }
 
     bool supportParallelWrite() const override { return object_storage->supportParallelWrite(); }
-
-    const String & getName() const override { return name; }
 
     const String & getPath() const override { return metadata_storage->getPath(); }
 
@@ -53,10 +50,7 @@ public:
 
     void getRemotePathsRecursive(const String & local_path, std::vector<LocalPathWithObjectStoragePaths> & paths_map) override;
 
-    const std::string & getCacheBasePath() const override
-    {
-        return object_storage->getCacheBasePath();
-    }
+    const std::string & getCacheName() const override { return object_storage->getCacheName(); }
 
     UInt64 getTotalSpace() const override { return std::numeric_limits<UInt64>::max(); }
 
@@ -92,6 +86,8 @@ public:
 
     void removeSharedRecursive(const String & path, bool keep_all_batch_data, const NameSet & file_names_remove_metadata_only) override;
 
+    void removeSharedFiles(const RemoveBatchRequest & files, bool keep_all_batch_data, const NameSet & file_names_remove_metadata_only) override;
+
     MetadataStoragePtr getMetadataStorage() override { return metadata_storage; }
 
     UInt32 getRefCount(const String & path) const override;
@@ -120,7 +116,7 @@ public:
 
     void clearDirectory(const String & path) override;
 
-    void moveDirectory(const String & from_path, const String & to_path) override { moveFile(from_path, to_path); }
+    void moveDirectory(const String & from_path, const String & to_path) override;
 
     void removeDirectory(const String & path) override;
 
@@ -136,7 +132,7 @@ public:
 
     void shutdown() override;
 
-    void startup(ContextPtr context) override;
+    void startupImpl(ContextPtr context) override;
 
     ReservationPtr reserve(UInt64 bytes) override;
 
@@ -152,7 +148,15 @@ public:
         WriteMode mode,
         const WriteSettings & settings) override;
 
-    void copy(const String & from_path, const std::shared_ptr<IDisk> & to_disk, const String & to_path) override;
+    Strings getBlobPath(const String & path) const override;
+    void writeFileUsingBlobWritingFunction(const String & path, WriteMode mode, WriteBlobFunction && write_blob_function) override;
+
+    void copyFile( /// NOLINT
+        const String & from_file_path,
+        IDisk & to_disk,
+        const String & to_file_path,
+        const ReadSettings & read_settings = {},
+        const WriteSettings & write_settings = {}) override;
 
     void applyNewSettings(const Poco::Util::AbstractConfiguration & config, ContextPtr context_, const String &, const DisksMap &) override;
 
@@ -164,6 +168,8 @@ public:
 
     UInt64 getRevision() const override;
 
+    ObjectStoragePtr getObjectStorage() override;
+
     DiskObjectStoragePtr createDiskObjectStorage() override;
 
     bool supportsCache() const override;
@@ -172,6 +178,14 @@ public:
     /// For example: WebObjectStorage is read only as it allows to read from a web server
     /// with static files, so only read-only operations are allowed for this storage.
     bool isReadOnly() const override;
+
+    /// Is object write-once?
+    /// For example: S3PlainObjectStorage is write once, this means that it
+    /// does support BACKUP to this disk, but does not support INSERT into
+    /// MergeTree table on this disk.
+    bool isWriteOnce() const override;
+
+    bool supportsHardLinks() const override;
 
     /// Add a cache layer.
     /// Example: DiskObjectStorage(S3ObjectStorage) -> DiskObjectStorage(CachedObjectStorage(S3ObjectStorage))
@@ -188,8 +202,6 @@ public:
     /// Get names of all cache layers. Name is how cache is defined in configuration file.
     NameSet getCacheLayersNames() const override;
 
-    static std::shared_ptr<Executor> getAsyncExecutor(const std::string & log_name, size_t size);
-
     bool supportsStat() const override { return metadata_storage->supportsStat(); }
     struct stat stat(const String & path) const override;
 
@@ -201,22 +213,30 @@ private:
     /// Create actual disk object storage transaction for operations
     /// execution.
     DiskTransactionPtr createObjectStorageTransaction();
+    DiskTransactionPtr createObjectStorageTransactionToAnotherDisk(DiskObjectStorage& to_disk);
 
-    const String name;
-    const String object_storage_root_path;
-    Poco::Logger * log;
+    String getReadResourceName() const;
+    String getWriteResourceName() const;
+
+    const String object_key_prefix;
+    LoggerPtr log;
 
     MetadataStoragePtr metadata_storage;
     ObjectStoragePtr object_storage;
+    DataSourceDescription data_source_description;
 
     UInt64 reserved_bytes = 0;
     UInt64 reservation_count = 0;
     std::mutex reservation_mutex;
 
     std::optional<UInt64> tryReserve(UInt64 bytes);
+    void sendMoveMetadata(const String & from_path, const String & to_path);
 
     const bool send_metadata;
-    size_t threadpool_size;
+
+    mutable std::mutex resource_mutex;
+    String read_resource_name;
+    String write_resource_name;
 
     std::unique_ptr<DiskObjectStorageRemoteMetadataRestoreHelper> metadata_helper;
 };

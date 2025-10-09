@@ -1,0 +1,219 @@
+tags:
+  - avro
+  - format_schema
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/6799
+
+description: prepare data for pulsar external stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_08
+
+  - type: pulsar
+    name: create
+    topic: test_08
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_08
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop format schema if exists avro_schema;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: set flatten_nested = 1;
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA avro_schema AS '
+      {
+        "type": "record",
+        "name": "Person",
+        "fields": [
+            {"name": "int8_c", "type": "int"},
+            {"name": "int16_c", "type": "int"},
+            {"name": "int32_c", "type": "int"},
+            {"name": "int64_c", "type": "long"},
+            {"name": "uint8_c", "type": "int"},
+            {"name": "uint16_c", "type": "int"},
+            {"name": "uint32_c", "type": "int"},
+            {"name": "uint64_c", "type": "long"},
+            {"name": "uuid_c", "type": {"type": "string", "logicalType": "uuid"}},
+            {"name": "string_c", "type": "string"},
+            {"name": "fixed_c", "type": {"type": "fixed", "size": 32, "name": "FixedString"}},
+            {"name": "float32_c", "type": "float"}, 
+            {"name": "float64_c", "type": "double"},
+            {"name": "date_c", "type": {"type": "int", "logicalType": "date"}},
+            {"name": "datetime3_c", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+            {"name": "datetime6_c", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+            {"name": "enum_c", "type": {"type": "enum", "name": "EnumType", "symbols": ["a", "b", "z"]}},
+            {"name": "map_c", "type": {"type": "map", "values": "int"}},
+            {"name": "array_c", "type": {"type": "array", "items": "int"}},
+            {"name": "tuple_c", "type": {"name": "Record", "type": "record",
+                                "fields": [{"name": "s", "type": "string"}, {"name": "i", "type": "int"}]}},
+            {"name": "array_tuple_c", "type": {"type": "array", 
+                    "items": {"name": "ArrayRecord", "type": "record",
+                    "fields": [{"name": "s", "type": "string"}, {"name": "i", "type": "int"}]}}},
+            {"name": "null_c", "type": ["null", "int"]}
+        ]
+      }
+      ' TYPE Avro;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create external stream ex_pulsar_08
+      (
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uuid_c uuid,
+        string_c string,
+        fixed_c fixed_string(32),
+        float32_c float,
+        float64_c float64,
+        date_c date,
+        datetime3_c datetime64(3),
+        datetime6_c datetime64(6),
+        enum_c enum('a'=0, 'b'=1, 'z'=26),
+        map_c map(string, int),
+        array_c array(int),
+        tuple_c tuple(s string, i int),
+        array_tuple_c array(tuple(s string, i int)),
+        null_c nullable(int32)
+      )
+      settings type='pulsar', service_url='pulsar://pulsar:6650', topic='test_08',
+      data_format = 'Avro', format_schema = 'avro_schema';
+
+  - type: wait
+    time: 3
+
+  - name: pulsar-08
+    type: stream
+    query: select _tp_shard, * from ex_pulsar_08;
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: int8_c
+        type: int8
+      - name: int16_c
+        type: int16
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint8_c
+        type: uint8
+      - name: uint16_c
+        type: uint16
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: uuid_c
+        type: uuid
+      - name: string_c
+        type: string
+      - name: fixed_c
+        type: fixed_string(32)
+      - name: float32_c
+        type: float32
+      - name: float64_c
+        type: float64
+      - name: date_c 
+        type: date
+      - name: datetime3_c
+        type: datetime64(3)
+      - name: datetime6_c
+        type: datetime64(6)
+      - name: enum_c
+        type: enum8('a'=0, 'b'=1, 'z'=26)
+      - name: map_c
+        type: map(string, int32)
+      - name: array_c
+        type: array(int32)
+      - name: tuple_c
+        type: tuple(s string, i int32)
+      - name: array_tuple_c
+        type: array(tuple(s string, i int32))
+      - name: null_c
+        type: nullable(int32)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_08 values 
+      (-128, -32768, -2147483648, -9223372036854775808, 0, 0, 0, 0, '928c88b9-f37a-41d5-bef5-9cb3663c2445', '{@string}', '{@fixed_string32}', -12345.123, -123456.1234,
+       '2022-03-24', '2022-03-24 17:17:17.111', '2022-03-24 17:17:17.111111', 'a', {'key1': 111}, [1, 2, 3], ('a', 0), [('aa', 0)], null);
+
+  - type: query
+    sql: |
+      insert into ex_pulsar_08 values 
+      (127, 32767, 2147483647, 9223372036854775807, 255, 65535, 4294967295, 18446744073709551615, '928c88b9-f37a-41d5-bef5-9cb3663c2446', '{@string-0}','{@fixed_string32-0}', 12345.123, 123456.1234,
+      '2022-03-25', '2022-03-25 18:18:18.222', '2022-03-25 18:18:18.222222', 'a', {'key2': 222}, [4, 5, 6], ('b', 1), [('bb', 1)], 111);
+
+  - type: check
+    target_name: pulsar-08
+    expected_result:
+      - - -1
+        - -128
+        - -32768
+        - -2147483648
+        - -9223372036854775808
+        - 0
+        - 0
+        - 0
+        - 0
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string}"
+        - "{@fixed_string32}"
+        - "-12345.123"
+        - "-123456.1234"
+        - "2022-03-24"
+        - "2022-03-24 17:17:17.111"
+        - "2022-03-24 17:17:17.111111"
+        - a
+        - {'key1': 111}
+        - [1, 2, 3]
+        - {s: a, i: 0}
+        - [{s: aa, i: 0}]
+        - null
+      - - -1
+        - 127
+        - 32767
+        - 2147483647
+        - 9223372036854775807
+        - 255
+        - 65535
+        - 4294967295
+        - 18446744073709551615
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2446
+        - "{@string-0}"
+        - "{@fixed_string32-0}"
+        - "12345.123"
+        - "123456.1234"
+        - "2022-03-25"
+        - "2022-03-25 18:18:18.222"
+        - "2022-03-25 18:18:18.222222"
+        - a
+        - {'key2': 222}
+        - [4, 5, 6]
+        - {s: b, i: 1}
+        - [{s: bb, i: 1}]
+        - 111

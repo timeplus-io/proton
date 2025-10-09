@@ -1,0 +1,118 @@
+tags:
+  - subquery/view/materialized_view/
+  - tumble(table)
+  - group_by
+  - primary_key
+  - to_support
+  - skip
+description: versioned_kv window aggreagtion (tumble window) group by promary key(not_implemented)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_stream(val float, id int, name string, ts
+      datetime) primary key id settings mode='versioned_kv';
+
+  - type: wait
+    time: 2
+
+  - name: "1439"
+    type: stream
+    query:
+      select max(val), min(val), avg(val), count(*), sum(val), window_start from
+      tumble(test14_stream, ts, 5s) group by window_start;
+    schema:
+      - name: max(val)
+        type: float32
+      - name: min(val)
+        type: float32
+      - name: avg(val)
+        type: float64
+      - name: count(*)
+        type: uint64
+      - name: sum(val)
+        type: float64
+      - name: window_start
+        type: datetime64(3)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (1, 2, 'a', '2020-02-02
+      20:00:01');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (3, 3, 'b', '2020-02-02
+      20:00:02');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (4, 3, 'b', '2020-02-02
+      20:00:03');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (0, 2, 'a', '2020-02-02
+      20:00:03');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (5, 1, 'c', '2020-02-02
+      20:00:04');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (8, 2, 'a', '2020-02-02
+      20:00:06');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (9, 3, 'b', '2020-02-02
+      20:00:07');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (11, 2, 'b', '2020-02-02
+      20:00:08');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (10, 1, 'c', '2020-02-02
+      20:00:09');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      insert into test14_stream(val, id, name, ts) values (14, 2, 'b', '2020-02-02
+      20:00:20');

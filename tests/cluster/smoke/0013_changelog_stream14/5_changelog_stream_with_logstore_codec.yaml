@@ -1,0 +1,70 @@
+tags:
+  - changelog_kv
+
+description: Test stream with logstore_codec settings such as zstd, lz4
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test_changelog_14;
+
+  - type: query
+    sql: drop stream if exists test_changelog_15;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: create stream test_changelog_14(id int, val int) primary key id SETTINGS logstore_codec='zstd';
+  - type: wait
+    time: 2
+
+  - name: 111
+    type: stream
+    query: select id, val from test_changelog_14;
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_changelog_14(id, val) values(1, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_changelog_15(id int, val int) primary key id SETTINGS logstore_codec='lz4';
+  - type: wait
+    time: 2
+
+  - name: 222
+    type: stream
+    query: select id, val from test_changelog_15;
+    schema:
+      - name: id
+        type: int32
+      - name: val
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test_changelog_15(id, val) values(1, 2);
+
+  - type: check
+    target_name: 111
+    expected_result:
+      - [1,2]
+
+  - type: check
+    target_name: 222
+    expected_result:
+      - [1,2]

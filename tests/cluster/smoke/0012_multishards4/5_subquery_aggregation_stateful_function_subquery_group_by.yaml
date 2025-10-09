@@ -1,0 +1,127 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_aggregation
+- global_aggregation
+- group_by
+- stateful_function
+description: subquery aggregation stateful function, subquery group by
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_subq_4;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_subq_4(val float, f int, k int) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create view test13_view1_4 as
+      select count(k) as cnt,
+             k
+      from test13_subq_4
+      group by k emit periodic 100ms;
+  
+  - type: wait
+    time: 1
+  
+  - name: '1335'
+    type: stream
+    query: |
+      select cnt,
+             k
+      from test13_view1_4
+      where cnt > 1;
+    schema:
+        - name: cnt
+          type: uint64
+        - name: k
+          type: int32
+          
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_4 (val, f, k)
+      values (0, 0, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_4 (val, f, k)
+      values (0, 0, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_4 (val, f, k)
+      values (0, 0, 3);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_4 (val, f, k)
+      values (0, 0, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_4 (val, f, k)
+      values (0, 0, 3);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_4 (val, f, k)
+      values (0, 0, 1);
+
+  - type: check
+    target_name: '1335'
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+    - [2, 2]
+    - [2, 3]
+    - [2, 2]
+    - [2, 3]
+    - [2, 2]
+    - [2, 1]

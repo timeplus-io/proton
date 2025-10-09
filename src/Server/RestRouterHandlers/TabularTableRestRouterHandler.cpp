@@ -1,7 +1,8 @@
-#include "TabularTableRestRouterHandler.h"
-#include "ColumnDefinition.h"
-#include "SchemaValidator.h"
+#include <Server/RestRouterHandlers/ColumnDefinition.h>
+#include <Server/RestRouterHandlers/SchemaValidator.h>
+#include <Server/RestRouterHandlers/TabularTableRestRouterHandler.h>
 
+#include <Interpreters/MetadataHelper.h>
 #include <Interpreters/executeQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/queryToString.h>
@@ -17,14 +18,18 @@ std::map<String, std::map<String, String>> TabularTableRestRouterHandler::create
        {"optional",
         {{"shards", "int"},
          {ProtonConsts::RESERVED_EVENT_TIME_API_NAME, "string"},
-         {"replication_factor", "int"},
          {"order_by_expression", "string"},
          {"order_by_granularity", "string"},
          {"primary_key", "string"},
+         {"secondary_indexes", "array"},
          {"partition_by_expression", "string"},
          {"partition_by_granularity", "string"},
          {"ttl_expression", "string"},
-         {"mode", "string"}}}};
+         {"mode", "string"},
+         {"created_by", "string"},
+         {"last_modified_by", "string"},
+         {"created_at", "int64"},
+         {"last_modified_at", "int64"}}}};
 
 std::map<String, std::map<String, String>> TabularTableRestRouterHandler::column_schema
     = {{"required",
@@ -36,6 +41,7 @@ std::map<String, std::map<String, String>> TabularTableRestRouterHandler::column
         {{"nullable", "bool"},
          {"default", "string"},
          {"alias", "string"},
+         {"comment", "string"},
          {"compression_codec", "string"},
          {"ttl_expression", "string"},
          {"skipping_index_expression", "string"}}}};
@@ -54,7 +60,7 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         if (table->name.starts_with(".inner.") && !include_internal_streams)
             continue;
 
-        if (table_names.contains(table->name))
+        if (table_names.contains(fmt::format("{}.{}", table->database, table->name)))
             continue;
 
         if (table->engine_full.find("subtype = 'rawstore'") != String::npos)
@@ -68,7 +74,9 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
 
         Poco::JSON::Object table_mapping_json;
         table_mapping_json.set("name", table->name);
+        table_mapping_json.set("database", table->database);
         table_mapping_json.set("engine", table->engine);
+        table_mapping_json.set("uuid", DB::toString(table->uuid));
         table_mapping_json.set("order_by_expression", table->sorting_key);
         table_mapping_json.set("partition_by_expression", table->partition_key);
         table_mapping_json.set("mode", table->mode);
@@ -77,14 +85,20 @@ void TabularTableRestRouterHandler::buildTablesJSON(Poco::JSON::Object & resp, c
         if (table->engine == "Stream" || table->engine == "MaterializedView")
             buildRetentionSettings(table_mapping_json, table->database.empty() ? database : table->database, table->name);
 
+        buildCreatedByAndLastModifiedBy(table_mapping_json, table->database.empty() ? database : table->database, table->name);
+
+        if (table->engine == "MaterializedView")
+            buildTargetStream(table_mapping_json, table->database.empty() ? database : table->database, table->name);
+
         /// ttl of materialized view has already been updated in buildRetentionSettings.
+        /// ttl for stream in cluster env also updated in buildRetentionSettings.
         if (create.storage && create.storage->ttl_table)
             table_mapping_json.set("ttl", queryToString(*create.storage->ttl_table));
 
         buildColumnsJSON(table_mapping_json, create.columns_list);
         tables_mapping_json.add(table_mapping_json);
 
-        table_names.insert(table->name);
+        table_names.insert(fmt::format("{}.{}", table->database, table->name));
     }
 
     resp.set("data", tables_mapping_json);
@@ -101,9 +115,6 @@ bool TabularTableRestRouterHandler::validatePost(const Poco::JSON::Object::Ptr &
         const auto col_ptr = col.extract<Poco::JSON::Object::Ptr>();
         if (!validateSchema(column_schema, col_ptr, error_msg))
             return false;
-
-        if (!isDistributedDDL())
-            continue;
 
         if (std::find(
                 ProtonConsts::RESERVED_COLUMN_NAMES.begin(), ProtonConsts::RESERVED_COLUMN_NAMES.end(), col_ptr->get("name").toString())
@@ -203,22 +214,20 @@ String TabularTableRestRouterHandler::getColumnsDefinition(const Poco::JSON::Obj
                 payload->get(ProtonConsts::RESERVED_EVENT_TIME_API_NAME).toString()));
         else
             columns_definition.push_back(fmt::format(
-                "`{}` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_EVENT_TIME));
+                "`{}` datetime64(3, 'UTC') DEFAULT now64(3, 'UTC') CODEC (DoubleDelta, ZSTD)", ProtonConsts::RESERVED_EVENT_TIME));
     }
 
     (void)has_index_time;
-    (void)has_event_sn;
 
 #if 0
     if (!has_index_time)
         /// RESERVED_INDEX_TIME will need recalculate when the block gets indexed to historical store
-        columns_definition.push_back(fmt::format("`{}` datetime64(3, 'UTC') CODEC (DoubleDelta, LZ4)", ProtonConsts::RESERVED_INDEX_TIME));
-
+        columns_definition.push_back(fmt::format("`{}` datetime64(3, 'UTC') CODEC (DoubleDelta, ZSTD)", ProtonConsts::RESERVED_INDEX_TIME));
+#endif
 
     /// RESERVED_EVENT_SEQUENCE_ID will be recalculated when the block gets indexed to historical store
     if (!has_event_sn)
-        columns_definition.push_back(fmt::format("`{}` Int64 CODEC (Delta, LZ4)", ProtonConsts::RESERVED_EVENT_SEQUENCE_ID));
-#endif
+        columns_definition.push_back(fmt::format("`{}` int64 CODEC (Delta, ZSTD)", ProtonConsts::RESERVED_EVENT_SEQUENCE_ID));
 
     if (!has_delta_flag)
     {

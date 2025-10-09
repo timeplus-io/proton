@@ -1,0 +1,35 @@
+tags:
+- udf
+description: scalar udf missing one arg
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: two_arg
+    arguments:
+    - name: arg1
+      type: float32
+    - name: arg2
+      type: float32
+    return_type: float32
+    source: function two_arg(arg1, arg2) {}
+- type: wait
+  time: 5
+
+- name: udf-18
+  type: stream
+  query: select two_arg(3.0)
+  schema:
+  - name: two_arg(3.0)
+    type: float32
+
+- type: check
+  target_name: udf-18
+  expected_result:
+  - ["error_code:42"]

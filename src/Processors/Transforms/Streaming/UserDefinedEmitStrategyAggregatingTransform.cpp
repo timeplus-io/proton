@@ -1,7 +1,6 @@
-#include "UserDefinedEmitStrategyAggregatingTransform.h"
+#include <Processors/Transforms/Streaming/UserDefinedEmitStrategyAggregatingTransform.h>
 
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
-#include <Processors/Transforms/convertToChunk.h>
 
 #include <algorithm>
 
@@ -10,29 +9,25 @@ namespace DB
 namespace Streaming
 {
 
-UserDefinedEmitStrategyAggregatingTransform::UserDefinedEmitStrategyAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
-    : UserDefinedEmitStrategyAggregatingTransform(std::move(header), std::move(params_), std::make_unique<ManyAggregatedData>(1), 0, 1, 1)
+UserDefinedEmitStrategyAggregatingTransform::UserDefinedEmitStrategyAggregatingTransform(
+    Block header, AggregatingTransformParamsPtr params_, const std::string & id)
+    : UserDefinedEmitStrategyAggregatingTransform(
+          std::move(header), params_, std::make_unique<ManyAggregatedData>(params_->aggregatorType(), id), 0, 1)
 {
 }
 
 UserDefinedEmitStrategyAggregatingTransform::UserDefinedEmitStrategyAggregatingTransform(
-    Block header,
-    AggregatingTransformParamsPtr params_,
-    ManyAggregatedDataPtr many_data_,
-    size_t current_variant_,
-    size_t max_threads_,
-    size_t temporary_data_merge_threads_)
+    Block header, AggregatingTransformParamsPtr params_, ManyAggregatedDataPtr many_data_, size_t current_variant_, size_t max_threads_)
     : AggregatingTransform(
-        std::move(header),
-        std::move(params_),
-        std::move(many_data_),
-        current_variant_,
-        max_threads_,
-        temporary_data_merge_threads_,
-        "UserDefinedAggregatingTransform",
-        ProcessorID::UserDefinedEmitStrategyAggregatingTransformID)
+          std::move(header),
+          std::move(params_),
+          std::move(many_data_),
+          current_variant_,
+          max_threads_,
+          "UserDefinedAggregatingTransform",
+          ProcessorID::UserDefinedEmitStrategyAggregatingTransformID)
 {
-    assert(params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED);
+    chassert(params->params->group_by == IAggregatorParams::GroupBy::UserDefined);
 }
 
 void UserDefinedEmitStrategyAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
@@ -43,7 +38,7 @@ void UserDefinedEmitStrategyAggregatingTransform::finalize(const ChunkContextPtr
         return;
 
     auto chunks = AggregatingHelper::convertToChunks(variants, *params);
-    if (params->emit_version && params->final)
+    if (params->emit_version)
         emitVersion(chunks);
 
     if (chunks.empty()) [[unlikely]]
@@ -53,5 +48,18 @@ void UserDefinedEmitStrategyAggregatingTransform::finalize(const ChunkContextPtr
     chunks.back().setChunkContext(chunk_ctx);
     setAggregatedResult(chunks);
 }
+
+String UserDefinedEmitStrategyAggregatingTransform::getName() const
+{
+    switch (params->aggregatorType())
+    {
+        case AggregatorType::Memory:
+            return "UserDefinedEmitStrategyAggregatingTransform";
+        case AggregatorType::Hybrid:
+            return "HybridUserDefinedEmitStrategyAggregatingTransform";
+    }
 }
+
+}
+
 }

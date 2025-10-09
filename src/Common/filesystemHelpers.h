@@ -9,14 +9,16 @@
 #include <sys/statvfs.h>
 #include <Poco/TemporaryFile.h>
 
+namespace fs = std::filesystem;
 
 namespace DB
 {
 
-using TemporaryFile = Poco::TemporaryFile;
+using PocoTemporaryFile = Poco::TemporaryFile;
 
 bool enoughSpaceInDirectory(const std::string & path, size_t data_size);
-std::unique_ptr<TemporaryFile> createTemporaryFile(const std::string & path);
+std::unique_ptr<PocoTemporaryFile> createTemporaryFile(const std::string & folder_path);
+
 
 // Determine what block device is responsible for specified path
 #if !defined(__linux__)
@@ -45,6 +47,17 @@ UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id);
 
 /// Returns mount point of filesystem where absolute_path (must exist) is located
 std::filesystem::path getMountPoint(std::filesystem::path absolute_path);
+
+/// proton: starts.
+/// Returns mount entry of filesystem mounted to mount_point
+#if defined(OS_LINUX)
+std::pair<std::string, std::string> getFilesystemNameType([[maybe_unused]] const String & mount_point);
+#else
+[[noreturn]] std::pair<std::string, std::string> getFilesystemNameType([[maybe_unused]] const String & mount_point);
+#endif
+
+std::pair<std::string, std::string> tryGetFilesystemNameType([[maybe_unused]] const String & mount_point);
+/// proton: ends.
 
 /// Returns name of filesystem mounted to mount_point
 #if !defined(OS_LINUX)
@@ -89,4 +102,9 @@ Poco::Timestamp getModificationTimestamp(const std::string & path);
 void setModificationTime(const std::string & path, time_t time);
 /// st_ctime
 time_t getChangeTime(const std::string & path);
+
+bool isSymlink(const fs::path & path);
+bool isSymlinkNoThrow(const fs::path & path);
+fs::path readSymlink(const fs::path & path);
+
 }

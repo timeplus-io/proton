@@ -1,0 +1,47 @@
+name: stream_join_stream3
+description: Test Append only stream Left Join Append only stream
+tags:
+  - smoke
+  - left_join
+
+setup:
+  scope: case
+  steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS left_Stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS right_Stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM left_Stream (
+        id int32,                      -- Unique identifier for the entity in left_Stream
+        name string,           -- Name of the person/entity
+        department_id int32,           -- Foreign key referencing department 
+        manager_id int32,              -- Self-referencing key (for self-joins)
+        type string,                 -- Type of entity 
+        PRIMARY KEY(id)              -- Primary key constraint
+      );
+  
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE STREAM right_Stream (
+        id int32,                      -- Foreign key corresponding to id in left_Stream
+        value string,          -- Associated value or metadata for records in left
+        department_id int32,           -- Foreign key used for joining based on department
+        type string,                 -- Entity type, to be used in complex join conditions
+        PRIMARY KEY (id, type)       -- Composite key ensuring uniqueness for id/type
+      );
+
+  - type: wait
+    time: 2

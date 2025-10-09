@@ -1,0 +1,55 @@
+tags:
+  - join
+  - subquery
+  - pushdown
+description: join subquery with where clause and pushdown
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists fixed_issues2_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream fixed_issues2_stream(i int, v string);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into fixed_issues2_stream(i, v) values(1, 'tt1');
+
+  - type: wait
+    time: 2
+
+  - name: fixed-issues2-1
+    query_id: fixed-issues2-1
+    type: stream
+    query: with cte as (select * from fixed_issues2_stream as t1 join table(fixed_issues2_stream) as t2 on t1.i = t2.i where t1.i = 1) select i, v as v1, t2.v as v2 from cte;
+    schema:
+      - name: i
+        type: int32
+      - name: v1
+        type: string
+      - name: v2
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into fixed_issues2_stream(i, v) values (1, 't1');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: kill query where query_id = 'fixed-issues2-1'
+
+  - type: check
+    target_name: fixed-issues2-1
+    expected_result:
+      - [ 1, 't1', 'tt1' ]

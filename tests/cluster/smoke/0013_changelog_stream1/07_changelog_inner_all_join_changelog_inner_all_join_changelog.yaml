@@ -1,0 +1,130 @@
+tags:
+  - changelog
+  - append-only
+  - multiple stream joins
+description: changelog inner all join changelog inner all join changelog
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql:
+      create stream test14_append_stream1_1 (i int, k1 int, k2 string)
+      settings mode='changelog';
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_append_stream2_1 (j int, kk1 int, kk2 string)
+      settings mode='changelog';
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_append_stream3_1 (k int, kkk1 int, kkk2
+      string) settings mode='changelog';
+  - type: wait
+    time: 1
+    
+  - name: "1430"
+    type: stream
+    query:
+      select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, c.k, c.kkk1, c.kkk2, _tp_delta
+      from test14_append_stream1_1 as a inner all join test14_append_stream2_1 as b
+      on a.k1 = b.kk1 and a.k2 = b.kk2 inner all join test14_append_stream3_1 as c on
+      a.k1 = c.kkk1 and a.k2 = c.kkk2 emit changelog;
+    schema:
+      - name: a.i
+        type: int32
+      - name: a.k1
+        type: int32
+      - name: a.k2
+        type: string
+      - name: b.j
+        type: int32
+      - name: b.kk1
+        type: int32
+      - name: b.kk2
+        type: string
+      - name: c.k 
+        type: int32
+      - name: c.kkk1
+        type: int32
+      - name: c.kkk2
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - name: "1430-2"
+    type: stream
+    query:
+      select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, c.k, c.kkk1, c.kkk2
+      from test14_append_stream1_1 as a inner all join test14_append_stream2_1 as b
+      on a.k1 = b.kk1 and a.k2 = b.kk2 inner all join test14_append_stream3_1 as c on
+      a.k1 = c.kkk1 and a.k2 = c.kkk2;
+    schema:
+      - name: a.i
+        type: int32
+      - name: a.k1
+        type: int32
+      - name: a.k2
+        type: string
+      - name: b.j
+        type: int32
+      - name: b.kk1
+        type: int32
+      - name: b.kk2
+        type: string
+      - name: c.k 
+        type: int32
+      - name: c.kkk1
+        type: int32
+      - name: c.kkk2
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_append_stream1_1(i, k1, k2) values (1, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream2_1(j, kk1, kk2) values (2, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream3_1(k, kkk1, kkk2) values (3, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream2_1(j, kk1, kk2, _tp_delta) values (2, 1, 'k', -1);
+
+  - type: query
+    sql: insert into test14_append_stream1_1(i, k1, k2) values (4, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream3_1(k, kkk1, kkk2) values (5, 1, 'k');
+
+  - type: query
+    sql: insert into test14_append_stream2_1(j, kk1, kk2) values (6, 1, 'k');
+
+  - type: check
+    target_name: "1430"
+    mode: random
+    expected_result:
+      - [1, 1, k, 2, 1, k, 3, 1, k, 1]
+      - [1, 1, k, 2, 1, k, 3, 1, k, -1]
+      - [1, 1, k, 6, 1, k, 3, 1, k, 1]
+      - [4, 1, k, 6, 1, k, 3, 1, k, 1]
+      - [1, 1, k, 6, 1, k, 5, 1, k, 1]
+      - [4, 1, k, 6, 1, k, 5, 1, k, 1]
+
+  - type: check
+    target_name: "1430-2"
+    mode: random
+    expected_result:
+      - [1, 1, k, 2, 1, k, 3, 1, k]
+      - [1, 1, k, 6, 1, k, 3, 1, k]
+      - [4, 1, k, 6, 1, k, 3, 1, k]
+      - [1, 1, k, 6, 1, k, 5, 1, k]
+      - [4, 1, k, 6, 1, k, 5, 1, k]

@@ -1,10 +1,17 @@
 #include <V8/ConvertDataTypes.h>
 #include <V8/Modules/Console.h>
+#include <V8/Modules/DictionaryAccess/DictionaryAccess.h>
 #include <V8/Utils.h>
 
+#include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Core/DecimalFunctions.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Functions/FunctionsConversion.h>
 #include <base/getMemoryAmount.h>
+#include <Common/logger_useful.h>
+#include <Common/thread_local_rng.h>
+
+#include <random>
 
 
 #define FOR_V8_BASIC_NUMERIC_TYPES(M) \
@@ -36,8 +43,6 @@ extern const int UDF_MEMORY_THRESHOLD_EXCEEDED;
 
 namespace V8
 {
-namespace
-{
 template <typename In>
 DateTime64::NativeType toDateTime64(In source)
 {
@@ -45,6 +50,8 @@ DateTime64::NativeType toDateTime64(In source)
     ToDateTime64Transform transform(3);
     return transform.execute(static_cast<In>(source), time_zone);
 }
+
+template DateTime64::NativeType DB::V8::toDateTime64<UInt16>(UInt16);
 
 DateTime64 toDateTime64(int64_t value, uint32_t source_scale, uint32_t target_scale)
 {
@@ -66,6 +73,9 @@ v8::Local<v8::Value> toV8Date(v8::Isolate * isolate, double dt)
     return scope.Escape(date);
 }
 
+namespace
+{
+
 /// convert the input column to v8::Array
 v8::Local<v8::Array>
 fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableColumnPtr & column, uint64_t offset, uint64_t size)
@@ -76,15 +86,17 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
     v8::EscapableHandleScope scope(isolate);
     v8::Local<v8::Context> context = isolate->GetCurrentContext();
     v8::Local<v8::Array> result = v8::Array::New(isolate, static_cast<int>(size));
+    constexpr auto string_size_threshold = 50 * 1024 * 1024;
 
     assert(offset + size <= column->size());
 
     switch (arg_type_id)
     {
-        case TypeIndex::UInt8: {
+        case TypeIndex::UInt8:
+        {
             if (arg_type->getName() == "bool")
             {
-                for (uint64_t i = 0; i < size; i++)
+                for (uint32_t i = 0; i < size; i++)
                     result->Set(context, i, to_v8<bool>(isolate, column->getBool(offset + i))).FromJust();
             }
             else
@@ -95,27 +107,38 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
             break;
         }
         case TypeIndex::String:
-        case TypeIndex::FixedString: {
-            for (uint64_t i = 0; i < size; i++)
-                result->Set(context, i, to_v8(isolate, column->getDataAt(offset + i).data, (*column).getDataAt(offset + i).size))
-                    .FromJust();
+        case TypeIndex::FixedString:
+        {
+            for (uint32_t i = 0; i < size; i++)
+            {
+                auto str = column->getDataAt(offset + i);
+                if (str.size > string_size_threshold)
+                    LOG_INFO(
+                        getLogger("V8"),
+                        "V8::fillV8Array try to allocate big string size={} bytes, threshold={} bytes",
+                        str.size,
+                        string_size_threshold);
+                result->Set(context, i, to_v8(isolate, str.data, str.size)).FromJust();
+            }
             break;
         }
-        case TypeIndex::DateTime64: {
+        case TypeIndex::DateTime64:
+        {
             const auto * source = checkAndGetColumn<ColumnDecimal<DateTime64>>(column.get());
             const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(arg_type.get())->getScale();
-            for (uint64_t i = 0; i < size; i++)
+            for (uint32_t i = 0; i < size; i++)
             {
                 auto dt64 = static_cast<Int64>((*source).getElement(offset + i));
                 result->Set(context, i, toV8Date(isolate, toDateTime64(dt64, scale, 3).value)).FromJust();
             }
             break;
         }
-        case TypeIndex::Array: {
+        case TypeIndex::Array:
+        {
             const auto * array_type_ptr = reinterpret_cast<const DataTypeArray *>(arg_type.get());
             const auto * col_arr = checkAndGetColumn<ColumnArray>(column.get());
             assert(col_arr && array_type_ptr);
-            for (uint64_t i = 0; i < size; i++)
+            for (uint32_t i = 0; i < size; i++)
             {
                 uint64_t elem_offset = col_arr->getOffsets()[offset + i - 1];
                 uint64_t elem_size = col_arr->getOffsets()[offset + i] - elem_offset;
@@ -125,11 +148,46 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
             }
             break;
         }
+        case TypeIndex::Nullable:
+        {
+            const auto * col_nullable = checkAndGetColumn<ColumnNullable>(column.get());
+            auto & nested_column = col_nullable->getNestedColumn();
+            const auto & null_map = col_nullable->getNullMapData();
+            auto nested_type = assert_cast<const DataTypeNullable *>(arg_type.get())->getNestedType();
+            MutableColumnPtr mutable_nested_column = IColumn::mutate(nested_column.convertToFullIfNeeded());
+
+            for (uint32_t i = 0; i < size;)
+            {
+                // deal with continous non-null elements
+                uint32_t start = i;
+                while (i < size && !null_map[offset + i])
+                    i++;
+                if (start < i)
+                {
+                    v8::Local<v8::Array> temp_array = fillV8Array(isolate, nested_type, mutable_nested_column, offset + start, i - start);
+                    for (uint32_t j = start; j < i; j++)
+                    {
+                        result->Set(context, j, temp_array->Get(context, j - start).ToLocalChecked()).FromJust();
+                    }
+                }
+
+                // deal with continous null elements
+                start = i;
+                while (i < size && null_map[offset + i])
+                    i++;
+                for (uint32_t j = start; j < i; j++)
+                {
+                    result->Set(context, j, v8::Null(isolate)).FromJust();
+                }
+            }
+            break;
+        }
 
 #define FOR_DATE(DATE_TYPE_ID, DATE_TYPE_INTERNAL) \
-    case (TypeIndex::DATE_TYPE_ID): { \
+    case (TypeIndex::DATE_TYPE_ID): \
+    { \
         const auto * col_date = checkAndGetColumn<ColumnVector<DATE_TYPE_INTERNAL>>(column.get()); \
-        for (uint64_t i = 0; i < size; i++) \
+        for (uint32_t i = 0; i < size; i++) \
         { \
             auto d = toDateTime64<DATE_TYPE_INTERNAL>((*col_date).getElement(offset + i)); \
             result->Set(context, i, toV8Date(isolate, d)).FromJust(); \
@@ -140,7 +198,8 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
 #undef FOR_DATE
 
 #define DISPATCH(NUMERIC_TYPE_ID) \
-    case (TypeIndex::NUMERIC_TYPE_ID): { \
+    case (TypeIndex::NUMERIC_TYPE_ID): \
+    { \
         const auto & internal_data = assert_cast<const ColumnVector<NUMERIC_TYPE_ID> &>(*column).getData(); \
         result = to_v8(isolate, internal_data.begin() + offset, internal_data.begin() + offset + size); \
         break; \
@@ -157,7 +216,9 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
 }
 
 std::vector<v8::Local<v8::Value>> prepareArguments(
-    v8::Isolate * isolate, const std::span<const DB::UserDefinedFunctionConfiguration::Argument> arguments, const MutableColumns & columns)
+    v8::Isolate * isolate,
+    const std::span<const cluster::protocol::UserDefinedFunctionDescriptor::Argument> arguments,
+    const MutableColumns & columns)
 {
     std::vector<v8::Local<v8::Value>> argv;
     argv.reserve(arguments.size());
@@ -165,7 +226,7 @@ std::vector<v8::Local<v8::Value>> prepareArguments(
     /// input is v8::Array
     for (int i = 0; const auto & arg : arguments)
     {
-        argv.emplace_back(fillV8Array(isolate, arg.type, columns[i], 0, columns[i]->size()));
+        argv.emplace_back(fillV8Array(isolate, DB::DataTypeFactory::instance().get(arg.type), columns[i], 0, columns[i]->size()));
         ++i;
     }
     return argv;
@@ -178,15 +239,27 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & resul
 
     if (!is_result_array)
     {
-        switch (result_type->getTypeId())
+        auto result_type_id = result_type->getTypeId();
+        switch (result_type_id)
         {
             case TypeIndex::UInt8:
+            {
                 if (result_type->getName() == "bool" && result->IsBoolean())
-                    /// Internally we stores bool as UIn8
+                {
+                    /// Internally we store bool as UInt8
                     to.insert(from_v8<bool>(isolate, result));
+                }
+                else if (result->IsBoolean())
+                {
+                    // Special case for boolean values in UInt8 columns that aren't explicitly bool type
+                    to.insert(result->BooleanValue(isolate));
+                }
                 else
+                {
                     to.insert(from_v8<uint8_t>(isolate, result));
+                }
                 break;
+            }
             case TypeIndex::UInt16:
                 to.insert(from_v8<uint16_t>(isolate, result));
                 break;
@@ -218,14 +291,186 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & resul
             case TypeIndex::FixedString:
                 to.insert(from_v8<String>(isolate, result));
                 break;
-            case TypeIndex::DateTime64: {
-                const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(result_type.get())->getScale();
-                if (!result->IsDate())
-                    throw Exception(ErrorCodes::TYPE_MISMATCH, "the UDA does not return 'datetime64' type");
-                to.insert(toDateTime64(static_cast<int64_t>(result.As<v8::Date>()->NumberValue(context).ToChecked()), 3, scale));
+            case TypeIndex::Nullable:
+            {
+                if (result->IsNull())
+                {
+                    /// Directly handle null value
+                    to.insert(Null());
+                }
+                else if (result->IsArray())
+                {
+                    /// Handle array case as before
+                    auto array_result = result.As<v8::Array>();
+                    uint32_t len = array_result->Length();
+                    const auto & nested_type = assert_cast<const DataTypeNullable &>(*result_type).getNestedType();
+                    for (uint32_t i = 0; i < len; i++)
+                    {
+                        auto elt_obj = array_result->Get(context, i).ToLocalChecked();
+                        if (elt_obj->IsNull())
+                            to.insert(Null());
+                        else
+                            insertResult(isolate, to, nested_type, elt_obj, false);
+                    }
+                }
+                else
+                {
+                    /// Handle a single non-null value
+                    const auto & nested_type = assert_cast<const DataTypeNullable &>(*result_type).getNestedType();
+                    insertResult(isolate, to, nested_type, result, false);
+                }
                 break;
             }
-            case TypeIndex::Tuple: {
+            case TypeIndex::DateTime64:
+            {
+                const auto & scale = reinterpret_cast<const DataTypeDateTime64 *>(result_type.get())->getScale();
+                
+                if (result->IsDate())
+                {
+                    // Handle Date object directly
+                    to.insert(toDateTime64(static_cast<int64_t>(result.As<v8::Date>()->ValueOf()), 3, scale));
+                }
+                else if (result->IsNumber())
+                {
+                    // If it's a number, assume it's a millisecond timestamp
+                    to.insert(toDateTime64(static_cast<int64_t>(result->NumberValue(context).ToChecked()), 3, scale));
+                }
+                else if (result->IsString())
+                {
+                    // Parse string as date using JavaScript Date constructor
+                    v8::Local<v8::Function> date_constructor = v8::Local<v8::Function>::Cast(
+                        context->Global()->Get(context, V8::to_v8(isolate, "Date")).ToLocalChecked());
+                    
+                    v8::Local<v8::Value> args[] = {result};
+                    v8::MaybeLocal<v8::Object> date_obj = date_constructor->NewInstance(context, 1, args);
+                    
+                    if (!date_obj.IsEmpty())
+                    {
+                        v8::Local<v8::Object> date = date_obj.ToLocalChecked();
+                        if (!date->IsNativeError()) // Check if parsing was successful
+                        {
+                            v8::Local<v8::Function> get_time = v8::Local<v8::Function>::Cast(
+                                date->Get(context, V8::to_v8(isolate, "getTime")).ToLocalChecked());
+                            
+                            v8::Local<v8::Value> time_value = get_time->Call(context, date, 0, nullptr).ToLocalChecked();
+                            if (time_value->IsNumber())
+                            {
+                                double timestamp_ms = time_value->NumberValue(context).ToChecked();
+                                to.insert(toDateTime64(static_cast<int64_t>(timestamp_ms), 3, scale));
+                            }
+                            else
+                            {
+                                throw Exception(
+                                    ErrorCodes::TYPE_MISMATCH,
+                                    "Failed to convert string to DateTime64: invalid time value");
+                            }
+                        }
+                        else
+                        {
+                            throw Exception(
+                                ErrorCodes::TYPE_MISMATCH,
+                                "Failed to convert string to DateTime64: invalid date format");
+                        }
+                    }
+                    else
+                    {
+                        throw Exception(
+                            ErrorCodes::TYPE_MISMATCH,
+                            "Failed to convert string to DateTime64: could not create Date object");
+                    }
+                }
+                else
+                {
+                    throw Exception(
+                        ErrorCodes::TYPE_MISMATCH,
+                        "Expected Date, Number, or String for DateTime64 type, got {}",
+                        from_v8<std::string>(isolate, result->TypeOf(isolate)));
+                }
+                break;
+            }
+#define STRINGIFY_HELPER(x) #x
+#define STRINGIFY(x) STRINGIFY_HELPER(x)
+#define FOR_DATE(DATE_TYPE_ID, DATE_TYPE_INTERNAL) \
+    case (TypeIndex::DATE_TYPE_ID): \
+    { \
+        if (result->IsDate()) \
+        { \
+            double datetime64_v = result.As<v8::Date>()->NumberValue(context).ToChecked(); \
+            const auto & time_zone = DateLUT::instance("UTC"); \
+            FromDateTime64Transform<To##DATE_TYPE_ID##Impl> transform(3); \
+            DATE_TYPE_INTERNAL res = transform.execute(static_cast<DateTime64::NativeType>(datetime64_v), time_zone); \
+            to.insert(res); \
+        } \
+        else if (result->IsNumber()) \
+        { \
+            double ms_timestamp = result->NumberValue(context).ToChecked(); \
+            const auto & time_zone = DateLUT::instance("UTC"); \
+            FromDateTime64Transform<To##DATE_TYPE_ID##Impl> transform(3); \
+            DATE_TYPE_INTERNAL res = transform.execute(static_cast<DateTime64::NativeType>(ms_timestamp), time_zone); \
+            to.insert(res); \
+        } \
+        else if (result->IsString()) \
+        { \
+            /* Parse string as date using JavaScript Date constructor */ \
+            v8::Local<v8::Function> date_constructor = v8::Local<v8::Function>::Cast( \
+                context->Global()->Get(context, V8::to_v8(isolate, "Date")).ToLocalChecked()); \
+            \
+            v8::Local<v8::Value> args[] = {result}; \
+            v8::MaybeLocal<v8::Object> date_obj = date_constructor->NewInstance(context, 1, args); \
+            \
+            if (!date_obj.IsEmpty()) \
+            { \
+                v8::Local<v8::Object> date = date_obj.ToLocalChecked(); \
+                if (!date->IsNativeError()) \
+                { \
+                    v8::Local<v8::Function> get_time = v8::Local<v8::Function>::Cast( \
+                        date->Get(context, V8::to_v8(isolate, "getTime")).ToLocalChecked()); \
+                    \
+                    v8::Local<v8::Value> time_value = get_time->Call(context, date, 0, nullptr).ToLocalChecked(); \
+                    if (time_value->IsNumber()) \
+                    { \
+                        double timestamp_ms = time_value->NumberValue(context).ToChecked(); \
+                        const auto & time_zone = DateLUT::instance("UTC"); \
+                        FromDateTime64Transform<To##DATE_TYPE_ID##Impl> transform(3); \
+                        DATE_TYPE_INTERNAL res = transform.execute(static_cast<DateTime64::NativeType>(timestamp_ms), time_zone); \
+                        to.insert(res); \
+                    } \
+                    else \
+                    { \
+                        throw Exception( \
+                            ErrorCodes::TYPE_MISMATCH, \
+                            "Failed to convert string to " STRINGIFY(DATE_TYPE_ID) ": invalid time value"); \
+                    } \
+                } \
+                else \
+                { \
+                    throw Exception( \
+                        ErrorCodes::TYPE_MISMATCH, \
+                        "Failed to convert string to " STRINGIFY(DATE_TYPE_ID) ": invalid date format"); \
+                } \
+            } \
+            else \
+            { \
+                throw Exception( \
+                    ErrorCodes::TYPE_MISMATCH, \
+                    "Failed to convert string to " STRINGIFY(DATE_TYPE_ID) ": could not create Date object"); \
+            } \
+        } \
+        else \
+        { \
+            throw Exception(ErrorCodes::TYPE_MISMATCH, \
+                "Expected Date, Number, or String for " STRINGIFY(DATE_TYPE_ID) " type, got {}", \
+                from_v8<std::string>(isolate, result->TypeOf(isolate))); \
+        } \
+        break; \
+    }
+                FOR_INTERNAL_DATE_TYPES(FOR_DATE)
+#undef FOR_DATE
+#undef STRINGIFY
+#undef STRINGIFY_HELPER
+
+            case TypeIndex::Tuple:
+            {
                 const auto * tuple_type_ptr = reinterpret_cast<const DataTypeTuple *>(result_type.get());
                 if (!result->IsObject())
                     throw Exception(ErrorCodes::TYPE_MISMATCH, "the result result is Tuple type, but the UDF does not return Object");
@@ -244,7 +489,8 @@ void insertResult(v8::Isolate * isolate, IColumn & to, const DataTypePtr & resul
                 }
                 break;
             }
-            case TypeIndex::Array: {
+            case TypeIndex::Array:
+            {
                 const auto * array_type_ptr = reinterpret_cast<const DataTypeArray *>(result_type.get());
                 if (result.IsEmpty() || !result->IsArray())
                     throw Exception(
@@ -300,6 +546,9 @@ void compileSource(
     /// Setup 'console' object
     installConsole(isolate, local_ctx, func_name);
 
+    /// Setup dictionary access functions (getValue, setValue, getCardinality)
+    DB::V8::DictionaryAccess::installJS(isolate, local_ctx);
+
     v8::Local<v8::String> script_code
         = v8::String::NewFromUtf8(isolate, source.data(), v8::NewStringType::kNormal, static_cast<int>(source.size())).ToLocalChecked();
 
@@ -340,8 +589,8 @@ void validateFunctionSource(
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func)
 {
     /// FIXME, switch to global isolate allocation / pooling
-    UInt64 max_heap_size_in_bytes = 10 * 1024 * 1024;
-    UInt64 max_old_gen_size_in_bytes = 8 * 1024 * 1024;
+    UInt64 max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+    UInt64 max_old_gen_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
 
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator_shared
@@ -431,26 +680,129 @@ void validateStatelessFunctionSource(const std::string & func_name, const std::s
     validateFunctionSource(func_name, source, validate_function);
 }
 
-void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes)
+std::string getHeapStatisticsString(v8::HeapStatistics & heap_statistics)
 {
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::HandleScope scope(isolate);
-    v8::HeapStatistics heap_statistics;
-    isolate->GetHeapStatistics(&heap_statistics);
+    return fmt::format(
+        "Total Heap Size: {}\t"
+        "Total Heap Size Executable: {}\t"
+        "Total Physical Size: {}\t"
+        "Total Available Size: {}\t"
+        "Used Heap Size: {}\t"
+        "Heap Size Limit: {}\t"
+        "Malloced Memory: {}\t"
+        "External Memory: {}\t"
+        "Peak Malloced Memory: {}\t"
+        "Does Zap Garbage: {}\t"
+        "Number Of Native Contexts: {}\t"
+        "Number Of Detached Contexts: {}\t"
+        "Total Global Handles Size: {}\t"
+        "Used Global Handles Size: {}",
+        heap_statistics.total_heap_size(),
+        heap_statistics.total_heap_size_executable(),
+        heap_statistics.total_physical_size(),
+        heap_statistics.total_available_size(),
+        heap_statistics.used_heap_size(),
+        heap_statistics.heap_size_limit(),
+        heap_statistics.malloced_memory(),
+        heap_statistics.external_memory(),
+        heap_statistics.peak_malloced_memory(),
+        heap_statistics.does_zap_garbage(),
+        heap_statistics.number_of_native_contexts(),
+        heap_statistics.number_of_detached_contexts(),
+        heap_statistics.total_global_handles_size(),
+        heap_statistics.used_global_handles_size());
+}
 
-    auto used = heap_statistics.used_heap_size();
-    auto total = heap_statistics.total_available_size();
-    auto limit = std::min(static_cast<size_t>(0.9 * total), max_v8_heap_size_in_bytes);
+void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes, bool log_v8_memory, LoggerPtr logger)
+{
+    v8::HeapStatistics heap_statistics;
+    {
+        v8::Locker locker(isolate);
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+
+        /// TODO(qijun): add v8 heap stat metrics to system profile event capture
+        isolate->GetHeapStatistics(&heap_statistics);
+    }
+
+    size_t used = heap_statistics.used_heap_size();
+    size_t total = heap_statistics.heap_size_limit();
+    size_t limit = std::min(total, max_v8_heap_size_in_bytes);
+
+    /// If the used heap size exceeds the soft limit, directly throw an exception
     if (used > limit)
         throw Exception(
             ErrorCodes::UDF_MEMORY_THRESHOLD_EXCEEDED,
-            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes",
+            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes, v8 heap "
+            "stat={{{}}}",
             used,
             total,
             max_v8_heap_size_in_bytes,
-            limit);
+            limit,
+            V8::getHeapStatisticsString(heap_statistics));
+
+    /// Check if the actual heap limit is lower than the soft limit
+    if (total < max_v8_heap_size_in_bytes)
+    {
+        LOG_WARNING(
+            logger,
+            "V8 engine cannot allocate the requested memory: actual limit={} bytes, "
+            "requested={} bytes. Consider recreating with `settings javascript_max_memory_bytes` set to a lower value. "
+            "V8 heap statistics: {{{}}}",
+            total,
+            max_v8_heap_size_in_bytes,
+            getHeapStatisticsString(heap_statistics));
+    }
+    else if (used > (limit * 0.8))
+    {
+        /// This is the case where we should notify users to increase settings
+        LOG_WARNING(
+            logger,
+            "V8 heap usage is approaching the limit: used={} bytes ({:.1f}% of limit). "
+            "Consider increasing settings javascript_max_memory_bytes (currently {} bytes) "
+            "to avoid potential memory errors. V8 heap statistics: {{{}}}",
+            used,
+            (static_cast<double>(used) / limit) * 100,
+            max_v8_heap_size_in_bytes,
+            getHeapStatisticsString(heap_statistics));
+    }
+    else if (log_v8_memory)
+        LOG_INFO(
+            logger,
+            "V8 heap is within the acceptable range: used={} bytes, javascript_max_memory_bytes={} bytes, hard limit={} bytes. "
+            "V8 heap statistics: {{{}}}",
+            used,
+            max_v8_heap_size_in_bytes,
+            total,
+            getHeapStatisticsString(heap_statistics));
+}
+
+size_t nearHeapLimitCallback(void * isolate_, size_t current_heap_limit, size_t initial_heap_limit)
+{
+    v8::Isolate * isolate = reinterpret_cast<v8::Isolate *>(isolate_);
+    v8::Locker locker(isolate);
+    v8::Isolate::Scope isolate_scope(isolate);
+    v8::HandleScope handle_scope(isolate);
+
+    v8::HeapStatistics heap_statistics;
+    isolate->GetHeapStatistics(&heap_statistics);
+
+    size_t used = heap_statistics.used_heap_size();
+    size_t total = heap_statistics.heap_size_limit();
+
+    LOG_WARNING(
+        getLogger("V8"),
+        "V8 heap near limit: used={} bytes, current_heap_limit={} bytes, initial_heap_limit={} bytes. \nV8 heap statistics: {{{}}}",
+        used,
+        current_heap_limit,
+        total,
+        getHeapStatisticsString(heap_statistics));
+    return 0;
+}
+
+void fatalErrorHandle(const char * location, const char * message)
+{
+    LOG_ERROR(getLogger("V8"), "V8 Fatal: location={}, message={}", location, message);
 }
 }
 }

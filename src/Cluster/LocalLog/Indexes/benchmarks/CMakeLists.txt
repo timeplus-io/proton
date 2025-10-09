@@ -1,0 +1,2 @@
+proton_add_executable (benchmark_leader_epoch_sn_index benchmark_leader_epoch_sn_index.cpp)
+target_link_libraries (benchmark_leader_epoch_sn_index PRIVATE ch_contrib::gbenchmark_all cluster)

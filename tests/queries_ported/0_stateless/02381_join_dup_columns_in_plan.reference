@@ -1,0 +1,52 @@
+Expression
+Header: key string
+        value string
+  Join
+  Header: key string
+          value string
+    Expression
+    Header: key string
+      ReadFromStorage
+      Header: dummy uint8
+    Union
+    Header: s2.key string
+            value string
+      Expression
+      Header: s2.key string
+              value string
+        ReadFromStorage
+        Header: dummy uint8
+      Expression
+      Header: s2.key string
+              value string
+        ReadFromStorage
+        Header: dummy uint8
+Expression
+Header: key string
+        value string
+  Join
+  Header: key string
+          s2.key string
+          value string
+    Sorting
+    Header: key string
+      Expression
+      Header: key string
+        ReadFromStorage
+        Header: dummy uint8
+    Sorting
+    Header: s2.key string
+            value string
+      Union
+      Header: s2.key string
+              value string
+        Expression
+        Header: s2.key string
+                value string
+          ReadFromStorage
+          Header: dummy uint8
+        Expression
+        Header: s2.key string
+                value string
+          ReadFromStorage
+          Header: dummy uint8

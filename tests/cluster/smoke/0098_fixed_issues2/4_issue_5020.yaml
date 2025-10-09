@@ -1,0 +1,92 @@
+tags:
+  - query state
+  - pointer cast
+description: (#5020)possible Bad cast from type DB::IAST const* to DB::ASTLiteral const*
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node: 
+    - p1
+    sql: 
+      CREATE STREAM stream 
+      (uid uuid, date DateTime) 
+      ENGINE = MergeTree 
+      ORDER BY date;
+  - type: wait
+    time: 2
+
+  - type: query
+    node: 
+    - p1
+    sql: INSERT INTO `stream` VALUES 
+     ('550e8400-e29b-41d4-a716-446655440000', '2021-03-24 01:04:27'),
+     ('550e8400-e29b-41d4-a716-446655440001', '2021-03-24 01:04:27'), 
+     ('550e8400-e29b-41d4-a716-446655440002', '2021-03-24 01:04:27'), 
+     ('550e8400-e29b-41d4-a716-446655440003', '2021-03-24 01:04:27'), 
+     ('550e8400-e29b-41d4-a716-446655440004', '2021-03-24 01:04:27');
+  - type: wait
+    time: 2
+
+  - name: fixed-issues4-1
+    node: 
+    - p1
+    type: stream
+    query: 
+      SELECT uid, date, to_date(date) = to_date('2021-03-24') 
+      AS res 
+      FROM stream 
+      WHERE res = 1 ORDER BY uid, date;
+    schema: 
+      - name: uid
+        type: uuid
+      - name: date
+        type: datetime
+      - name: res
+        type: bool
+
+  - type: wait
+    time: 2
+
+  - node: 
+    - p1
+    type: check
+    target_name: fixed-issues4-1
+    expected_result: 
+      - [550e8400-e29b-41d4-a716-446655440000,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440001,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440002,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440003,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440004,2021-03-24 01:04:27,true]
+  
+  - name: fixed-issues4-2
+    node: 
+    - p1
+    type: stream
+    query: 
+      SELECT uid, date,to_date(date) = to_date('2021-03-24') AS res 
+      FROM 
+      stream 
+      WHERE 
+      to_date(date) = to_date('2021-03-24') 
+      ORDER BY 
+      uid, date;
+    schema: 
+      - name: uid
+        type: uuid
+      - name: date
+        type: datetime
+      - name: res
+        type: bool
+
+  - node: 
+    - p1
+    type: check
+    target_name: fixed-issues4-2
+    expected_result: 
+      - [550e8400-e29b-41d4-a716-446655440000,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440001,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440002,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440003,2021-03-24 01:04:27,true]
+      - [550e8400-e29b-41d4-a716-446655440004,2021-03-24 01:04:27,true]

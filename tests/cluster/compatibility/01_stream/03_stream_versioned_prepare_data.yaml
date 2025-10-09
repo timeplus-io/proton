@@ -1,0 +1,57 @@
+tags:
+  - prepare
+  - versioned_kv
+
+description: prepare data for versioned_kv stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists versioned_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream versioned_stream
+      (
+        int8_c int8,
+        int16_c int16,
+        int32_c int32,
+        int64_c int64,
+        int128_c int128,
+        int256_c int256,
+        uint8_c uint8,
+        uint16_c uint16,
+        uint32_c uint32,
+        uint64_c uint64,
+        uint128_c uint128,
+        uint256_c uint256,
+        bool_c bool,
+        decimal_c decimal(9,5),
+        float32_c float32,
+        float64_c float64,
+        date_c date,
+        datetime_c datetime,
+        datetime64_c datetime64(3),
+        string_c string,
+        fixed_c fixed_string(32),
+        array_c array(int),
+        uuid_c uuid,
+        ipv4_c ipv4,
+        ipv6_c ipv6
+      )
+      primary key (int32_c, string_c) settings mode='versioned_kv'
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into versioned_stream (int8_c, int16_c, int32_c, int64_c, int128_c, int256_c, uint8_c, uint16_c, uint32_c, uint64_c, uint128_c, uint256_c, bool_c, decimal_c, float32_c, float64_c, date_c, datetime_c, datetime64_c, string_c, fixed_c, array_c, uuid_c, ipv4_c, ipv6_c) values 
+      (-127, -32767, -2147483647, -9223372036854775807, -170141183460469231731687303715884105727, -7896044618658097711785492504343953926634992332820282019728792003956564819967, 1, 1, 1, 1, 1, 1, false, 1111.11111, 1.11, 1.111111111111, '2024-01-01', '2024-01-01 00:00:00', '2024-01-01 00:00:00.000', 'aaaa', 'HelloWorld11111', [1, 1, 1], '550e8400-e29b-41d4-a716-446655440000', '192.168.1.0', '2001:0db8:85a3:0000:0000:8a2e:0370:7330')
+      (127, 32767, 2147483647, 9223372036854775807, 170141183460469231731687303715884105727, 7896044618658097711785492504343953926634992332820282019728792003956564819967, 255, 65535, 4294967295, 18446744073709551615, 340282366920938463463374607431768211455, 115792089237316195423570985008687907853269984665640564039457584007913129639935, true, 1234.56789, 3.14, 2.718281828459, '2024-01-11', '2024-01-11 12:34:56', '2024-01-11 12:34:56.789', 'bbbb', 'HelloWorld12345', [1, 2, 3], '550e8400-e29b-41d4-a716-446655440009', '192.168.1.9', '2001:0db8:85a3:0000:0000:8a2e:0370:7334');

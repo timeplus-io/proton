@@ -1,0 +1,147 @@
+tags:
+- table_func_changelog
+- multiple_inner_joins
+description: changelog_inner_joins_changelog_inner_joins_changelog_inner_joins
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test28_stream1;
+
+- type: query
+  sql: drop stream if exists test28_stream2;
+
+- type: query
+  sql: drop stream if exists test28_stream3;
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create stream test28_stream1 (i int, k1 string);
+
+- type: query
+  sql: create stream test28_stream2 (j int, k2 string);
+
+- type: query
+  sql: create stream test28_stream3 (k int, k3 string);
+
+- type: wait
+  time: 2
+
+- name: '2814'
+  type: stream
+  query: select c1.i, c1.k1, c2.j, c2.k2, c3.k, c3.k3, _tp_delta from changelog(test28_stream1,
+    k1) as c1 inner join changelog(test28_stream2, k2) as c2 ON c1.i = c2.j inner
+    join changelog(test28_stream3, k3) as c3 ON c1.i = c3.k emit changelog;
+  schema:
+  - name: c1.i
+    type: int32
+  - name: c1.k1
+    type: string
+  - name: c2.j
+    type: int32
+  - name: c2.k2
+    type: string
+  - name: c3.k
+    type: int32
+  - name: c3.k3
+    type: string
+  - name: _tp_delta
+    type: int8
+
+- name: '2814-2'
+  type: stream
+  query: select c1.i, c1.k1, c2.j, c2.k2, c3.k, c3.k3 from changelog(test28_stream1,
+    k1) as c1 inner join changelog(test28_stream2, k2) as c2 ON c1.i = c2.j inner
+    join changelog(test28_stream3, k3) as c3 ON c1.i = c3.k;
+  schema:
+  - name: c1.i
+    type: int32
+  - name: c1.k1
+    type: string
+  - name: c2.j
+    type: int32
+  - name: c2.k2
+    type: string
+  - name: c3.k
+    type: int32
+  - name: c3.k3
+    type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test28_stream1(i, k1) values
+  schema:
+  - name: i
+    type: int32
+  - name: k1
+    type: string
+  inputs:
+  - [1, 'k1']
+
+- type: query
+  sql: insert into test28_stream2(j, k2) values
+  schema:
+  - name: j
+    type: int32
+  - name: k2
+    type: string
+  inputs:
+  - [1, 'k2']
+
+- type: query
+  sql: insert into test28_stream3(k, k3) values
+  schema:
+  - name: k
+    type: int32
+  - name: k3
+    type: string
+  inputs:
+  - [1, 'k3']
+
+- type: query
+  sql: insert into test28_stream1(i, k1) values
+  schema:
+  - name: i
+    type: int32
+  - name: k1
+    type: string
+  inputs:
+  - [2, 'k1']
+
+- type: query
+  sql: insert into test28_stream2(j, k2) values
+  schema:
+  - name: j
+    type: int32
+  - name: k2
+    type: string
+  inputs:
+  - [2, 'k2']
+
+- type: query
+  sql: insert into test28_stream3(k, k3) values
+  schema:
+  - name: k
+    type: int32
+  - name: k3
+    type: string
+  inputs:
+  - [2, 'k3']
+
+- type: check
+  target_name: '2814'
+  expected_result:
+  - [1, k1, 1, k2, 1, k3, 1]
+  - [1, k1, 1, k2, 1, k3, -1]
+  - [2, k1, 2, k2, 2, k3, 1]
+
+- type: check
+  target_name: '2814-2'
+  expected_result:
+  - [1, k1, 1, k2, 1, k3]
+  - [2, k1, 2, k2, 2, k3]

@@ -1,0 +1,88 @@
+tags:
+- table_func_changelog
+description: table func changelog subquery state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream4;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream4 (i int, k string);
+- type: wait
+  time: 1
+
+- name: '19402'
+  type: stream
+  query_id: '19402'
+  query: subscribe to with cte as (select i, k from test19_left_stream4) select i,
+    k, _tp_delta from changelog(cte, k) settings checkpoint_interval=1
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream4(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'k1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19402'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_left_stream4(i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [2, 'k1']
+
+- name: 19402-1
+  type: stream
+  query: recover from '19402'
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19402' sync
+
+- type: query
+  sql: unsubscribe to '19402'
+
+- type: check
+  target_name: '19402'
+  expected_result:
+  - [1, k1, 1]
+
+- type: check
+  target_name: 19402-1
+  expected_result:
+  - [1, k1, -1]
+  - [2, k1, 1]

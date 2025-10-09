@@ -9,21 +9,22 @@ namespace Streaming
 class WindowAggregatingTransformWithSubstream : public AggregatingTransformWithSubstream
 {
 public:
-    WindowAggregatingTransformWithSubstream(Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_);
+    WindowAggregatingTransformWithSubstream(
+        Block header, AggregatingTransformParamsPtr params_, size_t id, const String & log_name, ProcessorID pid_);
 
     ~WindowAggregatingTransformWithSubstream() override = default;
 
 protected:
-    void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
+    void finalize(const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 
-    void clearExpiredState(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx) override;
+    void clearExpiredState(Int64 finalized_watermark, const SubstreamAggregatedDataPtr & substream_ctx) override;
 
 private:
-    inline void doFinalize(Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
+    inline void doFinalize(Int64 watermark, const SubstreamAggregatedDataPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
 
-    virtual WindowsWithBuckets getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const = 0;
-    virtual Window getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const = 0;
-    virtual void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) = 0;
+    virtual WindowsWithBuckets getWindowsWithBuckets(const SubstreamAggregatedDataPtr & substream_ctx) const = 0;
+    virtual Window getLastFinalizedWindow(const SubstreamAggregatedDataPtr & substream_ctx) const = 0;
+    virtual void removeBucketsImpl(Int64 watermark, const SubstreamAggregatedDataPtr & substream_ctx) = 0;
     virtual bool needReassignWindow() const = 0;
 
     std::optional<size_t> window_start_col_pos;

@@ -1,0 +1,22 @@
+tags:
+- stream_join_stream
+- cluster_table_bug
+description: range join are not supported in non-stream-to-stream join scenarios yet
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: 1032-1
+  type: stream
+  query: select s, ss from test10_left_stream1 join table(test10_right_stream1) as
+    test10_right_stream1 on i=ii and date_diff('second', ts, tts) between -10 and 10
+  schema:
+    - name: s
+      type: string
+    - name: ss
+      type: string
+
+- type: check
+  target_name: 1032-1
+  expected_result:
+  - [error_code:48]

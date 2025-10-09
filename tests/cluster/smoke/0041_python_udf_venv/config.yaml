@@ -1,0 +1,9 @@
+name: python_udf_venv
+description: Tests covering the python_udf venv scenario
+tags:
+  - smoke
+  - python_udf
+  - venv
+
+arch:
+  - x86_64

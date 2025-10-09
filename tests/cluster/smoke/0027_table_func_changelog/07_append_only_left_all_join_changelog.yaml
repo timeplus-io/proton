@@ -1,0 +1,99 @@
+tags:
+- table_func_changelog
+- left-join
+description: append-only left all join changelog(t2)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test28_left_stream;
+
+- type: query
+  sql: drop stream if exists test28_right_stream;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test28_left_stream (i int, k string);
+
+- type: query
+  sql: create stream test28_right_stream (j int, kk string);
+
+- type: wait
+  time: 2
+
+- name: '2807'
+  type: stream
+  query: select i, k, j, kk from test28_left_stream as a left join changelog(test28_right_stream,
+    kk) as b on a.i == b.j;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test28_right_stream (j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [1, 'kk1']
+
+- type: query
+  sql: insert into test28_left_stream (i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'k1']
+
+- type: query
+  sql: insert into test28_right_stream (j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [2, 'kk1']
+
+- type: query
+  sql: insert into test28_left_stream (i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [2, 'k1']
+
+- type: query
+  sql: insert into test28_left_stream (i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [3, 'k2']
+
+- type: check
+  target_name: '2807'
+  expected_result:
+  - [1, k1, 1, kk1]
+  - [2, k1, 2, kk1]
+  - [3, k2, 0, '']

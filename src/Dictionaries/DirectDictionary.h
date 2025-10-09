@@ -10,6 +10,11 @@
 #include <Dictionaries/DictionaryHelpers.h>
 
 
+namespace Poco
+{
+class Logger;
+}
+
 namespace DB
 {
 
@@ -34,14 +39,14 @@ public:
 
     size_t getBytesAllocated() const override { return 0; }
 
-    size_t getQueryCount() const override { return query_count.load(std::memory_order_relaxed); }
+    size_t getQueryCount() const override { return query_count.load(); }
 
     double getFoundRate() const override
     {
-        size_t queries = query_count.load(std::memory_order_relaxed);
+        size_t queries = query_count.load();
         if (!queries)
             return 0;
-        return static_cast<double>(found_count.load(std::memory_order_relaxed)) / queries;
+        return std::min(1.0, static_cast<double>(found_count.load()) / queries);
     }
 
     double getHitRate() const override { return 1.0; }
@@ -50,7 +55,7 @@ public:
 
     double getLoadFactor() const override { return 0; }
 
-    std::shared_ptr<const IExternalLoadable> clone() const override
+    std::shared_ptr<IExternalLoadable> clone() const override
     {
         return std::make_shared<DirectDictionary>(getDictionaryID(), dict_struct, source_ptr->clone());
     }
@@ -69,20 +74,20 @@ public:
     DictionaryKeyType getKeyType() const override { return dictionary_key_type; }
 
     Columns getColumns(
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        const std::vector<size_t> & key_index_map,
         const Strings & attribute_names,
-        const DataTypes & result_types,
-        const Columns & key_columns,
-        const DataTypes & key_types,
-        const Columns & default_values_columns) const override;
+        const DataTypes & attribute_types,
+        DefaultsOrFilter defaults_or_filter) const override;
 
     ColumnPtr getColumn(
-        const std::string& attribute_name,
-        const DataTypePtr & result_type,
-        const Columns & key_columns,
-        const DataTypes & key_types,
-        const ColumnPtr & default_values_column) const override;
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        const std::vector<size_t> & key_index_map,
+        const std::string & attribute_name,
+        const DataTypePtr & attribute_type,
+        DefaultOrFilter default_or_filter) const override;
 
-    ColumnUInt8::Ptr hasKeys(const Columns & key_columns, const DataTypes & key_types) const override;
+    ColumnUInt8::Ptr hasKeys(const ColumnsWithTypeAndName & key_columns_with_types, const std::vector<size_t> & key_index_map) const override;
 
     bool hasHierarchy() const override { return dict_struct.hierarchical_attribute_index.has_value(); }
 
@@ -95,15 +100,32 @@ public:
 
     Pipe read(const Names & column_names, size_t max_block_size, size_t num_streams) const override;
 
+    void applySettings(const Settings & settings);
+
+    /// proton: starts
+    bool supportMultipleValuesPerKey() const override { return true; }
+
+    Chunk getAllByKeys(
+        const ColumnsWithTypeAndName & key_columns_with_types,
+        PaddedPODArray<size_t> & out_values,
+        const Names & required_columns,
+        const std::vector<size_t> & key_index_map,
+        bool add_defaults_if_missing) const override;
+    /// proton: ends
+
 private:
-    Pipe getSourceBlockInputStream(const Columns & key_columns, const PaddedPODArray<KeyType> & requested_keys) const;
+    Pipe getSourcePipe(const Columns & key_columns, const PaddedPODArray<KeyType> & requested_keys) const;
 
     const DictionaryStructure dict_struct;
     const DictionarySourcePtr source_ptr;
     const DictionaryLifetime dict_lifetime;
 
+    bool use_async_executor = false;
+
     mutable std::atomic<size_t> query_count{0};
     mutable std::atomic<size_t> found_count{0};
+
+    LoggerPtr logger;
 };
 
 extern template class DirectDictionary<DictionaryKeyType::Simple>;

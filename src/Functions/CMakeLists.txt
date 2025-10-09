@@ -3,8 +3,30 @@ add_subdirectory(divide)
 include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 add_headers_and_sources(clickhouse_functions .)
 
-list(REMOVE_ITEM clickhouse_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp extractTimeZoneFromFunctionArguments.cpp FunctionsLogical.cpp)
-list(REMOVE_ITEM clickhouse_functions_headers IFunction.h FunctionFactory.h FunctionHelpers.h extractTimeZoneFromFunctionArguments.h FunctionsLogical.h)
+# These files are moved from clickhouse_functions into dbms to make dbms self-contained (not depend on clickhouse_functions)
+# This allows less dependency and linker work (specially important when building many example executables)
+set(DBMS_FUNCTIONS
+    IFunction.cpp # IFunctionOverloadResolver::getLambdaArgumentTypes, IExecutableFunction::execute... (Many AST visitors, analyzer passes, some storages...)
+    FunctionDynamicAdaptor.cpp # IFunctionOverloadResolver::getLambdaArgumentTypes, IExecutableFunction::execute... (Many AST visitors, analyzer passes, some storages...)
+    FunctionFactory.cpp # FunctionFactory::instance() (Many AST visitors, analyzer passes, some storages...)
+    FunctionHelpers.cpp # convertConstTupleToConstantElements, checkAndGetColumnConstStringOrFixedString, checkAndGetNestedArrayOffset ...)
+    FunctionsLogical.cpp # createInternalFunctionAndOverloadResolve / createInternalFunctionOrOverloadResolver ... (Multiple)
+    if.cpp # createInternalFunctionIfOverloadResolver (Used by MultiIfToIfPass.cpp)
+    multiIf.cpp # createInternalMultiIfOverloadResolver (Used by IfChainToMultiIfPass.cpp)
+    multiMatchAny.cpp # createInternalMultiMatchAnyOverloadResolver (Used by ConvertOrLikeChainPass.cpp)
+    checkHyperscanRegexp.cpp # checkHyperscanRegexp (Used by MultiMatchAnyImpl.h, multiMatchAny.cpp)
+    CastOverloadResolver.cpp # createInternalCast (Used by WindowTransform.cpp, KeyCondition.cpp...)
+    FunctionsConversion.cpp # createFunctionBaseCast (Used by CastOverloadResolver.cpp)
+    extractTimeZoneFromFunctionArguments.cpp # extractTimeZoneFromFunctionArguments (DateTimeTransforms.h, FunctionsConversion.cpp)
+)
+extract_into_parent_list(clickhouse_functions_headers dbms_headers
+    IFunction.h
+    FunctionFactory.h
+    FunctionHelpers.h
+    extractTimeZoneFromFunctionArguments.h
+    FunctionsLogical.h
+    CastOverloadResolver.h
+)
 
 # Enable / disable functions
 if (NOT ENABLE_BITMAP_FUNCS)
@@ -268,7 +290,7 @@ if (NOT ENABLE_DEBUG_FUNCS)
     message(STATUS "Debug functions are disabled")
 endif()
 
-add_library(clickhouse_functions_obj OBJECT ${clickhouse_functions_sources})
+add_library(clickhouse_functions_obj OBJECT ${clickhouse_functions_headers} ${clickhouse_functions_sources})
 
 list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_obj>)
 

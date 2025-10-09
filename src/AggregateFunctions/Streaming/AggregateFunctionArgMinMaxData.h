@@ -34,13 +34,17 @@ constexpr bool isFixedType()
 
 /// We have a combination explosion here : 20 ResType * 20 ValType * 2  = 800 class instantiations
 /// For possible values for template parameters, see AggregateFunctionMinMaxAny.h
-template <typename ResType, typename ValType, bool maximum>
+template <typename ResType_, typename ValType_, bool maximum_>
 struct AggregateFunctionArgMinMaxData
 {
 private:
-    CountedArgValueMap<ValType, ResType, maximum> values;
+    CountedArgValueMap<ValType_, ResType_, maximum_> values;
 
 public:
+    static constexpr bool maximum = maximum_;
+    using ResType = ResType_;
+    using ValType = ValType_;
+
     static bool allocatesMemoryInArena() { return false; }
 
     static const char * name()

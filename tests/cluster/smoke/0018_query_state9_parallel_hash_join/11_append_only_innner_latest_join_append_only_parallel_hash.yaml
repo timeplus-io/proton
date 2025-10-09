@@ -1,0 +1,98 @@
+tags:
+- query_state
+- stream_join_stream
+- to_support
+- bug # skip for to_support
+description: append-only innner latest join append-only parallel_hash state checkpoint
+cluster:
+- p1k1
+#  # unsupport subscribe to
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream2
+- type: query
+  sql: drop stream if exists test19_right_stream2
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream2 (i int, s string, ts datetime)
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime)
+- type: wait
+  time: 1
+
+- name: '19233'
+  type: stream
+  query_id: '19233'
+  query: subscribe to select s, ss, _tp_delta from test19_left_stream2 inner latest join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1
+  schema:
+  - name: s
+    type: string
+  - name: ss
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream2(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_right_stream2(ii, ss) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  inputs:
+  - [1, 's1']
+
+- type: query
+  sql: insert into test19_right_stream2(ii, ss) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  inputs:
+  - [1, 's2']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream2(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's3']
+- type: wait
+  time: 1
+
+- type: query
+  sql: unsubscribe to '19233'
+
+- type: check
+  target_name: '19233'
+  expected_result:
+  - [s, s1, 1]
+  - [s, s1, -1]
+  - [s, s2, 1]
+  - [s, s2, -1]
+  - [s3, s2, 1]

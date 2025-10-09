@@ -1,0 +1,55 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (df float, size int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_random_standard_t(df float, size int) RETURNS float LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      def test_random_standard_t(df, size):
+          res = []
+          for i in range(len(df)):
+              if df[i] > 0:
+                  s = np.random.standard_t(df[i], size[i])
+                  check = np.median(s)
+                  res.append(float(check))
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-21-1
+    type: stream
+    query: select test_random_standard_t(df, size) as res, df, size from udf_stream;
+    schema:
+      - name: res
+        type: float32
+      - name: df
+        type: float32
+      - name: size
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(df, size) values (10, 3)(30, 5);
+
+  - type: check
+    target_name: python-udf2-21-1
+    expected_result:
+      - [any_value, 10, 3]
+      - [any_value, 30, 5]

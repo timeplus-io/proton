@@ -1,0 +1,110 @@
+tags:
+  - materizlized view
+
+description: |
+  Test external table with secure that config custom SSL security certificate
+  Main steps:
+    1.Create table in Clickhouse
+    2.Ingest data into Clickhouse table
+    3.Create external table with type=clickhouse, secure=true, ssl_ca_cert_file specified
+    4.Create append-only stream
+    5.Create materizlized view from append-only stream into external table 
+    6.Ingest data into external table
+    7.Ingest data into append-only stream
+    8.Query external stream and verify data from Clickhouse table, external table, append-only stream
+
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "DROP TABLE IF EXISTS ch_sink_table;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "CREATE TABLE ch_sink_table (ts Datetime64(3), c Int, j String, event_ts Datetime64(3), inserted_at Datetime64(3) default now64(3)) PRIMARY KEY ts;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_clickhouse clickhouse client -q "INSERT INTO ch_sink_table (ts, c, j) VALUES ('2024-01-01 00:00:01.000', 1, 'a1');"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE sink_ch_ext
+      SETTINGS type = 'clickhouse', address = 'clickhouse:9440', 
+      database = 'default', table = 'ch_sink_table', 
+      secure='true', ssl_ca_cert_file = '/etc/proton-server/certs/ca.crt', 
+      user = 'chusr', password = 'chpwd';
+
+  - type: query
+    sql: |
+      CREATE STREAM source
+      (
+        ts datetime64(3),
+        c int32,
+        j string
+      );
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW ch_gen_mv INTO sink_ch_ext
+      (
+        ts datetime64(3),
+        c int32,
+        j string,
+        event_ts datetime64(3)
+      ) AS
+      SELECT
+        ts, c AS c, j, _tp_time AS event_ts
+      FROM
+        source;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO sink_ch_ext(ts, c, j) VALUES
+      ('2024-01-02 00:00:02.000', 2, 'b2')
+      ('2024-01-03 00:00:03.000', 3, 'b3');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      INSERT INTO source(ts, c, j) VALUES
+      ('2024-01-04 00:00:04.000', 4, 'c4')
+      ('2024-01-05 00:00:05.000', 5, 'c5');
+
+  - type: wait
+    time: 2
+
+  - name: extch-2-1
+    type: stream
+    query: SELECT ts, c, j FROM sink_ch_ext;
+    schema:
+      - name: ts
+        type: datetime64(3)
+      - name: c
+        type: int32
+      - name: j
+        type: string
+  
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: extch-2-1
+    mode: random
+    expected_result:
+      - ['2024-01-01 00:00:01.000', 1, 'a1']
+      - ['2024-01-02 00:00:02.000', 2, 'b2']
+      - ['2024-01-03 00:00:03.000', 3, 'b3']
+      - ['2024-01-04 00:00:04.000', 4, 'c4']
+      - ['2024-01-05 00:00:05.000', 5, 'c5']

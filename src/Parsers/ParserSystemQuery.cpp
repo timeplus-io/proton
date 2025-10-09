@@ -6,8 +6,55 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/parseDatabaseAndTableName.h>
 
+/// proton: starts
+#include <Common/LogLevels.h>
+/// proton: ends
+
 #include <magic_enum.hpp>
-#include <base/EnumReflection.h>
+
+#include <unordered_set>
+
+/// proton: starts.
+namespace
+{
+const std::unordered_set<std::string_view> ENABLED_COMMANDS{
+    /// Clickhouse old command
+    "STOP_MERGES",
+    "START_MERGES",
+    "STOP_TTL_MERGES",
+    "START_TTL_MERGES",
+    "FLUSH_LOGS",
+    "DROP_MMAP_CACHE",
+    "DROP_COMPILED_EXPRESSION_CACHE",
+
+    /// For stream recovery
+    "PAUSE_STREAM",
+    "RECOVER_STREAM",
+    "RESUME_STREAM",
+
+    /// For materialized view recovery
+    "PAUSE_MATERIALIZED_VIEW",
+    "RESUME_MATERIALIZED_VIEW",
+    "ABORT_MATERIALIZED_VIEW",
+    "RECOVER_MATERIALIZED_VIEW",
+
+    "RELOAD_DICTIONARY",
+
+    "DROP_FORMAT_SCHEMA_CACHE",
+
+    "SET_LOG_LEVEL",
+
+    "SHOW_LOGGERS",
+
+    "PAUSE_TASK",
+    "RESUME_TASK",
+
+    "INSTALL_PYTHON_PACKAGE",
+    "UNINSTALL_PYTHON_PACKAGE",
+    "LIST_PYTHON_PACKAGES",
+};
+}
+/// proton: ends.
 
 namespace ErrorCodes
 {
@@ -24,14 +71,17 @@ static bool parseQueryWithOnClusterAndMaybeTable(std::shared_ptr<ASTSystemQuery>
     /// Query rewritten form + form while executing on cluster: SYSTEM <ACTION> ON CLUSTER cluster table
     /// Need to support both
     String cluster;
-    bool parsed_on_cluster = false;
 
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster, expected))
-            return false;
-        parsed_on_cluster = true;
-    }
+    /// proton: starts
+    /// we don't need to parse ON CLUSTER
+    /// bool parsed_on_cluster = false;
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster, expected))
+    ///         return false;
+    ///     parsed_on_cluster = true;
+    /// }
+    /// proton: ends
 
     bool parsed_table = false;
     if (allow_string_literal)
@@ -50,9 +100,12 @@ static bool parseQueryWithOnClusterAndMaybeTable(std::shared_ptr<ASTSystemQuery>
     if (!parsed_table && require_table)
         return false;
 
-    if (!parsed_on_cluster && ParserKeyword{"ON"}.ignore(pos, expected))
-        if (!ASTQueryWithOnCluster::parse(pos, cluster, expected))
-            return false;
+    /// proton: starts
+    /// we don't need to parse ON CLUSTER
+    /// if (!parsed_on_cluster && ParserKeyword{"ON"}.ignore(pos, expected))
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster, expected))
+    ///         return false;
+    /// proton: ends
 
     res->cluster = cluster;
 
@@ -64,18 +117,22 @@ static bool parseQueryWithOnClusterAndMaybeTable(std::shared_ptr<ASTSystemQuery>
     return true;
 }
 
-static bool parseQueryWithOnCluster(std::shared_ptr<ASTSystemQuery> & res, IParser::Pos & pos,
-                                    Expected & expected)
+static bool parseQueryWithOnCluster(std::shared_ptr<ASTSystemQuery> & res [[maybe_unused]], IParser::Pos & pos [[maybe_unused]],
+                                    [[maybe_unused]] Expected & expected)
 {
-    String cluster_str;
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
-    {
-        if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
-            return false;
-    }
-    res->cluster = cluster_str;
+    /// proton: starts
+    /// we don't need to parse ON CLUSTER
+    return false;
+    /// String cluster_str;
+    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// {
+    ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
+    ///         return false;
+    /// }
+    /// res->cluster = cluster_str;
 
-    return true;
+    /// return true;
+    /// proton: ends
 }
 
 bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
@@ -99,8 +156,22 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         }
     }
 
+    /// proton: starts. Support unpause as alias for resume
     if (!found)
+    {
+        if (ParserKeyword{"UNPAUSE STREAM"}.ignore(pos, expected))
+            res->type = Type::RESUME_STREAM;
+        else if (ParserKeyword{"UNPAUSE MATERIALIZED VIEW"}.ignore(pos, expected))
+            res->type = Type::RESUME_MATERIALIZED_VIEW;
+        else if (ParserKeyword{"UNPAUSE TASK"}.ignore(pos, expected))
+            res->type = Type::RESUME_TASK;
+        else
+            return false;
+    }
+
+    if (!ENABLED_COMMANDS.contains(magic_enum::enum_name(res->type)))
         return false;
+    /// proton: ends.
 
     switch (res->type)
     {
@@ -158,30 +229,6 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
             break;
         }
-        /// proton: starts
-        case Type::REPLACE_REPLICA:
-        {
-            parseQueryWithOnCluster(res, pos, expected);
-
-            ASTPtr ast;
-            if (!ParserStringLiteral{}.parse(pos, ast, expected))
-                return false;
-            res->replica = ast->as<ASTLiteral &>().value.safeGet<String>();
-            if (!ParserKeyword{"FOR"}.ignore(pos, expected))
-                return false;
-
-            ASTPtr old_ast;
-            if (!ParserStringLiteral{}.parse(pos, old_ast, expected))
-                return false;
-            res->old_replica = old_ast->as<ASTLiteral &>().value.safeGet<String>();
-            res->is_drop_whole_replica = true;
-            break;
-        }
-        case Type::STOP_MAINTAIN:
-        case Type::START_MAINTAIN:
-        case Type::ADD_REPLICA:
-        case Type::RESTART_REPLICA:
-        /// proton: ends
         case Type::DROP_REPLICA:
         {
             parseQueryWithOnCluster(res, pos, expected);
@@ -204,17 +251,6 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 else if (ParserKeyword{"TABLE"}.ignore(pos, expected))
                 {
                     parseDatabaseAndTableAsAST(pos, expected, res->database, res->table);
-                    /// proton: starts
-                    /// support 'SYSTEM ADD REPLICA FROM TABLE <table> SHARD <shard>
-                    if(ParserKeyword("SHARD").ignore(pos, expected))
-                    {
-                        ASTPtr shard_ast;
-                        if (!ParserLiteral{}.parse(pos, shard_ast, expected))
-                            return false;
-
-                        res->shard = shard_ast->as<ASTLiteral &>().value.safeGet<UInt64>();
-                    }
-                    /// proton: ends
                 }
                 else if (ParserKeyword{"ZKPATH"}.ignore(pos, expected))
                 {
@@ -234,17 +270,16 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
             break;
         }
-        /// proton: starts
-        /// case Type::RESTART_REPLICA:
-        /// proton: ends
+
+        case Type::RESTART_REPLICA:
         case Type::SYNC_REPLICA:
+        case Type::WAIT_LOADING_PARTS:
         {
             parseQueryWithOnCluster(res, pos, expected);
             if (!parseDatabaseAndTableAsAST(pos, expected, res->database, res->table))
                 return false;
             break;
         }
-
         case Type::RESTART_DISK:
         {
             parseQueryWithOnCluster(res, pos, expected);
@@ -257,7 +292,6 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
             break;
         }
-
         /// FLUSH DISTRIBUTED requires table
         /// START/STOP DISTRIBUTED SENDS does not require table
         case Type::STOP_DISTRIBUTED_SENDS:
@@ -357,7 +391,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             ParserLiteral path_parser;
             ASTPtr ast;
             if (path_parser.parse(pos, ast, expected))
-                res->filesystem_cache_path = ast->as<ASTLiteral>()->value.safeGet<String>();
+                res->filesystem_cache_name = ast->as<ASTLiteral>()->value.safeGet<String>();
             break;
         }
         case Type::DROP_SCHEMA_CACHE:
@@ -377,7 +411,139 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             }
             break;
         }
+        case Type::DROP_FORMAT_SCHEMA_CACHE:
+        {
+                if (ParserKeyword{"FOR"}.ignore(pos, expected))
+                {
+                    if (ParserKeyword{"Protobuf"}.ignore(pos, expected))
+                        res->schema_cache_format = "Protobuf";
+                    else
+                        return false;
+                }
+                break;
+        }
+        /// proton : starts
+        case Type::PAUSE_STREAM:
+            [[fallthrough]];
+        case Type::RESUME_STREAM:
+            [[fallthrough]];
+        case Type::RECOVER_STREAM:
+        {
+            /// SYSTEM RECOVER STREAM database.stream shard_id
+            if (!parseDatabaseAndTableAsAST(pos, expected, res->database, res->table))
+                return false;
 
+            ASTPtr shard_ast;
+            if (!ParserLiteral{}.parse(pos, shard_ast, expected))
+                return false;
+
+            res->shard = static_cast<UInt32>(shard_ast->as<ASTLiteral &>().value.safeGet<UInt32>());
+            break;
+        }
+        case Type::PAUSE_MATERIALIZED_VIEW:
+            [[fallthrough]];
+        case Type::RESUME_MATERIALIZED_VIEW:
+            [[fallthrough]];
+        case Type::ABORT_MATERIALIZED_VIEW:
+            [[fallthrough]];
+        case Type::RECOVER_MATERIALIZED_VIEW:
+        {
+            /// SYSTEM PAUSE|RESUME|ABORT|RECOVER MATERIALIZED VIEW database.mv [LOCAL]
+            if (!parseDatabaseAndTableAsAST(pos, expected, res->database, res->table))
+                return false;
+
+            if (ParserKeyword{"PERMANENT"}.ignore(pos, expected))
+                res->is_permanent = true;
+            break;
+        }
+        case Type::SET_LOG_LEVEL:
+        {
+            /// SYSTEM SET LOG LEVEL '<log_level>' [FOR '<logger_name>']
+            /// SYSTEM SET LOG LEVEL <log_level> [FOR '<logger_name>']
+            ASTPtr level_ast;
+
+            if (!ParserStringLiteral{}.parse(pos, level_ast, expected))
+            {
+                if (!ParserIdentifier{}.parse(pos, level_ast, expected))
+                    return false;
+
+                String identifier_name;
+                tryGetIdentifierNameInto(level_ast, identifier_name);
+                res->log_level = identifier_name;
+            }
+            else
+            {
+                res->log_level = level_ast->as<ASTLiteral &>().value.safeGet<String>();
+            }
+
+            String lower_level = res->log_level;
+            std::transform(lower_level.begin(), lower_level.end(), lower_level.begin(), [](unsigned char c) { return std::tolower(c); });
+
+            if (!getValidLogLevels().contains(lower_level))
+            {
+                expected.add(pos, "valid log level (none, fatal, critical, error, warning, notice, information, debug, trace, test)");
+                return false;
+            }
+
+            res->log_level = lower_level;
+
+            if (ParserKeyword{"FOR"}.ignore(pos, expected))
+            {
+                ASTPtr logger_ast;
+                if (!ParserStringLiteral{}.parse(pos, logger_ast, expected))
+                    return false;
+
+                res->logger_name = logger_ast->as<ASTLiteral &>().value.safeGet<String>();
+            }
+            break;
+        }
+        case Type::SHOW_LOGGERS:
+        {
+            /// SYSTEM SHOW LOGGERS
+            break;
+        }
+        case Type::PAUSE_TASK:
+            [[fallthrough]];
+        case Type::RESUME_TASK:
+        {
+            /// SYSTEM PAUSE/RESUME TASK ns.task_name
+            if (!parseDatabaseAndTableAsAST(pos, expected, res->database, res->table))
+                return false;
+            break;
+        }
+        case Type::INSTALL_PYTHON_PACKAGE:
+        {
+            /// SYSTEM INSTALL PYTHON PACKAGE 'package_name' ['version']
+            ASTPtr package_ast;
+            if (!ParserStringLiteral{}.parse(pos, package_ast, expected))
+                return false;
+
+            res->python_package_name = package_ast->as<ASTLiteral &>().value.safeGet<String>();
+
+            /// Optional version parameter
+            ASTPtr version_ast;
+            if (ParserStringLiteral{}.parse(pos, version_ast, expected))
+            {
+                res->python_package_version = version_ast->as<ASTLiteral &>().value.safeGet<String>();
+            }
+            break;
+        }
+        case Type::UNINSTALL_PYTHON_PACKAGE:
+        {
+            /// SYSTEM UNINSTALL PYTHON PACKAGE 'package_name'
+            ASTPtr package_ast;
+            if (!ParserStringLiteral{}.parse(pos, package_ast, expected))
+                return false;
+
+            res->python_package_name = package_ast->as<ASTLiteral &>().value.safeGet<String>();
+            break;
+        }
+        case Type::LIST_PYTHON_PACKAGES:
+        {
+            /// SYSTEM LIST PYTHON PACKAGES
+            break;
+        }
+        /// proton : ends
         default:
         {
             parseQueryWithOnCluster(res, pos, expected);

@@ -1,6 +1,8 @@
 #include <Storages/ExternalStream/Kafka/KafkaSink.h>
 
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnDecimal.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Kafka/mapErrorCode.h>
@@ -15,7 +17,11 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+#include <rdkafka.h>
+
 #include <numeric>
+#include <unordered_map>
+
 
 namespace DB
 {
@@ -25,6 +31,7 @@ namespace ErrorCodes
 extern const int CANNOT_WRITE_TO_KAFKA;
 extern const int INVALID_SETTING_VALUE;
 extern const int KAFKA_PRODUCER_STOPPED;
+extern const int TIMEOUT_EXCEEDED;
 extern const int TYPE_MISMATCH;
 }
 
@@ -37,10 +44,86 @@ ExpressionActionsPtr buildExpression(const Block & header, const ASTPtr & expr_a
     auto syntax_result = TreeRewriter(context).analyze(const_cast<ASTPtr &>(expr_ast), header.getNamesAndTypesList());
     return ExpressionAnalyzer(expr_ast, syntax_result, context).getActions(false);
 }
+
+template <typename T>
+StringRef getKeyBigEndian(const IColumn & column, size_t row, String & key_holder)
+{
+    const auto value = assert_cast<const T &>(column).getElement(row);
+    WriteBufferFromString wb(key_holder);
+    writeBinaryBigEndian(value, wb);
+    wb.finalize();
+    return StringRef{key_holder.data(), key_holder.size()};
+}
+
+StringRef getKey(const IColumn & column, size_t row, String & key_holder)
+{
+    if (column.isNullable())
+    {
+        const auto & col = assert_cast<const ColumnNullable &>(column);
+        if (col.isNullAt(row))
+            return "";
+        return getKey(col.getNestedColumn(), row, key_holder);
+    }
+
+    switch (column.getDataType())
+    {
+        case TypeIndex::Bool:
+            return getKeyBigEndian<ColumnUInt8>(column, row, key_holder);
+        case TypeIndex::UInt8:
+            return getKeyBigEndian<ColumnUInt8>(column, row, key_holder);
+        case TypeIndex::UInt16:
+            return getKeyBigEndian<ColumnUInt16>(column, row, key_holder);
+        case TypeIndex::UInt32:
+            return getKeyBigEndian<ColumnUInt32>(column, row, key_holder);
+        case TypeIndex::UInt64:
+            return getKeyBigEndian<ColumnUInt64>(column, row, key_holder);
+        case TypeIndex::Int8:
+            return getKeyBigEndian<ColumnInt8>(column, row, key_holder);
+        case TypeIndex::Int16:
+            return getKeyBigEndian<ColumnInt16>(column, row, key_holder);
+        case TypeIndex::Int32:
+            return getKeyBigEndian<ColumnInt32>(column, row, key_holder);
+        case TypeIndex::Int64:
+            return getKeyBigEndian<ColumnInt64>(column, row, key_holder);
+        case TypeIndex::Float32:
+            return getKeyBigEndian<ColumnFloat32>(column, row, key_holder);
+        case TypeIndex::Float64:
+            return getKeyBigEndian<ColumnFloat64>(column, row, key_holder);
+        /// Other types are written as in memory order.
+        case TypeIndex::String:
+            [[fallthrough]];
+        case TypeIndex::FixedString:
+            [[fallthrough]];
+        default:
+            return column.getDataAt(row);
+    }
+}
+
+std::unordered_map<String, String> getHeaders(const IColumn & column, size_t row)
+{
+    const auto & column_map = assert_cast<const ColumnMap &>(column);
+    const auto & column_array = column_map.getNestedColumn();
+    const auto & offsets = column_array.getOffsets();
+    size_t offset = offsets[row - 1];
+    size_t next_offset = offsets[row];
+    size_t row_count = next_offset - offset;
+    const auto & nested_columns = column_map.getNestedData();
+    const auto & keys_column = nested_columns.getColumn(0);
+    const auto & values_column = nested_columns.getColumn(1);
+
+    std::unordered_map<String, String> headers;
+    headers.reserve(row_count);
+    for (size_t i = offset; i < next_offset; ++i)
+        headers.emplace(keys_column.getDataAt(i), values_column.getDataAt(i));
+    return headers;
+}
+
 }
 
 namespace ExternalStream
 {
+using DB::Kafka::ProducerPtr;
+
 
 ChunkSharder::ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name)
     : sharding_expr(sharding_expr_), sharding_key_column_name(column_name)
@@ -61,7 +144,7 @@ BlocksWithShard ChunkSharder::shard(Block block, UInt32 shard_cnt)
         return {BlockWithShard{Block(std::move(block)), 0}};
 
     if (random_sharding)
-        return {BlockWithShard{Block(std::move(block)), static_cast<int32_t>(getNextShardIndex(shard_cnt))}};
+        return {BlockWithShard{Block(std::move(block)), getNextShardIndex(shard_cnt)}};
 
     return doSharding(std::move(block), shard_cnt);
 }
@@ -129,85 +212,60 @@ IColumn::Selector ChunkSharder::createSelector(Block block, UInt32 shard_cnt) co
 KafkaSink::KafkaSink(
     Kafka & kafka,
     const Block & header,
-    const ASTPtr & message_key_ast,
-    const DB::Kafka::ProducerPtr & producer_,
+    ProducerPtr producer_,
+    UInt64 connection_timeout_ms_,
+    bool refresh_topic_partitions,
     ExternalStreamCounterPtr external_stream_counter_,
-    Poco::Logger * logger_,
+    LoggerPtr logger_,
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
-    , producer(producer_)
-    , partition_cnt(producer->getPartitionCount())
+    , producer(std::move(producer_))
+    , connection_timeout_ms(connection_timeout_ms_)
+    , checkpoint_timeout_ms(context->getSettingsRef().insert_timeout_ms)
+    , partition_cnt(producer->getPartitionCount(connection_timeout_ms))
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
-    , pending_data(context->getSettingsRef().kafka_max_message_size.value)
-    , external_stream_counter(external_stream_counter_)
-    , logger(logger_)
+    , external_stream_counter(std::move(external_stream_counter_))
+    , logger(std::move(logger_))
 {
-    pending_data.resize(0); /// no pending data at the beginning
-
-    /// If the buffer_size (kafka_max_message_size) is reached, the buffer will be forced to flush.
-    wb = std::make_unique<WriteBufferFromKafkaSink>(
-        [this](char * pos, size_t len, size_t total_len) { addMessageToBatch(pos, len, total_len); },
-        [this]() { tryCarryOverPendingData(); },
-        /*buffer_size=*/context->getSettingsRef().kafka_max_message_size.value);
-
     const auto & data_format = kafka.dataFormat();
     assert(!data_format.empty());
 
     Block output_header = header;
+
     /// `_tp_message_key` should not be part of the message payload.
     if (auto pos = output_header.tryGetPositionByName(ProtonConsts::RESERVED_MESSAGE_KEY); pos)
     {
-        assert(!message_key_ast);
-
-        message_key_column_name = ProtonConsts::RESERVED_MESSAGE_KEY;
+        msg_key_column_pos = pos;
         output_header.erase(*pos);
     }
 
-    if (message_key_ast)
+    /// Do not put `_tp_time` in the message payload.
+    if (auto pos = output_header.tryGetPositionByName(ProtonConsts::RESERVED_EVENT_TIME); pos)
     {
-        message_key_expr = buildExpression(header, message_key_ast, context);
-        const auto & sample_block = message_key_expr->getSampleBlock();
-        /// The last column is the key column, the others are required columns (to be used to calculate the key value).
-        message_key_column_name = sample_block.getColumnsWithTypeAndName().back().name;
+        ts_column_pos = pos;
+        output_header.erase(*pos);
     }
 
+    /// Do not put `_tp_message_headers` in the message payload.
+    if (auto pos = output_header.tryGetPositionByName(ProtonConsts::RESERVED_MESSAGE_HEADERS); pos)
+    {
+        headers_column_pos = pos;
+        output_header.erase(*pos);
+    }
+
+    auto max_rows_per_message = context->getSettingsRef().max_insert_block_size.value;
     if (one_message_per_row)
-    {
-        /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
-        writer = FormatFactory::instance().getOutputFormat(
-            data_format,
-            *wb,
-            output_header,
-            context,
-            [this](auto & /*column*/, auto /*row*/) {
-                wb->markOffset();
-                wb->next();
-            },
-            kafka.getFormatSettings(context));
-        if (dynamic_cast<IRowOutputFormat *>(writer.get()) == nullptr)
-            LOG_WARNING(
-                logger, "Data format `{}` is not a row-based format, `one_message_per_row` setting will not be applied", data_format);
-    }
-    else
-    {
-        auto max_rows_per_message = context->getSettingsRef().max_insert_block_size.value;
-        writer = FormatFactory::instance().getOutputFormat(
-            data_format,
-            *wb,
-            output_header,
-            context,
-            [this, max_rows_per_message](auto & /*column*/, auto /*row*/) {
-                wb->markOffset();
-                if (++rows_in_current_message >= max_rows_per_message)
-                {
-                    external_stream_counter->addToMessagesByRow(1);
-                    wb->next();
-                }
-            },
-            kafka.getFormatSettings(context));
-    }
-    writer->setAutoFlush();
+        max_rows_per_message = 1;
+
+    format_executor = std::make_unique<MessageQueueFormatExecutor>(
+        output_header,
+        data_format,
+        kafka.getFormatSettings(context),
+        max_rows_per_message,
+        context->getSettingsRef().kafka_max_message_size,
+        context);
+    format_executor->start();
 
     if (kafka.hasCustomShardingExpr())
     {
@@ -217,106 +275,90 @@ KafkaSink::KafkaSink(
     else
         partitioner = std::make_unique<ChunkSharder>();
 
-    /// Fetch partition count regularly, so that it can send data to new partitions.
-    background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
-        LOG_INFO(logger, "Start topic partition count refreshing job");
-        auto metadata_refresh_stopwatch = Stopwatch();
-        /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
-        auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
-        while (true)
-        {
-            if (is_finished.test())
-                break;
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
-            /// Fetch topic metadata for partition updates
-            if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
-                continue;
-
-            metadata_refresh_stopwatch.restart();
-
-            try
-            {
-                partition_cnt = producer->getPartitionCount();
-            }
-            catch (...) /// do not break the loop until finished
-            {
-                LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
-            }
-        }
-        LOG_INFO(logger, "Stopped topic partition count refreshing job");
-    });
-}
-
-/// When this function is called, there could be two scenarios:
-/// 1) len == total_len. That means the whole Chunk (or the whole row, when one_message_per_row is true) can fit into the buffer.
-///    In this case, we just need to create a rd_kafka_message_t, and push it to current_batch.
-///
-/// 2) len < total_len. That means the Chunk (or a row) is too big to fit into the buffer. In this case, the data between
-///    [pos + len, pos + total_len] will be copied into pending_data so that the bufer can accept more data until it gets
-///    complete data. Then it can create a rd_kafka_message_t.
-///
-/// In this way, we limit the size of one single Kafka message, so that it can avoid hitting the max.message.size.
-/// However, it's still possible that, one single row is still too big and it exceeds that limit. There is nothing we can do about it for now.
-void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
-{
-    auto pending_size = pending_data.size();
-
-    /// There are complete data to consume.
-    if (len > 0)
+    if (refresh_topic_partitions)
     {
-        StringRef key = keys_for_current_batch.empty() ? "" : keys_for_current_batch[current_batch_row++];
+        background_jobs.emplace(CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, 1);
+        /// Fetch partition count regularly, so that it can send data to new partitions.
+        background_jobs->scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
+            LOG_INFO(logger, "Start topic partition count refreshing job");
+            auto metadata_refresh_stopwatch = Stopwatch();
+            /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
+            auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
+            while (true)
+            {
+                if (is_finished.test())
+                    break;
 
-        /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
-        auto msg_size = pending_size + len;
-        nlog::ByteVector payload{msg_size};
-        payload.resize(msg_size); /// set the size to the right value
-        if (pending_size != 0u)
-            memcpy(payload.data(), pending_data.data(), pending_size);
-        memcpy(payload.data() + pending_size, pos, len);
+                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+                /// Fetch topic metadata for partition updates
+                if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
+                    continue;
 
-        current_batch.push_back(rd_kafka_message_t{
-            .err = RD_KAFKA_RESP_ERR_NO_ERROR,
-            .rkt = nullptr,
-            .partition = next_partition,
-            .payload = payload.data(),
-            .len = msg_size,
-            .key = const_cast<char *>(key.data),
-            .key_len = key.size,
-            .offset = 0, /// fixme (yokofly) is the `offset` no need settings? the old code use default value
-            ._private = this,
+                metadata_refresh_stopwatch.restart();
+
+                try
+                {
+                    partition_cnt = producer->getPartitionCount(connection_timeout_ms);
+                }
+                catch (...) /// do not break the loop until finished
+                {
+                    LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
+                }
+            }
+            LOG_INFO(logger, "Stopped topic partition count refreshing job");
         });
-
-        batch_payload.push_back(std::move(payload));
-        ++state.outstandings;
-
-        pending_data.resize(0);
-        pending_size = 0;
-        rows_in_current_message = 0;
     }
-
-    if (len == total_len)
-        /// Nothing left
-        return;
-
-    /// There are some remaining incomplete data, copy them to pending_data.
-    auto remaining = total_len - len;
-    pending_data.resize(pending_size + remaining);
-    memcpy(pending_data.data() + pending_size, pos + len, remaining);
-
-    external_stream_counter->addToMessagesBySize(1);
 }
 
-void KafkaSink::tryCarryOverPendingData()
+void KafkaSink::sendMessage(const String & message, ColumnPtr ts_column, ColumnPtr headers_column, ColumnPtr key_column)
 {
-    /// If there are pending data and it can be fit into the buffer, then write the data back to the buffer,
-    /// so that we can use the buffer to limit the message size.
-    /// If the pending data are too big, that means we get a over-size row.
-    if (!pending_data.empty() && pending_data.size() < wb->available())
+    Int64 ts{0};
+    if (ts_column)
+        ts = ts_column->getInt(current_batch_row);
+    else
+        ts = UTCMilliseconds::now();
+
+    String key_holder;
+    auto key = key_column ? getKey(*key_column, current_batch_row, key_holder) : StringRef{};
+    auto headers = headers_column ? getHeaders(*headers_column, current_batch_row) : std::unordered_map<String, String>();
+
+    auto * msg_headers = rd_kafka_headers_new(headers.size());
+    for (const auto & [k, v] : headers)
+        rd_kafka_header_add(msg_headers, k.data(), k.size(), v.data(), v.size());
+
+    ++current_batch_row;
+
+    constexpr size_t vu_size = 8;
+    rd_kafka_vu_t vus[vu_size] = {
+        {.vtype = RD_KAFKA_VTYPE_RKT, .u = {.rkt = producer->getTopicHandle()}},
+        {.vtype = RD_KAFKA_VTYPE_PARTITION, .u = {.i32 = next_partition}},
+        {.vtype = RD_KAFKA_VTYPE_MSGFLAGS, .u = {.i = RD_KAFKA_MSG_F_COPY | RD_KAFKA_MSG_F_BLOCK}},
+        {.vtype = RD_KAFKA_VTYPE_VALUE, .u = {.mem = {.ptr = const_cast<char *>(message.data()), .size = message.size()}}},
+        {.vtype = RD_KAFKA_VTYPE_KEY, .u = {.mem = {.ptr = const_cast<char *>(key.data), .size = key.size}}},
+        {.vtype = RD_KAFKA_VTYPE_TIMESTAMP, .u = {.i64 = ts}},
+        {.vtype = RD_KAFKA_VTYPE_HEADERS, .u = {.headers = msg_headers}},
+        {.vtype = RD_KAFKA_VTYPE_OPAQUE, .u = {.ptr = this}},
+    };
+
+    auto * err = rd_kafka_produceva(producer->getHandle(), vus, vu_size);
+
+    if (err != nullptr)
     {
-        wb->write(pending_data.data(), pending_data.size());
-        pending_data.resize(0);
+        external_stream_counter->addWrittenFailed(1);
+
+        const auto msg = fmt::format(
+            "error_code={} error_name={} error={}", rd_kafka_error_code(err), rd_kafka_error_name(err), rd_kafka_error_string(err));
+
+        rd_kafka_error_destroy(err);
+        /// if rd_kafka_produceva fails, we need to free msg_headers manually
+        rd_kafka_headers_destroy(msg_headers);
+
+        throw Exception(ErrorCodes::CANNOT_WRITE_TO_KAFKA, "{}", msg);
     }
+
+    ++state.outstandings;
+    external_stream_counter->addWrittenBytes(message.size());
+    external_stream_counter->addWrittenRows(1);
 }
 
 void KafkaSink::consume(Chunk chunk)
@@ -329,137 +371,72 @@ void KafkaSink::consume(Chunk chunk)
             ErrorCodes::KAFKA_PRODUCER_STOPPED,
             "KafkaSink cannot consume data because producer has stopped, likely the underlying external stream is gone");
 
-    auto total_rows = chunk.rows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    BlocksWithShard blocks;
 
-    /// We do swap with empty std::vector here to avoid some big underlying memory hang out there forever.
-    /// since std::vector::clear still holds on to its allocated memory
-    if (!message_key_column_name.empty())
+    current_batch_row = 0;
+
+    if (msg_key_column_pos) /// using message key column
     {
-        if (!keys_for_current_batch.empty())
-        {
-            std::vector<StringRef> keys;
-            keys_for_current_batch.swap(keys);
-        }
-        keys_for_current_batch.reserve(chunk.rows());
-        current_batch_row = 0;
+        next_partition = RD_KAFKA_PARTITION_UA;
 
         /// When message key is used, partitioning is based on message key.
-        blocks = BlocksWithShard{{std::move(block), 0}};
-    }
-    else
-        blocks = partitioner->shard(std::move(block), partition_cnt);
+        BlocksWithShard blocks{{std::move(block), 0}};
 
-    if (!current_batch.empty())
-    {
-        std::vector<rd_kafka_message_t> batch;
-        current_batch.swap(batch);
-    }
-
-    if (!batch_payload.empty())
-    {
-        std::vector<nlog::ByteVector> payload;
-        batch_payload.swap(payload);
-    }
-
-    /// When one_message_per_row is set to true, one Kafka message will be generated for each row.
-    /// Otherwise, all rows in the same block will be in the same kafka message.
-    if (one_message_per_row)
-    {
-        current_batch.reserve(chunk.rows());
-        batch_payload.reserve(chunk.rows());
-    }
-    else
-    {
-        current_batch.reserve(blocks.size());
-        batch_payload.reserve(blocks.size());
-    }
-
-    for (auto & block_with_shard : blocks)
-    {
-        next_partition = message_key_column_name.empty() ? block_with_shard.shard : RD_KAFKA_PARTITION_UA;
-
-        if (message_key_column_name.empty())
+        for (auto & block_with_shard : blocks)
         {
-            writer->write(block_with_shard.block);
-            continue;
-        }
+            /// Order is important here, since in constructor we initialize msg_key_column_pos before ts_column_pos,
+            /// here it should follow the exact order to make sure the pos'es are correctly used
+            ColumnPtr key_column = block_with_shard.block.getByPosition(*msg_key_column_pos).column;
+            block_with_shard.block.erase(*msg_key_column_pos);
 
-        /// Compute and collect message keys.
-        if (message_key_expr)
-            message_key_expr->execute(block_with_shard.block);
-
-        const auto & message_key_column{*block_with_shard.block.getByName(message_key_column_name).column};
-        size_t rows{message_key_column.size()};
-        for (size_t i = 0; i < rows; ++i)
-        {
-            if (message_key_column.isNullable())
+            ColumnPtr ts_column{nullptr};
+            if (ts_column_pos)
             {
-                const ColumnNullable & col = assert_cast<const ColumnNullable &>(message_key_column);
-                if (col.isNullAt(i))
-                    keys_for_current_batch.push_back("");
-                else
-                    keys_for_current_batch.push_back(col.getDataAt(0));
+                ts_column.swap(block_with_shard.block.getByPosition(*ts_column_pos).column);
+                block_with_shard.block.erase(*ts_column_pos);
             }
-            else
-                keys_for_current_batch.push_back(message_key_column.getDataAt(i));
+
+            ColumnPtr headers_column{nullptr};
+            if (headers_column_pos)
+            {
+                headers_column.swap(block_with_shard.block.getByPosition(*headers_column_pos).column);
+                block_with_shard.block.erase(*headers_column_pos);
+            }
+
+            format_executor->execute(
+                block_with_shard.block,
+                [this, &ts_column, &key_column, &headers_column](const String & message, size_t) { sendMessage(message, ts_column, headers_column, key_column); },
+                /*flush_at_the_end=*/true);
         }
-
-        /// 1. After `message_key_expr->execute`, the columns in `block_with_shard.block` could be out-of-order.
-        /// We have to make sure the the column order in `block_with_shard.block` exactly matches the order in header,
-        /// otherwise, the output format writer will panic.
-        /// 2. Remove the `_tp_message_key` values from the chunk (because it won't be in the payload).
-        Block blk;
-        blk.reserve(getHeader().columns() - (message_key_expr ? 0 : 1));
-        for (const auto & col : getHeader())
-            if (col.name != ProtonConsts::RESERVED_MESSAGE_KEY)
-                blk.insert(std::move(block_with_shard.block.getByName(col.name)));
-
-        writer->write(blk);
     }
-
-    /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
-    rd_kafka_produce_batch(
-        producer->getTopicHandle(),
-        RD_KAFKA_PARTITION_UA,
-        RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
-        current_batch.data(),
-        static_cast<int32_t>(current_batch.size()));
-
-    rd_kafka_resp_err_t err{RD_KAFKA_RESP_ERR_NO_ERROR};
-    for (size_t i = 0; i < current_batch.size(); ++i)
+    else /// message key column is not used
     {
-        if (current_batch[i].err != RD_KAFKA_RESP_ERR_NO_ERROR)
+        auto blocks = partitioner->shard(std::move(block), partition_cnt);
+
+        for (auto & block_with_shard : blocks)
         {
-            err = current_batch[i].err;
-            external_stream_counter->addWrittenFailed(1);
-        }
-        else
-        {
-            /// payload of messages which are succesfully handled by rd_kafka_produce_batch will be free'ed by librdkafka
-            batch_payload[i].release();
-            external_stream_counter->addWrittenBytes(current_batch[i].len);
+            next_partition = block_with_shard.shard;
+
+            ColumnPtr ts_column{nullptr};
+            if (ts_column_pos)
+            {
+                ts_column.swap(block_with_shard.block.getByPosition(*ts_column_pos).column);
+                block_with_shard.block.erase(*ts_column_pos);
+            }
+
+            ColumnPtr headers_column{nullptr};
+            if (headers_column_pos)
+            {
+                headers_column.swap(block_with_shard.block.getByPosition(*headers_column_pos).column);
+                block_with_shard.block.erase(*headers_column_pos);
+            }
+
+            format_executor->execute(
+                block_with_shard.block,
+                [this, &ts_column, &headers_column](const String & message, size_t) { sendMessage(message, ts_column, headers_column, nullptr); },
+                /*flush_at_the_end=*/true);
         }
     }
-
-    /// Clean up all the bookkeepings for the batch.
-    std::vector<rd_kafka_message_t> batch;
-    current_batch.swap(batch);
-
-    std::vector<nlog::ByteVector> payload;
-    batch_payload.swap(payload);
-
-    if (!keys_for_current_batch.empty())
-    {
-        std::vector<StringRef> keys;
-        keys_for_current_batch.swap(keys);
-    }
-
-    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        throw Exception(DB::Kafka::mapErrorCode(err), rd_kafka_err2str(err));
-    else
-        external_stream_counter->addWrittenRows(total_rows);
 }
 
 void KafkaSink::onFinish()
@@ -471,7 +448,10 @@ void KafkaSink::onFinish()
 
     producer->stop();
 
-    background_jobs.wait();
+    if (background_jobs)
+        background_jobs->wait();
+
+    format_executor->finish();
 
     /// if there are no outstandings, no need to do flushing
     if (outstandingMessages() == 0)
@@ -515,18 +495,19 @@ KafkaSink::~KafkaSink()
 
 void KafkaSink::checkpoint(CheckpointContextPtr context)
 {
+    Stopwatch timer;
     do
     {
         if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
             throw Exception(
-                DB::Kafka::mapErrorCode(err),
-                "Failed to send messages, error_count={} last_error={}",
-                errorCount(),
-                rd_kafka_err2str(err));
+                DB::Kafka::mapErrorCode(err), "Failed to send messages, error_count={} last_error={}", errorCount(), rd_kafka_err2str(err));
 
         auto outstanding_msgs = outstandingMessages();
         if (outstanding_msgs == 0)
             break;
+
+        if (timer.elapsedMilliseconds() >= checkpoint_timeout_ms)
+            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Checkpoint timed out, outstandings={}", outstanding_msgs);
 
         LOG_INFO(logger, "Waiting for {} outstandings on checkpointing", outstanding_msgs);
 
@@ -569,5 +550,4 @@ void KafkaSink::State::reset()
 }
 
 }
-
 }

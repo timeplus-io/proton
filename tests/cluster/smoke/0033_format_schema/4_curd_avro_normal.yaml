@@ -1,0 +1,98 @@
+tags:
+- avro
+
+description: Avro format schema lifecycle.
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_simple_avro_schema;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE OR REPLACE FORMAT SCHEMA test_simple_avro_schema AS
+    $$
+    {
+      "namespace": "example.avro",
+      "type": "record",
+      "name": "User",
+      "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "favorite_number",  "type": ["int", "null"]},
+        {"name": "favorite_color", "type": ["string", "null"]}
+      ]
+    }
+    $$
+    TYPE Avro;
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-4-1
+  query: SHOW FORMAT SCHEMAS
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-4-2
+  query: SHOW CREATE FORMAT SCHEMA test_simple_avro_schema
+  schema:
+    - name: statement
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: DROP FORMAT SCHEMA test_simple_avro_schema
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-4-4
+  query: SHOW FORMAT SCHEMAS
+  schema:
+    - name: name
+      type: string
+    - name: type
+      type: string
+
+- type: check
+  target_name: fmt-4-1
+  expected_result:
+    - [ 'test_simple_avro_schema', 'Avro' ]
+
+- type: check
+  target_name: fmt-4-2
+  expected_result:
+    -
+      - |-
+        CREATE FORMAT SCHEMA test_simple_avro_schema AS
+        $$
+        {
+          "namespace": "example.avro",
+          "type": "record",
+          "name": "User",
+          "fields": [
+            {"name": "name", "type": "string"},
+            {"name": "favorite_number",  "type": ["int", "null"]},
+            {"name": "favorite_color", "type": ["string", "null"]}
+          ]
+        }
+        $$
+        TYPE Avro
+
+- type: check
+  target_name: fmt-4-4
+  expected_result: 
+    - []

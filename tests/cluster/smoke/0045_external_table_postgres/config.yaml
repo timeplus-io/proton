@@ -1,0 +1,21 @@
+name: external_table_postgres
+description: Tests MySQL external table feature.
+tags:
+  - smoke
+  - external_table
+  - postgres
+
+setup:
+  scope: case
+  steps:
+  - type: query
+    sql: DROP VIEW IF EXISTS pg_mv;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS source;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS pg_ext;

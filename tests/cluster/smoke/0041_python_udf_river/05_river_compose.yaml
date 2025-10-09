@@ -1,0 +1,53 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value string);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_compose(value string) RETURNS map(string, int) LANGUAGE PYTHON AS
+      $$
+      import random
+      from river import compose
+
+      def test_compose(value):
+          x = {'a': 42, 'b': 12, 'c': 13}
+          res = [compose.Discard(v).transform_one(x) for v in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf13-5-1
+    type: stream
+    query: select test_compose(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: map(string, int32)
+      - name: value
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      insert into udf_stream(value) values ('a')('b');
+
+  - type: check
+    target_name: python-udf13-5-1
+    expected_result:
+      - [{'b': 12, 'c': 13}, 'a']
+      - [{'a': 42, 'c': 13}, 'b']

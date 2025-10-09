@@ -12,12 +12,16 @@ namespace DB
 {
 namespace
 {
-    bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
+    bool parseOnCluster(IParserBase::Pos & pos [[maybe_unused]], Expected & expected [[maybe_unused]], String & cluster [[maybe_unused]])
     {
-        return IParserBase::wrapParseImpl(pos, [&]
-        {
-            return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
-        });
+        return false;
+        /// proton: starts
+        /// we don't need to parse ON CLUSTER
+        /// return IParserBase::wrapParseImpl(pos, [&]
+        /// {
+        ///     return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
+        /// });
+        /// proton: ends
     }
 
 
@@ -34,15 +38,18 @@ namespace
             /// The following code is necessary to figure out while parsing something like
             /// policy1 ON table1, policy2 ON table2
             /// that policy2 is another policy, not another table.
-            auto end_pos = pos;
-            if (res_database.empty() && ParserKeyword{"ON"}.ignore(pos, expected))
-            {
-                String unused;
-                if (ASTQueryWithOnCluster::parse(pos, unused, expected))
-                    pos = end_pos;
-                else
-                    return false;
-            }
+            /// proton: starts
+            /// we don't need to parse ON CLUSTER
+            /// auto end_pos = pos;
+            /// if (res_database.empty() && ParserKeyword{"ON"}.ignore(pos, expected))
+            /// {
+            ///     String unused;
+            ///     if (ASTQueryWithOnCluster::parse(pos, unused, expected))
+            ///         pos = end_pos;
+            ///     else
+            ///         return false;
+            /// }
+            /// proton: ends
 
             database = std::move(res_database);
             table_name = std::move(res_table_name);

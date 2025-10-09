@@ -32,10 +32,12 @@ public:
 
     TypeIndex getTypeId() const override { return TypeIndex::Tuple; }
     std::string doGetName() const override;
+    std::string doGetPrettyName(size_t indent) const override;
     const char * getFamilyName() const override { return "tuple"; }
 
     bool canBeInsideNullable() const override { return false; }
     bool supportsSparseSerialization() const override { return true; }
+    bool canBeInsideSparseColumns() const override { return false; }
 
     MutableColumnPtr createColumn() const override;
     MutableColumnPtr createColumn(const ISerialization & serialization) const override;
@@ -50,7 +52,6 @@ public:
     bool isComparable() const override;
     bool textCanContainOnlyValidUTF8() const override;
     bool haveMaximumSizeOfValue() const override;
-    bool hasDynamicSubcolumns() const override;
     size_t getMaximumSizeOfValueInMemory() const override;
     size_t getSizeOfValueInMemory() const override;
 
@@ -68,6 +69,8 @@ public:
     String getNameByPosition(size_t i) const;
 
     bool haveExplicitNames() const { return have_explicit_names; }
+
+    void forEachChild(const ChildCallback & callback) const override;
 };
 
 }

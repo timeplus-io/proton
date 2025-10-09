@@ -14,7 +14,7 @@ class PostgreSQLHandlerFactory : public TCPServerConnectionFactory
 {
 private:
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 #if USE_SSL
     bool ssl_enabled = true;
@@ -28,6 +28,6 @@ private:
 public:
     explicit PostgreSQLHandlerFactory(IServer & server_);
 
-    Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket, TCPServer & server) override;
+    std::shared_ptr<Poco::Net::TCPServerConnection> createConnection(const Poco::Net::StreamSocket & socket, TCPServer & server) override;
 };
 }

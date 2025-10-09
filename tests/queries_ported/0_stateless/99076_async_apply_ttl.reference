@@ -1,0 +1,14 @@
+Data that should expire (even IDs):	10
+Data that should be kept (odd IDs):	0
+Before optimize result:	10
+Before optimize remaining data:	0	data_0	2024-06-01 10:00:00
+Before optimize remaining data:	1	data_1	2024-06-08 10:00:00
+Before optimize remaining data:	2	data_2	2024-06-01 10:00:00
+Before optimize remaining data:	3	data_3	2024-06-08 10:00:00
+Before optimize remaining data:	4	data_4	2024-06-01 10:00:00
+Before optimize remaining data:	5	data_5	2024-06-08 10:00:00
+Before optimize remaining data:	6	data_6	2024-06-01 10:00:00
+Before optimize remaining data:	7	data_7	2024-06-08 10:00:00
+Before optimize remaining data:	8	data_8	2024-06-01 10:00:00
+Before optimize remaining data:	9	data_9	2024-06-08 10:00:00
+After optimize final result:	0

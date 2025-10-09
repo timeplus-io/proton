@@ -1,0 +1,109 @@
+tags:
+- checkpoint
+- multishards
+description: subquery query from multishards state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists multishards_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream multishards_stream (id int, name string, val float, ts datetime)
+    settings shards=3
+- type: wait
+  time: 1
+
+- name: '19308'
+  type: stream
+  query_id: '19308'
+  query: subscribe to with transformed as (select id, count(*) as cnt, min(val) as
+    minVal, max(val) as maxVal from multishards_stream group by id emit periodic 1s)
+    select count(*), min(minVal), max(maxVal) from transformed emit periodic 2s settings
+    checkpoint_interval=1
+  schema:
+  - name: count(*)
+    type: uint64
+  - name: min(minVal)
+    type: float32
+  - name: max(maxVal)
+    type: float32
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into multishards_stream (id, name, val, ts) values
+    (1, 's1', 11.1, '2020-02-02 20:00:01')
+    (2, 's2', 22.2, '2020-02-02 20:00:02')
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    insert into multishards_stream (id, name, val, ts) values
+    (1, 's3', 33.3, '2020-02-02 20:00:03')
+    (2, 's4', 44.4, '2020-02-02 20:00:04')
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    insert into multishards_stream (id, name, val, ts) values
+    (1, 's5', 55.5, '2020-02-02 20:00:05')
+    (2, 's6', 66.6, '2020-02-02 20:00:06')
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19308'
+- type: wait
+  time: 3
+
+- type: query
+  sql: |
+    insert into multishards_stream (id, name, val, ts) values
+    (1, 's7', 10, '2020-02-02 20:00:07')
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    insert into multishards_stream (id, name, val, ts) values
+    (2, 's8', 88.8, '2020-02-02 20:00:08')
+- type: wait
+  time: 3
+
+- name: 19308-1
+  type: stream
+  query: recover from '19308'
+  schema:
+  - name: count(*)
+    type: uint64
+  - name: min(minVal)
+    type: float32
+  - name: max(maxVal)
+    type: float32
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19308' sync
+
+- type: query
+  sql: unsubscribe to '19308'
+
+- type: check
+  target_name: '19308'
+  expected_result:
+  - [2, 11.1, 22.2]
+  - [2, 11.1, 44.4]
+  - [2, 11.1, 66.6]
+
+- type: check
+  target_name: 19308-1
+  expected_result:
+  - [2, 10.0, 88.8]

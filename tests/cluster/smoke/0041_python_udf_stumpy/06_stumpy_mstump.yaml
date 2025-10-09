@@ -1,0 +1,52 @@
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value array(array(float)));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_mstump(value array(array(float))) RETURNS tuple(array(array(float)), array(array(int))) LANGUAGE PYTHON AS
+      $$
+      import stumpy
+      import numpy as np
+
+      def test_mstump(value):
+          res = []
+          for v in value:
+              if len(v) > 0 and len(v[0]) > 3:
+                  mp = stumpy.mstump(np.array(v), m=3)
+                  res_mstump = tuple(arr.tolist() for arr in mp)
+                  res.append(res_mstump)
+          return res
+      $$;
+
+  - type: wait
+    time: 2
+
+  - name: python-udf14-6-1
+    type: stream
+    query: select test_mstump(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: tuple(array(array(float32)), array(array(int32)))
+      - name: value
+        type: array(array(float32))
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into udf_stream(value) values ([[584., -11., 23., 79., 1001., 0., -19.], [1., 2., 4., 8., 16., 0., 32.]]);
+
+  - type: check
+    target_name: python-udf14-6-1
+    expected_result:
+      - [[[[5.7711949142924205e-08, 1.4394714223464589, 5.7711949142924205e-08, 2.6940739180634408, 0.1163385711369199], [0.7779049967416893, 2.361799222353045, 1.5000463458802706, 2.922467219646885, 0.7779049967416893]], [[2, 4, 0, 1, 0], [4, 4, 0, 1, 0]]], [[584., -11., 23., 79., 1001., 0., -19.], [1., 2., 4., 8., 16., 0., 32.]]]

@@ -11,6 +11,7 @@
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int CANNOT_ALLOCATE_MEMORY;
@@ -160,8 +161,7 @@ struct SimdJSONParser
     void reserve(size_t max_size)
     {
         if (parser.allocate(max_size) != simdjson::error_code::SUCCESS)
-            throw Exception{"Couldn't allocate " + std::to_string(max_size) + " bytes when parsing JSON",
-                            ErrorCodes::CANNOT_ALLOCATE_MEMORY};
+            throw Exception(ErrorCodes::CANNOT_ALLOCATE_MEMORY, "Couldn't allocate {} bytes when parsing JSON", max_size);
     }
 
 private:

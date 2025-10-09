@@ -1,0 +1,52 @@
+tags:
+  - ingest
+description: Create a table test_ingest, ingest columns same/difference as sequence of show create
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test2_ingest
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream test2_ingest (
+        id string,
+        location string,
+        value float,
+        timestamp datetime64(3) DEFAULT now64(3)
+      )
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test2_ingest (id, location, value, timestamp) values ('dev1', 'ca', 100, '2020-01-01 11:11:11')
+  
+  - type: wait
+    time: 2
+
+  - name: '201'
+    type: stream
+    query: |
+      select id, location, value, timestamp
+      from test2_ingest
+      settings seek_to = 'earliest'
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: timestamp
+        type: datetime64(3)
+  
+  - type: check
+    target_name: '201'
+    expected_result:
+      - [ dev1, ca, 100, '2020-01-01 11:11:11' ]
+

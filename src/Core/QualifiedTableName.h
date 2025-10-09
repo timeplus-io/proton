@@ -125,9 +125,9 @@ namespace fmt
         }
 
         template <typename FormatContext>
-        auto format(const DB::QualifiedTableName & name, FormatContext & ctx)
+        auto format(const DB::QualifiedTableName & name, FormatContext & ctx) const
         {
-            return format_to(ctx.out(), "{}.{}", DB::backQuoteIfNeed(name.database), DB::backQuoteIfNeed(name.table));
+            return fmt::format_to(ctx.out(), "{}.{}", DB::backQuoteIfNeed(name.database), DB::backQuoteIfNeed(name.table));
         }
     };
 }

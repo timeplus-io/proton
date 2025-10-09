@@ -1,5 +1,5 @@
-set query_mode='table';
-set asterisk_include_reserved_columns=false;
+SET allow_experimental_analyzer = 1;
+
 DROP STREAM IF EXISTS table1;
 DROP STREAM IF EXISTS table2;
 DROP STREAM IF EXISTS table3;
@@ -11,14 +11,13 @@ CREATE STREAM table2 (a uint32, b uint32) ENGINE = Memory;
 CREATE STREAM table3 (b uint32, c uint32) ENGINE = Memory;
 CREATE STREAM table5 (a uint32, b uint32, c uint32) ENGINE = Memory;
 
-INSERT INTO table1(a) SELECT number FROM numbers(21);
-INSERT INTO table2(a,b) SELECT number * 2, number * 20 FROM numbers(11);
-INSERT INTO table3(b,c) SELECT number * 30, number * 300 FROM numbers(10);
-INSERT INTO table5(a,b,c) SELECT number * 5, number * 50, number * 500 FROM numbers(10);
+INSERT INTO table1 SELECT number FROM numbers(21);
+INSERT INTO table2 SELECT number * 2, number * 20 FROM numbers(11);
+INSERT INTO table3 SELECT number * 30, number * 300 FROM numbers(10);
+INSERT INTO table5 SELECT number * 5, number * 50, number * 500 FROM numbers(10);
 
-select sleep(3);
-select t1.a, t2.b, t3.c from table1 as t1 join table2 as t2 on t1.a = t2.a join table3 as t3 on t2.b = t3.b;
-select t1.a, t2.b, t5.c from table1 as t1 join table2 as t2 on t1.a = t2.a join table5 as t5 on t1.a = t5.a AND t2.b = t5.b;
+select t1.a, t2.b, t3.c from table1 as t1 join table2 as t2 on t1.a = t2.a join table3 as t3 on t2.b = t3.b ORDER BY t1.a;
+select t1.a, t2.b, t5.c from table1 as t1 join table2 as t2 on t1.a = t2.a join table5 as t5 on t1.a = t5.a AND t2.b = t5.b ORDER BY t1.a;
 
 select t1.a, t2.a, t2.b, t3.b, t3.c, t5.a, t5.b, t5.c
 from table1 as t1

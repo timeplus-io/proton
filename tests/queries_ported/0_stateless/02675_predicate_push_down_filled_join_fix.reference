@@ -1,0 +1,28 @@
+Expression ((Projection + (Before ORDER BY + )))
+Header: id uint64
+        value string
+        t2.value string
+Actions: INPUT :: 0 -> id uint64 : 0
+         INPUT :: 1 -> value string : 1
+         INPUT :: 2 -> t2.value string : 2
+Positions: 0 1 2
+  FilledJoin (JOIN)
+  Header: id uint64
+          value string
+          t2.value string
+    Filter (( + Before JOIN))
+    Header: id uint64
+            value string
+    Filter column: equals(id, 0) (removed)
+    Actions: INPUT : 0 -> id uint64 : 0
+             INPUT :: 1 -> value string : 1
+             COLUMN const(uint8) -> 0 uint8 : 2
+             FUNCTION equals(id : 0, 0 :: 2) -> equals(id, 0) bool : 3
+    Positions: 3 0 1
+      ReadFromMergeTree (default.test_table)
+      Header: id uint64
+              value string
+      ReadType: Default
+      Parts: 1
+      Granules: 1
+0	Value	JoinValue

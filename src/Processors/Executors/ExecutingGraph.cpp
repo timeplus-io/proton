@@ -2,36 +2,25 @@
 #include <stack>
 #include <Common/Stopwatch.h>
 
-/// proton: starts.
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Processors/PlaceholdProcessor.h>
-#include <Processors/Streaming/ISource.h>
-
-#include <Poco/JSON/Object.h>
-#include <Poco/JSON/Array.h>
-/// proton: ends.
-
 namespace DB
 {
 
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
-ExecutingGraph::ExecutingGraph(Processors & processors_, bool profile_processors_)
-    : processors(processors_)
+ExecutingGraph::ExecutingGraph(std::shared_ptr<Processors> processors_, bool profile_processors_)
+    : processors(std::move(processors_))
     , profile_processors(profile_processors_)
 {
-    uint64_t num_processors = processors.size();
+    uint64_t num_processors = processors->size();
     nodes.reserve(num_processors);
 
     /// Create nodes.
     for (uint64_t node = 0; node < num_processors; ++node)
     {
-        IProcessor * proc = processors[node].get();
+        IProcessor * proc = processors->at(node).get();
         processors_map[proc] = node;
         nodes.emplace_back(std::make_unique<Node>(proc, node));
     }
@@ -120,10 +109,10 @@ bool ExecutingGraph::expandPipeline(std::stack<uint64_t> & stack, uint64_t pid)
 
     {
         std::lock_guard guard(processors_mutex);
-        processors.insert(processors.end(), new_processors.begin(), new_processors.end());
+        processors->insert(processors->end(), new_processors.begin(), new_processors.end());
     }
 
-    uint64_t num_processors = processors.size();
+    uint64_t num_processors = processors->size();
     std::vector<uint64_t> back_edges_sizes(num_processors, 0);
     std::vector<uint64_t> direct_edge_sizes(num_processors, 0);
 
@@ -137,7 +126,7 @@ bool ExecutingGraph::expandPipeline(std::stack<uint64_t> & stack, uint64_t pid)
 
     while (nodes.size() < num_processors)
     {
-        auto * processor = processors[nodes.size()].get();
+        auto * processor = processors->at(nodes.size()).get();
         if (processors_map.contains(processor))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Processor {} was already added to pipeline", processor->getName());
 
@@ -397,208 +386,8 @@ bool ExecutingGraph::updateNode(uint64_t pid, Queue & queue, Queue & async_queue
 void ExecutingGraph::cancel()
 {
     std::lock_guard guard(processors_mutex);
-    for (auto & processor : processors)
+    for (auto & processor : *processors)
         processor->cancel();
 }
-
-/// proton: starts.
-void ExecutingGraph::serialize(WriteBuffer & wb) const
-{
-    /// Graph layout
-    /// [num_processors][processor][processor]...
-    UInt16 num_processors_to_serde = processors_indices_to_serde.size();
-    DB::writeIntBinary(num_processors_to_serde, wb);
-    for (auto index : processors_indices_to_serde)
-        processors[index]->marshal(wb);
-}
-
-void ExecutingGraph::deserialize(ReadBuffer & rb) const
-{
-    /// Graph layout
-    /// [num_processors][processor][processor]...
-    UInt16 num_processors_to_serde = 0;
-    DB::readIntBinary(num_processors_to_serde, rb);
-
-    if (num_processors_to_serde != processors_indices_to_serde.size())
-        throw Exception(
-            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-            "Checkpointed number of streaming processors doesn't match: checkpointed={}, current={}",
-            num_processors_to_serde,
-            processors_indices_to_serde.size());
-
-    Processors recovered_processors;
-    recovered_processors.reserve(num_processors_to_serde);
-    for (UInt16 i = 0; i < num_processors_to_serde; ++i)
-    {
-        auto processor = std::make_shared<PlaceholdProcessor>();
-        processor->setName(processor->unmarshal(rb));
-        recovered_processors.push_back(std::move(processor));
-    }
-
-    /// Validate the recovered processors and new-planed processors
-    for (size_t i = 0; const auto & recovered_processor : recovered_processors)
-    {
-        auto new_planned_processor = processors[processors_indices_to_serde[i]];
-        if (recovered_processor->getID() != new_planned_processor->getID())
-            throw Exception(
-                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                "Recovered streaming processor logic_id={} is not the same type as the new planned processor: checkpointed={}, current={}",
-                recovered_processor->getLogicID(),
-                recovered_processor->getName(),
-                new_planned_processor->getName());
-
-        auto compare_ports = [&](const auto & recovered_ports, const auto & new_ports) {
-            if (recovered_ports.size() != new_ports.size())
-                throw Exception(
-                    ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                    "Recovered streaming processor logic_id={} name={} doesn't have same number of inputs as the new planned processor: checkpointed={}, "
-                    "current={} current_name={}",
-                    recovered_processor->getLogicID(),
-                    recovered_processor->getName(),
-                    recovered_ports.size(),
-                    new_ports.size(),
-                    new_planned_processor->getName());
-
-            auto recovered_ports_iter = recovered_ports.begin();
-            auto new_ports_iter = new_ports.begin();
-
-            for (; recovered_ports_iter != recovered_ports.end();)
-            {
-                /// Use `isCompatibleHeaderWithoutComparingColumnNames` instead of `blocksHaveEqualStructure`,
-                /// After deserialization from disk, the header name may be different than the current one in-memory
-                /// (for instance constant column names) for query state checkpoint. So skip column name comparision
-                /// when validting the head structure
-                if (!isCompatibleHeaderWithoutComparingColumnNames(new_ports_iter->getHeader(), recovered_ports_iter->getHeader()))
-                    throw Exception(
-                        ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                        "Recovered streaming processor logic_id={} name={} doesn't have same input structure as the new planned processor. expected "
-                        "structure: \"{}\", but recovered structure: \"{}\"",
-                        recovered_processor->getLogicID(),
-                        recovered_processor->getName(),
-                        new_ports_iter->getHeader().dumpStructure(),
-                        recovered_ports_iter->getHeader().dumpStructure());
-
-                ++recovered_ports_iter;
-                ++new_ports_iter;
-            }
-        };
-
-        /// Compare inputs
-        compare_ports(recovered_processor->getInputs(), new_planned_processor->getInputs());
-        /// Compare outputs
-        compare_ports(recovered_processor->getOutputs(), new_planned_processor->getOutputs());
-
-        ++i;
-    }
-
-    /// FIXME, check the graph shape
-}
-
-void ExecutingGraph::recover(CheckpointContextPtr ckpt_ctx)
-{
-    for (auto & processor : processors)
-        processor->recover(ckpt_ctx);
-}
-
-void ExecutingGraph::initCheckpointNodes()
-{
-    if (!checkpoint_ack_nodes.empty())
-        return;
-
-    /// NOTE: If there are some historical source, the number of processors is volatile for each recovering,
-    /// since there are new parts of MergeTree or parts merging of MergeTree.
-    /// So far, we only support following streaming queries:
-    /// 1) fillback from historical data (With ConcatProcessor)
-    /// 2) stream join table (With JoiningTransform)
-    /// 3) join with versioned_kv (With Streaming::JoinTransform + ConcatProcessor)
-    ///
-    /// A case: checkpointed when there is no historical data, but recovering when there is historical data, which
-    /// will use ConcatProcessor to link historical and streaming data.
-    /// So we only serialize/deserialize streaming processors (Except ConcatProcessor).
-    processors_indices_to_serde.clear();
-    processors_indices_to_serde.reserve(processors.size());
-    for (UInt16 i = 0; auto & node : nodes)
-    {
-        if (node->processor->isStreaming() && node->processor->getID() != ProcessorID::ConcatProcessorID)
-        {
-            node->processor->setLogicID(static_cast<UInt32>(processors_indices_to_serde.size()));
-            processors_indices_to_serde.emplace_back(i);
-        }
-
-        if (node->back_edges.empty())
-        {
-            assert(node->processor->isSource());
-            if (node->processor->isStreaming())
-                checkpoint_trigger_nodes.push_back(node.get());
-        }
-
-        if (node->direct_edges.empty())
-        {
-            checkpoint_ack_nodes.push_back(node.get());
-            assert(node->processor->isSink());
-        }
-
-        ++i;
-    }
-
-    assert(!checkpoint_trigger_nodes.empty() && !checkpoint_ack_nodes.empty());
-}
-
-bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
-{
-    for (const auto * node : checkpoint_trigger_nodes)
-    {
-        const auto * streaming_source = dynamic_cast<const Streaming::ISource *>(node->processor);
-        if (streaming_source->hasProcessedNewDataSinceLastCheckpoint())
-            return true;
-    }
-    return false;
-}
-
-void ExecutingGraph::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
-{
-    for (auto * node : checkpoint_trigger_nodes)
-        node->processor->checkpoint(ckpt_ctx);
-}
-
-String ExecutingGraph::getStats() const
-{
-    Poco::JSON::Object status;
-    Poco::JSON::Array node_list;
-    Poco::JSON::Array edges;
-
-    for (const auto & node : nodes)
-    {
-        Poco::JSON::Object n;
-
-        n.set("name", node->processor->getName());
-        n.set("id", node->processors_id);
-        n.set("status", IProcessor::statusToName(node->last_processor_status));
-
-        for (auto eg = node->direct_edges.begin(); eg != node->direct_edges.end(); ++eg)
-        {
-            Poco::JSON::Object edge;
-            edge.set("from", node->processors_id);
-            edge.set("to", eg->to);
-            edges.add(edge);
-        }
-
-        Poco::JSON::Object metrices;
-        auto metric = node->processor->getMetrics();
-
-        metrices.set("processing_time_ns", metric.processing_time_ns);
-        metrices.set("processed_bytes", metric.processed_bytes);
-
-        n.set("metric", metrices);
-        node_list.add(n);
-    }
-    status.set("nodes", node_list);
-    status.set("edges", edges);
-
-    std::ostringstream oss; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    status.stringify(oss);
-    return oss.str();
-}
-/// proton: ends.
 
 }

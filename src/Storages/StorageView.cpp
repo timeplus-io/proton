@@ -21,6 +21,9 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
+#include <Interpreters/ReplaceQueryParameterVisitor.h>
+#include <Parsers/QueryParameterVisitor.h>
+
 /// proton: starts.
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/ObjectUtils.h>
@@ -36,6 +39,7 @@ namespace ErrorCodes
     extern const int INCORRECT_QUERY;
     extern const int LOGICAL_ERROR;
 }
+
 
 namespace
 {
@@ -93,24 +97,34 @@ StorageView::StorageView(
     const ASTCreateQuery & query,
     const ColumnsDescription & columns_,
     const String & comment,
-    ContextPtr context_)
+    ContextPtr context_,
+    const bool is_parameterized_view_)
     : IStorage(table_id_), local_context(Context::createCopy(context_))
 {
     local_context->makeQueryContext();
 
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+   if (!is_parameterized_view_)
+    {
+        /// If CREATE query is to create parameterized view, then we dont want to set columns
+        if (!query.isParameterizedView())
+            storage_metadata.setColumns(columns_);
+    }
+    else
+        storage_metadata.setColumns(columns_);
+
     storage_metadata.setComment(comment);
 
     if (!query.select)
-        throw Exception("SELECT query is not specified for " + getName(), ErrorCodes::INCORRECT_QUERY);
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "SELECT query is not specified for {}", getName());
 
     /// proton: start.
-    auto description = SelectQueryDescription::getSelectQueryFromASTForView(query.select->clone(), local_context);
+    auto description = SelectQueryDescription::getSelectQueryFromASTForView(query.select->ptr(), local_context);
     if (std::ranges::find(description.select_table_ids, getStorageID()) != description.select_table_ids.end())
         throw Exception(ErrorCodes::INCORRECT_QUERY, "{} {} cannot select from itself", getName(), getStorageID().getFullTableName());
     /// proton; ends.
 
+    is_parameterized_view = is_parameterized_view_ || query.isParameterizedView();
     storage_metadata.setSelectQuery(description);
     setInMemoryMetadata(storage_metadata);
 }
@@ -130,7 +144,7 @@ void StorageView::read(
     if (query_info.view_query)
     {
         if (!query_info.view_query->as<ASTSelectWithUnionQuery>())
-            throw Exception("Unexpected optimized VIEW query", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected optimized VIEW query");
         current_inner_query = query_info.view_query->clone();
     }
 
@@ -179,27 +193,46 @@ void StorageView::read(
 static ASTTableExpression * getFirstTableExpression(ASTSelectQuery & select_query)
 {
     if (!select_query.tables() || select_query.tables()->children.empty())
-        throw Exception("Logical error: no stream expression in view select AST", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: no stream expression in view select AST");
 
     auto * select_element = select_query.tables()->children[0]->as<ASTTablesInSelectQueryElement>();
 
     if (!select_element->table_expression)
-        throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: incorrect stream expression");
 
     return select_element->table_expression->as<ASTTableExpression>();
 }
 
-void StorageView::replaceWithSubquery(ASTSelectQuery & outer_query, ASTPtr view_query, ASTPtr & view_name)
+void StorageView::replaceQueryParametersIfParametrizedView(ASTPtr & outer_query, const NameToNameMap & parameter_values)
+{
+    ReplaceQueryParameterVisitor visitor(parameter_values);
+    visitor.visit(outer_query);
+}
+
+void StorageView::replaceWithSubquery(ASTSelectQuery & outer_query, ASTPtr view_query, ASTPtr & view_name, bool parameterized_view)
 {
     ASTTableExpression * table_expression = getFirstTableExpression(outer_query);
 
     if (!table_expression->database_and_table_name)
     {
-        // If it's a view table function, add a fake db.table name.
-        if (table_expression->table_function && table_expression->table_function->as<ASTFunction>()->name == "view")
-            table_expression->database_and_table_name = std::make_shared<ASTTableIdentifier>("__view");
-        else
-            throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
+        /// If it's a view or merge table function, add a fake db.table name.
+        /// For parameterized view, the function name is the db.view name, so add the function name
+        if (table_expression->table_function)
+        {
+            auto table_function_name = table_expression->table_function->as<ASTFunction>()->name;
+            if (table_function_name == "view" || table_function_name == "viewIfPermitted")
+                table_expression->database_and_table_name = std::make_shared<ASTTableIdentifier>("__view");
+            /// proton: starts. (TODO: remove this after merge https://github.com/ClickHouse/ClickHouse/pull/40734)
+            /// else if (table_function_name == "merge")
+            ///    table_expression->database_and_table_name = std::make_shared<ASTTableIdentifier>("__merge");
+            /// proton: ends.
+            else if (parameterized_view)
+                table_expression->database_and_table_name = std::make_shared<ASTTableIdentifier>(table_function_name);
+
+        }
+
+        if (!table_expression->database_and_table_name)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: incorrect stream expression");
     }
 
     DatabaseAndTableWithAlias db_table(table_expression->database_and_table_name);
@@ -214,6 +247,12 @@ void StorageView::replaceWithSubquery(ASTSelectQuery & outer_query, ASTPtr view_
     for (auto & child : table_expression->children)
         if (child.get() == view_name.get())
             child = view_query;
+        else if (child.get()
+                 && child->as<ASTFunction>()
+                 && table_expression->table_function
+                 && table_expression->table_function->as<ASTFunction>()
+                 && child->as<ASTFunction>()->name == table_expression->table_function->as<ASTFunction>()->name)
+            child = view_query;
 }
 
 ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr & view_name)
@@ -221,7 +260,7 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
     ASTTableExpression * table_expression = getFirstTableExpression(select_query);
 
     if (!table_expression->subquery)
-        throw Exception("Logical error: incorrect stream expression", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Logical error: incorrect stream expression");
 
     ASTPtr subquery = table_expression->subquery;
     table_expression->subquery = {};
@@ -236,24 +275,42 @@ ASTPtr StorageView::restoreViewName(ASTSelectQuery & select_query, const ASTPtr 
 /// proton: starts.
 void StorageView::startup()
 {
+    if (started.test_and_set())
+        return;
+
     auto metadata_snapshot = getInMemoryMetadataPtr();
     auto storage_id = getStorageID();
     const auto & select_query = metadata_snapshot->getSelectQuery();
-    for (const auto & select_table_id : select_query.select_table_ids)
-        DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
+    /// proton: starts. only add dependency for non-parameterized views.
+    if (!is_parameterized_view)
+    {
+        for (const auto & select_table_id : select_query.select_table_ids)
+            DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
+    }
+    /// proton: ends.
 }
 
-void StorageView::shutdown()
+void StorageView::shutdown(bool /*dropping*/)
 {
-    auto storage_id = getStorageID();
-    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
-    for (const auto & select_table_id : select_query.select_table_ids)
-        DatabaseCatalog::instance().removeDependency(select_table_id, storage_id);
+    if (started.test())
+    {
+        auto metadata_snapshot = getInMemoryMetadataPtr();
+        auto storage_id = getStorageID();
+        const auto & select_query = metadata_snapshot->getSelectQuery();
+        /// proton: starts. only remove dependency for non-parameterized views.
+        if (!is_parameterized_view)
+        {
+            for (const auto & select_table_id : select_query.select_table_ids)
+                DatabaseCatalog::instance().removeDependency(select_table_id, storage_id);
+        }
+        /// proton: ends.
+    }
 }
 
 bool StorageView::isReady() const
 {
-    const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    const auto & select_query = metadata_snapshot->getSelectQuery();
     for (const auto & select_table_id : select_query.select_table_ids)
     {
         auto source_storage = DatabaseCatalog::instance().getTable(select_table_id, local_context);
@@ -268,7 +325,23 @@ bool StorageView::isStreamingQuery(ContextPtr query_context) const
     auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
     auto local_ctx = Context::createCopy(query_context);
     local_ctx->setCollectRequiredColumns(false);
-    return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().subquery().analyze()).isStreamingQuery();
+
+    if (is_parameterized_view)
+        return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().createParameterizedView().noModify().analyze()).isStreamingQuery();
+    else
+        return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().noModify().analyze()).isStreamingQuery();
+}
+
+bool StorageView::hasStreamingGlobalAggregation() const
+{
+    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+    auto ctx = Context::createCopy(local_context);
+    ctx->setCollectRequiredColumns(false);
+
+    if (is_parameterized_view)
+        return InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().createParameterizedView().noModify().analyze()).hasStreamingGlobalAggregation();
+    else
+        return InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().noModify().analyze()).hasStreamingGlobalAggregation();
 }
 
 Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
@@ -280,7 +353,10 @@ Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
     auto ctx = Context::createCopy(local_context);
     ctx->setCollectRequiredColumns(false);
 
-    data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().subquery().analyze()).getDataStreamSemantic();
+    if (is_parameterized_view)
+        data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().createParameterizedView().noModify().analyze()).getDataStreamSemantic();
+    else
+        data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().noModify().analyze()).getDataStreamSemantic();
 
     data_stream_semantic_resolved = true;
 
@@ -290,10 +366,7 @@ Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
 NamesAndTypesList StorageView::getVirtuals() const
 {
     /// We may emit _tp_delta on the fly
-    if (Streaming::canTrackChangesFromInput(dataStreamSemantic()))
-        return {NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get("int8"))};
-
-    return {};
+    return {NameAndTypePair(ProtonConsts::RESERVED_DELTA_FLAG, DataTypeFactory::instance().get("int8"))};
 }
 /// proton: ends.
 
@@ -302,9 +375,9 @@ void registerStorageView(StorageFactory & factory)
     factory.registerStorage("View", [](const StorageFactory::Arguments & args)
     {
         if (args.query.storage)
-            throw Exception("Specifying ENGINE is not allowed for a View", ErrorCodes::INCORRECT_QUERY);
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "Specifying ENGINE is not allowed for a View");
 
-        return StorageView::create(args.table_id, args.query, args.columns, args.comment, args.getLocalContext());
+        return StorageView::create(args.table_id, args.query, args.columns, args.comment, args.getLocalContext(), /*is_parameterized_view*/ false);
     });
 }
 

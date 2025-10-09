@@ -109,6 +109,7 @@ AuthSettings AuthSettings::loadFromConfig(const std::string & config_elem, const
 {
         auto access_key_id = config.getString(config_elem + ".access_key_id", "");
         auto secret_access_key = config.getString(config_elem + ".secret_access_key", "");
+        auto session_token = config.getString(config_elem + ".session_token", ""); /// proton: added
         auto region = config.getString(config_elem + ".region", "");
         auto server_side_encryption_customer_key_base64 = config.getString(config_elem + ".server_side_encryption_customer_key_base64", "");
 
@@ -133,7 +134,9 @@ AuthSettings AuthSettings::loadFromConfig(const std::string & config_elem, const
 
         return AuthSettings
             {
-                std::move(access_key_id), std::move(secret_access_key),
+                std::move(access_key_id),
+                std::move(secret_access_key),
+                std::move(session_token), /// proton: added
                 std::move(region),
                 std::move(server_side_encryption_customer_key_base64),
                 std::move(sse_kms_config),

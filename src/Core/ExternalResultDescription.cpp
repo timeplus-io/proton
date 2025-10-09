@@ -20,6 +20,11 @@ namespace ErrorCodes
     extern const int UNKNOWN_TYPE;
 }
 
+ExternalResultDescription::ExternalResultDescription(const Block & sample_block_)
+{
+    init(sample_block_);
+}
+
 void ExternalResultDescription::init(const Block & sample_block_)
 {
     sample_block = sample_block_;
@@ -87,7 +92,7 @@ void ExternalResultDescription::init(const Block & sample_block_)
         else if (which.isFixedString())
             types.emplace_back(ValueType::vtFixedString, is_nullable);
         else
-            throw Exception{"Unsupported type " + type->getName(), ErrorCodes::UNKNOWN_TYPE};
+            throw Exception(ErrorCodes::UNKNOWN_TYPE, "Unsupported type {}", type->getName());
     }
 }
 

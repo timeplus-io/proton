@@ -1,0 +1,129 @@
+tags:
+- changelog join changelog
+- emit changelog
+- left-join
+- inner-join
+
+description: global aggregation emit changelog query over append stream
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test30_stream1_1
+- type: wait
+  time: 1
+
+- type: query
+  sql: drop stream if exists test30_stream2_1
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test30_stream1_1
+        (
+          i int,
+          k1 int,
+          k2 string
+        )
+        settings mode='changelog'
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test30_stream2_1
+        (
+          j int,
+          kk1 int,
+          kk2 string
+        )
+        settings mode='changelog'
+- type: wait
+  time: 2
+
+- name: 3000
+  type: stream
+  query: select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test30_stream1_1 as a inner join test30_stream2_1 as b on a.i == b.j emit changelog periodic 1s
+  schema:
+    - name: i
+      type: int32
+    - name: k1
+      type: int32
+    - name: k2
+      type: string
+    - name: j
+      type: int32
+    - name: kk1
+      type: int32
+    - name: kk2
+      type: string
+    - name: _tp_delta
+      type: int8
+- type: wait
+  time: 1
+
+- name: 3001
+  type: stream
+  query: select a.i, a.k1, a.k2, b.j, b.kk1, b.kk2, _tp_delta from test30_stream1_1 as a left join test30_stream2_1 as b on a.i == b.j emit changelog periodic 1s
+  schema:
+  - name: i
+    type: int32
+  - name: k1
+    type: int32
+  - name: k2
+    type: string
+  - name: j
+    type: int32
+  - name: kk1
+    type: int32
+  - name: kk2
+    type: string
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream1_1(i, k1, k2) values (2, 1, 'k')
+  schema:
+    - name: i
+      type: int32
+    - name: k1
+      type: int32
+    - name: k2
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream2_1(j, kk1, kk2) values (1, 1, 'k')
+  schema:
+    - name: j
+      type: int32
+    - name: kk1
+      type: int32
+    - name: kk2
+      type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream1_1(i, k1, k2) values (1, 2, 'k')
+  schema:
+    - name: i
+      type: int32
+    - name: k1
+      type: int32
+    - name: k2
+      type: string
+
+- type: check
+  target_name: 3000
+  expected_result:
+    - [1, 2, k, 1, 1, k, 1]
+
+- type: check
+  target_name: 3001
+  expected_result:
+    - [2, 1, k, 0, 0, '', 1]
+    - [1, 2, k, 1, 1, k, 1]

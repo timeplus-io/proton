@@ -1,0 +1,59 @@
+Row 1:
+──────
+name:             stateless_99064_avro
+type:             Avro
+version:          1
+last_modified_by: 
+created_by:       proton
+
+Row 2:
+──────
+name:             stateless_99064_proto
+type:             Protobuf
+version:          3
+last_modified_by: proton
+created_by:       proton
+Row 1:
+──────
+statement:        CREATE FORMAT SCHEMA `` AS
+$$
+syntax = "proto3";
+
+message SearchRequest {
+  string query = 3;
+}
+$$
+TYPE Protobuf
+version:          3
+last_modified_by: proton
+created_by:       proton
+
+Row 2:
+──────
+statement:        CREATE FORMAT SCHEMA `` AS
+$$
+syntax = "proto3";
+
+message SearchRequest {
+  string query = 2;
+}
+$$
+TYPE Protobuf
+version:          2
+last_modified_by: proton
+created_by:       proton
+
+Row 3:
+──────
+statement:        CREATE FORMAT SCHEMA `` AS
+$$
+syntax = "proto3";
+
+message SearchRequest {
+  string query = 1;
+}
+$$
+TYPE Protobuf
+version:          1
+last_modified_by: 
+created_by:       proton

@@ -2,6 +2,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <IO/HashingWriteBuffer.h>
+#include <Interpreters/Context.h>
 #include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -181,6 +182,15 @@ namespace
             hash.update(x.data.size());
             hash.update(x.data.data(), x.data.size());
         }
+        void operator() (const CustomType & x) const
+        {
+            UInt8 type = Field::Types::CustomType;
+            hash.update(type);
+            hash.update(x.getTypeName());
+            auto result = x.toString();
+            hash.update(result.size());
+            hash.update(result.data(), result.size());
+        }
         void operator() (const bool & x) const
         {
             UInt8 type = Field::Types::Bool;
@@ -200,7 +210,7 @@ String MergeTreePartition::getID(const MergeTreeData & storage) const
 String MergeTreePartition::getID(const Block & partition_key_sample) const
 {
     if (value.size() != partition_key_sample.columns())
-        throw Exception("Invalid partition key size: " + toString(value.size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid partition key size: {}", value.size());
 
     if (value.empty())
         return "all"; /// It is tempting to use an empty string here. But that would break directory structure in ZK.
@@ -343,9 +353,8 @@ std::optional<Row> MergeTreePartition::tryParseValueFromID(const String & partit
     return res;
 }
 
-void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffer & out, const FormatSettings & format_settings) const
+void MergeTreePartition::serializeText(StorageMetadataPtr metadata_snapshot, WriteBuffer & out, const FormatSettings & format_settings) const
 {
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
     size_t key_size = partition_key_sample.columns();
 
@@ -379,13 +388,21 @@ void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffe
     }
 }
 
-void MergeTreePartition::load(const MergeTreeData & storage, const PartMetadataManagerPtr & manager)
+String MergeTreePartition::serializeToString(StorageMetadataPtr metadata_snapshot) const
 {
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    static FormatSettings format_settings{};
+
+    WriteBufferFromOwnString out;
+    serializeText(metadata_snapshot, out, format_settings);
+    return out.str();
+}
+
+void MergeTreePartition::load(const StorageMetadataPtr & metadata_snapshot, const PartMetadataManagerPtr & manager, const ContextPtr & context)
+{
     if (!metadata_snapshot->hasPartitionKey())
         return;
 
-    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, context).sample_block;
 
     auto file = manager->read("partition.dat");
     value.resize(partition_key_sample.columns());
@@ -393,12 +410,12 @@ void MergeTreePartition::load(const MergeTreeData & storage, const PartMetadataM
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], *file, {});
 }
 
-std::unique_ptr<WriteBufferFromFileBase> MergeTreePartition::store(const MergeTreeData & storage, IDataPartStorage & data_part_storage, MergeTreeDataPartChecksums & checksums) const
+std::unique_ptr<WriteBufferFromFileBase> MergeTreePartition::store(
+    StorageMetadataPtr metadata_snapshot, ContextPtr storage_context,
+    IDataPartStorage & data_part_storage, MergeTreeDataPartChecksums & checksums) const
 {
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    const auto & context = storage.getContext();
-    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
-    return store(partition_key_sample, data_part_storage, checksums, context->getWriteSettings());
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage_context).sample_block;
+    return store(partition_key_sample, data_part_storage, checksums, storage_context->getWriteSettings());
 }
 
 std::unique_ptr<WriteBufferFromFileBase> MergeTreePartition::store(const Block & partition_key_sample, IDataPartStorage & data_part_storage, MergeTreeDataPartChecksums & checksums, const WriteSettings & settings) const
@@ -413,9 +430,11 @@ std::unique_ptr<WriteBufferFromFileBase> MergeTreePartition::store(const Block &
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->serializeBinary(value[i], out_hashing, {});
     }
 
-    out_hashing.next();
+    out_hashing.finalize();
+
     checksums.files["partition.dat"].file_size = out_hashing.count();
     checksums.files["partition.dat"].file_hash = out_hashing.getHash();
+
     out->preFinalize();
     return out;
 }

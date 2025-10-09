@@ -35,6 +35,9 @@
 	#pragma message (OPENSSL_VERSION_TEXT POCO_INTERNAL_OPENSSL_BUILD)
 #endif
 
+#if __has_feature(address_sanitizer)
+#include <sanitizer/lsan_interface.h>
+#endif
 
 using Poco::RandomInputStream;
 using Poco::Thread;
@@ -91,12 +94,18 @@ void OpenSSLInitializer::initialize()
 		SSL_library_init();
 		SSL_load_error_strings();
 		OpenSSL_add_all_algorithms();
-		
+
 		char seed[SEEDSIZE];
 		RandomInputStream rnd;
 		rnd.read(seed, sizeof(seed));
-		RAND_seed(seed, SEEDSIZE);
-		
+        {
+#   if __has_feature(address_sanitizer)
+            /// Leak sanitizer (part of address sanitizer) thinks that a few bytes of memory in OpenSSL are allocated during but never released.
+            __lsan::ScopedDisabler lsan_disabler;
+#endif
+		    RAND_seed(seed, SEEDSIZE);
+        }
+
 		int nMutexes = CRYPTO_num_locks();
 		_mutexes = new Poco::FastMutex[nMutexes];
 		CRYPTO_set_locking_callback(&OpenSSLInitializer::lock);
@@ -105,8 +114,8 @@ void OpenSSLInitializer::initialize()
 // https://sourceforge.net/p/poco/bugs/110/
 //
 // From http://www.openssl.org/docs/crypto/threads.html :
-// "If the application does not register such a callback using CRYPTO_THREADID_set_callback(), 
-//  then a default implementation is used - on Windows and BeOS this uses the system's 
+// "If the application does not register such a callback using CRYPTO_THREADID_set_callback(),
+//  then a default implementation is used - on Windows and BeOS this uses the system's
 //  default thread identifying APIs"
 		CRYPTO_set_id_callback(&OpenSSLInitializer::id);
 #endif
@@ -128,7 +137,7 @@ void OpenSSLInitializer::uninitialize()
 		CRYPTO_set_id_callback(0);
 #endif
 		delete [] _mutexes;
-		
+
 		CONF_modules_free();
 	}
 }

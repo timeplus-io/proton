@@ -1,0 +1,105 @@
+tags:
+- ddl-column
+- bug
+description: streaming query after delete a column
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists del_column_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream del_column_stream (id int, name string, val float, ts datetime)
+- type: wait
+  time: 1
+
+- name: '2703'
+  type: stream
+  query: select id, name, val, ts from del_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into del_column_stream (id, name, val, ts) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM del_column_stream DROP COLUMN IF EXISTS ts
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into del_column_stream (id, name, val) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - [2, 's2', 22.2]
+- type: wait
+  time: 1
+
+- name: 2703-1
+  type: stream
+  query: select id, name, val, ts from del_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into del_column_stream (id, name, val) values
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  inputs:
+  - [3, 's3', 33.3]
+
+- type: check
+  target_name: '2703'
+  expected_result:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+  - [2, 's2', 22.2, '1970-01-01 00:00:00']
+
+- type: check
+  target_name: 2703-1
+  expected_result:
+  - [3, 's3', 33.3]

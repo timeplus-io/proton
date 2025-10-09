@@ -1,8 +1,9 @@
 #pragma once
 
+#include <Core/Defines.h>
 #include <Core/Names.h>
 #include <base/types.h>
-
+#include <base/unit.h>
 
 namespace DB
 {
@@ -25,21 +26,34 @@ struct FormatSettings
     bool enable_streaming = false;
 
     bool skip_unknown_fields = false;
+    bool ignore_parsing_errors = false; /// proton: added
     bool with_names_use_header = false;
     bool with_types_use_header = false;
     bool write_statistics = true;
     bool import_nested_json = false;
     bool null_as_default = true;
+    bool force_null_for_omitted_fields = false;
     bool decimal_trailing_zeros = false;
     bool defaults_for_omitted_fields = true;
+    bool is_writing_to_terminal = false;
+    bool try_infer_variant = false;
 
     bool seekable_read = true;
     UInt64 max_rows_to_read_for_schema_inference = 100;
 
-    String column_names_for_schema_inference = "";
-    bool try_infer_integers = false;
-    bool try_infer_dates = false;
-    bool try_infer_datetimes = false;
+    String column_names_for_schema_inference{};
+    String schema_inference_hints{};
+
+    bool try_infer_integers = true;
+    bool try_infer_dates = true;
+    bool try_infer_datetimes = true;
+    bool try_infer_datetimes_only_datetime64 = false;
+    bool try_infer_exponent_floats = false;
+
+    /// proton: starts.
+    bool is_clickhouse_compatible = false;
+    bool precise_float_parsing = true;
+    /// proton: ends.
 
     enum class DateTimeInputFormat
     {
@@ -68,6 +82,9 @@ struct FormatSettings
         Raw
     };
 
+    UInt64 schema_inference_make_columns_nullable = 1;
+    bool schema_inference_make_json_columns_nullable = false;
+
     DateTimeOutputFormat date_time_output_format = DateTimeOutputFormat::Simple;
 
     bool input_format_ipv4_default_on_conversion_error = false;
@@ -76,17 +93,30 @@ struct FormatSettings
     UInt64 input_allow_errors_num = 0;
     Float32 input_allow_errors_ratio = 0;
 
-    UInt64 max_binary_string_size = 0;
+    UInt64 client_protocol_version = 0;
+
+    UInt64 max_parser_depth = DBMS_DEFAULT_MAX_PARSER_DEPTH;
+
+    struct
+    {
+        UInt64 max_binary_string_size = 1_GiB;
+        UInt64 max_binary_array_size = 1_GiB;
+        bool encode_types_in_binary_format = false;
+        bool decode_types_in_binary_format = false;
+        bool read_json_as_string = false;
+        bool write_json_as_string = false;
+    } binary{};
 
     struct
     {
         UInt64 row_group_size = 1000000;
         bool low_cardinality_as_dictionary = false;
-        bool import_nested = false;
         bool allow_missing_columns = false;
         bool skip_columns_with_unsupported_types_in_schema_inference = false;
         bool case_insensitive_column_matching = false;
-    } arrow;
+        bool output_string_as_string = false;
+        bool output_fixed_string_as_fixed_byte_array = true;
+    } arrow{};
 
     struct
     {
@@ -97,7 +127,7 @@ struct FormatSettings
         String string_column_pattern;
         UInt64 output_rows_in_file = 1;
         bool null_as_default = false;
-    } avro;
+    } avro{};
 
     String bool_true_representation = "true";
     String bool_false_representation = "false";
@@ -107,14 +137,27 @@ struct FormatSettings
         char delimiter = ',';
         bool allow_single_quotes = true;
         bool allow_double_quotes = true;
+        bool serialize_tuple_into_separate_columns = true;
+        bool deserialize_separate_columns_into_tuple = true;
         bool empty_as_default = false;
         bool crlf_end_of_line = false;
+        bool allow_cr_end_of_line = false;
         bool enum_as_number = false;
         bool arrays_as_nested_csv = false;
         String null_representation = "\\N";
         char tuple_delimiter = ',';
-        bool input_format_use_best_effort_in_schema_inference = true;
-    } csv;
+        bool use_best_effort_in_schema_inference = true;
+        UInt64 skip_first_lines = 0;
+        String custom_delimiter;
+        bool try_detect_header = true;
+        bool skip_trailing_empty_lines = false;
+        bool trim_whitespaces = true;
+        bool allow_whitespace_or_tab_as_delimiter = false;
+        bool allow_variable_number_of_columns = false;
+        bool use_default_on_bad_values = false;
+        bool try_infer_numbers_from_strings = true;
+        bool try_infer_strings_from_quoted_tuples = true;
+    } csv{};
 
     struct HiveText
     {
@@ -122,7 +165,7 @@ struct FormatSettings
         char collection_items_delimiter = '\x02';
         char map_keys_delimiter = '\x03';
         Names input_field_names;
-    } hive_text;
+    } hive_text{};
 
     struct Custom
     {
@@ -133,31 +176,64 @@ struct FormatSettings
         std::string row_between_delimiter;
         std::string field_delimiter;
         EscapingRule escaping_rule = EscapingRule::Escaped;
-    } custom;
+        bool try_detect_header = true;
+    } custom{};
 
-    struct
+    struct JSON
     {
+        size_t max_depth = 1000;
         bool array_of_rows = false;
         bool quote_64bit_integers = true;
         bool quote_64bit_floats = false;
         bool quote_denormals = true;
         bool quote_decimals = false;
         bool escape_forward_slashes = true;
-        bool named_tuples_as_objects = false;
+        bool read_named_tuples_as_objects = false;
+        bool use_string_type_for_ambiguous_paths_in_named_tuples_inference_from_objects = false;
+        bool write_named_tuples_as_objects = true;
+        bool skip_null_value_in_named_tuples = false;
+        bool defaults_for_missing_elements_in_named_tuple = false;
+        bool ignore_unknown_keys_in_named_tuple = false;
         bool serialize_as_strings = false;
         bool read_bools_as_numbers = true;
-        bool try_infer_numbers_from_strings = false;
+        bool read_bools_as_strings = true;
         bool read_numbers_as_strings = true;
-    } json;
+        bool read_objects_as_strings = true;
+        bool read_arrays_as_strings = true;
+        bool try_infer_numbers_from_strings = false;
+        bool validate_types_from_metadata = true;
+        bool validate_utf8 = false;
+        bool allow_json_type = false;
+        bool valid_output_on_exception = false;
+        bool compact_allow_variable_number_of_columns = false;
+        bool try_infer_objects_as_tuples = false;
+        bool infer_incomplete_types_as_strings = true;
+        bool throw_on_bad_escape_sequence = true;
+        bool ignore_unnecessary_fields = true;
+        bool empty_as_default = false;
+        bool type_json_skip_duplicated_paths = false;
+        bool pretty_print = true;
+        char pretty_print_indent = ' ';
+        size_t pretty_print_indent_multiplier = 4;
+    } json{};
+
+    struct
+    {
+        String column_for_object_name;
+    } json_object_each_row{};
 
     struct
     {
         UInt64 row_group_size = 1000000;
-        bool import_nested = false;
         bool allow_missing_columns = false;
         bool skip_columns_with_unsupported_types_in_schema_inference = false;
         bool case_insensitive_column_matching = false;
-    } parquet;
+        std::unordered_set<int> skip_row_groups = {};
+        bool output_string_as_string = false;
+        bool output_fixed_string_as_fixed_byte_array = true;
+        bool preserve_order = false;
+        UInt64 max_block_size = 8192;
+    } parquet{};
 
     struct Pretty
     {
@@ -167,6 +243,9 @@ struct FormatSettings
         bool color = true;
 
         bool output_format_pretty_row_numbers = false;
+        UInt64 single_large_number_tip_threshold = 1'000'000;
+        UInt64 output_format_pretty_display_footer_column_names = 1;
+        UInt64 output_format_pretty_display_footer_column_names_min_rows = 50;
 
         enum class Charset
         {
@@ -175,7 +254,7 @@ struct FormatSettings
         };
 
         Charset charset = Charset::UTF8;
-    } pretty;
+    } pretty{};
 
     struct
     {
@@ -192,21 +271,21 @@ struct FormatSettings
         bool skip_fields_with_unsupported_types_in_schema_inference = false;
         bool use_autogenerated_schema = true;
         std::string google_protos_path;
-    } protobuf;
+    } protobuf{};
 
     struct
     {
         uint32_t client_capabilities = 0;
         size_t max_packet_size = 0;
         uint8_t * sequence_id = nullptr; /// Not null if it's MySQLWire output format used to handle MySQL protocol connections.
-    } mysql_wire;
+    } mysql_wire{};
 
     struct
     {
         std::string regexp;
         EscapingRule escaping_rule = EscapingRule::Raw;
         bool skip_unmatched = false;
-    } regexp;
+    } regexp{};
 
     struct
     {
@@ -214,7 +293,7 @@ struct FormatSettings
         std::string format_schema_path;
         bool is_server = false;
         std::string output_format_schema;
-    } schema;
+    } schema{};
 
     /// proton: starts
     struct
@@ -226,7 +305,8 @@ struct FormatSettings
         std::string private_key_file;
         std::string certificate_file;
         std::string ca_location;
-        std::string topic_name; /// for output to fetch the schema
+        std::string subject_name; /// for schema subject name use to fetch the schema for writing
+        std::string topic_name;
     } kafka_schema_registry{};
     /// proton: ends
 
@@ -235,7 +315,9 @@ struct FormatSettings
         String resultset_format;
         String row_format;
         String row_between_delimiter;
-    } template_settings;
+        String row_format_template;
+        String resultset_format_template;
+    } template_settings{};
 
     struct
     {
@@ -243,8 +325,13 @@ struct FormatSettings
         bool crlf_end_of_line = false;
         String null_representation = "\\N";
         bool enum_as_number = false;
-        bool input_format_use_best_effort_in_schema_inference = true;
-    } tsv;
+        bool use_best_effort_in_schema_inference = true;
+        UInt64 skip_first_lines = 0;
+        bool try_detect_header = true;
+        bool skip_trailing_empty_lines = false;
+        bool allow_variable_number_of_columns = false;
+        bool crlf_end_of_line_input = false;
+    } tsv{};
 
     struct
     {
@@ -254,17 +341,17 @@ struct FormatSettings
         /// proton: starts
         bool no_commas_between_rows = false;
         /// proton: ends
-    } values;
+    } values{};
 
     struct
     {
-        bool import_nested = false;
         bool allow_missing_columns = false;
         int64_t row_batch_size = 100'000;
         bool skip_columns_with_unsupported_types_in_schema_inference = false;
         bool case_insensitive_column_matching = false;
+        std::unordered_set<int> skip_stripes = {};
         bool output_string_as_string = false;
-    } orc;
+    } orc{};
 
     /// For capnProto format we should determine how to
     /// compare ClickHouse Enum and Enum from schema.
@@ -280,19 +367,76 @@ struct FormatSettings
         EnumComparingMode enum_comparing_mode = EnumComparingMode::BY_VALUES;
         bool skip_fields_with_unsupported_types_in_schema_inference = false;
         bool use_autogenerated_schema = true;
-    } capn_proto;
+    } capn_proto{};
+
+    enum class MsgPackUUIDRepresentation
+    {
+        STR, // Output UUID as a string of 36 characters.
+        BIN, // Output UUID as 16-bytes binary.
+        EXT, // Output UUID as ExtType = 2
+    };
 
     struct
     {
         UInt64 number_of_columns = 0;
-    } msgpack;
+        MsgPackUUIDRepresentation output_uuid_representation = MsgPackUUIDRepresentation::EXT;
+    } msgpack{};
+
+    struct MySQLDump
+    {
+        String table_name;
+        bool map_column_names = true;
+    } mysql_dump{};
 
     /// proton: starts
     struct
     {
         String rawstore_time_extraction_type;
         String rawstore_time_extraction_rule;
-    } rawstore;
+    } rawstore{};
+    /// proton: ends
+
+    struct
+    {
+        UInt64 max_batch_size = DEFAULT_BLOCK_SIZE;
+        String table_name = "table";
+        bool include_column_names = true;
+        bool use_replace = false;
+        bool quote_names = true;
+    } sql_insert{};
+
+    struct
+    {
+        bool output_string_as_string;
+        bool skip_fields_with_unsupported_types_in_schema_inference;
+    } bson{};
+
+    struct
+    {
+        bool allow_types_conversion = true;
+        bool encode_types_in_binary_format = false;
+        bool decode_types_in_binary_format = false;
+        bool write_json_as_string = false;
+    } native{};
+
+    struct
+    {
+        bool valid_output_on_exception = false;
+    } xml{};
+
+    struct
+    {
+        bool escape_special_characters = false;
+    } markdown{};
+
+    /// proton: starts
+    struct
+    {
+        String index_column;
+        String id_column;
+        bool include_index_column_in_document = false;
+        bool include_id_column_in_document = false;
+    } open_search{};
     /// proton: ends
 };
 

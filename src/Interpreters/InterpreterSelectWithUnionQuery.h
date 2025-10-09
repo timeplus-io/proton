@@ -31,7 +31,7 @@ public:
     ~InterpreterSelectWithUnionQuery() override;
 
     /// Builds QueryPlan for current query.
-    virtual void buildQueryPlan(QueryPlan & query_plan) override;
+    void buildQueryPlan(QueryPlan & query_plan) override;
 
     BlockIO execute() override;
 
@@ -42,9 +42,10 @@ public:
         const ASTPtr & query_ptr_,
         ContextPtr context_,
         bool is_subquery,
-        Streaming::DataStreamSemanticEx * output_data_stream_semantic = nullptr);
+        Streaming::DataStreamSemanticEx * output_data_stream_semantic = nullptr,
+        bool is_create_parameterized_view = false);
 
-    virtual void ignoreWithTotals() override;
+    void ignoreWithTotals() override;
 
     bool supportsTransactions() const override { return true; }
 
@@ -55,7 +56,11 @@ public:
     bool hasStreamingWindowFunc() const override;
     Streaming::DataStreamSemanticEx getDataStreamSemantic() const override;
 
+    void assertNoNonDeterministicFunctions(const Names & required, std::string_view msg_prefix) const override;
+
     std::set<String> getGroupByColumns() const override;
+
+    bool isConsistentWithoutCheckpoint() const override;
     /// proton: ends
 
 private:

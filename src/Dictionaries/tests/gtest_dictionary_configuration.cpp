@@ -15,6 +15,7 @@
 using namespace DB;
 
 static bool registered = false;
+
 /// For debug
 [[maybe_unused]] static std::string configurationToString(const DictionaryConfigurationPtr & config)
 {

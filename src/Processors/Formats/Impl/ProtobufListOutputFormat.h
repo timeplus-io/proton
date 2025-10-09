@@ -26,7 +26,6 @@ public:
     ProtobufListOutputFormat(
         WriteBuffer & out_,
         const Block & header_,
-        const RowOutputFormatParams & params_,
         const ProtobufSchemaInfo & schema_info_,
         bool defaults_for_nullable_google_wrappers_,
         const String & google_protos_path);
@@ -40,6 +39,7 @@ private:
     void writeField(const IColumn &, const ISerialization &, size_t) override {}
 
     void finalizeImpl() override;
+    void resetFormatterImpl() override;
 
     std::unique_ptr<ProtobufWriter> writer;
     std::unique_ptr<ProtobufSerializer> serializer;

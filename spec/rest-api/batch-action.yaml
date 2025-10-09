@@ -1,0 +1,217 @@
+openapi: 3.0.0
+
+servers:
+  - url: http://{host}:{port}/proton/v1/batch_action
+info:
+  version: "1.0.1"
+  title: "Batch Action"
+  description: 'Rest API for Batch Action, including DELETE, RECREATE, PAUSE, UNPAUSE .etc operations.'
+paths:
+  /streams:
+    post:
+      summary: Batch Action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - "type"
+                - "stream_list"
+
+              properties:
+                type:
+                  type: string
+                  description: "action type"
+                  enum:
+                    - "delete"
+                    - "recreate"
+                    - "pause"
+                    - "unpause"
+        
+                stream_list:
+                  type: array
+                  description: "stream list"
+                  items:
+                    type: string
+                    description: "stream name"
+        
+                database:
+                  type: string
+                  description: "optional, stream database"
+                  default: "default"
+        
+                synchronous:
+                  type: boolean
+                  description: "optional, request mode (true: sync, false: async)"
+                  default: "true"
+        
+                timeout_seconds:
+                  type: integer
+                  description: "optional, request timeout (seconds)"
+
+                pause_mvs_after_recreate:
+                  type: boolean
+                  description: "optional, pause mvs after recreate (true: pause, false: no effect)"
+                  default: "false"
+
+            examples:
+              example-1:
+                value:
+                  type: "delete"
+                  stream_list: ["stream1", "mv1"]
+                  database: "default"
+                  synchronous: true
+                  timeout_seconds: 60
+              example-2:
+                value:
+                  type: "recreate"
+                  stream_list: ["stream1", "mv1", "unknown_stream"]
+                  database: "default"
+                  synchronous: false
+                  timeout_seconds: 600
+                  pause_mvs_after_recreate: true
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResp"
+              examples:
+                example-1:
+                  value:
+                    code: 0
+                    request_id: "ea7ade0a-1c50-4638-8d17-fa76083ca4f6"
+                    request_datetime: "2024-05-15 05:13:16.92"
+                    status: "success"
+                    elapsed_ms: 1234
+                    finished_tables: ["stream1", "mv1"]
+                    ignored_tables: ["unknown_stream"]
+                example-2:
+                  value:
+                    poll_id: "1_ea7ade0a-1c50-4638-8d17-fa76083ca4f6"
+        '400':
+          description: FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailedResp"
+              examples:
+                example-1:
+                  value:
+                    code: 159
+                    request_id: "ea7ade0a-1c50-4638-8d17-fa76083ca4f6"
+                    request_datetime: "2024-05-15 05:13:16.92"
+                    status: "failed"
+                    error_msg: "Timeout exceeded 60 seconds when dropping 106 tables..."
+                example-2:
+                  value:
+                    error_msg: "unknown error"
+                    code: 1002
+                    request_id: "ea7ade0a-1c50-4638-8d17-fa76083ca4f6"
+        
+
+  /statuses:
+    get:
+      summary: Get the batch action asynchronous request statuses 
+      parameters:
+        - name: poll_id
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "1_ea7ade0a-1c50-4638-8d17-fa76083ca4f6"
+            description: "Poll ID returned by the batch action request with asynchronous mode enabled (i.e. \"synchronous\": false)"
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResp"
+              examples:
+                example-2:
+                  value:
+                    code: 0
+                    request_id: "ea7ade0a-1c50-4638-8d17-fa76083ca4f6"
+                    request_datetime: "2024-05-15 05:13:16.92"
+                    status: "success"
+                    elapsed_ms: 12345
+                    finished_tables: ["stream1", "mv1"]
+                    ignored_tables: ["unknown_stream"]
+
+components:
+  schemas:
+    SuccessResp:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: "Response code, 0 for success"
+        request_id:
+          type: string
+          description: "Unique identifier for the request" 
+        request_datetime:
+          type: string
+          description: "Timestamp of the request"
+        status:
+          type: string
+          description: "Status of the request: 'success', 'failed' or 'running'"
+        elapsed_ms:
+          type: integer
+          description: "Elapsed time in milliseconds for the request"
+        finished_tables:
+          type: array
+          description: "Tables successfully processed"
+          items:
+            type: string
+            description: "stream name"
+        ignored_tables:
+          type: array
+          description: "Tables ignored during the operation, which may occur if table is not found or its type is not supported"
+          items:
+            type: string
+            description: "stream name"
+          
+
+    FailedResp:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: "Response code, 0 for success"
+        request_id:
+          type: string
+          description: "Unique identifier for the request" 
+        request_datetime:
+          type: string
+          description: "Timestamp of the request"
+        status:
+          type: string
+          description: "Status of the request: 'success', 'failed' or 'running'"
+        error_msg:
+          type: string
+          description: "Error message describing the failure reason"
+
+    RunningResp:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: "Response code, 0 for success"
+        request_id:
+          type: string
+          description: "Unique identifier for the request"
+        request_datetime:
+          type: string
+          description: "Timestamp of the request"
+        status:
+          type: string
+          description: "Status of the request: 'success', 'failed' or 'running'"
+        elapsed_ms:
+          type: integer
+          description: "Elapsed time in milliseconds for the request"

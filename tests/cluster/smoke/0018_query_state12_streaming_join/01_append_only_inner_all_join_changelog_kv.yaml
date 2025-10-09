@@ -1,0 +1,137 @@
+tags:
+- query_state
+- data_enrichment_join
+- inner-join
+description: append-only INNER ALL JOIN changelog-kv state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream3;
+- type: query
+  sql: drop stream if exists test19_changelog_kv_stream;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream3(i int, s string);
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_changelog_kv_stream(ii int, ss string) primary
+    key ss settings mode='changelog_kv';
+- type: wait
+  time: 1
+
+- name: '19351'
+  type: stream
+  query_id: '19351'
+  query: subscribe to select i, s, ii, ss from test19_left_stream3 inner
+    join test19_changelog_kv_stream on i == ii settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_changelog_kv_stream (ii, ss) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  inputs:
+  - [1, 's1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3 (i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19351'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_changelog_kv_stream (ii, ss) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  inputs:
+  - [1, 's2']
+
+- type: query
+  sql: insert into test19_changelog_kv_stream (ii, ss, _tp_delta) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  - name: _tp_delta
+    type: int8
+  inputs:
+  - [1, 's1', -1]
+
+- name: 19351-1
+  type: stream
+  query: recover from '19351'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3 (i, s) values (1, 's1');
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's1']
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19351' sync
+
+- type: query
+  sql: unsubscribe to '19351'
+
+- type: check
+  target_name: '19351'
+  expected_result:
+  - [1, s1, 1, s1]
+
+- type: check
+  target_name: 19351-1
+  expected_result:
+  - [1, s1, 1, s2]

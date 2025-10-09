@@ -57,6 +57,30 @@ on:
         required: false
         type: string
         default: ''
+      upjob:
+        type: string
+        required: false
+        default: ''
+      s3_upload:
+        required: false
+        type: boolean
+        default: false
+      s3_output_path:
+        required: false
+        type: string
+        default: 'proton/cross-compile/macOS-x86'
+      prerelease:
+        required: false
+        default: false
+        type: boolean
+      ref:
+        required: false
+        type: string
+        default: ''
+    outputs:
+      tag_name:
+        description: "Tag name for releae build use"
+        value: ${{ jobs.execute-command.outputs.tag_name }}
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -72,17 +96,16 @@ on:
         required: true
       DOCKERHUB_TOKEN:
         required: true
-      TIMEPLUS_ADDRESS2:     # Changed from TIMEPLUS_ADDRESS
+      TIMEPLUS_ADDRESS:
         required: false
-      TIMEPLUS_API_KEY2:     # Changed from TIMEPLUS_API_KEY
+      TIMEPLUS_API_KEY:
         required: false
-      TIMEPLUS_WORKSPACE2:   # Changed from TIMEPLUS_WORKSPACE
+      TIMEPLUS_WORKSPACE:
         required: false
       TP_DEMO_API_KEY:
         required: false
-      TP_DEMO_SITE_API_KEY: 
+      TP_DEMO_SITE_API_KEY:
         required: false
-
 
 jobs:
   start-runner:
@@ -93,7 +116,7 @@ jobs:
       ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4.1.0
+        uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -115,59 +138,101 @@ jobs:
               {"Key": "Name", "Value": "ec2-github-runner-${{ github.sha }}"},
               {"Key": "GitHubRepository", "Value": "${{ github.repository }}"}
             ]
+
   execute-command:
     name: Execute Command
     needs: start-runner # required to start the main job when the runner is ready
     runs-on: ${{ needs.start-runner.outputs.label }} # run the job on the newly created runner
+    outputs:
+      tag_name: ${{ steps.execute.outputs.tag_name }}
     env:
       SANITIZER: ${{ inputs.sanitizer }}
       ARCH: ${{ inputs.arch }}
       TAG: ${{ inputs.tag }}
-      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
-      TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}       
+      TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
       - name: Configure AWS credentials from Test account
-        uses: aws-actions/configure-aws-credentials@v4.1.0
+        uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-      - name: Login to ghcr.io
-        uses: docker/login-action@v3.3.0
+      
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
         with:
-          registry: ghcr.io
-          username: proton_robot
-          password: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
       - name: Checkout Repo
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4.1.6
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: ${{ inputs.submodules }}
+          ref: ${{ inputs.ref }}
       - name: Checkout quark
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4.1.6
         with:
           repository: timeplus-io/quark
           path: quark
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       - name: Prepare directory
         run: mkdir /test_output /artifacts
+
       - name: execute
         id: execute
         timeout-minutes: ${{ inputs.timeout }}
         run: |
-          ${{ inputs.command }}
+          {
+            echo "Command: ${{ inputs.command }}"
+            echo "--- Command Output ---"
+            ${{ inputs.command }}
+          } 1> >(tee /artifacts/${{ inputs.upjob }}_execute_command_${{ github.run_id }}.txt)
+
+      - name: Upload to S3
+        if: ${{ inputs.s3_upload }}
+        run: |
+          BINARY_PATH=$(find $GITHUB_WORKSPACE -name "proton-*-Darwin-x86_64" -type f)
+          
+          if [ -z "$BINARY_PATH" ]; then
+            echo "Error: Could not find binary file"
+            exit 1
+          fi
+          
+          # Calculate SHA256
+          sha256sum $BINARY_PATH
+          
+          # Upload to S3
+          aws s3 cp --no-progress $BINARY_PATH s3://${{ secrets.AWS_S3_BUCKET }}/${{ inputs.s3_output_path }}/
+          
+          # no need clean up?
+          # rm -rf $GITHUB_WORKSPACE/ccache
+          # rm -rf $GITHUB_WORKSPACE/build_docker
+
       - name: Release binary
-        if: ${{ inputs.upload_files != '' }}
+        if: ${{ !inputs.s3_upload && inputs.upload_files != '' }}
         uses: softprops/action-gh-release@v2.2.1
         with:
           files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           generate_release_notes: true
+          prerelease: ${{ inputs.prerelease }}
           tag_name: ${{ steps.execute.outputs.tag_name }}
+
+      - name: Upload Artifact
+        if: ${{ always() && inputs.upjob != '' }}
+        uses: actions/upload-artifact@v4.3.4
+        with:
+          name: Artifact-${{ inputs.upjob }}-${{ github.run_id }}
+          path: |
+            /artifacts/*
+          retention-days: 7
+
   stop-runner:
     name: Stop self-hosted EC2 runner
     needs:
@@ -177,7 +242,7 @@ jobs:
     if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4.1.0
+        uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

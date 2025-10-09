@@ -1,0 +1,71 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x int, y int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getSpatialDistanceEuclidean(x int, y int) RETURNS float64 LANGUAGE PYTHON AS $$
+      import pickle
+      from scipy.spatial import distance
+
+      class getSpatialDistanceEuclidean:
+          def __init__(self):
+              self.euclidean = 0
+
+          def serialize(self):
+              data = {}
+              data['euclidean'] = self.euclidean
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.euclidean = data['euclidean']
+
+          def merge(self, other):
+              skip
+
+          def process(self, xs, ys):
+              self.euclidean = distance.euclidean(xs, ys)
+
+          def finalize(self):
+              return self.euclidean
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-2-1
+    type: stream
+    query: select getSpatialDistanceEuclidean(x, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: float64
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (1, 0)(0, 1)(0, 0);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y) values (1, 0)(1, 1)(0, 0);
+
+  - type: check
+    target_name: python-udf4-2-1
+    expected_result:
+      - [1.4142135623730951]
+      - [1.0]

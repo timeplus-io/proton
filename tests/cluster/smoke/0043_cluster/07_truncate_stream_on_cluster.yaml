@@ -1,0 +1,133 @@
+tags:
+  - distributed
+  - stream
+  - materialized-view
+
+description: |
+  Tests covering the creation of a stream and a materialized view, insertion of data, truncate table
+  Main steps:
+    1. Create stream 1113_0112v
+    2. Create materialized view 1113_0112mv based on stream 1113_0112v
+    3. Insert data into stream 1113_0112v
+    4. Retrieve and truncate from stream 1113_0112v
+    5. Verify data in stream 1113_0112v and materialized view 1113_0112mv after each operation
+
+cluster:
+  - p3k1
+
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop view if exists 1113_0112mv;
+  - type: wait
+    time: 1
+
+
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists 1113_0112v;
+  - type: wait
+    time: 1
+
+  - type: query
+    node:
+      - p1
+    sql: create stream 1113_0112v(id int);
+  - type: wait
+    time: 1
+
+  - type: query
+    node:
+      - p1
+    sql: create materialized view 1113_0112mv as select id from 1113_0112v;
+  - type: wait
+    time: 2
+
+  # Insert data into stream 1113_0112v on node p1
+  - type: query
+    node:
+      - p1
+    sql: INSERT INTO 1113_0112v (id) SELECT number FROM system.numbers LIMIT 7200;
+  - type: wait
+    time: 5
+
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: drop view 1113_0112mv;
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: TRUNCATE STREAM 1113_0112v;
+  - type: wait
+    time: 5
+
+  # Verify data in stream 1113_0112v after truncate on node p1
+  - name: stream-check-1
+    type: stream
+    node:
+     - p1
+    query: select id from table(1113_0112v);
+    schema:
+      - name: id
+        type: int32
+
+  - type: check
+    target_name: stream-check-1
+    expected_result:
+     - []
+
+
+  # Insert new data into stream 1113_0112v on node p1
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into 1113_0112v(id) values(5);
+  - type: wait
+    time: 2
+
+  # Verify data in stream 1113_0112v after new insert on node p1
+  - name: stream-check-2
+    type: stream
+    node:
+     - p1
+    query: select count() from table(1113_0112v);
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: stream-check-2
+    expected_result:
+     - [1]
+
+  # Cleanup on nodes p1 and p1
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: drop view if exists 1113_0112mv;
+  - type: wait
+    time: 2 # drop dependent view between different node seems need more time
+
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists 1113_0112v;

@@ -1,0 +1,88 @@
+tags:
+- table_func_changelog
+- inner-join
+description: append-only inner all join changelog(subquery)
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test28_left_stream;
+
+- type: query
+  sql: drop stream if exists test28_right_stream;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test28_left_stream (i int, k string);
+
+- type: query
+  sql: create stream test28_right_stream (j int, kk string);
+
+- type: wait
+  time: 1
+
+- name: '2806'
+  type: stream
+  query: with cte as (select j, kk from test28_right_stream) select i, k, j, kk
+    from test28_left_stream as a inner join changelog(cte, kk) as b on a.i == b.j;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test28_right_stream (j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [1, 'kk1']
+
+- type: query
+  sql: insert into test28_left_stream (i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [1, 'k1']
+
+- type: query
+  sql: insert into test28_right_stream (j, kk) values
+  schema:
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+  inputs:
+  - [2, 'kk1']
+
+- type: query
+  sql: insert into test28_left_stream (i, k) values
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  inputs:
+  - [2, 'k1']
+
+- type: check
+  target_name: '2806'
+  expected_result:
+  - [1, k1, 1, kk1]
+  - [2, k1, 2, kk1]

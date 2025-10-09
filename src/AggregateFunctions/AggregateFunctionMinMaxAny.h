@@ -47,7 +47,7 @@ private:
     using ColVecType = ColumnVectorOrDecimal<T>;
 
     bool has_value = false; /// We need to remember if at least one value has been passed. This is necessary for AggregateFunctionIf.
-    T value;
+    T value = T{};
 
 public:
     static constexpr bool is_nullable = false;
@@ -748,7 +748,7 @@ public:
 
     static bool allocatesMemoryInArena()
     {
-        return true;
+        return true; /// SingleValueDataString shall be not used when HybridHashTable is enabled
     }
 
 #if USE_EMBEDDED_COMPILER
@@ -1221,26 +1221,25 @@ private:
 
 public:
     explicit AggregateFunctionsSingleValue(const DataTypePtr & type)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValue<Data>>({type}, {})
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValue<Data>>({type}, {}, createResultType(type))
         , serialization(type->getDefaultSerialization())
     {
         if (StringRef(Data::name()) == StringRef("min")
             || StringRef(Data::name()) == StringRef("max"))
         {
             if (!type->isComparable())
-                throw Exception("Illegal type " + type->getName() + " of argument of aggregate function " + getName()
-                    + " because the values of that data type are not comparable", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of aggregate function {} "
+                                "because the values of that data type are not comparable", type->getName(), getName());
         }
     }
 
     String getName() const override { return Data::name(); }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypePtr & type_)
     {
-        auto result_type = this->argument_types.at(0);
         if constexpr (Data::is_nullable)
-            return makeNullable(result_type);
-        return result_type;
+            return makeNullable(type_);
+        return type_;
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
@@ -1260,7 +1259,7 @@ public:
     void addBatchSinglePlace(
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         Arena * arena,
         ssize_t if_argument_pos,
@@ -1297,7 +1296,7 @@ public:
     void addBatchSinglePlaceNotNull( /// NOLINT
         size_t row_begin,
         size_t row_end,
-        AggregateDataPtr place,
+        AggregateDataPtr __restrict place,
         const IColumn ** columns,
         const UInt8 * null_map,
         Arena * arena,
@@ -1346,7 +1345,7 @@ public:
         this->data(place).write(buf, *serialization);
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
         this->data(place).read(buf, *serialization, arena);
     }
@@ -1379,15 +1378,15 @@ public:
         b.CreateMemSet(aggregate_data_ptr, llvm::ConstantInt::get(b.getInt8Ty(), 0), this->sizeOfData(), llvm::assumeAligned(this->alignOfData()));
     }
 
-    void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const DataTypes &, const std::vector<llvm::Value *> & argument_values) const override
+    void compileAdd(llvm::IRBuilderBase & builder, llvm::Value * aggregate_data_ptr, const ValuesWithType & arguments) const override
     {
         if constexpr (Data::is_compilable)
         {
-            Data::compileChangeIfBetter(builder, aggregate_data_ptr, argument_values[0]);
+            Data::compileChangeIfBetter(builder, aggregate_data_ptr, arguments[0].value);
         }
         else
         {
-            throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} is not JIT-compilable", getName());
         }
     }
 
@@ -1399,7 +1398,7 @@ public:
         }
         else
         {
-            throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} is not JIT-compilable", getName());
         }
     }
 
@@ -1411,7 +1410,7 @@ public:
         }
         else
         {
-            throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} is not JIT-compilable", getName());
         }
     }
 

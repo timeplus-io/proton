@@ -4,10 +4,11 @@
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
 
+#include <magic_enum.hpp>
+
 /// proton: starts
 #include <boost/algorithm/string.hpp>
 /// proton: ends
-#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -172,10 +173,14 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
             print_database_table();
         else if (!volume.empty())
             print_on_volume();
+
+        if (is_permanent)
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PERMANENT" << (settings.hilite ? hilite_none : "");
     }
     else if (  type == Type::RESTART_REPLICA
             || type == Type::RESTORE_REPLICA
             || type == Type::SYNC_REPLICA
+            || type == Type::WAIT_LOADING_PARTS
             || type == Type::FLUSH_DISTRIBUTED
             || type == Type::RELOAD_DICTIONARY)
     {
@@ -192,11 +197,64 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
             << (settings.hilite ? hilite_keyword : "") << " SECOND"
             << (settings.hilite ? hilite_none : "");
     }
+    else if (type == Type::DROP_FORMAT_SCHEMA_CACHE)
+    {
+        if (!schema_cache_format.empty())
+            settings.ostr << (settings.hilite ? hilite_none : "") << " FOR " << backQuoteIfNeed(schema_cache_format);
+    }
     else if (type == Type::DROP_FILESYSTEM_CACHE)
     {
-         if (!filesystem_cache_path.empty())
-            settings.ostr << (settings.hilite ? hilite_none : "") << filesystem_cache_path;
+        if (!filesystem_cache_name.empty())
+            settings.ostr << (settings.hilite ? hilite_none : "") << " " << filesystem_cache_name;
     }
+    /// proton: starts.
+    else if (
+        type == Type::PAUSE_STREAM || type == Type::RESUME_STREAM || type == Type::RECOVER_STREAM || type == Type::PAUSE_MATERIALIZED_VIEW
+        || type == Type::RESUME_MATERIALIZED_VIEW || type == Type::ABORT_MATERIALIZED_VIEW || type == Type::RECOVER_MATERIALIZED_VIEW)
+    {
+        if (table)
+            print_database_table();
+
+        /// PAUSE/RESUME/RECOVER STREAM <database.table> <shard_num>
+        if (type == Type::PAUSE_STREAM || type == Type::RESUME_STREAM || type == Type::RECOVER_STREAM)
+            settings.ostr << shard;
+
+        if (is_permanent)
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PERMANENT" << (settings.hilite ? hilite_none : "");
+    }
+    else if (type == Type::SET_LOG_LEVEL)
+    {
+        /// SYSTEM SET LOG LEVEL <level> [FOR <logger_name>]
+        settings.ostr << " " << quoteString(log_level);
+        if (!logger_name.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " FOR " << (settings.hilite ? hilite_none : "")
+                          << quoteString(logger_name);
+        }
+    }
+    else if (type == Type::SHOW_LOGGERS)
+    {
+        /// SYSTEM SHOW LOGGERS
+    }
+    else if (type == Type::INSTALL_PYTHON_PACKAGE)
+    {
+        /// SYSTEM INSTALL PYTHON PACKAGE 'package_name' ['version']
+        settings.ostr << " " << quoteString(python_package_name);
+        if (!python_package_version.empty())
+        {
+            settings.ostr << " " << quoteString(python_package_version);
+        }
+    }
+    else if (type == Type::UNINSTALL_PYTHON_PACKAGE)
+    {
+        /// SYSTEM UNINSTALL PYTHON PACKAGE 'package_name'
+        settings.ostr << " " << quoteString(python_package_name);
+    }
+    else if (type == Type::LIST_PYTHON_PACKAGES)
+    {
+        /// SYSTEM LIST PYTHON PACKAGES
+    }
+    /// proton: ends.
 }
 
 

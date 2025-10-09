@@ -22,7 +22,7 @@ public:
         size_t max_streams_,
         size_t join_max_cached_bytes_);
 
-    String getName() const override { return "StreamingJoin"; }
+    String getName() const override;
 
     QueryPipelineBuilderPtr updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &) override;
 
@@ -35,7 +35,6 @@ private:
     size_t max_block_size;
     size_t max_streams;
     size_t join_max_cached_bytes;
-    Processors processors;
 };
 }
 }

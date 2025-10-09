@@ -1,51 +1,70 @@
 #pragma once
 
+#include <base/types.h>
+#include <Common/isLocalAddress.h>
+#include <Common/MultiVersion.h>
+#include <Common/OpenTelemetryTraceContext.h>
+#include <Common/RemoteHostFilter.h>
+#include <Common/SharedMutex.h>
+#include <Common/SharedMutexHelper.h>
+#include <Common/ThreadPool_fwd.h>
+#include <Common/Throttler_fwd.h>
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
+#include <IO/AsyncReadCounters.h>
+#include <Disks/IO/getThreadPoolReader.h>
 #include <Interpreters/SynonymsExtensions.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/MergeTreeTransactionHolder.h>
+#include <IO/IResourceManager.h>
 #include <Parsers/IAST_fwd.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage_fwd.h>
-#include <Common/MultiVersion.h>
-#include <Common/OpenTelemetryTraceContext.h>
-#include <Common/RemoteHostFilter.h>
-#include <Common/isLocalAddress.h>
-#include <Common/ThreadPool.h>
-#include <Common/SharedMutex.h>
-#include <Common/SharedMutexHelper.h>
-#include <base/types.h>
-#include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
+#include <IO/IResourceManager.h>
 
 #include "config.h"
 
 #include <boost/container/flat_set.hpp>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-
 #include <thread>
-#include <exception>
 
 /// proton: starts
+#include <Bootstrap/ServerDescriptor.h>
+#include <Cluster/Common/PortAddress.h>
+#include <Interpreters/Streaming/HashJoin/JoinStreamDescription.h>
 #include <Interpreters/TimeParam.h>
-#include <Storages/Streaming/IngestMode.h>
-#include <Interpreters/Streaming/JoinStreamDescription.h>
+#include <Storages/Stream/IngestMode.h>
 /// proton: ends
 
-
-namespace Poco::Net { class IPAddress; }
-namespace zkutil { class ZooKeeper; }
+namespace Poco::Net
+{
+class IPAddress;
+}
+namespace zkutil
+{
+    class ZooKeeper;
+    using ZooKeeperPtr = std::shared_ptr<ZooKeeper>;
+}
 
 struct OvercommitTracker;
 
+namespace cluster
+{
+class TimerService;
+}
+
 namespace DB
 {
+
+class ASTSelectQuery;
 
 struct ContextSharedPart;
 class ContextAccess;
@@ -62,8 +81,6 @@ enum class RowPolicyFilterType;
 class EmbeddedDictionaries;
 class ExternalDictionariesLoader;
 class ExternalModelsLoader;
-class ExternalUserDefinedFunctionsLoader;
-class IUserDefinedSQLObjectsLoader;
 class InterserverCredentials;
 using InterserverCredentialsPtr = std::shared_ptr<const InterserverCredentials>;
 class InterserverIOHandler;
@@ -76,6 +93,7 @@ class MMappedFileCache;
 class UncompressedCache;
 class ProcessList;
 class QueryStatus;
+using QueryStatusPtr = std::shared_ptr<QueryStatus>;
 class Macros;
 struct Progress;
 struct FileProgress;
@@ -89,15 +107,20 @@ class TraceLog;
 class MetricLog;
 class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
-class ZooKeeperLog;
 class SessionLog;
 class ProcessorsProfileLog;
 class FilesystemCacheLog;
+class AsynchronousInsertLog;
+class FilesystemReadPrefetchesLog;
+class BlobStorageLog;
 class TransactionsInfoLog;
 class IAsynchronousReader;
+class IOUringReader;
+struct InitialAllRangesAnnouncement;
+struct ParallelReadRequest;
+struct ParallelReadResponse;
 class StorageS3Settings;
 class IDatabase;
-class DDLWorker;
 class ITableFunction;
 class Block;
 class ActionLocksManager;
@@ -108,6 +131,7 @@ class AccessControl;
 class Credentials;
 class GSSAcceptorContext;
 struct SettingsConstraintsAndProfileIDs;
+class SettingsProfileElements;
 class RemoteHostFilter;
 struct StorageID;
 class IDisk;
@@ -130,20 +154,27 @@ using OrdinaryBackgroundExecutor = MergeTreeBackgroundExecutor<OrdinaryRuntimeQu
 using OrdinaryBackgroundExecutorPtr = std::shared_ptr<OrdinaryBackgroundExecutor>;
 struct PartUUIDs;
 using PartUUIDsPtr = std::shared_ptr<PartUUIDs>;
-class KeeperDispatcher;
 class Session;
 struct WriteSettings;
 
 class IInputFormat;
 
 /// proton: starts.
-class MetaStoreDispatcher;
 class PipelineMetricLog;
+class StreamStateLog;
+class MaterializedViewDeadLetterQueue;
 struct StreamSettings;
 using MergeTreeSettings = StreamSettings;
-namespace Streaming
+
+namespace NLOG
 {
-class MetaStoreJSONConfigRepository;
+class BackgroundSchedulePool;
+}
+
+
+namespace Task
+{
+class TaskScheduler;
 }
 /// proton: ends.
 
@@ -160,13 +191,14 @@ struct BackgroundTaskSchedulingSettings;
     class Lemmatizers;
 #endif
 
-class Throttler;
-using ThrottlerPtr = std::shared_ptr<Throttler>;
-
-class ZooKeeperMetadataTransaction;
-using ZooKeeperMetadataTransactionPtr = std::shared_ptr<ZooKeeperMetadataTransaction>;
-
 class AsynchronousInsertQueue;
+
+#if USE_PYTHON_UDF
+namespace cpython
+{
+class AsyncPythonPackageManager;
+}
+#endif
 
 /// Callback for external tables initializer
 using ExternalTablesInitializer = std::function<void(ContextPtr)>;
@@ -179,13 +211,24 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
 
-using MergeTreeReadTaskCallback = std::function<std::optional<PartitionReadResponse>(PartitionReadRequest)>;
+using MergeTreeAllRangesCallback = std::function<void(InitialAllRangesAnnouncement)>;
+using MergeTreeReadTaskCallback = std::function<std::optional<ParallelReadResponse>(ParallelReadRequest)>;
 
+class TemporaryDataOnDiskScope;
+using TemporaryDataOnDiskScopePtr = std::shared_ptr<TemporaryDataOnDiskScope>;
+
+struct ServerSettings;
+
+class ParallelReplicasReadingCoordinator;
+using ParallelReplicasReadingCoordinatorPtr = std::shared_ptr<ParallelReplicasReadingCoordinator>;
 
 #if USE_ROCKSDB
 class MergeTreeMetadataCache;
 using MergeTreeMetadataCachePtr = std::shared_ptr<MergeTreeMetadataCache>;
 #endif
+
+class PreparedSetsCache;
+using PreparedSetsCachePtr = std::shared_ptr<PreparedSetsCache>;
 
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
@@ -241,21 +284,36 @@ protected:
     std::shared_ptr<const SettingsConstraintsAndProfileIDs> settings_constraints_and_current_profiles;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> row_policies_of_initial_user;
+    mutable bool need_recalculate_access = true;
     String current_database;
     Settings settings;  /// Setting for query execution.
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback;  /// Callback for tracking progress of query execution.
 
+    /// proton: starts
+    ProgressCallback write_progress_callback;  /// Callback for tracking progress of write query execution.
+    /// proton: ends.
+
     using FileProgressCallback = std::function<void(const FileProgress & progress)>;
     FileProgressCallback file_progress_callback; /// Callback for tracking progress of file loading.
 
-    QueryStatus * process_list_elem = nullptr;  /// For tracking total resource usage for query.
-    StorageID insertion_table = StorageID::createEmpty();  /// Saved insertion table in query context
+    std::weak_ptr<QueryStatus> process_list_elem;  /// For tracking total resource usage for query.
+    bool has_process_list_elem = false;     /// It's impossible to check if weak_ptr was initialized or not
+    struct InsertionTableInfo
+    {
+        StorageID table = StorageID::createEmpty();
+        std::optional<Names> column_names;
+    };
+
+    InsertionTableInfo insertion_table_info;  /// Saved information about insertion table in query context
     bool is_distributed = false;  /// Whether the current context it used for distributed query
 
     String default_format;  /// Format, used when server formats data by itself and if query does not have FORMAT specification.
                             /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
+
+    String insert_format; /// Format, used in insert query.
+
     TemporaryTablesMapping external_tables_mapping;
     Scalars scalars;
     /// Used to store constant values which are different on each instance during distributed plan, such as _shard_num.
@@ -267,21 +325,23 @@ protected:
     /// Used in parallel reading from replicas. A replica tells about its intentions to read
     /// some ranges from some part and initiator will tell the replica about whether it is accepted or denied.
     std::optional<MergeTreeReadTaskCallback> merge_tree_read_task_callback;
+    std::optional<MergeTreeAllRangesCallback> merge_tree_all_ranges_callback;
+    UUID parallel_replicas_group_uuid{UUIDHelpers::Nil};
+
+    /// This parameter can be set by the HTTP client to tune the behavior of output formats for compatibility.
+    UInt64 client_protocol_version = 0;
 
     /// proton: starts
-    String this_host;
-    String node_identity;
-    String channel_id;
-    String query_status_poll_id;
     String idempotent_key;
-    String config_path;
-    UInt64 block_base_id = 0;
-    IngestMode ingest_mode = IngestMode::None;
-    bool distributed_ddl_operation = false;
+    std::optional<IngestMode> ingest_mode;
 
     /// For now, if there are X shards on one remote node, we will execute X remote queries to read per shard
     /// FIXME: support multiple shards to read
     std::optional<Int32> shard_to_read;  /// specify read shard num
+
+    mutable std::shared_ptr<std::atomic<UInt32>> spill_id_for_current_query = std::make_shared<std::atomic<UInt32>>(0); /// Used to isolate different hash tables in the same query
+
+    String creator;
     /// proton: ends
 
     /// Record entities accessed by current query, and store this information in system.query_log.
@@ -307,7 +367,7 @@ protected:
             return *this;
         }
 
-        void swap(QueryAccessInfo & rhs)
+        void swap(QueryAccessInfo & rhs) noexcept
         {
             std::swap(databases, rhs.databases);
             std::swap(tables, rhs.tables);
@@ -382,6 +442,8 @@ protected:
 
     /// Needs to be changed while having const context in factories methods
     mutable QueryFactoriesInfo query_factories_info;
+    /// Query metrics for reading data asynchronously with IAsynchronousReader.
+    mutable std::shared_ptr<AsyncReadCounters> async_read_counters;
 
     /// TODO: maybe replace with temporary tables?
     StoragePtr view_source;                 /// Temporary StorageValues used to generate alias columns for materialized views
@@ -399,6 +461,25 @@ protected:
 
     inline static ContextPtr global_context_instance;
 
+    /// Prepared sets that can be shared between different queries. One use case is when is to share prepared sets between
+    /// mutation tasks of one mutation executed against different parts of the same table.
+    PreparedSetsCachePtr prepared_sets_cache;
+
+    /// this is a mode of parallel replicas where we set parallel_replicas_count and parallel_replicas_offset
+    /// and generate specific filters on the replicas (e.g. when using parallel replicas with sample key)
+    /// if we already use a different mode of parallel replicas we want to disable this mode
+    bool offset_parallel_replicas_enabled = true;
+
+    /// Temporary data for query execution accounting.
+    TemporaryDataOnDiskScopePtr temp_data_on_disk;
+
+    /// Resource classifier for a query, holds smart pointers required for ResourceLink
+    /// NOTE: all resource links became invalid after `classifier` destruction
+    mutable ClassifierPtr classifier;
+
+public:
+    ParallelReplicasReadingCoordinatorPtr parallel_reading_coordinator;
+
     /// proton : starts
     /// (database, table, is_view, column name, column type) tuple
     using RequiredColumnTuple = std::tuple<std::string, std::string, bool, std::string, std::string>;
@@ -406,11 +487,9 @@ protected:
     /// is collected in a single thread
     std::set<RequiredColumnTuple> required_columns;
     mutable bool collect_required_columns = false;
-    /// proton: end
 
-public:
-    // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
-    OpenTelemetryTraceContext query_trace_context;
+    bool is_query_from_materialized_view = false;
+    /// proton: end
 
 protected:
     using SampleBlockCache = std::unordered_map<std::string, Block>;
@@ -427,12 +506,6 @@ protected:
                                    /// logger, some query identification information, profiling guards, etc. This field is
                                    /// to be customized in HTTP and TCP servers by overloading the customizeContext(DB::ContextPtr)
                                    /// methods.
-
-    ZooKeeperMetadataTransactionPtr metadata_transaction;    /// Distributed DDL context. I'm not sure if it's a suitable place for this,
-                                                    /// but it's the easiest way to pass this through the whole stack from executeQuery(...)
-                                                    /// to DatabaseOnDisk::commitCreateTable(...) or IStorage::alter(...) without changing
-                                                    /// thousands of signatures.
-                                                    /// And I hope it will be replaced with more common Transaction sometime.
 
     MergeTreeTransactionPtr merge_tree_transaction;     /// Current transaction context. Can be inside session or query context.
                                                         /// It's shared with all children contexts.
@@ -475,27 +548,20 @@ public:
 
     ~Context();
 
-    /// proton: start
-    bool collectRequiredColumns() const { return collect_required_columns; }
-    void setCollectRequiredColumns(bool collect) { collect_required_columns = collect; }
-
-    const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
-    void addRequiredColumns(RequiredColumnTuple && column_tuple) { required_columns.insert(std::move(column_tuple)); }
-    /// Get data stream semantic for subquery
-    DataStreamSemanticCache & getDataStreamSemanticCache() const;
-    /// proton: end
-
     String getPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
     String getDictionariesLibPath() const;
     String getUserScriptsPath() const;
+    std::shared_ptr<IDisk> getDatabaseDisk() const;
 
     /// A list of warnings about server configuration to place in `system.warnings` table.
     Strings getWarnings() const;
 
-    VolumePtr getTemporaryVolume() const;
+    VolumePtr getTemporaryVolume() const; /// TODO: remove, use `getTempDataOnDisk`
 
+    TemporaryDataOnDiskScopePtr getTempDataOnDisk() const;
+    void setTempDataOnDisk(TemporaryDataOnDiskScopePtr temp_data_on_disk_);
 
     void setPath(const String & path);
     void setFlagsPath(const String & path);
@@ -505,7 +571,9 @@ public:
 
     void addWarningMessage(const String & msg) const;
 
-    VolumePtr setTemporaryStorage(const String & path, const String & policy_name = "");
+    void setTemporaryStorageInCache(const String & cache_disk_name, size_t max_size);
+    void setTemporaryStoragePolicy(const String & policy_name, size_t max_size);
+    void setTemporaryStoragePath(const String & path, size_t max_size);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -513,8 +581,7 @@ public:
     void setConfig(const ConfigurationPtr & config);
     const Poco::Util::AbstractConfiguration & getConfigRef() const;
 
-    AccessControl & getAccessControl();
-    const AccessControl & getAccessControl() const;
+    std::shared_ptr<AccessControl> getAccessControl() const; /// proton updates: return shared_ptr copy to fix use after dtor on shutdown
 
     /// Sets external authenticators config (LDAP, Kerberos).
     void setExternalAuthenticatorsConfig(const Poco::Util::AbstractConfiguration & config);
@@ -538,11 +605,6 @@ public:
     std::optional<UUID> getUserID() const;
 
     void setQuotaKey(String quota_key_);
-
-    /// proton: starts
-    String getPasswordByUserName(const String & user_name) const;
-    void setUserByName(const String & user_name);
-    /// proton: ends
 
     void setCurrentRoles(const std::vector<UUID> & current_roles_);
     void setCurrentRolesDefault();
@@ -584,6 +646,10 @@ public:
     std::shared_ptr<const EnabledQuota> getQuota() const;
     std::optional<QuotaUsage> getQuotaUsage() const;
 
+    /// Resource management related
+    ResourceManagerPtr getResourceManager() const;
+    ClassifierPtr getWorkloadClassifier() const;
+
     /// We have to copy external tables inside executeQuery() to track limits. Therefore, set callback for it. Must set once.
     void setExternalTablesInitializer(ExternalTablesInitializer && initializer);
     /// This method is called in executeQuery() and will call the external tables initializer.
@@ -603,6 +669,10 @@ public:
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
 
+    /// Modify stored in the context information about the client executing a query.
+    void setClientInfo(const ClientInfo & client_info_);
+    void increaseDistributedDepth();
+
     enum StorageNamespace
     {
          ResolveGlobal = 1u,                                           /// Database name must be specified
@@ -620,9 +690,10 @@ public:
 
     Tables getExternalTables() const;
     void addExternalTable(const String & table_name, TemporaryTableHolder && temporary_table);
+    std::shared_ptr<TemporaryTableHolder> findExternalTable(const String & table_name) const;
     std::shared_ptr<TemporaryTableHolder> removeExternalTable(const String & table_name);
 
-    const Scalars & getScalars() const;
+    Scalars getScalars() const;
     const Block & getScalar(const String & name) const;
     void addScalar(const String & name, const Block & block);
     bool hasScalar(const String & name) const;
@@ -631,6 +702,7 @@ public:
     void addSpecialScalar(const String & name, const Block & block);
 
     const QueryAccessInfo & getQueryAccessInfo() const { return query_access_info; }
+
     void addQueryAccessInfo(
         const String & quoted_database_name,
         const String & full_quoted_table_name,
@@ -656,34 +728,78 @@ public:
     const QueryFactoriesInfo & getQueryFactoriesInfo() const { return query_factories_info; }
     void addQueryFactoriesInfo(QueryLogFactories factory_type, const String & created_object) const;
 
-    StoragePtr executeTableFunction(const ASTPtr & table_expression);
+    /// For table functions s3/file/url/hdfs/input we can use structure from
+    /// insertion table depending on select expression.
+    StoragePtr executeTableFunction(const ASTPtr & table_expression, const ASTSelectQuery * select_query_hint = nullptr);
 
     void addViewSource(const StoragePtr & storage);
     StoragePtr getViewSource() const;
 
     String getCurrentDatabase() const;
     String getCurrentQueryId() const { return client_info.current_query_id; }
-    /// proton: starts
-    String getQueryStatusPollId() const { return query_status_poll_id; }
-    UInt64 getBlockBaseId() const { return block_base_id; }
-    /// Parse poll id and return `host` in ID, throws if poll_id is invalid or validations didn't pass
-    std::vector<String> parseQueryStatusPollId(const String & poll_id) const;
-    String getHostFQDN() const { return this_host; }
-    String getNodeIdentity() const { return node_identity; }
-    String getChannel() const { return channel_id; }
-    String getConfigPath() const { return config_path; }
-    const String & getIdempotentKey() const { return idempotent_key; }
-    IngestMode getIngestMode() const { return ingest_mode; }
-    /// If proton is a distributed deployment
-    bool isDistributedEnv() const;
-    bool isDistributedDDLOperation() const { return distributed_ddl_operation;}
-    bool isLocalQueryFromTCP() const { return !isDistributedDDLOperation() && !getQueryParameters().contains("_payload"); }
-    /// true, means to create the table but suspend all operations on disk parts. It is used when adding a replica
-    bool isStartSuspend() const { return getQueryParameters().contains("_suspend"); }
-    ThreadPool & getPartCommitPool() const;
 
-    void setShardToRead(Int32 shard) { shard_to_read = shard; }
-    const std::optional<Int32> & getShardToRead() const { return shard_to_read; }
+    /// proton: starts
+    String getSpillDirForCurrentQuery(const String & postfix) const;
+
+    void setSpillDirPath(const String & spill_dir_path_);
+    const String & getSpillDirPath() const noexcept;
+
+    String getPasswordForCurrentUser() const;
+    void setUserByName(const String & user_name);
+
+    ServerDescriptorPtr getServerDescriptor() const;
+    const String & getHostFQDN() const noexcept;
+    const String & getClusterID() const noexcept;
+    const DB::UUID & getNodeUUID() const noexcept;
+
+    void setTotalMaterializedViews(UInt32 total_mvs) noexcept;
+    void setTotalShards(UInt32 total_shards) noexcept;
+    void setOSMemoryFreeMB(UInt32 os_memory_free_mb) noexcept;
+    void setMemoryUsedMB(UInt32 memory_used_mb) noexcept;
+    void setOSCPUUsage(double os_cpu_usage) noexcept;
+    void setCPUUsage(double cpu_usage) noexcept;
+    void updateDiskUsage(const String & name, UInt64 total_bytes, UInt64 available_bytes, bool first_run) noexcept;
+
+    /// Single-instance: Set node ID (always 1 for single-instance)
+    void setNodeID(cluster::NodeID node_id_) noexcept;
+    cluster::NodeID getNodeID() const noexcept;
+    /// proton: ends
+
+    void setConfigPath(const String & config_path_);
+    const String & getConfigPath() const noexcept;
+
+    void setMaxDiskUtil(double max_disk_util);
+    void checkDiskUtil() const;
+    void checkIngest(const String & database_name) const;
+
+    ThreadPool & getAdhocSchedulePool() const;
+    ThreadPool & getStorageCommitPool() const;
+    ThreadPool & getNlogAdhocSchedulePool() const;
+    NLOG::BackgroundSchedulePool & getNlogBackgroundSchedulePool() const;
+    cluster::TimerService & getTimerService() const;
+
+    /// Query time states
+    void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
+    const String & getIdempotentKey() const noexcept { return idempotent_key; }
+
+    void setIngestMode(IngestMode ingest_mode_) noexcept { ingest_mode = ingest_mode_; }
+    std::optional<IngestMode> getIngestMode() const noexcept
+    {
+        if (ingest_mode)
+            return ingest_mode;
+        return getSettingsRef().async_insert ? IngestMode::Async : IngestMode::Sync;
+    }
+
+    void setShardToRead(Int32 shard) noexcept { shard_to_read = shard; }
+    std::optional<Int32> getShardToRead() const noexcept { return shard_to_read; }
+
+    bool collectRequiredColumns() const { return collect_required_columns; }
+    void setCollectRequiredColumns(bool collect) { collect_required_columns = collect; }
+
+    const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
+    void addRequiredColumns(RequiredColumnTuple && column_tuple) { required_columns.insert(std::move(column_tuple)); }
+    /// Get data stream semantic for subquery
+    DataStreamSemanticCache & getDataStreamSemanticCache() const;
     /// proton: ends
 
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
@@ -695,26 +811,22 @@ public:
     void setCurrentDatabaseNameInGlobalContext(const String & name);
     void setCurrentQueryId(const String & query_id);
 
-    /// proton: starts
-    void setupNodeIdentity();
-    void setupQueryStatusPollId(UInt64 block_base_id_);
-    void setIdempotentKey(const String & idempotent_key_) { idempotent_key = idempotent_key_; }
-    void setIngestMode(IngestMode ingest_mode_) { ingest_mode = ingest_mode_; }
-    void setConfigPath(const String & config_path_) { config_path = config_path_; }
-    /// Kinda hacky
-    void setDistributedDDLOperation(bool distributed) { distributed_ddl_operation = distributed; }
-    /// proton: ends
+    void killCurrentQuery() const;
 
-    void killCurrentQuery();
-
-    void setInsertionTable(StorageID db_and_table) { insertion_table = std::move(db_and_table); }
-    const StorageID & getInsertionTable() const { return insertion_table; }
+    bool hasInsertionTable() const { return !insertion_table_info.table.empty(); }
+    bool hasInsertionTableColumnNames() const { return insertion_table_info.column_names.has_value(); }
+    void setInsertionTable(StorageID db_and_table, std::optional<Names> column_names = std::nullopt) { insertion_table_info = {std::move(db_and_table), std::move(column_names)}; }
+    const StorageID & getInsertionTable() const { return insertion_table_info.table; }
+    const std::optional<Names> & getInsertionTableColumnNames() const{ return insertion_table_info.column_names; }
 
     void setDistributed(bool is_distributed_) { is_distributed = is_distributed_; }
-    bool isDistributed() const { return is_distributed; }
+    bool isDistributed() const noexcept { return is_distributed; }
 
     String getDefaultFormat() const;    /// If default_format is not specified, some global default format is returned.
     void setDefaultFormat(const String & name);
+
+    String getInsertFormat() const;
+    void setInsertFormat(const String & name);
 
     MultiVersion<Macros>::Version getMacros() const;
     void setMacros(std::unique_ptr<Macros> && macros);
@@ -729,10 +841,12 @@ public:
     void applySettingsChanges(const SettingsChanges & changes);
 
     /// Checks the constraints.
+    void checkSettingsConstraints(const SettingsProfileElements & profile_elements) const;
     void checkSettingsConstraints(const SettingChange & change) const;
     void checkSettingsConstraints(const SettingsChanges & changes) const;
     void checkSettingsConstraints(SettingsChanges & changes) const;
     void clampToSettingsConstraints(SettingsChanges & changes) const;
+    void checkMergeTreeSettingsConstraints(const MergeTreeSettings & merge_tree_settings, const SettingsChanges & changes) const;
 
     /// Reset settings to default value
     void resetSettingsToDefaultValue(const std::vector<String> & names);
@@ -751,25 +865,17 @@ public:
     void tryCreateEmbeddedDictionaries(const Poco::Util::AbstractConfiguration & config) const;
     void loadOrReloadDictionaries(const Poco::Util::AbstractConfiguration & config);
 
-    const ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader() const;
-    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader();
-    const IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader() const;
-    IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader();
-    /// proton: starts
-    void loadOrReloadUserDefinedExecutableFunctions();
-    Streaming::MetaStoreJSONConfigRepository * getMetaStoreJSONConfigRepository() const;
-    /// proton: ends
-
 #if USE_NLP
     SynonymsExtensions & getSynonymsExtensions() const;
     Lemmatizers & getLemmatizers() const;
 #endif
 
     /// I/O formats.
-    InputFormatPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size, const std::optional<FormatSettings> & format_settings = std::nullopt) const;
+    InputFormatPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size,
+                                  const std::optional<FormatSettings> & format_settings = std::nullopt, const std::optional<size_t> max_parsing_threads = std::nullopt) const;
 
-    OutputFormatPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
-    OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;
+    OutputFormatPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample, const std::optional<FormatSettings> & format_settings = std::nullopt) const;
+    OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample, const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
     InterserverIOHandler & getInterserverIOHandler();
 
@@ -790,9 +896,7 @@ public:
     const RemoteHostFilter & getRemoteHostFilter() const;
 
     /// The port that the server listens for executing SQL queries.
-    UInt16 getTCPPort() const;
-
-    std::optional<UInt16> getTCPPortSecure() const;
+    cluster::TCPPort getTCPPort() const;
 
     /// Register server ports during server starting up. No lock is held.
     void registerServerPort(String port_name, UInt16 port);
@@ -824,9 +928,9 @@ public:
     void setQueryContext(ContextMutablePtr context_) { query_context = context_; }
     void setSessionContext(ContextMutablePtr context_) { session_context = context_; }
 
-    void makeQueryContext() { query_context = shared_from_this(); }
-    void makeSessionContext() { session_context = shared_from_this(); }
-    void makeGlobalContext() { initGlobal(); global_context = shared_from_this(); }
+    void makeQueryContext();
+    void makeSessionContext();
+    void makeGlobalContext();
 
     const Settings & getSettingsRef() const { return settings; }
 
@@ -834,15 +938,20 @@ public:
     /// Used in executeQuery() to pass it to the QueryPipeline.
     ProgressCallback getProgressCallback() const;
 
+    /// proton: starts.
+    void setWriteProgressCallback(ProgressCallback callback);
+    ProgressCallback getWriteProgressCallback() const;
+    /// proton: ends.
+
     void setFileProgressCallback(FileProgressCallback && callback) { file_progress_callback = callback; }
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
 
     /** Set in executeQuery and InterpreterSelectQuery. Then it is used in QueryPipeline,
       *  to update and monitor information about the total number of resources spent for the query.
       */
-    void setProcessListElement(QueryStatus * elem);
+    void setProcessListElement(QueryStatusPtr elem);
     /// Can return nullptr if the query was not inserted into the ProcessList.
-    QueryStatus * getProcessListElement() const;
+    QueryStatusPtr getProcessListElement() const;
 
     /// List all queries.
     ProcessList & getProcessList();
@@ -853,25 +962,19 @@ public:
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
 
+    UInt64 getClientProtocolVersion() const;
+    void setClientProtocolVersion(UInt64 version);
+
 #if USE_ROCKSDB
     MergeTreeMetadataCachePtr getMergeTreeMetadataCache() const;
     MergeTreeMetadataCachePtr tryGetMergeTreeMetadataCache() const;
 #endif
 
-#if USE_NURAFT
-    std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
-#endif
-    void initializeKeeperDispatcher(bool start_async) const;
-    void shutdownKeeperDispatcher() const;
-    void updateKeeperConfiguration(const Poco::Util::AbstractConfiguration & config);
+    /// proton: starts.
 
-/// proton: starts.
-#if USE_NURAFT
-    std::shared_ptr<MetaStoreDispatcher> & getMetaStoreDispatcher() const;
-#endif
-    void initializeMetaStoreDispatcher() const;
-    void shutdownMetaStoreDispatcher() const;
-/// proton: ends.
+    void setTaskScheduler(std::shared_ptr<Task::TaskScheduler> scheduler);
+    std::shared_ptr<Task::TaskScheduler> getTaskScheduler() const;
+    /// proton: ends.
 
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
@@ -883,6 +986,13 @@ public:
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
     ThreadPool & getLoadMarksThreadpool() const;
+
+    ThreadPool & getPrefetchThreadpool() const;
+
+    /// Note: prefetchThreadpool is different from threadpoolReader
+    /// in the way that its tasks are - wait for marks to be loaded
+    /// and make a prefetch by putting a read task to threadpoolReader.
+    size_t getPrefetchThreadpoolSize() const;
 
     /// Create a cache of index uncompressed blocks of specified size. This can be done only once.
     void setIndexUncompressedCache(size_t max_size_in_bytes);
@@ -916,23 +1026,6 @@ public:
     BackgroundSchedulePool & getMessageBrokerSchedulePool() const;
     BackgroundSchedulePool & getDistributedSchedulePool() const;
 
-    ThrottlerPtr getRemoteReadThrottler() const;
-    ThrottlerPtr getRemoteWriteThrottler() const;
-
-    /// Has distributed_ddl configuration or not.
-    bool hasDistributedDDL() const;
-
-    std::shared_ptr<Clusters> getClusters() const;
-    std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
-    std::shared_ptr<Cluster> tryGetCluster(const std::string & cluster_name) const;
-    void setClustersConfig(const ConfigurationPtr & config, bool enable_discovery = false, const String & config_name = "remote_servers");
-
-    void startClusterDiscovery();
-
-    /// Sets custom cluster, but doesn't update configuration
-    void setCluster(const String & cluster_name, const std::shared_ptr<Cluster> & cluster);
-    void reloadClusterConfig() const;
-
     Compiler & getCompiler();
 
     /// Call after initialization before using system logs. Call for global context.
@@ -958,15 +1051,19 @@ public:
 
     /// proton: starts.
     std::shared_ptr<PipelineMetricLog> getPipelineMetricLog() const;
+    std::shared_ptr<MaterializedViewDeadLetterQueue> getMaterializedViewDLQ() const;
+    std::shared_ptr<StreamStateLog> getStreamStateLog() const;
     /// proton: ends.
 
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
-    std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
     std::shared_ptr<SessionLog> getSessionLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<TransactionsInfoLog> getTransactionsInfoLog() const;
 
     std::shared_ptr<FilesystemCacheLog> getFilesystemCacheLog() const;
+    std::shared_ptr<AsynchronousInsertLog> getAsynchronousInsertLog() const;
+    std::shared_ptr<FilesystemReadPrefetchesLog> getFilesystemReadPrefetchesLog() const;
+    std::shared_ptr<BlobStorageLog> getBlobStorageLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
     /// Provide table name to make required checks.
@@ -985,22 +1082,35 @@ public:
 
     /// Prevents DROP PARTITION if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
     void setMaxPartitionSizeToDrop(size_t max_size);
+    size_t getMaxPartitionSizeToDrop() const;
     void checkPartitionCanBeDropped(const String & database, const String & table, const size_t & partition_size) const;
 
     /// Lets you select the compression codec according to the conditions described in the configuration file.
     std::shared_ptr<ICompressionCodec> chooseCompressionCodec(size_t part_size, double part_size_ratio) const;
 
-
     /// Provides storage disks
     DiskPtr getDisk(const String & name) const;
+    using DiskCreator = std::function<DiskPtr(const DisksMap & disks_map)>;
+    DiskPtr getOrCreateDisk(const String & name, DiskCreator creator) const;
 
     StoragePoliciesMap getPoliciesMap() const;
     DisksMap getDisksMap() const;
     void updateStorageConfiguration(const Poco::Util::AbstractConfiguration & config);
-
+    /// proton: starts
+    void updateDisk(const String & name, const Poco::Util::AbstractConfiguration & config);
+    void deleteDisk(const String & name) const;
+    /// proton: ends
 
     /// Provides storage politics schemes
     StoragePolicyPtr getStoragePolicy(const String & name) const;
+
+    StoragePolicyPtr getStoragePolicyFromDisk(const String & disk_name) const;
+
+    /// proton: starts.
+    /// get or create storage policy by storage policy configuration
+    StoragePolicyPtr getStoragePolicyFromConfiguration(const String & name, const Poco::AutoPtr<Poco::Util::AbstractConfiguration> & config) const;
+    void deleteStoragePolicy(const String & name) const;
+    /// proton: ends
 
     /// Get the server uptime in seconds.
     double getUptimeSeconds() const;
@@ -1014,6 +1124,14 @@ public:
     bool isInternalQuery() const { return is_internal_query; }
     void setInternalQuery(bool internal) { is_internal_query = internal; }
 
+    /// proton: start.
+    String getCreator() const { return creator; }
+    void setCreator(const String & creator_) { creator = creator_; }
+
+    bool isQueryFromMaterializedView() const { return is_query_from_materialized_view; }
+    void setQueryFromMaterializedView(bool is_query_from_materialized_view_) { is_query_from_materialized_view = is_query_from_materialized_view_; }
+    /// proton: ends.
+
     ActionLocksManagerPtr getActionLocksManager();
 
     enum class ApplicationType
@@ -1022,10 +1140,6 @@ public:
         CLIENT,         /// clickhouse-client
         LOCAL,          /// clickhouse-local
         KEEPER,         /// clickhouse-keeper (also daemon)
-
-        /// proton: starts.
-        METASTORE,      /// proton-metastore (also daemon)
-        /// proton: ends.
     };
 
     ApplicationType getApplicationType() const;
@@ -1080,38 +1194,71 @@ public:
     AsynchronousInsertQueue * getAsynchronousInsertQueue() const;
     void setAsynchronousInsertQueue(const std::shared_ptr<AsynchronousInsertQueue> & ptr);
 
+#if USE_PYTHON_UDF
+    cpython::AsyncPythonPackageManager * getAsyncPythonPackageManager() const;
+    void setAsyncPythonPackageManager(const std::shared_ptr<cpython::AsyncPythonPackageManager> & ptr);
+#endif
+
     ReadTaskCallback getReadTaskCallback() const;
     void setReadTaskCallback(ReadTaskCallback && callback);
 
     MergeTreeReadTaskCallback getMergeTreeReadTaskCallback() const;
     void setMergeTreeReadTaskCallback(MergeTreeReadTaskCallback && callback);
 
+    MergeTreeAllRangesCallback getMergeTreeAllRangesCallback() const;
+    void setMergeTreeAllRangesCallback(MergeTreeAllRangesCallback && callback);
+
+    UUID getParallelReplicasGroupUUID() const;
+    void setParallelReplicasGroupUUID(UUID uuid);
+
     /// Background executors related methods
     void initializeBackgroundExecutorsIfNeeded();
 
     MergeMutateBackgroundExecutorPtr getMergeMutateExecutor() const;
     OrdinaryBackgroundExecutorPtr getMovesExecutor() const;
-    OrdinaryBackgroundExecutorPtr getFetchesExecutor() const;
     OrdinaryBackgroundExecutorPtr getCommonExecutor() const;
 
-    enum class FilesystemReaderType
-    {
-        SYNCHRONOUS_LOCAL_FS_READER,
-        ASYNCHRONOUS_LOCAL_FS_READER,
-        ASYNCHRONOUS_REMOTE_FS_READER,
-    };
-
     IAsynchronousReader & getThreadPoolReader(FilesystemReaderType type) const;
+#if USE_LIBURING
+    IOUringReader & getIOUringReader() const;
+#endif
 
-    size_t getThreadPoolReaderSize(FilesystemReaderType type) const;
+    std::shared_ptr<AsyncReadCounters> getAsyncReadCounters() const;
 
     ThreadPool & getThreadPoolWriter() const;
 
     /** Get settings for reading from filesystem. */
     ReadSettings getReadSettings() const;
 
+    /** Get settings for reading from filesystem for BACKUPs. */
+    ReadSettings getBackupReadSettings() const;
+
     /** Get settings for writing to filesystem. */
     WriteSettings getWriteSettings() const;
+
+    /** There are multiple conditions that have to be met to be able to use parallel replicas */
+    bool canUseTaskBasedParallelReplicas() const;
+    bool canUseParallelReplicasOnInitiator() const;
+    bool canUseParallelReplicasOnFollower() const;
+    bool canUseParallelReplicasCustomKey() const;
+    bool canUseParallelReplicasCustomKeyForCluster(const Cluster & cluster) const;
+    bool canUseOffsetParallelReplicas() const;
+
+    void disableOffsetParallelReplicas();
+
+    enum class ParallelReplicasMode : uint8_t
+    {
+        SAMPLE_KEY,
+        CUSTOM_KEY,
+        READ_TASKS,
+    };
+
+    ParallelReplicasMode getParallelReplicasMode() const;
+
+    void setPreparedSetsCache(const PreparedSetsCachePtr & cache);
+    PreparedSetsCachePtr getPreparedSetsCache() const;
+
+    const ServerSettings & getServerSettings() const;
 
 private:
     std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfilesWithLock() const;
@@ -1142,8 +1289,6 @@ private:
 
     ExternalDictionariesLoader & getExternalDictionariesLoaderWithLock(const std::lock_guard<std::mutex> & lock);
 
-    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoaderWithLock(const std::lock_guard<std::mutex> & lock);
-
     ExternalModelsLoader & getExternalModelsLoaderWithLock(const std::lock_guard<std::mutex> & lock);
 
     void initGlobal();
@@ -1160,9 +1305,31 @@ private:
 
     StoragePolicySelectorPtr getStoragePolicySelector(std::lock_guard<std::mutex> & lock) const;
 
-    DiskSelectorPtr getDiskSelector(std::lock_guard<std::mutex> & /* lock */) const;
+    DiskSelectorPtr getDiskSelector(std::lock_guard<std::mutex> & lock) const;
 
     DisksMap getDisksMap(std::lock_guard<std::mutex> & lock) const;
+
+    /// Throttling
+public:
+    ThrottlerPtr getReplicatedFetchesThrottler() const;
+    ThrottlerPtr getReplicatedSendsThrottler() const;
+
+    ThrottlerPtr getRemoteReadThrottler() const;
+    ThrottlerPtr getRemoteWriteThrottler() const;
+
+    ThrottlerPtr getLocalReadThrottler() const;
+    ThrottlerPtr getLocalWriteThrottler() const;
+
+    ThrottlerPtr getBackupsThrottler() const;
+
+private:
+    mutable ThrottlerPtr remote_read_query_throttler;       /// A query-wide throttler for remote IO reads
+    mutable ThrottlerPtr remote_write_query_throttler;      /// A query-wide throttler for remote IO writes
+
+    mutable ThrottlerPtr local_read_query_throttler;        /// A query-wide throttler for local IO reads
+    mutable ThrottlerPtr local_write_query_throttler;       /// A query-wide throttler for local IO writes
+
+    mutable ThrottlerPtr backups_query_throttler;           /// A query-wide throttler for BACKUPs
 };
 
 }

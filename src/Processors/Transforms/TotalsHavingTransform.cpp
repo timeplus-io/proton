@@ -129,7 +129,7 @@ IProcessor::Status TotalsHavingTransform::prepare()
     if (!totals_output.canPush())
         return Status::PortFull;
 
-    if (!totals)
+    if (!total_prepared)
         return Status::Ready;
 
     totals_output.push(std::move(totals));
@@ -152,11 +152,11 @@ void TotalsHavingTransform::transform(Chunk & chunk)
     {
         const auto & info = chunk.getChunkInfo();
         if (!info)
-            throw Exception("Chunk info was not set for chunk in TotalsHavingTransform.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Chunk info was not set for chunk in TotalsHavingTransform.");
 
         const auto * agg_info = typeid_cast<const AggregatedChunkInfo *>(info.get());
         if (!agg_info)
-            throw Exception("Chunk should have AggregatedChunkInfo in TotalsHavingTransform.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Chunk should have AggregatedChunkInfo in TotalsHavingTransform.");
 
         if (agg_info->is_overflows)
         {
@@ -189,7 +189,7 @@ void TotalsHavingTransform::transform(Chunk & chunk)
         for (const auto & action : expression->getActions())
         {
             if (action.node->type == ActionsDAG::ActionType::ARRAY_JOIN)
-                throw Exception("Having clause cannot contain arrayJoin", ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Having clause cannot contain arrayJoin");
         }
 
         expression->execute(finalized_block, num_rows);
@@ -260,7 +260,7 @@ void TotalsHavingTransform::addToTotals(const Chunk & chunk, const IColumn::Filt
             size_t size = vec.size();
 
             if (filter && filter->size() != size)
-                throw Exception("Filter has size which differs from column size", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Filter has size which differs from column size");
 
             if (filter)
             {
@@ -303,6 +303,8 @@ void TotalsHavingTransform::prepareTotals()
         /// Note: after expression totals may have several rows if `arrayJoin` was used in expression.
         totals = Chunk(block.getColumns(), num_rows);
     }
+
+    total_prepared = true;
 }
 
 }

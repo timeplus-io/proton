@@ -1,0 +1,240 @@
+tags:
+- local-run
+
+description: |
+  Test cover SQL UDF data types
+  Main Steps:
+    1.Create stream
+    2.Create sql udf with different data types as parameter
+    3.Query sql udf from stream
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: DROP STREAM IF EXISTS test22_stream;
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE STREAM test22_stream (
+      int8_c int8,
+      int16_c int16,
+      int32_c int32,
+      int64_c int64,
+      uint8_c uint8,
+      uint16_c uint16,
+      uint32_c uint32,
+      uint64_c uint64,
+      uuid_c uuid,
+      string_c string,
+      float_c float,
+      decimal_c decimal(9,5),
+      date_c date,
+      datetime_c datetime,
+      enum_c enum('a'=1, 'b'=2, 'z'=26),
+      tuple_c tuple(s string, i int),
+      ipv4_c ipv4,
+      ipv6_c ipv6,
+      map_c map(string, int),
+      array_c array(int),
+      null_int_c nullable(int),
+      null_float_c nullable(float),
+      null_string_c nullable(string),
+      null_bool_c nullable(bool),
+      null_datetime_c nullable(datetime)
+    );
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_int8_c AS (int8_c) -> int8_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_int16_c AS (int16_c) -> int16_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_int32_c AS (int32_c) -> int32_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_int64_c AS (int64_c) -> int64_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_uint8_c AS (uint8_c) -> uint8_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_uint16_c AS (uint16_c) -> uint16_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_uint32_c AS (uint32_c) -> uint32_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_uint64_c AS (uint64_c) -> uint64_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_uint64_c AS (uint64_c) -> uint64_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_uuid_c AS (uuid_c) -> uuid_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_string_c AS (string_c) -> string_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_float_c AS (float_c) -> float_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_decimal_c AS (decimal_c) -> decimal_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_date_c AS (date_c) -> date_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_datetime_c AS (datetime_c) -> datetime_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_enum_c AS (enum_c) -> enum_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_tuple_c AS (tuple_c) -> tuple_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_ipv4_c AS (ipv4_c) -> ipv4_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_ipv6_c AS (ipv6_c) -> ipv6_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_map_c AS (map_c) -> map_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_array_c AS (array_c) -> array_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_null_int_c AS (null_int_c) -> null_int_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_null_float_c AS (null_float_c) -> null_float_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_null_string_c AS (null_string_c) -> null_string_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_null_bool_c AS (null_bool_c) -> null_bool_c
+
+- type: query
+  sql: CREATE OR REPLACE FUNCTION test_null_datetime_c AS (null_datetime_c) -> null_datetime_c
+
+- type: wait
+  time: 2
+
+- name: udf-2-1
+  type: stream
+  query: |
+    SELECT 
+      test_int8_c(int8_c) as res_int8,
+      test_int16_c(int16_c) as res_int16,
+      test_int32_c(int32_c) as res_int32,
+      test_int64_c(int64_c) as res_int64,
+      test_uint8_c(uint8_c) as res_uint8,
+      test_uint16_c(uint16_c) as res_uint16,
+      test_uint32_c(uint32_c) as res_uint32,
+      test_uint64_c(uint64_c) as res_uint64,
+      test_uuid_c(uuid_c) as res_uuid,
+      test_string_c(string_c) as res_string,
+      test_float_c(float_c) as res_float,
+      test_decimal_c(decimal_c) as res_decimal,
+      test_date_c(date_c) as res_date,
+      test_datetime_c(datetime_c) as res_datetime,
+      test_enum_c(enum_c) as res_enum,
+      test_tuple_c(tuple_c) as res_tuple,
+      test_ipv4_c(ipv4_c) as res_ipv4,
+      test_ipv6_c(ipv6_c) as res_ipv6,
+      test_map_c(map_c) as res_map,
+      test_array_c(array_c) as res_array,
+      test_null_int_c(null_int_c) as res_null_int,
+      test_null_float_c(null_float_c) as res_null_float_c,
+      test_null_string_c(null_string_c) as res_null_string_c,
+      test_null_bool_c(null_bool_c) as res_null_bool_c,
+      test_null_datetime_c(null_datetime_c) as res_null_datetime_c
+    FROM test22_stream;
+  schema:
+    - name: res_int8
+      type: int8
+    - name: res_int16
+      type: int16
+    - name: res_int32
+      type: int32
+    - name: res_int64
+      type: int64
+    - name: res_uint8
+      type: uint8
+    - name: res_uint16
+      type: uint16
+    - name: res_uint32
+      type: uint32
+    - name: res_uint64
+      type: uint64
+    - name: res_uuid
+      type: uuid
+    - name: res_string
+      type: string
+    - name: res_float
+      type: float32
+    - name: res_decimal
+      type: decimal(9,5)
+    - name: res_date
+      type: date
+    - name: res_datetime
+      type: datetime
+    - name: res_enum
+      type: enum8('a'=1, 'b'=2, 'z'=26)
+    - name: res_tuple
+      type: tuple(s string, i int32)
+    - name: res_ipv4
+      type: ipv4
+    - name: res_ipv6
+      type: ipv6
+    - name: res_map
+      type: map(string, int32)
+    - name: res_array
+      type: array(int32)
+    - name: res_null_int
+      type: nullable(int32)
+    - name: res_null_float_c
+      type: nullable(float32)
+    - name: res_null_string_c
+      type: nullable(string)
+    - name: res_null_bool_c
+      type: nullable(bool)
+    - name: res_null_datetime_c
+      type: nullable(datetime)
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    INSERT INTO test22_stream (int8_c, int16_c, int32_c, int64_c, uint8_c, uint16_c, uint32_c, uint64_c, uuid_c, string_c, float_c, decimal_c, date_c, datetime_c, enum_c, tuple_c, ipv4_c, ipv6_c, map_c, array_c, null_int_c, null_float_c, null_string_c, null_bool_c, null_datetime_c) 
+    VALUES (1, 1, 1, 1, 1, 1, 1, 1, '550e8400-e29b-41d4-a716-446655440009', 'HelloWorld', 3.14, 1234.56789, '2024-01-11', '2024-01-11 12:34:56', 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1,2,3], 1, 3.14, 'aaaa', true, '2024-01-11 12:34:56');
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: |
+    INSERT INTO test22_stream (int8_c, int16_c, int32_c, int64_c, uint8_c, uint16_c, uint32_c, uint64_c, uuid_c, string_c, float_c, decimal_c, date_c, datetime_c, enum_c, tuple_c, ipv4_c, ipv6_c, map_c, array_c, null_int_c, null_float_c, null_string_c, null_bool_c, null_datetime_c)
+    VALUES (-128, -32768, -2147483648, -9223372036854775808, 0, 0, 0, 0, '550e8400-e29b-41d4-a716-446655440000', '', -3.14, -1234.56789, '1970-01-01', '1970-01-01 12:34:56', 'a', ('a', 0), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1,2,3], null, null, null, null, null) 
+           (127, 32767, 2147483647, 9223372036854775807, 255, 65535, 4294967295, 18446744073709551615, '550e8400-e29b-41d4-a716-446655440001', 'HelloWorld12345', 3.14, 1234.56789, '2105-12-31', '2105-12-31 12:34:56', 'b', ('b', 1), '192.168.168.168', '2a02:aa08:e000:3100::20', {'key2': 222}, [4,5,6], -1, -3.14, 'bbbb', false, '2105-12-31 12:34:56');
+
+- type: check
+  target_name: udf-2-1
+  expected_result:
+  - [1, 1, 1, 1, 1, 1, 1, 1, '550e8400-e29b-41d4-a716-446655440009', 'HelloWorld', 3.14, '1234.56789', '2024-01-11', '2024-01-11 12:34:56', 'a', {s: a, i: 0}, 192.168.168.168, 2a02:aa08:e000:3100::20, {'key1': 111}, [1, 2, 3], 1, 3.14, 'aaaa', true, '2024-01-11 12:34:56']
+  - [-128, -32768, -2147483648, -9223372036854775808, 0, 0, 0, 0, '550e8400-e29b-41d4-a716-446655440000', '', -3.14, '-1234.56789', '1970-01-01', '1970-01-01 12:34:56', 'a', {s: a, i: 0}, '192.168.168.168', '2a02:aa08:e000:3100::20', {'key1': 111}, [1, 2, 3], null, null, null, null, null]
+  - [127, 32767, 2147483647, 9223372036854775807, 255, 65535, 4294967295, 18446744073709551615, '550e8400-e29b-41d4-a716-446655440001', 'HelloWorld12345', 3.14, '1234.56789', '2105-12-31', '2105-12-31 12:34:56', 'b', {s: b, i: 1}, '192.168.168.168', '2a02:aa08:e000:3100::20', {'key2': 222}, [4, 5, 6], -1, -3.14, 'bbbb', false, '2105-12-31 12:34:56']

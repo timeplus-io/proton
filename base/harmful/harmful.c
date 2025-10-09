@@ -101,7 +101,11 @@ TRAP(getutxline)
 TRAP(getwchar_unlocked)
 //TRAP(glob)
 //TRAP(glob64)
+/// proton: starts.
+#if !USE_PYTHON_UDF
 TRAP(gmtime)
+#endif
+/// proton: ends.
 TRAP(hcreate)
 TRAP(hdestroy)
 TRAP(hsearch)
@@ -110,7 +114,11 @@ TRAP(jrand48)
 TRAP(l64a)
 TRAP(lcong48)
 TRAP(lgammafNx)
+/// proton: starts.
+#if !USE_PYTHON_UDF
 TRAP(localeconv)
+#endif
+/// proton: ends.
 TRAP(localtime)
 TRAP(login)
 TRAP(login_tty)
@@ -172,7 +180,13 @@ TRAP(tcflow)
 TRAP(tcsendbreak)
 TRAP(tmpnam)
 TRAP(ttyname)
-TRAP(unsetenv)
+/// proton : starts
+#if !USE_PYTHON_UDF
+TRAP(unsetenv)    // Used by Python UDF
+TRAP(nl_langinfo) // Used by Python UDF
+TRAP(wcstombs)    // Used by Python UDF
+#endif
+/// proton : ends
 TRAP(updwtmp)
 TRAP(utmpname)
 TRAP(utmpxname)
@@ -204,7 +218,6 @@ TRAP(lgamma)
 TRAP(lgammaf)
 TRAP(lgammal)
 TRAP(nftw)
-TRAP(nl_langinfo)
 TRAP(putc_unlocked)
 TRAP(rand)
 /** In  the current POSIX.1 specification (POSIX.1-2008), readdir() is not required to be thread-safe.  However, in modern
@@ -216,7 +229,6 @@ TRAP(rand)
   */
 //TRAP(readdir)
 TRAP(system)
-TRAP(wcstombs)
 TRAP(ether_aton)
 TRAP(ether_ntoa)
 TRAP(fgetsgent)

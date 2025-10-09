@@ -11,6 +11,9 @@ namespace DB
 class Chain;
 class ThreadStatus;
 
+struct ThreadStatusesHolder;
+using ThreadStatusesHolderPtr = std::shared_ptr<ThreadStatusesHolder>;
+
 /** Interprets the INSERT query.
   */
 class InterpreterInsertQuery : public IInterpreter, WithContext
@@ -33,11 +36,15 @@ public:
 
     StorageID getDatabaseTable() const;
 
+    /// Return explicitly specified column names to insert.
+    /// It not explicit names were specified, return nullopt.
+    std::optional<Names> getInsertColumnNames() const;
+
     Chain buildChain(
         const StoragePtr & table,
         const StorageMetadataPtr & metadata_snapshot,
         const Names & columns,
-        ThreadStatus * thread_status = nullptr,
+        ThreadStatusesHolderPtr thread_status_holder = {},
         std::atomic_uint64_t * elapsed_counter_ms = nullptr,
         bool is_streaming = false);
 
@@ -45,7 +52,7 @@ public:
         const StoragePtr & table,
         const StorageMetadataPtr & metadata_snapshot,
         const Block & query_sample_block,
-        ThreadStatus * thread_status,
+        ThreadStatusesHolderPtr thread_status_holder,
         std::atomic_uint64_t * elapsed_counter_ms,
         bool is_streaming = false);
 
@@ -70,7 +77,7 @@ private:
         const StoragePtr & table,
         const StorageMetadataPtr & metadata_snapshot,
         const Block & query_sample_block,
-        ThreadStatus * thread_status,
+        ThreadStatusesHolderPtr thread_status,
         std::atomic_uint64_t * elapsed_counter_ms,
         bool is_streaming);
 };

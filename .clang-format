@@ -5,6 +5,7 @@ BreakBeforeBraces: Custom
 BraceWrapping:
     AfterClass: true
     AfterControlStatement: true
+    AfterCaseLabel: true
     AfterEnum: true
     AfterFunction: true
     AfterNamespace: true
@@ -31,7 +32,7 @@ IndentCaseLabels: true
 SpaceAfterTemplateKeyword: true
 SpaceBeforeCpp11BracedList: false
 SortIncludes: true
-IndentPPDirectives: AfterHash
+IndentPPDirectives: None
 IncludeCategories:
   - Regex: '^<[a-z_]+>'
     Priority: 1

@@ -1,0 +1,50 @@
+tags:
+- versioned_kv
+- multi_shard
+- substream
+- partition_by_primary_key
+- streaming_tailing
+- stateful_function
+description: partition by primary key, streaming tailing, stateful function, add
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: create stream test14_multishard_11(i float, k1 int, k2 string) primary key k2 settings mode='versioned_kv', shards=3;
+
+- type: wait
+  time: 2
+
+- name: '1493'
+  type: stream
+  query: select lag(i, 1),
+                k1,
+                k2
+        from test14_multishard_11 partition by k2;
+  schema:
+  - name: lag(i, 1)
+    type: float32
+  - name: k1
+    type: int32
+  - name: k2
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (1, 1, 'a');
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (2, 1, 'b');
+
+- type: query
+  sql: insert into test14_multishard_11(i, k1, k2) values (3, 1, 'c');
+
+- type: check
+  target_name: '1493'
+  mode: random
+  expected_result:
+  - [0, 1, a]
+  - [0, 1, b]
+  - [0, 1, c]

@@ -1,0 +1,49 @@
+tags:
+  - hopping window w/ slide interal > window interval
+description: tumble window aggregate by max and group by id, window_start, window_end
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '601'
+    type: stream
+    query: |
+      select id, max(value), window_start, window_end
+      from hop(test6_stream_only, timestamp, interval 5 second, interval 3 second)
+      group by id, window_start, window_end
+    schema:
+      - name: id
+        type: string
+      - name: max(value)
+        type: float64
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:01"', '2020-02-02 20:00:00'),
+      ('dev2', 'ca', 58.3, '"create_time":"2021-11-02 20:00:10"', '2020-02-02 20:00:03');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev6', 'ca', 66, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:04'),
+      ('dev6', 'ca', 69, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:05');
+
+  - type: query
+    sql: |
+      insert into test6_stream_only (id, location, value, json, timestamp) values
+      ('dev8', 'ca', 68, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:08'),
+      ('dev8', 'ca', 67, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:10');
+
+  - type: check
+    target_name: '601'
+    expected_result:
+      - [ error_code:36 ]
+

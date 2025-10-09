@@ -1,0 +1,93 @@
+tags:
+- seek_to
+- bug
+description: event predicate with view
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop view if exists seek_to_view1
+
+- type: query
+  sql: drop view if exists seek_to_view2
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: create view seek_to_view1 as select t, s, _tp_time as time from (select * from
+    test21_limit_by_stream)
+
+- type: query
+  sql: create view seek_to_view2 as select t, s, _tp_time, _tp_sn from (select *,
+    _tp_sn from test21_limit_by_stream)
+
+- name: '2100'
+  type: stream
+  query: select t, s from seek_to_view1 where time = '2022-12-01 00:00:01.111'
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2101'
+  type: stream
+  query: select t, s from seek_to_view2 where _tp_sn = 3
+  schema:
+  - name: t
+    type: datetime64(3)
+  - name: s
+    type: string
+
+- name: '2102'
+  type: stream
+  query: "select window_start, count() from tumble(seek_to_view1, time, 2s) where time
+    >= '2022-12-01 00:00:01.111' group by window_start"
+  schema:
+  - name: window_start
+    type: datetime64(3)
+  - name: count()
+    type: uint64
+
+- type: wait
+  time: 2
+
+- type: query
+  sql: drop view if exists seek_to_view1
+
+- name: '2103'
+  type: stream
+  query: "select window_start, count() from tumble(seek_to_view2, 2s) where _tp_sn
+    >= 3 group by window_start"
+  schema:
+  - name: window_start
+    type: datetime64(3)
+  - name: count()
+    type: uint64
+
+- type: query
+  sql: drop view if exists seek_to_view2
+
+- type: check
+  target_name: '2100'
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+
+- type: check
+  target_name: '2101'
+  expected_result:
+  - ['2022-12-01 00:00:01.111000+00:00', s1]
+
+- type: check
+  target_name: '2102'
+  expected_result:
+  - ['2022-12-01 00:00:00+00:00', 1]
+  - ['2022-12-01 00:00:02+00:00', 2]
+
+- type: check
+  target_name: '2103'
+  expected_result:
+  - ['2022-12-01 00:00:00+00:00', 1]
+  - ['2022-12-01 00:00:02+00:00', 2]

@@ -1,0 +1,53 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (value array(int));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_series_tail(value array(int)) RETURNS array(int64) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+
+      def test_series_tail(value):
+          res = []
+          for v in value:
+              s = pd.Series(v)
+              series_tail = s.tail(2).tolist()
+              res.append(series_tail)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-62-2
+    type: stream
+    query: select test_series_tail(value) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(int64)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(value) values 
+          ([1, 2, 4]) ([2, 6, 3]);
+
+  - type: check
+    target_name: python-udf3-62-2
+    expected_result:
+      - [[2, 4]]
+      - [[6, 3]]

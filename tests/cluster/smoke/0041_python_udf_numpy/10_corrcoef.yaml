@@ -1,0 +1,85 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.corrcoef function - population corrcoefiance
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x float, y float, z float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getCorrcoef(x float, y float, z float) RETURNS array(array(float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+
+      class getCorrcoef:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.corrcoef = []
+              self.x_history = []
+              self.y_history = []
+              self.z_history = []
+
+          def serialize(self):
+              data = {}
+              data['corrcoef'] = self.corrcoef
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.corrcoef = data['corrcoef']
+
+          def merge(self, other):
+              self.x_history = other.x_history
+              self.y_history = other.y_history
+              self.z_history = other.z_history
+
+          def process(self, xs, ys, zs):
+              self.x_history += xs
+              self.y_history += ys
+              self.z_history += zs
+              xarr = np.stack((self.x_history, self.y_history, self.z_history), axis=1)
+              self.corrcoef = np.corrcoef(xarr).tolist()
+
+          def finalize(self):
+              return self.corrcoef
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-10-1
+    type: stream
+    query: select getCorrcoef(x, y, z) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y, z) values 
+          (0.77395605, 0.69736803, 0.7611397)
+          (0.43887844, 0.09417735, 0.78606431)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y, z) values (0.85859792, 0.97562235, 0.12811363);
+
+  - type: check
+    target_name: python-udf2-10-1
+    expected_result:
+      - [[[1.0, 0.7759807137575264], [0.7759807137575265, 1.0]]]
+      - [[[1.0, 0.7759807137575264, -0.4745854213188376], [0.7759807137575265, 1.0, -0.9234670849660505], [-0.4745854213188376, -0.9234670849660505, 1.0]]]

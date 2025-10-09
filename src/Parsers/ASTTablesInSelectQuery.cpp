@@ -3,6 +3,7 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Common/SipHash.h>
 #include <IO/Operators.h>
+#include <Parsers/ASTFunction.h>
 
 
 namespace DB
@@ -113,7 +114,7 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
     {
         database_and_table_name->formatImpl(settings, state, frame);
     }
-    else if (table_function)
+    else if (table_function && !(table_function->as<ASTFunction>()->prefer_subquery_to_function_formatting && subquery))
     {
         table_function->formatImpl(settings, state, frame);
     }

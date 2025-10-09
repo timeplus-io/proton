@@ -28,6 +28,8 @@ public:
 
     static void executeDropQuery(ASTDropQuery::Kind kind, ContextPtr global_context, ContextPtr current_context, const StorageID & target_table_id, bool no_delay);
 
+    bool supportsTransactions() const override;
+
 private:
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     ASTPtr query_ptr;
@@ -43,5 +45,9 @@ private:
     BlockIO executeToDictionary(const String & database_name, const String & dictionary_name, ASTDropQuery::Kind kind, bool if_exists, bool is_temporary, bool no_ddl_lock);
 
     BlockIO executeToTemporaryTable(const String & table_name, ASTDropQuery::Kind kind);
+
+    /// proton: start
+    BlockIO executeToDatabaseOnCluster(const ASTDropQuery & query);
+    /// proton: end
 };
 }

@@ -10,6 +10,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Common/Exception.h>
 #include <Common/WeakHash.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 
 namespace DB
 {
@@ -35,7 +36,8 @@ ConcurrentHashJoin::ConcurrentHashJoin(ContextPtr context_, std::shared_ptr<Tabl
     for (size_t i = 0; i < slots; ++i)
     {
         auto inner_hash_join = std::make_shared<InternalHashJoin>();
-        inner_hash_join->data = std::make_unique<HashJoin>(table_join_, right_sample_block, any_take_last_row_);
+
+        inner_hash_join->data = std::make_unique<HashJoin>(table_join_, right_sample_block, any_take_last_row_, 0, fmt::format("concurrent{}", i));
         hash_joins.emplace_back(std::move(inner_hash_join));
     }
 }
@@ -153,16 +155,14 @@ bool ConcurrentHashJoin::alwaysReturnsEmptySet() const
     return true;
 }
 
-std::shared_ptr<NotJoinedBlocks> ConcurrentHashJoin::getNonJoinedBlocks(
+IBlocksStreamPtr ConcurrentHashJoin::getNonJoinedBlocks(
         const Block & /*left_sample_block*/, const Block & /*result_sample_block*/, UInt64 /*max_block_size*/) const
 {
-    if (table_join->strictness() == JoinStrictness::Asof ||
-        table_join->strictness() == JoinStrictness::Semi ||
-        !isRightOrFull(table_join->kind()))
-    {
+    if (!JoinCommon::hasNonJoinedBlocks(*table_join))
         return {};
-    }
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid join type. join kind: {}, strictness: {}", table_join->kind(), table_join->strictness());
+
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid join type. join kind: {}, strictness: {}",
+                    table_join->kind(), table_join->strictness());
 }
 
 static ALWAYS_INLINE IColumn::Selector hashToSelector(const WeakHash32 & hash, size_t num_shards)
@@ -196,6 +196,7 @@ IColumn::Selector ConcurrentHashJoin::selectDispatchBlock(const Strings & key_co
 
 Blocks ConcurrentHashJoin::dispatchBlock(const Strings & key_columns_names, const Block & from_block)
 {
+    /// TODO: use JoinCommon::scatterBlockByHash
     size_t num_shards = hash_joins.size();
     size_t num_cols = from_block.columns();
 

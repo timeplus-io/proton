@@ -1,0 +1,122 @@
+tags:
+- multishards
+- append_only
+- subquery
+- subquery_view_materialized-view
+- tail_aggr_last-X
+- streaming_tailing
+- stateless_function
+description: query subquery view test
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_6;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_6;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_subq_6;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_subq_6(val float, f1 int, f2 int) settings shards=3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create view test13_view1_6 as
+      select val,
+             f1,
+             f2
+      from test13_subq_6
+      where f1 = 1;
+  
+  - type: wait
+    time: 1
+  
+  - name: '1355'
+    type: stream
+    query: |
+      select pow(2, val),
+             f1,
+             f2
+      from
+        (select val,
+                f1,
+                f2
+         from test13_view1_6
+         where f2 = 1
+           and val > 0 );
+    schema: 
+      - name: 'pow(2, val)'
+        type: float64
+      - name: 'f1'
+        type: int32
+      - name: 'f2'
+        type: int32
+        
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_6 (val, f1, f2)
+      values (1, 1, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_6 (val, f1, f2)
+      values (2, 1, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_6 (val, f1, f2)
+      values (3, 0, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_6 (val, f1, f2)
+      values (4, 1, 0);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subq_6 (val, f1, f2)
+      values (5, 1, 1);
+
+  - type: check
+    target_name: '1355'
+    expected_result:
+    - [2, 1, 1]
+    - [4, 1, 1]
+    - [32, 1, 1]

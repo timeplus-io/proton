@@ -1,0 +1,4 @@
+name: table_func_changelog
+description: Tests covering query table function changelog
+tags:
+- smoke

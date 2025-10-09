@@ -1,0 +1,85 @@
+tags:
+  - json
+  - probe_bug
+  - skip
+description: When the value type of a key is changed from int to string or vice versa,
+  it is expected proton to do the necessary conversion automatically
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: drop stream if exists test_json_conversion
+  
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test_json_conversion (id int, json json)
+  
+  - type: wait
+    time: 2
+  
+  - type: query
+    sql: insert into test_json_conversion (id, json) values (1, '{"a":1, "b":"b", "c":{"k1":"v1",
+      "k2":"v2"}}')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_json_conversion (id, json) values (2, '{"a":"2", "b":3, "c":{"k1":"v1",
+      "k2":"v2"}}')
+  
+  - type: wait
+    time: 2
+  
+  - name: '1205'
+    type: stream
+    query: select id, json.a, json.b, json.c.k1, json.c.k2 from test_json_conversion
+      limit 2 settings seek_to='earliest'
+    schema:
+      - name: id
+        type: int32
+      - name: json.a
+        type: string
+      - name: json.b
+        type: string
+      - name: json.c.k1
+        type: string
+      - name: json.c.k2
+        type: string
+
+  - type: wait
+    time: 2
+
+  - name: '1206'
+    type: stream
+    query: select id, json.a, json.b, json.c.k1, json.c.k2 from table(test_json_conversion)
+    schema:
+      - name: id
+        type: int32
+      - name: json.a
+        type: string
+      - name: json.b
+        type: string
+      - name: json.c.k1
+        type: string
+      - name: json.c.k2
+        type: string
+
+  - type: check
+    target_name: '1205'
+    expected_result:
+      - [ 1, '1', b, v1, v2 ]
+      - [ 2, '2', '3', v1, v2 ]
+    
+  - type: check
+    target_name: '1206'
+    mode: random
+    expected_result:
+      - [ 1, '1', b, v1, v2 ]
+      - [ 2, '2', '3', v1, v2 ]

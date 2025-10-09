@@ -1,16 +1,12 @@
 #pragma once
 
-#include "CheckpointStorage.h"
-
-namespace Poco::Util
-{
-class AbstractConfiguration;
-}
+#include <Checkpoint/CheckpointConfig.h>
+#include <Checkpoint/CheckpointStorage.h>
 
 namespace DB
 {
 struct CheckpointStorageFactory final
 {
-    static std::unique_ptr<CheckpointStorage> create(const Poco::Util::AbstractConfiguration & config);
+    static std::unique_ptr<CheckpointStorage> create(CheckpointStorageType type, const CheckpointConfig & config);
 };
 }

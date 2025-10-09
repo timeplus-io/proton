@@ -1,4 +1,10 @@
 name: manual_trigger_build
+run-name: |
+  manual-build
+  [timeplus/proton:${{ github.event.inputs.tag }}]
+  [${{ github.event.inputs.OS }}-${{ github.event.inputs.arch }}]
+  [${{ github.event.inputs.build_type }}]
+  [${{ format('python-udf:{0}', inputs.python_udf) }}]
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
@@ -10,6 +16,8 @@ on: # yamllint disable-line rule:truthy
         type: choice
         options:
         - release
+        - debug
+        - relwithdebinfo
         - address
         - thread
         - memory
@@ -22,13 +30,33 @@ on: # yamllint disable-line rule:truthy
         options:
         - x64
         - arm
+
       tag:
-        description: 'Docker image tag'     
-        required: true
+        description: 'Docker image tag (required for Linux builds)'     
+        required: false
         type: string
         default: 'manual'
-      enable_native_build_for_macOS:
-        description: 'Experimental try to build macos binary native'
+
+      OS:
+        description: 'Operation System(linux or macos)'
+        required: false
+        default: 'linux'
+        type: choice
+        options:
+        - linux
+        - macos
+
+      strip_binary:
+        description: 'Strip the binary to reduce size'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - true
+          - false
+
+      python_udf:
+        description: 'Enable Python UDF'
         required: false
         default: 'false'
         type: choice
@@ -37,9 +65,35 @@ on: # yamllint disable-line rule:truthy
           - false
 
 jobs:
-  prepare_sanitizer:
+  validate_inputs:
     runs-on: ubuntu-latest
-    if: github.event.inputs.enable_native_build_for_macOS == 'false' && github.event.inputs.build_type != 'release'
+    if: github.event.inputs.OS == 'linux'
+    timeout-minutes: 10
+    steps:
+      - name: Validate tag requirement
+        if: ${{ github.event.inputs.tag == '' }}
+        run: |
+          echo "::error::Tag is required for Linux builds"
+          exit 1
+      - name: Check tag format
+        run: |
+          if echo "${{ github.event.inputs.tag }}" | grep -q '[[:space:]]'; then
+            echo "::error::Tag cannot contain spaces"
+            exit 1
+          fi
+      - uses: actions/checkout@v4.1.7
+      - name: Verify tag not exist
+        run: python tests/proton_ci/docker_tag_check.py
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          PROTON_VERSION: ${{ github.event.inputs.tag }}
+          PROTON_REPO: timeplus/proton
+
+  prepare_sanitizer:
+    needs: validate_inputs
+    runs-on: ubuntu-latest
+    if: github.event.inputs.OS == 'linux' && (github.event.inputs.build_type != 'release' && github.event.inputs.build_type != 'debug' && github.event.inputs.build_type != 'relwithdebinfo')
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -47,15 +101,35 @@ jobs:
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
-        
+
+        # update build info
+        ./release --test --version dev
+
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal/proton/ci_cache/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
+        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
+        enable_python=""
+        if [ "${{ github.event.inputs.python_udf }}" == "false" ]; then
+          enable_python="--disable-python-udf"
+        fi
+
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --sanitizer $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton Failed"
+          exit 127
+        fi
+
+        if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
+          echo "Stripping the binary..."
+          ls -lh $GITHUB_WORKSPACE/output/proton
+          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+          ls -lh $GITHUB_WORKSPACE/output/proton
+        fi
 
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache
@@ -64,8 +138,8 @@ jobs:
         # build unit test docker image
         cp $GITHUB_WORKSPACE/output/unit_tests_dbms $GITHUB_WORKSPACE/docker/test/proton_unit_test/
         cd $GITHUB_WORKSPACE/docker/test/proton_unit_test/
-        docker build . -t ghcr.io/timeplus-io/proton-unit-test:$TAG
-        docker push ghcr.io/timeplus-io/proton-unit-test:$TAG
+        docker build . -t timeplus/proton-unit-test:$TAG
+        docker push timeplus/proton-unit-test:$TAG
 
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
@@ -76,18 +150,25 @@ jobs:
         rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$TAG
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
 
         # push docker image
-        docker push ghcr.io/timeplus-io/proton:$TAG
-        echo "docker push ghcr.io/timeplus-io/proton:$TAG"
+        docker push timeplus/proton:$TAG
+        echo "docker pull timeplus/proton:$TAG"
     steps:
+      - name: check tag
+        run: |
+          if echo "${{ github.event.inputs.tag }}" | grep -q '[[:space:]]'; then
+            echo "error: tag '${{ github.event.inputs.tag }}' contains space"
+            exit 1
+          fi
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
-  prepare_release:
+  prepare_release_or_debug:
     runs-on: ubuntu-latest
-    if:  github.event.inputs.enable_native_build_for_macOS == 'false' && github.event.inputs.build_type == 'release'
+    needs: validate_inputs
+    if: github.event.inputs.OS == 'linux' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'relwithdebinfo')
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -96,14 +177,35 @@ jobs:
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
 
+        # update build info
+        ./release --test --version dev
+
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal/proton/ci_cache/cache${ARCH:+_}$ARCH.tar.gz .
+        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache${ARCH:+_}$ARCH.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache${ARCH:+_}$ARCH.tar.gz
 
+        enable_python=""
+        if [ "${{ github.event.inputs.python_udf }}" == "false" ]; then
+          enable_python="--disable-python-udf"
+        fi
+
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-16 --build-type release --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type ${{ github.event.inputs.build_type }} --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton Failed"
+          exit 127
+        fi
+
+        if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
+          echo "Stripping the binary..."
+          ls -lh $GITHUB_WORKSPACE/output/proton
+          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+          ls -lh $GITHUB_WORKSPACE/output/proton
+        fi
+        
         # release doesn't build unit_tests_dbms
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache
@@ -118,19 +220,25 @@ jobs:
         rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:$TAG
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
 
         # push docker image
-        docker push ghcr.io/timeplus-io/proton:$TAG
-        echo "docker pull ghcr.io/timeplus-io/proton:$TAG"
+        docker push timeplus/proton:$TAG
+        echo "docker pull timeplus/proton:$TAG"
     steps:
+      - name: check tag
+        run: |
+          if echo "${{ github.event.inputs.tag }}" | grep -q '[[:space:]]'; then
+            echo "error: tag '${{ github.event.inputs.tag }}' contains space"
+            exit 1
+          fi
       - name: display command
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   build_x64:
     needs: prepare_sanitizer
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release'
+    if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release')
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -139,20 +247,21 @@ jobs:
       sanitizer: ${{ github.event.inputs.build_type }}
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
+      upjob: build_x64
       command: |
         ${{ needs.prepare_sanitizer.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  build_x64_release:
-    needs: prepare_release
+  build_x64_release_or_debug:
+    needs: prepare_release_or_debug
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'x64' && github.event.inputs.build_type == 'release'
+    if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'x64' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'relwithdebinfo'))
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -161,20 +270,21 @@ jobs:
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
+      upjob: build_x64_release_or_debug
       command: |
-        ${{ needs.prepare_release.outputs.command }}
+        ${{ needs.prepare_release_or_debug.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm:
     needs: prepare_sanitizer
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release'
+    if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release')
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -183,20 +293,21 @@ jobs:
       sanitizer: ${{ github.event.inputs.build_type }}
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
+      upjob: build_arm
       command: |
         ${{ needs.prepare_sanitizer.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  build_arm_release:
-    needs: prepare_release
+  build_arm_release_or_debug:
+    needs: prepare_release_or_debug
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'arm' && github.event.inputs.build_type == 'release'
+    if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'arm' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'relwithdebinfo'))
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -205,22 +316,84 @@ jobs:
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
+      upjob: build_arm_release_or_debug
       command: |
-        ${{ needs.prepare_release.outputs.command }}
+        ${{ needs.prepare_release_or_debug.outputs.command }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  build_native_macOS_arm:
+
+
+  Build_macOS_X86_64:
+    if: github.event.inputs.OS == 'macos' && github.event.inputs.arch == 'x64'
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c6i.8xlarge
+      ec2-image-id: ami-042a37e33a285c22b
+      submodules: 'recursive'
+      run_mode: 'start'
+      s3_upload: true
+      s3_output_path: 'proton/cross-compile/macOS-x86'
+      command: |
+        cd $GITHUB_WORKSPACE
+      
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
+        # update build info
+        ./release --test --version dev
+
+        mkdir -p $GITHUB_WORKSPACE/ccache    
+        # Download pre-built v8 binary for cross-compilation
+        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
+        rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
+        chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
+        chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/mksnapshot
+        chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/torque
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version clang-18 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-18-darwin
+
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton Failed"
+          exit 127
+        fi
+
+        # get proton tag and rename binary
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        PROTON_BINARY=proton-${COMMIT_HASH}-Darwin-x86_64
+
+        # Only strip if strip_binary is true
+        if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
+          echo "Stripping the binary..."
+          ls -lh $GITHUB_WORKSPACE/output/proton
+          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-18 /usr/bin/llvm-strip-18 proton
+          ls -lh $GITHUB_WORKSPACE/output/proton
+        fi
+
+        mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  Build_macOS_arm:
+    if: github.event.inputs.OS == 'macos' && github.event.inputs.arch == 'arm'
     runs-on: [self-hosted, macOS, ARM64]
     env:
       build_directory: ${{ github.workspace }}/build
       build_type: RelWithDebInfo
-    if: github.event.inputs.enable_native_build_for_macOS == 'true' && github.event.inputs.arch == 'arm'
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.7
@@ -228,6 +401,9 @@ jobs:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           fetch-depth: 1
           submodules: true
+
+      - name: Get MacOS version
+        run: sw_vers
 
       - name: Create and Configure Build
         run: |
@@ -240,16 +416,29 @@ jobs:
       - name: Build with Ninja
         run: cmake --build ${{ env.build_directory }}
 
-      - name: Strip and Rename binary
+      - name: Process Binary
         run: |
           COMMIT_HASH=$(git rev-parse --short HEAD)
           ARCH=$(uname -m)
           ORIGINAL_BINARY=${{ env.build_directory }}/programs/proton
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}
+
+          echo "Original binary size:"
           ls -lh $ORIGINAL_BINARY
-          /opt/homebrew/opt/llvm@19/bin/llvm-strip $ORIGINAL_BINARY
-          mv $ORIGINAL_BINARY $STRIPPED_BINARY
-          ls -lh $STRIPPED_BINARY
+
+          if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
+            echo "Stripping the binary..."
+            /opt/homebrew/opt/llvm@19/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
+            echo "Stripped binary size:"
+            ls -lh $STRIPPED_BINARY
+          else
+            echo "Skipping strip, copying original binary..."
+            cp $ORIGINAL_BINARY $STRIPPED_BINARY
+          fi
+
+          # Store binary name and path for later steps
+          echo "BINARY_NAME=proton_${COMMIT_HASH}_${ARCH}" >> $GITHUB_ENV
+          echo "BINARY_PATH=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
@@ -260,7 +449,41 @@ jobs:
 
       - name: Upload Artifact To S3
         run: |
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          ARCH=$(uname -m)
-          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}
-          aws s3 cp --no-progress $STRIPPED_BINARY s3://tp-internal/proton/native_build_macOS/
+          # Improve S3 upload reliability with specific options
+          max_attempts=5
+          attempt=1
+          wait_time=15
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "S3 upload attempt $attempt of $max_attempts"
+
+            # Using specific AWS CLI options to handle large file uploads more reliably
+            if aws s3 cp \
+               --no-progress \
+               --only-show-errors \
+               --cli-connect-timeout 30 \
+               --cli-read-timeout 600 \
+               "${{ env.BINARY_PATH }}" \
+               "s3://tp-internal2/proton-oss/native_build_macOS/${{ env.BINARY_NAME }}"; then
+              echo "Upload successful"
+              break
+            else
+              upload_status=$?
+              echo "Upload failed on attempt $attempt with exit code $upload_status"
+
+              if [ $attempt -eq $max_attempts ]; then
+                echo "All upload attempts failed"
+                exit 1
+              fi
+
+              echo "Retrying in $wait_time seconds..."
+              sleep $wait_time
+              wait_time=$((wait_time * 2))  # Exponential backoff
+              attempt=$((attempt + 1))
+            fi
+          done
+
+      - name: Print SHA256 Checksum
+        run: |
+          STRIPPED_BINARY=${{ env.build_directory }}/programs/${{ env.BINARY_NAME }}
+          shasum -a 256 $STRIPPED_BINARY

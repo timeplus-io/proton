@@ -1,0 +1,35 @@
+tags:
+  - prepare
+  - validate
+  - checkpoint
+
+description: basic tests on mv checkpoint
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - name: view-19-1
+    type: stream
+    query: select count() from ckpt_mv settings seek_to='earliest';
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: view-19-1
+    expected_result:
+      - [580000]
+
+  - name: view-19-2
+    type: stream
+    query: select count() from ckpt_target_stream settings seek_to='earliest';
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: view-19-2
+    expected_result:
+      - [580000]

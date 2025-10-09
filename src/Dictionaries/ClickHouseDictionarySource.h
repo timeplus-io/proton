@@ -1,13 +1,12 @@
 #pragma once
 
-#include <memory>
-#include <Poco/Logger.h>
-#include <Client/ConnectionPoolWithFailover.h>
-#include <Interpreters/Context.h>
-#include "DictionaryStructure.h"
-#include "ExternalQueryBuilder.h"
-#include "IDictionarySource.h"
+#include <Dictionaries/DictionaryStructure.h>
+#include <Dictionaries/ExternalQueryBuilder.h>
+#include <Dictionaries/IDictionarySource.h>
 
+#include <ClickHouse/ITypeNameProvider.h>
+#include <ClickHouse/ConnectionPool.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -15,7 +14,9 @@ namespace DB
   *    @todo use ConnectionPoolWithFailover
   *    @todo invent a way to keep track of source modifications
   */
-class ClickHouseDictionarySource final : public IDictionarySource
+class ClickHouseDictionarySource final : public IDictionarySource,
+                                         public std::enable_shared_from_this<ClickHouseDictionarySource>,
+                                         public DB::ClickHouse::ITypeNameProvider
 {
 public:
     struct Configuration
@@ -34,6 +35,7 @@ public:
         const UInt16 port;
         const bool is_local;
         const bool secure;
+        const bool final;
     };
 
     ClickHouseDictionarySource(
@@ -42,9 +44,12 @@ public:
         const Block & sample_block_,
         ContextMutablePtr context_);
 
-    /// copy-constructor is provided in order to support cloneability
+    /// copy-constructor is provided in order to support clone-ability
     ClickHouseDictionarySource(const ClickHouseDictionarySource & other);
     ClickHouseDictionarySource & operator=(const ClickHouseDictionarySource &) = delete;
+
+    /// Returns the column name and type name pairs.
+    const std::unordered_map<String, String> & getColumnTypeNames() const override { return original_column_type_names; }
 
     QueryPipeline loadAllWithSizeHint(std::atomic<size_t> * result_size_hint) override;
 
@@ -61,6 +66,11 @@ public:
 
     bool hasUpdateField() const override;
 
+    /// proton: starts
+    /// CLICKHOUSE SOURCE is always remote.
+    /// bool isLocal() const { return configuration.is_local; }
+    /// proton: ends
+
     DictionarySourcePtr clone() const override { return std::make_shared<ClickHouseDictionarySource>(*this); }
 
     std::string toString() const override;
@@ -76,6 +86,9 @@ private:
 
     std::string doInvalidateQuery(const std::string & request) const;
 
+    /// To make ClickHouse::Client happy, not used since it is only for write
+    std::unordered_map<String, String> original_column_type_names;
+
     std::chrono::time_point<std::chrono::system_clock> update_time;
     const DictionaryStructure dict_struct;
     const Configuration configuration;
@@ -83,9 +96,9 @@ private:
     ExternalQueryBuilder query_builder;
     Block sample_block;
     ContextMutablePtr context;
-    ConnectionPoolWithFailoverPtr pool;
+    ClickHouse::ConnectionPoolPtr pool;
     const std::string load_all_query;
-    Poco::Logger * log = &Poco::Logger::get("ProtonDictionarySource");
+    LoggerPtr logger;
 };
 
 }

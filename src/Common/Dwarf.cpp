@@ -107,7 +107,7 @@ Dwarf::Section::Section(std::string_view d) : is64_bit(false), data(d)
 }
 
 
-#define SAFE_CHECK(cond, message) do { if (!(cond)) throw Exception(message, ErrorCodes::CANNOT_PARSE_DWARF); } while (false)
+#define SAFE_CHECK(cond, ...) do { if (!(cond)) throw Exception(ErrorCodes::CANNOT_PARSE_DWARF, __VA_ARGS__); } while (false)
 
 
 namespace
@@ -124,7 +124,7 @@ template <typename T>
 requires std::is_trivial_v<T> && std::is_standard_layout_v<T>
 T read(std::string_view & sp)
 {
-    SAFE_CHECK(sp.size() >= sizeof(T), fmt::format("underflow: expected bytes {}, got bytes {}", sizeof(T), sp.size()));
+    SAFE_CHECK(sp.size() >= sizeof(T), "underflow: expected bytes {}, got bytes {}", sizeof(T), sp.size());
     T x;
     memcpy(&x, sp.data(), sizeof(T));
     sp.remove_prefix(sizeof(T));
@@ -176,7 +176,7 @@ uint64_t readOffset(std::string_view & sp, bool is64Bit)
 // Read "len" bytes
 std::string_view readBytes(std::string_view & sp, uint64_t len)
 {
-    SAFE_CHECK(len <= sp.size(), "invalid string length: " + std::to_string(len) + " vs. " + std::to_string(sp.size()));
+    SAFE_CHECK(len <= sp.size(), "invalid string length: {} vs. {}", len, sp.size());
     std::string_view ret(sp.data(), len);
     sp.remove_prefix(len);
     return ret;
@@ -689,7 +689,7 @@ bool Dwarf::findDebugInfoOffset(uintptr_t address, std::string_view aranges, uin
 
 Dwarf::Die Dwarf::getDieAtOffset(const CompilationUnit & cu, uint64_t offset) const
 {
-    SAFE_CHECK(offset < info_.size(), fmt::format("unexpected offset {}, info size {}", offset, info_.size()));
+    SAFE_CHECK(offset < info_.size(), "unexpected offset {}, info size {}", offset, info_.size());
     Die die;
     std::string_view sp{info_.data() + offset, cu.offset + cu.size - offset};
     die.offset = offset;

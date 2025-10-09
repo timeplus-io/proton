@@ -13,6 +13,12 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
+
+
 class ReadBuffer;
 class WriteBuffer;
 
@@ -65,10 +71,16 @@ public:
     /// Name of data type (examples: UInt64, Array(String)).
     String getName() const
     {
-      if (custom_name)
-          return custom_name->getName();
-      else
-          return doGetName();
+        if (custom_name)
+            return custom_name->getName();
+        return doGetName();
+    }
+
+    String getPrettyName(size_t indent = 0) const
+    {
+        if (custom_name)
+            return custom_name->getName();
+        return doGetPrettyName(indent);
     }
 
     DataTypePtr getPtr() const { return shared_from_this(); }
@@ -78,6 +90,8 @@ public:
 
     /// Data type id. It's used for runtime type checks.
     virtual TypeIndex getTypeId() const = 0;
+    /// Storage type (e.g. Int64 for Interval)
+    virtual TypeIndex getColumnType() const { return getTypeId(); }
 
     bool hasSubcolumn(const String & subcolumn_name) const;
 
@@ -101,6 +115,10 @@ public:
         const SubcolumnCallback & callback,
         const SubstreamData & data);
 
+    /// Call callback for each nested type recursively.
+    using ChildCallback = std::function<void(const IDataType &)>;
+    virtual void forEachChild(const ChildCallback &) const {}
+
     Names getSubcolumnNames() const;
 
     virtual MutableSerializationInfoPtr createSerializationInfo(const SerializationInfo::Settings & settings) const;
@@ -108,6 +126,7 @@ public:
 
     /// TODO: support more types.
     virtual bool supportsSparseSerialization() const { return !haveSubtypes(); }
+    virtual bool canBeInsideSparseColumns() const { return supportsSparseSerialization(); }
 
     SerializationPtr getDefaultSerialization() const;
     SerializationPtr getSparseSerialization() const;
@@ -128,6 +147,8 @@ protected:
     virtual String doGetName() const { return getFamilyName(); }
     virtual SerializationPtr doGetDefaultSerialization() const = 0;
 
+    virtual String doGetPrettyName(size_t /*indent*/) const { return doGetName(); }
+
 public:
     /** Create empty column for corresponding type and default serialization.
       */
@@ -139,7 +160,7 @@ public:
 
     /** Create ColumnConst for corresponding type, with specified size and value.
       */
-    ColumnPtr createColumnConst(size_t size, const Field & field) const;
+    virtual ColumnPtr createColumnConst(size_t size, const Field & field) const;
     ColumnPtr createColumnConstWithDefaultValue(size_t size) const;
 
     /** Get default value of data type.
@@ -291,8 +312,10 @@ public:
     /// Strings, Numbers, Date, DateTime, Nullable
     virtual bool canBeInsideLowCardinality() const { return false; }
 
-    /// Object, Array(Object), Tuple(..., Object, ...)
-    virtual bool hasDynamicSubcolumns() const { return false; }
+    /// Checks if column has dynamic subcolumns.
+    virtual bool hasDynamicSubcolumns() const;
+    /// Checks if column can create dynamic subcolumns data and getDynamicSubcolumnData can be called.
+    virtual bool hasDynamicSubcolumnsData() const { return false; }
 
     /// Updates avg_value_size_hint for newly read column. Uses to optimize deserialization. Zero expected for first column.
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
@@ -309,16 +332,25 @@ protected:
     mutable SerializationPtr custom_serialization;
 
 public:
+    bool hasCustomName() const { return static_cast<bool>(custom_name.get()); }
     const IDataTypeCustomName * getCustomName() const { return custom_name.get(); }
     const ISerialization * getCustomSerialization() const { return custom_serialization.get(); }
 
-private:
-    template <typename Ptr>
-    Ptr getForSubcolumn(
-        const String & subcolumn_name,
+protected:
+    static std::unique_ptr<SubstreamData> getSubcolumnData(
+        std::string_view subcolumn_name,
         const SubstreamData & data,
-        Ptr SubstreamData::*member,
-        bool throw_if_null) const;
+        bool throw_if_null);
+
+    virtual std::unique_ptr<SubstreamData> getDynamicSubcolumnData(
+        std::string_view /*subcolumn_name*/,
+        const SubstreamData & /*data*/,
+        bool throw_if_null) const
+    {
+        if (throw_if_null)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getDynamicSubcolumnData() is not implemented for type {}", getName());
+        return nullptr;
+    }
 };
 
 
@@ -341,8 +373,8 @@ struct WhichDataType
     constexpr bool isUInt64() const { return idx == TypeIndex::UInt64; }
     constexpr bool isUInt128() const { return idx == TypeIndex::UInt128; }
     constexpr bool isUInt256() const { return idx == TypeIndex::UInt256; }
-    constexpr bool isUInt() const { return isUInt8() || isUInt16() || isUInt32() || isUInt64() || isUInt128() || isUInt256(); }
     constexpr bool isNativeUInt() const { return isUInt8() || isUInt16() || isUInt32() || isUInt64(); }
+    constexpr bool isUInt() const { return isNativeUInt() || isUInt128() || isUInt256(); }
 
     constexpr bool isInt8() const { return idx == TypeIndex::Int8; }
     constexpr bool isInt16() const { return idx == TypeIndex::Int16; }
@@ -350,8 +382,11 @@ struct WhichDataType
     constexpr bool isInt64() const { return idx == TypeIndex::Int64; }
     constexpr bool isInt128() const { return idx == TypeIndex::Int128; }
     constexpr bool isInt256() const { return idx == TypeIndex::Int256; }
-    constexpr bool isInt() const { return isInt8() || isInt16() || isInt32() || isInt64() || isInt128() || isInt256(); }
     constexpr bool isNativeInt() const { return isInt8() || isInt16() || isInt32() || isInt64(); }
+    constexpr bool isInt() const { return isNativeInt() || isInt128() || isInt256(); }
+
+    constexpr bool isNativeInteger() const { return isNativeInt() || isNativeUInt(); }
+    constexpr bool isInteger() const { return isInt() || isUInt(); }
 
     constexpr bool isDecimal32() const { return idx == TypeIndex::Decimal32; }
     constexpr bool isDecimal64() const { return idx == TypeIndex::Decimal64; }
@@ -361,7 +396,11 @@ struct WhichDataType
 
     constexpr bool isFloat32() const { return idx == TypeIndex::Float32; }
     constexpr bool isFloat64() const { return idx == TypeIndex::Float64; }
-    constexpr bool isFloat() const { return isFloat32() || isFloat64(); }
+    constexpr bool isNativeFloat() const { return isFloat32() || isFloat64(); }
+    constexpr bool isFloat() const { return isNativeFloat(); }
+
+    constexpr bool isNativeNumber() const { return isNativeInteger() || isNativeFloat(); }
+    constexpr bool isNumber() const { return isInteger() || isFloat() || isDecimal(); }
 
     constexpr bool isEnum8() const { return idx == TypeIndex::Enum8; }
     constexpr bool isEnum16() const { return idx == TypeIndex::Enum16; }
@@ -369,9 +408,11 @@ struct WhichDataType
 
     constexpr bool isDate() const { return idx == TypeIndex::Date; }
     constexpr bool isDate32() const { return idx == TypeIndex::Date32; }
+    constexpr bool isDateOrDate32() const { return isDate() || isDate32(); }
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
-    constexpr bool isDateOrDate32() const { return isDate() || isDate32(); }
+    constexpr bool isDateTimeOrDateTime64() const { return isDateTime() || isDateTime64(); }
+    constexpr bool isDateOrDate32OrDateTimeOrDateTime64() const { return isDateOrDate32() || isDateTimeOrDateTime64(); }
 
     constexpr bool isString() const { return idx == TypeIndex::String; }
     constexpr bool isFixedString() const { return idx == TypeIndex::FixedString; }
@@ -385,7 +426,6 @@ struct WhichDataType
     constexpr bool isMap() const {return idx == TypeIndex::Map; }
     constexpr bool isSet() const { return idx == TypeIndex::Set; }
     constexpr bool isInterval() const { return idx == TypeIndex::Interval; }
-    constexpr bool isObject() const { return idx == TypeIndex::Object; }
 
     constexpr bool isNothing() const { return idx == TypeIndex::Nothing; }
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }
@@ -393,37 +433,118 @@ struct WhichDataType
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
     constexpr bool isSimple() const  { return isInt() || isUInt() || isFloat() || isString(); }
 
-    constexpr bool isLowCarnality() const { return idx == TypeIndex::LowCardinality; }
+    constexpr bool isLowCardinality() const { return idx == TypeIndex::LowCardinality; }
+
+    constexpr bool isVariant() const { return idx == TypeIndex::Variant; }
+    constexpr bool isDynamic() const { return idx == TypeIndex::Dynamic; }
+    constexpr bool isObject() const { return idx == TypeIndex::Object; }
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
 
-template <typename T>
-inline bool isDate(const T & data_type) { return WhichDataType(data_type).isDate(); }
-template <typename T>
-inline bool isDate32(const T & data_type) { return WhichDataType(data_type).isDate32(); }
-template <typename T>
-inline bool isDateOrDate32(const T & data_type) { return WhichDataType(data_type).isDateOrDate32(); }
-template <typename T>
-inline bool isDateTime(const T & data_type) { return WhichDataType(data_type).isDateTime(); }
-template <typename T>
-inline bool isDateTime64(const T & data_type) { return WhichDataType(data_type).isDateTime64(); }
+#define FOR_TYPES_OF_TYPE(M) \
+    M(TypeIndex) \
+    M(const IDataType &) \
+    M(const DataTypePtr &) \
+    M(WhichDataType)
 
-inline bool isEnum(const DataTypePtr & data_type) { return WhichDataType(data_type).isEnum(); }
-inline bool isDecimal(const DataTypePtr & data_type) { return WhichDataType(data_type).isDecimal(); }
-inline bool isTuple(const DataTypePtr & data_type) { return WhichDataType(data_type).isTuple(); }
-inline bool isArray(const DataTypePtr & data_type) { return WhichDataType(data_type).isArray(); }
-inline bool isMap(const DataTypePtr & data_type) {return WhichDataType(data_type).isMap(); }
-inline bool isInterval(const DataTypePtr & data_type) {return WhichDataType(data_type).isInterval(); }
-inline bool isNothing(const DataTypePtr & data_type) { return WhichDataType(data_type).isNothing(); }
-inline bool isUUID(const DataTypePtr & data_type) { return WhichDataType(data_type).isUUID(); }
-inline bool isIPv4(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv4(); }
-inline bool isIPv6(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv6(); }
+#define DISPATCH(TYPE) \
+bool isUInt8(TYPE data_type); \
+bool isUInt16(TYPE data_type); \
+bool isUInt32(TYPE data_type); \
+bool isUInt64(TYPE data_type);\
+bool isUInt128(TYPE data_type);\
+bool isUInt256(TYPE data_type); \
+bool isNativeUInt(TYPE data_type); \
+bool isUInt(TYPE data_type); \
+\
+bool isInt8(TYPE data_type); \
+bool isInt16(TYPE data_type); \
+bool isInt32(TYPE data_type); \
+bool isInt64(TYPE data_type); \
+bool isInt128(TYPE data_type); \
+bool isInt256(TYPE data_type); \
+bool isNativeInt(TYPE data_type); \
+bool isInt(TYPE data_type); \
+\
+bool isInteger(TYPE data_type); \
+bool isNativeInteger(TYPE data_type); \
+\
+bool isDecimal(TYPE data_type); \
+\
+bool isFloat(TYPE data_type); \
+\
+bool isNativeNumber(TYPE data_type); \
+bool isNumber(TYPE data_type); \
+\
+bool isEnum8(TYPE data_type); \
+bool isEnum16(TYPE data_type); \
+bool isEnum(TYPE data_type); \
+\
+bool isDate(TYPE data_type); \
+bool isDate32(TYPE data_type); \
+bool isDateOrDate32(TYPE data_type); \
+bool isDateTime(TYPE data_type); \
+bool isDateTime64(TYPE data_type); \
+bool isDateTimeOrDateTime64(TYPE data_type); \
+bool isDateOrDate32OrDateTimeOrDateTime64(TYPE data_type); \
+\
+bool isString(TYPE data_type); \
+bool isFixedString(TYPE data_type); \
+bool isStringOrFixedString(TYPE data_type); \
+\
+bool isUUID(TYPE data_type); \
+bool isIPv4(TYPE data_type); \
+bool isIPv6(TYPE data_type); \
+bool isArray(TYPE data_type); \
+bool isTuple(TYPE data_type); \
+bool isMap(TYPE data_type); \
+bool isInterval(TYPE data_type); \
+bool isVariant(TYPE data_type); \
+bool isDynamic(TYPE data_type); \
+bool isObject(TYPE data_type); \
+bool isNothing(TYPE data_type); \
+\
+bool isColumnedAsNumber(TYPE data_type); \
+\
+bool isColumnedAsDecimal(TYPE data_type); \
+\
+bool isNotCreatable(TYPE data_type); \
+\
+bool isNotDecimalButComparableToDecimal(TYPE data_type); \
 
-template <typename T>
-inline bool isObject(const T & data_type)
+FOR_TYPES_OF_TYPE(DISPATCH)
+
+#undef DISPATCH
+#undef FOR_TYPES_OF_TYPE
+
+// Same as isColumnedAsDecimal but also checks value type of underlyig column.
+template <typename T, typename DataType>
+inline bool isColumnedAsDecimalT(const DataType & data_type)
 {
-    return WhichDataType(data_type).isObject();
+    const WhichDataType which(data_type);
+    return (which.isDecimal() || which.isDateTime64()) && which.idx == TypeToTypeIndex<T>;
+}
+
+inline bool isBool(const DataTypePtr & data_type)
+{
+    return data_type->getName() == "bool";
+}
+
+inline bool isNullableOrLowCardinalityNullable(const DataTypePtr & data_type)
+{
+    return data_type->isNullable() || data_type->isLowCardinalityNullable();
+}
+
+template <typename T>
+inline bool isArray(const T & data_type)
+{
+    return WhichDataType(data_type).isArray();
+}
+
+inline bool isCompilableType(const DataTypePtr & data_type)
+{
+    return data_type->isValueRepresentedByNumber() && !isDecimal(data_type);
 }
 
 template <typename T>
@@ -433,73 +554,10 @@ inline bool isUInt8(const T & data_type)
 }
 
 template <typename T>
-inline bool isUInt64(const T & data_type)
-{
-    return WhichDataType(data_type).isUInt64();
-}
-
-template <typename T>
-inline bool isUnsignedInteger(const T & data_type)
-{
-    return WhichDataType(data_type).isUInt();
-}
-
-template <typename T>
-inline bool isInteger(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isInt() || which.isUInt();
-}
-
-template <typename T>
-inline bool isFloat(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isFloat();
-}
-
-template <typename T>
 inline bool isNativeInteger(const T & data_type)
 {
     WhichDataType which(data_type);
     return which.isNativeInt() || which.isNativeUInt();
-}
-
-
-template <typename T>
-inline bool isNativeNumber(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isNativeInt() || which.isNativeUInt() || which.isFloat();
-}
-
-template <typename T>
-inline bool isNumber(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isInt() || which.isUInt() || which.isFloat() || which.isDecimal();
-}
-
-template <typename T>
-inline bool isColumnedAsNumber(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isInt() || which.isUInt() || which.isFloat() || which.isDateOrDate32() || which.isDateTime() || which.isDateTime64() || which.isUUID() || which.isIPv4() || which.isIPv6();
-}
-
-template <typename T>
-inline bool isColumnedAsDecimal(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isDecimal() || which.isDateTime64();
-}
-
-// Same as isColumnedAsDecimal but also checks value type of underlyig column.
-template <typename T, typename DataType>
-inline bool isColumnedAsDecimalT(const DataType & data_type)
-{
-    const WhichDataType which(data_type);
-    return (which.isDecimal() || which.isDateTime64()) && which.idx == TypeToTypeIndex<T>;
 }
 
 template <typename T>
@@ -518,35 +576,6 @@ template <typename T>
 inline bool isStringOrFixedString(const T & data_type)
 {
     return WhichDataType(data_type).isStringOrFixedString();
-}
-
-template <typename T>
-inline bool isNotCreatable(const T & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isNothing() || which.isFunction() || which.isSet();
-}
-
-inline bool isNotDecimalButComparableToDecimal(const DataTypePtr & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isInt() || which.isUInt() || which.isFloat();
-}
-
-inline bool isCompilableType(const DataTypePtr & data_type)
-{
-    return data_type->isValueRepresentedByNumber() && !isDecimal(data_type);
-}
-
-inline bool isBool(const DataTypePtr & data_type)
-{
-    return data_type->getName() == "bool";
-}
-
-inline bool isAggregateFunction(const DataTypePtr & data_type)
-{
-    WhichDataType which(data_type);
-    return which.isAggregateFunction();
 }
 
 template <typename DataType> constexpr bool IsDataTypeDecimal = false;
@@ -626,14 +655,14 @@ struct fmt::formatter<DB::DataTypePtr>
 
         /// Only support {}.
         if (it != end && *it != '}')
-            throw format_error("invalid format");
+            throw fmt::format_error("invalid format");
 
         return it;
     }
 
     template <typename FormatContext>
-    auto format(const DB::DataTypePtr & type, FormatContext & ctx)
+    auto format(const DB::DataTypePtr & type, FormatContext & ctx) const
     {
-        return format_to(ctx.out(), "{}", type->getName());
+        return fmt::format_to(ctx.out(), "{}", type->getName());
     }
 };

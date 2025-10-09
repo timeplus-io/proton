@@ -1,0 +1,70 @@
+tags:
+  - func
+  - cluster_table_bug
+description: extract array from json string
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists t_json_raw1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream t_json_raw1(raw string)
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into t_json_raw1(raw) values('')('[1, 2]')('["abc", "xyz"]')
+
+  - type: wait
+    time: 2
+
+  - name: '801'
+    type: stream
+    query: select raw, json_extract_array(raw) as tags, tags[1] as tags1, tags[2] as tags2 from table(t_json_raw1)
+    schema:
+      - name: raw
+        type: string
+      - name: tags
+        type: array(string)
+      - name: tags1
+        type: string
+      - name: tags2
+        type: string
+
+  - type: wait
+    time: 1
+
+  - name: '802'
+    type: stream
+    query: select '{"a":1,"tags":["x","y"]}' as raw, json_extract_array(raw:tags) as
+      tags, tags[1] as tags1, tags[2] as tags2
+    schema:
+      - name: raw
+        type: string
+      - name: tags
+        type: array(string)
+      - name: tags1
+        type: string
+      - name: tags2
+        type: string
+
+  - type: check
+    target_name: '801'
+    expected_result:
+      - [ '', [ ], '', '' ]
+      - [ '[1, 2]', [ '1', '2' ], '1', '2' ]
+      - [ '["abc", "xyz"]', [ 'abc', 'xyz' ], abc, xyz ]
+
+  - type: check
+    target_name: '802'
+    expected_result:
+      - [ '{"a":1,"tags":["x","y"]}', [ 'x', 'y' ], x, y ]

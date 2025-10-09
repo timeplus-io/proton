@@ -12,7 +12,7 @@ class IRegionsHierarchyReader
 public:
     virtual bool readNext(RegionEntry & entry) = 0;
 
-    virtual ~IRegionsHierarchyReader() {}
+    virtual ~IRegionsHierarchyReader() = default;
 };
 
 using IRegionsHierarchyReaderPtr = std::unique_ptr<IRegionsHierarchyReader>;

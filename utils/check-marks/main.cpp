@@ -14,6 +14,8 @@
 #include <Compression/CompressedReadBufferFromFile.h>
 
 
+bool LOG_PANIC_ABORT = true;
+
 /** This program checks correctness of .mrk/.mrk2 (marks) file for corresponding compressed .bin file.
   */
 

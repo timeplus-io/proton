@@ -1,0 +1,51 @@
+tags:
+  - session window
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: insert event with tp_time in milliseconds
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - name: '701'
+    type: stream
+    query: |
+      select min(value), max(value), count(location), to_string(window_start), to_string(window_end), id
+      from session(test7_session, 5s, [location='ca', location='sh'])
+      partition by id
+      group by window_start, window_end
+    schema:
+      - name: min(value)
+        type: float32
+      - name: max(value)
+        type: float32
+      - name: count(location)
+        type: uint64
+      - name: to_string(window_start)
+        type: string
+      - name: to_string(window_end)
+        type: string
+      - name: id
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test7_session (id, location, value, json, timestamp) values
+        ('dev1', 'sh', 60.3, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 19:59:55.262+00:00')
+        ('dev1', 'ca', 57.3, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:00.261+00:00')
+        ('dev1', 'ca', 58.3, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:05.260+00:00')
+        ('dev1', 'sh', 59.3, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:08.262+00:00')
+        ('dev1', 'ca', 66, '"create_time":"2021-11-02 20:00:04"', '2020-02-02 20:00:10.263+00:00')
+        ('dev1', 'da', 67, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:13.262+00:00')
+        ('dev1', 'ca', 68, '"create_time":"2021-11-02 20:00:00"', '2020-02-02 20:00:16.262+00:00')
+        ('dev1', 'sh', 69, '"create_time":"2021-11-02 20:00:11"', '2020-02-02 20:00:18.261+00:00')
+
+  - type: check
+    target_name: '701'
+    expected_result:
+      - [ '57.3', '59.3', '3', '2020-02-02 20:00:00.261', '2020-02-02 20:00:08.263', dev1 ]
+      - [ '66', '69', '4', '2020-02-02 20:00:10.263', '2020-02-02 20:00:18.262', dev1 ]
+

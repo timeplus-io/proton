@@ -33,6 +33,12 @@ class TableJoin;
 class QueryPipelineBuilder;
 using QueryPipelineBuilderPtr = std::unique_ptr<QueryPipelineBuilder>;
 
+struct SetAndKey;
+using SetAndKeyPtr = std::shared_ptr<SetAndKey>;
+
+class PreparedSetsCache;
+using PreparedSetsCachePtr = std::shared_ptr<PreparedSetsCache>;
+
 class QueryPipelineBuilder
 {
 public:
@@ -69,7 +75,7 @@ public:
 
     using Transformer = std::function<Processors(OutputPortRawPtrs ports)>;
     /// Transform pipeline in general way.
-    void transform(const Transformer & transformer);
+    void transform(const Transformer & transformer, bool check_ports = true);
 
     /// Add TotalsHavingTransform. Resize pipeline to single input. Adds totals port.
     void addTotalsHavingTransform(ProcessorPtr transform);
@@ -92,6 +98,11 @@ public:
 
     /// Changes the number of output ports if needed. Adds ResizeTransform.
     void resize(size_t num_streams, bool force = false, bool strict = false);
+
+    /// Concat some ports to have no more then size outputs.
+    /// This method is needed for Merge table engine in case of reading from many tables.
+    /// It prevents opening too many files at the same time.
+    void narrow(size_t size);
 
     /// Unite several pipelines together. Result pipeline would have common_header structure.
     /// If collector is used, it will collect only newly-added processors, but not processors from pipelines.
@@ -133,7 +144,18 @@ public:
     /// This is used for CreatingSets.
     void addPipelineBefore(QueryPipelineBuilder pipeline);
 
-    void addCreatingSetsTransform(const Block & res_header, SubqueryForSet subquery_for_set, const SizeLimits & limits, ContextPtr context);
+    void addCreatingSetsTransform(
+        const Block & res_header,
+        SetAndKeyPtr set_and_key,
+        StoragePtr external_table,
+        const SizeLimits & limits,
+        PreparedSetsCachePtr prepared_sets_cache);
+
+    /// Finds all processors for reading from MergeTree
+    /// And explicitly connects them with all RemoteSources
+    /// using a ResizeProcessor. This is needed not to let
+    /// the RemoteSource to starve for CPU time
+    void connectDependencies();
 
     PipelineExecutorPtr execute();
 
@@ -143,7 +165,7 @@ public:
 
     const Block & getHeader() const { return pipe.getHeader(); }
 
-    void setProcessListElement(QueryStatus * elem);
+    void setProcessListElement(QueryStatusPtr elem);
 
     /// Recommend number of threads for pipeline execution.
     size_t getNumThreads() const
@@ -178,12 +200,15 @@ public:
 
     void addResources(QueryPlanResourceHolder resources_) { resources = std::move(resources_); }
     void setQueryIdHolder(std::shared_ptr<QueryIdHolder> query_id_holder) { resources.query_id_holders.emplace_back(std::move(query_id_holder)); }
+    void addContext(ContextPtr context) { resources.interpreter_context.emplace_back(std::move(context)); }
 
     /// Convert query pipeline to pipe.
     static Pipe getPipe(QueryPipelineBuilder pipeline, QueryPlanResourceHolder & resources);
     static QueryPipeline getPipeline(QueryPipelineBuilder builder);
 
     /// proton: starts.
+    void addDelayedPipeline(QueryPipelineBuilder pipeline);
+
     /// Add shuffling transform. It should have single input with compatible header.
     /// Output ports should have same headers. (used for shuffling)
     void addShufflingTransform(const Pipe::ProcessorGetter & getter);
@@ -192,6 +217,8 @@ public:
     ExecuteMode getExecuteMode() const { return exec_mode; }
 
     bool isStreaming() const { return pipe.isStreaming(); }
+
+    std::vector<std::shared_ptr<Streaming::ISource>> getStreamingSources() const;
 
     /// Join two streaming pipelines together using JoinPtr.
     /// If collector is used, it will collect only newly-added processors, but not processors from pipelines.
@@ -203,6 +230,12 @@ public:
         size_t max_block_size,
         size_t max_streams,
         size_t join_max_cached_bytes,
+        Processors * collected_processors = nullptr);
+
+    static QueryPipelineBuilderPtr concatPipelines(
+        QueryPipelineBuilderPtr left,
+        QueryPipelineBuilderPtr right,
+        std::function<void(Int64)> concat_callback = {},
         Processors * collected_processors = nullptr);
     /// proton: ends.
 
@@ -216,10 +249,10 @@ private:
     /// Sometimes, more streams are created then the number of threads for more optimal execution.
     size_t max_threads = 0;
 
-    QueryStatus * process_list_element = nullptr;
+    QueryStatusPtr process_list_element;
 
     /// proton : starts
-    ExecuteMode exec_mode = ExecuteMode::NORMAL;
+    ExecuteMode exec_mode = ExecuteMode::Normal;
     /// proton : ends
 
     void checkInitialized();

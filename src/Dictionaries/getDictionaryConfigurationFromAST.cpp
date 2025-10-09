@@ -16,9 +16,11 @@
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Dictionaries/DictionaryFactory.h>
+#include <Dictionaries/DictionarySourceFactory.h>
 #include <Functions/FunctionFactory.h>
 #include <Common/isLocalAddress.h>
 #include <Interpreters/Context.h>
+#include <DataTypes/DataTypeFactory.h>
 
 
 namespace DB
@@ -110,6 +112,7 @@ void buildLifetimeConfiguration(
 void buildLayoutConfiguration(
     AutoPtr<Document> doc,
     AutoPtr<Element> root,
+    const ASTDictionarySettings * settings,
     const ASTDictionaryLayout * layout)
 {
     AutoPtr<Element> layout_element(doc->createElement("layout"));
@@ -119,6 +122,19 @@ void buildLayoutConfiguration(
 
     if (!layout->parameters)
         return;
+
+    if (settings != nullptr)
+    {
+        AutoPtr<Element> settings_element(doc->createElement("settings"));
+        root->appendChild(settings_element);
+        for (const auto & [name, value] : settings->changes)
+        {
+            AutoPtr<Element> setting_change_element(doc->createElement(name));
+            settings_element->appendChild(setting_change_element);
+            AutoPtr<Text> setting_value(doc->createTextNode(convertFieldToString(value)));
+            setting_change_element->appendChild(setting_value);
+        }
+    }
 
     for (const auto & param : layout->parameters->children)
     {
@@ -141,12 +157,15 @@ void buildLayoutConfiguration(
         }
 
         const auto value_field = value_literal->value;
+        /// proton : starts. Add bool type for layout value parameter
+        const auto value_type = value_field.getType();
 
-        if (value_field.getType() != Field::Types::UInt64 && value_field.getType() != Field::Types::String)
+        if (value_type != Field::Types::UInt64 && value_type != Field::Types::Float64 && value_type != Field::Types::String && value_type != Field::Types::Bool)
+        /// proton: ends
         {
             throw DB::Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "Dictionary layout parameter value must be an uint64 or string, got '{}' instead",
+                "Dictionary layout parameter value must be an bool, uint64, float64 or string, got '{}' instead",
                 value_field.getTypeName());
         }
 
@@ -494,8 +513,11 @@ void buildSourceConfiguration(
     AutoPtr<Element> root,
     const ASTFunctionWithKeyValueArguments * source,
     const ASTDictionarySettings * settings,
+    const String & dictionary_name,
     ContextPtr context)
 {
+    DictionarySourceFactory::instance().checkSourceAvailable(source->name, dictionary_name, context);
+
     AutoPtr<Element> outer_element(doc->createElement("source"));
     root->appendChild(outer_element);
     AutoPtr<Element> source_element(doc->createElement(source->name));
@@ -521,7 +543,7 @@ void buildSourceConfiguration(
   */
 void checkAST(const ASTCreateQuery & query)
 {
-    if (!query.is_dictionary || query.dictionary == nullptr)
+    if (!query.isDictionary() || query.dictionary == nullptr)
         throw Exception(ErrorCodes::INCORRECT_DICTIONARY_DEFINITION, "Cannot convert dictionary to configuration from non-dictionary AST.");
 
     if (query.dictionary->layout == nullptr)
@@ -529,7 +551,9 @@ void checkAST(const ASTCreateQuery & query)
 
     const auto is_direct_layout = !strcasecmp(query.dictionary->layout->layout_type.data(), "direct") ||
                                 !strcasecmp(query.dictionary->layout->layout_type.data(), "complex_key_direct");
-    if (query.dictionary->lifetime == nullptr && !is_direct_layout)
+    const auto is_hybrid_hash_cache = !strcasecmp(query.dictionary->layout->layout_type.data(), "hybrid_hash_cache");
+
+    if (query.dictionary->lifetime == nullptr && !is_direct_layout && !is_hybrid_hash_cache)
         throw Exception(ErrorCodes::INCORRECT_DICTIONARY_DEFINITION, "Cannot create dictionary with empty lifetime");
 
     if (query.dictionary->primary_key == nullptr)
@@ -554,6 +578,10 @@ getDictionaryConfigurationFromAST(const ASTCreateQuery & query, ContextPtr conte
 {
     checkAST(query);
 
+    String dictionary_name = query.getTable();
+    String db_name = !database_.empty() ? database_ : query.getDatabase();
+    String full_dictionary_name = (!db_name.empty() ? (db_name + ".") : "") + dictionary_name;
+
     AutoPtr<Poco::XML::Document> xml_document(new Poco::XML::Document());
     AutoPtr<Poco::XML::Element> document_root(xml_document->createElement("dictionaries"));
     xml_document->appendChild(document_root);
@@ -563,12 +591,12 @@ getDictionaryConfigurationFromAST(const ASTCreateQuery & query, ContextPtr conte
 
     AutoPtr<Poco::XML::Element> name_element(xml_document->createElement("name"));
     current_dictionary->appendChild(name_element);
-    AutoPtr<Text> name(xml_document->createTextNode(query.getTable()));
+    AutoPtr<Text> name(xml_document->createTextNode(dictionary_name));
     name_element->appendChild(name);
 
     AutoPtr<Poco::XML::Element> database_element(xml_document->createElement("database"));
     current_dictionary->appendChild(database_element);
-    AutoPtr<Text> database(xml_document->createTextNode(!database_.empty() ? database_ : query.getDatabase()));
+    AutoPtr<Text> database(xml_document->createTextNode(db_name));
     database_element->appendChild(database);
 
     if (query.uuid != UUIDHelpers::Nil)
@@ -591,10 +619,24 @@ getDictionaryConfigurationFromAST(const ASTCreateQuery & query, ContextPtr conte
 
     checkPrimaryKey(all_attr_names_and_types, pk_attrs);
 
+    /// If the pk size is 1 and pk's DataType is not number, we should convert to complex.
+    /// NOTE: the data type of Numeric key(simple layout) is UInt64, so if the type is not under UInt64, type casting will lead to precision loss.
+    DataTypePtr first_key_type = DataTypeFactory::instance().get(all_attr_names_and_types.find(pk_attrs[0])->second.type);
+    if ((pk_attrs.size() > 1 || (pk_attrs.size() == 1 && !isNumber(first_key_type))) && !complex)
+    {
+        if (DictionaryFactory::instance().convertToComplex(dictionary_layout->layout_type))
+            complex = true;
+        else
+            throw Exception(
+                ErrorCodes::INCORRECT_DICTIONARY_DEFINITION,
+                "Primary key for simple dictionary '{}' must contain exactly one numeric element",
+                dictionary_layout->layout_type);
+    }
+
     buildPrimaryKeyConfiguration(xml_document, structure_element, complex, pk_attrs, query.dictionary_attributes_list);
 
-    buildLayoutConfiguration(xml_document, current_dictionary, dictionary_layout);
-    buildSourceConfiguration(xml_document, current_dictionary, query.dictionary->source, query.dictionary->dict_settings, context);
+    buildLayoutConfiguration(xml_document, current_dictionary, query.dictionary->dict_settings, dictionary_layout);
+    buildSourceConfiguration(xml_document, current_dictionary, query.dictionary->source, query.dictionary->dict_settings, full_dictionary_name, context);
     buildLifetimeConfiguration(xml_document, current_dictionary, query.dictionary->lifetime);
 
     if (query.dictionary->range)
@@ -622,7 +664,6 @@ getInfoIfClickHouseDictionarySource(DictionaryConfigurationPtr & config, Context
     UInt16 port = config->getUInt("dictionary.source.clickhouse.port", 0);
     String database = config->getString("dictionary.source.clickhouse.db", "");
     String table = config->getString("dictionary.source.clickhouse.table", "");
-    bool secure = config->getBool("dictionary.source.clickhouse.secure", false);
 
     if (host.empty() || port == 0 || table.empty())
         return {};
@@ -631,8 +672,8 @@ getInfoIfClickHouseDictionarySource(DictionaryConfigurationPtr & config, Context
 
     try
     {
-        UInt16 default_port = secure ? global_context->getTCPPortSecure().value_or(0) : global_context->getTCPPort();
-        if (isLocalAddress({host, port}, default_port))
+        auto local_tcp_port = global_context->getTCPPort();
+        if (isLocalAddress({host, port}, local_tcp_port.port))
             info.is_local = true;
     }
     catch (const Poco::Net::DNSException &)

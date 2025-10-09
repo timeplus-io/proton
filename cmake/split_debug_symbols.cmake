@@ -15,6 +15,12 @@ macro(proton_split_debug_symbols)
         message(FATAL_ERROR "Destination directory for stripped binary must be provided")
     endif()
 
+    if(APPLE)
+        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+    else()
+        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note --keep-section=.proton.hash "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+    endif()
+
     add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
         COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
         COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
@@ -22,9 +28,9 @@ macro(proton_split_debug_symbols)
         # Splits debug symbols into separate file, leaves the binary untouched:
         COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
         COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
-        # Strips binary, sections '.note' & '.comment' are removed in line with Debian's stripping policy: www.debian.org/doc/debian-policy/ch-files.html, section '.clickhouse.hash' is needed for integrity check:
-       COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note --keep-section=.clickhouse.hash "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
-       # Associate stripped binary with debug symbols:
+        # Strips binary, sections '.note' & '.comment' are removed in line with Debian's stripping policy: www.debian.org/doc/debian-policy/ch-files.html, section '.proton.hash' is needed for integrity check:
+        COMMAND ${STRIP_COMMAND}
+        # Associate stripped binary with debug symbols:
         COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
         COMMENT "Stripping proton binary" VERBATIM
     )

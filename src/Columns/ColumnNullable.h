@@ -1,10 +1,12 @@
 #pragma once
 
 #include <Columns/IColumn.h>
-#include <Columns/IColumnImpl.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+
+#include "config.h"
+
 
 class Collator;
 
@@ -23,10 +25,10 @@ using ConstNullMapPtr = const NullMap *;
 /// over a bitmap because columns are usually stored on disk as compressed
 /// files. In this regard, using a bitmap instead of a byte map would
 /// greatly complicate the implementation with little to no benefits.
-class ColumnNullable final : public COWHelper<IColumn, ColumnNullable>
+class ColumnNullable final : public COWHelper<IColumnHelper<ColumnNullable>, ColumnNullable>
 {
 private:
-    friend class COWHelper<IColumn, ColumnNullable>;
+    friend class COWHelper<IColumnHelper<ColumnNullable>, ColumnNullable>;
 
     ColumnNullable(MutableColumnPtr && nested_column_, MutableColumnPtr && null_map_);
     ColumnNullable(const ColumnNullable &) = default;
@@ -35,7 +37,7 @@ public:
     /** Create immutable column using immutable arguments. This arguments may be shared with other columns.
       * Use IColumn::mutate in order to make mutable column and mutate shared nested columns.
       */
-    using Base = COWHelper<IColumn, ColumnNullable>;
+    using Base = COWHelper<IColumnHelper<ColumnNullable>, ColumnNullable>;
     static Ptr create(const ColumnPtr & nested_column_, const ColumnPtr & null_map_)
     {
         return ColumnNullable::create(nested_column_->assumeMutable(), null_map_->assumeMutable());
@@ -60,11 +62,27 @@ public:
     /// Will insert null value if pos=nullptr
     void insertData(const char * pos, size_t length) override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
+    /// proton: starts.
+    void serializeValueIntoBuffer(size_t n, WriteBuffer & wb) const override;
+    /// proton: ends.
+    char * serializeValueIntoMemory(size_t n, char * memory) const override;
     const char * deserializeAndInsertFromArena(const char * pos) override;
     const char * skipSerializedInArena(const char * pos) const override;
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+#else
+    void doInsertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+#endif
     void insert(const Field & x) override;
+    bool tryInsert(const Field & x) override;
+
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertFrom(const IColumn & src, size_t n) override;
+    void insertManyFrom(const IColumn & src, size_t position, size_t length) override;
+#else
+    void doInsertFrom(const IColumn & src, size_t n) override;
+    void doInsertManyFrom(const IColumn & src, size_t position, size_t length) override;
+#endif
 
     void insertFromNotNullable(const IColumn & src, size_t n);
     void insertRangeFromNotNullable(const IColumn & src, size_t start, size_t length);
@@ -81,12 +99,27 @@ public:
     void expand(const Filter & mask, bool inverted) override;
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     ColumnPtr index(const IColumn & indexes, size_t limit) const override;
+
+/// proton: starts
+    bool equal(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
+    bool equal(size_t n, const Field & rhs_, int null_direction_hint) const override;
+/// proton: ends
+
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
-    void compareColumn(const IColumn & rhs, size_t rhs_row_num,
-                       PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results,
-                       int direction, int nan_direction_hint) const override;
+#else
+    int doCompareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
+#endif
+
+#if USE_EMBEDDED_COMPILER
+
+    bool isComparatorCompilable() const override;
+
+    llvm::Value * compileComparator(llvm::IRBuilderBase & /*builder*/, llvm::Value * /*lhs*/, llvm::Value * /*rhs*/, llvm::Value * /*nan_direction_hint*/) const override;
+
+#endif
+
     int compareAtWithCollation(size_t n, size_t m, const IColumn & rhs, int null_direction_hint, const Collator &) const override;
-    bool hasEqualValues() const override;
     void getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
                         size_t limit, int null_direction_hint, Permutation & res) const override;
     void updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
@@ -95,7 +128,11 @@ public:
                         size_t limit, int null_direction_hint, Permutation & res) const override;
     void updatePermutationWithCollation(const Collator & collator, IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
                         size_t limit, int null_direction_hint, Permutation & res, EqualRanges& equal_ranges) const override;
+    size_t estimateCardinalityInPermutedRange(const Permutation & permutation, const EqualRange & equal_range) const override;
     void reserve(size_t n) override;
+    size_t capacity() const override;
+    void prepareForSquashing(const Columns & source_columns) override;
+    void shrinkToFit() override;
     void ensureOwnership() override;
     size_t byteSize() const override;
     size_t byteSizeAt(size_t n) const override;
@@ -110,14 +147,21 @@ public:
     // Special function for nullable minmax index
     void getExtremesNullLast(Field & min, Field & max) const;
 
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override
+    ColumnPtr compress() const override;
+
+    void forEachMutableSubcolumn(MutableColumnCallback callback) override
     {
-        return scatterImpl<ColumnNullable>(num_columns, selector);
+        callback(nested_column);
+        callback(null_map);
     }
 
-    void gather(ColumnGathererStream & gatherer_stream) override;
-
-    ColumnPtr compress() const override;
+    void forEachMutableSubcolumnRecursively(RecursiveMutableColumnCallback callback) override
+    {
+        callback(*nested_column);
+        nested_column->forEachMutableSubcolumnRecursively(callback);
+        callback(*null_map);
+        null_map->forEachMutableSubcolumnRecursively(callback);
+    }
 
     void forEachSubcolumn(ColumnCallback callback) const override
     {
@@ -140,17 +184,7 @@ public:
         return false;
     }
 
-    double getRatioOfDefaultRows(double sample_ratio) const override
-    {
-        return getRatioOfDefaultRowsImpl<ColumnNullable>(sample_ratio);
-    }
-
-    void getIndicesOfNonDefaultRows(Offsets & indices, size_t from, size_t limit) const override
-    {
-        getIndicesOfNonDefaultRowsImpl<ColumnNullable>(indices, from, limit);
-    }
-
-    ColumnPtr createWithOffsets(const Offsets & offsets, const Field & default_field, size_t total_rows, size_t shift) const override;
+    ColumnPtr createWithOffsets(const Offsets & offsets, const ColumnConst & column_with_default_value, size_t total_rows, size_t shift) const override;
 
     bool isNullable() const override { return true; }
     bool isFixedAndContiguous() const override { return false; }
@@ -177,6 +211,8 @@ public:
     NullMap & getNullMapData() { return getNullMapColumn().getData(); }
     const NullMap & getNullMapData() const { return getNullMapColumn().getData(); }
 
+    ColumnPtr getNestedColumnWithDefaultOnNull() const;
+
     /// Apply the null byte map of a specified nullable column onto the
     /// null byte map of the current column by performing an element-wise OR
     /// between both byte maps. This method is used to determine the null byte
@@ -190,6 +226,9 @@ public:
 
     /// Check that size of null map equals to size of nested column.
     void checkConsistency() const;
+
+    bool hasDynamicStructure() const override { return nested_column->hasDynamicStructure(); }
+    void takeDynamicStructureFromSourceColumns(const Columns & source_columns) override;
 
 private:
     WrappedPtr nested_column;
@@ -209,5 +248,10 @@ private:
 
 ColumnPtr makeNullable(const ColumnPtr & column);
 ColumnPtr makeNullableSafe(const ColumnPtr & column);
+ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column);
+ColumnPtr makeNullableOrLowCardinalityNullableSafe(const ColumnPtr & column);
+
+ColumnPtr removeNullable(const ColumnPtr & column);
+ColumnPtr removeNullableOrLowCardinalityNullable(const ColumnPtr & column);
 
 }

@@ -311,14 +311,15 @@ BlockIO InterpreterGrantQuery::execute()
     query.access_rights_elements.eraseNonGrantable();
 
     if (!query.access_rights_elements.sameOptions())
-        throw Exception("Elements of an ASTGrantQuery are expected to have the same options", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Elements of an ASTGrantQuery are expected to have the same options");
     if (!query.access_rights_elements.empty() && query.access_rights_elements[0].is_partial_revoke && !query.is_revoke)
-        throw Exception("A partial revoke should be revoked, not granted", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "A partial revoke should be revoked, not granted");
 
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     auto current_user_access = getContext()->getAccess();
 
-    std::vector<UUID> grantees = RolesOrUsersSet{*query.grantees, access_control, getContext()->getUserID()}.getMatchingIDs(access_control);
+    std::vector<UUID> grantees
+        = RolesOrUsersSet{*query.grantees, *access_control, getContext()->getUserID()}.getMatchingIDs(*access_control);
 
     /// Collect access rights and roles we're going to grant or revoke.
     AccessRightsElements elements_to_grant, elements_to_revoke;
@@ -326,17 +327,25 @@ BlockIO InterpreterGrantQuery::execute()
 
     std::vector<UUID> roles_to_grant;
     RolesOrUsersSet roles_to_revoke;
-    collectRolesToGrantOrRevoke(access_control, query, roles_to_grant, roles_to_revoke);
+    collectRolesToGrantOrRevoke(*access_control, query, roles_to_grant, roles_to_revoke);
 
     /// Check if the current user has corresponding access rights granted with grant option.
     String current_database = getContext()->getCurrentDatabase();
     elements_to_grant.replaceEmptyDatabase(current_database);
     elements_to_revoke.replaceEmptyDatabase(current_database);
     bool need_check_grantees_are_allowed = true;
-    checkGrantOption(access_control, *current_user_access, grantees, need_check_grantees_are_allowed, elements_to_grant, elements_to_revoke);
+    checkGrantOption(
+        *access_control, *current_user_access, grantees, need_check_grantees_are_allowed, elements_to_grant, elements_to_revoke);
 
     /// Check if the current user has corresponding roles granted with admin option.
-    checkAdminOption(access_control, *current_user_access, grantees, need_check_grantees_are_allowed, roles_to_grant, roles_to_revoke, query.admin_option);
+    checkAdminOption(
+        *access_control,
+        *current_user_access,
+        grantees,
+        need_check_grantees_are_allowed,
+        roles_to_grant,
+        roles_to_revoke,
+        query.admin_option);
 
     if (need_check_grantees_are_allowed)
         current_user_access->checkGranteesAreAllowed(grantees);
@@ -349,7 +358,7 @@ BlockIO InterpreterGrantQuery::execute()
         return clone;
     };
 
-    access_control.update(grantees, update_func);
+    access_control->update(grantees, update_func);
 
     return {};
 }

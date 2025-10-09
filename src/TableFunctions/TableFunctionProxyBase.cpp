@@ -7,9 +7,10 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSubquery.h>
+#include <Storages/MatView/StorageMaterializedView.h>
+#include <Storages/Proxy/ProxyStream.h>
 #include <Storages/StorageView.h>
-#include <Storages/Streaming/ProxyStream.h>
-#include <Storages/Streaming/storageUtil.h>
+#include <Storages/Stream/storageUtil.h>
 
 namespace DB
 {
@@ -48,6 +49,11 @@ void TableFunctionProxyBase::resolveStorageID(const ASTPtr & arg, ContextPtr con
             else if (const auto * nested_subquery = std::get_if<ASTPtr>(&proxy))
                 subquery = *nested_subquery;
         }
+        else
+        {
+            storage = function_storage;
+        }
+
         storage_id = function_storage->getStorageID();
     }
     else if (auto storage_id_opt = tryGetStorageID(arg))
@@ -95,7 +101,7 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
             underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
             auto select = underlying_storage_snapshot->getMetadataForQuery()->getSelectQuery().inner_query;
 
-            auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, SelectQueryOptions{}.analyze());
+            auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, SelectQueryOptions{}.subquery().analyze());
             auto source_header = interpreter_subquery->getSampleBlock();
             columns = ColumnsDescription(source_header.getNamesAndTypesList());
 
@@ -105,7 +111,12 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
         }
         else if (storage->supportsStreamingQuery())
         {
-            underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+            /// Use the target table's metadata because columns are always read from the target table of the materialized view
+            if (auto * mv = storage->as<StorageMaterializedView>())
+                underlying_storage_snapshot = mv->getStorageSnapshot(mv->getTargetInMemoryMetadataPtr(), context);
+            else
+                underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+
             columns = underlying_storage_snapshot->metadata->getColumns();
             data_stream_semantic = storage->dataStreamSemantic();
         }
@@ -144,13 +155,23 @@ ColumnsDescription TableFunctionProxyBase::getActualTableStructure(ContextPtr /*
     return columns;
 }
 
-TableFunctionDescriptionMutablePtr TableFunctionProxyBase::createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context) const
+TableFunctionDescriptionMutablePtr
+TableFunctionProxyBase::createStreamingTableFunctionDescription(ASTPtr ast, ContextPtr context, size_t exclude_last_n_args) const
 {
     auto & func = ast->as<ASTFunction &>();
-    auto syntax_analyzer_result
-        = TreeRewriter(context).analyze(func.arguments, columns.getAll(), nested_proxy_storage ? nested_proxy_storage : storage, underlying_storage_snapshot);
 
-    ExpressionAnalyzer func_expr_analyzer(func.arguments, syntax_analyzer_result, context);
+    auto arguments = func.arguments;
+    if (exclude_last_n_args > 0 && arguments->children.size() >= exclude_last_n_args)
+    {
+        arguments = func.arguments->clone();
+        for (size_t i = 0; i < exclude_last_n_args; ++i)
+            arguments->children.pop_back();
+    }
+
+    auto syntax_analyzer_result = TreeRewriter(context).analyze(
+        arguments, columns.getAll(), nested_proxy_storage ? nested_proxy_storage : storage, underlying_storage_snapshot);
+
+    ExpressionAnalyzer func_expr_analyzer(arguments, syntax_analyzer_result, context);
     auto expr_before_table_function = func_expr_analyzer.getActions(true);
 
     const auto & args_header = expr_before_table_function->getSampleBlock();

@@ -32,8 +32,9 @@ DataTypeLowCardinality::DataTypeLowCardinality(DataTypePtr dictionary_type_)
         inner_type = static_cast<const DataTypeNullable &>(*dictionary_type).getNestedType();
 
     if (!inner_type->canBeInsideLowCardinality())
-        throw Exception("Data type low_cardinality is supported only for numbers, strings, Date or DateTime, but got "
-                        + dictionary_type->getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Data type low_cardinality is supported only for numbers, strings, Date or DateTime, but got {}",
+                        dictionary_type->getName());
 }
 
 namespace
@@ -93,13 +94,13 @@ MutableColumnUniquePtr DataTypeLowCardinality::createColumnUniqueImpl(const IDat
         TypeListUtils::forEach(TypeListIntAndFloat{}, CreateColumnVector(column, *type, creator));
 
         if (!column)
-            throw Exception("Unexpected numeric type: " + type->getName(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected numeric type: {}", type->getName());
 
         return column;
     }
 
-    throw Exception("Unexpected dictionary type for DataTypeLowCardinality: " + type->getName(),
-                    ErrorCodes::LOGICAL_ERROR);
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected dictionary type for DataTypeLowCardinality: {}",
+                    type->getName());
 }
 
 
@@ -149,12 +150,18 @@ SerializationPtr DataTypeLowCardinality::doGetDefaultSerialization() const
     return std::make_shared<SerializationLowCardinality>(dictionary_type);
 }
 
+void DataTypeLowCardinality::forEachChild(const ChildCallback & callback) const
+{
+    callback(*dictionary_type);
+    dictionary_type->forEachChild(callback);
+}
+
 
 static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.size() != 1)
-        throw Exception("The low_cardinality data type family must have single argument - type of elements",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                        "The low_cardinality data type family must have single argument - type of elements");
 
     return std::make_shared<DataTypeLowCardinality>(DataTypeFactory::instance().get(arguments->children[0]/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 }
@@ -176,4 +183,8 @@ DataTypePtr removeLowCardinality(const DataTypePtr & type)
     return type;
 }
 
+DataTypePtr removeLowCardinalityAndNullable(const DataTypePtr & type)
+{
+    return removeNullable(removeLowCardinality(type));
+};
 }

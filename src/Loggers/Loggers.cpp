@@ -12,11 +12,20 @@
 #include <Interpreters/TextLog.h>
 #include <filesystem>
 
+/// proton: starts
+#include <re2/re2.h>
+/// proton: ends
+
 namespace fs = std::filesystem;
 
 namespace DB
 {
     class SensitiveDataMasker;
+
+namespace ErrorCodes
+{
+    extern const int BAD_ARGUMENTS;
+}
 }
 
 
@@ -319,6 +328,129 @@ void Loggers::updateLevels(Poco::Util::AbstractConfiguration & config, Poco::Log
         }
     }
 }
+
+/// proton: starts
+std::vector<std::string> Loggers::findLoggersByPattern(const std::string & pattern)
+{
+    std::vector<std::string> matched_loggers;
+    
+    if (pattern.empty())
+        return matched_loggers;
+
+    std::vector<std::string> all_names;
+    all_names.reserve(512);
+    Poco::Logger::root().names(all_names);
+    
+    re2::RE2 regex_pattern(pattern);
+    bool is_regex = regex_pattern.ok();
+    
+    if (is_regex)
+    {
+        /// Check root logger
+        if (RE2::FullMatch("root", regex_pattern))
+            matched_loggers.push_back("root");
+        
+        /// Check all other loggers
+        for (const auto & name : all_names)
+        {
+            if (RE2::FullMatch(name, regex_pattern))
+                matched_loggers.push_back(name);
+        }
+        
+        /// If no exact regex matches found, try partial matching for convenience
+        if (matched_loggers.empty())
+        {
+            std::string partial_pattern = ".*" + pattern + ".*";
+            re2::RE2 partial_regex(partial_pattern);
+            
+            if (partial_regex.ok())
+            {
+                if (RE2::PartialMatch("root", partial_regex))
+                    matched_loggers.push_back("root");
+                    
+                for (const auto & name : all_names)
+                {
+                    if (RE2::PartialMatch(name, partial_regex))
+                        matched_loggers.push_back(name);
+                }
+            }
+        }
+    }
+    else
+    {
+        /// Fallback to partial string matching
+        for (const auto & name : all_names)
+        {
+            if (name.find(pattern) != std::string::npos)
+                matched_loggers.push_back(name);
+        }
+    }
+    
+    return matched_loggers;
+}
+
+void Loggers::setLogLevel(const std::string & level, const std::string & logger_name)
+{
+    auto parsed_level = Poco::Logger::parseLevel(level);
+
+    if (logger_name.empty())
+    {
+        Poco::Logger::root().setLevel(parsed_level);
+
+        std::vector<std::string> names;
+        names.reserve(512);
+        Poco::Logger::root().names(names);
+        for (const auto & name : names)
+            getLogger(name)->setLevel(parsed_level);
+
+        if (split)
+        {
+            split->setLevel("log", parsed_level);
+            split->setLevel("console", parsed_level);
+        }
+    }
+    else
+    {
+        if (Poco::Logger::has(logger_name))
+        {
+            getLogger(logger_name)->setLevel(parsed_level);
+        }
+        else
+        {
+            /// If exact match fails, try pattern matching as fallback
+            auto matched_loggers = findLoggersByPattern(logger_name);            
+            if (matched_loggers.empty())
+                throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "No loggers found matching pattern: {}", logger_name);
+
+            for (const auto & matched_name : matched_loggers)
+                getLogger(matched_name)->setLevel(parsed_level);
+        }
+        
+        /// CRITICAL FIX: When setting a specific logger to a more verbose level,
+        /// we need to ensure channels can accept those messages
+        /// In Poco: higher numbers = more verbose (FATAL=1, CRITICAL=2, ERROR=3, WARNING=4, NOTICE=5, INFORMATION=6, DEBUG=7, TRACE=8, TEST=9)
+        if (split)
+        {
+            /// Only update channels if the new level is more verbose (higher number) than current
+            /// We need to check current channel levels and only raise them if necessary
+            auto current_log_level = split->getLevel("log");
+            auto current_console_level = split->getLevel("console");
+            
+            /// Raise channel levels to accommodate the more verbose logger
+            /// This ensures that when a specific logger is set to DEBUG/TRACE,
+            /// the channels can actually output those messages
+            if (parsed_level > current_log_level)
+                split->setLevel("log", parsed_level);
+
+            if (parsed_level > current_console_level)
+                split->setLevel("console", parsed_level);
+                
+            /// Note: We deliberately don't touch syslog and errorlog channels
+            /// as they maintain their configured levels from the config file
+        }
+    }
+}
+/// proton: ends
 
 void Loggers::closeLogs(Poco::Logger & logger)
 {

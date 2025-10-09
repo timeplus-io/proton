@@ -12,6 +12,9 @@ class ASTFunction;
 class ASTIndexDeclaration : public IAST
 {
 public:
+    static const auto DEFAULT_INDEX_GRANULARITY = 1uz;
+
+public:
     String name;
     IAST * expr;
     ASTFunction * type;

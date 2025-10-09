@@ -1,0 +1,112 @@
+tags:
+- ddl-column
+- bug
+description: streaming query after modify a column type
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists modify_column_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream modify_column_stream (id int, name string, val float, ts datetime)
+- type: wait
+  time: 1
+
+- name: '2707'
+  type: stream
+  query: select id, name, val, ts from modify_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into modify_column_stream (id, name, val, ts) values (1, 's1', 11.1,
+    '2020-02-02 20:00:01')
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+- type: wait
+  time: 1
+
+- type: query
+  sql: ALTER STREAM modify_column_stream MODIFY COLUMN val int
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into modify_column_stream (id, name, val, ts) values (2, 's2', 22.2,
+    '2020-02-02 20:00:02')
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: ts
+    type: datetime
+  inputs:
+  - [2, 's2', 22.2, '2020-02-02 20:00:02']
+- type: wait
+  time: 1
+
+- name: 2707-1
+  type: stream
+  query: select id, name, val, timestamp from rename_column_stream
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: timestamp
+    type: datetime
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into rename_column_stream (id, name, val, timestamp) values (3, 's3',
+    33.3, '2020-02-02 20:00:03')
+  schema:
+  - name: id
+    type: int32
+  - name: name
+    type: string
+  - name: val
+    type: float32
+  - name: timestamp
+    type: datetime
+  inputs:
+  - [3, 's3', 33.3, '2020-02-02 20:00:03']
+
+- type: check
+  target_name: '2707'
+  expected_result:
+  - [1, 's1', 11.1, '2020-02-02 20:00:01']
+  - [2, 's2', 22, '1970-01-01 00:00:00']
+
+- type: check
+  target_name: 2707-1
+  expected_result:
+  - [3, 's3', 33, '2020-02-02 20:00:03']

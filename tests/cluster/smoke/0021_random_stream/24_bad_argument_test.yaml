@@ -1,0 +1,26 @@
+tags:
+- monotonic test
+description: bad argument test
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2233'
+  type: stream
+  query: select monotonic(1.0)
+- type: wait
+  time: 2
+
+- name: '2234'
+  type: stream
+  query: select monotonic('1')
+
+- type: check
+  target_name: '2233'
+  expected_result:
+  - ["error_code:36"]
+
+- type: check
+  target_name: '2234'
+  expected_result:
+  - ["error_code:36"]

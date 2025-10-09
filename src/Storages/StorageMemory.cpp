@@ -4,6 +4,7 @@
 #include <Interpreters/MutationsInterpreter.h>
 #include <Interpreters/getColumnFromBlock.h>
 #include <Interpreters/inplaceBlockConversions.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMemory.h>
 #include <Storages/MemorySettings.h>
@@ -21,10 +22,20 @@
 
 namespace DB
 {
+namespace MemorySetting
+{
+    extern const MemorySettingsBool compress;
+    extern const MemorySettingsUInt64 max_bytes_to_keep;
+    extern const MemorySettingsUInt64 max_rows_to_keep;
+    extern const MemorySettingsUInt64 min_bytes_to_keep;
+    extern const MemorySettingsUInt64 min_rows_to_keep;
+}
 
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int CANNOT_RESTORE_TABLE;
+    extern const int NOT_IMPLEMENTED;
 }
 
 
@@ -41,7 +52,7 @@ public:
         InitializerFunc initializer_func_ = {})
         : ISource(storage_snapshot->getSampleBlockForColumns(column_names_), true, ProcessorID::MemorySourceID)
         , column_names_and_types(storage_snapshot->getColumnsByNames(
-            GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), column_names_))
+            GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withExtendedObjects(), column_names_))
         , data(data_)
         , parallel_execution_index(parallel_execution_index_)
         , initializer_func(std::move(initializer_func_))
@@ -66,7 +77,10 @@ protected:
             return {};
         }
 
-        const Block & src = (*data)[current_index];
+        /// Deep clone the block since if the underlying columns are shared
+        /// they could be manipulated by down stream processors which makes
+        /// data blocks corrupted
+        Block src{(*data)[current_index].deepClone()};
 
         Columns columns;
         size_t num_columns = column_names_and_types.size();
@@ -79,7 +93,7 @@ protected:
             ++name_and_type;
         }
 
-        fillMissingColumns(columns, src.rows(), column_names_and_types, /*metadata_snapshot=*/ nullptr);
+        fillMissingColumns(columns, src.rows(), column_names_and_types, column_names_and_types, {}, /*metadata_snapshot=*/ nullptr);
         assert(std::all_of(columns.begin(), columns.end(), [](const auto & column) { return column != nullptr; }));
 
         return Chunk(std::move(columns), src.rows());
@@ -125,10 +139,8 @@ public:
     {
         auto block = getHeader().cloneWithColumns(chunk.getColumns());
         storage_snapshot->metadata->check(block, true);
-        if (!storage_snapshot->object_columns.get()->empty())
-            convertDynamicColumnsToTuples(block, storage_snapshot);
 
-        if (storage.compress)
+        if (storage.getMemorySettingsRef()[MemorySetting::compress])
         {
             Block compressed_block;
             for (const auto & elem : block)
@@ -156,6 +168,29 @@ public:
         std::lock_guard lock(storage.mutex);
 
         auto new_data = std::make_unique<Blocks>(*(storage.data.get()));
+        UInt64 new_total_rows = storage.total_size_rows.load(std::memory_order_relaxed) + inserted_rows;
+        UInt64 new_total_bytes = storage.total_size_bytes.load(std::memory_order_relaxed) + inserted_bytes;
+        const auto & memory_settings = storage.getMemorySettingsRef();
+        while (!new_data->empty()
+               && ((memory_settings[MemorySetting::max_bytes_to_keep] && new_total_bytes > memory_settings[MemorySetting::max_bytes_to_keep])
+                   || (memory_settings[MemorySetting::max_rows_to_keep] && new_total_rows > memory_settings[MemorySetting::max_rows_to_keep])))
+        {
+            Block oldest_block = new_data->front();
+            UInt64 rows_to_remove = oldest_block.rows();
+            UInt64 bytes_to_remove = oldest_block.allocatedBytes();
+            if (new_total_bytes - bytes_to_remove < memory_settings[MemorySetting::min_bytes_to_keep]
+                || new_total_rows - rows_to_remove < memory_settings[MemorySetting::min_rows_to_keep])
+            {
+                break; // stop - removing next block will put us under min_bytes / min_rows threshold
+            }
+
+            // delete old block from current storage table
+            new_total_rows -= rows_to_remove;
+            new_total_bytes -= bytes_to_remove;
+            new_data->erase(new_data->begin());
+        }
+
+        // append new data to modified storage table and commit
         new_data->insert(new_data->end(), new_blocks.begin(), new_blocks.end());
 
         storage.data.set(std::move(new_data));
@@ -176,13 +211,16 @@ StorageMemory::StorageMemory(
     ColumnsDescription columns_description_,
     ConstraintsDescription constraints_,
     const String & comment,
-    bool compress_)
-    : IStorage(table_id_), data(std::make_unique<const Blocks>()), compress(compress_)
+    const MemorySettings & memory_settings_)
+    : IStorage(table_id_)
+    , data(std::make_unique<const Blocks>())
+    , memory_settings(memory_settings_)
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(std::move(columns_description_));
     storage_metadata.setConstraints(std::move(constraints_)); /// NOLINT(performance-move-const-arg)
     storage_metadata.setComment(comment);
+    storage_metadata.setSettingsChanges(memory_settings.getSettingsChangesQuery());
     setInMemoryMetadata(storage_metadata);
 }
 
@@ -191,16 +229,7 @@ StorageSnapshotPtr StorageMemory::getStorageSnapshot(const StorageMetadataPtr & 
     auto snapshot_data = std::make_unique<SnapshotData>();
     snapshot_data->blocks = data.get();
 
-    if (!hasDynamicSubcolumns(metadata_snapshot->getColumns()))
-        return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, ColumnsDescription{}, std::move(snapshot_data));
-
-    auto object_columns = getConcreteObjectColumns(
-        snapshot_data->blocks->begin(),
-        snapshot_data->blocks->end(),
-        metadata_snapshot->getColumns(),
-        [](const auto & block) -> const auto & { return block.getColumnsWithTypeAndName(); });
-
-    return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns, std::move(snapshot_data));
+    return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, std::move(snapshot_data));  /// proton: updates. object_columns removed
 }
 
 Pipe StorageMemory::read(
@@ -297,7 +326,8 @@ void StorageMemory::mutate(const MutationCommands & commands, ContextPtr context
     new_context->setSetting("max_streams_to_max_threads_ratio", 1);
     new_context->setSetting("max_threads", 1);
 
-    auto interpreter = std::make_unique<MutationsInterpreter>(storage_ptr, metadata_snapshot, commands, new_context, true);
+    MutationsInterpreter::Settings settings(true);
+    auto interpreter = std::make_unique<MutationsInterpreter>(storage_ptr, metadata_snapshot, commands, new_context, settings);
     auto pipeline = QueryPipelineBuilder::getPipeline(interpreter->execute());
     PullingPipelineExecutor executor(pipeline);
 
@@ -305,7 +335,7 @@ void StorageMemory::mutate(const MutationCommands & commands, ContextPtr context
     Block block;
     while (executor.pull(block))
     {
-        if (compress)
+        if (memory_settings[MemorySetting::compress])
             for (auto & elem : block)
                 elem.column = elem.column->compress();
 
@@ -360,6 +390,72 @@ void StorageMemory::truncate(
     total_size_rows.store(0, std::memory_order_relaxed);
 }
 
+void StorageMemory::alter(const DB::AlterCommands & params, DB::ContextPtr context, DB::IStorage::AlterLockHolder & /*alter_lock_holder*/)
+{
+    auto table_id = getStorageID();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    params.apply(new_metadata, context);
+
+    if (params.isSettingsAlter())
+    {
+        auto & settings_changes = new_metadata.settings_changes->as<ASTSetQuery &>();
+        auto changed_settings = memory_settings;
+        changed_settings.applyChanges(settings_changes.changes);
+        changed_settings.sanityCheck();
+
+        /// When modifying the values of max_bytes_to_keep and max_rows_to_keep to be smaller than the old values,
+        /// the old data needs to be removed.
+        if (!memory_settings[MemorySetting::max_bytes_to_keep] || memory_settings[MemorySetting::max_bytes_to_keep] > changed_settings[MemorySetting::max_bytes_to_keep]
+            || !memory_settings[MemorySetting::max_rows_to_keep] || memory_settings[MemorySetting::max_rows_to_keep] > changed_settings[MemorySetting::max_rows_to_keep])
+        {
+            std::lock_guard lock(mutex);
+
+            auto new_data = std::make_unique<Blocks>(*(data.get()));
+            UInt64 new_total_rows = total_size_rows.load(std::memory_order_relaxed);
+            UInt64 new_total_bytes = total_size_bytes.load(std::memory_order_relaxed);
+            while (!new_data->empty()
+                   && ((changed_settings[MemorySetting::max_bytes_to_keep] && new_total_bytes > changed_settings[MemorySetting::max_bytes_to_keep])
+                       || (changed_settings[MemorySetting::max_rows_to_keep] && new_total_rows > changed_settings[MemorySetting::max_rows_to_keep])))
+            {
+                Block oldest_block = new_data->front();
+                UInt64 rows_to_remove = oldest_block.rows();
+                UInt64 bytes_to_remove = oldest_block.allocatedBytes();
+                if (new_total_bytes - bytes_to_remove < changed_settings[MemorySetting::min_bytes_to_keep]
+                    || new_total_rows - rows_to_remove < changed_settings[MemorySetting::min_rows_to_keep])
+                {
+                    break; // stop - removing next block will put us under min_bytes / min_rows threshold
+                }
+
+                // delete old block from current storage table
+                new_total_rows -= rows_to_remove;
+                new_total_bytes -= bytes_to_remove;
+                new_data->erase(new_data->begin());
+            }
+
+            data.set(std::move(new_data));
+            total_size_rows.store(new_total_rows, std::memory_order_relaxed);
+            total_size_bytes.store(new_total_bytes, std::memory_order_relaxed);
+        }
+        memory_settings = std::move(changed_settings);
+    }
+
+    DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(context, table_id, new_metadata);
+    setInMemoryMetadata(new_metadata);
+}
+
+void StorageMemory::checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type != AlterCommand::Type::ADD_COLUMN && command.type != AlterCommand::Type::MODIFY_COLUMN
+            && command.type != AlterCommand::Type::DROP_COLUMN && command.type != AlterCommand::Type::COMMENT_COLUMN
+            && command.type != AlterCommand::Type::COMMENT_TABLE && command.type != AlterCommand::Type::RENAME_COLUMN
+            && command.type != AlterCommand::Type::MODIFY_SETTING)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter of type '{}' is not supported by storage {}",
+                command.type, getName());
+    }
+}
+
 std::optional<UInt64> StorageMemory::totalRows(const Settings &) const
 {
     /// All modifications of these counters are done under mutex which automatically guarantees synchronization/consistency
@@ -386,7 +482,9 @@ void registerStorageMemory(StorageFactory & factory)
         if (has_settings)
             settings.loadFromQuery(*args.storage_def);
 
-        return StorageMemory::create(args.table_id, args.columns, args.constraints, args.comment, settings.compress);
+        settings.sanityCheck();
+
+        return std::make_shared<StorageMemory>(args.table_id, args.columns, args.constraints, args.comment, settings);
     },
     {
         .supports_settings = true,

@@ -1127,18 +1127,20 @@ public:
         const auto & p_column = arguments[1];
 
         if (!isColumnConst(*p_column.column) && p_column.column->size() != 1)
-            throw Exception{"Second argument for function " + getName() + " must be either constant float64 or constant uint", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Second argument for function {} must be either constant float64 or constant uInt", getName());
 
         double p;
         if (isFloat(p_column.column->getDataType()))
             p = p_column.column->getFloat64(0);
-        else if (isUnsignedInteger(p_column.column->getDataType()))
+        else if (isUInt(p_column.column->getDataType()))
             p = p_column.column->getUInt(0);
         else
-            throw Exception{"Second argument for function " + getName() + " must be either constant float64 or constant uint", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Second argument for function {} must be either constant float64 or constant uint", getName());
 
         if (p < 1 || p >= HUGE_VAL)
-            throw Exception{"Second argument for function " + getName() + " must be not less than one and not be an infinity", ErrorCodes::ARGUMENT_OUT_OF_BOUND};
+            throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND,
+                            "Second argument for function {} must be not less than one and not be an infinity",
+                            getName());
 
         auto abs = FunctionFactory::instance().get("abs", context);
         auto pow = FunctionFactory::instance().get("pow", context);
@@ -1383,7 +1385,7 @@ public:
                                                     divide_result.type, input_rows_count);
 
         auto minus_elem = minus->build({one, divide_result});
-        return minus_elem->execute({one, divide_result}, minus_elem->getResultType(), {});
+        return minus_elem->execute({one, divide_result}, minus_elem->getResultType(), input_rows_count);
     }
 };
 
@@ -1560,7 +1562,7 @@ Consecutively adds a tuple of intervals to a date or a datetime.
             .examples{
                 {"tuple", "WITH to_date('2018-01-01') AS date SELECT add_tuple_of_intervals(date, (INTERVAL 1 DAY, INTERVAL 1 YEAR))", ""},
                 },
-            .categories{"Tuple", "Interval", "Date", "DateTime"}
+            .category{"Dates and Times"}
         });
 
     factory.registerFunction<FunctionSubtractTupleOfIntervals>(FunctionDocumentation
@@ -1572,7 +1574,7 @@ Consecutively subtracts a tuple of intervals from a Date or a DateTime.
             .examples{
                 {"tuple", "WITH to_date('2018-01-01') AS date SELECT subtract_tuple_of_intervals(date, (INTERVAL 1 DAY, INTERVAL 1 YEAR))", ""},
                 },
-            .categories{"Tuple", "Interval", "Date", "DateTime"}
+            .category{"Dates and Times"}
         });
 
     factory.registerFunction<FunctionTupleAddInterval>(FunctionDocumentation
@@ -1590,7 +1592,7 @@ If the types of the first interval (or the interval in the tuple) and the second
                 {"interval1", "SELECT add_interval(INTERVAL 1 DAY, INTERVAL 1 MONTH)", ""},
                 {"interval2", "SELECT add_interval(INTERVAL 1 DAY, INTERVAL 1 DAY)", ""},
                 },
-            .categories{"Tuple", "Interval"}
+            .category{"Dates and Times"}
         });
     factory.registerFunction<FunctionTupleSubtractInterval>(FunctionDocumentation
         {
@@ -1607,7 +1609,7 @@ If the types of the first interval (or the interval in the tuple) and the second
                 {"interval1", "SELECT subtract_interval(INTERVAL 1 DAY, INTERVAL 1 MONTH)", ""},
                 {"interval2", "SELECT subtract_interval(INTERVAL 2 DAY, INTERVAL 1 DAY)", ""},
                 },
-            .categories{"Tuple", "Interval"}
+            .category{"Dates and Times"}
         });
 
     factory.registerFunction<FunctionTupleMultiplyByNumber>();

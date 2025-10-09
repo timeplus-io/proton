@@ -1,0 +1,117 @@
+tags:
+- multishards
+- append_only
+- streaming_aggregation
+- global_aggregation
+- no_group_by
+- UDA
+description: streaming aggregation no group by, UDA
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_multishard_3;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_3(i float, k1 int, k2 string) settings shards=3;
+  
+  - type: wait
+    time: 5
+  
+  - name: '1322'
+    type: stream
+    query: |
+      select test_13_3_sec_large(i)
+      from test13_multishard_3
+      emit periodic 100ms;
+    schema:
+    - name: 'test_13_3_sec_large(i)'
+      type: float32
+      
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (1, 0, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (2, 0, 'b');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (3, 0, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    node: [p1]
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (4, 0, 'c');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (5, 0, 'a');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: |
+      insert into test13_multishard_3 (i, k1, k2)
+      values (6, 0, 'b');
+
+  - type: check
+    target_name: '1322'
+    expected_result:
+    - [-1]
+    - [1]
+    - [2]
+    - [3]
+    - [4]
+    - [5]

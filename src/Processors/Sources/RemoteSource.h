@@ -1,8 +1,9 @@
 #pragma once
 
-#include <Processors/ISource.h>
+#include <Processors/Streaming/ISource.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <QueryPipeline/Pipe.h>
+#include "Core/UUID.h"
 #include <atomic>
 
 namespace DB
@@ -14,19 +15,23 @@ using RemoteQueryExecutorPtr = std::shared_ptr<RemoteQueryExecutor>;
 class RemoteQueryExecutorReadContext;
 
 /// Source from RemoteQueryExecutor. Executes remote query and returns query result chunks.
-class RemoteSource final : public ISource
+class RemoteSource final : public Streaming::ISource
 {
 public:
     /// Flag add_aggregation_info tells if AggregatedChunkInfo should be added to result chunk.
     /// AggregatedChunkInfo stores the bucket number used for two-level aggregation.
     /// This flag should be typically enabled for queries with GROUP BY which are executed till WithMergeableState.
-    RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_, std::optional<bool> is_streaming_=std::nullopt); /// proton: added is_streaming_
+    RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_, UUID uuid /*= UUIDHelpers::Nil*/, bool is_streaming); /// proton: added is_streaming_
     ~RemoteSource() override;
 
     Status prepare() override;
     String getName() const override { return "Remote"; }
 
+    void connectToScheduler(InputPort & input_port);
+
     void setRowsBeforeLimitCounter(RowsBeforeLimitCounterPtr counter) { rows_before_limit.swap(counter); }
+
+    UUID getParallelReplicasGroupUUID();
 
     /// Stop reading from stream if output port is finished.
     void onUpdatePorts() override;
@@ -36,19 +41,34 @@ public:
     void setStorageLimits(const std::shared_ptr<const StorageLimitsList> & storage_limits_) override;
 
 protected:
-    std::optional<Chunk> tryGenerate() override;
-    void onCancel() override;
+    void onCancel() noexcept override;
+
+    /// proton: starts.
+    Chunk generate() override;
+
+    Chunk doCheckpoint(CheckpointContextPtr) override;
+    void doRecover(CheckpointContextPtr) override;
+    void doResetStartSN(Int64 /*sn*/) override;
+    /// proton: ends.
 
 private:
+    /// proton: starts.
+    size_t timeout_ms = 0;
+    Chunk empty_chunk;
+    /// proton: ends.
+
     std::atomic<bool> was_query_canceled = false;
     bool was_query_sent = false;
     bool add_aggregation_info = false;
     RemoteQueryExecutorPtr query_executor;
     RowsBeforeLimitCounterPtr rows_before_limit;
 
+    OutputPort * dependency_port{nullptr};
+
     const bool async_read;
     bool is_async_state = false;
     std::unique_ptr<RemoteQueryExecutorReadContext> read_context;
+    UUID uuid;
     int fd = -1;
 };
 
@@ -87,6 +107,6 @@ private:
 /// Create pipe with remote sources.
 Pipe createRemoteSourcePipe(
     RemoteQueryExecutorPtr query_executor,
-    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read);
+    bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read, UUID uuid /*= UUIDHelpers::Nil*/, bool is_streaming); /// proton: added is_streaming
 
 }

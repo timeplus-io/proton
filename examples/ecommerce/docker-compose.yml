@@ -1,13 +1,14 @@
+version: '3.7'
 name: proton-demo-ecommerce
 volumes:
   redpanda: null
 services:
   proton:
-    image: d.timeplus.com/timeplus-io/proton:latest
-    pull_policy: always
-    ports:
+     image: ghcr.io/timeplus-io/proton:latest
+     pull_policy: always
+     ports:
       #  - 3218:3218 #http port for JDBC driver, default streaming mode
-      - 8123:8123 #http port for JDBC driver, default batch mode
+       - 8123:8123 #http port for JDBC driver, default batch mode
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
@@ -45,3 +46,4 @@ services:
       - SHOP_TRAFFIC_INTERVAL_DURATION=0.1s
     depends_on:
       - redpanda
+

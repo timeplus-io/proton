@@ -2,6 +2,7 @@
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Cluster/Common/Constants.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Formats/FormatFactory.h>
 #include <IO/ReadBufferFromMemory.h>
@@ -11,12 +12,17 @@
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <base/ClockUtils.h>
+#include <Common/Exception.h>
 #include <Common/ProtonCommon.h>
+
+#include <utility>
 
 namespace DB
 {
 namespace ErrorCodes
 {
+extern const int CANNOT_PARSE_DATA;
+extern const int CANNOT_RECEIVE_MESSAGE;
 extern const int ILLEGAL_COLUMN;
 extern const int RECOVER_CHECKPOINT_FAILED;
 }
@@ -25,7 +31,7 @@ namespace ExternalStream
 {
 
 KafkaSource::StallDetector::StallDetector(
-    DB::Kafka::Consumer & consumer_, Int32 partition_, Int64 initial_offset, UInt64 timeout_ms_, Poco::Logger * logger_)
+    DB::Kafka::Consumer & consumer_, Int32 partition_, Int64 initial_offset, UInt64 timeout_ms_, LoggerPtr logger_)
     : consumer(consumer_)
     , partition(partition_)
     , timeout_ms(timeout_ms_)
@@ -33,8 +39,8 @@ KafkaSource::StallDetector::StallDetector(
     /// (so that we know if the high offset ever updated or not)
     /// And we like to poll watermark offset since the cached watermark offsets may be stale
     /// which likely returns {-1001, -1001} for this case
-    , recorded_latest_sn(initial_offset == ProtonConsts::LatestSN ? consumer.queryWatermarkOffsets(partition).high : initial_offset)
-    , logger(logger_)
+    , recorded_latest_sn(initial_offset == cluster::Constants::LatestSN ? consumer.queryWatermarkOffsets(partition).high : initial_offset)
+    , logger(std::move(logger_))
 {
 }
 
@@ -103,7 +109,6 @@ void KafkaSource::StallDetector::checkAndHandleStall()
     }
 
     auto new_version = consumer.recreate(version);
-    reset();
 
     LOG_WARNING(
         logger,
@@ -115,6 +120,8 @@ void KafkaSource::StallDetector::checkAndHandleStall()
         timeout_ms,
         consumer.name(),
         new_version);
+
+    reset();
 }
 
 void KafkaSource::StallDetector::reset()
@@ -130,7 +137,7 @@ KafkaSource::KafkaSource(
     const StorageSnapshotPtr & storage_snapshot_,
     const String & data_format,
     const FormatSettings & format_settings,
-    const String & topic_,
+    String topic_,
     DB::Kafka::ConsumerPtr consumer_,
     Int32 shard_,
     Int64 offset_,
@@ -138,31 +145,32 @@ KafkaSource::KafkaSource(
     size_t max_block_size_,
     UInt64 consumer_stall_timeout_ms,
     ExternalStreamCounterPtr external_stream_counter_,
-    Poco::Logger * logger_,
-    ContextPtr query_context_)
-    : Streaming::ISource(header_, true, ProcessorID::KafkaSourceID)
+    ContextPtr query_context_,
+    LoggerPtr logger_)
+    : Streaming::ISource(header_, true, std::move(logger_), ProcessorID::KafkaSourceID)
     , ExternalStreamSource(header_, storage_snapshot_, max_block_size_, query_context_)
-    , topic(topic_)
+    , topic(std::move(topic_))
     , virtual_col_value_functions(header.columns(), nullptr)
     , virtual_col_types(header.columns(), nullptr)
-    , shard(shard_)
+    , ignore_format_errors(format_settings.ignore_parsing_errors)
     , offset(offset_)
     , high_watermark(high_watermark_.value_or(std::numeric_limits<Int64>::max()))
-    , consumer(consumer_)
+    , consumer(std::move(consumer_))
     /// if offset == high_watermark, it means there is no message to read, so it already reaches the end
     , reached_the_end(high_watermark_.has_value() && offset == high_watermark_)
     , watermark_error_log_throttler(std::make_unique<TimeBasedThrottler>(60000))
-    , stall_detector(*consumer, shard, offset, consumer_stall_timeout_ms, logger_)
-    , external_stream_counter(external_stream_counter_)
-    , logger(logger_)
+    , stall_detector(*consumer, shard_, offset, consumer_stall_timeout_ms, logger)
+    , external_stream_counter(std::move(external_stream_counter_))
 {
     assert(external_stream_counter);
+
+    setStream(shard_);
 
     if (offset > 0)
     {
         setLastProcessedSN(offset - 1);
     }
-    else if (offset == ProtonConsts::LatestSN)
+    else if (offset == cluster::Constants::LatestSN)
     {
         /// For tail case, we like to reset the processed_sn to end_sn; otherwise if there is no new data
         /// flows in to the Kafka partition, the `lagging` (end_offset - processed_sn) will be very large
@@ -183,7 +191,7 @@ KafkaSource::KafkaSource(
     header_chunk = Chunk(header.getColumns(), 0);
     iter = result_chunks_with_sns.begin();
 
-    consumer->startConsume(shard, offset);
+    setDescription(fmt::format("topic={},partition={}", consumer->topicName(), getStream()));
 }
 
 KafkaSource::~KafkaSource()
@@ -192,9 +200,16 @@ KafkaSource::~KafkaSource()
         onCancel();
 }
 
-void KafkaSource::onCancel()
+void KafkaSource::onCancel() noexcept
 {
-    consumer->stopConsume(shard);
+    try
+    {
+        consumer->stopConsume(static_cast<int32_t>(getStream()));
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Error occurs on cancellation.");
+    }
 }
 
 Chunk KafkaSource::generate()
@@ -205,8 +220,14 @@ Chunk KafkaSource::generate()
     if (unlikely(reached_the_end))
         return {};
 
+    if (!start_consume_flag.test_and_set())
+        consumer->startConsume(static_cast<int32_t>(getStream()), offset);
+
     if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
     {
+        if (consume_exception)
+            consume_exception->rethrow();
+
         readAndProcess();
 
         if (isCancelled())
@@ -225,7 +246,7 @@ Chunk KafkaSource::generate()
         /// result_blocks is not empty, fallthrough
     }
 
-    setLastProcessedSN(iter->second);
+    setLastProcessedSNRange(iter->second);
     return std::move((iter++)->first);
 }
 
@@ -235,32 +256,95 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto callback = [this](void * rkmessage, size_t /*total_count*/, void * /*data*/) {
-        auto * message = static_cast<rd_kafka_message_t *>(rkmessage);
-        parseFormat(message);
+    DB::Kafka::WatermarkOffsets skipped_messages;
+
+    auto callback = [this, &skipped_messages](const void * rkmessage, size_t /*total_count*/, void * /*data*/) {
+        auto * message = static_cast<const rd_kafka_message_t *>(rkmessage);
+        /// We have seen this happened, and do not know how. So, just in case.
+        if (message->offset < offset)
+        {
+            /// Collect the offsets first, log later to avoid too many logs
+            if (skipped_messages.low < 0)
+                skipped_messages.low = message->offset;
+            skipped_messages.high = message->offset;
+            return;
+        }
+
+        try
+        {
+            parseFormat(message);
+        }
+        catch (Exception & e)
+        {
+            external_stream_counter->addReadFailed(1);
+
+            if (ignore_format_errors)
+            {
+                LOG_ERROR(
+                    logger,
+                    "Failed to parse message topic={} partition={} offset={} error={}",
+                    topic,
+                    getStream(),
+                    message->offset,
+                    e.message());
+            }
+            else
+            {
+                e.addMessage("Failed to parse message topic={} partition={} offset={}", topic, getStream(), message->offset);
+                e.rethrow();
+            }
+        }
     };
 
-    auto error_callback = [this](rd_kafka_resp_err_t err) {
-        LOG_ERROR(logger, "Failed to consume topic={} shard={} err={}", consumer->topicName(), shard, rd_kafka_err2str(err));
+    auto error_callback = [this](rd_kafka_resp_err_t err, std::string_view errmsg) {
         external_stream_counter->addReadFailed(1);
+        throw Exception(
+            ErrorCodes::CANNOT_RECEIVE_MESSAGE,
+            "Failed to consume message from kafka topic={} partition={} error_code={} error_code_msg='{}' error_msg='{}'",
+            topic,
+            getStream(),
+            err,
+            rd_kafka_err2str(err),
+            errmsg);
     };
 
-    consumer->consumeBatch(shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
+    try
+    {
+        consumer->consumeBatch(
+            static_cast<int32_t>(getStream()), record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
+    }
+    catch (Exception & e)
+    {
+        /// In case that the exception happened in the middle of the batch, we still
+        /// want the "good" messages processed properly (otherwise they will be lost).
+        /// So, we store the exception, and keep going. Once the messages processed,
+        /// then throw the exception.
+        consume_exception.emplace(std::move(e));
+    }
 
-    auto offsets = consumer->getLastBatchOffsets(shard);
+    if (skipped_messages.low >= 0)
+        LOG_WARNING(
+            logger,
+            "Skipped unexpected message offset range {}-{}, expected offsets beyond {}",
+            skipped_messages.low,
+            skipped_messages.high,
+            offset);
+
+    auto offsets = consumer->getLastBatchOffsets(static_cast<int32_t>(getStream()));
     if (!current_batch.empty())
     {
         auto rows = current_batch[0]->size();
 
         assert(offsets.low >= 0 && offsets.high >= 0);
-        result_chunks_with_sns.emplace_back(Chunk{std::move(current_batch), rows}, offsets.high);
+        result_chunks_with_sns.emplace_back(
+            Chunk{std::move(current_batch), rows}, Streaming::SequenceRange{.start = offsets.low, .end = offsets.high});
     }
     else
     {
         /// Because bad messages are skipped (and logged), if it turns out that all messages in this batch were all invalid,
         /// it should still report the progress as messages were actually consumed.
         if (offsets.low >= 0)
-            result_chunks_with_sns.emplace_back(header_chunk.clone(), offsets.high);
+            result_chunks_with_sns.emplace_back(header_chunk.clone(), Streaming::SequenceRange{.start = offsets.low, .end = offsets.high});
     }
 
     /// All available messages up to the moment when the query was executed have been consumed, no need to read the messages beyond that point.
@@ -275,18 +359,19 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 {
     assert(format_executor);
 
+    /// We like to record the current processed timestamp of the Kafka message
+    {
+        /// We don't care the failure
+        rd_kafka_timestamp_type_t ts_type;
+        if (auto ts = rd_kafka_message_timestamp(kmessage, &ts_type); ts > 0)
+            setLastProcessedRecordTimestamp(ts);
+    }
+
     ReadBufferFromMemory buffer(static_cast<const char *>(kmessage->payload), kmessage->len);
     auto new_rows = format_executor->execute(buffer);
 
     external_stream_counter->addReadBytes(kmessage->len);
     external_stream_counter->addReadRows(new_rows);
-
-    if (format_error)
-    {
-        LOG_ERROR(logger, "Failed to parse message at {}: {}", kmessage->offset, format_error.value());
-        external_stream_counter->addReadFailed(1);
-        format_error.reset();
-    }
 
     if (new_rows == 0u)
         return;
@@ -385,7 +470,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -403,7 +488,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -421,7 +506,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -439,7 +524,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -457,7 +542,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -475,7 +560,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -493,7 +578,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -511,7 +596,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -529,7 +614,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -547,7 +632,7 @@ void KafkaSource::getPhysicalHeader()
                         }
                         assert(kmessage->key_len == sizeof(result));
                         ReadBufferFromString buf({static_cast<char *>(kmessage->key), kmessage->key_len});
-                        readPODBinary(result, buf);
+                        readBinaryBigEndian(result, buf);
                         return result;
                     };
                     break;
@@ -611,11 +696,22 @@ void KafkaSource::getPhysicalHeader()
             };
             virtual_col_types[pos] = column.type;
         }
+        else if (column.name == ProtonConsts::RESERVED_EVENT_TIME)
+        {
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) {
+                rd_kafka_timestamp_type_t ts_type;
+                auto ts = rd_kafka_message_timestamp(kmessage, &ts_type);
+                if (ts_type == RD_KAFKA_TIMESTAMP_NOT_AVAILABLE)
+                    return Decimal64();
+                /// Each Kafka message has only one timestamp, thus we always use it as the `_tp_time`.
+                return Decimal64(ts);
+            };
+            virtual_col_types[pos] = column.type;
+        }
         /// If a virtual column is explicitly defined as a physical column in the stream definition, we should honor it,
         /// just as the virtual columns document says, and users are not recommended to do this (and they still can).
-        else if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&column](auto & non_virtual_column) {
-                     return non_virtual_column.name == column.name;
-                 }))
+        else if (std::ranges::any_of(
+                     non_virtual_header, [&column](auto & non_virtual_column) { return non_virtual_column.name == column.name; }))
         {
             physical_header.insert(column);
         }
@@ -635,18 +731,6 @@ void KafkaSource::getPhysicalHeader()
         else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
         {
             virtual_col_value_functions[pos] = [](const rd_kafka_message_t *) { return Decimal64(UTCMilliseconds::now()); };
-            virtual_col_types[pos] = column.type;
-        }
-        else if (column.name == ProtonConsts::RESERVED_EVENT_TIME)
-        {
-            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) {
-                rd_kafka_timestamp_type_t ts_type;
-                auto ts = rd_kafka_message_timestamp(kmessage, &ts_type);
-                if (ts_type == RD_KAFKA_TIMESTAMP_NOT_AVAILABLE)
-                    return Decimal64();
-                /// Each Kafka message has only one timestamp, thus we always use it as the `_tp_time`.
-                return Decimal64(ts);
-            };
             virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_SHARD)
@@ -673,7 +757,7 @@ void KafkaSource::getPhysicalHeader()
         ++pos;
     }
 
-    request_virtual_columns = std::any_of(virtual_col_types.begin(), virtual_col_types.end(), [](auto type) { return type != nullptr; });
+    request_virtual_columns = std::ranges::any_of(virtual_col_types, [](auto type_ptr) { return type_ptr != nullptr; });
 
     /// Clients like to read virtual columns only, add the first physical column, then we know how many rows
     if (physical_header.columns() == 0)
@@ -694,11 +778,11 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 
     ckpt_ctx_->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) {
         writeStringBinary(topic, wb);
-        writeIntBinary(shard, wb);
-        writeIntBinary(lastProcessedSN(), wb);
+        writeIntBinary<Int32>(static_cast<Int32>(getStream()), wb);
+        writeIntBinary<Int64>(lastProcessedSN(), wb);
     });
 
-    LOG_INFO(logger, "Saved checkpoint topic={} partition={} offset={}", topic, shard, lastProcessedSN());
+    LOG_INFO(logger, "Saved checkpoint topic={} partition={} offset={}", topic, getStream(), lastProcessedSN());
 
     /// FIXME, if commit failed ?
     /// Propagate checkpoint barriers
@@ -711,40 +795,137 @@ void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
         String recovered_topic;
         Int32 recovered_partition;
         readStringBinary(recovered_topic, rb);
-        readIntBinary(recovered_partition, rb);
+        readIntBinary<Int32>(recovered_partition, rb);
 
-        if (recovered_topic != topic || recovered_partition != shard)
+        if (recovered_topic != topic || static_cast<size_t>(recovered_partition) != getStream())
             throw Exception(
                 ErrorCodes::RECOVER_CHECKPOINT_FAILED,
                 "Found mismatched kafka topic-partition. recovered={}-{}, current={}-{}",
                 recovered_topic,
                 recovered_partition,
                 topic,
-                shard);
+                getStream());
 
         Int64 recovered_last_sn;
-        readIntBinary(recovered_last_sn, rb);
-        setLastProcessedSN(recovered_last_sn);
+        readIntBinary<Int64>(recovered_last_sn, rb);
+        setLastCheckpointSN(recovered_last_sn);
     });
 
-    LOG_INFO(logger, "Recovered checkpoint topic={} partition={} last_sn={}", topic, shard, lastCheckpointSN());
+    LOG_INFO(logger, "Recovered checkpoint topic={} partition={} last_sn={}", topic, getStream(), lastCheckpointSN());
 }
 
 void KafkaSource::doResetStartSN(Int64 sn)
 {
+    /// This reset function is only supposed to be called during MV recover phase, thus the source should not
+    /// have started consuming any data yet.
+    if (start_consume_flag.test())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected offset reset ({}), consumer had already started", sn);
+
     if (sn >= 0 && sn != offset)
     {
         offset = sn;
-
-        /// Create a new partition consumer when starting offset gets changed
-        /// Reset to stop consuming first.
-        consumer->stopConsume(shard);
-        consumer->startConsume(shard, offset);
-
         reached_the_end = high_watermark == offset;
-
-        LOG_INFO(logger, "Reset offset topic={} partition={} offset={} reached_the_end={}", topic, shard, offset, reached_the_end);
+        LOG_INFO(logger, "Reset offset topic={} partition={} offset={} reached_the_end={}", topic, getStream(), offset, reached_the_end);
     }
+}
+
+/// \return [start_offset, end_offset] of the Kafka partition. The result may be stale
+std::pair<Int64, Int64> KafkaSource::sequenceRange() const
+{
+    try
+    {
+        auto marks = consumer->getWatermarkOffsets(static_cast<int32_t>(getStream()));
+        watermark_error_log_throttler->reset();
+        return {marks.low, std::max(marks.low, marks.high - 1)};
+    }
+    catch (...)
+    {
+        watermark_error_log_throttler->execute([this](auto count) {
+            tryLogCurrentException(
+                logger,
+                fmt::format(
+                    "Failed to get sequence range from Kafka topic={} shard={} consective_count={}",
+                    consumer->topicName(),
+                    getStream(),
+                    count));
+        });
+
+        return {-1, -1};
+    }
+}
+
+Strings KafkaSource::doFetchData(const Streaming::SequenceRange & sn_range)
+{
+    /// At this point, the source is already cancelled, it's safe to use `consumer`.
+    auto watermark = consumer->queryWatermarkOffsets(static_cast<int32_t>(getStream()));
+    if (watermark.low < 0 || watermark.high < 0)
+    {
+        LOG_INFO(
+            logger,
+            "Fetching data of sn_range ({}, {}), but topic watermark ({}, {}) didn't match",
+            sn_range.start,
+            sn_range.end,
+            watermark.low,
+            watermark.high);
+        return {};
+    }
+
+    auto start = sn_range.start;
+    auto end = sn_range.end;
+
+    if (end < watermark.low)
+    {
+        /// All data are gone, show something to the users so that they won't be confused why messages are empty.
+        return {fmt::format("Messages at offsets range ({}, {}) were gone", start, end)};
+    }
+
+    start = std::max(start, watermark.low); /// In case some data are already gone
+    end = std::min(end, watermark.high); /// std::max is needed just in case high is negative
+    auto count = end - start + 1;
+    LOG_INFO(logger, "Fetching data sn_range=({}, {}) actual_range=({}, {}) count={}", sn_range.start, sn_range.end, start, end, count);
+
+    if (count < 1)
+        return {};
+
+    Strings results;
+    results.reserve(count);
+
+    consumer->startConsume(static_cast<int32_t>(getStream()), start);
+    SCOPE_EXIT_SAFE(consumer->stopConsume(static_cast<int32_t>(getStream())));
+
+    auto callback = [&count, &results](const void * rkmessage, size_t /*total_count*/, void * /*data*/) {
+        if (count > 0)
+        {
+            auto * message = static_cast<const rd_kafka_message_t *>(rkmessage);
+            results.emplace_back(static_cast<const char *>(message->payload), message->len);
+            --count;
+        }
+    };
+
+    auto error_callback = [this, start, end](rd_kafka_resp_err_t err, std::string_view errmsg) {
+        throw Exception(
+            ErrorCodes::CANNOT_RECEIVE_MESSAGE,
+            "Failed to fetch messages from kafka topic={} partition={} sn_range=({}, {}) error_code={} error_code_msg='{}' error_msg='{}'",
+            topic,
+            getStream(),
+            start,
+            end,
+            err,
+            rd_kafka_err2str(err),
+            errmsg);
+    };
+
+    while (count > 0)
+    {
+        auto pre_count = count;
+        consumer->consumeBatch(
+            static_cast<int32_t>(getStream()), static_cast<UInt32>(count), record_consume_timeout_ms, callback, error_callback);
+        /// No progress was made, this is abnormal, because all messages should be in the topic
+        if (count > 0 && count == pre_count)
+            break;
+    }
+
+    return results;
 }
 
 }

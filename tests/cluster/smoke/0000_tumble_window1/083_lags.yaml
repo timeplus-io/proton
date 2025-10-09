@@ -1,0 +1,49 @@
+tags:
+  - functions
+  - streaming functions
+description: function lags
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: stream
+    name: '102'
+    query: select value, lags(value, 1, 3) as prev_1_3, lags(value, 2, 5, -1) as `prev_2_5_-1` from test_smoke1
+    schema:
+      - name: value
+        type: float32
+      - name: prev_1_3
+        type: array(float32)
+      - name: prev_2_5_-1
+        type: array(float32)
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test_smoke1(id, location, value, json, timestamp) values
+    schema:
+      - name: id
+        type: string
+      - name: location
+        type: string
+      - name: value
+        type: float32
+      - name: json
+        type: string
+      - name: timestamp 
+        type: datetime64(3)
+    inputs:
+      - ['dev1', 'ca', 1, '2021-11-02 20:00:01', '2020-02-02 20:00:01']
+      - ['dev2', 'ca', 2, '2021-11-02 20:00:10', '2020-02-02 20:01:02']
+      - ['dev2', 'ca', 3, '2021-11-02 20:00:10', '2020-02-02 20:00:02']
+      - ['dev2', 'ca', 4, '2021-11-02 20:00:10', '2020-02-02 20:01:02']
+      - ['dev3', 'ca', 5, '2021-11-02 20:00:10', '2020-02-02 20:01:03']
+
+  - type: check
+    target_name: '102'
+    expected_result:
+      - [1, [0.0, 0.0, 0.0], [-1.0, -1.0, -1.0, -1.0]]
+      - [2, [1.0, 0.0, 0.0], [-1.0, -1.0, -1.0, -1.0]]
+      - [3, [2.0, 1.0, 0.0], [1.0, -1.0, -1.0, -1.0]]
+      - [4, [3.0, 2.0, 1.0], [2.0, 1.0, -1.0, -1.0]]
+      - [5, [4.0, 3.0, 2.0], [3.0, 2.0, 1.0, -1.0]]

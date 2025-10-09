@@ -1,0 +1,80 @@
+tags:
+- local-run
+- create random
+description: create random stream with default generating function, BUG :for query like with cte as (select * from test22_create_random limit 1000) select count(*) from cte where id <4it produces no output because the lower query ends when reaches limit while upper query hasnt emitted yet;
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test22_create_random
+- type: wait
+  time: 2
+
+- type: query
+  sql: create random stream test22_create_random(id int default rand()%4)
+- type: wait
+  time: 2
+
+- name: '2200'
+  type: stream
+  query: with cte as (select * from test22_create_random ) select max(id) from cte where id<4 limit 1 settings max_threads=1
+  schema:
+  - name: max(id)
+    type: int32
+
+- name: '2201'
+  type: stream
+  query: with cte as (select id from tumble(test22_create_random,2s) group by id,window_start limit 10) select max(id) from cte limit 1 settings max_threads=1
+  schema:
+  - name: max(id)
+    type: int32
+
+- name: '2202'
+  type: stream
+  query: select count(distinct id) from test22_create_random limit 1 settings max_threads=1
+  schema:
+  - name: count_distinct(id)
+    type: uint64
+
+- name: '2203'
+  type: stream
+  query: select count(distinct id) from tumble(test22_create_random,2s) group by window_start limit 1 settings max_threads=1
+  schema:
+  - name: count_distinct(id)
+    type: uint64
+
+- name: '2204'
+  type: stream
+  query: with cte as (select * from table(test22_create_random) limit 1000) select count(*) from cte where id<4
+  schema:
+  - name: count()
+    type: uint64
+
+- type: wait
+  time: 2
+
+- type: check
+  target_name: '2200'
+  expected_result:
+  - [3]
+
+- type: check
+  target_name: '2201'
+  expected_result:
+  - [3]
+
+- type: check
+  target_name: '2202'
+  expected_result:
+  - [4]
+
+- type: check
+  target_name: '2203'
+  expected_result:
+  - [4]
+
+- type: check
+  target_name: '2204'
+  expected_result:
+  - [1000]

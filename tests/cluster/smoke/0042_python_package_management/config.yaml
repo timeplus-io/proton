@@ -1,0 +1,10 @@
+name: python_package_management
+description: Tests covering Python package installation, uninstallation and task monitoring
+tags:
+  - smoke
+  - python_udf
+  - python_package
+  - async
+
+arch:
+  - x86_64

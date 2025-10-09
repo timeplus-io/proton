@@ -4,6 +4,7 @@
 #include "hashing_buffer.h"
 #include <iostream>
 #include <pcg_random.hpp>
+#include <sstream>
 
 
 static void test(size_t data_size)

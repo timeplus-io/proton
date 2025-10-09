@@ -18,6 +18,8 @@
 #include <Poco/Util/XMLConfiguration.h>
 #include <boost/range/adaptor/map.hpp>
 
+#include <sstream>
+
 
 namespace DB
 {
@@ -194,7 +196,7 @@ void BackupImpl::readBackupMetadata()
 Strings BackupImpl::listFiles(const String & prefix, const String & terminator) const
 {
     if (!prefix.ends_with('/') && !prefix.empty())
-        throw Exception("prefix should end with '/'", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "prefix should end with '/'");
     std::lock_guard lock{mutex};
     Strings elements;
     for (auto it = file_infos.lower_bound(prefix); it != file_infos.end(); ++it)

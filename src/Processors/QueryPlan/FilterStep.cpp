@@ -27,6 +27,9 @@ static ITransformingStep::Traits getTraits(const ActionsDAGPtr & expression, con
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = preserves_sorting,
+            /// proton: starts.
+            .preserves_substream = true,
+            /// proton: ends.
         },
         {
             .preserves_number_of_rows = false,
@@ -43,7 +46,7 @@ FilterStep::FilterStep(
         input_stream_,
         FilterTransform::transformHeader(
             input_stream_.header,
-            *actions_dag_,
+            actions_dag_.get(),
             filter_column_name_,
             remove_filter_column_),
         getTraits(actions_dag_, input_stream_.header, input_stream_.sort_description, remove_filter_column_, filter_column_name_))
@@ -53,25 +56,6 @@ FilterStep::FilterStep(
 {
     /// TODO: it would be easier to remove all expressions from filter step. It should only filter by column name.
     updateDistinctColumns(output_stream->header, output_stream->distinct_columns);
-}
-
-void FilterStep::updateInputStream(DataStream input_stream, bool keep_header)
-{
-    Block out_header = std::move(output_stream->header);
-    if (keep_header)
-        out_header = FilterTransform::transformHeader(
-            input_stream.header,
-            *actions_dag,
-            filter_column_name,
-            remove_filter_column);
-
-    output_stream = createOutputStream(
-            input_stream,
-            std::move(out_header),
-            getDataStreamTraits());
-
-    input_streams.clear();
-    input_streams.emplace_back(std::move(input_stream));
 }
 
 void FilterStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings)
@@ -123,6 +107,15 @@ void FilterStep::describeActions(FormatSettings & settings) const
         settings.out << ' ' << pos;
     settings.out << '\n';
 }
+
+void FilterStep::updateOutputStream()
+{
+    output_stream = createOutputStream(
+        input_streams.front(),
+        FilterTransform::transformHeader(input_streams.front().header, actions_dag.get(), filter_column_name, remove_filter_column),
+        getDataStreamTraits());
+}
+
 
 void FilterStep::describeActions(JSONBuilder::JSONMap & map) const
 {

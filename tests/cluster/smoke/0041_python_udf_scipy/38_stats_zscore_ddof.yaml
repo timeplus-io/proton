@@ -1,0 +1,61 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float64);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_stats_zscore_ddof(value float64) RETURNS float64 LANGUAGE PYTHON AS
+      $$
+      import numpy as np
+      import scipy.stats as stats
+
+      def test_stats_zscore_ddof(value):
+          a = np.array((value))
+          res = stats.zscore(a, ddof=1)
+          return res.tolist()
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf4-38-1
+    type: stream
+    query: select test_stats_zscore_ddof(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: float64
+      - name: value
+        type: float64
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values 
+            (0.7972)(0.0767)(0.4383)(0.7866)(0.8091)
+            (0.1954)(0.6307)(0.6599)(0.1065)(0.0508);
+
+  - type: check
+    target_name: python-udf4-38-1
+    expected_result:
+      - [1.06939901, 0.7972]
+      - [-1.1830039, 0.0767]
+      - [-0.05258212, 0.4383]
+      - [1.03626165, 0.7866]
+      - [1.10660039, 0.8091]
+      - [-0.81192795, 0.1954]
+      - [ 0.5488923, 0.6307]
+      - [ 0.64017636, 0.6599]
+      - [-1.08984414, 0.1065]
+      - [-1.26397161, 0.0508]

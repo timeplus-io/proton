@@ -10,7 +10,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
-#include <Common/ThreadPool.h>
+#include <Common/ThreadPool_fwd.h>
 
 #define SYSTEM_LOG_ELEMENTS(M) \
     M(AsynchronousMetricLogElement) \
@@ -24,11 +24,16 @@
     M(SessionLogElement) \
     M(TraceLogElement) \
     M(TransactionsInfoLogElement) \
-    M(ZooKeeperLogElement) \
     M(ProcessorProfileLogElement) \
-    M(TextLogElement)          \
-    M(FilesystemCacheLogElement) \
-    M(PipelineMetricLogElement)
+    M(TextLogElement) \
+    M(FilesystemCacheLogElement)    \
+    M(AsynchronousInsertLogElement)  \
+    M(FilesystemReadPrefetchesLogElement) \
+    M(BlobStorageLogElement)   \
+    M(PipelineMetricLogElement) \
+    M(StreamMetricLogElement) \
+    M(StreamStateLogElement) \
+    M(MaterializedViewDLQElement)
 
 namespace Poco
 {
@@ -58,12 +63,12 @@ public:
     /// Stop the background flush thread before destructor. No more data will be written.
     virtual void shutdown() = 0;
 
-    virtual ~ISystemLog() = default;
+    virtual ~ISystemLog();
 
     virtual void savingThreadFunction() = 0;
 
 protected:
-    ThreadFromGlobalPool saving_thread;
+    std::unique_ptr<ThreadFromGlobalPool> saving_thread;
 
     /// Data shared between callers of add()/flush()/shutdown(), and the saving thread
     std::mutex mutex;
@@ -91,7 +96,7 @@ public:
     String getName() override { return LogElement::name(); }
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
 
     // Queue is bounded. But its size is quite large to not block in all normal cases.
     std::vector<LogElement> queue;

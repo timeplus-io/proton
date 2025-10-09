@@ -1,0 +1,70 @@
+tags:
+- data_enrichment_join
+- inner-join
+description: append-only inner all join append-only, concat buffered events
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test10_append_left_stream
+  
+- type: query
+  sql: drop stream if exists test10_append_right_stream
+  
+- type: wait
+  time: 2
+  
+- type: query
+  sql: create stream test10_append_left_stream(i int, k string)
+  
+- type: query
+  sql: create stream test10_append_right_stream(j int, kk string)
+  
+- type: wait
+  time: 3
+  
+- name: '1062'
+  type: stream
+  query: SELECT i, k, j, kk FROM test10_append_left_stream asof join test10_append_right_stream
+    ON k = kk AND i <= j SETTINGS join_buffered_data_block_size=2, keep_versions=2
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+    - name: j
+      type: int32
+    - name: kk
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: INSERT INTO test10_append_right_stream(j, kk) VALUES (1, 'a')
+  
+- type: query
+  sql: INSERT INTO test10_append_right_stream(j, kk) VALUES (2, 'a')
+  
+- type: query
+  sql: INSERT INTO test10_append_right_stream(j, kk) VALUES (3, 'a')
+  
+- type: query
+  sql: INSERT INTO test10_append_right_stream(j, kk) VALUES (4, 'a')
+  
+- type: wait
+  time: 1
+  
+- type: query
+  sql: INSERT INTO test10_append_left_stream(i, k) VALUES (0, 'a'), (1, 'a'), (2,
+    'a'), (3, 'a'), (4, 'a'), (5, 'a')
+
+- type: check
+  target_name: '1062'
+  expected_result:
+  - [0, a, 3, a]
+  - [1, a, 3, a]
+  - [2, a, 3, a]
+  - [3, a, 3, a]
+  - [4, a, 4, a]

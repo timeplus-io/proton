@@ -1,0 +1,123 @@
+tags:
+  - validate
+  - pulsar
+  - avro
+  - format_schema
+  
+description: extra tests on append-only stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      insert into ex_pulsar_avro values 
+      (127, 32767, 2147483647, 9223372036854775807, 255, 65535, 4294967295, 18446744073709551615, '928c88b9-f37a-41d5-bef5-9cb3663c2446', '{@string-0}','{@fixed_string32-0}', 12345.123, 123456.1234,
+      '2022-03-25', '2022-03-25 18:18:18.222', '2022-03-25 18:18:18.222222', 'a', {'key2': 222}, [4, 5, 6], ('b', 1), ['bb'], [1], 111);
+
+  - name: ext-17-1
+    type: stream
+    query: select _tp_shard, * from ex_pulsar_avro settings seek_to='earliest';
+    schema:
+      - name: _tp_shard
+        type: int32
+      - name: int8_c
+        type: int8
+      - name: int16_c
+        type: int16
+      - name: int32_c
+        type: int32
+      - name: int64_c
+        type: int64
+      - name: uint8_c
+        type: uint8
+      - name: uint16_c
+        type: uint16
+      - name: uint32_c
+        type: uint32
+      - name: uint64_c
+        type: uint64
+      - name: uuid_c
+        type: uuid
+      - name: string_c
+        type: string
+      - name: fixed_c
+        type: fixed_string(32)
+      - name: float32_c
+        type: float32
+      - name: float64_c
+        type: float64
+      - name: date_c 
+        type: date
+      - name: datetime3_c
+        type: datetime64(3)
+      - name: datetime6_c
+        type: datetime64(6)
+      - name: enum_c
+        type: enum8('a'=0, 'b'=1, 'z'=26)
+      - name: map_c
+        type: map(string, int32)
+      - name: array_c
+        type: array(int32)
+      - name: tuple_c
+        type: tuple(s string, i int32)
+      - name: array_tuple_c.s
+        type: array(string)
+      - name: array_tuple_c.i
+        type: array(int32)
+      - name: null_c
+        type: nullable(int32)
+
+  - type: check
+    target_name: ext-17-1
+    expected_result:
+      - - -1
+        - -128
+        - -32768
+        - -2147483648
+        - -9223372036854775808
+        - 0
+        - 0
+        - 0
+        - 0
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+        - "{@string}"
+        - "{@fixed_string32}"
+        - "-12345.123"
+        - "-123456.1234"
+        - "2022-03-24"
+        - "2022-03-24 17:17:17.111"
+        - "2022-03-24 17:17:17.111111"
+        - a
+        - {'key1': 111}
+        - [1, 2, 3]
+        - {s: a, i: 0}
+        - [aa]
+        - [0]
+        - null
+      - - -1
+        - 127
+        - 32767
+        - 2147483647
+        - 9223372036854775807
+        - 255
+        - 65535
+        - 4294967295
+        - 18446744073709551615
+        - 928c88b9-f37a-41d5-bef5-9cb3663c2446
+        - "{@string-0}"
+        - "{@fixed_string32-0}"
+        - "12345.123"
+        - "123456.1234"
+        - "2022-03-25"
+        - "2022-03-25 18:18:18.222"
+        - "2022-03-25 18:18:18.222222"
+        - a
+        - {'key2': 222}
+        - [4, 5, 6]
+        - {s: b, i: 1}
+        - [bb]
+        - [1]
+        - 111

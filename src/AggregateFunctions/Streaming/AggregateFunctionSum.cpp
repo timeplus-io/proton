@@ -67,8 +67,10 @@ createAggregateFunctionSum(const std::string & name, const DataTypes & argument_
 
     if (!res)
         throw Exception(
-            "Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name,
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Illegal type {} of argument for aggregate function {}",
+            argument_types[0]->getName(),
+            name);
     return res;
 }
 

@@ -1,0 +1,180 @@
+tags:
+  - distributed
+  - stream
+  - materialized-view
+
+description: |
+  Tests covering the creation of a stream and a materialized view, insertion of data, dynamically retrieving the partition ID, altering the stream by dropping a partition, and verifying the data integrity in both the stream and the materialized view.
+  Main steps:
+    1. Create stream 0821_0609v
+    2. Create materialized view 0821_0609mv based on stream 0821_0609v
+    3. Insert data into stream 0821_0609v
+    4. Retrieve and drop a partition from stream 0821_0609v
+    5. Verify data in stream 0821_0609v and materialized view 0821_0609mv after each operation
+
+cluster:
+  - p3k1
+
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop view if exists 0821_0609mv;
+  - type: wait
+    time: 1
+
+
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists 0821_0609v;
+  - type: wait
+    time: 1
+
+  - type: query
+    node:
+      - p1
+    sql: create stream 0821_0609v(id int);
+  - type: wait
+    time: 1
+
+  - type: query
+    node:
+      - p1
+    sql: create materialized view 0821_0609mv as select id from 0821_0609v;
+  - type: wait
+    time: 2
+
+  # Insert data into stream 0821_0609v on node p1
+  - type: query
+    node:
+      - p1
+    sql: INSERT INTO 0821_0609v (id) SELECT number FROM system.numbers LIMIT 7200;
+  - type: wait
+    time: 5
+
+  # Retrieve the partition ID on node p1
+  - name: get-partition-id
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select partition from system.parts where table='0821_0609v' limit 1
+    schema:
+    - name: partition
+      type: string
+  - type: wait
+    time: 1
+
+  # Drop the retrieved partition from stream 0821_0609v on node p1
+  - type: command
+    target_name: get-partition-id
+    param: partition_id
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    shell: |
+      proton client -h 127.0.0.1 -q "alter stream 0821_0609v drop partition {partition_id}"
+  - type: wait
+    time: 1
+
+  # Verify data in stream 0821_0609v after partition drop on node p1
+  - name: stream-check-1
+    type: stream
+    node:
+     - p1
+    query: select id from table(0821_0609v);
+    schema:
+      - name: id
+        type: int32
+
+  - type: check
+    target_name: stream-check-1
+    expected_result:
+     - []
+
+  # Verify data in materialized view 0821_0609mv after partition drop in stream 0821_0609v on node p1
+  - name: 0821_0609mv-check-1
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select count() from table(0821_0609mv);
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: 0821_0609mv-check-1
+    expected_result:
+     - [7200]
+
+  # Insert new data into stream 0821_0609v on node p1
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into 0821_0609v(id) values(5);
+  - type: wait
+    time: 2
+
+  # Verify data in stream 0821_0609v after new insert on node p1
+  - name: stream-check-2
+    type: stream
+    node:
+     - p1
+    query: select count() from table(0821_0609v);
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: check
+    target_name: stream-check-2
+    expected_result:
+     - [1]
+
+  # Verify data in materialized view 0821_0609mv after new insert in stream 0821_0609v on node p1
+  - name: 0821_0609mv-check-2
+    type: stream
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    query: select count() from table(0821_0609mv);
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: 0821_0609mv-check-2
+    expected_result:
+     - [7201]
+
+  # Cleanup on nodes p1 and p1
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: drop view if exists 0821_0609mv;
+  - type: wait
+    time: 1
+
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists 0821_0609v;

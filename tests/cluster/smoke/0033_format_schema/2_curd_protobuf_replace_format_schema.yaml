@@ -1,0 +1,104 @@
+tags:
+- protobuf
+
+description: |
+  Test replace protobuf format schema
+  Steps:
+    1.create format schema
+    2.check create success with "show create format schema"
+    3.replace format schema
+    4.check replace success with "show create format schema"
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+- type: query
+  sql: |
+    CREATE OR REPLACE FORMAT SCHEMA test_format_schema_02 AS
+    $$
+    syntax = "proto3";
+
+    message SearchRequest {
+      string query = 1;
+      int32 page_number = 2;
+      int32 results_per_page = 3;
+    }
+    $$
+    TYPE Protobuf;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-1
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_02
+  schema:
+    - name: statement
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: |
+    CREATE OR REPLACE FORMAT SCHEMA test_format_schema_02 AS
+    $$
+    syntax = "proto3";
+
+    message SearchRequest {
+      string query1 = 1;
+      string page_number = 2;
+    }
+    $$
+    TYPE Protobuf;
+
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-2
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_02;
+  schema:
+    - name: statement
+      type: string
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_format_schema_02;
+
+- type: check
+  target_name: fmt-2-1
+  expected_result:
+     -
+      - |-
+        CREATE FORMAT SCHEMA test_format_schema_02 AS
+        $$
+        syntax = "proto3";
+
+        message SearchRequest {
+          string query = 1;
+          int32 page_number = 2;
+          int32 results_per_page = 3;
+        }
+        $$
+        TYPE Protobuf
+
+- type: check
+  target_name: fmt-2-2
+  expected_result:
+     -
+      - |-
+        CREATE FORMAT SCHEMA test_format_schema_02 AS
+        $$
+        syntax = "proto3";
+
+        message SearchRequest {
+          string query1 = 1;
+          string page_number = 2;
+        }
+        $$
+        TYPE Protobuf

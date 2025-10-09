@@ -1,6 +1,7 @@
 #include <Processors/Transforms/MergingAggregatedTransform.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/convertToChunk.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -10,9 +11,9 @@ namespace ErrorCodes
 }
 
 MergingAggregatedTransform::MergingAggregatedTransform(
-    Block header_, AggregatingTransformParamsPtr params_, size_t max_threads_)
+    Block header_, AggregatingTransformParamsPtr params_)
     : IAccumulatingTransform(std::move(header_), params_->getHeader(), ProcessorID::MergingAggregatedTransformID)
-    , params(std::move(params_)), max_threads(max_threads_)
+    , params(std::move(params_))
 {
 }
 
@@ -33,18 +34,17 @@ void MergingAggregatedTransform::consume(Chunk chunk)
 
     const auto & info = chunk.getChunkInfo();
     if (!info)
-        throw Exception("Chunk info was not set for chunk in MergingAggregatedTransform.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Chunk info was not set for chunk in MergingAggregatedTransform.");
 
     const auto * agg_info = typeid_cast<const AggregatedChunkInfo *>(info.get());
     if (!agg_info)
-        throw Exception("Chunk should have AggregatedChunkInfo in MergingAggregatedTransform.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Chunk should have AggregatedChunkInfo in MergingAggregatedTransform.");
 
     /** If the remote servers used a two-level aggregation method,
       *  then blocks will contain information about the number of the bucket.
       * Then the calculations can be parallelized by buckets.
       * We decompose the blocks to the bucket numbers indicated in them.
       */
-
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.getColumns());
     block.info.is_overflows = agg_info->is_overflows;
     block.info.bucket_num = agg_info->bucket_num;
@@ -63,8 +63,8 @@ Chunk MergingAggregatedTransform::generate()
         next_block = blocks.begin();
 
         /// TODO: this operation can be made async. Add async for IAccumulatingTransform.
-        params->aggregator.mergeBlocks(std::move(bucket_to_blocks), data_variants, max_threads);
-        blocks = params->aggregator.convertToBlocks(data_variants, params->final, max_threads);
+        params->aggregator.mergeBlocks(std::move(bucket_to_blocks), data_variants, is_cancelled);
+        blocks = params->aggregator.convertToBlocks(data_variants, params->final);
         next_block = blocks.begin();
     }
 

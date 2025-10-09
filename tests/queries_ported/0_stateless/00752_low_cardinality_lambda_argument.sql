@@ -1,3 +1,4 @@
+set allow_suspicious_low_cardinality_types=1;
 SET query_mode = 'table';
 drop stream if exists lc_lambda;
 create stream lc_lambda (arr array(low_cardinality(uint64))) engine = Memory;

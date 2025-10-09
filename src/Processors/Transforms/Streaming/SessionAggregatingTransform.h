@@ -9,14 +9,14 @@ namespace Streaming
 class SessionAggregatingTransform final : public WindowAggregatingTransform
 {
 public:
-    SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_);
+    SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const std::string & id);
 
     ~SessionAggregatingTransform() override = default;
 
-    String getName() const override { return "SessionAggregatingTransform"; }
+    String getName() const override;
 
 private:
-    std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows) override;
+    std::pair<bool, bool> executeColumns(Chunk & chunk, size_t num_rows) override;
     WindowsWithBuckets getLocalWindowsWithBucketsImpl() const override;
     void removeBucketsImpl(Int64 watermark) override;
     bool needReassignWindow() const override { return true; }

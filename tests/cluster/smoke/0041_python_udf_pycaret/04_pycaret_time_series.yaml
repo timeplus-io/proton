@@ -1,0 +1,84 @@
+tags:
+  - uda
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/7346
+
+description: Test covering python uda test on pycaret.time_series function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (date string, value float32);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION timeSeriesTester(date string, value float32) RETURNS array(float32) LANGUAGE PYTHON AS $$
+      import pandas as pd
+      from pycaret.time_series import TSForecastingExperiment
+
+      class timeSeriesTester:
+          def __init__(self):
+              self.res = []
+
+          def serialize(self):
+              data = {}
+              data['res'] = self.res
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.res = data['res']
+
+          def merge(self, other):
+              pass
+
+          def process(self, dates, values):
+              if len(values) < 2:
+                  return
+              date_index = pd.to_datetime(dates).to_period('D')
+              data=pd.DataFrame({'value': values}, index=date_index)
+              s = TSForecastingExperiment()
+              s.setup(data, fold = 1, session_id = 123)
+              model = s.create_model('exp_smooth')
+              final_model = s.finalize_model(model)
+              predictions = s.predict_model(final_model, fh = 5)
+              self.res = predictions['y_pred'].to_list()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf12-4-1
+    type: stream
+    query: select timeSeriesTester(date, value) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(date, value) values
+          ('2024-01-01', 112.0) ('2024-01-02', 118.0) ('2024-01-03', 132.0)('2024-01-04', 129.0) ('2024-01-05', 121.0);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(date, value) values
+          ('2024-01-01', 112.0) ('2024-01-02', 118.0) ('2024-01-03', 132.0)('2024-01-04', 129.0) ('2024-01-05', 121.0);
+
+  - type: check
+    target_name: python-udf12-4-1
+    expected_result:
+      - [[131.1001, 134.0001, 136.9001, 139.8001, 142.7001]]
+      - [[131.1001, 134.0001, 136.9001, 139.8001, 142.7001]]

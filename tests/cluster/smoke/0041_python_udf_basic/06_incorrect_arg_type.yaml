@@ -1,0 +1,36 @@
+tags:
+  - to_support
+
+description: Test covering scalar 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_add_five(value int) RETURNS int LANGUAGE PYTHON AS $$
+      def test_add_five(value):
+          for i in range(len(value)):
+              value[i] = value[i] + 5
+          return value
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-6
+    type: stream
+    query: select test_add_five('aaa') as res;
+    schema:
+      - name: res
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-6
+    expected_result:
+    - ["error_code:6"]

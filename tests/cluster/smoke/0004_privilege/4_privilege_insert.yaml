@@ -1,0 +1,69 @@
+description: test insert query of select_only user 
+
+steps:
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP ROLE if exists select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: DROP USER if exists user_select_only;
+
+  - type: query
+    sql: DROP stream if exists test00_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: CREATE ROLE select_only;
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create user user_select_only identified with plaintext_password by 'password';
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: create stream test00_stream(i int, s string);
+
+  - type: wait
+    time: 2  
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: GRANT INSERT ON test00_stream TO user_select_only;
+
+  - type: wait
+    time: 1
+
+  - name: '105'
+    type: stream
+    user: proton
+    password: proton@t+
+    query: select i, s from test00_stream settings seek_to = 'earliest';
+    schema:
+      - name: i
+        type: int32
+      - name: s
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    user: proton
+    password: proton@t+
+    sql: insert into test00_stream(i,s) values (3,'kui'),(4,'spring');
+
+  - type: check
+    target_name: '105'
+    expected_result:
+      - [3, 'kui']
+      - [4, 'spring']

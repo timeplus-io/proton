@@ -1,0 +1,35 @@
+tags:
+  - changelog_stream
+  - restapi
+description: single shard changelog_kv stream creation via rest
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: wait
+    time: 1
+  
+  - type: query
+    sql: drop stream if exists test14_changelog_kv_stream_rest;
+  - type: wait
+    time: 1
+
+  - name: "1403"
+    query_id: 1403
+    type: rest
+    url: /proton/v1/ddl/streams
+    method: POST
+    data:
+      name: test14_changelog_kv_stream_rest
+      columns:
+        - name: i
+          type: int
+        - name: k
+          type: string
+      mode: changelog_kv
+      primary_key: k
+
+  - type: check
+    target_name: "1403"
+    expected_result:
+      - request_id: "1403"

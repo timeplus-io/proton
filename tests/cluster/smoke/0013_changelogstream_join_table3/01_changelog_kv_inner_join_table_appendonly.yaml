@@ -1,0 +1,163 @@
+tags:
+  - changelog_kv
+  - table(appendonly)
+  - inner join
+description: changelog_kv inner join table(appendonly)
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test14_stream_3;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists test14_table_3;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_stream_3(i int64, j int64, k string) primary
+      key j settings mode='changelog_kv';
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test14_table_3(ii int64, jj int64, kk string)
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test14_table_3(ii, jj, kk) values(1, 2, 'a');
+    schema:
+      - name: ii
+        type: int64
+      - name: jj
+        type: int64
+      - name: kk
+        type: string
+ 
+  - type: query
+    sql: insert into test14_table_3(ii, jj, kk) values(1, 3, 'b');
+    schema:
+      - name: ii
+        type: int64
+      - name: jj
+        type: int64
+      - name: kk
+        type: string
+
+  - type: query
+    sql: insert into test14_table_3(ii, jj, kk) values(2, 7, 'h');
+    schema:
+      - name: ii
+        type: int64
+      - name: jj
+        type: int64
+      - name: kk
+        type: string
+ 
+  - type: query
+    sql: insert into test14_table_3(ii, jj, kk) values(4, 2, 'a');
+    schema:
+      - name: ii
+        type: int64
+      - name: jj
+        type: int64
+      - name: kk
+        type: string
+  - type: wait
+    time: 4
+ 
+  - name: "14144"
+    type: stream
+    query:
+      select i, j, k, ii, jj, kk, _tp_delta from test14_stream_3 as a inner join
+      table(test14_table_3) as b on a.j = b.jj;
+    schema:
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+      - name: ii
+        type: int64
+      - name: jj
+        type: int64
+      - name: kk
+        type: string
+      - name: _tp_delta
+        type: int8
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test14_stream_3(i, j, k) values(1, 2, 'a');
+    schema:
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+ 
+  - type: check
+    target_name: "14144"
+    mode: random
+    expected_result:
+      - ["1", "2", a, "4", "2", a, "1"]
+      - ["1", "2", a, "1", "2", a, "1"]
+
+  - type: query
+    sql: insert into test14_stream_3(i, j, k) values(1, 3, 'a');
+    schema:
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+ 
+  - type: check
+    target_name: "14144"
+    expected_result:
+      - ["1", "3", a, "1", "3", b, "1"]
+
+  - type: query
+    sql: insert into test14_stream_3(i, j, k) values(5, 2, 'a');
+    schema:
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+ 
+  - type: check
+    target_name: "14144"
+    mode: random
+    expected_result:
+      - ["5", "2", a, "4", "2", a, "1"]
+      - ["5", "2", a, "1", "2", a, "1"]
+
+  - type: query
+    sql: insert into test14_stream_3(i, j, k, _tp_delta) values(1, 2, 'a', -1);
+    schema:
+      - name: i
+        type: int64
+      - name: j
+        type: int64
+      - name: k
+        type: string
+      - name: _tp_delta
+        type: int8
+
+  - type: check
+    target_name: "14144"
+    mode: random
+    expected_result:
+      - ["1", "2", a, "4", "2", a, "-1"]
+      - ["1", "2", a, "1", "2", a, "-1"]

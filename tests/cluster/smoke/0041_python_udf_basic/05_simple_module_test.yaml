@@ -1,0 +1,89 @@
+tags:
+  - to_support
+
+description: Test covering scalar 
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value ipv4);
+  - type: wait
+    time: 1
+
+  # get 24 bit network address
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION get_network(value ipv4) RETURNS ipv4 LANGUAGE PYTHON AS $$
+      import ipaddress
+
+      def uint32_to_ipv4(uint32):
+          return str(ipaddress.IPv4Address(uint32))
+
+      def get_subnet_mask(ipv4, prefix_length):
+          network = ipaddress.IPv4Network(f"{ipv4}/{prefix_length}", strict=False)
+          return network.netmask
+
+      def subnet_mask_to_uint32(subnet_mask):
+          return int(ipaddress.IPv4Address(subnet_mask))
+
+      # 获取子网号
+      def get_network_address(ipv4, prefix_length):
+          network = ipaddress.IPv4Network(f"{ipv4}/{prefix_length}", strict=False)
+          return network.network_address
+
+      def network_address_to_uint32(network_address):
+          return int(ipaddress.IPv4Address(network_address))
+
+
+      def get_network(values):
+          res = []
+          for i in range(len(values)):
+              ipv4_address = uint32_to_ipv4(values[i])
+              subnet_mask = get_subnet_mask(ipv4_address, 24)
+              uint32_subnet_mask = subnet_mask_to_uint32(subnet_mask)
+              network_address = get_network_address(ipv4_address, 24)
+              uint32_network_address = network_address_to_uint32(network_address)
+              res.append(uint32_network_address)
+
+          return res
+      $$;
+
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-5
+    type: stream
+    query: select get_network(value) as res from test41_stream;
+    schema:
+      - name: res
+        type: ipv4
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values
+    schema:
+      - name: value
+        type: ipv4
+    inputs:
+      - ['192.168.65.69']
+      - ['172.65.95.69']
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-5
+    expected_result:
+      - ['192.168.65.0']
+      - ['172.65.95.0']

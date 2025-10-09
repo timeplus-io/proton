@@ -1,0 +1,33 @@
+name: python_udf_neuralforecast
+description: Tests covering the python_udf neuralforecast library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - neuralforecast
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # neuralforecast
+    - type: command
+      <<if eq .nodes "1">>
+      node: [p1]
+      <<else>>
+      node: [p1, p2, p3]
+      <<end>>
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d $'{"packages": [{"name": "neuralforecast"}]}'
+
+    - type: command
+      name: python-udf10-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "neuralforecast") | length > 0'
+    
+    - type: check
+      target_name: python-udf10-1
+      expected_result: ['true']

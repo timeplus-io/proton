@@ -1,0 +1,82 @@
+name: performance_comparison_test
+run-name: Performance Comparison Test [${{ (github.event.inputs.source == '' || github.event.inputs.source == github.event.inputs.target) && format('Upload {0}', github.event.inputs.target) || format('{0} -> {1}', github.event.inputs.source, github.event.inputs.target) }}] [${{ github.event.inputs.arch }}]
+
+on:
+    workflow_dispatch:
+      inputs:
+        target:
+          description: 'Test image Version'
+          required: false
+          default: ''
+        source:
+          description: 'BaseLine image Version'
+          required: false
+          default: ''
+        repo:
+          description: 'Docker repo to build image'
+          required: false
+          default: 'timeplus/proton'
+        arch:
+          description: 'Hardware architecture'
+          required: false
+          default: 'x64/arm'
+          type: choice
+          options:
+            - x64
+            - arm
+            - x64/arm
+            
+jobs:     
+  prepare_performance_comparison_test:
+    if: ${{ github.event.inputs.source != '' && github.event.inputs.source != github.event.inputs.target }}
+    runs-on: ubuntu-latest
+    outputs:
+      command: |
+        export TARGET_VERSION=${{ github.event.inputs.target }}
+        export SOURCE_VERSION=${{ github.event.inputs.source }}
+        export PROTON_REPO=${{ github.event.inputs.repo }}
+
+        # pull docker image
+        cd $GITHUB_WORKSPACE/docker/test/smoke/
+        docker build . -f Dockerfile --build-arg FROM_TAG=$SOURCE_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$SOURCE_VERSION
+        docker build . -f Dockerfile --build-arg FROM_TAG=$TARGET_VERSION --build-arg FROM_REPO=$PROTON_REPO -t timeplus/proton-smoke-test:$TARGET_VERSION
+        docker pull ghcr.io/risingwavelabs/nexmark-bench:test-7
+
+        # download docker-compose
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.5.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+
+        # run performance test
+        echo "run performance comparison test"
+        cd $GITHUB_WORKSPACE/tests/cluster/
+        bash perf_comparison.sh
+    steps:
+      - name: display command
+        run: |
+          echo 'command: ${{ steps.set_command.outputs.command }}'
+  performance_comparison_test_x64:
+    needs: [prepare_performance_comparison_test]
+    if: ${{ github.event.inputs.arch == 'x64' || github.event.inputs.arch == 'x64/arm' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c7i.4xlarge
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '60'
+      submodules: false
+      timeout: 200
+      arch: ${{ vars.X64_ARCH }}
+      upjob: performance_comparison_test_x64
+      run_mode: 'start_spot'
+      command: |
+        ${{ needs.prepare_performance_comparison_test.outputs.command }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}

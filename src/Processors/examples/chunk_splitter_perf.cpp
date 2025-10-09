@@ -1,13 +1,13 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Processors/Streaming/ChunkSplitter.h>
-#include <Processors/Transforms/Streaming/BlockSplitter.h>
+#include <Processors/Streaming/SubstreamChunkSplitter.h>
 #include <base/ClockUtils.h>
+
+#include <numeric>
 
 /// As 2022-11-15 10 AM PST on a c5a.8xlarge EC2 box
 /// using ChunkMap = HashMap<UInt128, UInt32, UInt128TrivialHash>;
@@ -114,6 +114,8 @@
 //Benchmarking case='One 16 chars key + one uint64_t key + 100 rows per chunk with 10 subchunks' took 40,923ms with total iterations=4,000,000, rps=10,000,000, total_chunks=40,000,000, cps=1,000,000
 //Benchmarking case='One 16 chars key + one uint64_t key + 1000 rows per chunk with 30 subchunks' took 98,102ms with total iterations=1,000,000, rps=10,204,081, total_chunks=30,000,000, cps=306,122
 
+bool LOG_PANIC_ABORT = true;
+
 namespace
 {
 
@@ -161,7 +163,7 @@ void doSplitChunkPerf(DB::Chunk chunk, std::vector<size_t> key_column_positions,
 {
     size_t rows = chunk.getNumRows();
 
-    DB::Streaming::ChunkSplitter splitter(key_column_positions);
+    DB::Streaming::SubstreamChunkSplitter splitter(key_column_positions);
 
     auto start = DB::UTCMilliseconds ::now();
 
@@ -192,7 +194,7 @@ void doSplitChunkPerfOneRow(
 {
     size_t rows = chunk.getNumRows();
 
-    DB::Streaming::ChunkSplitter splitter(key_column_positions);
+    DB::Streaming::SubstreamChunkSplitter splitter(key_column_positions);
 
     auto start = DB::UTCMilliseconds::now();
 
@@ -560,420 +562,11 @@ void doSplitChunkPerfOneRow(
     }
 }
 
-
-void doSplitBlockPerf(DB::Chunk chunk, std::vector<size_t> key_column_positions, std::string case_name, size_t iteration = 10'000'000)
-{
-    auto & data_types = DB::DataTypeFactory::instance();
-    DB::Block block;
-
-    /// Convert chunk to block
-    for (size_t i = 0; const auto & column : chunk.getColumns())
-    {
-        DB::ColumnWithTypeAndName col_with_name{column, data_types.get(column->getDataType()), fmt::format("c_{}_{}",column->getFamilyName(), i)};
-        block.insert(col_with_name);
-    }
-
-    auto header = block.cloneEmpty();
-
-    size_t rows = block.rows();
-
-    auto start = DB::UTCMilliseconds ::now();
-
-    size_t total = 0;
-    for (size_t i = 0; i < iteration; ++i)
-    {
-        DB::Streaming::Substream::BlockSplitter splitter(header, key_column_positions);
-        auto blocks = splitter.split(block);
-        total += blocks.size();
-    }
-
-    auto cost = DB::UTCMilliseconds::now() - start;
-    auto rps = (iteration * rows) / (cost / 1000);
-    auto bps = total / (cost / 1000);
-
-    std::cout << fmt::format(
-        std::locale("en_US.UTF-8"),
-        "Benchmarking case='{}' took {:L}ms with total iterations={:L}, rps={:L}, total_blocks={:L}, bps={:L}",
-        case_name,
-        cost,
-        iteration,
-        rps,
-        total,
-        bps) << std::endl;
-}
-
-//Benchmarking case='Single 16 chars key + 1 row per chunk' took 23,314ms with total iterations=10,000,000, rps=434,782, total_blocks=10,000,000, bps=434,782
-//Benchmarking case='Single 16 chars key + 10 rows per chunk with 3 subchunks' took 44,859ms with total iterations=10,000,000, rps=2,272,727, total_blocks=30,000,000, bps=681,818
-//Benchmarking case='Single 16 chars key + 100 rows per chunk with 10 subchunks' took 164,444ms with total iterations=10,000,000, rps=6,097,560, total_blocks=100,000,000, bps=609,756
-//Benchmarking case='Single 16 chars key + 1000 rows per chunk with 30 subchunks' took 80,203ms with total iterations=1,000,000, rps=12,500,000, total_blocks=30,000,000, bps=375,000
-//Benchmarking case='Two 16 chars key + 1 row per chunk' took 25,217ms with total iterations=10,000,000, rps=400,000, total_blocks=10,000,000, bps=400,000
-//Benchmarking case='Two 16 chars key + 10 row per chunk with 3 subchunks' took 53,640ms with total iterations=10,000,000, rps=1,886,792, total_blocks=30,000,000, bps=566,037
-//Benchmarking case='Two 16 chars key + 100 row per chunk with 10 subchunks' took 230,758ms with total iterations=10,000,000, rps=4,347,826, total_blocks=100,000,000, bps=434,782
-//Benchmarking case='Two 16 chars key + 1000 row per chunk with 30 subchunks' took 132,571ms with total iterations=1,000,000, rps=7,575,757, total_blocks=30,000,000, bps=227,272
-//Benchmarking case='Three 16 chars key + 1 row per chunk' took 29,665ms with total iterations=10,000,000, rps=344,827, total_blocks=10,000,000, bps=344,827
-//Benchmarking case='Three 16 chars key + 10 row per chunk with 3 subchunks' took 68,441ms with total iterations=10,000,000, rps=1,470,588, total_blocks=30,000,000, bps=441,176
-//Benchmarking case='Three 16 chars key + 100 row per chunk with 10 subchunks' took 278,245ms with total iterations=10,000,000, rps=3,597,122, total_blocks=100,000,000, bps=359,712
-//Benchmarking case='Three 16 chars key + 1000 row per chunk with 30 subchunks' took 169,553ms with total iterations=1,000,000, rps=5,917,159, total_blocks=30,000,000, bps=177,514
-//Benchmarking case='Single uint64_t key + 1 row per chunk' took 19,400ms with total iterations=10,000,000, rps=526,315, total_blocks=10,000,000, bps=526,315
-//Benchmarking case='Single uint64_t key + 10 rows per chunk with 3 subchunks' took 36,362ms with total iterations=10,000,000, rps=2,777,777, total_blocks=30,000,000, bps=833,333
-//Benchmarking case='Single uint64_t key + 100 rows per chunk with 10 subchunks' took 139,942ms with total iterations=10,000,000, rps=7,194,244, total_blocks=100,000,000, bps=719,424
-//Benchmarking case='Single uint64_t key + 1000 rows per chunk with 30 subchunks' took 70,996ms with total iterations=1,000,000, rps=14,285,714, total_blocks=30,000,000, bps=428,571
-//Benchmarking case='Two uint64_t key + 1 row per chunk' took 24,970ms with total iterations=10,000,000, rps=416,666, total_blocks=10,000,000, bps=416,666
-//Benchmarking case='Two uint64_t key + 10 rows per chunk with 3 subchunks' took 44,749ms with total iterations=10,000,000, rps=2,272,727, total_blocks=30,000,000, bps=681,818
-//Benchmarking case='Two uint64_t key + 100 rows per chunk with 10 subchunks' took 174,952ms with total iterations=10,000,000, rps=5,747,126, total_blocks=100,000,000, bps=574,712
-//Benchmarking case='Two uint64_t key + 1000 rows per chunk with 30 subchunks' took 81,574ms with total iterations=1,000,000, rps=12,345,679, total_blocks=30,000,000, bps=370,370
-//Benchmarking case='One 16 chars key + one uint64_t key + 1 row per chunk' took 22,733ms with total iterations=10,000,000, rps=454,545, total_blocks=10,000,000, bps=454,545
-//Benchmarking case='One 16 chars key + one uint64_t key + 10 rows per chunk with 3 subchunks' took 48,319ms with total iterations=10,000,000, rps=2,083,333, total_blocks=30,000,000, bps=625,000
-//Benchmarking case='One 16 chars key + one uint64_t key + 100 rows per chunk with 10 subchunks' took 193,452ms with total iterations=10,000,000, rps=5,181,347, total_blocks=100,000,000, bps=518,134
-//Benchmarking case='One 16 chars key + one uint64_t key + 1000 rows per chunk with 30 subchunks' took 109,911ms with total iterations=1,000,000, rps=9,174,311, total_blocks=30,000,000, bps=275,229
-
-[[maybe_unused]] void splitBlockPerf()
-{
-    /// One 16 char string key
-    {
-        size_t rows = 1;
-        size_t chunks = 1;
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single 16 chars key + 1 row per chunk");
-    }
-
-    {
-        size_t rows = 10;
-        size_t chunks = 3;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single 16 chars key + 10 rows per chunk with 3 subchunks");
-    }
-
-    {
-        size_t rows = 100;
-        size_t chunks = 10;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single 16 chars key + 100 rows per chunk with 10 subchunks");
-    }
-
-    {
-        size_t rows = 1000;
-        size_t chunks = 30;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single 16 chars key + 1000 rows per chunk with 30 subchunks", 1'000'000);
-    }
-
-    /// Two 16 char string keys
-    {
-        size_t rows = 1;
-        size_t chunks = 1;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two 16 chars key + 1 row per chunk");
-    }
-
-    {
-        size_t rows = 10;
-        size_t chunks = 3;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two 16 chars key + 10 row per chunk with 3 subchunks");
-    }
-
-    {
-        size_t rows = 100;
-        size_t chunks = 10;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two 16 chars key + 100 row per chunk with 10 subchunks");
-    }
-
-    {
-        size_t rows = 1000;
-        size_t chunks = 30;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two 16 chars key + 1000 row per chunk with 30 subchunks", 1'000'000);
-    }
-
-    /// Three 16 char string keys
-    {
-        size_t rows = 1;
-        size_t chunks = 1;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-        insertColumnString(chunk, 300, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Three 16 chars key + 1 row per chunk");
-    }
-
-    {
-        size_t rows = 10;
-        size_t chunks = 3;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-        insertColumnString(chunk, 300, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Three 16 chars key + 10 row per chunk with 3 subchunks");
-    }
-
-    {
-        size_t rows = 100;
-        size_t chunks = 10;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-        insertColumnString(chunk, 300, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Three 16 chars key + 100 row per chunk with 10 subchunks");
-    }
-
-    {
-        size_t rows = 1000;
-        size_t chunks = 30;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnString(chunk, 200, rows, chunks);
-        insertColumnString(chunk, 300, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Three 16 chars key + 1000 row per chunk with 30 subchunks", 1'000'000);
-    }
-
-    /// One uint64_t key
-    {
-        size_t rows = 1;
-        size_t chunks = 1;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single uint64_t key + 1 row per chunk");
-    }
-
-    {
-        size_t rows = 10;
-        size_t chunks = 3;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single uint64_t key + 10 rows per chunk with 3 subchunks");
-    }
-
-    {
-        size_t rows = 100;
-        size_t chunks = 10;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single uint64_t key + 100 rows per chunk with 10 subchunks");
-    }
-
-    {
-        size_t rows = 1000;
-        size_t chunks = 30;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Single uint64_t key + 1000 rows per chunk with 30 subchunks", 1'000'000);
-    }
-
-    /// Two uint64_t key
-    {
-        size_t rows = 1;
-        size_t chunks = 1;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two uint64_t key + 1 row per chunk");
-    }
-
-    {
-        size_t rows = 10;
-        size_t chunks = 3;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two uint64_t key + 10 rows per chunk with 3 subchunks");
-    }
-
-    {
-        size_t rows = 100;
-        size_t chunks = 10;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two uint64_t key + 100 rows per chunk with 10 subchunks");
-    }
-
-    {
-        size_t rows = 1000;
-        size_t chunks = 30;
-
-        DB::Chunk chunk;
-        insertColumnUInt64(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "Two uint64_t key + 1000 rows per chunk with 30 subchunks", 1'000'000);
-    }
-
-    /// 16 chars + uint64_t keys
-    {
-        size_t rows = 1;
-        size_t chunks = 1;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(std::move(chunk), std::move(positions), "One 16 chars key + one uint64_t key + 1 row per chunk");
-    }
-
-    {
-        size_t rows = 10;
-        size_t chunks = 3;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(
-            std::move(chunk), std::move(positions), "One 16 chars key + one uint64_t key + 10 rows per chunk with 3 subchunks");
-    }
-
-    {
-        size_t rows = 100;
-        size_t chunks = 10;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-
-        doSplitBlockPerf(
-            std::move(chunk), std::move(positions), "One 16 chars key + one uint64_t key + 100 rows per chunk with 10 subchunks");
-    }
-
-    {
-        size_t rows = 1000;
-        size_t chunks = 30;
-
-        DB::Chunk chunk;
-        insertColumnString(chunk, 100, rows, chunks);
-        insertColumnUInt64(chunk, 200, rows, chunks);
-
-        std::vector<size_t> positions(chunk.getNumColumns());
-        std::iota(positions.begin(), positions.end(), 0);
-        doSplitBlockPerf(
-            std::move(chunk),
-            std::move(positions),
-            "One 16 chars key + one uint64_t key + 1000 rows per chunk with 30 subchunks",
-            1'000'000);
-    }
-}
 }
 
 int main(int, char **)
 {
     splitChunkPerf();
-
-    splitBlockPerf();
 
     return 0;
 }

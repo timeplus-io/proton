@@ -1,0 +1,151 @@
+tags:
+  - external_stream
+  - materialized view
+  - session window
+description: Test External Stream with builtin data types -> MV with nested SELECT query and session window -> Target Stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: DROP VIEW IF EXISTS test_mv
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP VIEW IF EXISTS test_mv2
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_target_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: CREATE STREAM test_target_stream
+        (
+          id string,
+          max float,
+          start string,
+          end string
+        )
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: CREATE EXTERNAL STREAM test_external_stream
+        (
+          id int, 
+          value string,
+          float_c float,
+          datetime_c datetime
+        )
+        SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow'
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test_mv INTO test_target_stream AS 
+      WITH transformed AS 
+      (
+        SELECT
+          max(float_c) AS max, window_start, window_end, id 
+        FROM 
+          session(test_external_stream, datetime_c, 5s) 
+        PARTITION BY id GROUP BY window_start, window_end
+      ) 
+      SELECT
+        id, max, to_string(window_start) AS start, to_string(window_end) AS end 
+      FROM
+        transformed
+  - type: wait
+    time: 2
+
+  - name: external-stream-3-0
+    type: stream
+    query: SELECT id, max, start, end FROM test_target_stream
+    schema:
+    - name: id
+      type: string
+    - name: max
+      type: float32
+    - name: start
+      type: string
+    - name: end
+      type: string
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+    - id: 1
+      value: sometext1
+      float_c: 11.1
+      datetime_c: '2020-02-02 20:00:00'
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+    - id: 2
+      value: sometext1
+      float_c: 22.1
+      datetime_c: '2020-02-02 20:00:05'
+    - id: 2
+      value: sometext2
+      float_c: 22.2
+      datetime_c: '2020-02-02 20:00:05'
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+    - id: 3
+      value: sometext1
+      float_c: 33.1
+      datetime_c: '2020-02-02 20:00:10'
+    - id: 3
+      value: sometext2
+      float_c: 33.2
+      datetime_c: '2020-02-02 20:00:15'
+    - id: 3
+      value: sometext3
+      float_c: 33.3
+      datetime_c: '2020-02-02 20:00:20'
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: external-stream-3-0
+    expected_result:
+    - [3, 33.1, '2020-02-02 20:00:10', '2020-02-02 20:00:15']
+    - [3, 33.2, '2020-02-02 20:00:15', '2020-02-02 20:00:20']

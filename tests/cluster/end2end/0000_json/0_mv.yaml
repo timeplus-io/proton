@@ -1,0 +1,120 @@
+tags:
+  - external_stream
+  - materialized view
+description: |
+  Test External Stream -> MV -> Target Stream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 3
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: DROP VIEW IF EXISTS test_mv
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_target_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM test_target_stream
+      (
+        id string,
+        value string
+      )
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_external_stream
+      (
+        id int,
+        value string
+      )
+      SETTINGS type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format = 'JSONEachRow'
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW test_mv INTO test_target_stream AS
+      SELECT
+        to_string(id) AS id, value
+      FROM
+        test_external_stream
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: 0000
+    query_id: '0000'
+    query: SELECT id, value FROM test_target_stream
+    schema:
+    - name: id
+      type: string
+    - name: value
+      type: string
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+    - id: 1
+      value: sometext1
+      partition: 0
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+    - id: 2
+      value: sometext2
+      partition: 1
+  - type: wait
+    time: 2
+
+  - type: kafka
+    name: produce
+    topic: test
+    format: JSONEachRow
+    messages:
+    - id: 3
+      value: sometext3
+      partition: 2
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: 0000
+    expected_result:
+    - ['1', 'sometext1']
+    - ['2', 'sometext2']
+    - ['3', 'sometext3']

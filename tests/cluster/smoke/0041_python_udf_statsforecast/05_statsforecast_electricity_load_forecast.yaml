@@ -1,0 +1,103 @@
+tags:
+  - uda
+
+description: Test covering python uda test on statsforecast function
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (unique_id string, ds date, y float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION electricityTester(unique_id string, ds date, y float) RETURNS array(float) LANGUAGE PYTHON AS
+      $$
+
+      import pandas as pd
+      from statsforecast import StatsForecast
+      from statsforecast.models import MSTL, AutoARIMA
+
+      class electricityTester:
+          def __init__(self):
+              self.res = []
+              self.model = MSTL(
+                  season_length=[24, 24 * 7],
+                  trend_forecaster=AutoARIMA()
+              )
+              self.sf = StatsForecast(models=[self.model], freq='H')
+
+          def serialize(self):
+              pass
+
+          def deserialize(self, data):
+              pass
+
+          def merge(self, other):
+              pass
+
+          def process(self, unique_ids, dss, ys):
+              if len(unique_ids) < 24:
+                  return
+              dss = pd.to_datetime(dss)
+              df = pd.DataFrame(zip(unique_ids, dss, ys),
+                                columns=['unique_id', 'ds', 'y'])
+              
+              self.sf = self.sf.fit(df=df)
+              self.sf.fitted_[0, 0].model_
+              forecasts = self.sf.predict(h=len(df), level=[90])
+              self.res = forecasts.head()['MSTL'].tolist()
+
+          def finalize(self):
+              return [self.res]
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf11-5-1
+    type: stream
+    query: select electricityTester(unique_id, ds, y) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(float32)
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(unique_id, ds, y) values
+          ('PJM_Load_hourly', '2024-01-01', 605.0) 
+          ('PJM_Load_hourly', '2024-01-02', 586.0)
+          ('PJM_Load_hourly', '2024-01-03', 586.0)
+          ('PJM_Load_hourly', '2024-01-04', 559.0)
+          ('PJM_Load_hourly', '2024-01-05', 511.0)
+          ('PJM_Load_hourly', '2024-01-06', 605.0) 
+          ('PJM_Load_hourly', '2024-01-07', 586.0)
+          ('PJM_Load_hourly', '2024-01-08', 586.0)
+          ('PJM_Load_hourly', '2024-01-09', 559.0)
+          ('PJM_Load_hourly', '2024-01-10', 511.0)
+          ('PJM_Load_hourly', '2024-01-11', 605.0) 
+          ('PJM_Load_hourly', '2024-01-12', 586.0)
+          ('PJM_Load_hourly', '2024-01-13', 586.0)
+          ('PJM_Load_hourly', '2024-01-14', 559.0)
+          ('PJM_Load_hourly', '2024-01-15', 511.0)
+          ('PJM_Load_hourly', '2024-01-16', 605.0) 
+          ('PJM_Load_hourly', '2024-01-17', 586.0)
+          ('PJM_Load_hourly', '2024-01-18', 586.0)
+          ('PJM_Load_hourly', '2024-01-19', 559.0)
+          ('PJM_Load_hourly', '2024-01-20', 511.0)
+          ('PJM_Load_hourly', '2024-01-21', 605.0) 
+          ('PJM_Load_hourly', '2024-01-22', 586.0)
+          ('PJM_Load_hourly', '2024-01-23', 586.0)
+          ('PJM_Load_hourly', '2024-01-24', 559.0);
+
+  - type: check
+    target_name: python-udf11-5-1
+    expected_result:
+      - [[605.0000000000007, 586.0000000000005, 586.0000000000007, 559.0000000000003, 511.0000000000003]]

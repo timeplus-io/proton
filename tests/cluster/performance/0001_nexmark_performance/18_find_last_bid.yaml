@@ -1,0 +1,63 @@
+description: |
+  Test finding latest(auction)
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q18
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q18
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      CREATE EXTERNAL STREAM target(
+        bidder int64,
+        last_bid int64) 
+        SETTINGS type='kafka', 
+                brokers='k1:9092', 
+                topic='NEXMARK_Q18', 
+                data_format='JSONEachRow',
+                one_message_per_row=false;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT
+        bidder, latest(auction) as last_bid
+      FROM
+        bid
+      GROUP BY
+        bidder
+      SETTINGS
+        seek_to = 'earliest';
+      
+  - type: wait
+    time: 150
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 30

@@ -1,0 +1,4 @@
+name: cte
+description: Tests covering the CTE smoke cases.
+tags:
+  - smoke

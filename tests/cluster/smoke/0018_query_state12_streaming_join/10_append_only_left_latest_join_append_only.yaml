@@ -1,0 +1,126 @@
+tags:
+- query_state
+- data_enrichment_join
+- left-join
+description: append-only left latest JOIN append-only state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream3;
+- type: query
+  sql: drop stream if exists test19_right_stream3;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream3 (i int, s string);
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_right_stream3 (ii int, ss string);
+- type: wait
+  time: 1
+
+- name: '19360'
+  type: stream
+  query_id: '19360'
+  query: subscribe to select i, s, ii, ss from test19_left_stream3 left latest join
+    test19_right_stream3 on i=ii settings checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_right_stream3(ii, ss) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  inputs:
+  - [1, 'ss1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19360'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_right_stream3(ii, ss) values
+  schema:
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+  inputs:
+  - [1, 'ss3']
+
+- name: 19360-1
+  type: stream
+  query: recover from '19360'
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  - name: ii
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream3(i, s) values
+  schema:
+  - name: i
+    type: int32
+  - name: s
+    type: string
+  inputs:
+  - [1, 's2']
+  - [2, 's3']
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19360' sync
+
+- type: query
+  sql: unsubscribe to '19360'
+
+- type: check
+  target_name: '19360'
+  expected_result:
+  - [1, s1, 1, ss1]
+
+- type: check
+  target_name: 19360-1
+  expected_result:
+  - [1, s2, 1, ss3]
+  - [2, s3, 0, '']

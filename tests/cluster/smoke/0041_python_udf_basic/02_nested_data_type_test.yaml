@@ -1,0 +1,72 @@
+tags:
+  - to_support
+  - nested_datatype
+
+description: Test covering basic function of python udf
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test41_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test41_stream (value array(tuple(array(int), string)));
+  - type: wait
+    time: 2
+
+    # add all the number by 5, and upper the str
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION add_five_and_upper(value array(tuple(array(int), string))) RETURNS array(tuple(array(int), string)) LANGUAGE PYTHON AS $$
+      def add_five_and_upper(value):
+          res = []
+          for i in range(len(value)):
+              tmp1 = []
+              for j in range(len(value[i])):
+                  tmp2 = []
+                  for k in range(len(value[i][j][0])):
+                      tmp2.append(value[i][j][0][k] + 5)
+                  s = value[i][j][1].upper()
+                  t = (tmp2, s)
+                  tmp1.append(t)
+              res.append(tmp1)
+
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-2
+    type: stream
+    query: select add_five_and_upper(value) as res, value from test41_stream;
+    schema:
+      - name: res
+        type: array(tuple(array(int32), string))
+      - name: value
+        type: array(tuple(array(int32), string))
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test41_stream(value) values ([([1, 2], 'a'), ([3, 4], 'b')]), ([([5, 6], 'c'), ([7, 8], 'd')]);
+    schema:
+      - name: value
+        type: array(tuple(array(int32), string))
+    inputs:
+      - [[[[1, 2], 'a'], [[3, 4], 'b']]]
+      - [[[[5, 6], 'c'], [[7, 8], 'd']]]
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-2
+    expected_result:
+      - [[[[6, 7], 'A'], [[8, 9], 'B']], [[[1, 2], 'a'], [[3, 4], 'b']]]
+      - [[[[10, 11], 'C'], [[12, 13], 'D']], [[[5, 6], 'c'], [[7, 8], 'd']]]

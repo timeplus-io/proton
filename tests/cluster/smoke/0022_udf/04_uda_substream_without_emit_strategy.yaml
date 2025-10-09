@@ -1,0 +1,73 @@
+tags:
+- udf
+- bug
+description: test_23_sec_large - uda without emit strategy (substream), 8 bit key
+cluster:
+- p1k1
+- p3k1
+steps:
+- name: '2300'
+  type: rest
+  url: /proton/v1/udfs
+  method: POST
+  data:
+    type: javascript
+    name: test_23_sec_large
+    arguments:
+    - name: value
+      type: float32
+    is_aggregation: true
+    return_type: float32
+    source: "{ initialize: function() { this.max = -1.0; this.sec = -1.0;}, process: function(values) { for(let i=0; i<values.length; i++) { if(values[i] > this.max) { this.sec = this.max; this.max = values[i];} if(values[i] < this.max && values[i] > this.sec) this.sec = values[i]; } }, finalize:function() { return this.sec; }, serialize: function() { let s = {'max': this.max, 'sec':this.sec }; return JSON.stringify(s);}, deserialize: function(state_str) { let s = JSON.parse(state_str); this.max = s['max']; this.sec = s['sec']; }, merge: function(state_str) { let s = JSON.parse(state_str); if (s['sec'] >= this.max) { this.max = s['max']; this.sec = s['sec'];} else if(s['max'] >= this.max) { this.sec = this.max; this.max = s['max'];} else if (s['max'] > this.sec) { this.sec = s['max']; } } }"
+- type: wait
+  time: 5
+
+- name: udf-4
+  type: stream
+  query: select i8, test_23_sec_large(f32) over (partition by i) from udf_types group by i8, i, f32;
+  schema:
+  - name: i8
+    type: int8
+  - name: test_23_sec_large(f32) OVER (PARTITION BY i)
+    type: float32
+- type: wait
+  time: 2
+
+- type: rest
+  url: /proton/v1/ingest/streams/udf_types
+  method: POST
+  data:
+    columns:
+    - i
+    - i8
+    - f32
+    - s
+    - dt
+    data:
+    - [1, 5, 1.0, 's1', '2020-02-02 20:00:00']
+    - [2, 4, 2.0, 's2', '2020-02-02 20:00:00']
+
+- type: wait
+  time: 5
+
+- type: rest
+  url: /proton/v1/ingest/streams/udf_types
+  method: POST
+  data:
+    columns:
+    - i
+    - i8
+    - f32
+    - s
+    - dt
+    data:
+    - [3, 5, 3.0, 's1', '2020-02-02 20:00:00']
+    - [2, 4, 4.0, 's2', '2020-02-02 20:00:00']
+
+- type: check
+  target_name: udf-4
+  expected_result:
+  - [5, -1]
+  - [4, -1]
+  - [5, -1]
+  - [4, 2.0]

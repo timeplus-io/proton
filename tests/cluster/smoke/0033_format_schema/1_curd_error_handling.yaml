@@ -1,0 +1,65 @@
+description: Tests for error handling.
+cluster:
+# - p1k1 # skip due to error code different from cluster
+- p3k1 
+steps:
+- type: query
+  sql: DROP FORMAT SCHEMA IF EXISTS test_format_schema_error_handling
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-0
+  query: CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'anything' TYPE Avro
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-1
+  query: CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS '' TYPE Protobuf
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-2
+  query: CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'bad' TYPE Protobuf
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-3
+  query: SHOW CREATE FORMAT SCHEMA test_format_schema_error_handling
+  schema:
+    - name: statement
+      type: string
+- type: wait
+  time: 1
+
+- type: stream
+  name: fmt-2-4
+  query: DROP FORMAT SCHEMA test_format_schema_error_handling
+
+- type: check
+  target_name: fmt-2-0
+  expected_result:
+  - ['error_code:2614']
+
+- type: check
+  target_name: fmt-2-1
+  expected_result:
+  - ['error_code:36']
+
+- type: check
+  target_name: fmt-2-2
+  expected_result:
+  - ['error_code:2614']
+
+- type: check
+  target_name: fmt-2-3
+  expected_result:
+  - ['error_code:2611']
+
+- type: check
+  target_name: fmt-2-4
+  expected_result:
+  - ['error_code:2615']

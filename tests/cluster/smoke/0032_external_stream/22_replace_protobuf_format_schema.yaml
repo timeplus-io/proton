@@ -1,0 +1,152 @@
+tags:
+- format_schema
+- protobuf
+
+description: replace protobuf format schema with different content
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+  # kafka topic: drop and create
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FORMAT SCHEMA schema_name AS
+      $$
+      syntax = "proto3";
+      message SearchRequest { 
+        string query1 = 1;
+        int32 page_number = 2;
+        int32 results_per_page = 3;
+      }
+      $$
+      TYPE Protobuf
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_external_stream
+      (
+        query string,
+        page_number int32,
+        results_per_page int32
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'test',
+          data_format = 'ProtobufSingle',
+          format_schema = 'schema_name:SearchRequest'
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: external-stream-22-1
+    query: SELECT * FROM test_external_stream
+    schema:
+      - name: query
+        type: string
+      - name: page_number
+        type: int32
+      - name: results_per_page
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test_external_stream(query, page_number, results_per_page) values 
+      ('select', 1, 1) ('create', 2, 2) ('drop', 3, 3);
+
+  - type: check
+    target_name: external-stream-22-1
+    expected_result:
+      - ['', 1, 1]
+      - ['', 2, 2]
+      - ['', 3, 3]
+
+  # replace format schema
+  - type: query
+    sql: |
+      CREATE OR REPLACE FORMAT SCHEMA schema_name AS
+      $$
+      syntax = "proto3";
+      message SearchRequest { 
+        string query = 1;
+        int32 page_number = 2;
+        int32 results_per_page = 3;
+      }
+      $$
+      TYPE Protobuf;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS test_external_stream;
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_external_stream
+      (
+        query string,
+        page_number int,
+        results_per_page int
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'test',
+          data_format = 'ProtobufSingle',
+          format_schema = 'schema_name:SearchRequest';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: external-stream-22-2
+    query: SELECT * FROM test_external_stream;
+    schema:
+      - name: query
+        type: string
+      - name: page_number
+        type: int32
+      - name: results_per_page
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test_external_stream(query, page_number, results_per_page) values 
+      ('select', 4, 4) ('create', 5, 5) ('drop', 6, 6);
+
+  - type: check
+    target_name: external-stream-22-2
+    expected_result:
+      - ['select', 4, 4]
+      - ['create', 5, 5]
+      - ['drop', 6, 6]

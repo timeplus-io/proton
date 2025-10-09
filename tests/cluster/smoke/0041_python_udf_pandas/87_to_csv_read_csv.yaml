@@ -1,0 +1,55 @@
+tags:
+  - uda
+
+description: Test covering simple python uda test
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (valuea array(string), valueb array(string));
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_to_csv(valuea array(string), valueb array(string)) RETURNS array(array(string)) LANGUAGE PYTHON AS
+      $$
+      import pandas as pd
+      def test_to_csv(valuea, valueb):
+          res = []
+          for a, b in zip(valuea, valueb):
+              df_write = pd.DataFrame(zip(a,b), columns=['name', 'mask'])
+              df_write.to_csv('/var/lib/proton/user_files/out.csv', index=False)
+              df_read = pd.read_csv('/var/lib/proton/user_files/out.csv')
+              result = df_read.head().values.tolist()
+              res.append(result)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf3-87-1
+    type: stream
+    query: select test_to_csv(valuea, valueb) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(string))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(valuea, valueb) values 
+          (['Raphael', 'red'], ['Donatello', 'purple'])
+          (['John', 'green'], ['Amy', 'pink']);
+
+  - type: check
+    target_name: python-udf3-87-1
+    expected_result:
+      - [[['Raphael', 'Donatello'], ['red', 'purple']]]
+      - [[['John', 'Amy'], ['green', 'pink']]]

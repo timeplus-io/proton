@@ -1,9 +1,11 @@
 #pragma once
 
 #include <IO/ConnectionTimeouts.h>
+#include <IO/HTTPCommon.h>
+#include <IO/HTTPHeaderEntries.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromOStream.h>
-#include <IO/HTTPCommon.h>
+
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
@@ -18,20 +20,44 @@ namespace DB
 class WriteBufferFromHTTP : public WriteBufferFromOStream
 {
 public:
-    explicit WriteBufferFromHTTP(const Poco::URI & uri,
-                                 const std::string & method = Poco::Net::HTTPRequest::HTTP_POST, // POST or PUT only
-                                 const std::string & content_type = "",
-                                 const std::string & content_encoding = "",
-                                 const ConnectionTimeouts & timeouts = {},
-                                 size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE);
+    explicit WriteBufferFromHTTP(
+        const Poco::URI & uri,
+        const std::string & method = Poco::Net::HTTPRequest::HTTP_POST, // POST or PUT only
+        const std::string & content_type = "",
+        const std::string & content_encoding = "",
+        const ConnectionTimeouts & timeouts = {},
+        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE);
+
+    /// proton: starts
+    WriteBufferFromHTTP(
+        PooledHTTPSessionPtr session_,
+        const Poco::URI & uri,
+        const std::string & method = Poco::Net::HTTPRequest::HTTP_POST, // POST or PUT only
+        const std::string & content_type = "",
+        const std::string & content_encoding = "",
+        const HTTPHeaderEntries & additional_headers = {},
+        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE);
+
+    void withResponseBodyHandler(std::function<void(std::istream *)>);
+    /// proton: ends
 
 private:
+    /// proton: starts
+    void init(
+        const Poco::URI & uri,
+        const std::string & content_type,
+        const std::string & content_encoding,
+        const HTTPHeaderEntries & additional_headers);
+    /// proton: ends
+
     /// Receives response from the server after sending all data.
     void finalizeImpl() override;
 
-    HTTPSessionPtr session;
+    std::variant<HTTPSessionPtr, PooledHTTPSessionPtr> session; /// proton: updated
     Poco::Net::HTTPRequest request;
     Poco::Net::HTTPResponse response;
+
+    std::function<void(std::istream *)> response_body_handler{nullptr}; /// proton: added
 };
 
 }

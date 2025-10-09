@@ -24,6 +24,19 @@ public:
 
     void updateLevels(Poco::Util::AbstractConfiguration & config, Poco::Logger & logger);
 
+    /// proton: starts
+    /// Dynamically change log level at runtime without configuration reload
+    /// Supports exact logger names, regex patterns, and partial string matching
+    /// Examples:
+    ///   setLogLevel("debug", "default.mut") - matches loggers containing "default.mut"
+    ///   setLogLevel("info", "default\\.mut\\.[0-9]+") - regex to match default.mut.0, default.mut.1, etc.
+    ///   setLogLevel("error", "default.mut (.*-.*-.*)") - matches loggers with UUID pattern
+    void setLogLevel(const std::string & level, const std::string & logger_name = "");
+    
+    /// Helper function to find loggers matching a pattern (exact, regex, or partial)
+    static std::vector<std::string> findLoggersByPattern(const std::string & pattern);
+    /// proton: ends
+
     /// Close log files. On next log write files will be reopened.
     void closeLogs(Poco::Logger & logger);
 

@@ -1,4 +1,3 @@
-#include "Storages/MergeTree/IDataPartStorage.h"
 #include <algorithm>
 #include <optional>
 
@@ -7,10 +6,16 @@
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
+#include <Storages/MergeTree/IDataPartStorage.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/HashingReadBuffer.h>
+#include <IO/S3Common.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/NetException.h>
+#include <Common/SipHash.h>
+#include <Common/ZooKeeper/IKeeper.h>
+#include <Poco/Net/NetException.h>
 
 
 namespace CurrentMetrics
@@ -29,7 +34,14 @@ namespace ErrorCodes
     extern const int CANNOT_ALLOCATE_MEMORY;
     extern const int CANNOT_MUNMAP;
     extern const int CANNOT_MREMAP;
+    extern const int CANNOT_SCHEDULE_TASK;
     extern const int UNEXPECTED_FILE_IN_DATA_PART;
+    extern const int NO_FILE_IN_DATA_PART;
+    extern const int NETWORK_ERROR;
+    extern const int SOCKET_TIMEOUT;
+    extern const int BROKEN_PROJECTION;
+    extern const int ABORTED;
+    extern const int CANNOT_WRITE_TO_OSTREAM;
 }
 
 
@@ -44,6 +56,83 @@ bool isNotEnoughMemoryErrorCode(int code)
         || code == ErrorCodes::CANNOT_MREMAP;
 }
 
+bool isRetryableException(std::exception_ptr exception_ptr)
+{
+    try
+    {
+        rethrow_exception(exception_ptr);
+    }
+#if USE_AWS_S3
+    catch (const S3Exception & s3_exception)
+    {
+        return s3_exception.isRetryableError();
+    }
+#endif
+#if USE_AZURE_BLOB_STORAGE
+    catch (const Azure::Core::RequestFailedException & e)
+    {
+        return isRetryableAzureException(e);
+    }
+#endif
+    catch (const ErrnoException & e)
+    {
+        return e.getErrno() == EMFILE
+            || e.getErrno() == ENOMEM
+            || isNotEnoughMemoryErrorCode(e.code())
+            || e.code() == ErrorCodes::NETWORK_ERROR
+            || e.code() == ErrorCodes::SOCKET_TIMEOUT
+            || e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK
+            || e.code() == ErrorCodes::ABORTED;
+
+    }
+    catch (const NetException &)
+    {
+        return true;
+    }
+    catch (const Coordination::Exception & e)
+    {
+        return Coordination::isHardwareError(e.code);
+    }
+    catch (const Exception & e)
+    {
+        return isNotEnoughMemoryErrorCode(e.code())
+            || e.code() == ErrorCodes::NETWORK_ERROR
+            || e.code() == ErrorCodes::SOCKET_TIMEOUT
+            || e.code() == ErrorCodes::CANNOT_SCHEDULE_TASK
+            || e.code() == ErrorCodes::ABORTED
+            || e.code() == ErrorCodes::CANNOT_WRITE_TO_OSTREAM;
+    }
+    catch (const std::filesystem::filesystem_error & e)
+    {
+        return e.code() == std::errc::no_space_on_device ||
+            e.code() == std::errc::read_only_file_system ||
+            e.code() == std::errc::too_many_files_open_in_system ||
+            e.code() == std::errc::operation_not_permitted ||
+            e.code() == std::errc::device_or_resource_busy ||
+            e.code() == std::errc::permission_denied ||
+            e.code() == std::errc::too_many_files_open ||
+            e.code() == std::errc::text_file_busy ||
+            e.code() == std::errc::timed_out ||
+            e.code() == std::errc::not_enough_memory ||
+            e.code() == std::errc::not_supported ||
+            e.code() == std::errc::too_many_links ||
+            e.code() == std::errc::too_many_symbolic_link_levels;
+    }
+    catch (const Poco::Net::NetException &)
+    {
+        return true;
+    }
+    catch (const Poco::TimeoutException &)
+    {
+        return true;
+    }
+    catch (...)
+    {
+        /// In fact, there can be other similar situations.
+        /// But it is OK, because there is a safety guard against deleting too many parts.
+        return false;
+    }
+}
 
 IMergeTreeDataPart::Checksums checkDataPart(
     MergeTreeData::DataPartPtr data_part,
@@ -71,9 +160,8 @@ IMergeTreeDataPart::Checksums checkDataPart(
     }
 
     if (columns_txt != columns_list)
-        throw Exception("Columns doesn't match in part " + data_part_storage.getFullPath()
-            + ". Expected: " + columns_list.toString()
-            + ". Found: " + columns_txt.toString(), ErrorCodes::CORRUPTED_DATA);
+        throw Exception(ErrorCodes::CORRUPTED_DATA, "Columns doesn't match in part {}. Expected: {}. Found: {}",
+            data_part_storage.getFullPath(), columns_list.toString(), columns_txt.toString());
 
     /// Real checksums based on contents of data. Must correspond to checksums.txt. If not - it means the data is broken.
     IMergeTreeDataPart::Checksums checksums_data;
@@ -111,98 +199,17 @@ IMergeTreeDataPart::Checksums checkDataPart(
     };
 
     /// This function calculates only checksum of file content (compressed or uncompressed).
-    /// It also calculates checksum of projections.
     auto checksum_file = [&](const String & file_name)
     {
-        if (data_part_storage.isDirectory(file_name) && endsWith(file_name, ".proj"))
-        {
-            auto projection_name = file_name.substr(0, file_name.size() - sizeof(".proj") + 1);
-            auto pit = data_part->getProjectionParts().find(projection_name);
-            if (pit == data_part->getProjectionParts().end())
-            {
-                if (require_checksums)
-                    throw Exception("Unexpected file " + file_name + " in data part", ErrorCodes::UNEXPECTED_FILE_IN_DATA_PART);
-                else
-                    return;
-            }
-
-            const auto & projection = pit->second;
-            IMergeTreeDataPart::Checksums projection_checksums_data;
-
-            auto projection_part_storage = data_part_storage.getProjection(file_name);
-
-            if (projection->getType() == MergeTreeDataPartType::Compact)
-            {
-                auto file_buf = projection_part_storage->readFile(MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION, {}, std::nullopt, std::nullopt);
-                HashingReadBuffer hashing_buf(*file_buf);
-                hashing_buf.ignoreAll();
-                projection_checksums_data.files[MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION]
-                    = IMergeTreeDataPart::Checksums::Checksum(hashing_buf.count(), hashing_buf.getHash());
-            }
-            else
-            {
-                const NamesAndTypesList & projection_columns_list = projection->getColumns();
-                for (const auto & projection_column : projection_columns_list)
-                {
-                    get_serialization(projection_column)->enumerateStreams(
-                        [&](const ISerialization::SubstreamPath & substream_path)
-                        {
-                            String projection_file_name = ISerialization::getFileNameForStream(projection_column, substream_path) + ".bin";
-                            projection_checksums_data.files[projection_file_name] = checksum_compressed_file(*projection_part_storage, projection_file_name);
-                        });
-                }
-            }
-
-            IMergeTreeDataPart::Checksums projection_checksums_txt;
-
-            if (require_checksums || projection_part_storage->exists("checksums.txt"))
-            {
-                auto buf = projection_part_storage->readFile("checksums.txt", {}, std::nullopt, std::nullopt);
-                projection_checksums_txt.read(*buf);
-                assertEOF(*buf);
-            }
-
-            const auto & projection_checksum_files_txt = projection_checksums_txt.files;
-            for (auto projection_it = projection_part_storage->iterate(); projection_it->isValid(); projection_it->next())
-            {
-                const String & projection_file_name = projection_it->name();
-                auto projection_checksum_it = projection_checksums_data.files.find(projection_file_name);
-
-                /// Skip files that we already calculated. Also skip metadata files that are not checksummed.
-                if (projection_checksum_it == projection_checksums_data.files.end() && !files_without_checksums.contains(projection_file_name))
-                {
-                    auto projection_txt_checksum_it = projection_checksum_files_txt.find(file_name);
-                    if (projection_txt_checksum_it == projection_checksum_files_txt.end()
-                        || projection_txt_checksum_it->second.uncompressed_size == 0)
-                    {
-                        auto projection_file_buf = projection_part_storage->readFile(projection_file_name, {}, std::nullopt, std::nullopt);
-                        HashingReadBuffer projection_hashing_buf(*projection_file_buf);
-                        projection_hashing_buf.ignoreAll();
-                        projection_checksums_data.files[projection_file_name] = IMergeTreeDataPart::Checksums::Checksum(
-                            projection_hashing_buf.count(), projection_hashing_buf.getHash());
-                    }
-                    else
-                    {
-                        projection_checksums_data.files[projection_file_name] = checksum_compressed_file(*projection_part_storage, projection_file_name);
-                    }
-                }
-            }
-            checksums_data.files[file_name] = IMergeTreeDataPart::Checksums::Checksum(
-                projection_checksums_data.getTotalSizeOnDisk(), projection_checksums_data.getTotalChecksumUInt128());
-
-            if (require_checksums || !projection_checksums_txt.files.empty())
-                projection_checksums_txt.checkEqual(projection_checksums_data, false);
-        }
-        else
-        {
-            auto file_buf = data_part_storage.readFile(file_name, {}, std::nullopt, std::nullopt);
-            HashingReadBuffer hashing_buf(*file_buf);
-            hashing_buf.ignoreAll();
-            checksums_data.files[file_name] = IMergeTreeDataPart::Checksums::Checksum(hashing_buf.count(), hashing_buf.getHash());
-        }
+        auto file_buf = data_part_storage.readFile(file_name, {}, std::nullopt, std::nullopt);
+        HashingReadBuffer hashing_buf(*file_buf);
+        hashing_buf.ignoreAll();
+        checksums_data.files[file_name] = IMergeTreeDataPart::Checksums::Checksum(hashing_buf.count(), hashing_buf.getHash());
     };
 
-    bool check_uncompressed = true;
+    /// Do not check uncompressed for projections. But why?
+    bool check_uncompressed = !data_part->isProjectionPart();
+
     /// First calculate checksums for columns data
     if (part_type == MergeTreeDataPartType::Compact)
     {
@@ -217,14 +224,25 @@ IMergeTreeDataPart::Checksums checkDataPart(
         {
             get_serialization(column)->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
             {
-                String file_name = ISerialization::getFileNameForStream(column, substream_path) + ".bin";
+                /// Skip ephemeral subcolumns that don't store any real data.
+                if (ISerialization::isEphemeralSubcolumn(substream_path, substream_path.size()))
+                    return;
+
+                auto stream_name = IMergeTreeDataPart::getStreamNameForColumn(column, substream_path, ".bin", data_part_storage);
+
+                if (!stream_name)
+                    throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART,
+                        "There is no file for column '{}' in data part '{}'",
+                        column.name, data_part->name);
+
+                auto file_name = *stream_name + ".bin";
                 checksums_data.files[file_name] = checksum_compressed_file(data_part_storage, file_name);
-            });
+            }, column.type, data_part->getColumnSample(column));
         }
     }
     else
     {
-        throw Exception("Unknown type in part " + data_part_storage.getFullPath(), ErrorCodes::UNKNOWN_PART_TYPE);
+        throw Exception(ErrorCodes::UNKNOWN_PART_TYPE, "Unknown type in part {}", data_part_storage.getFullPath());
     }
 
     /// Checksums from the rest files listed in checksums.txt. May be absent. If present, they are subsequently compared with the actual data checksums.
@@ -237,10 +255,19 @@ IMergeTreeDataPart::Checksums checkDataPart(
         assertEOF(*buf);
     }
 
+    NameSet projections_on_disk;
     const auto & checksum_files_txt = checksums_txt.files;
     for (auto it = data_part_storage.iterate(); it->isValid(); it->next())
     {
-        const String & file_name = it->name();
+        auto file_name = it->name();
+
+        /// We will check projections later.
+        if (data_part_storage.isDirectory(file_name) && endsWith(file_name, ".proj"))
+        {
+            projections_on_disk.insert(file_name);
+            continue;
+        }
+
         auto checksum_it = checksums_data.files.find(file_name);
 
         /// Skip files that we already calculated. Also skip metadata files that are not checksummed.
@@ -259,11 +286,38 @@ IMergeTreeDataPart::Checksums checkDataPart(
         }
     }
 
+    for (const auto & [name, projection] : data_part->getProjectionParts())
+    {
+        if (is_cancelled())
+            return {};
+
+        auto projection_file = name + ".proj";
+        auto projection_checksums = checkDataPart(
+            projection, *data_part_storage.getProjection(projection_file),
+            projection->getColumns(), projection->getType(),
+            projection->getFileNamesWithoutChecksums(),
+            require_checksums, is_cancelled);
+
+        checksums_data.files[projection_file] = IMergeTreeDataPart::Checksums::Checksum(
+            projection_checksums.getTotalSizeOnDisk(),
+            projection_checksums.getTotalChecksumUInt128());
+
+        projections_on_disk.erase(projection_file);
+    }
+
+    if (require_checksums && !projections_on_disk.empty())
+    {
+        throw Exception(ErrorCodes::UNEXPECTED_FILE_IN_DATA_PART,
+            "Found unexpected projection directories: {}",
+            fmt::join(projections_on_disk, ","));
+    }
+
     if (is_cancelled())
         return {};
 
     if (require_checksums || !checksums_txt.files.empty())
         checksums_txt.checkEqual(checksums_data, check_uncompressed);
+
     return checksums_data;
 }
 

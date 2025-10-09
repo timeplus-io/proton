@@ -14,7 +14,7 @@ TEST(Native, ReadWrite)
     std::vector<char> data;
     DB::WriteBufferFromVector wb{data};
 
-    DB::NativeWriter writer(wb, block.cloneEmpty(), 0);
+    DB::NativeWriter writer(wb, 0, block.cloneEmpty());
 
     writer.write(block);
 
@@ -37,7 +37,7 @@ TEST(Native, ReadWriteInfo)
     std::vector<char> data;
     DB::WriteBufferFromVector wb{data};
 
-    DB::NativeWriter writer(wb, block.cloneEmpty(), 1);
+    DB::NativeWriter writer(wb, 1, block.cloneEmpty());
 
     writer.write(block);
 

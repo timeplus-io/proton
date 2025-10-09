@@ -557,7 +557,7 @@ private:
         {
             NativeResultType res;
             if (Op::template apply<NativeResultType>(a, b, res))
-                throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "the decimal math overflow");
             return res;
         }
         else
@@ -585,7 +585,7 @@ private:
                 res = Op::template apply<NativeResultType>(a, b);
 
             if (overflow)
-                throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "The decimal math overflow");
         }
         else
         {
@@ -611,7 +611,7 @@ private:
                     overflow |= common::mulOverflow(scale, scale, scale);
                 overflow |= common::mulOverflow(a, scale, a);
                 if (overflow)
-                    throw Exception("The decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                    throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "The decimal math overflow");
             }
             else
             {
@@ -636,6 +636,11 @@ class FunctionBinaryArithmetic : public IFunction
     static constexpr const bool is_minus = IsOperation<Op>::minus;
     static constexpr const bool is_multiply = IsOperation<Op>::multiply;
     static constexpr const bool is_division = IsOperation<Op>::division;
+    static constexpr bool is_bit_hamming_distance = IsOperation<Op>::bit_hamming_distance;
+    static constexpr bool is_modulo = IsOperation<Op>::modulo;
+    static constexpr bool is_int_div = IsOperation<Op>::int_div;
+    static constexpr bool is_int_div_or_zero = IsOperation<Op>::int_div_or_zero;
+    static constexpr bool is_division_or_null = IsOperation<Op>::division_or_null;
 
     ContextPtr context;
     bool check_decimal_overflow = true;
@@ -702,8 +707,8 @@ class FunctionBinaryArithmetic : public IFunction
         }
 
         if (second_is_date_or_datetime && is_minus)
-            throw Exception("Wrong order of arguments for function " + String(name) + ": argument of type Interval cannot be first",
-                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Wrong order of arguments for function {}: "
+                                                                  "argument of type Interval cannot be first", name);
 
         std::string function_name;
         if (interval_data_type)
@@ -743,8 +748,8 @@ class FunctionBinaryArithmetic : public IFunction
             return {};
 
         if (isTuple(type0) && second_is_date_or_datetime && is_minus)
-            throw Exception("Wrong order of arguments for function " + String(name) + ": argument of tuple type cannot be first",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Wrong order of arguments for function {}: "
+                                                                  "argument of tuple type cannot be first", name);
 
         std::string function_name;
         if (is_plus)
@@ -842,8 +847,8 @@ class FunctionBinaryArithmetic : public IFunction
             return {};
 
         if (isNumber(type0) && is_division)
-            throw Exception("Wrong order of arguments for function " + String(name) + ": argument of numeric type cannot be first",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Wrong order of arguments for function {}: "
+                                                                  "argument of numeric type cannot be first", name);
 
         std::string function_name;
         if (is_multiply)
@@ -889,8 +894,8 @@ class FunctionBinaryArithmetic : public IFunction
             std::swap(new_arguments[0], new_arguments[1]);
 
         if (!isColumnConst(*new_arguments[1].column))
-            throw Exception{"Illegal column " + new_arguments[1].column->getName()
-                + " of argument of aggregation state multiply. Should be integer constant", ErrorCodes::ILLEGAL_COLUMN};
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of aggregation state multiply. "
+                "Should be integer constant", new_arguments[1].column->getName());
 
         const IColumn & agg_state_column = *new_arguments[0].column;
         bool agg_state_is_const = isColumnConst(agg_state_column);
@@ -1176,7 +1181,10 @@ public:
         /// We shouldn't use default implementation for nulls for the case when operation is divide,
         /// intDiv or modulo and denominator is Nullable(Something), because it may cause division
         /// by zero error (when value is Null we store default value 0 in nested column).
-        return !division_by_nullable;
+        /// And we also shouldn't use default implementation for nulls for the case when operation is
+        /// divideOrNull, intDivOrNull, moduloOrNull or positiveModuloOrNull, because it will return
+        /// null when the divisor is zero, and it is conflict with the default implementation.
+        return !division_by_nullable && !is_division_or_null;
     }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & arguments) const override
@@ -1205,8 +1213,9 @@ public:
         if (isAggregateAddition(arguments[0], arguments[1]))
         {
             if (!arguments[0]->equals(*arguments[1]))
-                throw Exception("Cannot add aggregate states of different functions: "
-                    + arguments[0]->getName() + " and " + arguments[1]->getName(), ErrorCodes::CANNOT_ADD_DIFFERENT_AGGREGATE_STATES);
+                throw Exception(ErrorCodes::CANNOT_ADD_DIFFERENT_AGGREGATE_STATES,
+                    "Cannot add aggregate states of different functions: {} and {}",
+                    arguments[0]->getName(), arguments[1]->getName());
 
             return arguments[0];
         }
@@ -1367,7 +1376,7 @@ public:
                                 /// So, we can check upfront possible overflow just by checking max scale used for left operand
                                 /// Note: it doesn't detect all possible overflow during big decimal division
                                 if (left.getScale() + right.getScale() > ResultDataType::maxPrecision())
-                                    throw Exception("Overflow during decimal division", ErrorCodes::DECIMAL_OVERFLOW);
+                                    throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "Overflow during decimal division");
                             }
                         }
                         ResultDataType result_type = decimalResultType<is_multiply, is_division>(left, right);
@@ -1402,13 +1411,15 @@ public:
         });
 
         if (valid)
-            return type_res;
+        {
+            if constexpr (is_division_or_null)
+                return makeNullable(type_res);
+            else
+                return type_res;
+        }
 
-        throw Exception(
-            "Illegal types " + arguments[0]->getName() +
-            " and " + arguments[1]->getName() +
-            " of arguments of function " + String(name),
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal types {} and {} of arguments of function {}",
+            arguments[0]->getName(), arguments[1]->getName(), String(name));
     }
 
     ColumnPtr executeFixedString(const ColumnsWithTypeAndName & arguments) const
@@ -1784,7 +1795,6 @@ public:
         if (division_by_nullable && !right_nullmap)
         {
             assert(right_argument.type->isNullable());
-
             bool is_const = checkColumnConst<ColumnNullable>(right_argument.column.get());
             const ColumnNullable * nullable_column = is_const ? checkAndGetColumnConstData<ColumnNullable>(right_argument.column.get())
                                                               : checkAndGetColumn<ColumnNullable>(*right_argument.column);
@@ -1792,6 +1802,65 @@ public:
             const auto & null_bytemap = nullable_column->getNullMapData();
             auto res = executeImpl2(createBlockWithNestedColumns(arguments), removeNullable(result_type), input_rows_count, &null_bytemap);
             return wrapInNullable(res, arguments, result_type, input_rows_count);
+        }
+
+        /// Process special case when operation is divideOrNull, intDivOrNull, moduloOrNull or positiveModuloOrNull.
+        if (is_division_or_null)
+        {
+            if (left_argument.column->onlyNull() || right_argument.column->onlyNull())
+            {
+                auto res = removeNullable(result_type)->createColumn();
+                res->insertManyDefaults(input_rows_count);
+                auto null_map_col = ColumnUInt8::create(input_rows_count, 1);
+                return !null_map_col->empty() ? wrapInNullable(std::move(res), std::move(null_map_col)) : makeNullable(std::move(res));
+            }
+            else if (result_type->isNullable())
+            {
+                auto null_map_col = ColumnUInt8::create(input_rows_count, 0);
+                PaddedPODArray<UInt8> & null_map_data = null_map_col->getData();
+                for (size_t i = 0; i < input_rows_count; ++i)
+                    null_map_data[i] = left_argument.column->isNullAt(i) || !right_argument.column->getBool(i);
+                auto res = executeImpl2(createBlockWithNestedColumns(arguments), removeNullable(result_type), input_rows_count, right_nullmap);
+                return !null_map_col->empty() ? wrapInNullable(res, std::move(null_map_col)) : makeNullable(res);
+            }
+        }
+
+        /// Special case - one or both arguments are IPv4
+        if (isIPv4(arguments[0].type) || isIPv4(arguments[1].type))
+        {
+            ColumnsWithTypeAndName new_arguments {
+                {
+                    isIPv4(arguments[0].type) ? castColumn(arguments[0], std::make_shared<DataTypeUInt32>()) : arguments[0].column,
+                    isIPv4(arguments[0].type) ? std::make_shared<DataTypeUInt32>() : arguments[0].type,
+                    arguments[0].name,
+                },
+                {
+                    isIPv4(arguments[1].type) ? castColumn(arguments[1], std::make_shared<DataTypeUInt32>()) : arguments[1].column,
+                    isIPv4(arguments[1].type) ? std::make_shared<DataTypeUInt32>() : arguments[1].type,
+                    arguments[1].name
+                }
+            };
+
+            return executeImpl2(new_arguments, result_type, input_rows_count, right_nullmap);
+        }
+
+        /// Special case - one or both arguments are IPv6
+        if (isIPv6(arguments[0].type) || isIPv6(arguments[1].type))
+        {
+            ColumnsWithTypeAndName new_arguments {
+                {
+                    isIPv6(arguments[0].type) ? castColumn(arguments[0], std::make_shared<DataTypeUInt128>()) : arguments[0].column,
+                    isIPv6(arguments[0].type) ? std::make_shared<DataTypeUInt128>() : arguments[0].type,
+                    arguments[0].name,
+                },
+                {
+                    isIPv6(arguments[1].type) ? castColumn(arguments[1], std::make_shared<DataTypeUInt128>()) : arguments[1].column,
+                    isIPv6(arguments[1].type) ? std::make_shared<DataTypeUInt128>() : arguments[1].type,
+                    arguments[1].name
+                }
+            };
+
+            return executeImpl2(new_arguments, result_type, input_rows_count, right_nullmap);
         }
 
         const auto * const left_generic = left_argument.type.get();
@@ -1845,51 +1914,68 @@ public:
     }
 
 #if USE_EMBEDDED_COMPILER
-    bool isCompilableImpl(const DataTypes & arguments) const override
+    bool isCompilableImpl(const DataTypes & arguments, const DataTypePtr & result_type) const override
     {
         if (2 != arguments.size())
+            return false;
+
+        if (!canBeNativeType(*arguments[0]) || !canBeNativeType(*arguments[1]) || !canBeNativeType(*result_type))
+            return false;
+
+        WhichDataType data_type_lhs(arguments[0]);
+        WhichDataType data_type_rhs(arguments[1]);
+        if ((data_type_lhs.isDateOrDate32() || data_type_lhs.isDateTime()) ||
+            (data_type_rhs.isDateOrDate32() || data_type_rhs.isDateTime()))
             return false;
 
         return castBothTypes(arguments[0].get(), arguments[1].get(), [&](const auto & left, const auto & right)
         {
             using LeftDataType = std::decay_t<decltype(left)>;
             using RightDataType = std::decay_t<decltype(right)>;
-            if constexpr (std::is_same_v<DataTypeFixedString, LeftDataType> || std::is_same_v<DataTypeFixedString, RightDataType> || std::is_same_v<DataTypeString, LeftDataType> || std::is_same_v<DataTypeString, RightDataType>)
-                return false;
-            else
+            if constexpr (!std::is_same_v<DataTypeFixedString, LeftDataType> &&
+                !std::is_same_v<DataTypeFixedString, RightDataType> &&
+                !std::is_same_v<DataTypeString, LeftDataType> &&
+                !std::is_same_v<DataTypeString, RightDataType>)
             {
                 using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
                 using OpSpec = Op<typename LeftDataType::FieldType, typename RightDataType::FieldType>;
-                return !std::is_same_v<ResultDataType, InvalidType> && !IsDataTypeDecimal<ResultDataType> && OpSpec::compilable;
+                if constexpr (!std::is_same_v<ResultDataType, InvalidType> && !IsDataTypeDecimal<ResultDataType> && OpSpec::compilable)
+                    return true;
             }
+            return false;
         });
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const ValuesWithType & arguments, const DataTypePtr & result_type) const override
     {
-        assert(2 == types.size() && 2 == values.size());
+        assert(2 == arguments.size());
 
         llvm::Value * result = nullptr;
-        castBothTypes(types[0].get(), types[1].get(), [&](const auto & left, const auto & right)
+        castBothTypes(arguments[0].type.get(), arguments[1].type.get(), [&](const auto & left, const auto & right)
         {
             using LeftDataType = std::decay_t<decltype(left)>;
             using RightDataType = std::decay_t<decltype(right)>;
-            if constexpr (!std::is_same_v<DataTypeFixedString, LeftDataType> && !std::is_same_v<DataTypeFixedString, RightDataType> && !std::is_same_v<DataTypeString, LeftDataType> && !std::is_same_v<DataTypeString, RightDataType>)
+            if constexpr (!std::is_same_v<DataTypeFixedString, LeftDataType> &&
+                !std::is_same_v<DataTypeFixedString, RightDataType> &&
+                !std::is_same_v<DataTypeString, LeftDataType> &&
+                !std::is_same_v<DataTypeString, RightDataType>)
             {
                 using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
                 using OpSpec = Op<typename LeftDataType::FieldType, typename RightDataType::FieldType>;
                 if constexpr (!std::is_same_v<ResultDataType, InvalidType> && !IsDataTypeDecimal<ResultDataType> && OpSpec::compilable)
                 {
                     auto & b = static_cast<llvm::IRBuilder<> &>(builder);
-                    auto type = std::make_shared<ResultDataType>();
-                    auto * lval = nativeCast(b, types[0], values[0], type);
-                    auto * rval = nativeCast(b, types[1], values[1], type);
+                    auto * lval = nativeCast(b, arguments[0], result_type);
+                    auto * rval = nativeCast(b, arguments[1], result_type);
                     result = OpSpec::compile(b, lval, rval, std::is_signed_v<typename ResultDataType::FieldType>);
+
                     return true;
                 }
             }
+
             return false;
         });
+
         return result;
     }
 #endif
@@ -2149,9 +2235,9 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() != 2)
-            throw Exception(
-                "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) + ", should be 2",
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Number of arguments for function {} doesn't match: passed {}, should be 2",
+                getName(), arguments.size());
         return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments>::getReturnTypeImplStatic(arguments, context);
     }
 

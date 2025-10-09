@@ -12,7 +12,7 @@
 #include <QueryPipeline/Pipe.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Storages/Streaming/StorageStream.h>
+#include <Storages/Stream/StorageStream.h>
 #include <Storages/TableLockHolder.h>
 
 #include <Columns/FilterDescription.h>
@@ -41,6 +41,15 @@ using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
 
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
+
+/// proton : starts
+namespace Streaming
+{
+struct EmitParams;
+}
+
+bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query);
+/// proton : ends
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */
@@ -98,12 +107,12 @@ public:
     BlockIO execute() override;
 
     /// Builds QueryPlan for current query.
-    virtual void buildQueryPlan(QueryPlan & query_plan) override;
+    void buildQueryPlan(QueryPlan & query_plan) override;
 
     bool ignoreLimits() const override { return options.ignore_limits; }
     bool ignoreQuota() const override { return options.ignore_quota; }
 
-    virtual void ignoreWithTotals() override;
+    void ignoreWithTotals() override;
 
     ASTPtr getQuery() const { return query_ptr; }
 
@@ -119,10 +128,12 @@ public:
     bool hasAggregation() const override { return query_analyzer->hasAggregation(); }
     bool isStreamingQuery() const override;
     Streaming::DataStreamSemanticEx getDataStreamSemantic() const override { return data_stream_semantic_pair.output_data_stream_semantic; }
+    void assertNoNonDeterministicFunctions(const Names & required, std::string_view msg_prefix) const override;
     std::set<String> getGroupByColumns() const override;
     bool hasStreamingWindowFunc() const override;
     Streaming::WindowType windowType() const;
     bool hasStreamingGlobalAggregation() const override;
+    bool isConsistentWithoutCheckpoint() const override;
     /// proton: ends
 
     static void addEmptySourceToQueryPlan(
@@ -131,6 +142,13 @@ public:
     Names getRequiredColumns() { return required_columns; }
 
     bool supportsTransactions() const override { return true; }
+
+    FilterDAGInfoPtr getAdditionalQueryInfo() const { return additional_filter_info; }
+
+    static SortDescription getSortDescription(const ASTSelectQuery & query, ContextPtr context);
+    static UInt64 getLimitForSorting(const ASTSelectQuery & query, ContextPtr context);
+
+    static std::pair<UInt64, UInt64> getLimitLengthAndOffset(const ASTSelectQuery & query, const ContextPtr & context);
 
 private:
     InterpreterSelectQuery(
@@ -170,7 +188,7 @@ private:
     void executeMergeAggregated(QueryPlan & query_plan, bool overflow_row, bool final, bool has_grouping_sets);
     void executeTotalsAndHaving(QueryPlan & query_plan, bool has_having, const ActionsDAGPtr & expression, bool remove_filter, bool overflow_row, bool final);
     void executeHaving(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool remove_filter);
-    static void executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description);
+    void executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description, bool preserves_substream = true);
     /// FIXME should go through ActionsDAG to behave as a proper function
     void executeWindow(QueryPlan & query_plan);
     void executeOrder(QueryPlan & query_plan, InputOrderInfoPtr sorting_info);
@@ -181,24 +199,24 @@ private:
     void executeLimitBy(QueryPlan & query_plan);
     void executeLimit(QueryPlan & query_plan);
     void executeOffset(QueryPlan & query_plan);
-    static void executeProjection(QueryPlan & query_plan, const ActionsDAGPtr & expression);
+    void executeProjection(QueryPlan & query_plan, const ActionsDAGPtr & expression);
     void executeDistinct(QueryPlan & query_plan, bool before_order, Names columns, bool pre_distinct);
     void executeExtremes(QueryPlan & query_plan);
     void executeSubqueriesInSetsAndJoins(QueryPlan & query_plan);
 
-    String generateFilterActions(ActionsDAGPtr & actions, const Names & prerequisite_columns = {}) const;
-
     /// proton: starts
-    void executeLightShuffling(QueryPlan & query_plan);
-    void executeStreamingWindow(QueryPlan & query_plan);
-    void executeStreamingOrder(QueryPlan & query_plan);
+    void processEmits();
+    void clearInits();
+    bool resolveTablesAndRewriteJoin(JoinedTables & joined_tables);
+    bool analyzeRequiredColumns(const Names & required_result_column_names, JoinedTables & joined_tables, std::unique_ptr<Names> & new_required_result_column_names);
+    void executeSubstreamShuffling(QueryPlan & query_plan, const ActionsDAGPtr & expression, const Names & keys);
+    void executeLightShuffling(QueryPlan & query_plan, const ActionsDAGPtr & expression, const Names & keys);
     void executeStreamingAggregation(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool overflow_row, bool final);
+    void executeStreamingOrder(QueryPlan & query_plan);
     void executeStreamingPreLimit(QueryPlan & query_plan, bool do_not_skip_offset);
     void executeStreamingLimit(QueryPlan & query_plan);
     void executeStreamingOffset(QueryPlan & query_plan);
     void finalCheckAndOptimizeForStreamingQuery();
-    bool shouldKeepAggregateState() const;
-    void buildShufflingQueryPlan(QueryPlan & query_plan);
     void buildWatermarkQueryPlan(QueryPlan & query_plan);
     void buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan);
     void buildStreamingProcessingQueryPlanAfterJoin(QueryPlan & query_plan);
@@ -207,9 +225,9 @@ private:
     void analyzeEventPredicateAsSeekTo(const JoinedTables & joined_tables);
     void checkAndPrepareStreamingFunctions();
     void checkUDA();
-    std::vector<nlog::RecordSN> checkReplaySettingsAndGetLastSN();
-
+    std::vector<int64_t> checkReplaySettingsAndGetLastSN();
     void resolveDataStreamSemantic(const JoinedTables & joined_tables);
+    std::shared_ptr<const Streaming::EmitParams> emitParams();
     /// proton: ends
 
     enum class Modificator
@@ -238,6 +256,12 @@ private:
     ASTPtr row_policy_filter;
     FilterDAGInfoPtr filter_info;
 
+    /// For additional_filter setting.
+    FilterDAGInfoPtr additional_filter_info;
+
+    /// For "per replica" filter when multiple replicas are used
+    FilterDAGInfoPtr parallel_replicas_custom_filter_info;
+
     QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
 
     /// List of columns to read to execute the query.
@@ -246,22 +270,16 @@ private:
     Block source_header;
 
     /// proton: starts
-    /// A copy of required_columns before adding the additional ones for streaming processing
-    struct StreamingSelectAnalysisContext
-    {
-    };
-
     bool emit_version = false;
     bool has_user_defined_emit_strategy = false;
     /// Bools to tell the query properties of the `current layer` of SELECT.
     bool current_select_has_aggregates = false;
     std::optional<std::pair<JoinKind, JoinStrictness>> current_select_join_kind_and_strictness; /// Which implies having join if have value
     mutable std::optional<bool> is_streaming_query;
-    bool shuffled_before_join = false;
+    bool substream_shuffled_before_join = false;
     bool light_shuffled = false;
 
-    Streaming::EmitMode emit_mode = Streaming::EmitMode::None;
-    bool emit_repeat = false;
+    std::shared_ptr<const Streaming::EmitParams> emit_params;
 
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT
     Streaming::DataStreamSemanticPair data_stream_semantic_pair;
@@ -281,7 +299,7 @@ private:
     /// Used when we read from prepared input, not table or subquery.
     std::optional<Pipe> input_pipe;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     StorageMetadataPtr metadata_snapshot;
     StorageSnapshotPtr storage_snapshot;
 

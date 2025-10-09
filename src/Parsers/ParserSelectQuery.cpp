@@ -9,6 +9,10 @@
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
+#include <Parsers/ASTOrderByElement.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTInterpolateElement.h>
+#include <Parsers/ASTIdentifier.h>
 
 /// proton: starts
 #include <Parsers/Streaming/ParserEmitQuery.h>
@@ -72,13 +76,15 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     ParserKeyword s_rows("ROWS");
     ParserKeyword s_first("FIRST");
     ParserKeyword s_next("NEXT");
+    ParserKeyword s_interpolate("INTERPOLATE");
 
-    ParserNotEmptyExpressionList exp_list(false);
-    ParserNotEmptyExpressionList exp_list_for_with_clause(false);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(false); /// proton: starts don't allows aliases without AS keyword.
+    ParserNotEmptyExpressionList exp_list(true);
+    ParserNotEmptyExpressionList exp_list_for_with_clause(true);
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true); /// proton: starts omitting `AS` is legal in SQL standard and many 3rd-party libraries rely on this features.
     ParserExpressionWithOptionalAlias exp_elem(false);
     ParserOrderByExpressionList order_list;
     ParserGroupingSetsExpressionList grouping_sets_list;
+    ParserInterpolateExpressionList interpolate_list;
 
     ParserToken open_bracket(TokenType::OpeningRoundBracket);
     ParserToken close_bracket(TokenType::ClosingRoundBracket);
@@ -96,6 +102,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     ASTPtr having_expression;
     ASTPtr window_list;
     ASTPtr order_expression_list;
+    ASTPtr interpolate_expression_list;
     ASTPtr limit_by_length;
     ASTPtr limit_by_offset;
     ASTPtr limit_by_expression_list;
@@ -226,15 +233,6 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
 
     if (partition_by_expression_list && shuffle_by_expression_list)
         throw Exception(ErrorCodes::SYNTAX_ERROR, "'PARTITION BY' and 'SHUFFLE BY' shall not be used together");
-
-    /// For now, only support `SHUFFLE BY col1, col2, ...`, so expecting column identifier
-    /// `SHUFFLE BY const_literal` seems doesn't make sense
-    if (shuffle_by_expression_list)
-    {
-        for (const auto & elem : shuffle_by_expression_list->children)
-            if (!elem->as<ASTIdentifier>())
-                throw Exception(ErrorCodes::SYNTAX_ERROR, "'SHUFFLE BY' only support columns instead of expressions / functions");
-    }
     /// proton: ends.
 
     /// GROUP BY expr list
@@ -314,6 +312,23 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     {
         if (!order_list.parse(pos, order_expression_list, expected))
             return false;
+
+        /// if any WITH FILL parse possible INTERPOLATE list
+        if (std::any_of(order_expression_list->children.begin(), order_expression_list->children.end(),
+                [](auto & child) { return child->template as<ASTOrderByElement>()->with_fill; }))
+        {
+            if (s_interpolate.ignore(pos, expected))
+            {
+                if (open_bracket.ignore(pos, expected))
+                {
+                    if (!interpolate_list.parse(pos, interpolate_expression_list, expected))
+                        return false;
+                    if (!close_bracket.ignore(pos, expected))
+                        return false;
+                } else
+                    interpolate_expression_list = std::make_shared<ASTExpressionList>();
+            }
+        }
     }
 
     /// This is needed for TOP expression, because it can also use WITH TIES.
@@ -351,7 +366,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
         }
 
         if (limit_with_ties_occured && distinct_on_expression_list)
-            throw Exception("Can not use WITH TIES alongside LIMIT BY/DISTINCT ON", ErrorCodes::LIMIT_BY_WITH_TIES_IS_NOT_SUPPORTED);
+            throw Exception(ErrorCodes::LIMIT_BY_WITH_TIES_IS_NOT_SUPPORTED, "Can not use WITH TIES alongside LIMIT BY/DISTINCT ON");
 
         if (s_by.ignore(pos, expected))
         {
@@ -359,10 +374,10 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
             /// But there are other kind of queries like LIMIT n BY smth LIMIT m WITH TIES which are allowed.
             /// So we have to ignore WITH TIES exactly in LIMIT BY state.
             if (limit_with_ties_occured)
-                throw Exception("Can not use WITH TIES alongside LIMIT BY/DISTINCT ON", ErrorCodes::LIMIT_BY_WITH_TIES_IS_NOT_SUPPORTED);
+                throw Exception(ErrorCodes::LIMIT_BY_WITH_TIES_IS_NOT_SUPPORTED, "Can not use WITH TIES alongside LIMIT BY/DISTINCT ON");
 
             if (distinct_on_expression_list)
-                throw Exception("Can not use DISTINCT ON alongside LIMIT BY", ErrorCodes::SYNTAX_ERROR);
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "Can not use DISTINCT ON alongside LIMIT BY");
 
             limit_by_length = limit_length;
             limit_by_offset = limit_offset;
@@ -374,7 +389,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
         }
 
         if (top_length && limit_length)
-            throw Exception("Can not use TOP and LIMIT together", ErrorCodes::TOP_AND_LIMIT_TOGETHER);
+            throw Exception(ErrorCodes::TOP_AND_LIMIT_TOGETHER, "Can not use TOP and LIMIT together");
     }
     else if (s_offset.ignore(pos, expected, false))
     {
@@ -387,7 +402,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
         if (s_row.ignore(pos, expected))
         {
             if (s_rows.ignore(pos, expected))
-                throw Exception("Can not use ROW and ROWS together", ErrorCodes::ROW_AND_ROWS_TOGETHER);
+                throw Exception(ErrorCodes::ROW_AND_ROWS_TOGETHER, "Can not use ROW and ROWS together");
             offset_with_fetch_maybe = true;
         }
         else if (s_rows.ignore(pos, expected))
@@ -399,12 +414,12 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
         {
             /// OFFSET FETCH clause must exists with "ORDER BY"
             if (!order_expression_list)
-                throw Exception("Can not use OFFSET FETCH clause without ORDER BY", ErrorCodes::OFFSET_FETCH_WITHOUT_ORDER_BY);
+                throw Exception(ErrorCodes::OFFSET_FETCH_WITHOUT_ORDER_BY, "Can not use OFFSET FETCH clause without ORDER BY");
 
             if (s_first.ignore(pos, expected))
             {
                 if (s_next.ignore(pos, expected))
-                    throw Exception("Can not use FIRST and NEXT together", ErrorCodes::FIRST_AND_NEXT_TOGETHER);
+                    throw Exception(ErrorCodes::FIRST_AND_NEXT_TOGETHER, "Can not use FIRST and NEXT together");
             }
             else if (!s_next.ignore(pos, expected))
                 return false;
@@ -415,7 +430,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
             if (s_row.ignore(pos, expected))
             {
                 if (s_rows.ignore(pos, expected))
-                    throw Exception("Can not use ROW and ROWS together", ErrorCodes::ROW_AND_ROWS_TOGETHER);
+                    throw Exception(ErrorCodes::ROW_AND_ROWS_TOGETHER, "Can not use ROW and ROWS together");
             }
             else if (!s_rows.ignore(pos, expected))
                 return false;
@@ -479,7 +494,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
 
     /// WITH TIES was used without ORDER BY
     if (!order_expression_list && select_query->limit_with_ties)
-        throw Exception("Can not use WITH TIES without ORDER BY", ErrorCodes::WITH_TIES_WITHOUT_ORDER_BY);
+        throw Exception(ErrorCodes::WITH_TIES_WITHOUT_ORDER_BY, "Can not use WITH TIES without ORDER BY");
 
     /// proton: starts
     if (s_emit.ignore(pos, expected))
@@ -519,6 +534,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
     select_query->setExpression(ASTSelectQuery::Expression::LIMIT_LENGTH, std::move(limit_length));
     select_query->setExpression(ASTSelectQuery::Expression::EMIT, std::move(emit));
     select_query->setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(settings));
+    select_query->setExpression(ASTSelectQuery::Expression::INTERPOLATE, std::move(interpolate_expression_list));
     return true;
 }
 

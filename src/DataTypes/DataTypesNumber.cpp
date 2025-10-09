@@ -21,12 +21,15 @@ static DataTypePtr createNumericDataType(const ASTPtr & arguments/* proton: star
         if (std::is_integral_v<T>)
         {
             if (arguments->children.size() > 1)
-                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "{} data type family must not have more than one argument - display width", TypeName<T>);
+                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                                "{} data type family must not have more than one argument - display width", TypeName<T>);
         }
         else
         {
             if (arguments->children.size() > 2)
-                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "{} data type family must not have more than two arguments - total number of digits and number of digits following the decimal point", TypeName<T>);
+                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                                "{} data type family must not have more than two arguments - total number "
+                                "of digits and number of digits following the decimal point", TypeName<T>);
         }
     }
     return std::make_shared<DataTypeNumber<T>>();
@@ -121,5 +124,22 @@ void registerDataTypeNumbers(DataTypeFactory & factory)
     factory.registerClickHouseAlias("DOUBLE", "double");
     /// proton: ends
 }
+
+/// Explicit template instantiations.
+template class DataTypeNumber<UInt8>;
+template class DataTypeNumber<UInt16>;
+template class DataTypeNumber<UInt32>;
+template class DataTypeNumber<UInt64>;
+template class DataTypeNumber<Int8>;
+template class DataTypeNumber<Int16>;
+template class DataTypeNumber<Int32>;
+template class DataTypeNumber<Int64>;
+template class DataTypeNumber<Float32>;
+template class DataTypeNumber<Float64>;
+
+template class DataTypeNumber<UInt128>;
+template class DataTypeNumber<Int128>;
+template class DataTypeNumber<UInt256>;
+template class DataTypeNumber<Int256>;
 
 }

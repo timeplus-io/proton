@@ -1,0 +1,140 @@
+description: |
+ Test external stream with one_message_per_row setting
+ Main steps:
+  1. Create external stream with settings one_message_per_row
+  2. Check count() and _tp_sn on stream query
+  3. Check count() and _tp_sn on table query
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  # create topic
+  - type: kafka
+    name: delete
+    topic: test
+
+  - type: kafka
+    name: create
+    topic: test
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 2
+
+  # create external stream
+  - type: query
+    sql: drop stream if exists test32_external
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create external stream test32_external
+        (
+          id int,
+          value string
+        )
+        settings type = 'kafka', brokers = 'k1:9092', topic = 'test', data_format='JSONEachRow', one_message_per_row=true;
+  - type: wait
+    time: 2
+
+  # query and insert
+  - type: stream
+    name: external-stream-11-1
+    query: select count(*) from test32_external
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: external-stream-11-2
+    query: select _tp_sn, id, value from test32_external
+    schema:
+      - name: _tp_sn
+        type: int64
+      - name: id
+        type: int32
+      - name: value
+        type: string
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test32_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [1, 'aaaa']
+      - [2, 'bbbb']
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test32_external(id, value) values
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    inputs:
+      - [3, 'cccc']
+      - [4, 'dddd']
+      - [5, 'eeee']
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: external-stream-11-3
+    query: select count(*) from table(test32_external)
+    schema:
+      - name: count()
+        type: uint64
+  - type: wait
+    time: 1
+
+  - type: stream
+    name: external-stream-11-4
+    query: select _tp_sn, id, value from table(test32_external)
+    schema:
+      - name: _tp_sn
+        type: int64
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: check
+    target_name: external-stream-11-1
+    expected_result:
+      - [2]
+      - [5]
+
+  - type: check
+    target_name: external-stream-11-2
+    expected_result:
+      - [0, 1, 'aaaa']
+      - [1, 2, 'bbbb']
+      - [2, 3, 'cccc']
+      - [3, 4, 'dddd']
+      - [4, 5, 'eeee']
+
+  - type: check
+    target_name: external-stream-11-3
+    expected_result:
+      - [5]
+
+  - type: check
+    target_name: external-stream-11-4
+    expected_result:
+      - [0, 1, 'aaaa']
+      - [1, 2, 'bbbb']
+      - [2, 3, 'cccc']
+      - [3, 4, 'dddd']
+      - [4, 5, 'eeee']

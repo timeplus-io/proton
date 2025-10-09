@@ -11,7 +11,7 @@ I=0
 while [[ $counter -lt $retries ]]; do
     I=$((I + 1))
     TYPE=$(perl -e "print 'array(' x $I; print 'uint8'; print ')' x $I")
-    ${CLICKHOUSE_CLIENT} --prefer_localhost_replica=0 --max_parser_depth 1000000 --query "SELECT * FROM remote('127.0.0.{1,2}', generateRandom('x $TYPE', 1, 1, 1)) LIMIT 1 FORMAT Null" 2>&1 | grep -q -F 'Maximum parse depth' && break;
+    ${CLICKHOUSE_CLIENT} --prefer_localhost_replica=0 --max_parser_depth 1000000 --query "SELECT * FROM remote('127.0.0.{1,2}', generate_random('x $TYPE', 1, 1, 1)) LIMIT 1 FORMAT Null" 2>&1 | grep -q -F 'Maximum parse depth' && break;
     ((++counter))
 done
 

@@ -1,0 +1,86 @@
+tags:
+  - emit changelog
+  - global aggr
+  - not_supported_hybrid # https://github.com/timeplus-io/proton-enterprise/issues/10137
+
+description: Emit global/window aggr results changelog periodic
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: drop stream if exists test13_multishard_8;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_multishard_8 (i int, k string) settings shards=3;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: multishards-3-1
+    node: [p1]
+    query: select min(i), max(i), count(), _tp_delta from test13_multishard_8 emit changelog periodic 1s;
+    schema:
+      - name: min(i)
+        type: int32
+      - name: max(i)
+        type: int32
+      - name: count()
+        type: uint64
+      - name: _tp_delta
+        type: int8
+
+  - type: stream
+    name: multishards-3-2
+    node: [p1]
+    query: select i, count(), _tp_delta from test13_multishard_8 group by i emit changelog periodic 1s;
+    schema:
+      - name: i
+        type: int32
+      - name: count()
+        type: uint64
+      - name: _tp_delta
+        type: int8
+
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: insert into test13_multishard_8(i, k, _tp_time) values (1, 'k1', '2024-01-24 10:00:00');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    sql: insert into test13_multishard_8(i, k, _tp_time) values (1, 'k2', '2024-01-24 10:00:05');
+
+  - type: check
+    target_name: multishards-3-1
+    expected_result:
+    - [0, 0, 0, -1]
+    - [1, 1, 1, 1]
+    - [1, 1, 1, -1]
+    - [1, 1, 2, 1]
+
+  - type: check
+    target_name: multishards-3-2
+    expected_result:
+    - [1, 1, 1]
+    - [1, 1, -1]
+    - [1, 2, 1]

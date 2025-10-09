@@ -14,7 +14,7 @@ class HTTPServerConnectionFactory : public TCPServerConnectionFactory
 public:
     HTTPServerConnectionFactory(ContextPtr context, Poco::Net::HTTPServerParams::Ptr params, HTTPRequestHandlerFactoryPtr factory);
 
-    Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket, TCPServer & tcp_server) override;
+    std::shared_ptr<Poco::Net::TCPServerConnection> createConnection(const Poco::Net::StreamSocket & socket, TCPServer & tcp_server) override;
 
 private:
     ContextPtr context;

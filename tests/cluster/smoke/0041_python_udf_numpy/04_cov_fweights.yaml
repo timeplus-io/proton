@@ -1,0 +1,77 @@
+tags:
+  - uda
+
+description: Test covering python uda test on numpy.cov function - cocoviance matrix
+
+steps:
+  - type: query
+    sql: drop stream if exists uda_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream uda_stream (x float, y float, fw int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION getCovFweights(x float, y float, fw int) RETURNS array(array(float)) LANGUAGE PYTHON AS $$
+      import pickle
+      import numpy as np
+      class getCovFweights:
+          has_customized_emit = False
+
+          def __init__(self):
+              self.covf = [[]]
+
+          def serialize(self):
+              data = {}
+              data['covf'] = self.covf
+              return pickle.dumps(data)
+
+          def deserialize(self, data):
+              data = pickle.loads(data)
+              self.covf = data['covf']
+
+          def merge(self, other):
+              pass
+
+          def process(self, xs, ys, fws):
+              f = np.array(fws)
+              if len(f) > 0 and f[0] > 0:
+                  arr = np.stack((xs, ys))
+                  tmp_covf = np.cov(arr, fweights=f)
+                  self.covf = tmp_covf.tolist()
+
+          def finalize(self):
+              return self.covf
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf2-4-1
+    type: stream
+    query: select getCovFweights(x, y, fw) as res from uda_stream;
+    schema:
+      - name: res
+        type: array(array(float32))
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into uda_stream(x, y, fw) values (0, 2, 1) (1, 1, 2) (2, 0, 1);
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into uda_stream(x, y, fw) values (-2.1, 3, 1) (-1, 1.1, 2) (4.3, 0.12, 3);
+
+  - type: check
+    target_name: python-udf2-4-1
+    expected_result:
+      - [[[0.6666666666666666, -0.6666666666666666], [-0.6666666666666666, 0.6666666666666666]]]
+      - [[[9.794666666666666, -3.021333333333333], [-3.021333333333333, 1.2621866666666668]]]

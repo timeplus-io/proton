@@ -1,0 +1,41 @@
+name: multishards7
+description: Tests covering the multishard stream query smoke cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+    - type: query
+      sql: |
+        CREATE OR REPLACE FUNCTION test_13_7_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+          function test_13_7_add_five(value) {
+              for (let i = 0; i < value.length; i++) {
+                  value[i] = value[i] + 5;
+              }
+              return value;
+          }
+        $$;
+
+teardown:
+  scope: suite
+  steps:
+    - type: query
+      sql: drop function if exists test_13_7_add_five;
+
+    - type: query
+      sql: |
+        drop view if exists test13_view2_7;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: |
+        drop view if exists test13_view1_7;
+
+    - type: wait
+      time: 1
+
+    - type: query
+      sql: |
+        drop stream if exists test13_subq_7;

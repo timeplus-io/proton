@@ -30,10 +30,13 @@ void registerStorageExecutable(StorageFactory & factory);
 #if USE_AWS_S3
 void registerStorageS3(StorageFactory & factory);
 void registerStorageCOS(StorageFactory & factory);
+void registerStorageHudi(StorageFactory & factory);
+void registerStorageDeltaLake(StorageFactory & factory);
+void registerStorageIceberg(StorageFactory & factory);
 #endif
 
-#if USE_ROCKSDB
-void registerStorageEmbeddedRocksDB(StorageFactory & factory);
+#if USE_MONGODB
+void registerStorageMongoDB(StorageFactory & factory);
 #endif
 
 /// proton: starts
@@ -69,18 +72,21 @@ void registerStorages()
 
     #if USE_AWS_S3
     registerStorageS3(factory);
-    registerStorageCOS(factory);
-    #endif
+    ////registerStorageCOS(factory);
+    ///registerStorageHudi(factory);
+    ///registerStorageDeltaLake(factory);
+    ///registerStorageIceberg(factory);
+#endif
+
+#if USE_MONGODB
+    registerStorageMongoDB(factory);
+#endif
 
     /// proton: starts
     /// #if USE_FILELOG
     /// registerStorageFileLog(factory);
     /// #endif
     /// proton: ends
-
-    #if USE_ROCKSDB
-    registerStorageEmbeddedRocksDB(factory);
-    #endif
 }
 
 }

@@ -70,25 +70,6 @@ static AggregatingSortedAlgorithm::ColumnsDefinition defineColumns(
     return def;
 }
 
-static MutableColumns getMergedColumns(const Block & header, const AggregatingSortedAlgorithm::ColumnsDefinition & def)
-{
-    MutableColumns columns;
-    columns.resize(header.columns());
-
-    for (const auto & desc : def.columns_to_simple_aggregate)
-    {
-        const auto & type = desc.nested_type ? desc.nested_type
-                                       : desc.real_type;
-        columns[desc.column_number] = type->createColumn();
-    }
-
-    for (size_t i = 0; i < columns.size(); ++i)
-        if (!columns[i])
-            columns[i] = header.getByPosition(i).type->createColumn();
-
-    return columns;
-}
-
 /// Remove constants and LowCardinality for SimpleAggregateFunction
 static void preprocessChunk(Chunk & chunk, const AggregatingSortedAlgorithm::ColumnsDefinition & def)
 {
@@ -117,7 +98,7 @@ static void postprocessChunk(Chunk & chunk, const AggregatingSortedAlgorithm::Co
         {
             const auto & from_type = desc.nested_type;
             const auto & to_type = desc.real_type;
-            columns[desc.column_number] = recursiveTypeConversion(columns[desc.column_number], from_type, to_type);
+            columns[desc.column_number] = recursiveLowCardinalityTypeConversion(columns[desc.column_number], from_type, to_type);
         }
     }
 
@@ -126,9 +107,24 @@ static void postprocessChunk(Chunk & chunk, const AggregatingSortedAlgorithm::Co
 
 
 AggregatingSortedAlgorithm::AggregatingMergedData::AggregatingMergedData(
-    MutableColumns columns_, UInt64 max_block_size_, ColumnsDefinition & def_)
-    : MergedData(std::move(columns_), false, max_block_size_), def(def_)
+    UInt64 max_block_size_rows_,
+    UInt64 max_block_size_bytes_,
+    ColumnsDefinition & def_)
+    : MergedData(false, max_block_size_rows_, max_block_size_bytes_), def(def_)
 {
+}
+
+void AggregatingSortedAlgorithm::AggregatingMergedData::initialize(const DB::Block & header, const IMergingAlgorithm::Inputs & inputs)
+{
+    MergedData::initialize(header, inputs);
+
+    for (const auto & desc : def.columns_to_simple_aggregate)
+    {
+        const auto & type = desc.nested_type ? desc.nested_type
+                                             : desc.real_type;
+        columns[desc.column_number] = type->createColumn();
+    }
+
     initAggregateDescription();
 
     /// Just to make startGroup() simpler.
@@ -188,7 +184,7 @@ void AggregatingSortedAlgorithm::AggregatingMergedData::finishGroup()
 void AggregatingSortedAlgorithm::AggregatingMergedData::addRow(SortCursor & cursor)
 {
     if (!is_group_started)
-        throw Exception("Can't add a row to the group because it was not started.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't add a row to the group because it was not started.");
 
     for (auto & desc : def.columns_to_aggregate)
         desc.column->insertMergeFrom(*cursor->all_columns[desc.column_number], cursor->getRow());
@@ -203,7 +199,7 @@ void AggregatingSortedAlgorithm::AggregatingMergedData::addRow(SortCursor & curs
 Chunk AggregatingSortedAlgorithm::AggregatingMergedData::pull()
 {
     if (is_group_started)
-        throw Exception("Can't pull chunk because group was not finished.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't pull chunk because group was not finished.");
 
     auto chunk = MergedData::pull();
     postprocessChunk(chunk, def);
@@ -224,15 +220,21 @@ void AggregatingSortedAlgorithm::AggregatingMergedData::initAggregateDescription
 
 
 AggregatingSortedAlgorithm::AggregatingSortedAlgorithm(
-    const Block & header_, size_t num_inputs, SortDescription description_, size_t max_block_size)
+    const Block & header_,
+    size_t num_inputs,
+    SortDescription description_,
+    size_t max_block_size_rows_,
+    size_t max_block_size_bytes_)
     : IMergingAlgorithmWithDelayedChunk(header_, num_inputs, description_)
     , columns_definition(defineColumns(header_, description_))
-    , merged_data(getMergedColumns(header_, columns_definition), max_block_size, columns_definition)
+    , merged_data(max_block_size_rows_, max_block_size_bytes_, columns_definition)
 {
 }
 
 void AggregatingSortedAlgorithm::initialize(Inputs inputs)
 {
+    merged_data.initialize(header, inputs);
+
     for (auto & input : inputs)
         if (input.chunk)
             preprocessChunk(input.chunk, columns_definition);

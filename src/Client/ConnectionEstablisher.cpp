@@ -19,12 +19,12 @@ namespace ErrorCodes
 }
 
 ConnectionEstablisher::ConnectionEstablisher(
-    IConnectionPool * pool_,
+    ConnectionPoolPtr pool_,
     const ConnectionTimeouts * timeouts_,
-    const Settings * settings_,
-    Poco::Logger * log_,
+    const Settings & settings_,
+    LoggerPtr log_,
     const QualifiedTableName * table_to_check_)
-    : pool(pool_), timeouts(timeouts_), settings(settings_), log(log_), table_to_check(table_to_check_), is_finished(false)
+    : pool(std::move(pool_)), timeouts(timeouts_), settings(settings_), log(log_), table_to_check(table_to_check_), is_finished(false)
 {
 }
 
@@ -59,31 +59,29 @@ void ConnectionEstablisher::run(ConnectionEstablisher::TryResult & result, std::
         if (table_status_it == status_response.table_states_by_id.end())
         {
             /// proton: starts
-            fail_message = fmt::format("There is no stream {}.{} on server: {}",
-                backQuote(table_to_check->database), backQuote(table_to_check->table), result.entry->getDescription());
+            LOG_WARNING(LogToStr(fail_message, log), "There is no stream {}.{} on server: {}",
+                        backQuote(table_to_check->database), backQuote(table_to_check->table), result.entry->getDescription());
             /// proton: ends
-            LOG_WARNING(log, fmt::runtime(fail_message));
             ProfileEvents::increment(ProfileEvents::DistributedConnectionMissingTable);
             return;
         }
 
         result.is_usable = true;
 
-        UInt64 max_allowed_delay = settings ? UInt64(settings->max_replica_delay_for_distributed_queries) : 0;
+        const UInt64 max_allowed_delay = settings.max_replica_delay_for_distributed_queries;
         if (!max_allowed_delay)
         {
             result.is_up_to_date = true;
             return;
         }
 
-        UInt32 delay = table_status_it->second.absolute_delay;
-
+        const UInt32 delay = table_status_it->second.absolute_delay;
         if (delay < max_allowed_delay)
             result.is_up_to_date = true;
         else
         {
             result.is_up_to_date = false;
-            result.staleness = delay;
+            result.delay = delay;
 
             /// proton: starts
             LOG_TRACE(log, "Server {} has unacceptable replica delay for stream {}.{}: {}", result.entry->getDescription(), table_to_check->database, table_to_check->table, delay);
@@ -110,12 +108,12 @@ void ConnectionEstablisher::run(ConnectionEstablisher::TryResult & result, std::
 #if defined(OS_LINUX)
 
 ConnectionEstablisherAsync::ConnectionEstablisherAsync(
-    IConnectionPool * pool_,
+    ConnectionPoolPtr pool_,
     const ConnectionTimeouts * timeouts_,
-    const Settings * settings_,
-    Poco::Logger * log_,
+    const Settings & settings_,
+    LoggerPtr log_,
     const QualifiedTableName * table_to_check_)
-    : connection_establisher(pool_, timeouts_, settings_, log_, table_to_check_)
+    : connection_establisher(std::move(pool_), timeouts_, settings_, log_, table_to_check_)
 {
     epoll.add(receive_timeout.getDescriptor());
 }

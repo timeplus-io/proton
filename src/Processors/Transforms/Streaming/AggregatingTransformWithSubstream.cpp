@@ -1,21 +1,86 @@
 #include <Processors/Transforms/Streaming/AggregatingTransformWithSubstream.h>
 
-#include <Checkpoint/CheckpointCoordinator.h>
-#include <Interpreters/Streaming/AggregatedDataMetrics.h>
+#include <Interpreters/Streaming/Aggregator/AggregatedDataMetrics.h>
+#include <Interpreters/Streaming/Aggregator/HybridAggregator/HybridAggregatorParams.h>
+#include <Interpreters/Streaming/Substream/HybridSubstreamHashMap.h>
+#include <Interpreters/Streaming/Substream/MemorySubstreamHashMap.h>
 #include <Processors/Transforms/convertToChunk.h>
 
-namespace DB
+namespace DB::Streaming
 {
-namespace Streaming
-{
+/// The life cycles of the following objects need to be maintained carefully for correct memory recycling during dtor.
+/// 1. AggregatingTransformWithSubstream
+/// 2. AggregatingTransformParams
+/// 3. IAggregator
+/// 4. SubstreamHashMap<SubstreamAggregatedDataPtr>
+/// 5. IAggregatorDataVariants
+///
+/// The current references directions are
+///  AggregatingTransformWithSubstream -> AggregatingTransformParams -> IAggregator
+///                                    -> SubstreamHashMap<SubstreamAggregatedDataPtr> -> IAggregatedDataVariants
+/// So the current dtor sequence is the reverse order of the above sequence which are good.
+/// Please note, during the dtor of IAggregatorDataVariants, it may reference IAggregator
 AggregatingTransformWithSubstream::AggregatingTransformWithSubstream(
-    Block header, AggregatingTransformParamsPtr params_, const String & log_name, ProcessorID pid_)
+    Block header, AggregatingTransformParamsPtr params_, size_t id, const String & log_name, ProcessorID pid_)
     : IProcessor({std::move(header)}, {params_->getHeader()}, pid_)
     , params(std::move(params_))
-    , log(&Poco::Logger::get(log_name))
-    , key_columns(params->params.keys_size)
-    , aggregate_columns(params->params.aggregates_size)
+    , transform_id(id)
+    , key_columns(params->params->keys_size)
+    , aggregate_columns(params->params->aggregates_size)
+    , last_log_ts(MonotonicMilliseconds::now())
+    , logger(getLogger(log_name))
 {
+    initSubstreamHashMap();
+}
+
+void AggregatingTransformWithSubstream::initSubstreamHashMap()
+{
+    auto value_serializer = [](const void * value, WriteBuffer & wb) {
+        const auto & substream_ctx = *reinterpret_cast<const ValueType *>(value);
+        substream_ctx->serialize(wb);
+        return ErrorCodes::OK;
+    };
+
+    auto value_deserializer = [this](void * value, ReadBuffer & rb) {
+        auto & substream_ctx = *reinterpret_cast<ValueType *>(value);
+        substream_ctx = std::make_shared<SubstreamAggregatedData>(params->aggregatorType(), this);
+        initSubstreamContext(substream_ctx);
+
+        substream_ctx->deserialize(rb);
+        /// In case when for we had global aggregated some data, but done checkpoint request before finalizing
+        if (substream_ctx->rows_since_last_finalization > 0) [[unlikely]]
+            LOG_WARNING(
+                logger,
+                "Last checkpoint state don't be finalized in substream_id={} transform_id={}, rows_since_last_finalization={}",
+                substream_ctx->id,
+                transform_id,
+                substream_ctx->rows_since_last_finalization);
+
+        return ErrorCodes::OK;
+    };
+
+    switch (params->params->aggregatorType())
+    {
+        case AggregatorType::Memory:
+        {
+            substream_aggregates_data = std::make_unique<Streaming::MemorySubstreamHashMap<ValueType>>(
+                std::move(value_serializer), std::move(value_deserializer));
+            return;
+        }
+        case AggregatorType::Hybrid:
+        {
+            const auto & hybrid_params = std::static_pointer_cast<HybridAggregatorParams>(params->params);
+            substream_aggregates_data = std::make_unique<Streaming::HybridSubstreamHashMap<ValueType>>(
+                fmt::format("{}-{}_substream", hybrid_params->spill_dir_path, transform_id),
+                hybrid_params->max_hot_key_count,
+                std::move(value_serializer),
+                std::move(value_deserializer),
+                logger);
+            return;
+        }
+    }
+
+    UNREACHABLE();
 }
 
 IProcessor::Status AggregatingTransformWithSubstream::prepare()
@@ -82,16 +147,17 @@ void AggregatingTransformWithSubstream::work()
         setAggregatedResult(res);
         /// Remember to reset `read_current_chunk`
         read_current_chunk = false;
+        logAggregatingMetrics();
         return;
     }
 
-    Int64 start_ns = MonotonicNanoseconds::now();
+    Stopwatch stopwatch;
     auto chunk_bytes = current_chunk.bytes();
     metrics.processed_bytes += chunk_bytes;
 
     if (likely(!is_consume_finished))
     {
-        SubstreamContextPtr substream_ctx = getOrCreateSubstreamContext(current_chunk.getSubstreamID());
+        SubstreamAggregatedDataPtr substream_ctx = getOrCreateSubstreamContext(current_chunk.getSubstreamID());
         if (num_rows > 0)
         {
             substream_ctx->addRowCount(num_rows);
@@ -105,10 +171,12 @@ void AggregatingTransformWithSubstream::work()
     /// Remember to reset `read_current_chunk`
     read_current_chunk = false;
 
-    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    metrics.processing_time_ns += stopwatch.elapsedNanoseconds();
+
+    logAggregatingMetrics();
 }
 
-void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamContextPtr & substream_ctx)
+void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamAggregatedDataPtr & substream_ctx)
 {
     bool done = false, need_finalization = false;
 
@@ -117,6 +185,20 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         assert(substream_ctx);
         if (std::tie(done, need_finalization) = executeOrMergeColumns(chunk, substream_ctx); done)
             is_consume_finished = true;
+    }
+    else
+    {
+        /// MarkSource is always generating the historical data start / end mark in a separate and empty chunk
+        if (!backfill_done)
+        {
+            if (!backfill_started)
+                backfill_started |= chunk.isHistoricalDataStart();
+            else
+                backfill_done |= chunk.isHistoricalDataEnd();
+        }
+
+        /// We cannot propagate them historical data start / end mark to downstream since they are not valid anymore after aggregating.
+        chunk.clearHistoricalDataStartAndEnd();
     }
 
     /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
@@ -143,28 +225,9 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         Chunk res{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()};
         setAggregatedResult(res);
     }
-
-    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
-    {
-        auto start = MonotonicMilliseconds::now();
-        AggregatedDataMetrics aggregated_data_metrics;
-        for (const auto & [_, ctx] : substream_contexts)
-            params->aggregator.updateMetrics(ctx->variants, aggregated_data_metrics);
-        auto end = MonotonicMilliseconds::now();
-
-        LOG_INFO(
-            log,
-            "Took {} milliseconds to log metrics. Substream metrics: total_substream_count={} hash_buffer_bytes={}; Aggregated data metrics: {}",
-            end - start,
-            substream_contexts.size(),
-            (sizeof(substream_contexts) + substream_contexts.size() * (sizeof(SubstreamContextPtr) + sizeof(SubstreamContext))),
-            aggregated_data_metrics.string());
-
-        last_log_ts = end;
-    }
 }
 
-void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(const SubstreamContextPtr & substream_ctx)
+void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(const SubstreamAggregatedDataPtr & substream_ctx)
 {
     assert(substream_ctx);
     if (!hasAggregatedResult())
@@ -172,10 +235,8 @@ void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(
         Chunk res{getOutputs().front().getHeader().getColumns(), 0};
         if (substream_ctx->finalized_watermark != INVALID_WATERMARK)
         {
-            auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setSubstreamID(substream_ctx->id);
-            chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-            res.setChunkContext(std::move(chunk_ctx));
+            res.setSubstreamID(substream_ctx->id);
+            res.setWatermark(substream_ctx->finalized_watermark);
         }
         setAggregatedResult(res);
     }
@@ -185,12 +246,39 @@ void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(
     clearExpiredState(substream_ctx->finalized_watermark, substream_ctx);
 }
 
-void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
+void AggregatingTransformWithSubstream::logAggregatingMetrics()
+{
+    if (MonotonicMilliseconds::now() - last_log_ts < log_metrics_interval_ms)
+        return;
+
+    auto start = MonotonicMilliseconds::now();
+    AggregatedDataMetrics aggregated_data_metrics;
+    substream_aggregates_data->forEachKeyValue(
+        [&, this](const auto & _, auto value) {
+            const auto & ctx = *reinterpret_cast<const SubstreamAggregatedDataPtr *>(value.getMapped());
+            ctx->variants->updateMetrics(aggregated_data_metrics, params->aggregator->totalSizeOfAggregatedStates());
+        },
+        /*inmemory=*/true);
+
+    auto end = MonotonicMilliseconds::now();
+
+    LOG_INFO(
+        logger,
+        "Took {} milliseconds to log metrics, transform_id={}. Substream metrics: {}; Inmemory aggregated data metrics: {}",
+        end - start,
+        transform_id,
+        substream_aggregates_data->metricsString(),
+        aggregated_data_metrics.string());
+
+    last_log_ts = end;
+}
+
+void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const SubstreamAggregatedDataPtr & substream_ctx)
 {
     assert(substream_ctx);
 
     size_t rows = chunk.rows();
-    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+    if (params->params->group_by == IAggregatorParams::GroupBy::UserDefined)
     {
         /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause emitted_version+1
         /// each emit only has one result, therefore we can count emit times by row number
@@ -207,11 +295,11 @@ void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const Substre
     }
 }
 
-void AggregatingTransformWithSubstream::emitVersion(ChunkList & chunks, const SubstreamContextPtr & substream_ctx)
+void AggregatingTransformWithSubstream::emitVersion(ChunkList & chunks, const SubstreamAggregatedDataPtr & substream_ctx)
 {
     assert(substream_ctx);
 
-    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
+    if (params->params->group_by == IAggregatorParams::GroupBy::UserDefined)
     {
         for (auto & chunk : chunks)
         {
@@ -236,7 +324,7 @@ void AggregatingTransformWithSubstream::emitVersion(ChunkList & chunks, const Su
 void AggregatingTransformWithSubstream::setAggregatedResult(Chunk & chunk)
 {
     if (hasAggregatedResult())
-        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Aggregated chunks was already set.");
 
     aggregated_chunks.emplace_back(std::move(chunk));
 }
@@ -244,37 +332,69 @@ void AggregatingTransformWithSubstream::setAggregatedResult(Chunk & chunk)
 void AggregatingTransformWithSubstream::setAggregatedResult(ChunkList & chunks)
 {
     if (hasAggregatedResult())
-        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Aggregated chunks was already set.");
 
+    /// If we have multiple chunks, we need to make sure they have the same substream_id (last chunk must have substream_id)
+    if (chunks.size() > 1)
+    {
+        assert(chunks.back().hasChunkContext());
+        const auto & substream_id = chunks.back().getSubstreamID();
+        for (auto & chunk : chunks)
+            chunk.setSubstreamID(substream_id);
+    }
     aggregated_chunks.swap(chunks);
 }
 
-std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
+std::pair<size_t, size_t> AggregatingTransformWithSubstream::chunksAndRowsOfAggregateResults() const noexcept
 {
-    assert(substream_ctx);
+    size_t rows = 0;
+    for (const auto & chunk : aggregated_chunks)
+        rows += chunk.rows();
+
+    return {aggregated_chunks.size(), rows};
+}
+
+std::pair<bool, bool>
+AggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamAggregatedDataPtr & substream_ctx)
+{
+    chassert(substream_ctx);
 
     /// When the workflow reaches here, the upstream (WatermarkTransformWithSubstream) already splits data
     /// according to partition keys
     auto num_rows = chunk.getNumRows();
+    auto columns = chunk.detachColumns();
 
-    assert(!params->only_merge && !no_more_keys);
+    /// A optimization for emit only updates/changes, caching processed key columns since last finalization (acquired \variants_mutex)
+    if (keysCacheEnabled(substream_ctx))
+    {
+        auto keys = params->aggregator->materializeKeyColumns(columns, key_columns, substream_ctx->variants->isLowCardinality());
+        substream_ctx->processed_keys_columns.emplace_back(std::move(keys));
+    }
 
-    return params->aggregator.executeOnBlock(
-        chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns);
+    if (retractEnabled(substream_ctx))
+        return params->aggregator->executeAndRetractOnBlock(
+            std::move(columns), 0, num_rows, *substream_ctx->variants, key_columns, aggregate_columns, backfilling());
+    else
+        return params->aggregator->executeOnBlock(
+            std::move(columns), 0, num_rows, *substream_ctx->variants, key_columns, aggregate_columns, backfilling());
 }
 
-SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
+SubstreamAggregatedDataPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
-    auto iter = substream_contexts.find(id);
-    if (iter == substream_contexts.end())
-        return substream_contexts.emplace(id, std::make_shared<SubstreamContext>(this, id)).first->second;
+    auto [value, inserted] = substream_aggregates_data->emplaceKey(id);
+    auto & substream_ctx = *reinterpret_cast<ValueType *>(value);
+    if (inserted)
+    {
+        substream_ctx = std::make_shared<SubstreamAggregatedData>(params->aggregatorType(), this, id);
+        initSubstreamContext(substream_ctx);
+    }
 
-    return iter->second;
+    return substream_ctx;
 }
 
 bool AggregatingTransformWithSubstream::removeSubstreamContext(const SubstreamID & id)
 {
-    return substream_contexts.erase(id);
+    return substream_aggregates_data->removeKey(id);
 }
 
 IProcessor::Status AggregatingTransformWithSubstream::preparePushToOutput()
@@ -285,77 +405,4 @@ IProcessor::Status AggregatingTransformWithSubstream::preparePushToOutput()
     return Status::PortFull;
 }
 
-void AggregatingTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
-{
-    ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        writeIntBinary(substream_contexts.size(), wb);
-        for (const auto & [id, substream_ctx] : substream_contexts)
-        {
-            assert(id == substream_ctx->id);
-            substream_ctx->serialize(wb, getVersion());
-        }
-    });
-}
-
-void AggregatingTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
-{
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
-        size_t num_substreams;
-        readIntBinary(num_substreams, rb);
-        substream_contexts.reserve(num_substreams);
-        for (size_t i = 0; i < num_substreams; ++i)
-        {
-            auto substream_ctx = std::make_shared<SubstreamContext>(this);
-            substream_ctx->deserialize(rb, version_);
-
-            /// In case when for we had global aggregated some data, but done checkpoint request before finializing
-            if (substream_ctx->rows_since_last_finalization > 0) [[unlikely]]
-                LOG_WARNING(
-                    log,
-                    "Last checkpoint state don't be finalized in substream id={}, rows_since_last_finalization={}",
-                    substream_ctx->id,
-                    substream_ctx->rows_since_last_finalization);
-
-            substream_contexts.emplace(substream_ctx->id, std::move(substream_ctx));
-        }
-    });
-}
-
-void SubstreamContext::serialize(WriteBuffer & wb, VersionType version) const
-{
-    DB::Streaming::serialize(id, wb);
-
-    variants.serialize(wb, aggregating_transform->params->aggregator);
-
-    DB::writeIntBinary(finalized_watermark, wb);
-
-    DB::writeIntBinary(emitted_version, wb);
-
-    DB::writeIntBinary(rows_since_last_finalization, wb);
-
-    bool has_field = hasField();
-    DB::writeBoolText(has_field, wb);
-    if (has_field)
-        any_field.serializer(any_field.field, wb, version);
-}
-
-void SubstreamContext::deserialize(ReadBuffer & rb, VersionType version)
-{
-    DB::Streaming::deserialize(id, rb);
-
-    variants.deserialize(rb, aggregating_transform->params->aggregator);
-
-    DB::readIntBinary(finalized_watermark, rb);
-
-    DB::readIntBinary(emitted_version, rb);
-
-    DB::readIntBinary(rows_since_last_finalization, rb);
-
-    bool has_field;
-    DB::readBoolText(has_field, rb);
-    if (has_field)
-        any_field.deserializer(any_field.field, rb, version);
-}
-
-}
 }

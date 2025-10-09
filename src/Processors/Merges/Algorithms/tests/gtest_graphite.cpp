@@ -10,6 +10,7 @@
 
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/Config/ConfigProcessor.h>
+#include <base/defines.h>
 
 using namespace DB;
 
@@ -42,7 +43,9 @@ static ConfigProcessor::LoadedConfig loadConfigurationFromString(std::string & s
         {
             throw std::runtime_error("unable write to temp file");
         }
-        close(fd);
+        int error = close(fd);
+        chassert(!error);
+
         auto config_path = std::string(tmp_file) + ".xml";
         if (std::rename(tmp_file, config_path.c_str()))
         {

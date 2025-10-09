@@ -1,0 +1,10 @@
+('key','string')
+('out','array(json(max_dynamic_types=16, max_dynamic_paths=256))')
+('outputs','array(json(max_dynamic_types=8, max_dynamic_paths=64))')
+('outputs','array(nullable(string))')
+('type','int64')
+('value','int64')
+('index','int64')
+('n','int64')
+v1	[0,0]	[1,2]	[[],[1960131]]	[[],[0]]
+v2	[1,1]	[4,3]	[[1881212],[]]	[[1],[]]

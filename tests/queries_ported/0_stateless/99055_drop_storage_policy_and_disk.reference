@@ -1,0 +1,12 @@
+--- After create disk and storage policy
+99055_d1 /var/lib/proton/disks/d1/ Local None None 0 0 0 0 0 99055_p1
+default /var/lib/proton/ Local None None 0 0 0 0 0 99055_p1,
+99055_p1	hot	1	['default']	JBOD	0	0.1	0	default.`99055_hcs`
+99055_p1	cold	2	['99055_d1']	JBOD	0	0.1	0	default.`99055_hcs`
+Code: 2662. DB::: Received from localhost:8463. DB::: Cannot drop storage policy '99055_p1', it used by: default.`99055_hcs`. (CANNOT_DELETE_STORAGE_POLICY)
+Code: 2662. DB::: Received from localhost:8463. DB::: Cannot drop 'default' storage policy. (CANNOT_DELETE_STORAGE_POLICY)
+Code: 2659. DB::: Received from localhost:8463. DB::: Cannot drop disk '99055_d1', it used by: 99055_p1. (CANNOT_DELETE_DISK)
+Code: 2659. DB::: Received from localhost:8463. DB::: Cannot drop 'default' disk. (CANNOT_DELETE_DISK)
+--- After drop disk and storage policy
+default /var/lib/proton/ Local None None 0 0 0 0 0 default
+default default 1 ['default'] JBOD 0 0 0

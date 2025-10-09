@@ -1,65 +1,69 @@
-#include "StorageInfoHandler.h"
+#include <Server/RestRouterHandlers/StorageInfoHandler.h>
 
 #include <Access/ContextAccess.h>
-#include <Common/quoteString.h>
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/NativeLog/NativeLog.h>
 #include <Databases/IDatabase.h>
+#include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Streaming/StorageStream.h>
-#include <Storages/Streaming/StreamShard.h>
+#include <Storages/Stream/StorageStream.h>
+#include <Storages/Stream/StreamShardStore.h>
 #include <Storages/System/StorageSystemPartsBase.h>
 #include <base/map.h>
+#include <Common/quoteString.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_REQUEST_PARAMETER;
-    extern const int UNSUPPORTED;
-    extern const int RESOURCE_NOT_FOUND;
-    extern const int STREAM_IS_DROPPED;
-    extern const int ACCESS_DENIED;
-    extern const int LOGICAL_ERROR;
+extern const int BAD_REQUEST_PARAMETER;
+extern const int UNSUPPORTED;
+extern const int RESOURCE_NOT_FOUND;
+extern const int STREAM_IS_DROPPED;
+extern const int ACCESS_DENIED;
+extern const int LOGICAL_ERROR;
 }
 
 namespace
 {
-    String getStreamName(const String & database, const String & stream)
-    {
-        return fmt::format("{}.{}", backQuoteIfNeed(database), backQuoteIfNeed(stream));
-    }
+String getStreamName(const String & database, const String & stream)
+{
+    return fmt::format("{}.{}", backQuoteIfNeed(database), backQuoteIfNeed(stream));
+}
 
-    /// @FORMAT:
-    /// {
-    ///     "request_id": xxx,
-    ///     "data":
-    ///     {
-    ///         "total_bytes_on_disk": xxx,
-    ///         "streams":
-    ///         {
-    ///             "stream-1":
-    ///             {
-    ///                 "streaming_data_bytes": xxx,
-    ///                 "streaming_data_paths": ["xxx/path"],
-    ///                 "historical_data_bytes": xxx,
-    ///                 "historical_data_paths": ["xxx/path"]
-    ///             },
-    ///             ...
-    ///         }
-    ///     }
-    /// }
-    String buildResponse(const StreamStorageInfoPtr & storage_info, const String & query_id, bool is_simple = false)
-    {
-        Poco::JSON::Object resp(Poco::JSON_PRESERVE_KEY_ORDER);
-        resp.set("request_id", query_id);
+/// @FORMAT:
+/// {
+///     "request_id": xxx,
+///     "data":
+///     {
+///         "total_bytes_on_disk": xxx,
+///         "streams":
+///         {
+///             "stream-1":
+///             {
+///                 "streaming_data_bytes": xxx,
+///                 "streaming_data_paths": ["xxx/path"],
+///                 "historical_data_bytes": xxx,
+///                 "historical_data_paths": ["xxx/path"]
+///             },
+///             ...
+///         }
+///     }
+/// }
+String buildResponse(const StreamStorageInfoPtr & storage_info, const String & query_id, bool is_simple = false)
+{
+    Poco::JSON::Object resp(Poco::JSON_PRESERVE_KEY_ORDER);
+    resp.set("request_id", query_id);
 
-        if (storage_info)
-            resp.set("data", storage_info->toJSON(is_simple));
+    if (storage_info)
+        resp.set("data", storage_info->toJSON(is_simple));
 
-        std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
-        resp.stringify(resp_str_stream, 0);
-        return resp_str_stream.str();
-    }
+    std::stringstream resp_str_stream; /// STYLE_CHECK_ALLOW_STD_STRING_STREAM
+    resp.stringify(resp_str_stream, 0);
+    return resp_str_stream.str();
+}
 }
 
 Poco::Dynamic::Var StreamStorageInfoForStream::toJSON(bool is_simple) const
@@ -90,12 +94,15 @@ Poco::Dynamic::Var StreamStorageInfoForStream::toJSON(bool is_simple) const
 Poco::Dynamic::Var StreamStorageInfo::toJSON(bool is_simple) const
 {
     Poco::JSON::Object obj(Poco::JSON_PRESERVE_KEY_ORDER);
+    obj.set("total_disk_space", total_disk_space);
+    obj.set("total_available_disk_space", total_available_disk_space);
     obj.set("total_bytes_on_disk", total_bytes_on_disk);
 
     if (need_sort_by_bytes.has_value())
     {
         Poco::JSON::Object streams_info(Poco::JSON_PRESERVE_KEY_ORDER);
-        auto streams_vec = collections::map<std::vector<StreamStorageInfoForStream>>(streams, [](const auto & elem) { return elem.second; });
+        auto streams_vec
+            = collections::map<std::vector<StreamStorageInfoForStream>>(streams, [](const auto & elem) { return elem.second; });
 
         /// Sorting
         if (*need_sort_by_bytes)
@@ -109,6 +116,7 @@ Poco::Dynamic::Var StreamStorageInfo::toJSON(bool is_simple) const
 
         for (const auto & stream : streams_vec)
             streams_info.set(getStreamName(stream.id.database_name, stream.id.table_name), stream.toJSON(is_simple));
+
         obj.set("streams", streams_info);
     }
     else
@@ -129,9 +137,9 @@ std::pair<String, Int32> StorageInfoHandler::executeGet(const Poco::JSON::Object
     bool need_sort = getQueryParameterBool("sort", true);
     try
     {
-        const auto access = query_context->getAccess();
-        // if (!access->isGranted(AccessType::SHOW_TABLES))
-        //     return {jsonErrorResponse("Not enough privileges", ErrorCodes::ACCESS_DENIED), HTTPResponse::HTTP_BAD_REQUEST};
+        /// const auto access = query_context->getAccess();
+        /// if (!access->isGranted(AccessType::SHOW_TABLES))
+        ///     return {jsonErrorResponse("Not enough privileges", ErrorCodes::ACCESS_DENIED), HTTPResponse::HTTP_BAD_REQUEST};
 
         auto disk_info = loadStorageInfo(database, stream);
 
@@ -140,7 +148,7 @@ std::pair<String, Int32> StorageInfoHandler::executeGet(const Poco::JSON::Object
             disk_info->sortingStreamByBytes();
 
         /// For normal users only get simple info
-        // const bool is_simple = !access->isGranted(AccessType::ACCESS_MANAGEMENT);
+        /// const bool is_simple = !access->isGranted(AccessType::ACCESS_MANAGEMENT);
         return {buildResponse(disk_info, query_context->getCurrentQueryId(), is_simple), HTTPResponse::HTTP_OK};
     }
     catch (...)
@@ -152,48 +160,89 @@ std::pair<String, Int32> StorageInfoHandler::executeGet(const Poco::JSON::Object
 
 StreamStorageInfoPtr StorageInfoHandler::loadStorageInfo(const String & ns, const String & stream) const
 {
-    if (!native_log.enabled())
-        throw DB::Exception(DB::ErrorCodes::UNSUPPORTED, "The native log is not enabled, so the interface does not work.");
-
     StreamStorageInfoPtr disk_info = std::make_shared<StreamStorageInfo>();
 
     /// Load from streaming store
-    auto list_resp{native_log.listStreams(ns, nlog::ListStreamsRequest{stream})};
-    if (list_resp.hasError())
-        throw DB::Exception(list_resp.error_code, "Failed to list streams in streaming store: {}", list_resp.error_message);
+    auto timeout_ms = query_context->getSettingsRef().query_timeout_sec * 1000;
+    auto & metastore = Globals::getMetaStore();
+    auto list_resp{metastore.listStreams(std::make_shared<cluster::ListStreamsRequest>(
+        ns,
+        stream,
+        metastore.nodeID(),
+        /*consistent_read_=*/false,
+        timeout_ms,
+        /*request_version=*/2))};
+    if (list_resp->hasError())
+        throw DB::Exception(
+            list_resp->data().err.error_code, "Failed to list streams in streaming store: {}", list_resp->data().err.error_message);
 
     /// streams + 100 (reserved for other engines, such as system tables)
-    disk_info->streams.reserve(list_resp.streams.size() + 100);
-    for (const auto & stream_desc : list_resp.streams)
+    disk_info->streams.reserve(list_resp->data().stream_descs.size() + 100);
+    for (const auto & stream_desc : list_resp->data().stream_descs)
     {
-        StorageID storage_id{stream_desc.ns, stream_desc.stream};
-        auto & stream_info = disk_info->streams[storage_id.getFullNameNotQuoted()];
+        /// All shards are local
+        if (!stream_desc->hasLocalShardReplica(query_context->getNodeID()))
+            continue;
+
+        StorageID storage_id{stream_desc->stream.ns, stream_desc->stream.name, stream_desc->stream.id};
+        auto storage = DatabaseCatalog::instance().tryGetTable(storage_id, query_context);
+        StreamStorageInfoForStream stream_info{};
         stream_info.id = storage_id;
 
-        auto streaming_data_info_opt = native_log.getLocalStreamInfo(stream_desc);
-        if (!streaming_data_info_opt.has_value())
-            throw DB::Exception(
-                DB::ErrorCodes::RESOURCE_NOT_FOUND,
-                "Failed to get info of the stream '{} in streaming store",
-                getStreamName(stream_desc.ns, stream_desc.stream));
+        if (storage)
+        {
+            if (storage->as<StorageStream>())
+            {
+                auto stream_stats = Globals::getNativeLog().stats(stream_desc->localStreamShards(query_context->getNodeID()));
+                if (stream_stats.hasError() || stream_stats.result.empty())
+                    continue;
+                std::tie(stream_info.streaming_data_bytes, stream_info.streaming_data_paths) = DB::sumOf(std::move(stream_stats.result));
+            }
+            else if (const auto & mv = storage->as<StorageMaterializedView>())
+            {
+                auto stream_stats = Globals::getNativeLog().stats(stream_desc->localStreamShards(query_context->getNodeID()));
+                if (!stream_stats.hasError() && !stream_stats.result.empty())
+                    std::tie(stream_info.streaming_data_bytes, stream_info.streaming_data_paths)
+                        = DB::sumOf(std::move(stream_stats.result));
 
-        stream_info.streaming_data_bytes = streaming_data_info_opt->first;
-        stream_info.streaming_data_paths = std::move(streaming_data_info_opt->second);
+                auto path_sizes = mv->getCheckpointStat();
+                for (auto & path_size : path_sizes)
+                {
+                    stream_info.streaming_data_bytes += path_size.size;
+                    stream_info.streaming_data_paths.push_back(std::move(path_size.path));
+                }
+            }
+        }
         disk_info->total_bytes_on_disk += stream_info.streaming_data_bytes;
+        disk_info->streams[storage_id.getFullNameNotQuoted()] = std::move(stream_info);
+    }
+
+    if (disk_info->streams.empty())
+    {
+        String res_name;
+        if (!ns.empty() && !stream.empty())
+            res_name = fmt::format("stream '{}.{}'", ns, stream);
+        else if (!ns.empty())
+            res_name = fmt::format("namespace '{}'", ns);
+
+        if (!res_name.empty())
+            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Failed to get stats info for {} in streaming store", res_name);
     }
 
     /// Load from historical storage
     loadLocalStoragesInfo(disk_info, ns, stream);
 
     /// If no specified namespace and no specified stream name, we use actual total used space on disk
-    if (ns.empty() && stream.empty())
+    auto use_general_total_bytes = ns.empty() && stream.empty();
+    for (const auto & [_, disk] : query_context->getDisksMap())
     {
-        disk_info->total_bytes_on_disk = 0;
-        for (auto & [_, disk] : query_context->getDisksMap())
-        {
-            if (disk)
-                disk_info->total_bytes_on_disk += disk->getTotalSpace() - disk->getAvailableSpace();
-        }
+        if (!disk)
+            continue;
+
+        disk_info->total_disk_space = disk->getTotalSpace();
+        disk_info->total_available_disk_space = disk->getAvailableSpace();
+        if (use_general_total_bytes)
+            disk_info->total_bytes_on_disk = disk_info->total_disk_space - disk_info->total_available_disk_space;
     }
 
     return disk_info;
@@ -226,12 +275,7 @@ auto StorageInfoHandler::getLocalStorageInfo(StoragePtr storage) const
             if (!info.data)
                 continue; /// virtual storage, it's a remote shard
 
-            /// Iterator all parts
-            MergeTreeData::DataPartStateVector all_parts_state;
-            const auto & all_parts = info.getParts(all_parts_state, /*has_state_column*/ true);
-            for (const auto & part : all_parts)
-                total_size += part->getBytesOnDisk();
-
+            total_size = info.data->getStorageSize();
             const auto & shard_paths = info.data->getDataPaths();
             paths.insert(paths.end(), shard_paths.begin(), shard_paths.end());
         }
@@ -239,12 +283,13 @@ auto StorageInfoHandler::getLocalStorageInfo(StoragePtr storage) const
     else if (auto * data = dynamic_cast<MergeTreeData *>(info.storage.get()))
     {
         info.data = data;
-        MergeTreeData::DataPartStateVector all_parts_state;
-        const auto & all_parts = info.getParts(all_parts_state, /*has_state_column*/ true);
-        for (const auto & part : all_parts)
-            total_size += part->getBytesOnDisk();
-
+        total_size = data->getStorageSize();
         paths = info.data->getDataPaths();
+    }
+    else if (storage)
+    {
+        total_size = storage->getStorageSize();
+        paths = storage->getDataPaths();
     }
     else
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown engine {}", info.engine);
@@ -280,7 +325,7 @@ void StorageInfoHandler::loadLocalStoragesInfo(StreamStorageInfoPtr & disk_info,
                 if (!info.storage)
                     continue;
 
-                if (!dynamic_cast<MergeTreeData *>(info.storage.get()))
+                if (!dynamic_cast<MergeTreeData *>(info.storage.get()) && !info.storage->as<StorageMaterializedView>())
                     continue;
 
                 // if (!access->isGranted(AccessType::SHOW_TABLES, info.database, info.table))
@@ -308,8 +353,9 @@ void StorageInfoHandler::loadLocalStoragesInfo(StreamStorageInfoPtr & disk_info,
         auto & stream_info = disk_info->streams[storage_id.getFullNameNotQuoted()];
         stream_info.id = storage_id;
 
-        if (!dynamic_cast<MergeTreeData *>(storage.get()))
+        if (!dynamic_cast<MergeTreeData *>(storage.get()) && !storage->as<StorageMaterializedView>())
             return; /// skip
+
         std::tie(stream_info.historical_data_bytes, stream_info.historical_data_paths) = getLocalStorageInfo(storage);
         disk_info->total_bytes_on_disk += stream_info.historical_data_bytes;
     }

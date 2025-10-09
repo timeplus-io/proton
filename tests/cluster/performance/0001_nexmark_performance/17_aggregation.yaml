@@ -1,0 +1,78 @@
+description: |
+  Test aggregation function min, max, avg, sum
+
+cluster:
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: NEXMARK_Q17
+  - type: wait
+    time: 1
+  
+  - type: kafka
+    name: create
+    topic: NEXMARK_Q17
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      CREATE EXTERNAL STREAM target(
+      auction int64,
+      day date,
+      total_bids int64,
+      rank1_bids int64,
+      rank2_bids int64,
+      rank3_bids int64,
+      min_price int64, 
+      max_price int64,
+      avg_price int64,
+      sum_price int64) 
+      SETTINGS type='kafka', 
+              brokers='k1:9092', 
+              topic='NEXMARK_Q17', 
+              data_format='JSONEachRow',
+              one_message_per_row=false;
+  - type: wait
+    time: 2
+
+  - type: query
+    sql:
+      CREATE MATERIALIZED VIEW mv INTO target AS 
+      SELECT
+          auction,
+          to_date(date_time) as `day`,
+          count(*) AS total_bids,
+          count(*) filter (where price < 10000) AS rank1_bids,
+          count(*) filter (where price >= 10000 and price < 1000000) AS rank2_bids,
+          count(*) filter (where price >= 1000000) AS rank3_bids,
+          min(price) AS min_price,
+          max(price) AS max_price,
+          avg(price) AS avg_price,
+          sum(price) AS sum_price
+      FROM bid
+      GROUP BY auction, day
+      SETTINGS
+        seek_to = 'earliest';
+      
+  - type: wait
+    time: 150
+
+  - name: ext-0-1
+    type: stream
+    query: select count(*) from table(target);
+    retry: 5 # run query 5 times to calculate the average latency
+    concurrency: 1 # run 1 queries concurrently
+    statistic_only: true
+    archive: true
+    schema:
+      - name: count()
+        type: uint64
+
+  - type: wait
+    time: 30

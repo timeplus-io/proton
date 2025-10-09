@@ -1,0 +1,72 @@
+tags:
+  - subquery/view/materialized_view/
+  - tumble(table)
+  - group_by
+  - primary_key
+  - substream
+  - todo
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+
+description: substream global aggregation partition by primary key, group by primary key,stateful function
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: query
+    sql: create stream test14_substream_6(val int, id int, name string);
+  - type: wait
+    time: 2
+
+  - name: "1428"
+    type: stream
+    query: |
+      select max(val), min(val), avg(val), id from changelog(test14_substream_6, id)
+      partition by id group by id;
+    schema:
+      - name: max(val)
+        type: int32
+      - name: min(val)
+        type: int32
+      - name: avg(val)
+        type: float64
+      - name: id
+        type: int32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+
+  - type: query
+    sql: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+
+  - type: check
+    target_name: "1428"
+    mode: random
+    expected_result:
+      - [1, 1, 1, 2]
+      - [3, 3, 3, 3]
+      - [5, 5, 5, 1]
+      - [14, 14, 14, 2]
+      - [10, 10, 10, 1]
+      - [9, 9, 9, 3]

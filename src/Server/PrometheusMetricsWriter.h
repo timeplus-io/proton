@@ -31,12 +31,18 @@ private:
     const bool send_asynchronous_metrics;
     const bool send_status_info;
     const bool send_external_stream;
+    const bool send_materialized_view;
+    const bool send_query_info;
+    const bool send_alert;
 
     static inline constexpr auto profile_events_prefix = "ProtonProfileEvents_";
     static inline constexpr auto current_metrics_prefix = "ProtonMetrics_";
     static inline constexpr auto asynchronous_metrics_prefix = "ProtonAsyncMetrics_";
     static inline constexpr auto current_status_prefix = "ProtonStatusInfo_";
     static inline constexpr auto external_stream_prefix = "ProtonExternalStream_";
+    static inline constexpr auto query_info_prefix = "ProtonQueryInfo_";
+    static inline constexpr auto materialized_view_prefix = "ProtonMaterializedView_";
+    static inline constexpr auto alert_prefix = "ProtonAlert_";
 };
 
 }

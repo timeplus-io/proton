@@ -97,11 +97,14 @@ void ISimpleTransform::work()
         metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
         /// proton: ends.
     }
-    catch (DB::Exception &)
+    catch (const DB::Exception & ex)
     {
         output_data.exception = std::current_exception();
         has_output = true;
         has_input = false;
+        /// proton: starts
+        setLastErrorMessage(ex.what());
+        /// proton: ends
         return;
     }
 
@@ -111,7 +114,7 @@ void ISimpleTransform::work()
     /// the output.header is empty. So we need explicitly check watermark chunk info here to propagate empty chunk
     /// with watermark.
     /// P.S. need propagate other chunk context like checkpoint context etc as well
-    if (!skip_empty_chunks || output_data.chunk || output_data.chunk.hasChunkContext())
+    if (isStreaming() || !skip_empty_chunks || output_data.chunk)
         has_output = true;
     /// proton: ends
 

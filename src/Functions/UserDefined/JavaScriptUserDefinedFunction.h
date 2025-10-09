@@ -1,7 +1,7 @@
 #pragma once
 
+#include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Functions/UserDefined/UserDefinedFunctionBase.h>
-#include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 
 #include <v8.h>
 
@@ -18,7 +18,7 @@ public:
         void operator()(v8::Isolate * isolate_) const { isolate_->Dispose(); }
     };
 
-    explicit JavaScriptExecutionContext(const JavaScriptUserDefinedFunctionConfiguration & config, ContextPtr ctx);
+    explicit JavaScriptExecutionContext(const String & name, const String & source, ContextPtr ctx, LoggerPtr logger);
 
     std::unique_ptr<v8::Isolate, JavaScriptExecutionContext::IsolateDeleter> isolate;
     v8::Persistent<v8::Context> context;
@@ -34,14 +34,15 @@ public:
 class JavaScriptUserDefinedFunction final : public UserDefinedFunctionBase
 {
 public:
-    explicit JavaScriptUserDefinedFunction(
-        ExternalUserDefinedFunctionsLoader::UserDefinedExecutableFunctionPtr executable_function_, ContextPtr context_);
+    explicit JavaScriptUserDefinedFunction(cluster::protocol::UserDefinedFunctionDescriptorPtr && udf_desc_, ContextPtr context_);
 
     ColumnPtr userDefinedExecuteImpl(
         const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override;
 
 private:
-    std::unique_ptr<JavaScriptExecutionContext> js_ctx = nullptr;
+    using JavaScriptExecutionContextPtr = std::unique_ptr<JavaScriptExecutionContext>;
+    std::vector<JavaScriptExecutionContextPtr> js_ctxes;
+    mutable std::atomic<size_t> js_ctx_idx = 0;
 };
 
 }

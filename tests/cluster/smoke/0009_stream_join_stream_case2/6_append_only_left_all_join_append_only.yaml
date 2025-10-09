@@ -1,0 +1,61 @@
+tags:
+  - bidirectional join
+  - left-join
+description: append-only left all join append-only
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop stream if exists test10_append_left_stream;
+
+  - type: query
+    sql: drop stream if exists test10_append_right_stream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test10_append_left_stream(i int, k string);
+
+  - type: query
+    sql: create stream test10_append_right_stream(j int, kk string);
+
+  - type: wait
+    time: 2
+
+  - name: '1056'
+    type: stream
+    query: select i, k, j, kk from test10_append_left_stream left join test10_append_right_stream
+      on k == kk;
+    schema:
+      - name: i
+        type: int32
+      - name: k
+        type: string
+      - name: j
+        type: int32
+      - name: kk
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test10_append_right_stream (j, kk) values (1, 'a') (1, 'b');
+
+  - type: query
+    sql: insert into test10_append_left_stream (i, k) values (2, 'a');
+
+  - type: query
+    sql: insert into test10_append_left_stream (i, k) values (2, 'b');
+
+  - type: query
+    sql: insert into test10_append_left_stream (i, k) values (2, 'c');
+
+  - type: check
+    target_name: '1056'
+    expected_result:
+      - [2, 'a', 1, 'a']
+      - [2, 'b', 1, 'b']
+      - [2, 'c', 0, '']

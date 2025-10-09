@@ -1,0 +1,56 @@
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value array(float), update float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_floss(value array(float), update float) RETURNS array(float) LANGUAGE PYTHON AS
+      $$
+      import stumpy
+      import numpy as np
+
+      def test_floss(value, update):
+          res = []
+          for v, u in zip(value, update):
+              if len(v) > 0:
+                  mp = stumpy.stump(np.array(v), m=3)
+                  stream = stumpy.floss(mp, np.array(v), m=3, L=3)
+                  stream.update(u)
+                  res_floss = stream.cac_1d_.tolist()
+                  res.append(res_floss)
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf14-13-1
+    type: stream
+    query: select test_floss(value, update) as res, value, update from udf_stream;
+    schema:
+      - name: res
+        type: array(float32)
+      - name: value
+        type: array(float32)
+      - name: update
+        type: float32
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into udf_stream(value, update) values ([584., -11., 23., 79., 1001., 0.], 19.);
+
+  - type: check
+    target_name: python-udf14-13-1
+    expected_result:
+      - [[1.0, 1.0, 1.0, 1.0], [584., -11., 23., 79., 1001., 0.], 19.]

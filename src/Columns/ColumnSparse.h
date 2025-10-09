@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Columns/IColumn.h>
-#include <Columns/IColumnImpl.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
@@ -18,10 +17,10 @@ namespace DB
  *  values contains also one default value at 0 position to make
  *  implementation of execution of functions and sorting more convenient.
  */
-class ColumnSparse final : public COWHelper<IColumn, ColumnSparse>
+class ColumnSparse final : public COWHelper<IColumnHelper<ColumnSparse>, ColumnSparse>
 {
 private:
-    friend class COWHelper<IColumn, ColumnSparse>;
+    friend class COWHelper<IColumnHelper<ColumnSparse>, ColumnSparse>;
 
     explicit ColumnSparse(MutableColumnPtr && values_);
     ColumnSparse(MutableColumnPtr && values_, MutableColumnPtr && offsets_, size_t size_);
@@ -31,7 +30,7 @@ public:
     static constexpr auto DEFAULT_ROWS_SEARCH_SAMPLE_RATIO = 0.1;
     static constexpr auto DEFAULT_RATIO_FOR_SPARSE_SERIALIZATION = 0.95;
 
-    using Base = COWHelper<IColumn, ColumnSparse>;
+    using Base = COWHelper<IColumnHelper<ColumnSparse>, ColumnSparse>;
     static Ptr create(const ColumnPtr & values_, const ColumnPtr & offsets_, size_t size_)
     {
         return Base::create(values_->assumeMutable(), offsets_->assumeMutable(), size_);
@@ -79,11 +78,24 @@ public:
     /// Will insert null value if pos=nullptr
     void insertData(const char * pos, size_t length) override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
+    /// proton: starts.
+    void serializeValueIntoBuffer(size_t n, WriteBuffer & wb) const override;
+    /// proton: ends.
+    char * serializeValueIntoMemory(size_t n, char * memory) const override;
     const char * deserializeAndInsertFromArena(const char * pos) override;
     const char * skipSerializedInArena(const char *) const override;
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+#else
+    void doInsertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+#endif
     void insert(const Field & x) override;
+    bool tryInsert(const Field & x) override;
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     void insertFrom(const IColumn & src, size_t n) override;
+#else
+    void doInsertFrom(const IColumn & src, size_t n) override;
+#endif
     void insertDefault() override;
     void insertManyDefaults(size_t length) override;
 
@@ -97,7 +109,16 @@ public:
     template <typename Type>
     ColumnPtr indexImpl(const PaddedPODArray<Type> & indexes, size_t limit) const;
 
+/// proton: starts
+    bool equal(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
+    bool equal(size_t n, const Field & rhs_, int null_direction_hint) const override;
+/// proton: ends
+
+#if !defined(DEBUG_OR_SANITIZER_BUILD)
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
+#else
+    int doCompareAt(size_t n, size_t m, const IColumn & rhs_, int null_direction_hint) const override;
+#endif
     void compareColumn(const IColumn & rhs, size_t rhs_row_num,
                        PaddedPODArray<UInt64> * row_indexes, PaddedPODArray<Int8> & compare_results,
                        int direction, int nan_direction_hint) const override;
@@ -133,13 +154,12 @@ public:
 
     void getIndicesOfNonDefaultRows(IColumn::Offsets & indices, size_t from, size_t limit) const override;
     double getRatioOfDefaultRows(double sample_ratio) const override;
-
-    MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
-
-    void gather(ColumnGathererStream & gatherer_stream) override;
+    UInt64 getNumberOfDefaultRows() const override;
 
     ColumnPtr compress() const override;
 
+    void forEachMutableSubcolumn(MutableColumnCallback callback) override;
+    void forEachMutableSubcolumnRecursively(RecursiveMutableColumnCallback callback) override;
     void forEachSubcolumn(ColumnCallback callback) const override;
     void forEachSubcolumnRecursively(RecursiveColumnCallback callback) const override;
 
@@ -151,7 +171,9 @@ public:
     size_t sizeOfValueIfFixed() const override { return values->sizeOfValueIfFixed() + values->sizeOfValueIfFixed(); }
     bool isCollationSupported() const override { return values->isCollationSupported(); }
 
-    size_t getNumberOfDefaults() const { return _size - offsets->size(); }
+    bool hasDynamicStructure() const override { return values->hasDynamicStructure(); }
+    void takeDynamicStructureFromSourceColumns(const Columns & source_columns) override;
+
     size_t getNumberOfTrailingDefaults() const
     {
         return offsets->empty() ? _size : _size - getOffsetsData().back() - 1;

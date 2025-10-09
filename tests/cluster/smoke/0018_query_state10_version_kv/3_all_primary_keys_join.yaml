@@ -1,0 +1,106 @@
+tags:
+- versioned_kv
+- multiple_primary_key
+description: versioned_kv join versioned_kv with all primary keys state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_vk_left_stream
+- type: query
+  sql: drop stream if exists test19_vk_right_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_vk_left_stream (i1 int, i2 int, s string)
+    primary key (i1, i2) settings mode='versioned_kv'
+
+- type: query
+  sql: create stream if not exists test19_vk_right_stream (ii1 int, ii2 int, ss string)
+    primary key (ii1, ii2) settings mode='versioned_kv'
+- type: wait
+  time: 2
+
+- name: '19253'
+  type: stream
+  query_id: '19253'
+  query: subscribe to select i1, i2, s, ii1, ii2, ss from test19_vk_left_stream
+    inner join test19_vk_right_stream on i1 = ii1 and i2 = ii2 settings checkpoint_interval=1
+  schema:
+  - name: i1
+    type: int32
+  - name: i2
+    type: int32
+  - name: s
+    type: string
+  - name: ii1
+    type: int32
+  - name: ii2
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss1')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's1')
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_vk_right_stream(ii1, ii2, ss) values (1, 1, 'ss2')
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19253'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_vk_left_stream(i1, i2, s) values (1, 1, 's2')
+- type: wait
+  time: 1
+
+- name: 19253-1
+  type: stream
+  query: recover from '19253'
+  schema:
+  - name: i1
+    type: int32
+  - name: i2
+    type: int32
+  - name: s
+    type: string
+  - name: ii1
+    type: int32
+  - name: ii2
+    type: int32
+  - name: ss
+    type: string
+- type: wait
+  time: 3
+
+- type: query
+  sql: kill query where query_id = '19253' sync
+
+- type: query
+  sql: unsubscribe to '19253'
+
+- type: check
+  target_name: '19253'
+  expected_result:
+  - [1, 1, s1, 1, 1, ss1]
+  - [1, 1, s1, 1, 1, ss2]
+
+- type: check
+  target_name: 19253-1
+  expected_result:
+  - [1, 1, s2, 1, 1, ss2]

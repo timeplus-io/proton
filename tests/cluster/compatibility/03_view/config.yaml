@@ -1,0 +1,6 @@
+name: view
+description: Test covers the view query compatibility cases.
+tags:
+  - compatibility
+  - materialized view
+  - view

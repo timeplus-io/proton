@@ -1,0 +1,105 @@
+tags:
+  - versioned_kv_subquery/view/materialized_view
+  - streaming_tailing
+description: subquery from materialized view from subquery
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_14_7_add_five(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        function test_14_7_add_five(value) {
+            for (let i = 0; i < value.length; i++) {
+                value[i] = value[i] + 5;
+            }
+            return value;
+          }
+      $$;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql:
+      create stream test14_subquery_7(i float, k1 int, k2 string) primary
+      key k2 settings mode='versioned_kv';
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      create materialized view if not exists test14_view_7 as (
+        with cte as (select i, k1, k2 from test14_subquery_7)
+        select i, k1, k2 from cte
+      );
+  - type: wait
+    time: 2
+
+  - name: "1442"
+    type: stream
+    query: select i, k1, k2, lag(i, 2), upper(k2), test_14_7_add_five(i) from test14_view_7;
+    schema:
+      - name: i
+        type: float32
+      - name: k1
+        type: int32
+      - name: k2
+        type: string
+      - name: lag(i, 2)
+        type: float32
+      - name: upper(k2)
+        type: string
+      - name: test_14_7_add_five(i)
+        type: float32
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (1, 2, 'a');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (3, 3, 'b');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (5, 1, 'c');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (8, 2, 'a');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (9, 3, 'b');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (11, 2, 'b');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (10, 1, 'c');
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_subquery_7(i, k1, k2) values (14, 2, 'b');
+
+  - type: check
+    target_name: "1442"
+    expected_result:
+      - [1, 2, a, 0, A, 6]
+      - [3, 3, b, 0, B, 8]
+      - [5, 1, c, 1, C, 10]
+      - [8, 2, a, 3, A, 13]
+      - [9, 3, b, 5, B, 14]
+      - [11, 2, b, 8, B, 16]
+      - [10, 1, c, 9, C, 15]
+      - [14, 2, b, 11, B, 19]

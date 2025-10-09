@@ -3,25 +3,33 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/SessionWindowHelper.h>
+#include <Common/ProtonCommon.h>
 
 #include <ranges>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int UNSUPPORTED;
+}
+
 namespace Streaming
 {
-SessionAggregatingTransform::SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_)
+SessionAggregatingTransform::SessionAggregatingTransform(Block header, AggregatingTransformParamsPtr params_, const std::string & id)
     : WindowAggregatingTransform(
-        std::move(header),
-        std::move(params_),
-        std::make_unique<ManyAggregatedData>(1),
-        0,
-        1,
-        1,
-        "SessionAggregatingTransform",
-        ProcessorID::SessionAggregatingTransformID)
-    , window_params(params->params.window_params->as<SessionWindowParams &>())
+          std::move(header),
+          params_,
+          std::make_unique<ManyAggregatedData>(params_->aggregatorType(), id),
+          0,
+          1,
+          "SessionAggregatingTransform",
+          ProcessorID::SessionAggregatingTransformID)
+    , window_params(params->params->window_params->as<SessionWindowParams &>())
 {
+    if (params->emit_mode == EmitMode::PerEvent)
+        throw Exception(ErrorCodes::UNSUPPORTED, "Session window aggregating is not supported for `EMIT PER EVENT`");
+
     const auto & input_header = getInputs().front().getHeader();
     if (input_header.has(ProtonConsts::STREAMING_WINDOW_START))
         wstart_col_pos = input_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_START);
@@ -42,7 +50,7 @@ SessionAggregatingTransform::SessionAggregatingTransform(Block header, Aggregati
          [](std::any & field, ReadBuffer & rb, VersionType) { deserialize(std::any_cast<SessionInfoQueue &>(field), rb); }});
 }
 
-std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
+std::pair<bool, bool> SessionAggregatingTransform::executeColumns(Chunk & chunk, size_t num_rows)
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
     auto columns = chunk.detachColumns();
@@ -51,7 +59,10 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
     num_rows = columns.at(0)->size();
     chunk.setColumns(std::move(columns), num_rows);
 
-    auto result = AggregatingTransform::executeOrMergeColumns(chunk, num_rows);
+    if (num_rows == 0)
+        return {false, false};
+
+    auto result = AggregatingTransform::executeColumns(chunk, num_rows);
     if (!sessions.empty())
     {
         if (chunk.hasTimeoutWatermark())
@@ -95,8 +106,19 @@ void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark_)
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
     Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions, watermark_);
-    params->aggregator.removeBucketsBefore(variants, last_expired_time_bucket);
+    return params->aggregator->removeBucketsBefore(variants, last_expired_time_bucket, transform_id);
 }
 
+String SessionAggregatingTransform::getName() const
+{
+    switch (params->aggregatorType())
+    {
+        case AggregatorType::Memory:
+            return "SessionAggregatingTransform";
+        case AggregatorType::Hybrid:
+            return "HybridSessionAggregatingTransform";
+    }
 }
+}
+
 }

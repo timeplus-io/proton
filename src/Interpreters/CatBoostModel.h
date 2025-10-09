@@ -67,7 +67,7 @@ public:
 
     bool isModified() const override;
 
-    std::shared_ptr<const IExternalLoadable> clone() const override;
+    std::shared_ptr<IExternalLoadable> clone() const override;
 
 private:
     const std::string name;

@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value float);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_format(value float) RETURNS string LANGUAGE PYTHON AS
+      $$
+      def test_format(value):
+          res = ["{:.2f}".format(x) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-19-1
+    type: stream
+    query: select test_format(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: string
+      - name: value
+        type: float32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values (3.1)(3.14)(3.1415);
+
+  - type: check
+    target_name: python-udf1-19-1
+    expected_result:
+      - ['3.10', 3.1]
+      - ['3.14', 3.14]
+      - ['3.14', 3.1415]

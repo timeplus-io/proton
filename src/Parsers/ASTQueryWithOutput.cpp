@@ -1,5 +1,8 @@
 #include <Parsers/ASTQueryWithOutput.h>
 
+#include <Parsers/ASTSetQuery.h>
+
+
 namespace DB
 {
 

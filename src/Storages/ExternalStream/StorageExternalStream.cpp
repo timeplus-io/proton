@@ -4,10 +4,13 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
+#include <Storages/ExternalStream/HTTP/HTTP.h>
+#include <Storages/ExternalStream/Iceberg/Iceberg.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Pulsar/Pulsar.h>
@@ -22,6 +25,10 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 
+#include <Poco/Net/AcceptCertificateHandler.h>
+#include <Poco/Net/KeyFileHandler.h>
+#include <Poco/Net/SSLManager.h>
+
 #include <string>
 #include <re2/re2.h>
 
@@ -35,7 +42,6 @@ extern const int INCORRECT_QUERY;
 extern const int INVALID_SETTING_VALUE;
 extern const int NOT_IMPLEMENTED;
 extern const int TYPE_MISMATCH;
-extern const int LICENSE_VIOLATED;
 }
 
 namespace
@@ -63,47 +69,106 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
 }
 
 StoragePtr createExternalStream(
-    IStorage * storage,
+    StorageID storage_id,
+    StorageInMemoryMetadata storage_metadata,
     std::unique_ptr<ExternalStreamSettings> external_stream_settings,
-    ContextPtr context [[maybe_unused]],
     const ASTs & engine_args,
-    StorageInMemoryMetadata & storage_metadata,
+    ASTStorage * storage_def,
     bool attach,
     ExternalStreamCounterPtr external_stream_counter,
-    ContextPtr context_)
+    ContextPtr context)
 {
     auto type = external_stream_settings->type.value;
 
     if (type.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
-
     if (type == StreamTypes::KAFKA || type == StreamTypes::REDPANDA)
         return std::make_unique<ExternalStream::Kafka>(
-            storage,
+            std::move(storage_id),
+            std::move(storage_metadata),
             std::move(external_stream_settings),
             engine_args,
-            storage_metadata,
             attach,
             std::move(external_stream_counter),
-            std::move(context_));
+            std::move(context));
 
     if (type == StreamTypes::TIMEPLUS)
         return std::make_unique<ExternalStream::Timeplus>(
-            storage, storage_metadata, std::move(external_stream_settings), attach, std::move(context_));
+            std::move(storage_id), std::move(storage_metadata), std::move(external_stream_settings), attach, std::move(context));
 
     if (type == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
-        return std::make_unique<FileLog>(storage, std::move(external_stream_settings), std::move(context_));
+        return std::make_unique<FileLog>(
+            std::move(storage_id), std::move(storage_metadata), std::move(external_stream_settings), std::move(context));
+
+    if (type == StreamTypes::HTTP)
+        return std::make_unique<ExternalStream::HTTP>(
+            std::move(storage_id),
+            std::move(storage_metadata),
+            std::move(external_stream_settings),
+            storage_def,
+            attach,
+            std::move(context));
 
 #if USE_PULSAR
     if (type == StreamTypes::PULSAR)
         return std::make_unique<ExternalStream::Pulsar>(
-            storage, std::move(external_stream_settings), attach, std::move(external_stream_counter), std::move(context_));
+            std::move(storage_id),
+            std::move(storage_metadata),
+            std::move(external_stream_settings),
+            attach,
+            std::move(external_stream_counter),
+            std::move(context));
+
+#endif
+
+#if USE_AWS_S3 && USE_AVRO && USE_PARQUET
+    if (type == StreamTypes::ICEBERG)
+        return std::make_unique<ExternalStream::Iceberg>(
+            std::move(storage_id),
+            std::move(storage_metadata),
+            std::move(external_stream_settings),
+            std::move(external_stream_counter),
+            std::move(context));
 
 #endif
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external stream type: {}", type);
 }
+}
 
+Int64 StorageExternalStream::getMetricTime(bool reset)
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->getMetricTime(reset);
+}
+
+UInt64 StorageExternalStream::readBytes(bool reset, [[maybe_unused]] bool external_ingress)
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->readBytes(reset);
+}
+
+UInt64 StorageExternalStream::readRows(bool reset, [[maybe_unused]] bool external_ingress)
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->readRows(reset);
+}
+
+UInt64 StorageExternalStream::writtenBytes(bool reset, [[maybe_unused]] bool external_ingress)
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->writtenBytes(reset);
+}
+
+UInt64 StorageExternalStream::writtenRows(bool reset, [[maybe_unused]] bool external_ingress)
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->writtenRows(reset);
 }
 
 UInt64 StorageExternalStream::readFailed(bool reset) const
@@ -120,6 +185,54 @@ UInt64 StorageExternalStream::writtenFailed(bool reset) const
     return external_stream_counter->writtenFailed(reset);
 }
 
+namespace
+{
+ColumnsDescription getFormatColumns(const String & format_name, ContextPtr & context, const std::optional<FormatSettings> & format_settings)
+{
+    if (!FormatFactory::instance().checkIfFormatHasExternalSchemaReader(format_name))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Format does not have schema reader: {}", format_name);
+
+    const auto external_schema_reader = FormatFactory::instance().getExternalSchemaReader(format_name, context, format_settings);
+    auto names_and_types = external_schema_reader->readSchema();
+    return ColumnsDescription(std::move(names_and_types));
+}
+}
+
+ColumnsDescription StorageExternalStream::initColumnsDescription(
+    const ColumnsDescription & columns, const ExternalStreamSettings & external_stream_settings, ContextPtr & context_)
+{
+    if (!columns.empty())
+        return columns;
+
+    const auto & stream_type = external_stream_settings.type.value;
+    /// Return empty columns for streams allowing empty columns list
+    if (stream_type == StreamTypes::TIMEPLUS)
+        return columns;
+
+    /// Try to infer columns from the format external schema
+    if (stream_type == StreamTypes::KAFKA || stream_type == StreamTypes::REDPANDA || stream_type == StreamTypes::PULSAR)
+    {
+        if (external_stream_settings.data_format.value.empty())
+            throw Exception(
+                ErrorCodes::INCORRECT_QUERY,
+                "Incorrect CREATE query: required list of column descriptions or data format setting to infer schema");
+
+        auto format_settings = external_stream_settings.getFormatSettings(context_);
+        auto inferred_columns = getFormatColumns(external_stream_settings.data_format, context_, format_settings);
+        if (inferred_columns.empty())
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Can not infer column descriptions from format settings: stream_type={} data_format={}",
+                stream_type,
+                external_stream_settings.data_format.value);
+
+        return inferred_columns;
+    }
+
+    throw Exception(
+        ErrorCodes::INCORRECT_QUERY, "Incorrect CREATE query: required list of column descriptions: stream_type={}", stream_type);
+}
+
 StorageExternalStream::StorageExternalStream(
     const ASTs & engine_args,
     const StorageID & table_id_,
@@ -132,43 +245,36 @@ StorageExternalStream::StorageExternalStream(
 {
     auto external_stream_settings = std::make_unique<ExternalStreamSettings>();
     external_stream_settings->loadFromQuery(*storage_def);
-    external_stream_settings->loadFromConfigFile();
-
-    if (columns_.empty() && external_stream_settings->type.value != StreamTypes::TIMEPLUS)
-        /// This is the same error reported by InterpreterCreateQuery
-        throw Exception(
-            ErrorCodes::INCORRECT_QUERY, "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.");
+    /// Load the unchanged settings if the configuration file is specified.
+    if (!external_stream_settings->config_file.value.empty())
+        external_stream_settings->loadFromConfigFile(external_stream_settings->config_file.value);
 
     external_stream_type = external_stream_settings->type.value;
+    ColumnsDescription columns = initColumnsDescription(columns_, *external_stream_settings, context_);
 
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setComment(comment);
-
-    if (!columns_.empty())
-        storage_metadata.setColumns(columns_);
-
     if (storage_def->partition_by != nullptr)
     {
         ASTPtr partition_by_ast{storage_def->partition_by->clone()};
-        storage_metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_ast, columns_, context_);
+        storage_metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_ast, columns, context_);
     }
 
-    /// Some external streams require the column information, thus we need to set the metadata before creating the stream.
-    setInMemoryMetadata(storage_metadata);
+    if (!columns.empty())
+        storage_metadata.setColumns(std::move(columns));
 
-    auto metadata = getInMemoryMetadata();
     auto stream = createExternalStream(
-        this,
+        this->getStorageID(),
+        std::move(storage_metadata),
         std::move(external_stream_settings),
-        context_,
         engine_args,
-        metadata,
+        storage_def,
         attach,
         external_stream_counter,
         std::move(context_));
     external_stream.swap(stream);
     /// Some external streams fetch the structure in other ways, thus need to set the metadata again here in case it's updated.
-    setInMemoryMetadata(metadata);
+    setInMemoryMetadata(external_stream->getInMemoryMetadata());
 }
 
 void StorageExternalStream::read(
@@ -181,8 +287,7 @@ void StorageExternalStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    return getNested()->read(
-        query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    getNested()->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 void registerStorageExternalStream(StorageFactory & factory)
@@ -209,5 +314,4 @@ void registerStorageExternalStream(StorageFactory & factory)
             .supports_schema_inference = true,
         });
 }
-
 }

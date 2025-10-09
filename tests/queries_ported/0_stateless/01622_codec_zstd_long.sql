@@ -7,7 +7,7 @@ DROP STREAM IF EXISTS zstd_9_24;
 DROP STREAM IF EXISTS words;
 
 CREATE STREAM words(i int, word string) ENGINE = Memory;
-INSERT INTO words SELECT * FROM generateRandom('i int, word string',1,10) LIMIT 1 BY i LIMIT 10000;
+INSERT INTO words SELECT * FROM generate_random('i int, word string',1,10) LIMIT 1 BY i LIMIT 10000;
 
 CREATE STREAM zstd_1_00(n int, b string CODEC(ZSTD(1))) ENGINE = MergeTree ORDER BY n;
 CREATE STREAM zstd_1_24(n int, b string CODEC(ZSTD(1,24))) ENGINE = MergeTree ORDER BY n;

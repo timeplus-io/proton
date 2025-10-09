@@ -3,6 +3,7 @@
 #include <cerrno>
 
 #include <Common/ProfileEvents.h>
+#include <base/defines.h>
 
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -28,10 +29,13 @@ WriteBufferFromFile::WriteBufferFromFile(
     const std::string & file_name_,
     size_t buf_size,
     int flags,
+    ThrottlerPtr throttler_,
     mode_t mode,
     char * existing_memory,
-    size_t alignment)
-    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, alignment, file_name_)
+    size_t alignment,
+    bool use_adaptive_buffer_size_,
+    size_t adaptive_buffer_initial_size)
+    : WriteBufferFromFileDescriptor(-1, buf_size, existing_memory, throttler_, alignment, file_name_, use_adaptive_buffer_size_, adaptive_buffer_initial_size)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
 
@@ -62,17 +66,39 @@ WriteBufferFromFile::WriteBufferFromFile(
     int & fd_,
     const std::string & original_file_name,
     size_t buf_size,
+    ThrottlerPtr throttler_,
     char * existing_memory,
-    size_t alignment)
-    : WriteBufferFromFileDescriptor(fd_, buf_size, existing_memory, alignment, original_file_name)
+    size_t alignment,
+    bool use_adaptive_buffer_size_,
+    size_t adaptive_buffer_initial_size)
+    : WriteBufferFromFileDescriptor(fd_, buf_size, existing_memory, throttler_, alignment, original_file_name, use_adaptive_buffer_size_, adaptive_buffer_initial_size)
 {
     fd_ = -1;
 }
 
 WriteBufferFromFile::~WriteBufferFromFile()
 {
-    finalize();
-    ::close(fd);
+    if (fd < 0)
+        return;
+
+    try
+    {
+        if (!canceled)
+            finalize();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    int err = ::close(fd);
+    /// Everything except for EBADF should be ignored in dtor, since all of
+    /// others (EINTR/EIO/ENOSPC/EDQUOT) could be possible during writing to
+    /// fd, and then write already failed and the error had been reported to
+    /// the user/caller.
+    ///
+    /// Note, that for close() on Linux, EINTR should *not* be retried.
+    chassert(!(err && errno == EBADF));
 }
 
 void WriteBufferFromFile::finalizeImpl()
@@ -90,10 +116,11 @@ void WriteBufferFromFile::close()
     if (fd < 0)
         return;
 
-    next();
+    if (!canceled)
+        finalize();
 
     if (0 != ::close(fd))
-        throw Exception("Cannot close file", ErrorCodes::CANNOT_CLOSE_FILE);
+        throw Exception(ErrorCodes::CANNOT_CLOSE_FILE, "Cannot close file");
 
     fd = -1;
     metric_increment.destroy();

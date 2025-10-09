@@ -12,6 +12,7 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int INCORRECT_DATA;
+    extern const int ILLEGAL_COLUMN;
 }
 
 JSONAsRowInputFormat::JSONAsRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_, ProcessorID pid_)
@@ -100,8 +101,7 @@ bool JSONAsRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &)
 
 void JSONAsRowInputFormat::setReadBuffer(ReadBuffer & in_)
 {
-    buf = std::make_unique<PeekableReadBuffer>(in_);
-    IInputFormat::setReadBuffer(*buf);
+    buf->setSubBuffer(in_);
 }
 
 
@@ -122,7 +122,7 @@ void JSONAsStringRowInputFormat::readJSONObject(IColumn & column)
     bool quotes = false;
 
     if (*buf->position() != '{')
-        throw Exception("JSON object must begin with '{'.", ErrorCodes::INCORRECT_DATA);
+        throw Exception(ErrorCodes::INCORRECT_DATA, "JSON object must begin with '{'.");
 
     ++buf->position();
     ++balance;
@@ -132,7 +132,7 @@ void JSONAsStringRowInputFormat::readJSONObject(IColumn & column)
     while (balance)
     {
         if (buf->eof())
-            throw Exception("Unexpected end of file while parsing JSON object.", ErrorCodes::INCORRECT_DATA);
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Unexpected end of file while parsing JSON object.");
 
         if (quotes)
         {
@@ -198,15 +198,25 @@ JSONAsObjectRowInputFormat::JSONAsObjectRowInputFormat(
     : JSONAsRowInputFormat(header_, in_, params_, ProcessorID::JSONAsObjectRowInputFormatID)
     , format_settings(format_settings_)
 {
-    if (!isObject(header_.getByPosition(0).type))
+    const auto & type = header_.getByPosition(0).type;
+    if (!isObject(type))
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "Input format JSONAsObject is only suitable for tables with a single column of type Object but the column type is {}",
-            header_.getByPosition(0).type->getName());
+            "Input format JSONAsObject is only suitable for tables with a single column of type json but the column type is {}",
+            type->getName());
 }
 
 void JSONAsObjectRowInputFormat::readJSONObject(IColumn & column)
 {
     serializations[0]->deserializeTextJSON(column, *buf, format_settings);
+}
+
+JSONAsObjectExternalSchemaReader::JSONAsObjectExternalSchemaReader(const FormatSettings & settings_) : settings(settings_)
+{
+    if (!settings.json.allow_json_type)
+        throw Exception(
+            ErrorCodes::ILLEGAL_COLUMN,
+            "Cannot infer the data structure in JSONAsObject format because experimental JSON type is not allowed. Set setting "
+            "enable_json_type = 1 in order to allow it");
 }
 
 void registerInputFormatJSONAsString(FormatFactory & factory)

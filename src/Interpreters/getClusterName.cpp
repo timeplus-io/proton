@@ -29,7 +29,7 @@ std::string getClusterName(const IAST & node)
     if (const auto * ast_func = node.as<ASTFunction>())
     {
         if (ast_func->name != "minus" || !ast_func->arguments || ast_func->arguments->children.size() < 2)
-            throw Exception("Illegal expression instead of cluster name.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal expression instead of cluster name.");
 
         String name;
         for (const auto & arg : ast_func->arguments->children)
@@ -43,7 +43,7 @@ std::string getClusterName(const IAST & node)
         return name;
     }
 
-    throw Exception("Illegal expression instead of cluster name.", ErrorCodes::BAD_ARGUMENTS);
+    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal expression instead of cluster name.");
 }
 
 

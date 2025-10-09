@@ -12,6 +12,7 @@
 #include <Common/logger_useful.h>
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>
+#include <Common/re2.h>
 #include <IO/HTTPCommon.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
@@ -25,7 +26,6 @@
 #include "Poco/StreamCopier.h"
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
-#include <re2/re2.h>
 
 #include <boost/algorithm/string.hpp>
 
@@ -133,16 +133,22 @@ void PocoHTTPClientConfiguration::updateSchemeAndRegion()
     }
 }
 
+ConnectionTimeouts getTimeoutsFromConfiguration(const PocoHTTPClientConfiguration & client_configuration)
+{
+    return ConnectionTimeouts()
+        .withConnectionTimeout(Poco::Timespan(client_configuration.connectTimeoutMs * 1000))
+        .withSendTimeout(Poco::Timespan(client_configuration.requestTimeoutMs * 1000))
+        .withReceiveTimeout(Poco::Timespan(client_configuration.requestTimeoutMs * 1000))
+        .withTCPKeepAliveTimeout(Poco::Timespan(
+            client_configuration.enableTcpKeepAlive ? client_configuration.tcpKeepAliveIntervalMs * 1000 : 0))
+        .withHTTPKeepAliveTimeout(Poco::Timespan(
+            client_configuration.http_keep_alive_timeout_ms * 1000)); /// flag indicating whether keep-alive is enabled is set to each session upon creation
+}
 
 PocoHTTPClient::PocoHTTPClient(const PocoHTTPClientConfiguration & client_configuration)
     : per_request_configuration(client_configuration.per_request_configuration)
     , error_report(client_configuration.error_report)
-    , timeouts(ConnectionTimeouts(
-          Poco::Timespan(client_configuration.connectTimeoutMs * 1000), /// connection timeout.
-          Poco::Timespan(client_configuration.requestTimeoutMs * 1000), /// send timeout.
-          Poco::Timespan(client_configuration.requestTimeoutMs * 1000), /// receive timeout.
-          Poco::Timespan(client_configuration.enableTcpKeepAlive ? client_configuration.tcpKeepAliveIntervalMs * 1000 : 0),
-          Poco::Timespan(client_configuration.http_keep_alive_timeout_ms * 1000))) /// flag indicating whether keep-alive is enabled is set to each session upon creation
+    , timeouts(getTimeoutsFromConfiguration(client_configuration))
     , remote_host_filter(client_configuration.remote_host_filter)
     , s3_max_redirects(client_configuration.s3_max_redirects)
     , s3_use_adaptive_timeouts(client_configuration.s3_use_adaptive_timeouts)
@@ -297,7 +303,7 @@ void PocoHTTPClient::makeRequestInternal(
 {
     /// Most sessions in pool are already connected and it is not possible to set proxy host/port to a connected session.
     const auto request_configuration = per_request_configuration(request);
-    if (http_connection_pool_size && request_configuration.proxy_host.empty())
+    if (http_connection_pool_size)
         makeRequestInternalImpl<true>(request, request_configuration, response, readLimiter, writeLimiter);
     else
         makeRequestInternalImpl<false>(request, request_configuration, response, readLimiter, writeLimiter);
@@ -332,7 +338,7 @@ void PocoHTTPClient::makeRequestInternalImpl(
 {
     using SessionPtr = std::conditional_t<pooled, PooledHTTPSessionPtr, HTTPSessionPtr>;
 
-    Poco::Logger * log = &Poco::Logger::get("AWSClient");
+    LoggerPtr log = getLogger("AWSClient");
 
     auto uri = request.GetUri().GetURIString();
     auto method = getMethod(request);
@@ -350,7 +356,7 @@ void PocoHTTPClient::makeRequestInternalImpl(
         case Aws::Http::HttpMethod::HTTP_HEAD:
             if (get_request_throttler)
             {
-                UInt64 sleep_us = get_request_throttler->add(1);
+                UInt64 sleep_us = get_request_throttler->add(1, ProfileEvents::S3GetRequestThrottlerCount, ProfileEvents::S3GetRequestThrottlerSleepMicroseconds);
                 if (for_disk_s3)
                 {
                     ProfileEvents::increment(ProfileEvents::DiskS3GetRequestThrottlerCount);
@@ -363,7 +369,7 @@ void PocoHTTPClient::makeRequestInternalImpl(
         case Aws::Http::HttpMethod::HTTP_PATCH:
             if (put_request_throttler)
             {
-                UInt64 sleep_us = put_request_throttler->add(1);
+                UInt64 sleep_us = put_request_throttler->add(1, ProfileEvents::S3PutRequestThrottlerCount, ProfileEvents::S3PutRequestThrottlerSleepMicroseconds);
                 if (for_disk_s3)
                 {
                     ProfileEvents::increment(ProfileEvents::DiskS3PutRequestThrottlerCount);
@@ -391,15 +397,9 @@ void PocoHTTPClient::makeRequestInternalImpl(
                 /// This can lead to request signature difference on S3 side.
                 if constexpr (pooled)
                     session = makePooledHTTPSession(
-                        target_uri,
-                        getTimeouts(method, first_attempt, /*first_byte*/ true),
-                        http_connection_pool_size,
-                        /* resolve_host = */ true);
+                        target_uri, timeouts, http_connection_pool_size, wait_on_pool_size_limit);
                 else
-                    session = makeHTTPSession(
-                        target_uri,
-                        getTimeouts(method, first_attempt, /*first_byte*/ true),
-                        /* resolve_host = */ false);
+                    session = makeHTTPSession(target_uri, timeouts);
                 bool use_tunnel = request_configuration.proxy_scheme == Aws::Http::Scheme::HTTP && target_uri.getScheme() == "https";
 
                 session->setProxy(
@@ -413,15 +413,9 @@ void PocoHTTPClient::makeRequestInternalImpl(
             {
                 if constexpr (pooled)
                     session = makePooledHTTPSession(
-                        target_uri,
-                        getTimeouts(method, first_attempt, /*first_byte*/ true),
-                        http_connection_pool_size,
-                        /* resolve_host = */ true);
+                        target_uri, timeouts, http_connection_pool_size, wait_on_pool_size_limit);
                 else
-                    session = makeHTTPSession(
-                        target_uri,
-                        getTimeouts(method, first_attempt, /*first_byte*/ true),
-                        /* resolve_host = */ false);
+                    session = makeHTTPSession(target_uri, timeouts);
             }
 
 

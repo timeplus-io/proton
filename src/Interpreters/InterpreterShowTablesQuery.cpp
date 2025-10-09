@@ -105,7 +105,7 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     }
 
     if (query.temporary && !query.from.empty())
-        throw Exception("The `FROM` and `TEMPORARY` cannot be used together in `SHOW TABLES`", ErrorCodes::SYNTAX_ERROR);
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "The `FROM` and `TEMPORARY` cannot be used together in `SHOW TABLES`");
 
     String database = getContext()->resolveDatabase(query.from);
     DatabaseCatalog::instance().assertDatabaseExists(database);
@@ -123,7 +123,7 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     if (query.temporary)
     {
         if (query.dictionaries)
-            throw Exception("Temporary dictionaries are not possible.", ErrorCodes::SYNTAX_ERROR);
+            throw Exception(ErrorCodes::SYNTAX_ERROR, "Temporary dictionaries are not possible.");
         rewritten_query << "is_temporary";
     }
     else
@@ -159,7 +159,7 @@ BlockIO InterpreterShowTablesQuery::execute()
 
         Block sample_block{ColumnWithTypeAndName(std::make_shared<DataTypeString>(), "Caches")};
         MutableColumns res_columns = sample_block.cloneEmptyColumns();
-        auto caches = FileCacheFactory::instance().getAllByName();
+        auto caches = FileCacheFactory::instance().getAll();
         for (const auto & [name, _] : caches)
             res_columns[0]->insert(name);
         BlockIO res;
@@ -170,7 +170,11 @@ BlockIO InterpreterShowTablesQuery::execute()
         return res;
     }
 
-    return executeQuery(getRewrittenQuery(), getContext(), true);
+    /// proton: starts
+    auto current_context = Context::createCopy(getContext());
+    current_context->setSetting("get_tables_ignore_error", false);
+    return executeQuery(getRewrittenQuery(), std::move(current_context), true);
+    /// proton: ends
 }
 
 

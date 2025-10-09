@@ -189,7 +189,7 @@ void LDAPClient::diag(const int rc, String text)
             }
         }
 
-        throw Exception(text, ErrorCodes::LDAP_ERROR);
+        throw Exception::createDeprecated(text, ErrorCodes::LDAP_ERROR);
     }
 }
 
@@ -210,13 +210,13 @@ bool LDAPClient::openConnection()
 
         auto * uri = ldap_url_desc2str(&url);
         if (!uri)
-            throw Exception("ldap_url_desc2str() failed", ErrorCodes::LDAP_ERROR);
+            throw Exception(ErrorCodes::LDAP_ERROR, "ldap_url_desc2str() failed");
 
         SCOPE_EXIT({ ldap_memfree(uri); });
 
         diag(ldap_initialize(&handle, uri));
         if (!handle)
-            throw Exception("ldap_initialize() failed", ErrorCodes::LDAP_ERROR);
+            throw Exception(ErrorCodes::LDAP_ERROR, "ldap_initialize() failed");
     }
 
     {
@@ -355,10 +355,10 @@ bool LDAPClient::openConnection()
                 const auto user_dn_search_results = search(*params.user_dn_detection);
 
                 if (user_dn_search_results.empty())
-                    throw Exception("Failed to detect user DN: empty search results", ErrorCodes::LDAP_ERROR);
+                    throw Exception(ErrorCodes::LDAP_ERROR, "Failed to detect user DN: empty search results");
 
                 if (user_dn_search_results.size() > 1)
-                    throw Exception("Failed to detect user DN: more than one entry in the search results", ErrorCodes::LDAP_ERROR);
+                    throw Exception(ErrorCodes::LDAP_ERROR, "Failed to detect user DN: more than one entry in the search results");
 
                 final_user_dn = *user_dn_search_results.begin();
             }
@@ -367,7 +367,7 @@ bool LDAPClient::openConnection()
         }
 
         default:
-            throw Exception("Unknown SASL mechanism", ErrorCodes::LDAP_ERROR);
+            throw Exception(ErrorCodes::LDAP_ERROR, "Unknown SASL mechanism");
     }
 }
 
@@ -516,7 +516,7 @@ LDAPClient::SearchResults LDAPClient::search(const SearchParams & search_params)
 
                     for (size_t i = 0; referrals[i]; ++i)
                     {
-                        LOG_WARNING(&Poco::Logger::get("LDAPClient"), "Received reference during LDAP search but not following it: {}", referrals[i]);
+                        LOG_WARNING(getLogger("LDAPClient"), "Received reference during LDAP search but not following it: {}", referrals[i]);
                     }
                 }
 
@@ -533,7 +533,7 @@ LDAPClient::SearchResults LDAPClient::search(const SearchParams & search_params)
 
                 if (rc != LDAP_SUCCESS)
                 {
-                    String message = "LDAP search failed";
+                    String message;
 
                     const char * raw_err_str = ldap_err2string(rc);
                     if (raw_err_str && *raw_err_str != '\0')
@@ -554,14 +554,14 @@ LDAPClient::SearchResults LDAPClient::search(const SearchParams & search_params)
                         message += matched_msg;
                     }
 
-                    throw Exception(message, ErrorCodes::LDAP_ERROR);
+                    throw Exception(ErrorCodes::LDAP_ERROR, "LDAP search failed{}", message);
                 }
 
                 break;
             }
 
             case -1:
-                throw Exception("Failed to process LDAP search message", ErrorCodes::LDAP_ERROR);
+                throw Exception(ErrorCodes::LDAP_ERROR, "Failed to process LDAP search message");
         }
     }
 
@@ -571,10 +571,10 @@ LDAPClient::SearchResults LDAPClient::search(const SearchParams & search_params)
 bool LDAPSimpleAuthClient::authenticate(const RoleSearchParamsList * role_search_params, SearchResultsList * role_search_results)
 {
     if (params.user.empty())
-        throw Exception("LDAP authentication of a user with empty name is not allowed", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "LDAP authentication of a user with empty name is not allowed");
 
     if (!role_search_params != !role_search_results)
-        throw Exception("Cannot return LDAP search results", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot return LDAP search results");
 
     // Silently reject authentication attempt if the password is empty as if it didn't match.
     if (params.password.empty())
@@ -613,12 +613,12 @@ bool LDAPSimpleAuthClient::authenticate(const RoleSearchParamsList * role_search
 
 void LDAPClient::diag(const int, String)
 {
-    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "proton was built without LDAP support");
 }
 
 bool LDAPClient::openConnection()
 {
-    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "proton was built without LDAP support");
 }
 
 void LDAPClient::closeConnection() noexcept
@@ -627,12 +627,12 @@ void LDAPClient::closeConnection() noexcept
 
 LDAPClient::SearchResults LDAPClient::search(const SearchParams &)
 {
-    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "proton was built without LDAP support");
 }
 
 bool LDAPSimpleAuthClient::authenticate(const RoleSearchParamsList *, SearchResultsList *)
 {
-    throw Exception("proton was built without LDAP support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
+    throw Exception(ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME, "proton was built without LDAP support");
 }
 
 #endif // USE_LDAP

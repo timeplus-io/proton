@@ -55,7 +55,7 @@ enum class TypeCategory : UInt8
 struct TupleOperators
 {
     using Comparer = std::function<int(const std::any &, const std::any &)>;
-    using Getter = std::function<std::pair<std::any, /*is_string_ref*/bool>(const IColumn **, size_t)>;
+    using Getter = std::function<std::pair<std::any, /*is_string_ref*/ bool>(const IColumn **, size_t)>;
     using Appender = std::function<void(const std::any &, ColumnTuple &)>;
     using Writer = std::function<void(const std::any &, WriteBuffer &)>;
     using Reader = std::function<std::any(ReadBuffer &, ArenaWithFreeLists *)>;
@@ -251,7 +251,8 @@ protected:
 
 public:
     AggregateFunctionMinMaxKTuple(UInt64 k_, const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKTupleData<is_min>, AggregateFunctionMinMaxKTuple<is_min>>(arguments, params)
+        : IAggregateFunctionDataHelper<AggregateFunctionMinMaxKTupleData<is_min>, AggregateFunctionMinMaxKTuple<is_min>>(
+              arguments, params, createResultType(arguments))
         , k(k_)
     {
     }
@@ -262,12 +263,12 @@ protected:
 public:
     String getName() const override { return is_min ? "min_k" : "max_k"; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType(const DataTypes & arguments_)
     {
-        if (this->argument_types.size() == 1 && !isTuple(this->argument_types[0]))
-            return std::make_shared<DataTypeArray>(this->argument_types[0]);
+        if (arguments_.size() == 1 && !isTuple(arguments_[0]))
+            return std::make_shared<DataTypeArray>(arguments_[0]);
         else
-            return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(this->argument_types));
+            return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(arguments_));
     }
 
     bool allocatesMemoryInArena() const override { return false; }

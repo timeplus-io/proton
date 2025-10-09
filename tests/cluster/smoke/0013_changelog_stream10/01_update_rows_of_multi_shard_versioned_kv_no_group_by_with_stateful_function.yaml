@@ -1,0 +1,135 @@
+tags:
+  - versioned_kv
+  - multi_shard
+  - streaming_aggreagation
+  - global_aggregation
+  - no_group_by
+  - stateful_function
+  - todo
+
+description: update rows of multi_shard versioned_kv no group_by with stateful function
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    sql: drop function if exists test_14_10_sec_large;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE AGGREGATE FUNCTION test_14_10_sec_large(value float32) RETURNS float32 LANGUAGE JAVASCRIPT AS $$
+        {
+          initialize: function() { 
+            this.max = -1.0;
+            this.sec = -1.0;
+          },
+
+          process: function(values) {
+            for(let i=0; i<values.length; i++) {
+              if(values[i] > this.max) {
+                this.sec = this.max;
+                this.max = values[i];
+              }
+              if(values[i] < this.max && values[i] > this.sec)
+                this.sec = values[i];
+            }
+          },
+
+          finalize: function() {
+            return this.sec;
+          },
+
+          serialize: function() {
+            let s = {"max": this.max, "sec":this.sec };
+            return JSON.stringify(s);
+          },
+
+          deserialize: function(state_str) {
+            let s = JSON.parse(state_str);
+            this.max = s["max"];
+            this.sec = s["sec"];
+          },
+
+          merge: function(state_str) {
+            let s = JSON.parse(state_str);
+            if (s["sec"] >= this.max) {
+              this.max = s["max"];
+              this.sec = s["sec"];
+            } else if (s["max"] >= this.max) {
+              this.sec = this.max;
+              this.max = s["max"];
+            } else if (s["max"] > this.sec) {
+              this.sec = s["max"];
+            }
+          }
+        }
+      $$;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream if not exists test14_multishard_10(i float, k1 int, k2 string) primary key k2
+      settings mode='versioned_kv', shards=3;
+  
+  - type: wait
+    time: 2
+
+  - name: "1473"
+    type: stream
+    query: |
+      select test_14_10_sec_large(i)
+      from test14_multishard_10 emit periodic 100ms;
+    schema: 
+      - name: test_14_10_sec_large(i)
+        type: float32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_multishard_10(i, k1, k2) values (6, 1, 'c');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_multishard_10(i, k1, k2) values (5, 2, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_multishard_10(i, k1, k2) values (4, 3, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_multishard_10(i, k1, k2) values (2, 1, 'a');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_multishard_10(i, k1, k2) values (3, 2, 'b');
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: insert into test14_multishard_10(i, k1, k2) values (4, 3, 'c');
+
+  - type: check
+    target_name: "1473"
+    expected_result:
+      - [-1]
+      - [5]
+      - [5]
+      - [5]
+      - [5]
+      - [5]

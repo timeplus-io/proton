@@ -3,7 +3,6 @@
 #include <Parsers/IAST.h>
 #include <Core/Names.h>
 
-
 namespace DB
 {
 
@@ -39,7 +38,8 @@ public:
         /// proton: starts
         EMIT,
         /// proton: ends
-        SETTINGS
+        SETTINGS,
+        INTERPOLATE
     };
 
     static String expressionToString(Expression expr)
@@ -86,6 +86,8 @@ public:
             /// proton: ends
             case Expression::SETTINGS:
                 return "SETTINGS";
+            case Expression::INTERPOLATE:
+                return "INTERPOLATE";
         }
         return "";
     }
@@ -131,6 +133,7 @@ public:
     ASTPtr emit()           const { return getExpression(Expression::EMIT); }
     /// proton: ends
     ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
+    ASTPtr interpolate()    const { return getExpression(Expression::INTERPOLATE); }
 
     bool hasFiltration() const { return where() || prewhere() || having(); }
 
@@ -151,6 +154,7 @@ public:
     std::pair<ASTPtr, bool> arrayJoinExpressionList() const;
 
     const ASTTablesInSelectQueryElement * join() const;
+    bool hasJoin() const;
     bool final() const;
     bool withFill() const;
     void replaceDatabaseAndTable(const String & database_name, const String & table_name);
@@ -160,7 +164,8 @@ public:
 
     void setFinal();
 
-    virtual QueryKind getQueryKind() const override { return QueryKind::Select; }
+    QueryKind getQueryKind() const override { return QueryKind::Select; }
+    bool hasQueryParameters() const;
 
     /// proton: starts. HACK
     void setSubQueryPipe(const std::string & subquery) { subquery_pipe = subquery; }
@@ -175,6 +180,11 @@ private:
     /// proton: ends
 
     std::unordered_map<Expression, size_t> positions;
+
+    /// This variable is optional as we want to set it on the first call to hasQueryParameters
+    /// and return the same variable on future calls to hasQueryParameters
+    /// its mutable as we set it in const function
+    mutable std::optional<bool> has_query_parameters;
 
     ASTPtr & getExpression(Expression expr);
 };

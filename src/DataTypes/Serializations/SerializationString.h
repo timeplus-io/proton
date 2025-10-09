@@ -18,23 +18,38 @@ public:
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
 
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
+    bool tryDeserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;
 
     /// proton: starts
-    void deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const override;
+    void deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const override;
+
+    void serializeBinaryPrefixTree(const Field & field, String & encoded, const FormatSettings & settings, bool ascending) const override;
+
+    void serializeBinaryPrefixTree(
+        const IColumn & column, size_t row_num, String & encoded, const FormatSettings & settings, bool ascending) const override;
+
+    void deserializeBinaryPrefixTree(
+        IColumn & column, std::string_view & data, const DB::FormatSettings & settings, bool ascending) const override;
+
+    void deserializeBinaryPrefixTreeDiscard(std::string_view & data, const DB::FormatSettings & settings, bool ascending) const override;
     /// proton: ends
 };
 

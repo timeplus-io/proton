@@ -1,0 +1,111 @@
+tags:
+- multishards
+- append_only
+- substream
+- streaming_tailing
+- stateful_function
+description: substreaming tailing with stateful func
+cluster:
+- p1k1
+- p3k1
+steps:
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view2_2;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop view if exists test13_view1_2;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      drop stream if exists test13_subst_2;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test13_subst_2(val float, k int) settings shards=3 ;
+  
+  - type: wait
+    time: 2
+  
+  - name: '1318'
+    type: stream
+    query: |
+      select lag(val, 1),
+             k
+      from test13_subst_2 partition by k;
+    schema:
+        - name: lag(val, 1)
+          type: float32
+        - name: k
+          type: int32
+          
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_2 (val, k)
+      values (6, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_2 (val, k)
+      values (1, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_2 (val, k)
+      values (2, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_2 (val, k)
+      values (3, 2);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_2 (val, k)
+      values (4, 1);
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      insert into test13_subst_2 (val, k)
+      values (5, 2);
+
+  - type: check
+    target_name: '1318'
+    expected_result:
+      - [ 0, 1 ]
+      - [ 0, 2 ]
+      - [ 6, 1 ]
+      - [ 1, 2 ]
+      - [ 2, 1 ]
+      - [ 3, 2 ]
+  

@@ -27,7 +27,7 @@ static void checkAllTypesAreAllowedInTable(const NamesAndTypesList & names_and_t
 {
     for (const auto & elem : names_and_types)
         if (elem.type->cannotBeStoredInTables())
-            throw Exception("Data type " + elem.type->getName() + " cannot be used in tables", ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_STREAMS);
+            throw Exception(ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_STREAMS, "Data type {} cannot be used in streams", elem.type->getName());
 }
 
 
@@ -35,7 +35,7 @@ ContextMutablePtr StorageFactory::Arguments::getContext() const
 {
     auto ptr = context.lock();
     if (!ptr)
-        throw Exception("Context has expired", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Context has expired");
     return ptr;
 }
 
@@ -43,7 +43,7 @@ ContextMutablePtr StorageFactory::Arguments::getLocalContext() const
 {
     auto ptr = local_context.lock();
     if (!ptr)
-        throw Exception("Context has expired", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Context has expired");
     return ptr;
 }
 
@@ -51,10 +51,7 @@ ContextMutablePtr StorageFactory::Arguments::getLocalContext() const
 void StorageFactory::registerStorage(const std::string & name, CreatorFn creator_fn, StorageFeatures features)
 {
     if (!storages.emplace(name, Creator{std::move(creator_fn), features}).second)
-        /// proton: starts
-        throw Exception("TableFunctionFactory: the function name '" + name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "TableFunctionFactory: the function name '{}' is not unique", name);
 }
 
 
@@ -65,30 +62,35 @@ StoragePtr StorageFactory::get(
     ContextMutablePtr context,
     const ColumnsDescription & columns,
     const ConstraintsDescription & constraints,
-    bool has_force_restore_data_flag) const
+    bool has_force_restore_data_flag,
+    Int32 schema_version) const
 {
     String name, comment;
     ASTStorage * storage_def = query.storage;
 
     bool has_engine_args = false;
 
-    if (query.is_ordinary_view)
+    if (query.isOrdinaryView())
     {
         if (query.storage)
-            throw Exception("Specifying ENGINE is not allowed for a View", ErrorCodes::INCORRECT_QUERY);
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "Specifying ENGINE is not allowed for a View");
 
         name = "View";
     }
-    else if (query.is_dictionary)
+    else if (query.isDictionary())
     {
         if (query.storage)
-            throw Exception("Specifying ENGINE is not allowed for a Dictionary", ErrorCodes::INCORRECT_QUERY);
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "Specifying ENGINE is not allowed for a Dictionary");
 
         name = "Dictionary";
     }
-    else if (query.is_random)
+    else if (query.isRandomStream())
     {
         name = "Random";
+    }
+    else if (query.isNullStream())
+    {
+        name = "Null";
     }
     else
     {
@@ -96,20 +98,19 @@ StoragePtr StorageFactory::get(
         /// Exception: any type is allowed in View, because plain (non-materialized) View does not store anything itself.
         checkAllTypesAreAllowedInTable(columns.getAll());
 
-        if (query.is_materialized_view)
+        if (query.isMaterializedView())
         {
             name = "MaterializedView";
         }
         else
         {
             if (!storage_def)
-                throw Exception("Incorrect CREATE query: ENGINE required", ErrorCodes::ENGINE_REQUIRED);
+                throw Exception(ErrorCodes::ENGINE_REQUIRED, "Incorrect CREATE query: ENGINE required");
 
             const ASTFunction & engine_def = *storage_def->engine;
 
             if (engine_def.parameters)
-                throw Exception(
-                    "Engine definition cannot take the form of a parametric function", ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS);
+                throw Exception(ErrorCodes::FUNCTION_CANNOT_HAVE_PARAMETERS, "Engine definition cannot take the form of a parametric function");
 
             if (engine_def.arguments)
                 has_engine_args = true;
@@ -118,29 +119,24 @@ StoragePtr StorageFactory::get(
 
             if (name == "View")
             {
-                throw Exception(
-                    "Direct creation of tables with ENGINE View is not supported, use CREATE VIEW statement",
-                    ErrorCodes::INCORRECT_QUERY);
+                throw Exception(ErrorCodes::INCORRECT_QUERY, "Direct creation of tables with ENGINE View is not supported, use CREATE VIEW statement");
             }
 
             auto it = storages.find(name);
             if (it == storages.end())
             {
                 auto hints = getHints(name);
-                /// proton: starts
                 if (!hints.empty())
-                    throw Exception("Unknown engine " + name + ". Maybe you meant: " + toString(hints), ErrorCodes::UNKNOWN_STORAGE);
+                    throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown engine {}. Maybe you meant: {}", name, toString(hints));
                 else
-                    throw Exception("Unknown engine " + name, ErrorCodes::UNKNOWN_STORAGE);
-                /// proton: ends
+                    throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown engine {}", name);
             }
 
             auto check_feature = [&](String feature_description, FeatureMatcherFn feature_matcher_fn)
             {
                 if (!feature_matcher_fn(it->second.features))
                 {
-                    String msg = "Engine " + name + " doesn't support " + feature_description + ". "
-                        "Currently only the following engines have support for the feature: [";
+                    String msg;
                     auto supporting_engines = getAllRegisteredNamesByFeatureMatcherFn(feature_matcher_fn);
                     for (size_t index = 0; index < supporting_engines.size(); ++index)
                     {
@@ -148,8 +144,9 @@ StoragePtr StorageFactory::get(
                             msg += ", ";
                         msg += supporting_engines[index];
                     }
-                    msg += "]";
-                    throw Exception(msg, ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Engine {} doesn't support {}. "
+                                    "Currently only the following engines have support for the feature: [{}]",
+                                    name, feature_description, msg);
                 }
             };
 
@@ -197,10 +194,9 @@ StoragePtr StorageFactory::get(
         .constraints = constraints,
         .attach = query.attach,
         /// proton: starts
-        .is_virtual = relative_data_path.empty(),
-        .is_random = query.is_random,
-        /// proton: ends
         .has_force_restore_data_flag = has_force_restore_data_flag,
+        .schema_version = schema_version,
+        /// proton: ends
         .comment = comment};
 
     assert(arguments.getContext() == arguments.getContext()->getGlobalContext());

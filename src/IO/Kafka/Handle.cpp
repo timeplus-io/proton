@@ -29,7 +29,7 @@ Handle::Handle(rd_kafka_type_t type, rd_kafka_conf_t * conf, int32_t poll_timeou
         throw Exception(mapErrorCode(rd_kafka_last_error()), "Failed to create kafka handle: {}", errstr);
     }
 
-    logger = &Poco::Logger::get(getName());
+    logger = getLogger(getName());
 }
 
 Handle::~Handle()

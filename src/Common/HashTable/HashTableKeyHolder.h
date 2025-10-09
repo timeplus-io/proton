@@ -79,6 +79,13 @@ struct ArenaKeyHolder
 
 }
 
+/// proton: starts.
+inline StringRef ALWAYS_INLINE keyHolderGetKey(DB::ArenaKeyHolder && holder)
+{
+    return holder.key;
+}
+/// proton: ends.
+
 inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::ArenaKeyHolder & holder)
 {
     return holder.key;
@@ -86,8 +93,12 @@ inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::ArenaKeyHolder & holder)
 
 inline void ALWAYS_INLINE keyHolderPersistKey(DB::ArenaKeyHolder & holder)
 {
-    // Hash table shouldn't ask us to persist a zero key
-    assert(holder.key.size > 0);
+    // Normally, our hash table shouldn't ask to persist a zero key,
+    // but it can happened in the case of clearable hash table (ClearableHashSet, for example).
+    // The clearable hash table doesn't use zero storage and
+    // distinguishes empty keys by using cell version, not the value itself.
+    // So, when an empty StringRef is inserted in ClearableHashSet we'll get here key of zero size.
+    // assert(holder.key.size > 0);
     holder.key.data = holder.pool.insert(holder.key.data, holder.key.size);
 }
 
@@ -109,6 +120,13 @@ struct SerializedKeyHolder
 };
 
 }
+
+/// proton: starts.
+inline StringRef ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder && holder)
+{
+    return holder.key;
+}
+/// proton: ends.
 
 inline StringRef & ALWAYS_INLINE keyHolderGetKey(DB::SerializedKeyHolder & holder)
 {

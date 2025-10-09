@@ -1,0 +1,40 @@
+name: python_udf_pycaret
+description: Tests covering the python_udf pycaret library 
+tags:
+  - smoke
+  - python_udf
+  - python_udf_library
+  - pycaret
+  - skip # DB::Exception: UDF running error, detail message: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject
+arch:
+  - x86_64
+
+
+setup:
+  scope: suite
+  steps:
+    # pycaret
+    - type: command
+      node: [p1]
+      shell: |
+        curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "pycaret"}'
+
+    - type: command
+      name: python-udf8-1
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "pycaret") | length > 0'
+    
+    - type: check
+      target_name: python-udf8-1
+      expected_result: ['true']
+    
+    - type: command
+      <<if eq .nodes "1">>
+      node: [p1]
+      <<else>>
+      node: [p1, p2, p3]
+      <<end>>
+      shell: |
+        apt-get update
+        apt-get install libgomp1

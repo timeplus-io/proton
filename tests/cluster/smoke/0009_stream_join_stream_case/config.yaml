@@ -1,0 +1,27 @@
+name: stream_join_stream
+description: Tests covering the stream query smoke cases.
+tags:
+- smoke
+setup:
+  scope: suite
+  steps:
+  - type: wait
+    time: 1
+    
+  - type: query
+    sql: drop stream if exists test10_left_stream
+    
+  - type: query
+    sql: drop stream if exists test10_right_stream
+    
+  - type: wait
+    time: 2
+    
+  - type: query
+    sql: create stream test10_left_stream (i int, s string, ts datetime)
+    
+  - type: wait
+    time: 2
+    
+  - type: query
+    sql: create stream test10_right_stream (ii int, ss string, tts datetime)

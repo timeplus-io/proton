@@ -1,4 +1,5 @@
-# rebuild in https://github.com/timeplus-io/proton/pull/921 revert in #925
+# rebuild in https://github.com/timeplus-io/proton-enterprise/pull/7825
+# docs: https://github.com/timeplus-io/proton-enterprise/wiki/How-to-generate-proton%E2%80%90binary%E2%80%90builder-image
 # docker build -t timeplus/proton-binary-builder .
 FROM ubuntu:20.04
 

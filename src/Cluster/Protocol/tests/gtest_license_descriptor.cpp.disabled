@@ -1,0 +1,165 @@
+#include <Cluster/Common/serde.h>
+#include <Cluster/Protocol/LicenseDescriptor.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/WriteBufferFromString.h>
+
+#include <gtest/gtest.h>
+
+
+TEST(LicenseDescriptor, SerializeDeserializeTrialLicense)
+{
+    cluster::protocol::LicenseDescriptor original;
+    original.type = cluster::protocol::LicenseDescriptor::Type::Trial;
+    original.created_by = "Trial User";
+    original.created_at = "2023-05-01";
+    original.expired_at = "2023-06-01";
+
+    std::string serialized;
+    DB::WriteBufferFromString write_buffer{serialized};
+    original.serialize(write_buffer, 1);
+    write_buffer.finalize();
+
+    DB::ReadBufferFromString read_buffer(serialized);
+    cluster::protocol::LicenseDescriptor deserialized;
+    deserialized.deserialize(read_buffer, 1);
+
+    EXPECT_EQ(original.type, deserialized.type);
+    EXPECT_EQ(original.created_by, deserialized.created_by);
+    EXPECT_EQ(original.created_at, deserialized.created_at);
+    EXPECT_EQ(original.expired_at, deserialized.expired_at);
+}
+
+TEST(LicenseDescriptor, SerializeDeserializePaidLicense)
+{
+    cluster::protocol::LicenseDescriptor original;
+    original.type = cluster::protocol::LicenseDescriptor::Type::Paid;
+    original.created_by = "Paid User";
+    original.license_key = "PAID-LICENSE-KEY-123";
+    original.license_file = "path/to/license/file.lic";
+
+    std::string serialized;
+    DB::WriteBufferFromString write_buffer{serialized};
+    original.serialize(write_buffer, 1);
+    write_buffer.finalize();
+
+    DB::ReadBufferFromString read_buffer(serialized);
+    cluster::protocol::LicenseDescriptor deserialized;
+    deserialized.deserialize(read_buffer, 1);
+
+    EXPECT_EQ(original.type, deserialized.type);
+    EXPECT_EQ(original.created_by, deserialized.created_by);
+    EXPECT_EQ(original.license_key, deserialized.license_key);
+    EXPECT_EQ(original.license_file, deserialized.license_file);
+}
+
+TEST(LicenseDescriptor, DeserializeTrialLicenseSchemaVersion1)
+{
+    uint32_t schema_version = 1;
+    uint32_t type = 0;
+    std::string created_by = "Test User";
+    std::string created_at = "2023-05-01";
+    std::string expired_at = "2023-06-01";
+
+    std::string serialized;
+    DB::WriteBufferFromString write_buffer(serialized);
+    DB::writeBinary(schema_version, write_buffer);
+    DB::writeBinary(type, write_buffer);
+    DB::writeStringBinary(created_by, write_buffer);
+    DB::writeStringBinary(created_at, write_buffer);
+    DB::writeStringBinary(expired_at, write_buffer);
+    write_buffer.finalize();
+
+    DB::ReadBufferFromString read_buffer(serialized);
+    cluster::protocol::LicenseDescriptor deserialized;
+    deserialized.deserialize(read_buffer, 1);
+
+    EXPECT_EQ(type, static_cast<uint32_t>(deserialized.type));
+    EXPECT_EQ(created_by, deserialized.created_by);
+    EXPECT_EQ(created_at, deserialized.created_at);
+    EXPECT_EQ(expired_at, deserialized.expired_at);
+}
+
+TEST(LicenseDescriptor, DeserializePaidLicenseSchemaVersion1)
+{
+    uint32_t schema_version = 1;
+    uint32_t type = 1;
+    std::string created_by = "Rich User";
+    std::string license_key = "license key 1";
+    std::string license_file = "license file content";
+
+    std::string serialized;
+    DB::WriteBufferFromString write_buffer(serialized);
+    DB::writeBinary(schema_version, write_buffer);
+    DB::writeBinary(type, write_buffer);
+    DB::writeStringBinary(created_by, write_buffer);
+    DB::writeStringBinary(license_key, write_buffer);
+    DB::writeStringBinary(license_file, write_buffer);
+    write_buffer.finalize();
+
+    DB::ReadBufferFromString read_buffer(serialized);
+    cluster::protocol::LicenseDescriptor deserialized;
+    deserialized.deserialize(read_buffer, 1);
+
+    EXPECT_EQ(type, static_cast<uint32_t>(deserialized.type));
+    EXPECT_EQ(created_by, deserialized.created_by);
+    EXPECT_EQ(license_key, deserialized.license_key);
+    EXPECT_EQ(license_file, deserialized.license_file);
+}
+
+TEST(LicenseDescriptor, DeserializeTrialLicenseSchemaVersion2)
+{
+    uint32_t schema_version = 2;
+    uint32_t type = 0;
+    std::string created_by = "Test User";
+    std::string created_at = "2023-05-01";
+    std::string expired_at = "2023-06-01";
+    std::string license_id = "TRIAL-001";
+
+    std::string serialized;
+    DB::WriteBufferFromString write_buffer(serialized);
+    DB::writeBinary(schema_version, write_buffer);
+    DB::writeBinary(type, write_buffer);
+    DB::writeStringBinary(created_by, write_buffer);
+    DB::writeStringBinary(created_at, write_buffer);
+    DB::writeStringBinary(expired_at, write_buffer);
+    DB::writeStringBinary(license_id, write_buffer);
+    write_buffer.finalize();
+
+    DB::ReadBufferFromString read_buffer(serialized);
+    cluster::protocol::LicenseDescriptor deserialized;
+    deserialized.deserialize(read_buffer, 1);
+
+    EXPECT_EQ(type, static_cast<uint32_t>(deserialized.type));
+    EXPECT_EQ(created_by, deserialized.created_by);
+    EXPECT_EQ(created_at, deserialized.created_at);
+    EXPECT_EQ(expired_at, deserialized.expired_at);
+}
+
+TEST(LicenseDescriptor, DeserializePaidLicenseSchemaVersion2)
+{
+    uint32_t schema_version = 2;
+    uint32_t type = 1;
+    std::string created_by = "Rich User";
+    std::string license_key = "license key 1";
+    std::string license_file = "license file content";
+    std::string license_id = "PAID-001";
+
+    std::string serialized;
+    DB::WriteBufferFromString write_buffer(serialized);
+    DB::writeBinary(schema_version, write_buffer);
+    DB::writeBinary(type, write_buffer);
+    DB::writeStringBinary(created_by, write_buffer);
+    DB::writeStringBinary(license_key, write_buffer);
+    DB::writeStringBinary(license_file, write_buffer);
+    DB::writeStringBinary(license_id, write_buffer);
+    write_buffer.finalize();
+
+    DB::ReadBufferFromString read_buffer(serialized);
+    cluster::protocol::LicenseDescriptor deserialized;
+    deserialized.deserialize(read_buffer, 1);
+
+    EXPECT_EQ(type, static_cast<uint32_t>(deserialized.type));
+    EXPECT_EQ(created_by, deserialized.created_by);
+    EXPECT_EQ(license_key, deserialized.license_key);
+    EXPECT_EQ(license_file, deserialized.license_file);
+}

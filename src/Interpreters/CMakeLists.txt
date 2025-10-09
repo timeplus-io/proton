@@ -10,4 +10,5 @@ if (ENABLE_FUZZING)
     add_subdirectory(fuzzers)
 endif()
 
+add_subdirectory(Apply)
 add_subdirectory(Streaming)

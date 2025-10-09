@@ -80,6 +80,8 @@ protected:
     std::pair<String, Int32> executePatch(const Poco::JSON::Object::Ptr & payload) const override;
 
     void buildRetentionSettings(Poco::JSON::Object & resp_table, const String & database, const String & table) const;
+    void buildCreatedByAndLastModifiedBy(Poco::JSON::Object & resp_table, const String & database, const String & table) const;
+    void buildTargetStream(Poco::JSON::Object & resp_table, const String & database, const String & table) const;
     virtual void buildTablesJSON(Poco::JSON::Object & resp, const TablePtrs & tables) const;
     virtual void buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_ast) const;
 

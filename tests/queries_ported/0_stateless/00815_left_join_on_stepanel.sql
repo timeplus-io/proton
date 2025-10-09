@@ -18,4 +18,4 @@ USE default;
 
 select f.model_id from test_00815.fact_cpc_clicks as f left join test_00815.dim_model as d on f.model_id=d.model_id limit 10;
 
-DROP DATABASE test_00815;
+DROP DATABASE test_00815 CASCADE;

@@ -1,0 +1,48 @@
+tags:
+  - udf
+
+description: Test covering simple python udf test
+
+steps:
+  - type: query
+    sql: drop stream if exists udf_stream;
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream udf_stream (value int);
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION test_bool(value int) RETURNS bool LANGUAGE PYTHON AS
+      $$
+      def test_bool(value):
+          res = [bool(x) for x in value]
+          return res
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python-udf1-13-1
+    type: stream
+    query: select test_bool(value) as res, value from udf_stream;
+    schema:
+      - name: res
+        type: bool
+      - name: value
+        type: int32
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into udf_stream(value) values ('0')('1')('2');
+
+  - type: check
+    target_name: python-udf1-13-1
+    expected_result:
+      - [False, '0']
+      - [True, '1']
+      - [True, '2']

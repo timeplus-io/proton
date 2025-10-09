@@ -1,0 +1,330 @@
+{% set table_size = 15 -%}
+{% for join_algorithm in ['default', 'full_sorting_merge', 'grace_hash'] -%}
+-- {{ join_algorithm }} --
+{% for block_size in range(1, table_size + 1, 4) -%}
+ALL INNER USING | bs = {{ block_size }}
+4	false	false
+5	false	false
+6	false	false
+8	false	false
+9	false	false
+11	false	false
+11	false	false
+12	false	false
+13	false	false
+13	false	false
+13	false	false
+14	false	false
+14	false	false
+ALL INNER | bs = {{ block_size }}
+4	4	false	false
+5	5	false	false
+6	6	false	false
+8	8	false	false
+9	9	false	false
+11	11	false	false
+11	11	false	false
+12	12	false	false
+13	13	false	false
+13	13	false	false
+13	13	false	false
+14	14	false	false
+14	14	false	false
+ALL LEFT | bs = {{ block_size }}
+1	0	val7	true
+2	0	val3	true
+2	0	val5	true
+4	4	val0	false
+5	5	val12	false
+6	6	val11	false
+8	8	val4	false
+9	9	val10	false
+10	0	val1	true
+10	0	val14	true
+11	11	val6	false
+11	11	val8	false
+12	12	val2	false
+13	13	val13	false
+13	13	val13	false
+13	13	val13	false
+14	14	val9	false
+14	14	val9	false
+ALL RIGHT | bs = {{ block_size }}
+4	4	false	val10
+5	5	false	val6
+6	6	false	val8
+8	8	false	val1
+9	9	false	val5
+11	11	false	val11
+11	11	false	val11
+12	12	false	val0
+13	13	false	val2
+13	13	false	val4
+13	13	false	val9
+14	14	false	val3
+14	14	false	val7
+ALL INNER | bs = {{ block_size }} | copmosite key
+2	2	2	2	2	2	false	false
+2	2	2	2	2	2	false	false
+ALL LEFT | bs = {{ block_size }} | copmosite key
+1	1	2	0	0	\N	val14	true
+1	1	2	0	0	\N	val3	true
+1	2	1	0	0	\N	val7	true
+1	2	2	0	0	\N	val1	true
+1	2	2	0	0	\N	val13	true
+1	2	2	0	0	\N	val4	true
+1	2	2	0	0	\N	val8	true
+1	\N	1	0	0	\N	val0	true
+1	\N	1	0	0	\N	val5	true
+1	\N	2	0	0	\N	val10	true
+2	2	1	0	0	\N	val11	true
+2	2	1	0	0	\N	val2	true
+2	2	1	0	0	\N	val6	true
+2	2	2	2	2	2	val12	false
+2	2	2	2	2	2	val9	false
+ALL RIGHT | bs = {{ block_size }} | copmosite key
+0	\N	0	1	1	1	true	val2
+0	\N	0	1	1	1	true	val7
+0	\N	0	1	1	2	true	val5
+0	\N	0	1	1	\N	true	val0
+0	\N	0	1	1	\N	true	val6
+0	\N	0	2	1	1	true	val1
+0	\N	0	2	1	1	true	val11
+0	\N	0	2	1	2	true	val10
+0	\N	0	2	1	2	true	val8
+0	\N	0	2	1	\N	true	val3
+0	\N	0	2	2	\N	true	val9
+2	2	2	2	2	2	false	val4
+2	2	2	2	2	2	false	val4
+ANY INNER USING | bs = {{ block_size }}
+4	false	false
+5	false	false
+6	false	false
+8	false	false
+9	false	false
+11	false	false
+12	false	false
+13	false	false
+14	false	false
+ANY INNER | bs = {{ block_size }}
+4	4	false	false
+5	5	false	false
+6	6	false	false
+8	8	false	false
+9	9	false	false
+11	11	false	false
+12	12	false	false
+13	13	false	false
+14	14	false	false
+ANY LEFT | bs = {{ block_size }}
+1	0	val7	true
+2	0	val3	true
+2	0	val5	true
+4	4	val0	false
+5	5	val12	false
+6	6	val11	false
+8	8	val4	false
+9	9	val10	false
+10	0	val1	true
+10	0	val14	true
+11	11	val6	false
+11	11	val8	false
+12	12	val2	false
+13	13	val13	false
+14	14	val9	false
+ANY RIGHT | bs = {{ block_size }}
+4	4	false	val10
+5	5	false	val6
+6	6	false	val8
+8	8	false	val1
+9	9	false	val5
+11	11	false	val11
+12	12	false	val0
+13	13	false	val2
+13	13	false	val4
+13	13	false	val9
+14	14	false	val3
+14	14	false	val7
+ANY INNER | bs = {{ block_size }} | copmosite key
+2	2	2	2	2	2	false	false
+ANY LEFT | bs = {{ block_size }} | copmosite key
+1	1	2	0	0	\N	val14	true
+1	1	2	0	0	\N	val3	true
+1	2	1	0	0	\N	val7	true
+1	2	2	0	0	\N	val1	true
+1	2	2	0	0	\N	val13	true
+1	2	2	0	0	\N	val4	true
+1	2	2	0	0	\N	val8	true
+1	\N	1	0	0	\N	val0	true
+1	\N	1	0	0	\N	val5	true
+1	\N	2	0	0	\N	val10	true
+2	2	1	0	0	\N	val11	true
+2	2	1	0	0	\N	val2	true
+2	2	1	0	0	\N	val6	true
+2	2	2	2	2	2	val12	false
+2	2	2	2	2	2	val9	false
+ANY RIGHT | bs = {{ block_size }} | copmosite key
+0	\N	0	1	1	1	true	val2
+0	\N	0	1	1	1	true	val7
+0	\N	0	1	1	2	true	val5
+0	\N	0	1	1	\N	true	val0
+0	\N	0	1	1	\N	true	val6
+0	\N	0	2	1	1	true	val1
+0	\N	0	2	1	1	true	val11
+0	\N	0	2	1	2	true	val10
+0	\N	0	2	1	2	true	val8
+0	\N	0	2	1	\N	true	val3
+0	\N	0	2	2	\N	true	val9
+2	2	2	2	2	2	false	val4
+{% endfor -%}
+ALL INNER | join_use_nulls = 1
+4	4	false	false
+5	5	false	false
+6	6	false	false
+8	8	false	false
+9	9	false	false
+11	11	false	false
+11	11	false	false
+12	12	false	false
+13	13	false	false
+13	13	false	false
+13	13	false	false
+14	14	false	false
+14	14	false	false
+ALL LEFT | join_use_nulls = 1
+1	\N	val7	true
+2	\N	val3	true
+2	\N	val5	true
+4	4	val0	false
+5	5	val12	false
+6	6	val11	false
+8	8	val4	false
+9	9	val10	false
+10	\N	val1	true
+10	\N	val14	true
+11	11	val6	false
+11	11	val8	false
+12	12	val2	false
+13	13	val13	false
+13	13	val13	false
+13	13	val13	false
+14	14	val9	false
+14	14	val9	false
+ALL RIGHT | join_use_nulls = 1
+4	4	false	val10
+5	5	false	val6
+6	6	false	val8
+8	8	false	val1
+9	9	false	val5
+11	11	false	val11
+11	11	false	val11
+12	12	false	val0
+13	13	false	val2
+13	13	false	val4
+13	13	false	val9
+14	14	false	val3
+14	14	false	val7
+ALL INNER | join_use_nulls = 1 | copmosite key
+2	2	2	2	2	2	false	false
+2	2	2	2	2	2	false	false
+ALL LEFT | join_use_nulls = 1 | copmosite key
+1	1	2	\N	\N	\N	val14	\N
+1	1	2	\N	\N	\N	val3	\N
+1	2	1	\N	\N	\N	val7	\N
+1	2	2	\N	\N	\N	val1	\N
+1	2	2	\N	\N	\N	val13	\N
+1	2	2	\N	\N	\N	val4	\N
+1	2	2	\N	\N	\N	val8	\N
+1	\N	1	\N	\N	\N	val0	\N
+1	\N	1	\N	\N	\N	val5	\N
+1	\N	2	\N	\N	\N	val10	\N
+2	2	1	\N	\N	\N	val11	\N
+2	2	1	\N	\N	\N	val2	\N
+2	2	1	\N	\N	\N	val6	\N
+2	2	2	2	2	2	val12	false
+2	2	2	2	2	2	val9	false
+ALL RIGHT | join_use_nulls = 1 | copmosite key
+2	2	2	2	2	2	false	val4
+2	2	2	2	2	2	false	val4
+\N	\N	\N	1	1	1	\N	val2
+\N	\N	\N	1	1	1	\N	val7
+\N	\N	\N	1	1	2	\N	val5
+\N	\N	\N	1	1	\N	\N	val0
+\N	\N	\N	1	1	\N	\N	val6
+\N	\N	\N	2	1	1	\N	val1
+\N	\N	\N	2	1	1	\N	val11
+\N	\N	\N	2	1	2	\N	val10
+\N	\N	\N	2	1	2	\N	val8
+\N	\N	\N	2	1	\N	\N	val3
+\N	\N	\N	2	2	\N	\N	val9
+ANY INNER | join_use_nulls = 1
+4	4	false	false
+5	5	false	false
+6	6	false	false
+8	8	false	false
+9	9	false	false
+11	11	false	false
+12	12	false	false
+13	13	false	false
+14	14	false	false
+ANY LEFT | join_use_nulls = 1
+1	\N	val7	true
+2	\N	val3	true
+2	\N	val5	true
+4	4	val0	false
+5	5	val12	false
+6	6	val11	false
+8	8	val4	false
+9	9	val10	false
+10	\N	val1	true
+10	\N	val14	true
+11	11	val6	false
+11	11	val8	false
+12	12	val2	false
+13	13	val13	false
+14	14	val9	false
+ANY RIGHT | join_use_nulls = 1
+4	4	false	val10
+5	5	false	val6
+6	6	false	val8
+8	8	false	val1
+9	9	false	val5
+11	11	false	val11
+12	12	false	val0
+13	13	false	val2
+13	13	false	val4
+13	13	false	val9
+14	14	false	val3
+14	14	false	val7
+ANY INNER | join_use_nulls = 1 | copmosite key
+2	2	2	2	2	2	false	false
+ANY LEFT | join_use_nulls = 1 | copmosite key
+1	1	2	\N	\N	\N	val14	\N
+1	1	2	\N	\N	\N	val3	\N
+1	2	1	\N	\N	\N	val7	\N
+1	2	2	\N	\N	\N	val1	\N
+1	2	2	\N	\N	\N	val13	\N
+1	2	2	\N	\N	\N	val4	\N
+1	2	2	\N	\N	\N	val8	\N
+1	\N	1	\N	\N	\N	val0	\N
+1	\N	1	\N	\N	\N	val5	\N
+1	\N	2	\N	\N	\N	val10	\N
+2	2	1	\N	\N	\N	val11	\N
+2	2	1	\N	\N	\N	val2	\N
+2	2	1	\N	\N	\N	val6	\N
+2	2	2	2	2	2	val12	false
+2	2	2	2	2	2	val9	false
+ANY RIGHT | join_use_nulls = 1 | copmosite key
+2	2	2	2	2	2	false	val4
+\N	\N	\N	1	1	1	\N	val2
+\N	\N	\N	1	1	1	\N	val7
+\N	\N	\N	1	1	2	\N	val5
+\N	\N	\N	1	1	\N	\N	val0
+\N	\N	\N	1	1	\N	\N	val6
+\N	\N	\N	2	1	1	\N	val1
+\N	\N	\N	2	1	1	\N	val11
+\N	\N	\N	2	1	2	\N	val10
+\N	\N	\N	2	1	2	\N	val8
+\N	\N	\N	2	1	\N	\N	val3
+\N	\N	\N	2	2	\N	\N	val9
+{% endfor -%}

@@ -8,6 +8,7 @@ namespace DB
 BackupEntryFromAppendOnlyFile::BackupEntryFromAppendOnlyFile(
     const DiskPtr & disk_,
     const String & file_path_,
+    const ReadSettings & /*settings_*/,
     const std::optional<UInt64> & file_size_,
     const std::optional<UInt128> & checksum_,
     const std::shared_ptr<TemporaryFileOnDisk> & temporary_file_)
@@ -19,7 +20,7 @@ BackupEntryFromAppendOnlyFile::BackupEntryFromAppendOnlyFile(
 std::unique_ptr<ReadBuffer> BackupEntryFromAppendOnlyFile::getReadBuffer() const
 {
     auto buf = BackupEntryFromImmutableFile::getReadBuffer();
-    return std::make_unique<LimitReadBuffer>(std::move(buf), limit, true);
+    return std::make_unique<LimitReadBuffer>(std::move(buf), LimitReadBuffer::Settings{.read_no_more = limit, .expect_eof = true});
 }
 
 }

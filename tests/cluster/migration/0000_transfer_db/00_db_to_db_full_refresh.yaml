@@ -1,0 +1,84 @@
+description: |
+  Test sling data transfer from db to db with full-refresh mode
+  Main Steps:
+    1.Create source and target stream
+    2.Ingest data
+    3.Migration data with full-refresh mode
+    4.Check target stream table query
+
+cluster:
+  - p1s1
+  - p3s1
+
+steps:
+  - type: query
+    sql: DROP STREAM IF EXISTS src;
+
+  - type: query
+    sql: DROP STREAM IF EXISTS tgt;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM src
+      (
+        id int64,
+        value float64,
+        name string,
+        ts datetime64(3) DEFAULT now64(3)
+      );
+
+  - type: query
+    sql: |
+      CREATE STREAM tgt
+      (
+        id int64,
+        value float64,
+        name string,
+        ts datetime64(3) DEFAULT now64(3)
+      );
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      INSERT INTO src(id, value, name, ts) VALUES
+      (1, 11.1, 's1', '2025-01-01 20:00:01.000')
+      (2, 22.2, 's2', '2025-01-02 20:00:02.000')
+      (3, 33.3, 's3', '2025-01-03 20:00:03.000');
+
+  - type: wait
+    time: 2
+
+  - type: command
+    node: [sling]
+    shell: sling run --src-conn TIMEPLUS --src-stream "src" --tgt-conn TIMEPLUS --tgt-object "tgt" --mode=full-refresh -d
+
+  - type: wait
+    time: 2
+ 
+  - name: sling-0-1
+    type: stream
+    query: SELECT id, value, name, ts FROM table(tgt) order by id;
+    schema:
+      - name: id
+        type: int64
+      - name: value
+        type: float64
+      - name: name
+        type: string
+      - name: ts
+        type: datetime64(3)
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: sling-0-1
+    expected_result:
+      - [ 1, '11.1', 's1', '2025-01-01 20:00:01.000' ]
+      - [ 2, '22.2', 's2', '2025-01-02 20:00:02.000' ]
+      - [ 3, '33.3', 's3', '2025-01-03 20:00:03.000' ]

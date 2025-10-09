@@ -186,10 +186,10 @@ void SerializationAggregateFunction::serializeTextJSON(const IColumn & column, s
 }
 
 
-void SerializationAggregateFunction::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationAggregateFunction::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     String s;
-    readJSONString(s, istr);
+    readJSONString(s, istr, settings.json);
     deserializeFromString(function, column, s, version);
 }
 
@@ -214,11 +214,11 @@ void SerializationAggregateFunction::deserializeTextCSV(IColumn & column, ReadBu
 }
 
 /// proton: starts
-void SerializationAggregateFunction::deserializeBinaryBulkSkip(ReadBuffer & istr, size_t limit) const
+void SerializationAggregateFunction::deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t limit) const
 {
     (void) istr;
     (void) limit;
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Skip deserialization is not implemented for aggregate function");
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Discard deserialization is not implemented for aggregate function");
 
     /*
     for (size_t i = 0; i < limit; ++i)

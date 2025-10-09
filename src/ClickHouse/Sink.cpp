@@ -1,6 +1,10 @@
 #include <ClickHouse/Sink.h>
-#include <Client/ConnectionParameters.h>
-#include <Processors/Formats/IOutputFormat.h>
+
+#include <Interpreters/Context.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {
@@ -11,16 +15,15 @@ namespace ClickHouse
 namespace
 {
 
-String constructInsertQuery(const String & database, const String & table, const Block & header)
+ASTPtr createInsertToRemoteTableQuery(const std::string & database, const std::string & table, const Names & column_names)
 {
-    assert(header.columns());
-    const auto & col_names = header.getNames();
-
-    auto query = "INSERT INTO " + (database.empty() ? "" : backQuoteIfNeed(database) + ".") + backQuoteIfNeed(table) + " (" + backQuoteIfNeed(col_names[0]);
-    for (const auto & name : std::vector<String>(std::next(col_names.begin()), col_names.end()))
-        query.append(", " + backQuoteIfNeed(name));
-    query.append(") VALUES ");
-
+    auto query = std::make_shared<ASTInsertQuery>();
+    query->table_id = StorageID(database, table);
+    auto columns = std::make_shared<ASTExpressionList>();
+    query->columns = columns;
+    query->children.push_back(columns);
+    for (const auto & column_name : column_names)
+        columns->children.push_back(std::make_shared<ASTIdentifier>(column_name));
     return query;
 }
 
@@ -30,51 +33,123 @@ Sink::Sink(
     const String & database,
     const String & table,
     const Block & header,
+    const Names & columns_to_send_,
     std::unique_ptr<Client> client_,
-    ContextPtr context_,
-    Poco::Logger * logger_)
+    const ContextPtr & context,
+    LoggerPtr logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
-    , insert_into(constructInsertQuery(database, table, header))
+    , insert_into(queryToString(createInsertToRemoteTableQuery(database, table, columns_to_send_)))
+    , columns_to_send(columns_to_send_.begin(), columns_to_send_.end())
     , client(std::move(client_))
-    , context(context_)
-    , logger(logger_)
+    , batch(context->getSettingsRef().max_insert_block_size, context->getSettingsRef().max_insert_block_bytes)
+    , logger(std::move(logger_))
 {
-    buf = std::make_unique<WriteBufferFromOwnString>();
-    auto format_settings = getFormatSettings(context);
-    format_settings.values.no_commas_between_rows = true;
-    output_format = FormatFactory::instance().getOutputFormat("Values", *buf, header, context, {}, format_settings);
-    output_format->setAutoFlush();
+    auto timeout = context->getSettingsRef().insert_block_timeout_ms.value;
+    if (timeout < 0)
+        batch_timeout_ms = std::numeric_limits<UInt64>::max();
+    else
+        batch_timeout_ms = timeout;
 
-    LOG_INFO(logger, "ready to send data to ClickHouse table {} with {}", table, insert_into);
-}
+    auto idle_connection_timeout = context->getSettingsRef().client_idle_connection_timeout.value;
+    if (idle_connection_timeout <= 0)
+        idle_connection_timeout_ms = std::numeric_limits<UInt64>::max();
+    else
+        idle_connection_timeout_ms = idle_connection_timeout * 1000;
 
-namespace
-{
+    LOG_INFO(
+        logger,
+        "Writing to ClickHouse with max_insert_block_size={} max_insert_block_bytes={} insert_block_timeout_ms={}",
+        context->getSettingsRef().max_insert_block_size,
+        context->getSettingsRef().max_insert_block_bytes,
+        timeout);
 
-class BufferResetter
-{
-public:
-explicit BufferResetter(WriteBufferFromOwnString & buf_): buf(buf_) {}
-~BufferResetter() { buf.restart(); }
-
-private:
-    WriteBufferFromOwnString & buf;
-};
-
+    if (columns_to_send.size() != header.columns())
+    {
+        columns_to_send_positions.reserve(columns_to_send.size());
+        for (const auto & name : columns_to_send)
+            columns_to_send_positions.push_back(header.getPositionByName(name));
+    }
 }
 
 void Sink::consume(Chunk chunk)
 {
-    if (!chunk.rows())
+    if (isCancelled())
         return;
 
-    BufferResetter reset_buffer(*buf); /// makes sure buf gets reset afterwards
-    buf->write(insert_into.data(), insert_into.size());
-    auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    output_format->write(block);
+    if (chunk.rows() > 0)
+        addToBatch(getHeader().cloneWithColumns(chunk.detachColumns()));
 
-    client->executeInsertQuery(buf->str());
+    if (batch_timer.elapsedMilliseconds() >= batch_timeout_ms)
+        flushBatch();
+}
+
+void Sink::addToBatch(Block && block)
+{
+    std::lock_guard<std::mutex> lock{batch_mutex};
+
+    removeSuperfluousColumns(block);
+
+    auto data = batch.add(block);
+    if (data.rows() == 0)
+        return;
+
+    idle_connection_timer.restart();
+    batch_timer.restart();
+
+    client->executeInsertQuery(insert_into, data);
     client->throwServerExceptionIfAny();
+}
+
+void Sink::flushBatch()
+{
+    if (batch.isEmpty())
+    {
+        if (idle_connection_timer.elapsedMilliseconds() >= idle_connection_timeout_ms)
+        {
+            client->releaseConnection();
+            idle_connection_timer.restart();
+        }
+
+        batch_timer.restart();
+        return;
+    }
+
+    addToBatch({});
+}
+
+void Sink::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    flushBatch();
+    IProcessor::checkpoint(ckpt_ctx);
+}
+
+void Sink::removeSuperfluousColumns(Block & block) const
+{
+    if (columns_to_send_positions.empty())
+        return;
+
+    /// It could be an empty block
+    if (block.columns() == 0)
+        return;
+
+    Block result;
+    result.reserve(columns_to_send_positions.size());
+    for (auto pos : columns_to_send_positions)
+        result.insert(std::move(block.getByPosition(pos)));
+
+    block.swap(result);
+}
+
+void Sink::onCancel() noexcept
+{
+    try
+    {
+        flushBatch();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Failed to flush batch");
+    }
 }
 
 }

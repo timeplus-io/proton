@@ -1,0 +1,119 @@
+tags:
+  - complex
+  - substream
+  - not_supported_hybrid # Substream aggregating does not support hybrid aggregator
+description: complex scenarios with substream
+cluster:
+  - p1k1
+  - p3k1
+steps:
+  - type: query
+    node:
+      - p1
+    sql: drop stream if exists test17_substream_3
+  - type: wait
+    time: 2
+
+  - type: query
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p2]
+    <<end>>
+    sql: create stream test17_substream_3(id int64, value int64, t datetime64(3))
+  - type: wait
+    time: 1
+    
+  - name: "1700"
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p3]
+    <<end>>
+    type: stream
+    query: select window_start, window_end, id, value, value - 1, max(value) as max_value, lag(max_value), emit_version() from tumble(test17_substream_3, t, 2s) partition by id, value group by window_start, window_end
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: id
+        type: int64
+      - name: value
+        type: int64
+      - name: minus(value, 1)
+        type: int64
+      - name: max_value
+        type: int64
+      - name: lag(value)
+        type: int64
+      - name: emit_version()
+        type: int64
+  - type: wait
+    time: 1
+
+  - type: query
+    node:
+      - p1
+    sql: insert into test17_substream_3(id, value, t) values(1, 100, '2020-01-01 10:00:00')(1, 200, '2020-01-01 10:00:01')(1, 100, '2020-01-01 10:00:02')(1, 100, '2020-01-01 10:00:03')(1, 200, '2020-01-01 10:00:04')(1, 100, '2020-01-01 10:00:05')
+
+  - type: check
+    target_name: "1700"
+    mode: random
+    expected_result:
+      - - "2020-01-01 10:00:00"
+        - "2020-01-01 10:00:02"
+        - 1
+        - 100
+        - 99
+        - 100
+        - 0
+        - 0
+      - - "2020-01-01 10:00:02"
+        - "2020-01-01 10:00:04"
+        - 1
+        - 100
+        - 99
+        - 100
+        - 100
+        - 1
+      - - "2020-01-01 10:00:00"
+        - "2020-01-01 10:00:02"
+        - 1
+        - 200
+        - 199
+        - 200
+        - 0
+        - 0
+
+  - type: query
+    sql: insert into test17_substream_3(id, value, t) values(2, 100, '2020-01-01 10:00:00')(2, 200, '2020-01-01 10:00:01')(2, 100, '2020-01-01 10:00:02')(2, 100, '2020-01-01 10:00:03')(2, 200, '2020-01-01 10:00:04')(2, 100, '2020-01-01 10:00:05')
+
+  - type: check
+    target_name: "1700"
+    mode: random
+    expected_result:
+      - - "2020-01-01 10:00:00"
+        - "2020-01-01 10:00:02"
+        - 2
+        - 100
+        - 99
+        - 100
+        - 0
+        - 0
+      - - "2020-01-01 10:00:02"
+        - "2020-01-01 10:00:04"
+        - 2
+        - 100
+        - 99
+        - 100
+        - 100
+        - 1
+      - - "2020-01-01 10:00:00"
+        - "2020-01-01 10:00:02"
+        - 2
+        - 200
+        - 199
+        - 200
+        - 0
+        - 0

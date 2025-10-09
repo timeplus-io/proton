@@ -14,7 +14,6 @@ namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
-extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 extern const int BAD_ARGUMENTS;
 }
 
@@ -34,67 +33,63 @@ TableFunctionDedup::TableFunctionDedup(const String & name_) : TableFunctionProx
 void TableFunctionDedup::parseArguments(const ASTPtr & func_ast, ContextPtr context)
 {
     if (func_ast->children.size() != 1)
-        throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-    ASTs asts;
+        throw Exception::createRuntime(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, help_message);
 
     auto dedup_func_ast = func_ast->clone();
     auto * node = dedup_func_ast->as<ASTFunction>();
-    assert(node);
+    chassert(node);
 
-    auto args{checkAndExtractArguments(node)};
+    auto limit_args{checkAndExtractArguments(node)};
 
     /// First argument is expected to be table
-    resolveStorageID(args[0], context);
+    resolveStorageID(node->arguments->children[0], context);
 
     /// Prune the first stream argument
-    args.erase(args.begin());
-    node->arguments->children.swap(args);
+    node->arguments->children.erase(node->arguments->children.begin());
 
     /// Calculate column description
     TableFunctionProxyBase::calculateColumnDescriptions(context);
 
     /// Create table func desc
-    streaming_func_desc = createStreamingTableFunctionDescription(dedup_func_ast, context);
+    /// We like to prune `limit_args` constant arguments when evaluate the table expression to make it more performant
+    /// since limits args don't need emit to down stream pipeline, we will need discard them anyway after evaluation
+    /// if we don't prune them
+    streaming_func_desc = createStreamingTableFunctionDescription(dedup_func_ast, context, limit_args);
 
     /// Project additional result columns of the streaming function to metadata
     for (const auto & column : streaming_func_desc->additional_result_columns)
         columns.add(ColumnDescription{column.name, column.type});
 }
 
-ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
+/// \return number of limit arguments specified. if `timeout`, and `limit` are both specified, it is 2 for example
+size_t TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
 {
     /// dedup(table, column1, column2, ..., timeout, limit)
     const auto & args = node->arguments->children;
     if (args.size() < 2)
-        throw Exception(help_message, ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION);
+        throw Exception::createRuntime(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, help_message);
 
     size_t end_pos = args.size();
 
-    auto check_timeout = [&, this](size_t pos) {
+    auto check_timeout = [&](size_t pos) {
         /// Check if last argument is interval literal
         if (auto * func = args[pos]->as<ASTFunction>(); func)
         {
             /// When last param or second last is interval param, we requires at least 3 params
-            if (args.size() < 3)
-                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
-
-            if (func->name != "to_interval_second")
-                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
-
-            end_pos -= 1;
+            if (func->name == "to_interval_second" && args.size() >= 3)
+                end_pos -= 1;
         }
     };
 
-    auto check_limit = [&, this](size_t pos) {
+    auto check_limit = [&](size_t pos) {
         if (auto * lit = args[pos]->as<ASTLiteral>(); lit)
         {
+            if (!isInt64OrUInt64FieldType(lit->value.getType()))
+                return false;
+
             /// When last param is number limit, we requires at least 4 params
             if (args.size() < 4)
-                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
-
-            if (!isInt64OrUInt64FieldType(lit->value.getType()))
-                throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+                return false;
 
             end_pos -= 1;
             return true;
@@ -106,6 +101,8 @@ ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
     {
         if (check_limit(args.size() - 1))
             check_timeout(args.size() - 2);
+        else
+            check_timeout(args.size() - 1);
     }
     else if (args.size() == 3)
     {
@@ -113,10 +110,12 @@ ASTs TableFunctionDedup::checkAndExtractArguments(ASTFunction * node) const
     }
 
     for (size_t i = 1; i < end_pos; ++i)
+    {
         if (!args[i]->as<ASTFunction>() && !args[i]->as<ASTIdentifier>())
-            throw Exception(help_message, ErrorCodes::BAD_ARGUMENTS);
+            throw Exception::createRuntime(ErrorCodes::BAD_ARGUMENTS, help_message);
+    }
 
-    return args;
+    return args.size() - end_pos;
 }
 
 void registerTableFunctionDedup(TableFunctionFactory & factory)
@@ -128,7 +127,7 @@ void registerTableFunctionDedup(TableFunctionFactory & factory)
             {},
         },
         TableFunctionFactory::CaseSensitive,
-        /*support subquery*/ true);
+        /*support subquery=*/true);
 }
 }
 }

@@ -2,6 +2,7 @@
 
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
+#include <Common/ProtonCommon.h>
 
 #include <ranges>
 
@@ -15,23 +16,14 @@ WindowAggregatingTransform::WindowAggregatingTransform(
     ManyAggregatedDataPtr many_data_,
     size_t current_variant_,
     size_t max_threads_,
-    size_t temporary_data_merge_threads_,
     const String & log_name,
     ProcessorID pid_)
-    : AggregatingTransform(
-        std::move(header),
-        std::move(params_),
-        std::move(many_data_),
-        current_variant_,
-        max_threads_,
-        temporary_data_merge_threads_,
-        log_name,
-        pid_)
+    : AggregatingTransform(std::move(header), std::move(params_), std::move(many_data_), current_variant_, max_threads_, log_name, pid_)
 {
-    assert(params->params.window_params);
-    assert(
-        params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START
-        || params->params.group_by == Aggregator::Params::GroupBy::WINDOW_END);
+    chassert(params->params->window_params);
+    chassert(
+        params->params->group_by == IAggregatorParams::GroupBy::WindowStart
+        || params->params->group_by == IAggregatorParams::GroupBy::WindowEnd);
 
     const auto & output_header = getOutputs().front().getHeader();
     if (output_header.has(ProtonConsts::STREAMING_WINDOW_START))
@@ -53,7 +45,7 @@ bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
 
     /// We need to remove some invalid windows, when:
     /// 1) some lagged events arrived after timeout, we skip finalized windows and remove them later
-    /// 2) if we only emit finalized windows, skip imtermidate windows
+    /// 2) if we only emit finalized windows, skip intermediate windows
     auto last_finalized_window_end = many_data->finalized_window_end.load(std::memory_order_relaxed);
     for (auto iter = local_windows_with_buckets.begin(); iter != local_windows_with_buckets.end();)
     {
@@ -77,12 +69,13 @@ bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
 
     /// FIXME: For multiple WindowAggregatingTransform, will emit multiple times in a periodic interval,
     /// we can do periodic emit in AggregatingTransform, not in WatermarkTransform.
-    if ((params->emit_mode == EmitMode::PeriodicWatermark || params->emit_mode == Streaming::EmitMode::PeriodicWatermarkOnUpdate) && !many_data->hasNewData())
+    if ((params->emit_mode == EmitMode::Periodic || params->emit_mode == EmitMode::OnUpdateWithBatchInterval)
+        && !(params->repeatEmit() || many_data->hasNewData()))
         return false;
 
     /// After acquired finalizing lock
     prepared_windows_with_buckets.clear();
-    for (auto * aggr_transform : many_data->aggregating_transforms)
+    for (size_t i = 0; auto * aggr_transform : many_data->aggregating_transforms)
     {
         auto * window_aggr_transform = reinterpret_cast<WindowAggregatingTransform *>(aggr_transform);
         auto windows_with_buckets = window_aggr_transform->getLocalWindowsWithBucketsImpl();
@@ -101,13 +94,22 @@ bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
 
         for (auto & window_with_buckets : windows_with_buckets)
         {
+            if (i == 0)
+            {
+                prepared_windows_with_buckets.push_back(std::move(window_with_buckets));
+                continue;
+            }
+
+            /// Merge windows with the same start/end time from multiple WindowAggregatingTransform instances (Concurrent).
+            /// NOTE: For session windows with start_cond/end_cond, there may be multiple windows with the same start/end time.
+            /// However, since parallel session window processing is not supported, this branch should not be reached.
             auto iter = prepared_windows_with_buckets.begin();
             for (; iter != prepared_windows_with_buckets.end(); ++iter)
             {
                 if (iter->window.end == window_with_buckets.window.end)
                 {
                     /// Unique merge buckets of same window (assume buckets always are sorted)
-                    assert(iter->window.start == window_with_buckets.window.start);
+                    chassert(iter->window.start == window_with_buckets.window.start);
                     std::vector<Int64> buckets;
                     buckets.reserve(std::max(iter->buckets.size(), window_with_buckets.buckets.size()));
                     std::ranges::set_union(iter->buckets, window_with_buckets.buckets, std::back_inserter(buckets));
@@ -126,6 +128,8 @@ bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
             if (iter == prepared_windows_with_buckets.end())
                 prepared_windows_with_buckets.push_back(std::move(window_with_buckets));
         }
+
+        ++i;
     }
 
     /// Has windows to finalize
@@ -136,7 +140,7 @@ bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
 /// and push the block to downstream pipe
 void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
-    assert(chunk_ctx && chunk_ctx->hasWatermark());
+    chassert(chunk_ctx && chunk_ctx->hasWatermark());
 
     SCOPE_EXIT({ many_data->resetRowCounts(); });
 
@@ -145,7 +149,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     ChunkList res_chunks;
     Chunk chunk;
 
-    assert(!prepared_windows_with_buckets.empty());
+    chassert(!prepared_windows_with_buckets.empty());
     for (const auto & window_with_buckets : prepared_windows_with_buckets)
     {
         if (only_emit_updates)
@@ -153,18 +157,18 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         else
             chunk = AggregatingHelper::mergeAndSpliceAndConvertToChunk(many_data->variants, *params, window_with_buckets.buckets);
 
-        if (!chunk)
+        if (!chunk.hasRows())
             continue;
 
         if (needReassignWindow())
             reassignWindow(
                 chunk,
                 window_with_buckets.window,
-                params->params.window_params->time_col_is_datetime64,
+                params->params->window_params->time_col_is_datetime64,
                 window_start_col_pos,
                 window_end_col_pos);
 
-        if (params->emit_version && params->final)
+        if (params->emit_version)
             emitVersion(chunk);
 
         res_chunks.emplace_back(std::move(chunk));
@@ -176,7 +180,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     {
         for (const auto & window_with_buckets : prepared_windows_with_buckets)
             for (auto & variants : many_data->variants)
-                params->aggregator.resetUpdatedForBuckets(*variants, window_with_buckets.buckets);
+                params->aggregator->resetUpdatedForBuckets(*variants, window_with_buckets.buckets);
     }
 
     if (res_chunks.empty()) [[unlikely]]
@@ -206,7 +210,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
-    assert(last_res_chunk.getWatermark() == finalized_watermark);
+    chassert(last_res_chunk.getWatermark() == finalized_watermark);
     setAggregatedResult(res_chunks);
 }
 
@@ -221,8 +225,9 @@ std::vector<Int64> WindowAggregatingTransform::getBuckets() const
 {
     /// Blocking finalization, it's a lightweight lock
     std::lock_guard lock(variants_mutex);
-    return params->aggregator.buckets(variants);
+    return params->aggregator->buckets(variants);
 }
 
 }
+
 }

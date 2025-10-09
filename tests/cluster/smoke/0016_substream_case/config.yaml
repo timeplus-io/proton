@@ -1,0 +1,35 @@
+name: substream
+description:
+  Tests covering the aggregate-over and non-aggregate-over functions in
+  streaming queries smoke cases.
+tags:
+  - smoke
+setup:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists test17_substream;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      create stream test17_substream (
+        id uint64,
+        val_i int64,
+        val_i64 int64,
+        val_f float64,
+        val_s string,
+        val_date datetime64(3),
+        timestamp datetime64(3) default now64(3)
+      ) settings event_time_column='timestamp';
+
+  - type: wait
+    time: 1
+
+teardown:
+  scope: suite
+  steps:
+  - type: query
+    sql: drop stream if exists test17_substream;

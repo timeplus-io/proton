@@ -33,7 +33,7 @@ namespace
 BlockIO InterpreterCreateRoleQuery::execute()
 {
     const auto & query = query_ptr->as<const ASTCreateRoleQuery &>();
-    auto & access_control = getContext()->getAccessControl();
+    auto access_control = getContext()->getAccessControl();
     if (query.alter)
         getContext()->checkAccess(AccessType::ALTER_ROLE);
     else
@@ -41,7 +41,12 @@ BlockIO InterpreterCreateRoleQuery::execute()
 
     std::optional<SettingsProfileElements> settings_from_query;
     if (query.settings)
-        settings_from_query = SettingsProfileElements{*query.settings, access_control};
+    {
+        settings_from_query = SettingsProfileElements{*query.settings, *access_control};
+
+        if (!query.attach)
+            getContext()->checkSettingsConstraints(*settings_from_query);
+    }
 
     if (query.alter)
     {
@@ -53,11 +58,11 @@ BlockIO InterpreterCreateRoleQuery::execute()
         };
         if (query.if_exists)
         {
-            auto ids = access_control.find<Role>(query.names);
-            access_control.tryUpdate(ids, update_func);
+            auto ids = access_control->find<Role>(query.names);
+            access_control->tryUpdate(ids, update_func);
         }
         else
-            access_control.update(access_control.getIDs<Role>(query.names), update_func);
+            access_control->update(access_control->getIDs<Role>(query.names), update_func);
     }
     else
     {
@@ -70,11 +75,11 @@ BlockIO InterpreterCreateRoleQuery::execute()
         }
 
         if (query.if_not_exists)
-            access_control.tryInsert(new_roles);
+            access_control->tryInsert(new_roles);
         else if (query.or_replace)
-            access_control.insertOrReplace(new_roles);
+            access_control->insertOrReplace(new_roles);
         else
-            access_control.insert(new_roles);
+            access_control->insert(new_roles);
     }
 
     return {};

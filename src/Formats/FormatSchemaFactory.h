@@ -1,9 +1,8 @@
 #pragma once
 
-#include <boost/core/noncopyable.hpp>
+#include <Cluster/Protocol/CreateFormatSchemaRequestData.h>
 #include <Interpreters/Context_fwd.h>
-
-#include <mutex>
+#include <boost/core/noncopyable.hpp>
 
 namespace DB
 {
@@ -11,18 +10,18 @@ namespace DB
 class FormatSchemaFactory final : private boost::noncopyable
 {
 public:
-    /// options for what to do if a schema alread exists
-    enum class ExistsOP {
-        Ignore, /// do nothing
-        Replace, /// replace with the new content
-        Throw, /// throw an exception
-    };
+    /// options for what to do if a schema already exists
+    using ExistsOP = cluster::protocol::ExistsOperation;
 
     static FormatSchemaFactory & instance();
 
-    void registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context);
+    void registerSchema(
+        const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context);
 
-    void unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context);
+    /// Unregisters the schema that match the schema_name and format.
+    /// If format is empty, it will find the schema with the schema_name, and if multiple match, throws exception.
+    /// Returns the format of the unregistered schemas, mostly useful when format is empty.
+    String unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context);
 
     struct SchemaEntry
     {
@@ -32,7 +31,7 @@ public:
 
     std::vector<SchemaEntry> getSchemasList(const String & format, const ContextPtr & context) const;
 
-    struct SchemaEntryWithBody final: SchemaEntry
+    struct SchemaEntryWithBody final : SchemaEntry
     {
         String body;
     };

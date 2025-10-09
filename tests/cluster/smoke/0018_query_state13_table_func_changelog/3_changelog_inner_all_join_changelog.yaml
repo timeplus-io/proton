@@ -1,0 +1,95 @@
+tags:
+- table_func_changelog
+- inner-join
+description: changelog(t1) inner all join changelog(t2) state checkpoint
+cluster:
+- p1k1
+
+steps:
+- type: query
+  sql: drop stream if exists test19_left_stream4;
+- type: query
+  sql: drop stream if exists test19_right_stream4;
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_left_stream4 (i int, k string);
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream if not exists test19_right_stream4 (j int, kk string);
+- type: wait
+  time: 1
+
+- name: '19403'
+  type: stream
+  query_id: '19403'
+  query: subscribe to select i, k, j, kk from changelog(test19_left_stream4,
+    k) as a inner join changelog(test19_right_stream4, kk) as b on a.i == b.j settings
+    checkpoint_interval=1;
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_left_stream4(i, k) values (1, 'k1')
+
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test19_right_stream4 (j, kk) values (1, 'kk1')
+- type: wait
+  time: 1
+
+- type: query
+  sql: kill query where query_id = '19403'
+- type: wait
+  time: 3
+
+- type: query
+  sql: insert into test19_left_stream4(i, k) values (2, 'k1')
+
+- type: query
+  sql: insert into test19_right_stream4 (j, kk) values (2, 'kk1')
+
+- name: 19403-1
+  type: stream
+  query: recover from '19403'
+  schema:
+  - name: i
+    type: int32
+  - name: k
+    type: string
+  - name: j
+    type: int32
+  - name: kk
+    type: string
+- type: wait
+  time: 2
+
+- type: query
+  sql: kill query where query_id = '19403' sync
+
+- type: query
+  sql: unsubscribe to '19403'
+
+- type: check
+  target_name: '19403'
+  expected_result:
+  - [1, k1, 1, kk1]
+
+- type: check
+  target_name: 19403-1
+  expected_result:
+  - [2, k1, 2, kk1]

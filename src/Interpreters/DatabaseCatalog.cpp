@@ -1,29 +1,36 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/TableNameHints.h>
 #include <Interpreters/loadMetadata.h>
 #include <Storages/IStorage.h>
 #include <Databases/IDatabase.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOnDisk.h>
 #include <Disks/IDisk.h>
-#include <Common/quoteString.h>
 #include <Storages/StorageMemory.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Parsers/formatAST.h>
 #include <IO/ReadHelpers.h>
 #include <Poco/DirectoryIterator.h>
 #include <Common/renameat2.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Common/quoteString.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/logger_useful.h>
-#include <Poco/Util/AbstractConfiguration.h>
+#include <Common/ThreadPool.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/noexcept_scope.h>
 
+#include <base/isSharedPtrUnique.h>
+
 #include "config.h"
+
 
 namespace CurrentMetrics
 {
     extern const Metric TablesToDropQueueSize;
+    extern const Metric DatabaseCatalogThreads;
+    extern const Metric DatabaseCatalogThreadsActive;
 }
 
 namespace DB
@@ -93,7 +100,7 @@ TemporaryTableHolder::TemporaryTableHolder(
 }
 
 TemporaryTableHolder::TemporaryTableHolder(TemporaryTableHolder && rhs) noexcept
-        : WithContext(rhs.context), temporary_tables(rhs.temporary_tables), id(rhs.id)
+        : WithContext(rhs.context), temporary_tables(rhs.temporary_tables), id(rhs.id), future_set(std::move(rhs.future_set))
 {
     rhs.id = UUIDHelpers::Nil;
 }
@@ -108,7 +115,7 @@ TemporaryTableHolder & TemporaryTableHolder::operator = (TemporaryTableHolder &&
 TemporaryTableHolder::~TemporaryTableHolder()
 {
     if (id != UUIDHelpers::Nil)
-        temporary_tables->dropTable(getContext(), "_tmp_" + toString(id));
+        temporary_tables->dropTable(getContext(), "_tmp_" + toString(id), false, nullptr);
 }
 
 StorageID TemporaryTableHolder::getGlobalTableID() const
@@ -120,9 +127,7 @@ StoragePtr TemporaryTableHolder::getTable() const
 {
     auto table = temporary_tables->tryGetTable("_tmp_" + toString(id), getContext());
     if (!table)
-        /// proton: starts
-        throw Exception("Temporary stream " + getGlobalTableID().getNameForLogs() + " not found", ErrorCodes::LOGICAL_ERROR);
-        /// proton: ends
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Temporary stream {} not found", getGlobalTableID().getNameForLogs());
     return table;
 }
 
@@ -239,9 +244,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         {
             assert(!db_and_table.first && !db_and_table.second);
             if (exception)
-                /// proton: starts
-                exception->emplace(fmt::format("Stream {} doesn't exist", table_id.getNameForLogs()), ErrorCodes::UNKNOWN_STREAM);
-                /// proton: ends
+                exception->emplace(Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {} doesn't exist", table_id.getNameForLogs()));
             return {};
         }
 
@@ -255,7 +258,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         /// If table_id has no UUID, then the name of database was specified by user and table_id was not resolved through context.
         /// Do not allow access to TEMPORARY_DATABASE because it contains all temporary tables of all contexts and users.
         if (exception)
-            exception->emplace(fmt::format("Direct access to `{}` database is not allowed", String(TEMPORARY_DATABASE)), ErrorCodes::DATABASE_ACCESS_DENIED);
+            exception->emplace(Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "Direct access to `{}` database is not allowed", TEMPORARY_DATABASE));
         return {};
     }
 
@@ -266,7 +269,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         if (databases.end() == it)
         {
             if (exception)
-                exception->emplace(fmt::format("Database {} doesn't exist", backQuoteIfNeed(table_id.getDatabaseName())), ErrorCodes::UNKNOWN_DATABASE);
+                exception->emplace(Exception(ErrorCodes::UNKNOWN_DATABASE, "Database {} doesn't exist", backQuoteIfNeed(table_id.getDatabaseName())));
             return {};
         }
         database = it->second;
@@ -274,9 +277,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
 
     auto table = database->tryGetTable(table_id.table_name, context_);
     if (!table && exception)
-            /// proton: starts
-            exception->emplace(fmt::format("Stream {} doesn't exist", table_id.getNameForLogs()), ErrorCodes::UNKNOWN_STREAM);
-            /// proton: ends
+            exception->emplace(Exception(ErrorCodes::UNKNOWN_STREAM, "Stream {} doesn't exist", table_id.getNameForLogs()));
     if (!table)
         database = nullptr;
 
@@ -299,7 +300,7 @@ void DatabaseCatalog::assertDatabaseExistsUnlocked(const String & database_name)
 {
     assert(!database_name.empty());
     if (databases.end() == databases.find(database_name))
-        throw Exception("Database " + backQuoteIfNeed(database_name) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
+        throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database {} doesn't exist", backQuoteIfNeed(database_name));
 }
 
 
@@ -307,7 +308,7 @@ void DatabaseCatalog::assertDatabaseDoesntExistUnlocked(const String & database_
 {
     assert(!database_name.empty());
     if (databases.end() != databases.find(database_name))
-        throw Exception("Database " + backQuoteIfNeed(database_name) + " already exists.", ErrorCodes::DATABASE_ALREADY_EXISTS);
+        throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Database {} already exists.", backQuoteIfNeed(database_name));
 }
 
 void DatabaseCatalog::attachDatabase(const String & database_name, const DatabasePtr & database)
@@ -326,7 +327,7 @@ void DatabaseCatalog::attachDatabase(const String & database_name, const Databas
 DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const String & database_name, bool drop, bool check_empty)
 {
     if (database_name == TEMPORARY_DATABASE)
-        throw Exception("Cannot detach database with temporary tables.", ErrorCodes::DATABASE_ACCESS_DENIED);
+        throw Exception(ErrorCodes::DATABASE_ACCESS_DENIED, "Cannot detach database with temporary tables.");
 
     DatabasePtr db;
     {
@@ -344,10 +345,7 @@ DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const Stri
         try
         {
             if (!db->empty())
-                /// proton: starts
-                throw Exception("New stream appeared in database being dropped or detached. Try again.",
-                                ErrorCodes::DATABASE_NOT_EMPTY);
-                /// proton: ends
+                throw Exception(ErrorCodes::DATABASE_NOT_EMPTY, "New stream appeared in database being dropped or detached. Try again.");
             if (!drop)
                 db->assertCanBeDetached(false);
         }
@@ -424,7 +422,7 @@ DatabasePtr DatabaseCatalog::getDatabase(const UUID & uuid) const
 {
     auto db_and_table = tryGetByUUID(uuid);
     if (!db_and_table.first || db_and_table.second)
-        throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database UUID {} does not exist", toString(uuid));
+        throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database UUID {} does not exist", uuid);
     return db_and_table.first;
 }
 
@@ -468,10 +466,8 @@ bool DatabaseCatalog::isTableExist(const DB::StorageID & table_id, ContextPtr co
 void DatabaseCatalog::assertTableDoesntExist(const StorageID & table_id, ContextPtr context_) const
 {
     if (isTableExist(table_id, context_))
-        /// proton: starts
         throw Exception(
             ErrorCodes::STREAM_ALREADY_EXISTS, "{} {} already exists.", getTable(table_id, context_)->getName(), table_id.getNameForLogs());
-        /// proton: ends
 }
 
 DatabasePtr DatabaseCatalog::getDatabaseForTemporaryTables() const
@@ -499,7 +495,9 @@ void DatabaseCatalog::addUUIDMapping(const UUID & uuid, const DatabasePtr & data
     if (inserted)
     {
         /// Mapping must be locked before actually inserting something
-        chassert((!database && !table));
+        /// proton: starts. Comment out this chassert() since in cluster mode
+        /// we don't need hold the UUID lock
+        /// chassert((!database && !table));
         return;
     }
 
@@ -517,15 +515,22 @@ void DatabaseCatalog::addUUIDMapping(const UUID & uuid, const DatabasePtr & data
 
     /// We are trying to replace existing mapping (prev_database != nullptr), it's logical error
     if (database || table)
-        /// proton: starts
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} already exists", toString(uuid));
+    {
+        /// proton: starts - Single-instance: Add debug info for UUID conflicts
+        LOG_ERROR(getLogger("DatabaseCatalog"), 
+            "UUID conflict: UUID={} already mapped to prev_database={} prev_table={}, trying to add database={} table={}", 
+            uuid, 
+            prev_database ? prev_database->getDatabaseName() : "null", 
+            prev_table ? prev_table->getStorageID().getFullTableName() : "null",
+            database ? database->getDatabaseName() : "null",
+            table ? table->getStorageID().getFullTableName() : "null");
         /// proton: ends
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} already exists", uuid);
+    }
     /// Normally this should never happen, but it's possible when the same UUIDs are explicitly specified in different CREATE queries,
     /// so it's not LOGICAL_ERROR
-    /// proton: starts
     throw Exception(ErrorCodes::STREAM_ALREADY_EXISTS, "Mapping for stream with UUID={} already exists. It happened due to UUID collision, "
-                    "most likely because some not random UUIDs were manually specified in CREATE queries.", toString(uuid));
-    /// proton: ends
+                    "most likely because some not random UUIDs were manually specified in CREATE queries.", uuid);
 }
 
 void DatabaseCatalog::removeUUIDMapping(const UUID & uuid)
@@ -535,9 +540,7 @@ void DatabaseCatalog::removeUUIDMapping(const UUID & uuid)
     std::lock_guard lock{map_part.mutex};
     auto it = map_part.map.find(uuid);
     if (it == map_part.map.end())
-        /// proton: starts
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} doesn't exist", toString(uuid));
-        /// proton: ends
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} doesn't exist", uuid);
     it->second = {};
 }
 
@@ -547,9 +550,7 @@ void DatabaseCatalog::removeUUIDMappingFinally(const UUID & uuid)
     UUIDToStorageMapPart & map_part = uuid_map[getFirstLevelIdx(uuid)];
     std::lock_guard lock{map_part.mutex};
     if (!map_part.map.erase(uuid))
-        /// proton: starts
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} doesn't exist", toString(uuid));
-        /// proton: ends
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} doesn't exist", uuid);
 }
 
 void DatabaseCatalog::updateUUIDMapping(const UUID & uuid, DatabasePtr database, StoragePtr table)
@@ -560,9 +561,7 @@ void DatabaseCatalog::updateUUIDMapping(const UUID & uuid, DatabasePtr database,
     std::lock_guard lock{map_part.mutex};
     auto it = map_part.map.find(uuid);
     if (it == map_part.map.end())
-        /// proton: starts
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} doesn't exist", toString(uuid));
-        /// proton: ends
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Mapping for stream with UUID={} doesn't exist", uuid);
     auto & prev_database = it->second.first;
     auto & prev_table = it->second.second;
     assert(prev_database && prev_table);
@@ -581,7 +580,7 @@ bool DatabaseCatalog::hasUUIDMapping(const UUID & uuid)
 std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
-    : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
+    : WithMutableContext(global_context_), log(getLogger("DatabaseCatalog"))
 {
 }
 
@@ -589,8 +588,7 @@ DatabaseCatalog & DatabaseCatalog::init(ContextMutablePtr global_context_)
 {
     if (database_catalog)
     {
-        throw Exception("Database catalog is initialized twice. This is a bug.",
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Database catalog is initialized twice. This is a bug.");
     }
 
     database_catalog.reset(new DatabaseCatalog(global_context_));
@@ -602,8 +600,7 @@ DatabaseCatalog & DatabaseCatalog::instance()
 {
     if (!database_catalog)
     {
-        throw Exception("Database catalog is not initialized. This is a bug.",
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Database catalog is not initialized. This is a bug.");
     }
 
     return *database_catalog;
@@ -668,7 +665,7 @@ DDLGuardPtr DatabaseCatalog::getDDLGuard(const String & database, const String &
     return std::make_unique<DDLGuard>(db_guard.first, db_guard.second, std::move(lock), table, database);
 }
 
-std::unique_lock<std::shared_mutex> DatabaseCatalog::getExclusiveDDLGuardForDatabase(const String & database)
+std::unique_lock<SharedMutex> DatabaseCatalog::getExclusiveDDLGuardForDatabase(const String & database)
 {
     DDLGuards::iterator db_guard_iter;
     {
@@ -770,7 +767,7 @@ void DatabaseCatalog::loadMarkedAsDroppedTables()
 
     LOG_INFO(log, "Found {} partially dropped tables. Will load them and retry removal.", dropped_metadata.size());
 
-    ThreadPool pool;
+    ThreadPool pool(CurrentMetrics::DatabaseCatalogThreads, CurrentMetrics::DatabaseCatalogThreadsActive);
     for (const auto & elem : dropped_metadata)
     {
         pool.scheduleOrThrowOnError([&]()
@@ -806,12 +803,17 @@ void DatabaseCatalog::enqueueDroppedTableCleanup(StorageID table_id, StoragePtr 
     else
     {
         /// Try load table from metadata to drop it correctly (e.g. remove metadata from zk or remove data from all volumes)
-        /// proton: starts
         LOG_INFO(log, "Trying load partially dropped stream {} from {}", table_id.getNameForLogs(), dropped_metadata_path);
-        /// proton: ends
         ASTPtr ast = DatabaseOnDisk::parseQueryFromMetadata(
             log, getContext(), dropped_metadata_path, /*throw_on_error*/ false, /*remove_empty*/ false);
         auto * create = typeid_cast<ASTCreateQuery *>(ast.get());
+
+        /// proton : starts. when we delete StorageStream, we commit `CREATE` query in the mark file
+        /// instead of `ATTACH` query because of convenience and `CREATE QUERY` doesn't have UUID.
+        if (create && !create->attach)
+            create->uuid = table_id.uuid;
+        /// proton : ends
+
         assert(!create || create->uuid == table_id.uuid);
 
         if (create)
@@ -821,25 +823,21 @@ void DatabaseCatalog::enqueueDroppedTableCleanup(StorageID table_id, StoragePtr 
             create->setTable(table_id.table_name);
             try
             {
-                table = createTableFromAST(*create, table_id.getDatabaseName(), data_path, getContext(), /* force_restore */ true).second;
+                table = createTableFromAST(*create, table_id.getDatabaseName(), data_path, getContext(), /* force_restore */ true, 1).second;
                 table->is_dropped = true;
             }
             catch (...)
             {
-                /// proton: starts
                 tryLogCurrentException(log, "Cannot load partially dropped stream " + table_id.getNameForLogs() +
                                             " from: " + dropped_metadata_path +
                                             ". Parsed query: " + serializeAST(*create) +
                                             ". Will remove metadata and " + data_path +
                                             ". Garbage may be left in ZooKeeper.");
-                /// proton: ends
             }
         }
         else
         {
-            /// proton: starts
             LOG_WARNING(log, "Cannot parse metadata of partially dropped stream {} from {}. Will remove metadata file and data directory. Garbage may be left in /store directory and ZooKeeper.", table_id.getNameForLogs(), dropped_metadata_path);
-            /// proton: ends
         }
 
         addUUIDMapping(table_id.uuid);
@@ -853,6 +851,8 @@ void DatabaseCatalog::enqueueDroppedTableCleanup(StorageID table_id, StoragePtr 
         tables_marked_dropped.push_back({table_id, table, dropped_metadata_path, drop_time + drop_delay_sec});
     tables_marked_dropped_ids.insert(table_id.uuid);
     CurrentMetrics::add(CurrentMetrics::TablesToDropQueueSize, 1);
+
+    LOG_INFO(log, "Deletion of the historical data for stream {} is scheduled", table_id.getNameForLogs());
 
     /// If list of dropped tables was empty, start a drop task.
     /// If ignore_delay is set, schedule drop task as soon as possible.
@@ -878,7 +878,7 @@ void DatabaseCatalog::dropTableDataTask()
         size_t tables_in_use_count = 0;
         auto it = std::find_if(tables_marked_dropped.begin(), tables_marked_dropped.end(), [&](const auto & elem)
         {
-            bool not_in_use = !elem.table || elem.table.unique();
+            bool not_in_use = !elem.table || isSharedPtrUnique(elem.table);
             bool old_enough = elem.drop_time <= current_time;
             min_drop_time = std::min(min_drop_time, elem.drop_time);
             tables_in_use_count += !not_in_use;
@@ -898,10 +898,8 @@ void DatabaseCatalog::dropTableDataTask()
             /// We are waiting for drop_delay_sec to exceed, no sense to wakeup until min_drop_time.
             /// If new table is added to the queue with ignore_delay flag, schedule() is called to wakeup the task earlier.
             schedule_after_ms = (min_drop_time - current_time) * 1000;
-            /// proton: starts
             LOG_TRACE(log, "Not found any suitable streams to drop, still have {} streams in drop queue ({} of them are in use). "
                            "Will check again after {} seconds", tables_marked_dropped.size(), tables_in_use_count, min_drop_time - current_time);
-            /// proton: ends
         }
         need_reschedule = !tables_marked_dropped.empty();
     }
@@ -921,10 +919,8 @@ void DatabaseCatalog::dropTableDataTask()
         }
         catch (...)
         {
-            /// proton: starts
             tryLogCurrentException(log, "Cannot drop stream " + table.table_id.getNameForLogs() +
                                         ". Will retry later.");
-            /// proton: ends
             {
                 table.drop_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + drop_error_cooldown_sec;
                 std::lock_guard lock(tables_marked_dropped_mutex);
@@ -964,9 +960,7 @@ void DatabaseCatalog::dropTableFinally(const TableMarkedAsDropped & table)
         disk->removeRecursive(data_path);
     }
 
-    /// proton: starts
     LOG_INFO(log, "Removing metadata {} of dropped stream {}", table.metadata_path, table.table_id.getNameForLogs());
-    /// proton: ends
     fs::remove(fs::path(table.metadata_path));
 
     removeUUIDMappingFinally(table.table_id.uuid);
@@ -995,9 +989,7 @@ void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
     if (uuid == UUIDHelpers::Nil)
         return;
 
-    /// proton: starts
     LOG_DEBUG(log, "Waiting for stream {} to be finally dropped", toString(uuid));
-    /// proton: ends
     std::unique_lock lock{tables_marked_dropped_mutex};
     wait_table_finally_dropped.wait(lock, [&]()
     {
@@ -1082,18 +1074,67 @@ TableNamesSet DatabaseCatalog::tryRemoveLoadingDependenciesUnlocked(const Qualif
     return dependencies;
 }
 
-void DatabaseCatalog::checkTableCanBeRemovedOrRenamed(const StorageID & table_id) const
+void DatabaseCatalog::checkTableCanBeRemovedOrRenamed(
+    const StorageID & table_id, bool check_view_dependencies, bool check_loading_dependencies, bool is_drop_database) const
 {
-    QualifiedTableName removing_table = table_id.getQualifiedName();
-    std::lock_guard lock{databases_mutex};
-    auto it = loading_dependencies.find(removing_table);
-    if (it == loading_dependencies.end())
+    if (!check_view_dependencies && !check_loading_dependencies)
         return;
+    std::lock_guard lock{databases_mutex};
+    checkTableCanBeRemovedOrRenamedUnlocked(table_id, check_view_dependencies, check_loading_dependencies, is_drop_database);
+}
 
-    const TableNamesSet & dependent = it->second.dependent_database_objects;
-    if (!dependent.empty())
-        throw Exception(ErrorCodes::HAVE_DEPENDENT_OBJECTS, "Cannot drop or rename {}, because some tables depend on it: {}",
-                            table_id.getNameForLogs(), fmt::join(dependent, ", "));
+void DatabaseCatalog::checkTableCanBeRemovedOrRenamedUnlocked(
+    const StorageID & removing_table, bool check_view_dependencies, bool check_loading_dependencies, bool is_drop_database) const
+{
+    /// proton updates: rewrite the step to get dependents as loading_dependencies and view_dependencies
+    /// are currently of different type.
+    std::set<StorageID> dependents;
+
+    if (check_loading_dependencies)
+    {
+        QualifiedTableName removing_table_name = removing_table.getQualifiedName();
+        auto it = loading_dependencies.find(removing_table_name);
+        if (it != loading_dependencies.end())
+        {
+            for (const auto & tn : it->second.dependent_database_objects)
+                dependents.emplace(tn.database, tn.table);
+        }
+    }
+
+    /// proton: starts.
+    if (check_view_dependencies)
+    {
+        /// Note: StorageID.uuid is Nil in view_dependencies
+        auto it = view_dependencies.find({removing_table.getDatabaseName(), removing_table.getTableName()});
+        if (it != view_dependencies.end())
+            dependents.insert(it->second.begin(), it->second.end());
+    }
+    /// proton: ends.
+
+    if (!is_drop_database)
+    {
+        if (!dependents.empty())
+            throw Exception(
+                ErrorCodes::HAVE_DEPENDENT_OBJECTS,
+                "Cannot drop or rename {}, because some tables depend on it: {}",
+                removing_table,
+                fmt::join(dependents, ", "));
+        return;
+    }
+
+    /// For DROP DATABASE we should ignore dependent tables from the same database.
+    /// TODO unload tables in reverse topological order and remove this code
+    std::vector<StorageID> from_other_databases;
+    for (const auto & dependent : dependents)
+        if (dependent.database_name != removing_table.database_name)
+            from_other_databases.push_back(dependent);
+
+    if (!from_other_databases.empty())
+        throw Exception(
+            ErrorCodes::HAVE_DEPENDENT_OBJECTS,
+            "Cannot drop or rename {}, because some tables depend on it: {}",
+            removing_table,
+            fmt::join(from_other_databases, ", "));
 }
 
 void DatabaseCatalog::updateLoadingDependencies(const StorageID & table_id, TableNamesSet && new_dependencies)
@@ -1126,6 +1167,7 @@ void DatabaseCatalog::cleanupStoreDirectoryTask()
             continue;
 
         size_t affected_dirs = 0;
+        size_t checked_dirs = 0;
         for (auto it = disk->iterateDirectory("store"); it->isValid(); it->next())
         {
             /// proton: starts. parse UUID of stream. adjust due to proton changes the directory structure of table
@@ -1141,6 +1183,7 @@ void DatabaseCatalog::cleanupStoreDirectoryTask()
             if (!expected_dir)
             {
                 LOG_WARNING(log, "Found invalid directory {} on disk {}, will try to remove it", it->path(), disk_name);
+                checked_dirs += 1;
                 affected_dirs += maybeRemoveDirectory(disk_name, disk, it->path());
                 continue;
             }
@@ -1152,6 +1195,7 @@ void DatabaseCatalog::cleanupStoreDirectoryTask()
                 /// so it looks safe enough to remove directory if we don't have uuid mapping for it.
                 /// No table or database using this directory should concurrently appear,
                 /// because creation of new table would fail with "directory already exists".
+                checked_dirs += 1;
                 affected_dirs += maybeRemoveDirectory(disk_name, disk, it->path());
             }
             /// proton: ends
@@ -1159,6 +1203,8 @@ void DatabaseCatalog::cleanupStoreDirectoryTask()
 
         if (affected_dirs)
             LOG_INFO(log, "Cleaned up {} directories from store/ on disk {}", affected_dirs, disk_name);
+        if (checked_dirs == 0)
+            LOG_TEST(log, "Nothing to clean up from store/ on disk {}", disk_name);
     }
 
     (*cleanup_task)->scheduleAfter(unused_dir_cleanup_period_sec * 1000);
@@ -1267,7 +1313,7 @@ TemporaryLockForUUIDDirectory & TemporaryLockForUUIDDirectory::operator = (Tempo
 }
 
 
-DDLGuard::DDLGuard(Map & map_, std::shared_mutex & db_mutex_, std::unique_lock<std::mutex> guards_lock_, const String & elem, const String & database_name)
+DDLGuard::DDLGuard(Map & map_, SharedMutex & db_mutex_, std::unique_lock<std::mutex> guards_lock_, const String & elem, const String & database_name)
         : map(map_), db_mutex(db_mutex_), guards_lock(std::move(guards_lock_))
 {
     it = map.emplace(elem, Entry{std::make_unique<std::mutex>(), 0}).first;
@@ -1306,6 +1352,44 @@ DDLGuard::~DDLGuard()
     if (!is_database_guard)
         db_mutex.unlock_shared();
     releaseTableLock();
+}
+
+std::pair<String, String> TableNameHints::getHintForTable(const String & table_name) const
+{
+    auto results = this->getHints(table_name, getAllRegisteredNames());
+    if (results.empty())
+        return getExtendedHintForTable(table_name);
+    return std::make_pair(database->getDatabaseName(), results[0]);
+}
+
+std::pair<String, String> TableNameHints::getExtendedHintForTable(const String & table_name) const
+{
+    /// load all available databases from the DatabaseCatalog instance
+    auto & database_catalog = DatabaseCatalog::instance();
+    auto all_databases = database_catalog.getDatabases();
+
+    for (const auto & [db_name, db] : all_databases)
+    {
+        /// this case should be covered already by getHintForTable
+        if (db_name == database->getDatabaseName())
+            continue;
+
+        TableNameHints hints(db, context);
+        auto results = hints.getHints(table_name);
+
+        /// if the results are not empty, return the first instance of the table_name
+        /// and the corresponding database_name that was found.
+        if (!results.empty())
+            return std::make_pair(db_name, results[0]);
+    }
+    return {};
+}
+
+Names TableNameHints::getAllRegisteredNames() const
+{
+    if (database)
+        return database->getAllTableNames(context);
+    return {};
 }
 
 }

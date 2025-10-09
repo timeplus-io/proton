@@ -12,7 +12,7 @@ public:
         , factory(factory_)
     {}
 
-    Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket) override
+    std::shared_ptr<Poco::Net::TCPServerConnection> createConnection(const Poco::Net::StreamSocket & socket) override
     {
         return factory->createConnection(socket, tcp_server);
     }

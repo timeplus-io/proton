@@ -44,7 +44,7 @@ TEST(ParserDictionaryDDL, SimpleDictionary)
     ASTCreateQuery * create = ast->as<ASTCreateQuery>();
     EXPECT_EQ(create->getTable(), "dict1");
     EXPECT_EQ(create->getDatabase(), "test");
-    EXPECT_EQ(create->is_dictionary, true);
+    EXPECT_EQ(create->isDictionary(), true);
     EXPECT_NE(create->dictionary, nullptr);
     EXPECT_NE(create->dictionary->lifetime, nullptr);
     EXPECT_NE(create->dictionary->source, nullptr);

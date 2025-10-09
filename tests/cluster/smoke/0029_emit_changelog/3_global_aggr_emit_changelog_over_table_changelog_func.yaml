@@ -1,0 +1,62 @@
+tags:
+- global aggr
+- emit changelog
+description: global aggregation emit changelog query over changelog_kv
+cluster:
+- p1k1
+- p3k1
+steps:
+- type: query
+  sql: drop stream if exists test30_stream
+- type: wait
+  time: 1
+
+- type: query
+  sql: create stream test30_stream (i int, k string)
+- type: wait
+  time: 2
+
+- name: 3000
+  type: stream
+  query: select k, count(), _tp_delta from changelog(test30_stream, i) group by k emit changelog periodic 1s;
+  schema:
+  - name: k
+    type: string
+  - name: count()
+    type: uint64
+  - name: _tp_delta
+    type: int8
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream(i, k) values
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+  inputs:
+    - [1, 'k1']
+    - [2, 'k1']
+- type: wait
+  time: 1
+
+- type: query
+  sql: insert into test30_stream(i, k) values
+  schema:
+    - name: i
+      type: int32
+    - name: k
+      type: string
+  inputs:
+    - [1, 'k2']
+
+- type: check
+  target_name: 3000
+  mode: random
+  expected_result:
+  - [k1, 2, 1]
+  - [k1, 2, -1]
+  - [k1, 1, 1]
+  - [k2, 1, 1]

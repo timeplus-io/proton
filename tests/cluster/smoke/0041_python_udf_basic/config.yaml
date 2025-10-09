@@ -1,0 +1,8 @@
+name: python_udf_basic
+description: Tests covering the python_udf
+tags:
+  - smoke
+  - python_udf
+  - basic
+arch:
+  - x86_64

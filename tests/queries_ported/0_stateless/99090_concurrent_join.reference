@@ -1,0 +1,24 @@
+====== Concurrent hash join ======
+1	a1	1	b1
+1	a1	1	b2
+1	a2	1	b1
+1	a2	1	b2
+2	a1	2	b1
+====== Concurrent hybrid hash join ======
+1	a1	1	b1
+1	a1	1	b2
+1	a2	1	b1
+1	a2	1	b2
+2	a1	2	b1
+====== Concurrent hash join with alignment ======
+1	a1	1	b1
+1	a1	1	b2
+1	a2	1	b1
+1	a2	1	b2
+2	a1	2	b1
+====== Concurrent hybrid hash join with alignment ======
+1	a1	1	b1
+1	a1	1	b2
+1	a2	1	b1
+1	a2	1	b2
+2	a1	2	b1

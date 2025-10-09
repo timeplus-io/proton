@@ -52,8 +52,8 @@ NamesAndTypesList StorageSystemQuotas::getNamesAndTypes()
 void StorageSystemQuotas::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
     context->checkAccess(AccessType::SHOW_QUOTAS);
-    const auto & access_control = context->getAccessControl();
-    std::vector<UUID> ids = access_control.findAll<Quota>();
+    const auto access_control = context->getAccessControl();
+    std::vector<UUID> ids = access_control->findAll<Quota>();
 
     size_t column_index = 0;
     auto & column_name = assert_cast<ColumnString &>(*res_columns[column_index++]);
@@ -97,7 +97,7 @@ void StorageSystemQuotas::fillData(MutableColumns & res_columns, ContextPtr cont
         }
         column_durations_offsets.push_back(column_durations.size());
 
-        auto apply_to_ast = apply_to.toASTWithNames(access_control);
+        auto apply_to_ast = apply_to.toASTWithNames(*access_control);
         column_apply_to_all.push_back(apply_to_ast->all);
 
         for (const auto & role_name : apply_to_ast->names)
@@ -109,12 +109,12 @@ void StorageSystemQuotas::fillData(MutableColumns & res_columns, ContextPtr cont
         column_apply_to_except_offsets.push_back(column_apply_to_except.size());
     };
 
-    for (const auto & id : access_control.findAll<Quota>())
+    for (const auto & id : access_control->findAll<Quota>())
     {
-        auto quota = access_control.tryRead<Quota>(id);
+        auto quota = access_control->tryRead<Quota>(id);
         if (!quota)
             continue;
-        auto storage = access_control.findStorage(id);
+        auto storage = access_control->findStorage(id);
         if (!storage)
             continue;
 
