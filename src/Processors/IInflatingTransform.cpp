@@ -96,7 +96,7 @@ void IInflatingTransform::work()
         can_generate = canGenerate();
     }
     /// proton: starts.
-    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
     /// proton: ends.
 }
 

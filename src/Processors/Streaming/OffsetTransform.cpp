@@ -241,7 +241,7 @@ void OffsetTransform::work()
     for (auto & port_data : ports_data)
         port_data.request_checkpoint = false;
 
-    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
 void OffsetTransform::checkpoint(CheckpointContextPtr ckpt_ctx)

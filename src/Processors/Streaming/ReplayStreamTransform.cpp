@@ -172,7 +172,7 @@ void ReplayStreamTransform::work()
     if (!output_chunk && !chunks_to_replay.empty())
         output_chunk = replayOneChunk();
 
-    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
 /**

@@ -95,7 +95,7 @@ void ISimpleTransform::work()
     {
         transform(input_data.chunk, output_data.chunk);
 
-        metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+        metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
         /// proton: ends.
     }
     catch (const DB::Exception & ex)

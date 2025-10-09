@@ -215,7 +215,7 @@ String ExecutingGraph::getStats() const
         Poco::JSON::Object metrices;
         auto metric = node->processor->getMetrics();
 
-        metrices.set("processing_time_ns", metric.processing_time_ns);
+        metrices.set("processed_time_ns", metric.processed_time_ns);
         metrices.set("processed_bytes", metric.processed_bytes);
         metrices.set("processed_rows", metric.processed_rows);
 

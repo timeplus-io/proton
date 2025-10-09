@@ -32,7 +32,7 @@ using Processors = std::vector<ProcessorPtr>;
 /// proton: starts.
 struct ProcessorMetrics
 {
-    int64_t processing_time_ns = 0;
+    int64_t processed_time_ns = 0;
     uint64_t processed_bytes = 0;
     uint64_t processed_rows = 0;
 

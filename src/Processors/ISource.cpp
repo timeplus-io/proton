@@ -104,9 +104,9 @@ void ISource::work()
         if (auto chunk = tryGenerate())
         {
             /// proton: starts.
-            metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+            metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
             metrics.processed_bytes += chunk->bytes();
-            metrics.processed_bytes += chunk->rows();
+            metrics.processed_rows += chunk->rows();
             /// proton: ends.
 
             current_chunk.chunk = std::move(*chunk);

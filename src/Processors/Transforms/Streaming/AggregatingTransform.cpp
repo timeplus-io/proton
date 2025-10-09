@@ -144,7 +144,7 @@ void AggregatingTransform::work()
         read_current_chunk = false;
     }
 
-    metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
 void AggregatingTransform::consume(Chunk chunk)

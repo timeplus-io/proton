@@ -172,7 +172,7 @@ void AggregatingTransformWithSubstream::work()
     /// Remember to reset `read_current_chunk`
     read_current_chunk = false;
 
-    metrics.processing_time_ns += stopwatch.elapsedNanoseconds();
+    metrics.processed_time_ns += stopwatch.elapsedNanoseconds();
 
     logAggregatingMetrics();
 }
