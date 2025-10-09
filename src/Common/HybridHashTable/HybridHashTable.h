@@ -993,6 +993,11 @@ public:
         /// After flushing, always expects rocks instance here
         if (!persistentPartInited())
             initRocks();
+
+        /// Flush all memtables to disk
+        rocksdb::FlushOptions flush_opts;
+        flush_opts.wait = true;
+        cf_handler->db->Flush(flush_opts, cf_handler->cf_handle);
     }
 
     void reload(const HybridHashTableConfig::ValueDeserializer & old_value_deserializer = {})
