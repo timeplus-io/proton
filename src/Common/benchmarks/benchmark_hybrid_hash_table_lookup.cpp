@@ -19,11 +19,11 @@ public:
         bool use_hash_index = state.range(3);
 
         DB::HybridHashTableConfig config;
-        config.spill_dir_path = fmt::format("{}_{}", db_path, case_id);
-        config.max_hot_key_count = max_hot_keys_count;
-        config.cleanup_on_disk_data = clean_up_on_disk_data;
-        config.use_hash_index = use_hash_index;
-        config.db_options = "max_background_jobs=4";
+        config.base_conf.spill_dir_path = fmt::format("{}_{}", db_path, case_id);
+        config.base_conf.max_hot_key_count = max_hot_keys_count;
+        config.base_conf.cleanup_on_disk_data = clean_up_on_disk_data;
+        config.base_conf.use_hash_index = use_hash_index;
+        config.base_conf.kv_options = "max_background_jobs=4";
         config.value_object_size = sizeof(std::string);
         config.align_value_object_size = alignof(std::string);
         config.value_constructor = [](void * data) { new (data) std::string(); };

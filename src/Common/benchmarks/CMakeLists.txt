@@ -24,13 +24,15 @@ target_link_libraries(benchmark_hybrid_hash_table PRIVATE
         ch_contrib::rocksdb
         ch_contrib::jemalloc
         ch_contrib::abseil_swiss_tables
-        clickhouse_common_io)
+        clickhouse_common_io
+        rocks)
 else()
 target_link_libraries(benchmark_hybrid_hash_table PRIVATE
         ch_contrib::gbenchmark_all
         ch_contrib::rocksdb
         ch_contrib::abseil_swiss_tables
-        clickhouse_common_io)
+        clickhouse_common_io
+        rocks)
 endif()
 
 proton_add_executable(benchmark_hybrid_hash_table_lookup benchmark_hybrid_hash_table_lookup.cpp)
@@ -41,13 +43,15 @@ target_link_libraries(benchmark_hybrid_hash_table_lookup PRIVATE
         ch_contrib::rocksdb
         ch_contrib::jemalloc
         ch_contrib::abseil_swiss_tables
-        clickhouse_common_io)
+        clickhouse_common_io
+        rocks)
 else()
 target_link_libraries(benchmark_hybrid_hash_table_lookup PRIVATE
         ch_contrib::gbenchmark_all
         ch_contrib::rocksdb
         ch_contrib::abseil_swiss_tables
-        clickhouse_common_io)
+        clickhouse_common_io
+        rocks)
 endif()
 
 
