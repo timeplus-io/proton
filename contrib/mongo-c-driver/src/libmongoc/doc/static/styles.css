@@ -1,0 +1,116 @@
+/**
+ * Propagate admonition colors into the styled element via a custom property
+ */
+.admonition.caution {
+  --admon-title-color: var(--color-admonition-title--caution);
+}
+
+.admonition.warning {
+  --admon-title-color: var(--color-admonition-title--warning);
+}
+
+.admonition.danger {
+  --admon-title-color: var(--color-admonition-title--danger);
+}
+
+.admonition.attention {
+  --admon-title-color: var(--color-admonition-title--attention);
+}
+
+.admonition.error {
+  --admon-title-color: var(--color-admonition-title--error);
+}
+
+.admonition.hint {
+  --admon-title-color: var(--color-admonition-title--hint);
+}
+
+.admonition.tip {
+  --admon-title-color: var(--color-admonition-title--tip);
+}
+
+.admonition.important {
+  --admon-title-color: var(--color-admonition-title--important);
+}
+
+.admonition.note {
+  --admon-title-color: var(--color-admonition-title--note);
+}
+
+.admonition.seealso {
+  --admon-title-color: var(--color-admonition-title--seealso);
+}
+
+.admonition.todo {
+  --admon-title-color: var(--color-admonition-title--todo);
+}
+
+/* Style for "bolded name" inline spans */
+code.bolded-name.literal>span.pre {
+  font-weight: bold;
+  font-size: 110%;
+}
+
+/* Prevent word breaks within inline code, which makes it very difficult to read */
+p .sig-inline,
+p code.literal {
+  white-space: nowrap;
+}
+
+/* Allow styling of dropdowns as admonitions */
+details.sd-dropdown.sd-card.admonition {
+  padding: 0;
+  /* Override the border: none for closed dropdowns */
+  border-left: 0.2rem solid var(--admon-title-color) !important;
+  /* Inset dropdowns to visually distinguish them from regular admonitions */
+  margin: 0 1rem;
+}
+
+details.sd-dropdown.admonition>summary.sd-summary-title {
+  padding: 0.5rem 2rem;
+}
+
+details.sd-dropdown.admonition>summary.sd-summary-title>div:is(.sd-summary-down, .sd-summary-up) {
+  height: 1rem;
+  position: absolute;
+  width: 1rem;
+  top: 0.75em
+}
+
+/* Replicate the style that causes admonition icons from Furo, onto the dropdown headers */
+details.sd-dropdown.admonition>summary.sd-summary-title::before {
+  content: "";
+  height: 1rem;
+  left: .5rem;
+  position: absolute;
+  width: 1rem;
+}
+
+/* Fix: sphinx-design is doing nonsense with the cursor property */
+details.sd-dropdown {
+  cursor: initial;
+}
+
+details.sd-dropdown>.sd-card-header {
+  cursor: pointer;
+}
+
+details.sd-dropdown>.sd-card-body.sd-summary-content {
+  cursor: initial;
+}
+
+/* Fix: Furo doesn't indent footnote elements other than 'p' */
+aside.footnote> :not(:first-child) {
+  margin-left: 2rem;
+}
+
+/* Pygments does not set an .nv color for body[data-theme="light"], which makes them a bit indistinguishable. */
+body[data-theme="light"] .highlight .nv {
+  color: #0004ff;
+}
+
+a.reference.external::after {
+  content: "⇗";
+  font-weight: bolder;
+  font-size: 80%;
+}

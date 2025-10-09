@@ -1,0 +1,233 @@
+resources:
+  containers:
+
+    - container: ubuntu-1804
+      image: ubuntu:18.04
+      options: "--name ubuntu-1804 --add-host=mariadb.example.com:127.0.0.1 -v /usr/bin/docker:/tmp/docker:ro"
+
+jobs:
+
+  - job: SSLFiles
+    displayName: 'Creating SSL Files'
+    pool:
+      vmImage: 'ubuntu-16.04'
+      container: $[ variables['containerImage'] ]
+    steps:
+      - script: |
+          java --version
+          mkdir tmp
+          chmod 777 .travis/gen-ssl.sh
+          .travis/gen-ssl.sh mariadb.example.com tmp
+          cp -R tmp $BUILD_ARTIFACTSTAGINGDIRECTORY
+        displayName: 'create SSL certificates'
+
+      - task: PublishPipelineArtifact@0
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)'
+          artifactName: ssl_certs
+
+  - job: windowsTest
+    displayName: 'test windows'
+    pool:
+      vmImage: 'windows-2019'
+    dependsOn:
+      - SSLFiles
+    steps:
+      - task: DownloadPipelineArtifact@2
+        displayName: 'Download SSL files'
+        inputs:
+          artifactName: ssl_certs
+          targetPath: $(System.DefaultWorkingDirectory)
+
+      - task: DownloadPipelineArtifact@2
+        displayName: 'Download 10.4 server'
+        inputs:
+          source: 'specific'
+          project: '550599d3-6165-4abd-8c86-e3f7e53a1847'
+          artifact: 'Windows'
+          pipeline: 3
+          runVersion: 'latestFromBranch'
+          runBranch: 'refs/heads/10.4-enterprise'
+          downloadPath: $(System.DefaultWorkingDirectory)
+
+      - script: |
+          for /f %%a in ('dir /B $(System.DefaultWorkingDirectory)\win_build\mariadb-enterprise-10.*-winx64.msi') do set servername=$(System.DefaultWorkingDirectory)\win_build\%%a
+          echo %servername%
+          msiexec /i %servername% INSTALLDIR=c:\projects\server SERVICENAME=mariadb ALLOWREMOTEROOTACCESS=true /qn
+          c:\projects\server\bin\mysql.exe -e "create database testc" --user=root
+          c:\projects\server\bin\mysql.exe -e "GRANT ALL on *.* to 'someUser'@'%' identified by 'Passw@rd2' with grant option;" --user=root
+        displayName: 'install server'
+
+      - script: |
+          echo 127.0.0.1 mariadb.example.com >> %WINDIR%\System32\Drivers\Etc\Hosts
+        displayName: 'set hostname'
+
+      - script: |
+          cmake -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build . --config RelWithDebInfo
+        displayName: 'build connector'
+
+      - script: |
+          cd $(System.DefaultWorkingDirectory)\unittest\libmariadb
+          set MARIADB_PLUGIN_DIR=$(System.DefaultWorkingDirectory)\plugins\lib\RelWithDebInfo
+          ctest -V
+          if %ERRORLEVEL% EQU 0 (
+            echo Success
+          ) else (
+            echo exit code is %errorlevel%
+            exit /b %errorlevel%
+          )
+        displayName: 'run tests'
+        env:
+          MYSQL_TEST_HOST: "mariadb.example.com"
+          MYSQL_TEST_USER: 'someUser'
+          MYSQL_TEST_PASSWD: 'Passw@rd2'
+          MYSQL_TEST_DB: 'testc'
+          MYSQL_TEST_PORT: 3306
+          TEST_SSL_CA_FILE: "$(System.DefaultWorkingDirectory)/tmp/server.crt"
+          TEST_SSL_CLIENT_KEY_FILE: "$(System.DefaultWorkingDirectory)/tmp/client.key"
+          TEST_SSL_CLIENT_CERT_FILE: "$(System.DefaultWorkingDirectory)/tmp/client.crt"
+          TEST_SSL_CLIENT_KEYSTORE_FILE: "$(System.DefaultWorkingDirectory)/tmp/client-keystore.p12"
+
+  - job: RunInContainer
+    pool:
+      vmImage: 'ubuntu-16.04'
+    displayName: 'test ubuntu bionic'
+    dependsOn:
+      - SSLFiles
+    strategy:
+      matrix:
+        ubuntu-1804:
+          containerImage: ubuntu-1804
+          containerName: bionic
+
+    container: $[variables['containerImage']]
+
+    steps:
+
+      - task: DownloadPipelineArtifact@2
+        inputs:
+          artifactName: ssl_certs
+          targetPath: $(System.DefaultWorkingDirectory)
+
+      - script: /tmp/docker exec -t -u 0 $(containerImage) sh -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" -y install sudo"
+        displayName: Set up sudo
+
+      - task: DownloadPipelineArtifact@2
+        displayName: 'Download 10.4 enterprise server artifact files'
+        inputs:
+          source: 'specific'
+          project: '550599d3-6165-4abd-8c86-e3f7e53a1847'
+          artifact: '$(containerImage)'
+          pipeline: 3
+          runVersion: 'latestFromBranch'
+          runBranch: 'refs/heads/10.4-enterprise'
+          downloadPath: $(System.DefaultWorkingDirectory)
+
+      - task: DownloadPipelineArtifact@2
+        displayName: 'Download galera server artifact files'
+        inputs:
+          source: 'specific'
+          project: '550599d3-6165-4abd-8c86-e3f7e53a1847'
+          artifact: $(containerImage)
+          runVersion: 'latestFromBranch'
+          pipeline: 2
+          runBranch: 'refs/heads/es-mariadb-4.x'
+          downloadPath: $(System.DefaultWorkingDirectory)
+
+
+      - script: |
+          tar xf mariadb-enterprise*
+
+          sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-transport-https ca-certificates tzdata pwgen
+          export DEBIAN_FRONTEND="noninteractive"
+          sudo debconf-set-selections <<< "mariadb-server-10.4 mysql-server/root_password password P4ssw@rd"
+          sudo debconf-set-selections <<< "mariadb-server-10.4 mysql-server/root_password_again password P4ssw@rd"
+          sudo apt-get update -y
+          sudo apt-get install --allow-unauthenticated -f -y libssl-dev libaio1 libaio-dev libxml2 libcurl4 curl libc-dev linux-libc-dev libc-dev-bin libdbi-perl rsync socat libnuma1 zlib1g-dev libreadline5 libjemalloc1 libsnappy1v5 libcrack2 gawk lsof psmisc perl libreadline5
+
+          cd mariadb-enterprise*/
+          sudo groupadd mysql
+          sudo useradd -g mysql mysql
+
+          export PROJ_PATH=`pwd`
+          echo $PROJ_PATH
+
+          cat <<EOT >> my.cnf
+          [mysqld]
+          port=3306
+          max_allowed_packet=16M
+          datadir=$PROJ_PATH/data
+          socket=/tmp/mysql.sock
+          user=mysql
+          ssl-ca=$(System.DefaultWorkingDirectory)/tmp/ca.crt
+          ssl-cert=$(System.DefaultWorkingDirectory)/tmp/server.crt
+          ssl-key=$(System.DefaultWorkingDirectory)/tmp/server.key
+          EOT
+
+          sudo chown mysql $PROJ_PATH/my.cnf
+          sudo tail -n 5000 $PROJ_PATH/my.cnf
+
+          sudo chmod 777 $PROJ_PATH
+          sudo ln -s $PROJ_PATH /usr/local/mysql
+
+          sudo ./scripts/mysql_install_db --defaults-file=$PROJ_PATH/my.cnf --user=mysql
+          sudo chown -R root .
+          sudo chown -R mysql data
+
+          export PATH=$PATH:$PROJ_PATH/bin/
+
+        env:
+          WORKING_DIR: $(System.DefaultWorkingDirectory)
+        displayName: 'install server'
+
+      - script: |
+          sudo apt-get install -f -y make cmake
+          cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_SSL=OPENSSL -DCERT_PATH=$(System.DefaultWorkingDirectory)/tmp
+          make
+        displayName: 'Build'
+
+      - script: |
+          cd mariadb-enterprise*/
+          sudo ./bin/mysqld --defaults-file=./my.cnf &
+
+          for i in {30..0}; do
+          	if sudo ./bin/mysql -e "SELECT 1" &> /dev/null; then
+          	    echo 'MySQL connected...'
+          		break
+          	fi
+          	echo 'MySQL init process in progress...'
+          	sleep 1
+          done
+          if [ "$i" = 0 ]; then
+          	echo >&2 'MySQL init process failed.'
+            sudo ./bin/mysql -e "SELECT 1"
+          	exit 1
+          fi
+
+          sudo ./bin/mysql -e "CREATE USER 'someUser'@'%' identified by 'Passw@rd2';"
+          sudo ./bin/mysql -e "GRANT ALL on *.* to 'someUser'@'%' identified by 'Passw@rd2' with grant option;"
+          sudo ./bin/mysql -e "CREATE DATABASE testc;"
+
+          echo "Running tests"
+          cd ../unittest/libmariadb
+          ctest -V
+          if [ $? -ne 0 ]; then
+            exit 1
+          fi
+          cd $(System.DefaultWorkingDirectory)/mariadb-enterprise*/
+          sudo ./bin/mysqladmin shutdown
+        env:
+          MYSQL_TEST_HOST: mariadb.example.com
+          MYSQL_TEST_DB: testc
+          MYSQL_TEST_USER: 'someUser'
+          MYSQL_TEST_PORT: 3306
+          MYSQL_TEST_TRAVIS: 1
+          MYSQL_TEST_PASSWD: 'Passw@rd2'
+          TEST_SSL_CA_FILE: "$(System.DefaultWorkingDirectory)/tmp/server.crt"
+          TEST_SSL_CLIENT_KEY_FILE: "$(System.DefaultWorkingDirectory)/tmp/client.key"
+          TEST_SSL_CLIENT_CERT_FILE: "$(System.DefaultWorkingDirectory)/tmp/client.crt"
+          TEST_SSL_CLIENT_KEYSTORE_FILE: "$(System.DefaultWorkingDirectory)/tmp/client-keystore.p12"
+        displayName: 'run tests'

@@ -1,0 +1,5 @@
+If connecting to a hostname that has both IPv4 and IPv6 DNS records, the behavior follows `RFC-6555 <https://www.ietf.org/rfc/rfc6555.txt>`_. A connection to the IPv6 address is attempted first. If IPv6 fails, then a connection is attempted to the IPv4 address. If the connection attempt to IPv6 does not complete within 250ms, then IPv4 is tried in parallel. Whichever succeeds connection first cancels the other. The successful DNS result is cached for 10 minutes.
+
+As a consequence, attempts to connect to a mongod only listening on IPv4 may be delayed if there are both A (IPv4) and AAAA (IPv6) DNS records associated with the host.
+
+To avoid a delay, configure hostnames to match the MongoDB configuration. That is, only create an A record if the mongod is only listening on IPv4.

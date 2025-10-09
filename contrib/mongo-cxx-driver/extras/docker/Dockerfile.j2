@@ -1,0 +1,65 @@
+FROM {{ base_image }} AS builder
+
+ARG MONGOCXX_VERSION={{ mongocxx_version }}
+ARG MONGOC_VERSION={{ mongoc_version }}
+ARG MONGOCRYPT_VERSION={{ mongocrypt_version }}
+
+WORKDIR /build
+
+RUN {{ install_build_dependencies }}
+
+RUN mkdir -p /opt/mongocxx
+
+RUN wget https://github.com/mongodb/libmongocrypt/archive/refs/tags/${MONGOCRYPT_VERSION}/libmongocrypt-${MONGOCRYPT_VERSION}.tar.gz \
+        -O libmongocrypt-${MONGOCRYPT_VERSION}.tar.gz && \
+    tar xf libmongocrypt-${MONGOCRYPT_VERSION}.tar.gz && \
+    cmake \
+        -S libmongocrypt-${MONGOCRYPT_VERSION} \
+        -B mongocrypt-build \
+        -G "Ninja Multi-Config" \
+        -DBUILD_VERSION=${MONGOCRYPT_VERSION} \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_INSTALL_PREFIX=/opt/mongocxx \
+        && \
+    cmake --build mongocrypt-build --config RelWithDebInfo && \
+    cmake --install mongocrypt-build --config RelWithDebInfo --prefix /opt/mongocxx
+
+RUN wget https://github.com/mongodb/mongo-c-driver/archive/refs/tags/${MONGOC_VERSION}/mongo-c-driver-${MONGOC_VERSION}.tar.gz \
+        -O mongo-c-driver-${MONGOC_VERSION}.tar.gz && \
+    tar xf mongo-c-driver-${MONGOC_VERSION}.tar.gz && \
+    cmake \
+        -S mongo-c-driver-${MONGOC_VERSION} \
+        -B mongoc-build \
+        -G "Ninja Multi-Config" \
+        -DBUILD_VERSION=${MONGOC_VERSION} \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DENABLE_AUTOMATIC_INIT_AND_CLEANUP=OFF \
+        -DMONGOC_ENABLE_CLIENT_SIDE_ENCRYPTION=ON \
+        -DCMAKE_INSTALL_PREFIX=/opt/mongocxx \
+        -DCMAKE_PREFIX_PATH=/opt/mongocxx \
+        && \
+    cmake --build mongoc-build --config RelWithDebInfo && \
+    cmake --install mongoc-build --config RelWithDebInfo --prefix /opt/mongocxx
+
+RUN wget https://github.com/mongodb/mongo-cxx-driver/archive/refs/tags/r${MONGOCXX_VERSION}/mongo-cxx-driver-${MONGOCXX_VERSION}.tar.gz \
+        -O mongo-cxx-driver-${MONGOCXX_VERSION}.tar.gz && \
+    tar xf mongo-cxx-driver-${MONGOCXX_VERSION}.tar.gz && \
+    cmake \
+        -S mongo-cxx-driver-r${MONGOCXX_VERSION} \
+        -B mongocxx-build \
+        -G "Ninja Multi-Config" \
+        -DBUILD_VERSION=${MONGOCXX_VERSION} \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_CXX_STANDARD=17 \
+        -DCMAKE_INSTALL_PREFIX=/opt/mongocxx \
+        -DCMAKE_PREFIX_PATH=/opt/mongocxx \
+        && \
+    cmake --build mongocxx-build --config RelWithDebInfo && \
+    cmake --install mongocxx-build --config RelWithDebInfo --prefix /opt/mongocxx
+
+FROM {{ base_image }}
+
+RUN {{ install_runtime_dependencies }}
+
+COPY --from=builder /opt/mongocxx /usr/local
+{{ post_install_commands }}

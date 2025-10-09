@@ -1,0 +1,13 @@
+Use this function for commands that both read and write, such as "mapReduce" with an output collection.
+
+Read and write concern and collation can be overridden by various sources. In a transaction, read concern and write concern are prohibited in ``opts``. The highest-priority sources for these options are listed first in the following table. Read preferences are *not* applied. The write concern is omitted for MongoDB before 3.4.
+
+============== ============== =========
+Read Concern   Write Concern  Collation
+============== ============== =========
+``opts``       ``opts``       ``opts``
+Transaction    Transaction
+|opts-source|  |opts-source|
+============== ============== =========
+
+:ref:`See the example for transactions <mongoc_client_session_start_transaction_example>` and for :ref:`the "distinct" command with opts <mongoc_client_read_command_with_opts_example>`.

@@ -1,0 +1,23 @@
+MONGOCXX_VERSION={{ mongocxx_version }}
+DOCKER=docker
+
+.PHONY: build
+build:
+	$(DOCKER) build . \
+		-t mongodb/mongo-cxx-driver:$(MONGOCXX_VERSION)-{{ distro }}
+
+.PHONY: nocachebuild
+nocachebuild:
+	$(DOCKER) build . \
+		--no-cache \
+		-t mongodb/mongo-cxx-driver:$(MONGOCXX_VERSION)-{{ distro }}
+
+.PHONY: run
+run: | $(filter nocachebuild build, $(MAKECMDGOALS))
+	$(DOCKER) run --rm -it mongodb/mongo-cxx-driver:$(MONGOCXX_VERSION)-{{ distro }}
+
+.PHONY: test
+test: | $(filter nocachebuild build, $(MAKECMDGOALS))
+	$(DOCKER) build . --no-cache -f TestDockerfile -t test-mongocxx-driver-image:$(MONGOCXX_VERSION)-{{ distro }}
+	$(DOCKER) run test-mongocxx-driver-image:$(MONGOCXX_VERSION)-{{ distro }}
+

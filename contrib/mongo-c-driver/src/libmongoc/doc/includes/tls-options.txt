@@ -1,0 +1,33 @@
+.. list-table::
+   :header-rows:  1
+
+   * - Constant
+     - Key
+     - Description
+   * - MONGOC_URI_TLS
+     - tls
+     - {true|false}, indicating if TLS must be used.
+   * - MONGOC_URI_TLSCERTIFICATEKEYFILE
+     - tlscertificatekeyfile
+     - Path to PEM formatted Private Key, with its Public Certificate concatenated at the end.
+   * - MONGOC_URI_TLSCERTIFICATEKEYFILEPASSWORD
+     - tlscertificatekeypassword
+     - The password, if any, to use to unlock encrypted Private Key.
+   * - MONGOC_URI_TLSCAFILE
+     - tlscafile
+     - One, or a bundle of, Certificate Authorities whom should be considered to be trusted.
+   * - MONGOC_URI_TLSALLOWINVALIDCERTIFICATES
+     - tlsallowinvalidcertificates
+     - Accept and ignore certificate verification errors (e.g. untrusted issuer, expired, etc.)
+   * - MONGOC_URI_TLSALLOWINVALIDHOSTNAMES
+     - tlsallowinvalidhostnames
+     - Ignore hostname verification of the certificate (e.g. Man In The Middle, using valid certificate, but issued for another hostname)
+   * - MONGOC_URI_TLSINSECURE
+     - tlsinsecure
+     - {true|false}, indicating if insecure TLS options should be used. Currently this implies MONGOC_URI_TLSALLOWINVALIDCERTIFICATES and MONGOC_URI_TLSALLOWINVALIDHOSTNAMES.
+   * - MONGOC_URI_TLSDISABLECERTIFICATEREVOCATIONCHECK
+     - tlsdisablecertificaterevocationcheck
+     - {true|false}, indicates if revocation checking (CRL / OCSP) should be disabled.
+   * - MONGOC_URI_TLSDISABLEOCSPENDPOINTCHECK
+     - tlsdisableocspendpointcheck
+     - {true|false}, indicates if OCSP responder endpoints should not be requested when an OCSP response is not stapled.

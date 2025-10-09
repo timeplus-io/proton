@@ -1,0 +1,5 @@
+.gitignore export-ignore
+.gitattributes export-ignore
+* text eol=lf
+*.png binary
+*.icns binary

@@ -1,0 +1,85 @@
+#!/usr/bin/env sh
+
+# Create an alias in /usr/local/bin/ for the command given by the arguments
+# Usage:
+#
+#   __alias <name> <program> [<arg> [...]]
+#
+# The generated alias can be invoked via <name>, and any subsequent arguments
+# are appended to the argument list that were given when __alias was invoked.
+
+# shellcheck disable=SC3043,SC3044
+
+set -eu
+
+# Usage: __readvar <dest> <varname>
+# Read the value of the variable named by <varname> into a variable <dest>
+__readvar() {
+    local __readvar_tmp
+    eval "__readvar_tmp=\$(printf %s. \"\${$2}\"); $1=\${__readvar_tmp%.}"
+}
+
+__fail() {
+    printf %s "$@"
+    return 1
+}
+
+# $ __strsub_inplace <varname> <needle> <repl>
+# Replace each occurrence of <needle> with <repl> within the string variable <varname>
+__strsub_inplace() {
+    test $# -eq 3 || __fail "__strsub_inplace expects three arguments (Got %s)" $# || return
+    local __strsub_varname="$1" __strsub_needle="$2" __strsub_repl="$3"
+    # Read the value of <varname> into __strsub_remaining
+    __readvar __strsub_remaining "$__strsub_varname"
+    # Accumulate into __strsub_acc
+    local __strsub_head __strsub_acc=''
+    while true; do
+        # Grab all content until the next needle:
+        __strsub_head=${__strsub_remaining%%"$__strsub_needle"*}
+        if test "$__strsub_head" = "$__strsub_remaining"; then
+            # Nothing match the needle, so we are done
+            __strsub_acc="$__strsub_acc$__strsub_remaining"
+            break
+        fi
+        # Everything after the needle:
+        __strsub_remaining=${__strsub_remaining#*"$__strsub_needle"}
+        # Accumulate the result:
+        __strsub_acc="$__strsub_acc$__strsub_head$__strsub_repl"
+    done
+    # Read the accumulated string back into the output variable:
+    __readvar "$__strsub_varname" __strsub_acc
+}
+
+_ESCAPES="$(printf '[][ \t\n\r\a*?!\\\$;()\\{\\}'"'"']')"
+__quote() {
+    local __quote_input="$1"
+    # shellcheck disable=SC2295
+    local __quote_tmp="${__quote_input#*$_ESCAPES}" || return
+    if test "$__quote_input" = ""; then
+        # Empty string: Just emit empty quotes
+        printf '""'
+        return
+    elif test "$__quote_tmp" = "$__quote_input"; then
+        # No special chars, so don't quote it:
+        printf %s "$__quote_input"
+        return
+    else
+        # Special chars. Escape any inner quotes, then wrap in quotes
+        __strsub_inplace __quote_input "'" "'\\''"
+        printf "'%s'" "$__quote_input"
+    fi
+}
+
+command='' name="$1"
+shift
+for x in "$@"; do
+    x=$(__quote "$x")
+    command="$command$x "
+done
+command="$command\"\$@\""
+filename="/usr/local/bin/$name"
+
+echo "#!/usr/bin/env sh" > "$filename"
+echo "$command" >> "$filename"
+chmod a+x "$filename"
+echo "Created command alias '$filename' of [$command]" 1>&2

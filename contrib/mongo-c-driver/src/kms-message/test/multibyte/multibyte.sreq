@@ -1,0 +1,8 @@
+GET /€/?euro=€ HTTP/1.1
+Content-Length:4
+Host:€.€.amazonaws.com
+X-Amz-Date:20150830T123600Z
+€:€asdf€
+Authorization: AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/€/€/aws4_request, SignedHeaders=content-length;host;x-amz-date;€, Signature=88d2d4b0639c6b6db1ce366d2578b8407562caa905fc375fdf1ddb7f0b789f5b
+
+€

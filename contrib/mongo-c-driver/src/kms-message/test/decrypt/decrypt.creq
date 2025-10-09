@@ -1,0 +1,11 @@
+POST
+/
+
+content-length:234
+content-type:application/x-amz-json-1.1
+host:service.us-east-1.amazonaws.com
+x-amz-date:20150830T123600Z
+x-amz-target:TrentService.Decrypt
+
+content-length;content-type;host;x-amz-date;x-amz-target
+48384de310621c850968f3948bddd004ecf5cae592a24530f778e4d190bd9dbc

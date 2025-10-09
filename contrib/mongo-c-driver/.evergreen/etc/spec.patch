@@ -1,0 +1,20 @@
+--- mongo-c-driver.spec
++++ mongo-c-driver.spec
+@@ -10,7 +10,7 @@
+ %global gh_project   mongo-c-driver
+ %global libname      libmongoc
+ %global libver       1.0
+-%global up_version   1.27.2
++%global up_version   1.27.3
+ #global up_prever    rc0
+ # disabled as require a MongoDB server
+ %bcond_with          tests
+@@ -20,7 +20,7 @@
+ 
+ Name:      mongo-c-driver
+ Summary:   Client library written in C for MongoDB
+-Version:   %{up_version}%{?up_prever:~%{up_prever}}
++Version:   %{up_version}%{?up_prever}
+ Release:   1%{?dist}
+ # See THIRD_PARTY_NOTICES
+ License:   Apache-2.0 AND ISC AND MIT AND Zlib

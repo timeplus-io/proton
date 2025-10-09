@@ -1,0 +1,3 @@
+Use this function for commands that read such as "count" or "distinct".
+
+.. include:: includes/read-opts-sources.txt

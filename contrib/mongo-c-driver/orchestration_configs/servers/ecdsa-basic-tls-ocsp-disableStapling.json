@@ -1,0 +1,18 @@
+{
+   "id" : "standalonenoauthssl",
+   "name": "mongod",
+   "procParams": {
+      "ipv6": true,
+      "bind_ip": "127.0.0.1,::1",
+      "logappend": true,
+      "port": 27017,
+      "setParameter": {"failpoint.disableStapling":"{\"mode\":\"alwaysOn\"}}"}
+   },
+   "sslParams": {
+      "sslOnNormalPorts": true,
+      "sslPEMKeyFile": "ABSOLUTE_PATH_REPLACEMENT_TOKEN/.evergreen/ocsp/ecdsa/server.pem",
+      "sslCAFile": "ABSOLUTE_PATH_REPLACEMENT_TOKEN/.evergreen/ocsp/ecdsa/ca.pem",
+      "sslWeakCertificateValidation" : true,
+      "sslAllowInvalidCertificates": true
+   }
+}

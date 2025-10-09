@@ -1,0 +1,48 @@
+# Default timeout for all tasks is 1 hour.
+# May be overridden by individual tasks.
+exec_timeout_secs: 3600
+
+# Default command type is 'system' to indicate failures unrelated to tests or
+# their setup. Most commands should define their type as 'setup' or 'test'.
+#   - setup:  before test (lavendar).
+#   - test:   during test (red).
+#   - system: after test (purple).
+command_type: system
+
+# Ensure Evergreen tests earlier commits when a task fails.
+stepback: true
+
+# Ensure failure in pre commands is also considered task failure.
+pre_error_fails_task: true
+
+# Too many post commands are not designed to handle errors.
+# TODO: set to true once failing post commands have been moved into
+# teardown_group commands of appropriate task groups.
+post_error_fails_task: false
+
+# TODO: move into timeout commands of appropriate task groups.
+timeout:
+  - func: backtrace
+
+# Commands run before all tasks (excluding those in task groups).
+# Use sparingly and ensure they are error-proof.
+pre:
+  - func: fetch-source
+
+# Commands run after all tasks (excluding those in task groups).
+# Use sparingly and ensure they are error-proof.
+# TODO: move into teardown_group commands of appropriate task groups.
+post:
+  - func: backtrace
+  - func: upload-mo-artifacts
+  - func: upload-test-results
+  - func: stop-mongo-orchestration
+  - func: stop-load-balancer
+  - func: restore-instance-profile
+
+include:
+  - filename: .evergreen/generated_configs/legacy-config.yml
+  - filename: .evergreen/generated_configs/functions.yml
+  - filename: .evergreen/generated_configs/task_groups.yml
+  - filename: .evergreen/generated_configs/tasks.yml
+  - filename: .evergreen/generated_configs/variants.yml

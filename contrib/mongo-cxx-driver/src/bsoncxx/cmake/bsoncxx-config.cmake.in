@@ -1,0 +1,4 @@
+include(CMakeFindDependencyMacro)
+@BSONCXX_PKG_DEP@
+@BSONCXX_BOOST_PKG_DEP@
+include("${CMAKE_CURRENT_LIST_DIR}/bsoncxx_targets.cmake")

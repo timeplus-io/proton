@@ -1,0 +1,16 @@
+{
+    "description": "Top-level document validity - libmongoc-specific tests. TODO (CDRIVER-4016) move this file.",
+    "bson_type": "0x00",
+    "valid": [],
+    "decodeErrors": [],
+    "parseErrors": [
+        {
+            "description": "Null byte in legacy $regex string",
+            "string": "{\"a\" : {\"$regex\" : \"b\\u0000\", \"$options\" : \"i\"}}"
+        },
+        {
+            "description": "Null byte in legacy $options string",
+            "string": "{\"a\" : {\"$regex\" : \"b\", \"$options\" : \"i\\u0000\"}}"
+        }
+    ]
+}

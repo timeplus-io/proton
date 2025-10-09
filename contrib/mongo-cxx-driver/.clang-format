@@ -1,0 +1,25 @@
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+BasedOnStyle: Google
+BinPackArguments: false
+BinPackParameters: false
+ColumnLimit: 100
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: 'prelude\.(hpp|hh)' # preludes
+    Priority: 4
+  - Regex: '<[[:alnum:]_.]+>' # system headers
+    Priority: 1
+  - Regex: '.*(-|\/)fwd\.(hpp|hh)' # forwarding headers
+    Priority: 2
+  - Regex: '.*' # driver headers
+    Priority: 3
+IndentWidth: 4
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+SpaceBeforeAssignmentOperators: true
+Standard: Cpp11
+UseTab: Never

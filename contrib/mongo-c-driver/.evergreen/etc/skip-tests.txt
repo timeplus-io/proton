@@ -1,0 +1,33 @@
+# This file lists known failing or flaky tests that for some reason or another
+# cannot be fixed and rather should be skipped in Evergreen builds.  Note that
+# listing a test in this file will result in the test being skipped on all
+# platforms, build variants, tasks, etc.
+#
+# The format of this file is as follows:
+# - one test per line, with an optional comment (total lines in file < 1,000)
+# - comments begin with a hash (#) character and continue to the end of the line
+# - lines starting with the comment character and blank lines are ignored
+# - specify test names as they are known to the test runner (e.g., /some/test)
+# - specify sub-tests of spec tests by an additional slash (/) and the quoted description
+#   (e.g., /some/spec/test/"sub-test 1")
+# - placing a comment at the end of a line will cause the test runner to output
+#   the comment text as the skip reason when the test is skipped
+#
+# Example entries:
+# /skip/entire/test # this will be output by the runner as the skip reason
+# /skip/part/of/spec/test/"sub-test description" # this will also be output
+
+/change_stream/live/track_resume_token # (CDRIVER-4344) Condition 'bson_compare (resume_token, &doc2_rt) == 0' failed
+/ClientPool/pop_timeout # (CDRIVER-4348) precondition failed: duration_usec / 1000 >= 1990
+
+/change_streams/legacy/change-streams # (CDRIVER-4350) Could not establish stream for node 127.0.0.1:8000: [TLS handshake failed: Connection timed out calling hello on '127.0.0.1:8000']
+/change_streams/legacy/change-streams-resume-allowlist # (CDRIVER-4350) Could not establish stream for node 127.0.0.1:8000: [TLS handshake failed: Connection timed out calling hello on '127.0.0.1:8000']
+/change_streams/legacy/change-streams-resume-errorLabels # (CDRIVER-4350) Could not establish stream for node 127.0.0.1:8000: [TLS handshake failed: Connection timed out calling hello on '127.0.0.1:8000']
+/unified/entity-find-cursor # (CDRIVER-4350) Could not establish stream for node 127.0.0.1:8000: [TLS handshake failed: Connection timed out calling hello on '127.0.0.1:8000']
+/change_streams/legacy/change-streams-errors # (CDRIVER-4350) Could not establish stream for node 127.0.0.1:8000: [TLS handshake failed: Connection timed out calling hello on '127.0.0.1:8000'] (on ASAN Tests Ubuntu 18.04 build variant)
+
+/transactions/legacy/mongos-recovery-token/"commitTransaction retry fails on new mongos" # fails with server selection timeout (CDRIVER-4268)
+/transactions/legacy/pin-mongos/"unpin after transient error within a transaction and commit" # (CDRIVER-4351) server selection timeout (on ASAN Tests Ubuntu 18.04 build variant)
+/Samples # (CDRIVER-4352) strange "heartbeat failed" error
+
+/client_side_encryption/bypass_spawning_mongocryptd/mongocryptdBypassSpawn  # Fails if crypt_shared is visible

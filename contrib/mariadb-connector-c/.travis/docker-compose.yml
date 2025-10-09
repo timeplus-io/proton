@@ -1,0 +1,13 @@
+version: '2'
+services:
+  db:
+    image: $DB
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --ssl-ca=/etc/sslcert/ca.crt --ssl-cert=/etc/sslcert/server.crt --ssl-key=/etc/sslcert/server.key --bind-address=0.0.0.0
+    ports:
+      - 3305:3306
+    volumes:
+      - $SSLCERT:/etc/sslcert
+      - $ENTRYPOINT:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_DATABASE: test
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1

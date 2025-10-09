@@ -1,0 +1,214 @@
+buildvariants:
+  - name: alpine3.16-clang
+    display_name: Alpine 3.16 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: alpine3.16
+    tasks:
+      - name: .alpine3.16-clang
+  - name: alpine3.16-gcc
+    display_name: Alpine 3.16 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: alpine3.16
+    tasks:
+      - name: .alpine3.16-gcc
+  - name: alpine3.17-clang
+    display_name: Alpine 3.17 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: alpine3.17
+    tasks:
+      - name: .alpine3.17-clang
+  - name: alpine3.17-gcc
+    display_name: Alpine 3.17 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: alpine3.17
+    tasks:
+      - name: .alpine3.17-gcc
+  - name: alpine3.18-clang
+    display_name: Alpine 3.18 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: alpine3.18
+    tasks:
+      - name: .alpine3.18-clang
+  - name: alpine3.18-gcc
+    display_name: Alpine 3.18 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: alpine3.18
+    tasks:
+      - name: .alpine3.18-gcc
+  - name: alpine3.19-clang
+    display_name: Alpine 3.19 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: alpine3.19
+    tasks:
+      - name: .alpine3.19-clang
+  - name: alpine3.19-gcc
+    display_name: Alpine 3.19 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: alpine3.19
+    tasks:
+      - name: .alpine3.19-gcc
+  - name: archlinux-clang
+    display_name: ArchLinux (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: archlinux
+    tasks:
+      - name: .archlinux-clang
+  - name: archlinux-gcc
+    display_name: ArchLinux (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: archlinux
+    tasks:
+      - name: .archlinux-gcc
+  - name: clang-format
+    display_name: clang-format
+    run_on:
+      - ubuntu2204-large
+      - ubuntu2004-large
+    tasks:
+      - name: .clang-format
+  - name: cse-matrix-darwinssl
+    display_name: cse-matrix-darwinssl
+    expansions:
+      CLIENT_SIDE_ENCRYPTION: "on"
+      DEBUG: "ON"
+    tasks:
+      - name: .cse-matrix-darwinssl
+  - name: cse-matrix-openssl
+    display_name: cse-matrix-openssl
+    expansions:
+      CLIENT_SIDE_ENCRYPTION: "on"
+      DEBUG: "ON"
+    tasks:
+      - name: .cse-matrix-openssl
+  - name: cse-matrix-winssl
+    display_name: cse-matrix-winssl
+    expansions:
+      CLIENT_SIDE_ENCRYPTION: "on"
+      DEBUG: "ON"
+    tasks:
+      - name: .cse-matrix-winssl
+  - name: loadbalanced
+    display_name: loadbalanced
+    tasks:
+      - name: .loadbalanced
+  - name: misc
+    display_name: Miscellaneous
+    tasks:
+      - name: .misc
+  - name: mock-server-test
+    display_name: Mock Server Test
+    expansions:
+      ASAN: "on"
+      CC: gcc
+      CFLAGS: -fno-omit-frame-pointer
+      EXTRA_CONFIGURE_FLAGS: -DENABLE_EXTRA_ALIGNMENT=OFF
+      SANITIZE: address,undefined
+    tasks:
+      - name: mock-server-test
+  - name: openssl-static-matrix
+    display_name: openssl-static-matrix
+    tasks:
+      - name: .openssl-static-matrix
+  - name: sanitizers-matrix-asan
+    display_name: sanitizers-matrix-asan
+    expansions:
+      ASAN: "on"
+      CFLAGS: -fno-omit-frame-pointer
+      CHECK_LOG: "ON"
+      EXTRA_CONFIGURE_FLAGS: -DENABLE_EXTRA_ALIGNMENT=OFF
+      SANITIZE: address,undefined
+    tasks:
+      - name: .sanitizers-matrix-asan
+  - name: sanitizers-matrix-tsan
+    display_name: sanitizers-matrix-tsan
+    expansions:
+      CFLAGS: -fno-omit-frame-pointer
+      CHECK_LOG: "ON"
+      EXTRA_CONFIGURE_FLAGS: -DENABLE_EXTRA_ALIGNMENT=OFF -DENABLE_SHM_COUNTERS=OFF
+      SANITIZE: thread
+    tasks:
+      - name: .sanitizers-matrix-tsan
+  - name: sasl-matrix-darwinssl
+    display_name: sasl-matrix-darwinssl
+    expansions:
+      DEBUG: "ON"
+    tasks:
+      - name: .sasl-matrix-darwinssl
+  - name: sasl-matrix-nossl
+    display_name: sasl-matrix-nossl
+    expansions:
+      DEBUG: "ON"
+    tasks:
+      - name: .sasl-matrix-nossl
+  - name: sasl-matrix-openssl
+    display_name: sasl-matrix-openssl
+    expansions:
+      DEBUG: "ON"
+    tasks:
+      - name: .sasl-matrix-openssl
+  - name: sasl-matrix-winssl
+    display_name: sasl-matrix-winssl
+    expansions:
+      DEBUG: "ON"
+    tasks:
+      - name: .sasl-matrix-winssl
+  - name: scan-build-matrix
+    display_name: scan-build-matrix
+    tasks:
+      - name: .scan-build-matrix
+  - name: std-matrix
+    display_name: std-matrix
+    tasks:
+      - name: .std-matrix
+  - name: u18-clang
+    display_name: Ubuntu 18.04 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: u18
+    tasks:
+      - name: .u18-clang
+  - name: u18-gcc
+    display_name: Ubuntu 18.04 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: u18
+    tasks:
+      - name: .u18-gcc
+  - name: u20-clang
+    display_name: Ubuntu 20.04 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: u20
+    tasks:
+      - name: .u20-clang
+  - name: u20-gcc
+    display_name: Ubuntu 20.04 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: u20
+    tasks:
+      - name: .u20-gcc
+  - name: u22-clang
+    display_name: Ubuntu 22.04 (LLVM/Clang)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: clang
+      MONGOC_EARTHLY_ENV: u22
+    tasks:
+      - name: .u22-clang
+  - name: u22-gcc
+    display_name: Ubuntu 22.04 (GCC)
+    expansions:
+      MONGOC_EARTHLY_C_COMPILER: gcc
+      MONGOC_EARTHLY_ENV: u22
+    tasks:
+      - name: .u22-gcc

@@ -1,0 +1,9 @@
+POST / HTTP/1.1
+Content-Length:45
+Content-Type:application/x-amz-json-1.1
+Host:service.us-east-1.amazonaws.com
+X-Amz-Date:20150830T123600Z
+X-Amz-Target:TrentService.Encrypt
+Authorization: AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date;x-amz-target, Signature=28d8a139a4a7da0bd7082979fa938ce20514e0500cdd441fd46f702ae3d3cfd2
+
+{"Plaintext": "Zm9vYmFy", "KeyId": "alias/1"}

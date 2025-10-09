@@ -1,0 +1,50 @@
+# CMake artifacts
+libmongoc-1.0-config-version.cmake
+libmongoc-1.0-config.cmake
+libmongoc-static-1.0-config-version.cmake
+libmongoc-static-1.0-config.cmake
+mongoc/mongoc-1.0-config.cmake
+mongoc/mongoc-1.0-config-version.cmake
+mongoc/mongoc-targets.cmake
+
+# Test program for mongoc_get_accept_args in CMakeLists.txt
+accept_test1.c
+
+# Example binaries
+aggregation1
+basic-aggregation
+bulk-collation
+bulk1
+bulk2
+bulk3
+bulk4
+bulk5
+bulk6
+common-operations
+example-client
+example-collection-watch
+example-command-monitoring
+example-command-with-opts
+example-manage-collection-indexes
+example-gridfs
+example-gridfs-bucket
+example-pool
+example-resume
+example-scram
+example-sdam-monitoring
+example-session
+example-start-at-optime
+example-transaction
+example-update
+fam
+find-and-modify
+hello_mongoc
+mongoc-dump
+mongoc-ping
+mongoc-stat
+mongoc-tail
+
+# Test binaries
+test-libmongoc
+test-mongoc-gssapi
+test-mongoc-cache

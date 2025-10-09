@@ -1,0 +1,157 @@
+{
+  "tests": [
+    {
+      "description": "Repeated authSource key",
+      "uri": "mongodb://example.com/?authSource=bar&authSource=foo",
+      "valid": true,
+      "comment": "invalid URI (see SPEC-1424)",
+      "warning": true,
+      "hosts": [
+        {
+          "type": "hostname",
+          "host": "example.com",
+          "port": null
+        }
+      ],
+      "auth": null,
+      "options": {
+        "authSource": "foo"
+      }
+    },
+    {
+      "description": "Repeated readConcernLevel key",
+      "uri": "mongodb://example.com/?readConcernLevel=local&readConcernLevel=majority",
+      "valid": true,
+      "warning": true,
+      "hosts": [
+        {
+          "type": "hostname",
+          "host": "example.com",
+          "port": null
+        }
+      ],
+      "auth": null,
+      "options": {
+        "readconcernlevel": "majority"
+      }
+    },
+    {
+      "description": "Repeated authmechanismproperties: key",
+      "uri": "mongodb://example.com/?authmechanismproperties=SERVICE_NAME:42&authmechanismproperties=SERVICE_NAME:49",
+      "valid": true,
+      "warning": true,
+      "hosts": [
+        {
+          "type": "hostname",
+          "host": "example.com",
+          "port": null
+        }
+      ],
+      "auth": null,
+      "options": {
+        "authmechanismproperties": { "SERVICE_NAME": "49" }
+      }
+    },
+    {
+      "description": "Repeated appname key",
+      "uri": "mongodb://example.com/?appname=example&appname=example42",
+      "valid": true,
+      "warning": true,
+      "hosts": [
+        {
+          "type": "hostname",
+          "host": "example.com",
+          "port": null
+        }
+      ],
+      "auth": null,
+      "options": {
+        "appname": "example42"
+      }
+    },
+    {
+      "description": "Username containing an unescaped :",
+      "uri": "mongodb://alic::e@127.0.0.1:27017",
+      "valid": false,
+      "warning": null,
+      "hosts": null,
+      "auth": null,
+      "options": null
+    },
+    {
+      "description": "Username containing an unescaped :",
+      "uri": "mongodb://alic::e@[::1]",
+      "valid": false,
+      "warning": null,
+      "hosts": null,
+      "auth": null,
+      "options": null
+    },
+    {
+      "description": "Username containing an unescaped :",
+      "uri": "mongodb://alic::e@[::1]:27017",
+      "valid": false,
+      "warning": null,
+      "hosts": null,
+      "auth": null,
+      "options": null
+    },
+    {
+      "description": "Username containing an unescaped :",
+      "uri": "mongodb://alic::e@%2Ftmp%2Fmongodb-27017.sock/",
+      "valid": false,
+      "warning": null,
+      "hosts": null,
+      "auth": null,
+      "options": null
+    },
+    {
+      "description": "should default to SERVICE_NAME:mongodb even if other authMechanismProperties present",
+      "uri": "mongodb://user%40DOMAIN.COM@localhost/?authMechanism=GSSAPI&authMechanismProperties=CANONICALIZE_HOST_NAME:true",
+      "valid": true,
+      "credential": {
+        "username": "user@DOMAIN.COM",
+        "password": null,
+        "source": "$external",
+        "mechanism": "GSSAPI",
+        "mechanism_properties": {
+            "SERVICE_NAME": "mongodb",
+            "CANONICALIZE_HOST_NAME": true
+        }
+      }
+    },
+    {
+      "description": "should detect case-insensitive service_name",
+      "uri": "mongodb://user%40DOMAIN.COM@localhost/?authMechanism=GSSAPI&authMechanismProperties=CANONICALIZE_HOST_NAME:true,service_name:abc",
+      "valid": true,
+      "credential": {
+        "username": "user@DOMAIN.COM",
+        "password": null,
+        "source": "$external",
+        "mechanism": "GSSAPI",
+        "mechanism_properties": {
+            "SERVICE_NAME": "abc",
+            "CANONICALIZE_HOST_NAME": true
+        }
+      }
+   },
+   {
+    "description": "Username containing percent encoded multi-byte UTF-8 is valid",
+    "uri": "mongodb://%E2%98%83",
+    "valid": true,
+    "hosts": [
+      {
+        "type": "hostname",
+        "host": "☃",
+        "port": null
+      }
+    ]
+  },
+  {
+    "description": "Username containing percent encoded multi-byte UTF-8 is valid",
+    "uri": "mongodb://%E2%D8%83",
+    "valid": false,
+    "warning": true
+  }
+  ]
+}

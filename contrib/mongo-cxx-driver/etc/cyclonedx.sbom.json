@@ -1,0 +1,113 @@
+{
+  "components": [
+    {
+      "bom-ref": "pkg:github/mnmlstc/core@v1.1.0",
+      "copyright": "Copyright \u00a9 2013 - 2014 MNMLSTC",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/mnmlstc/core/archive/refs/tags/v1.1.0.tar.gz"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mnmlstc/core/tree/v1.1.0"
+        }
+      ],
+      "group": "mnmlstc",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "name": "core",
+      "purl": "pkg:github/mnmlstc/core@v1.1.0",
+      "type": "library",
+      "version": "v1.1.0"
+    },
+    {
+      "bom-ref": "pkg:github/mongodb/mongo-c-driver@v1.25.0",
+      "copyright": "Copyright 2009-present MongoDB, Inc.",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://github.com/mongodb/mongo-c-driver/archive/refs/tags/v1.25.0.tar.gz"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mongodb/mongo-c-driver/tree/v1.25.0"
+        }
+      ],
+      "group": "mongodb",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "name": "mongo-c-driver",
+      "purl": "pkg:github/mongodb/mongo-c-driver@v1.25.0",
+      "type": "library",
+      "version": "v1.25.0"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:github/mnmlstc/core@v1.1.0"
+    },
+    {
+      "ref": "pkg:github/mongodb/mongo-c-driver@v1.25.0"
+    }
+  ],
+  "metadata": {
+    "timestamp": "2024-06-05T21:16:58.419485+00:00",
+    "tools": [
+      {
+        "externalReferences": [
+          {
+            "type": "build-system",
+            "url": "https://github.com/CycloneDX/cyclonedx-python-lib/actions"
+          },
+          {
+            "type": "distribution",
+            "url": "https://pypi.org/project/cyclonedx-python-lib/"
+          },
+          {
+            "type": "documentation",
+            "url": "https://cyclonedx-python-library.readthedocs.io/"
+          },
+          {
+            "type": "issue-tracker",
+            "url": "https://github.com/CycloneDX/cyclonedx-python-lib/issues"
+          },
+          {
+            "type": "license",
+            "url": "https://github.com/CycloneDX/cyclonedx-python-lib/blob/main/LICENSE"
+          },
+          {
+            "type": "release-notes",
+            "url": "https://github.com/CycloneDX/cyclonedx-python-lib/blob/main/CHANGELOG.md"
+          },
+          {
+            "type": "vcs",
+            "url": "https://github.com/CycloneDX/cyclonedx-python-lib"
+          },
+          {
+            "type": "website",
+            "url": "https://github.com/CycloneDX/cyclonedx-python-lib/#readme"
+          }
+        ],
+        "name": "cyclonedx-python-lib",
+        "vendor": "CycloneDX",
+        "version": "6.4.4"
+      }
+    ]
+  },
+  "serialNumber": "urn:uuid:dd68fbb0-f77c-4bb9-90cd-606dd854f301",
+  "version": 1,
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5"
+}

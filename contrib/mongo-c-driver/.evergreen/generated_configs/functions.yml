@@ -1,0 +1,731 @@
+functions:
+  abi-compliance-check:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        args:
+          - -c
+          - .evergreen/scripts/abi-compliance-check.sh
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        env:
+          AWS_ACCESS_KEY_ID: ${aws_key}
+          AWS_SECRET_ACCESS_KEY: ${aws_secret}
+        args:
+          - -c
+          - |
+            aws s3 cp abi-compliance/compat_reports s3://mciuploads/${project}/${build_variant}/${revision}/${version_id}/${build_id}/abi-compliance/compat_reports --recursive --acl public-read --region us-east-1
+            [[ ! -f ./abi-compliance/abi-error.txt ]]
+    - command: s3.put
+      params:
+        display_name: "ABI Report:"
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: text/html
+        local_files_include_filter: mongoc/abi-compliance/compat_reports/**/*.html
+        permissions: public-read
+        remote_file: ${project}/${build_variant}/${revision}/${version_id}/${build_id}/abi-compliance/compat_report.html
+  backtrace:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - .evergreen/scripts/debug-core-evergreen.sh
+  bootstrap-mongo-orchestration:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        args:
+          - -c
+          - .evergreen/scripts/integration-tests.sh
+    - command: expansions.update
+      type: setup
+      params:
+        file: mongoc/mo-expansion.yml
+  check-headers:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - .evergreen/scripts/check-public-decls.sh
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - .evergreen/scripts/check-preludes.py .
+  clang-format:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - ./tools/poetry.sh install --with=dev
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        env:
+          DRYRUN: "1"
+        args:
+          - -c
+          - ./tools/poetry.sh run .evergreen/scripts/clang-format-all.sh
+  cse-sasl-cyrus-darwinssl-compile:
+    - command: expansions.update
+      params:
+        updates:
+          - { key: SSL, value: DARWIN }
+          - { key: SASL, value: CYRUS }
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          COMPILE_LIBMONGOCRYPT: "ON"
+        args:
+          - -c
+          - EXTRA_CONFIGURE_FLAGS="-DENABLE_PIC=ON ${EXTRA_CONFIGURE_FLAGS}" .evergreen/scripts/compile.sh
+  cse-sasl-cyrus-openssl-compile:
+    - command: expansions.update
+      params:
+        updates:
+          - { key: SSL, value: OPENSSL }
+          - { key: SASL, value: CYRUS }
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          COMPILE_LIBMONGOCRYPT: "ON"
+        args:
+          - -c
+          - EXTRA_CONFIGURE_FLAGS="-DENABLE_PIC=ON ${EXTRA_CONFIGURE_FLAGS}" .evergreen/scripts/compile.sh
+  cse-sasl-cyrus-winssl-compile:
+    - command: expansions.update
+      params:
+        updates:
+          - { key: SSL, value: WINDOWS }
+          - { key: SASL, value: CYRUS }
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          COMPILE_LIBMONGOCRYPT: "ON"
+        args:
+          - -c
+          - EXTRA_CONFIGURE_FLAGS="-DENABLE_PIC=ON ${EXTRA_CONFIGURE_FLAGS}" .evergreen/scripts/compile.sh
+  fetch-build:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        args:
+          - -c
+          - rm -rf mongoc
+    - command: s3.get
+      type: setup
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        local_file: build.tar.gz
+        remote_file: ${project}/${build_variant}/${revision}/${BUILD_NAME}/${build_id}.tar.gz
+    - command: archive.targz_extract
+      params:
+        destination: mongoc
+        path: build.tar.gz
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - |
+            for file in $(find .evergreen/scripts -type f); do
+                chmod +rx "$file" || exit
+            done
+  fetch-det:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            if [[ ! -d drivers-evergreen-tools ]]; then
+                git clone --depth=1 https://github.com/mongodb-labs/drivers-evergreen-tools.git
+            fi
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: drivers-evergreen-tools
+        args:
+          - -c
+          - find .evergreen -type f -name "*.sh" -exec chmod +rx "{}" \;
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            set -o errexit
+            . drivers-evergreen-tools/.evergreen/find-python3.sh
+            echo "PYTHON3_BINARY: $(find_python3)" >|python3_binary.yml
+    - command: expansions.update
+      type: setup
+      params:
+        file: python3_binary.yml
+  fetch-source:
+    - command: git.get_project
+      type: setup
+      params:
+        directory: mongoc
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - |
+            set -o errexit
+            set -o pipefail
+            if [ -n "${github_pr_number}" -o "${is_patch}" = "true" ]; then
+                # This is a GitHub PR or patch build, probably branched from master
+                if command -v python3 &>/dev/null; then
+                    # Prefer python3 if it is available
+                    echo $(python3 ./build/calc_release_version.py --next-minor) > VERSION_CURRENT
+                else
+                    echo $(python ./build/calc_release_version.py --next-minor) > VERSION_CURRENT
+                fi
+                VERSION=$VERSION_CURRENT-${version_id}
+            else
+                VERSION=latest
+            fi
+            echo "CURRENT_VERSION: $VERSION" > expansion.yml
+    - command: expansions.update
+      type: setup
+      params:
+        file: mongoc/expansion.yml
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - |
+            for file in $(find .evergreen/scripts -type f); do
+                chmod +rx "$file" || exit
+            done
+  kms-divergence-check:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - .evergreen/scripts/kms-divergence-check.sh
+  make-docs:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        include_expansions_in_env:
+          - distro_id
+        args:
+          - -c
+          - |
+            set -o errexit
+            bash tools/poetry.sh install --with=docs
+            # See SphinxBuild.cmake for EVG_DOCS_BUILD reasoning
+            bash tools/poetry.sh run env EVG_DOCS_BUILD=1 bash .evergreen/scripts/build-docs.sh
+  openssl-static-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        args:
+          - -c
+          - .evergreen/scripts/compile-openssl-static.sh
+  prepare-kerberos:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        silent: true
+        args:
+          - -c
+          - |
+            if test "${keytab|}" && command -v kinit >/dev/null; then
+                echo "${keytab}" > /tmp/drivers.keytab.base64
+                base64 --decode /tmp/drivers.keytab.base64 > /tmp/drivers.keytab
+                if touch /etc/krb5.conf 2>/dev/null; then
+                    cat .evergreen/etc/kerberos.realm | tee -a /etc/krb5.conf
+                elif command sudo true 2>/dev/null; then
+                    cat .evergreen/etc/kerberos.realm | sudo tee -a /etc/krb5.conf
+                else
+                    echo "Cannot append kerberos.realm to /etc/krb5.conf; skipping." 1>&2
+                fi
+            fi
+  restore-instance-profile:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            # Restore the AWS Instance Profile that may have been removed in AWS tasks.
+
+            if [[ ! -d drivers-evergreen-tools ]]; then
+                echo "drivers-evergreen-tools not present ... skipping"
+                exit 0
+            fi
+
+            cd drivers-evergreen-tools/.evergreen/auth_aws
+            if [[ ! -f aws_e2e_setup.json ]]; then
+                echo "aws_e2e_setup.json not present ... skipping"
+                exit 0
+            fi
+
+            . ./activate-authawsvenv.sh
+
+            echo "restoring instance profile ... "
+            # Capture and hide logs on success. Logs may included expected `HTTP Error 404: Not Found` messages when checking for instance profile.
+            if ! { python ./lib/aws_assign_instance_profile.py 2>&1 >|output.txt; }; then
+                echo "restoring instance profile ... failed"
+                cat output.txt 1>&2
+                exit 1
+            fi
+            echo "restoring instance profile ... succeeded"
+  run-mock-kms-servers:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: drivers-evergreen-tools/.evergreen/csfle
+        args:
+          - -c
+          - |
+            set -o errexit
+            echo "Preparing KMS TLS venv environment..."
+            # TODO: remove this function along with the "run kms servers" function.
+            if [[ "$OSTYPE" =~ cygwin && ! -d kmstlsvenv ]]; then
+                # Avoid using Python 3.10 on Windows due to incompatible cipher suites.
+                # See CDRIVER-4530.
+                . ../venv-utils.sh
+                venvcreate "C:/python/Python39/python.exe" kmstlsvenv || # windows-2017
+                venvcreate "C:/python/Python38/python.exe" kmstlsvenv    # windows-2015
+                python -m pip install --upgrade boto3~=1.19 pykmip~=0.10.0 "sqlalchemy<2.0.0"
+                deactivate
+            else
+                . ./activate-kmstlsvenv.sh
+                deactivate
+            fi
+            echo "Preparing KMS TLS venv environment... done."
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: drivers-evergreen-tools/.evergreen/csfle
+        background: true
+        args:
+          - -c
+          - |
+            set -o errexit
+            echo "Starting mock KMS TLS servers..."
+            . ./activate-kmstlsvenv.sh
+            python -u kms_http_server.py --ca_file ../x509gen/ca.pem --cert_file ../x509gen/server.pem --port 8999 &
+            python -u kms_http_server.py --ca_file ../x509gen/ca.pem --cert_file ../x509gen/expired.pem --port 9000 &
+            python -u kms_http_server.py --ca_file ../x509gen/ca.pem --cert_file ../x509gen/wrong-host.pem --port 9001 &
+            python -u kms_http_server.py --ca_file ../x509gen/ca.pem --cert_file ../x509gen/server.pem --require_client_cert --port 9002 &
+            python -u kms_kmip_server.py &
+            deactivate
+            echo "Starting mock KMS TLS servers... done."
+  run-simple-http-server:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        working_dir: mongoc
+        background: true
+        args:
+          - -c
+          - |
+            set -o errexit
+            echo "Starting simple HTTP server..."
+            command -V "${PYTHON3_BINARY}" >/dev/null
+            "${PYTHON3_BINARY}" .evergreen/scripts/simple_http_server.py
+            echo "Starting simple HTTP server... done."
+  run-tests:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        args:
+          - -c
+          - .evergreen/scripts/run-tests.sh
+  sasl-cyrus-darwinssl-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          SASL: CYRUS
+          SSL: DARWIN
+        args:
+          - -c
+          - .evergreen/scripts/compile.sh
+  sasl-cyrus-openssl-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          SASL: CYRUS
+          SSL: OPENSSL
+        args:
+          - -c
+          - .evergreen/scripts/compile.sh
+  sasl-cyrus-winssl-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          SASL: CYRUS
+          SSL: WINDOWS
+        args:
+          - -c
+          - .evergreen/scripts/compile.sh
+  sasl-off-nossl-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          SASL: "OFF"
+          SSL: "OFF"
+        args:
+          - -c
+          - .evergreen/scripts/compile.sh
+  sasl-off-winssl-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          SASL: "OFF"
+          SSL: WINDOWS
+        args:
+          - -c
+          - .evergreen/scripts/compile.sh
+  sasl-sspi-winssl-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        env:
+          SASL: SSPI
+          SSL: WINDOWS
+        args:
+          - -c
+          - .evergreen/scripts/compile.sh
+  scan-build:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        redirect_standard_error_to_output: true
+        args:
+          - -c
+          - .evergreen/scripts/compile-scan-build.sh
+  start-load-balancer:
+    - command: subprocess.exec
+      type: setup
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            export DRIVERS_TOOLS=./drivers-evergreen-tools
+            export MONGODB_URI="${MONGODB_URI}"
+            $DRIVERS_TOOLS/.evergreen/run-load-balancer.sh start
+    - command: expansions.update
+      type: setup
+      params:
+        file: lb-expansion.yml
+  std-compile:
+    - command: subprocess.exec
+      type: test
+      params:
+        binary: bash
+        working_dir: mongoc
+        add_expansions_to_env: true
+        args:
+          - -c
+          - .evergreen/scripts/compile-std.sh
+  stop-load-balancer:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            # Only run if a load balancer was started.
+            if [[ -z "${SINGLE_MONGOS_LB_URI}" ]]; then
+                echo "OK - no load balancer running"
+                exit
+            fi
+            if [[ -d drivers-evergreen-tools ]]; then
+                cd drivers-evergreen-tools && .evergreen/run-load-balancer.sh stop
+            fi
+  stop-mongo-orchestration:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            if [[ -d MO ]]; then
+                cd MO && mongo-orchestration stop
+            fi
+  upload-build:
+    - command: archive.targz_pack
+      params:
+        include:
+          - ./**
+        source_dir: mongoc
+        target: ${build_id}.tar.gz
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: ${content_type|application/x-gzip}
+        local_file: ${build_id}.tar.gz
+        permissions: public-read
+        remote_file: ${project}/${build_variant}/${revision}/${task_name}/${build_id}.tar.gz
+  upload-docs:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        working_dir: mongoc/_build/for-docs/src/libbson
+        env:
+          AWS_ACCESS_KEY_ID: ${aws_key}
+          AWS_SECRET_ACCESS_KEY: ${aws_secret}
+        args:
+          - -c
+          - aws s3 cp doc/html s3://mciuploads/${project}/docs/libbson/${CURRENT_VERSION} --quiet --recursive --acl public-read --region us-east-1
+    - command: s3.put
+      params:
+        display_name: libbson docs
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: text/html
+        local_file: mongoc/_build/for-docs/src/libbson/doc/html/index.html
+        permissions: public-read
+        remote_file: ${project}/docs/libbson/${CURRENT_VERSION}/index.html
+    - command: subprocess.exec
+      params:
+        binary: bash
+        working_dir: mongoc/_build/for-docs/src/libmongoc
+        env:
+          AWS_ACCESS_KEY_ID: ${aws_key}
+          AWS_SECRET_ACCESS_KEY: ${aws_secret}
+        args:
+          - -c
+          - aws s3 cp doc/html s3://mciuploads/${project}/docs/libmongoc/${CURRENT_VERSION} --quiet --recursive --acl public-read --region us-east-1
+    - command: s3.put
+      params:
+        display_name: libmongoc docs
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: text/html
+        local_file: mongoc/_build/for-docs/src/libmongoc/doc/html/index.html
+        permissions: public-read
+        remote_file: ${project}/docs/libmongoc/${CURRENT_VERSION}/index.html
+  upload-man-pages:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        working_dir: mongoc
+        silent: true
+        args:
+          - -c
+          - |
+            set -o errexit
+            # Get "aha", the ANSI HTML Adapter.
+            git clone --depth 1 https://github.com/theZiz/aha.git aha-repo
+            pushd aha-repo
+            make
+            popd # aha-repo
+            mv aha-repo/aha .
+            .evergreen/scripts/man-pages-to-html.sh libbson _build/for-docs/src/libbson/doc/man > bson-man-pages.html
+            .evergreen/scripts/man-pages-to-html.sh libmongoc _build/for-docs/src/libmongoc/doc/man > mongoc-man-pages.html
+    - command: s3.put
+      params:
+        display_name: libbson man pages
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: text/html
+        local_file: mongoc/bson-man-pages.html
+        permissions: public-read
+        remote_file: ${project}/man-pages/libbson/${CURRENT_VERSION}/index.html
+    - command: s3.put
+      params:
+        display_name: libmongoc man pages
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: text/html
+        local_file: mongoc/mongoc-man-pages.html
+        permissions: public-read
+        remote_file: ${project}/man-pages/libmongoc/${CURRENT_VERSION}/index.html
+  upload-mo-artifacts:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - |
+            set -o errexit
+            declare dir="MO"
+            if [[ -d "/cygdrive/c/data/mo" ]]; then
+                dir="/cygdrive/c/data/mo"
+            fi
+            if [[ -d "$dir" ]]; then
+                find "$dir" -name \*.log | xargs tar czf mongodb-logs.tar.gz
+            fi
+    - command: s3.put
+      params:
+        display_name: mongodb-logs.tar.gz
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: ${content_type|application/x-gzip}
+        local_file: mongoc/mongodb-logs.tar.gz
+        optional: true
+        permissions: public-read
+        remote_file: ${project}/${build_variant}/${revision}/${version_id}/${build_id}/logs/${task_id}-${execution}-mongodb-logs.tar.gz
+    - command: s3.put
+      params:
+        display_name: orchestration.log
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: ${content_type|text/plain}
+        local_file: mongoc/MO/server.log
+        optional: true
+        permissions: public-read
+        remote_file: ${project}/${build_variant}/${revision}/${version_id}/${build_id}/logs/${task_id}-${execution}-orchestration.log
+    - command: subprocess.exec
+      params:
+        binary: bash
+        working_dir: mongoc
+        args:
+          - -c
+          - |
+            set -o errexit
+            # Find all core files from mongodb in orchestration and move to mongoc
+            declare dir="MO"
+            if [[ -d "/cygdrive/c/data/mo" ]]; then
+                dir="/cygdrive/c/data/mo"
+            fi
+            declare mdmp_dir="$dir"
+            if [[ -d "/cygdrive/c/mongodb" ]]; then
+                mdmp_dir="/cygdrive/c/mongodb"
+            fi
+            for core_file in $(find -H "$dir" "$mdmp_dir" \( -name "*.core" -o -name "*.mdmp" \) 2> /dev/null); do
+                declare base_name
+                base_name="$(echo "$core_file" | sed "s/.*\///")"
+                # Move file if it does not already exist
+                if [[ ! -f "$base_name" ]]; then
+                    mv "$core_file" .
+                fi
+            done
+    - command: archive.targz_pack
+      params:
+        include:
+          - ./**.core
+          - ./**.mdmp
+        source_dir: mongoc
+        target: mongo-coredumps.tgz
+    - command: s3.put
+      params:
+        display_name: Core Dumps - Execution ${execution}
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        bucket: mciuploads
+        content_type: ${content_type|application/x-gzip}
+        local_file: mongo-coredumps.tgz
+        optional: true
+        permissions: public-read
+        remote_file: ${project}/${build_variant}/${revision}/${version_id}/${build_id}/coredumps/${task_id}-${execution}-coredumps.log
+  upload-test-results:
+    - command: subprocess.exec
+      params:
+        binary: bash
+        args:
+          - -c
+          - |
+            mkdir -p mongoc
+            touch mongoc/test-results.json
+    - command: attach.results
+      params:
+        file_location: mongoc/test-results.json

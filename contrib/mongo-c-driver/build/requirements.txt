@@ -1,0 +1,2 @@
+jinja2
+git+https://github.com/mongodb-labs/drivers-evergreen-tools#subdirectory=evergreen_config_generator&egg=evergreen_config_generator

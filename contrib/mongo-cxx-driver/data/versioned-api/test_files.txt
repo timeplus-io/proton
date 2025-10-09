@@ -1,0 +1,6 @@
+crud-api-version-1-strict.json
+crud-api-version-1.json
+runcommand-helper-no-api-version-declared.json
+test-commands-deprecation-errors.json
+test-commands-strict-mode.json
+transaction-handling.json

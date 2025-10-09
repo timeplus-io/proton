@@ -1,0 +1,56 @@
+{
+  "id": "shard_cluster_1",
+  "login": "bob",
+  "password": "pwd123",
+  "auth_key": "secret",
+  "shards": [
+    {
+      "id": "sh01",
+      "shardParams": {
+        "members": [{
+          "procParams": {
+            "ipv6": true,
+            "bind_ip": "127.0.0.1,::1",
+            "shardsvr": true,
+            "setParameter" : { "enableTestCommands": 1 },
+            "port": 27217
+          }
+        }]
+      }
+    },
+    {
+      "id": "sh02",
+      "shardParams": {
+        "members": [{
+          "procParams": {
+            "ipv6": true,
+            "bind_ip": "127.0.0.1,::1",
+            "shardsvr": true,
+            "setParameter" : { "enableTestCommands": 1 },
+            "port": 27218
+          }
+        }]
+      }
+    }
+  ],
+  "routers": [
+    {
+      "ipv6": true,
+      "bind_ip": "127.0.0.1,::1",
+      "setParameter" : { "enableTestCommands": 1 },
+      "port": 27017
+    },
+    {
+      "ipv6": true,
+      "bind_ip": "127.0.0.1,::1",
+      "setParameter" : { "enableTestCommands": 1 },
+      "port": 27018
+    }
+  ],
+  "sslParams": {
+    "sslOnNormalPorts": true,
+    "sslPEMKeyFile": "/tmp/orchestration-home/server.pem",
+    "sslCAFile": "/tmp/orchestration-home/ca.pem",
+    "sslWeakCertificateValidation" : true
+  }
+}

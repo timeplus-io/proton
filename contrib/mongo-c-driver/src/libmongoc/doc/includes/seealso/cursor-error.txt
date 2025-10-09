@@ -1,0 +1,5 @@
+.. seealso::
+
+  | :symbol:`mongoc_cursor_error()`
+
+  | :symbol:`mongoc_cursor_error_document()`

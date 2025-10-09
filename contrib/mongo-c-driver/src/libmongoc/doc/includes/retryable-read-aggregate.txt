@@ -1,0 +1,3 @@
+This function is considered a retryable read operation unless the pipeline contains a write stage like $out or $merge.
+Upon a transient error (a network error, errors due to replica set failover, etc.) the operation is safely retried once.
+If ``retryreads`` is false in the URI (see :symbol:`mongoc_uri_t`) the retry behavior does not apply.

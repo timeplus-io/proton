@@ -1,0 +1,38 @@
+baseurl = "https://mongocxx.org"
+languageCode = "en-us"
+title = "MongoDB C++ Driver Manual"
+theme = "mongodb"
+canonifyurls = false
+relativeurls = false
+publishdir = "../build/hugo"
+
+[blackfriday]
+  plainIdAnchors = true
+
+[[menu.main]]
+    name = "legacy (v1)"
+    pre = "<i class='fa fa-arrow-right'></i>"
+    weight = 40
+    identifier = "legacy"
+    url = "/legacy-v1/"
+
+[[menu.main]]
+    name = "API Documentation"
+    pre = "<i class='fa fa-file-text-o'></i>"
+    weight = 90
+    identifier = "apiDocs"
+    url = "https://mongocxx.org/api/current"
+
+[[menu.main]]
+    name = "Contributing"
+    pre = "<i class='fa fa-pencil'></i>"
+    weight = 120
+    identifier = "contributing"
+    url = "/contributing/"
+
+[[menu.main]]
+    name = "Source Code"
+    pre = "<i class='fa fa-github'></i>"
+    weight = 100
+    identifier = "githubLink"
+    url = "https://github.com/mongodb/mongo-cxx-driver/"

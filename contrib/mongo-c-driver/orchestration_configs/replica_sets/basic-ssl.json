@@ -1,0 +1,51 @@
+{
+  "id": "repl0",
+  "members": [
+    {
+      "procParams": {
+        "ipv6": true,
+        "bind_ip": "127.0.0.1,::1",
+        "port": 27017,
+        "setParameter" : { "enableTestCommands": 1 }
+      },
+      "rsParams": {
+        "tags": {
+          "ordinal": "one",
+          "dc": "ny"
+        }
+      }
+    },
+    {
+      "procParams": {
+        "ipv6": true,
+        "bind_ip": "127.0.0.1,::1",
+        "port": 27018,
+        "setParameter" : { "enableTestCommands": 1 }
+      },
+      "rsParams": {
+        "tags": {
+          "ordinal": "two",
+          "dc": "pa"
+        }
+      }
+    },
+    {
+      "procParams": {
+        "ipv6": true,
+        "bind_ip": "127.0.0.1,::1",
+        "port": 27019,
+        "setParameter" : { "enableTestCommands": 1 }
+      },
+      "rsParams": {
+        "arbiterOnly": true
+      }
+    }
+  ],
+  "sslParams": {
+      "sslMode": "requireSSL",
+      "sslPEMKeyFile": "/tmp/orchestration-home/server.pem",
+      "sslCAFile": "/tmp/orchestration-home/ca.pem",
+      "sslAllowInvalidCertificates": true,
+      "sslWeakCertificateValidation" : true
+  }
+}

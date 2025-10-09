@@ -1,0 +1,43 @@
+*.a
+*.dylib
+*.gcda
+*.gcno
+*.gz
+*.o
+*.lo
+*.pc
+*.so
+*.so.*
+.githooks
+.scratch/
+cmake-build
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
+CPackConfig.cmake
+CPackSourceConfig.cmake
+CTestTestfile.cmake
+_build/
+dist_manifest.txt
+test-results.json
+VERSION_RELEASED
+*.pyc
+
+# Windows things
+*.sdf
+*.sln
+*.vcxproj*
+.vs
+Debug
+install_manifest.txt
+x64
+
+# "dist" is produced during the release process
+dist
+
+# `secrets-export.sh` is created by the drivers-evergreen-tools `setup_secrets.sh` script.
+# Ignore this file to reduce risk of committing credentials during local development.
+secrets-export.sh
+
+# A file that can be used to store secrets for Earthly
+.secret

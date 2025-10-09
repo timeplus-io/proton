@@ -1,0 +1,4 @@
+# Ignoring these functions due to a bug in libstdc++:
+# http://stackoverflow.com/questions/30122500/is-this-code-really-undefined-as-clang-seems-to-indicate
+fun:_ZStaNRSt13_Ios_FmtflagsS_
+fun:_ZStanSt13_Ios_FmtflagsS_

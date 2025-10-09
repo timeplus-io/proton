@@ -1,0 +1,14 @@
+.evergreen/build_example_projects.sh eol=lf
+.evergreen/compile.sh eol=lf
+.evergreen/install.sh eol=lf
+examples/projects/bsoncxx/cmake/shared/build.sh eol=lf
+examples/projects/bsoncxx/cmake/static/build.sh eol=lf
+examples/projects/bsoncxx/pkg-config/shared/build.sh eol=lf
+examples/projects/bsoncxx/pkg-config/static/build.sh eol=lf
+examples/projects/mongocxx/cmake/shared/build.sh eol=lf
+examples/projects/mongocxx/cmake/static/build.sh eol=lf
+examples/projects/mongocxx/pkg-config/shared/build.sh eol=lf
+examples/projects/mongocxx/pkg-config/static/build.sh eol=lf
+
+/appveyor.yml export-ignore
+/TODO.md export-ignore

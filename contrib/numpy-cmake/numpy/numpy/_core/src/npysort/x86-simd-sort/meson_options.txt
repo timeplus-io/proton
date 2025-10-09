@@ -1,0 +1,8 @@
+option('build_tests', type : 'boolean', value : false,
+  description : 'Build test suite (default: "false").')
+option('build_benchmarks', type : 'boolean', value : false,
+  description : 'Build benchmarking suite (default: "false").')
+option('build_ippbench', type : 'boolean', value : false,
+  description : 'Add IPP sort to benchmarks (default: "false").')
+option('build_vqsortbench', type : 'boolean', value : false,
+  description : 'Add google vqsort to benchmarks (default: "false").')

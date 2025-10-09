@@ -1,0 +1,18 @@
+FROM mongodb/mongo-cxx-driver:{{ mongocxx_version }}-{{ distro }}
+
+WORKDIR /build
+
+RUN {{ install_test_dependencies }}
+
+COPY test.cpp /build/
+
+RUN g++ \
+    -o test \
+    test.cpp \
+    -I/usr/local/include/bsoncxx/v_noabi/ \
+    -I/usr/local/include/mongocxx/v_noabi/ \
+    -lmongocxx \
+    -lbsoncxx
+
+CMD /build/test
+

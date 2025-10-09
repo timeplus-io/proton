@@ -1,0 +1,5 @@
+build
+*.swp
+tests/build/
+*.py[cod]
+__pycache__

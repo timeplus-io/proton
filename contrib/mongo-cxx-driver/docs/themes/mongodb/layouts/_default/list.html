@@ -1,0 +1,12 @@
+{{ partial "header.html" . }}
+{{ partial "header/contentHeader.html" . }}
+<h1> {{ .Title }} </h1>
+<ul id="subpage-list">
+    {{ range .Data.Pages }}
+    <li>
+        <a href="{{.Permalink}}">{{.Title}}</a>
+    </li>
+    {{ end }}
+</ul>
+{{ .Content }}
+{{ partial "footer.html" . }}

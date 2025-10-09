@@ -1,0 +1,31 @@
+# Required packages for the release script.
+click==8.1.7
+GitPython==3.1.43
+PyGithub==2.3.0
+cryptography==42.0.7
+
+# Pin `jira` to apply fix of https://github.com/pycontribs/jira/commit/010223289eb66663aaafb70447397038efb2d40d.
+# This avoids the `signature_method_rejected` error described in https://github.com/pycontribs/jira/pull/1643.
+# TODO: replace the following line with `jira` once there is a release of `jira` containing the fix.
+jira @ git+https://github.com/pycontribs/jira.git@010223289eb66663aaafb70447397038efb2d40d
+
+# Dependencies of required packages above.
+certifi==2024.2.2
+cffi==1.16.0
+charset-normalizer==3.3.2
+defusedxml==0.7.1
+Deprecated==1.2.14
+gitdb==4.0.11
+idna==3.7
+oauthlib==3.2.2
+packaging==24.0
+pycparser==2.22
+PyJWT==2.8.0
+PyNaCl==1.5.0
+requests==2.32.2
+requests-oauthlib==2.0.0
+requests-toolbelt==1.0.0
+smmap==5.0.1
+typing_extensions==4.11.0
+urllib3==2.2.1
+wrapt==1.16.0

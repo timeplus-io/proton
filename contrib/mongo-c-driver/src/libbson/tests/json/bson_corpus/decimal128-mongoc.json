@@ -1,0 +1,13 @@
+{
+    "description": "Decimal128 - libmongoc-specific tests",
+    "bson_type": "0x13",
+    "test_key": "d",
+    "valid": [
+        {
+            "description": "Scientific - Longest",
+            "degenerate_bson": "1800000013640030303030303030303030303030FFFF8000",
+            "canonical_bson": "18000000136400386B9ED104386B9ED104386B1E33008100",
+            "canonical_extjson": "{\"d\" : {\"$numberDecimal\" : \"-1.036812917280316154812861194857272E-6015\"}}"
+        }
+    ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "mongod",
+  "procParams": {
+    "ipv6": false,
+    "logappend": true,
+    "port": 27017
+  }
+}

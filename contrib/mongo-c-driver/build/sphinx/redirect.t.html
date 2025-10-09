@@ -1,0 +1,12 @@
+{%- extends "!page.html" %}
+
+{% block extrahead -%}
+<meta http-equiv="refresh" content="3; url={{ pathto(target, 1) | e }}">
+{%- endblock %}
+
+{% block content %}
+<p>
+    This page has been migrated to <pre>{{ pathto(target) | e }}</pre>. You should be
+    redirected to this location automatically in a few seconds.
+</p>
+{% endblock %}
