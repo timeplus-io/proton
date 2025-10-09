@@ -1,7 +1,0 @@
-#include "bench.h"
-#include "bench-argsort.hpp"
-#include "bench-partial-qsort.hpp"
-#include "bench-qselect.hpp"
-#include "bench-qsort.hpp"
-#include "bench-keyvalue.hpp"
-#include "bench-objsort.hpp"

@@ -1,6 +1,0 @@
-subroutine zadd(a,b,c,n) ! in :add:add.f
-   double complex dimension(*) :: a
-   double complex dimension(*) :: b
-   double complex dimension(*) :: c
-   integer :: n
-end subroutine zadd

@@ -1,3 +1,0 @@
-bulkWrite-serverErrors.json
-handshakeError.json
-insertOne-serverErrors.json

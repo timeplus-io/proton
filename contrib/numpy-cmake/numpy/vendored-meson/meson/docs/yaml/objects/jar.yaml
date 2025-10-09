@@ -1,4 +1,0 @@
-name: jar
-long_name: JAR build target
-description: A Java JAR build target
-extends: build_tgt

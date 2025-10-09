@@ -1,1 +1,0 @@
-Copied from drivers-evergreen-tools/.evergreen/ocsp.

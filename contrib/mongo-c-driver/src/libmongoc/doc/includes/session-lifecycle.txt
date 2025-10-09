@@ -1,9 +1,0 @@
-Start a session with :symbol:`mongoc_client_start_session`, use the session for a sequence of operations and multi-document transactions, then free it with :symbol:`mongoc_client_session_destroy()`. Any :symbol:`mongoc_cursor_t` or :symbol:`mongoc_change_stream_t` using a session must be destroyed before the session, and a session must be destroyed before the :symbol:`mongoc_client_t` it came from.
-
-By default, sessions are `causally consistent <https://www.mongodb.com/docs/manual/core/read-isolation-consistency-recency/#causal-consistency>`_. To disable causal consistency, before starting a session create a :symbol:`mongoc_session_opt_t` with :symbol:`mongoc_session_opts_new()` and call :symbol:`mongoc_session_opts_set_causal_consistency()`, then free the struct with :symbol:`mongoc_session_opts_destroy`.
-
-Unacknowledged writes are prohibited with sessions.
-
-.. the timeout warning is mandated by the Driver Sessions Spec
-
-A :symbol:`mongoc_client_session_t` must be used by only one thread at a time. Due to session pooling, :symbol:`mongoc_client_start_session` may return a session that has been idle for some time and is about to be closed after its idle timeout. Use the session within one minute of acquiring it to refresh the session and avoid a timeout.

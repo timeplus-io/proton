@@ -1,3 +1,0 @@
-name: file
-long_name: File
-description: Opaque object that stores the path to an existing file

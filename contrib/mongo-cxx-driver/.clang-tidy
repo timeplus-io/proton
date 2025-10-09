@@ -1,2 +1,0 @@
-Checks:          'clang-diagnostic-*,clang-analyzer-*,-*,cert-*,cppcoreguidelines-*,clang-analyzer-*'
-WarningsAsErrors: ''

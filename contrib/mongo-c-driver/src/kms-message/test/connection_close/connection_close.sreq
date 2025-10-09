@@ -1,5 +1,0 @@
-POST / HTTP/1.1
-Connection:close
-Host:foo-service.foo-region.amazonaws.com
-X-Amz-Date:20150830T123600Z
-Authorization: AWS4-HMAC-SHA256 Credential=foo-akid/20150830/foo-region/foo-service/aws4_request, SignedHeaders=host;x-amz-date, Signature=8b264695a2fd7fe28b309c611e0770da5a4c5ca0c040209941f78d773d9297b2

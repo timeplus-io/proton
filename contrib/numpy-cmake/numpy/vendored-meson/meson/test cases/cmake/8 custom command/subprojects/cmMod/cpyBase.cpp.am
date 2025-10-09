@@ -1,5 +1,0 @@
-#include "cpyBase.hpp"
-
-std::string getStrCpy() {
-  return "Hello Copied File";
-}

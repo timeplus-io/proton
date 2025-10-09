@@ -1,3 +1,0 @@
-name: extracted_obj
-long_name: Extracted object file
-description: Opaque object representing extracted object files from build targets

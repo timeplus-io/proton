@@ -1,4 +1,0 @@
-``opts`` may be NULL or a BSON document with additional command options:
-
-* ``sessionId``: First, construct a :symbol:`mongoc_client_session_t` with :symbol:`mongoc_client_start_session`. You can begin a transaction with :symbol:`mongoc_client_session_start_transaction`, optionally with a :symbol:`mongoc_transaction_opt_t` that overrides the options inherited from |opts-source|, and use :symbol:`mongoc_client_session_append` to add the session to ``opts``. See the example code for :symbol:`mongoc_client_session_t`.
-* ``serverId``: To target a specific server, include an int32 "serverId" field. Obtain the id by calling :symbol:`mongoc_client_select_server`, then :symbol:`mongoc_server_description_id` on its return value.

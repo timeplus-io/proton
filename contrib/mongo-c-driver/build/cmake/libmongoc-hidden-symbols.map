@@ -1,4 +1,0 @@
-mongoc {
-    local:
-        kms*;
-};

@@ -1,7 +1,0 @@
-dl-*
-out-*
-*.nupkg
-*.tgz
-*.key
-*.pyc
-__pycache__

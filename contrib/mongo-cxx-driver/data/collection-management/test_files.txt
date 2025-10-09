@@ -1,4 +1,0 @@
-unified/clustered-indexes.json
-unified/createCollection-pre_and_post_images.json
-unified/modifyCollection-pre_and_post_images.json
-unified/timeseries-collection.json

@@ -1,3 +1,0 @@
-name: generated_list
-long_name: Generated list object
-description: Opaque object representing the result of a [[generator.process]] call.

@@ -1,4 +1,0 @@
-default-write-concern-2.6.json
-default-write-concern-3.2.json
-default-write-concern-3.4.json
-default-write-concern-4.2.json
