@@ -302,7 +302,6 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 
     auto schema_id = KafkaSchemaRegistry::readSchemaId(*in);
 
-
     Int64 indexes_count = 0;
     readVarInt(indexes_count, *in);
 

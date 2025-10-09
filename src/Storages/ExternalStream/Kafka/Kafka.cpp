@@ -257,6 +257,20 @@ void Kafka::validateSettings(bool attach)
                 ErrorCodes::INVALID_SETTING_VALUE, "Setting `message_key` is deprecated, define the _tp_message_key column instead");
     }
 
+    if (hasSchemaRegistryUrl())
+    {
+        const auto & format = settings->data_format.value;
+        const bool format_supported = format == "ProtobufSingle" || format == "Avro";
+        if (!format_supported)
+        {
+            LOG_ERROR(logger, "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats: actual='{}'", format);
+            if (!attach)
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE,
+                    "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats");
+        }
+    }
+
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
     if (columns.has(ProtonConsts::RESERVED_EVENT_TIME) || columns.has(ProtonConsts::RESERVED_MESSAGE_KEY)
         || columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
@@ -572,6 +586,9 @@ Pipe Kafka::read(
 
 SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
+    if (hasSchemaRegistryUrl() && data_format == "ProtobufSingle")
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Write Protobuf data with schema registry is not supported");
+
     auto producer = client->getProducer(topicName());
 
     auto sink = std::make_shared<KafkaSink>(

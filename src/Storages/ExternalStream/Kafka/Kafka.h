@@ -94,7 +94,6 @@ private:
         size_t /*max_block_size*/,
         size_t /*num_streams*/) override;
 
-private:
     ASTs engine_args;
     ExternalStreamCounterPtr external_stream_counter;
 
