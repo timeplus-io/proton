@@ -57,7 +57,7 @@ jobs:
   performance_comparison_test_x64:
     needs: [prepare_performance_comparison_test]
     if: ${{ github.event.inputs.arch == 'x64' || github.event.inputs.arch == 'x64/arm' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}

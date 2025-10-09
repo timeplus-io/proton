@@ -443,7 +443,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   build_address_x64:
     needs: prepare_address_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -468,7 +468,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_address_x64:
     needs: [prepare_sanitizer_unit_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -494,7 +494,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_address_x64:
     needs: [prepare_sanitizer_smoke_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.9xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -520,7 +520,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_address_x64:
     needs: [prepare_sanitizer_stateless_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -546,7 +546,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_address_x64:
     needs: [prepare_sanitizer_stateful_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -572,7 +572,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   performance_test_address_x64:
     needs: [prepare_sanitizer_performance_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -599,7 +599,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_thread_x64:
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -625,7 +625,7 @@ jobs:
   unit_test_thread_x64:
     needs: [prepare_sanitizer_unit_test, build_thread_x64]
     if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/8701
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -651,7 +651,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_thread_x64:
     needs: [prepare_sanitizer_smoke_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -677,7 +677,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_thread_x64:
     needs: [prepare_sanitizer_stateless_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -703,7 +703,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_thread_x64:
     needs: [prepare_sanitizer_stateful_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.4xlarge # thread build need more resource
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -730,7 +730,7 @@ jobs:
   build_memory_x64:
     needs: prepare_sanitizer_build
     if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7740
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -755,7 +755,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_memory_x64:
     needs: [prepare_sanitizer_unit_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -781,7 +781,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_memory_x64:
     needs: [prepare_sanitizer_smoke_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -807,7 +807,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_memory_x64:
     needs: [prepare_sanitizer_stateless_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -833,7 +833,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_memory_x64:
     needs: [prepare_sanitizer_stateful_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -860,7 +860,7 @@ jobs:
   build_undefined_x64:
     needs: prepare_sanitizer_build
     if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7738
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -885,7 +885,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_undefined_x64:
     needs: [prepare_sanitizer_unit_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -911,7 +911,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_undefined_x64:
     needs: [prepare_sanitizer_smoke_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -937,7 +937,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_undefined_x64:
     needs: [prepare_sanitizer_stateless_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -963,7 +963,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_undefined_x64:
     needs: [prepare_sanitizer_stateful_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -989,7 +989,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_release_x64:
     needs: prepare_release_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -1014,7 +1014,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_release_x64:
     needs: [prepare_release_smoke_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -1040,7 +1040,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_release_x64:
     needs: [prepare_release_stateless_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -1066,7 +1066,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_release_x64:
     needs: [prepare_release_stateful_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -1097,7 +1097,7 @@ jobs:
       fail-fast: false # Turn off due to no dependencies between individual instances of matrix
       matrix:
         versions: ${{ fromJson(needs.prepare_compatibility_test.outputs.versions) }}
-    uses: timeplus-io/proton/.github/workflows/compatibility_test.yml@develop
+    uses: timeplus-io/proton/.github/workflows/compatibility_test.yml@proton-3.0-migration
     with:
       arch: ${{ vars.X64_ARCH }}
       target: testing-${{ vars.X64_ARCH }}-$GITHUB_SHA
@@ -1116,7 +1116,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   performance_test_release_x64:
     needs: [prepare_release_performance_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -1144,7 +1144,7 @@ jobs:
   build_address_arm:
     needs: prepare_sanitizer_build
     if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7784
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1169,7 +1169,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_address_arm:
     needs: [prepare_sanitizer_unit_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1195,7 +1195,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_address_arm:
     needs: [prepare_sanitizer_smoke_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1221,7 +1221,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_address_arm:
     needs: [prepare_sanitizer_stateless_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1247,7 +1247,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_address_arm:
     needs: [prepare_sanitizer_stateful_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1274,7 +1274,7 @@ jobs:
   performance_test_address_arm:
     if: false # current benchmark based on x86, disable performance on arm now
     needs: [prepare_sanitizer_performance_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1303,7 +1303,7 @@ jobs:
     # temporarily disable tsan on arm due to ASLR stall
     if: false
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1328,7 +1328,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_thread_arm:
     needs: [prepare_sanitizer_unit_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1354,7 +1354,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_thread_arm:
     needs: [prepare_sanitizer_smoke_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1380,7 +1380,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_thread_arm:
     needs: [prepare_sanitizer_stateless_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1406,7 +1406,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_thread_arm:
     needs: [prepare_sanitizer_stateful_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1434,7 +1434,7 @@ jobs:
     # temporarily disable msan on arm due to ASLR stall
     if: false
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1459,7 +1459,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_memory_arm:
     needs: [prepare_sanitizer_unit_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1485,7 +1485,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_memory_arm:
     needs: [prepare_sanitizer_smoke_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1511,7 +1511,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_memory_arm:
     needs: [prepare_sanitizer_stateless_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1537,7 +1537,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_memory_arm:
     needs: [prepare_sanitizer_stateful_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1564,7 +1564,7 @@ jobs:
   build_undefined_arm:
     needs: prepare_sanitizer_build
     if: false # issue: https://github.com/timeplus-io/proton-enterprise/issues/7738
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1589,7 +1589,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_undefined_arm:
     needs: [prepare_sanitizer_unit_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c6g.2xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1615,7 +1615,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_undefined_arm:
     needs: [prepare_sanitizer_smoke_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1641,7 +1641,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_undefined_arm:
     needs: [prepare_sanitizer_stateless_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1667,7 +1667,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_undefined_arm:
     needs: [prepare_sanitizer_stateful_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1693,7 +1693,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   build_release_arm:
     needs: prepare_release_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1718,7 +1718,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_release_arm:
     needs: [prepare_release_smoke_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1744,7 +1744,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_release_arm:
     needs: [prepare_release_stateless_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1770,7 +1770,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_release_arm:
     needs: [prepare_release_stateful_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1797,7 +1797,7 @@ jobs:
   performance_test_release_arm:
     if: false # current benchmark based on x86, disable performance on arm now
     needs: [prepare_release_performance_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}

@@ -87,7 +87,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   smoke_test_on_x64:
     needs: prepare_smoke_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: c5.9xlarge
@@ -113,7 +113,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_on_arm:
     needs: prepare_smoke_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -186,7 +186,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'  
   query_compability_test_on_x64:
     needs: prepare_query_compability_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_TEST_ONLY_INSTANCE_TYPE_SMALL }}
@@ -214,7 +214,7 @@ jobs:
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}  
   query_compability_on_arm:
     needs: prepare_query_compability_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_TEST_ONLY_INSTANCE_TYPE_SMALL }}
@@ -263,7 +263,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   unit_test_on_x64:
     needs: prepare_unit_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: c5.2xlarge
@@ -289,7 +289,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_on_arm:
     needs: prepare_unit_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: c6g.2xlarge
@@ -340,7 +340,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   stateless_test_on_x64:
     needs: prepare_stateless_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: c5.4xlarge
@@ -366,7 +366,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_on_arm:
     needs: prepare_stateless_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -417,7 +417,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   stateful_test_on_x64:
     needs: prepare_stateful_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: c5.2xlarge
@@ -443,7 +443,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_on_arm:
     needs: prepare_stateful_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: c6g.2xlarge
@@ -496,7 +496,7 @@ jobs:
   compatibility_test:
     needs: prepare_compatibility_test
     if: ${{ needs.prepare_compatibility_test.outputs.versions != '[]' }}
-    uses: timeplus-io/proton/.github/workflows/compatibility_test.yml@develop
+    uses: timeplus-io/proton/.github/workflows/compatibility_test.yml@proton-3.0-migration
     strategy:
       fail-fast: false # Turn off due to no dependencies between individual instances of matrix
       matrix: 
@@ -545,7 +545,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   performance_test_on_x64:
     needs: prepare_performance_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: c7i.8xlarge
@@ -572,7 +572,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   performance_test_on_arm:
     needs: prepare_performance_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: false # ${{ github.event.inputs.arch == 'arm' }}
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -623,7 +623,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   migration_test_on_x64:
     needs: prepare_migration_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: c7i.4xlarge
@@ -649,7 +649,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   migration_test_on_arm:
     needs: prepare_migration_test
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     if: github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: c6g.4xlarge
