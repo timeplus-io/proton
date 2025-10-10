@@ -20,7 +20,9 @@ NamesAndTypesList StorageSystemNamedCollections::getNamesAndTypes()
     return {
         {"name", std::make_shared<DataTypeString>()},
         {"collection", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
-        {"source", std::make_shared<DataTypeString>()},
+        /// proton: starts
+        /// {"source", std::make_shared<DataTypeString>()},
+        /// proton: ends
         {"create_query", std::make_shared<DataTypeString>()},
     };
 }
@@ -62,8 +64,10 @@ void StorageSystemNamedCollections::fillData(MutableColumns & res_columns, Conte
 
         offsets.push_back(offsets.back() + size);
 
-        res_columns[2]->insert(magic_enum::enum_name(collection->getSourceId()));
-        res_columns[3]->insert(collection->getCreateStatement(access_secrets));
+        /// proton: starts
+        /// res_columns[2]->insert(magic_enum::enum_name(collection->getSourceId()));
+        res_columns[2]->insert(collection->getCreateStatement(access_secrets));
+        /// proton: ends
     }
 }
 

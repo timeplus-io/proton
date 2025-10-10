@@ -6,7 +6,7 @@
 
 namespace cluster
 {
-class AlterTaskRequest final : public Request
+struct AlterTaskRequest final : public Request
 {
 public:
     using Request::Request;

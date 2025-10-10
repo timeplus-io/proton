@@ -507,6 +507,37 @@ GetTaskResponsePtr MetaStore::getTask(GetTaskRequestPtr req) const
         return std::make_shared<GetTaskResponse>(std::move(result.err), /*data_version_=*/req->version());
 }
 
+CreateNamedCollectionResponsePtr MetaStore::createNamedCollection(CreateNamedCollectionRequestPtr req)
+{
+    return processMetaRequestSync<CreateNamedCollectionRequest, CreateNamedCollectionResponse, /*resp_desc=*/false>(std::move(req));
+}
+
+DeleteNamedCollectionResponsePtr MetaStore::deleteNamedCollection(DeleteNamedCollectionRequestPtr req)
+{
+    return processMetaRequestSync<DeleteNamedCollectionRequest, DeleteNamedCollectionResponse, /*resp_desc=*/false>(std::move(req));
+}
+
+ListNamedCollectionsResponsePtr MetaStore::listNamedCollections(ListNamedCollectionsRequestPtr req) const
+{
+    auto result = meta_db->listNamedCollections();
+    if (!result.hasError())
+        return std::make_shared<ListNamedCollectionsResponse>(
+            std::move(result.result), nodeID(), /*sn_=*/0, /*data_version_=*/req->version());
+
+    return std::make_shared<ListNamedCollectionsResponse>(std::move(result.err), /*data_version_=*/req->version());
+}
+
+GetNamedCollectionResponsePtr MetaStore::getNamedCollection(GetNamedCollectionRequestPtr req) const
+{
+    const auto & req_data = req->data();
+    auto result = meta_db->getNamedCollection(req_data.collection_name, req_data.versions_requested);
+    if (!result.hasError())
+        return std::make_shared<GetNamedCollectionResponse>(
+            std::move(result.result), nodeID(), /*sn_=*/0, /*data_version_=*/req->version());
+    else
+        return std::make_shared<GetNamedCollectionResponse>(std::move(result.err), /*data_version_=*/req->version());
+}
+
 Error MetaStore::proposeMetaRequest(cluster::RequestPtr req, int64_t timeout_ms)
 {
     /// Always use local mode

@@ -7,6 +7,7 @@
 #include <Cluster/Requests/CreateDatabaseRequest.h>
 #include <Cluster/Requests/CreateDiskRequest.h>
 #include <Cluster/Requests/CreateFormatSchemaRequest.h>
+#include <Cluster/Requests/CreateNamedCollectionRequest.h>
 #include <Cluster/Requests/CreateStoragePolicyRequest.h>
 #include <Cluster/Requests/CreateStreamRequest.h>
 #include <Cluster/Requests/CreateTaskRequest.h>
@@ -16,6 +17,7 @@
 #include <Cluster/Requests/DeleteDatabaseRequest.h>
 #include <Cluster/Requests/DeleteDiskRequest.h>
 #include <Cluster/Requests/DeleteFormatSchemaRequest.h>
+#include <Cluster/Requests/DeleteNamedCollectionRequest.h>
 #include <Cluster/Requests/DeleteStoragePolicyRequest.h>
 #include <Cluster/Requests/DeleteStreamRequest.h>
 #include <Cluster/Requests/DeleteTaskRequest.h>
@@ -24,6 +26,7 @@
 #include <Cluster/Requests/GetAlertRequest.h>
 #include <Cluster/Requests/GetDatabaseRequest.h>
 #include <Cluster/Requests/GetFormatSchemaRequest.h>
+#include <Cluster/Requests/GetNamedCollectionRequest.h>
 #include <Cluster/Requests/GetStreamRequest.h>
 #include <Cluster/Requests/GetTaskRequest.h>
 #include <Cluster/Requests/GetUserDefinedFunctionRequest.h>
@@ -32,6 +35,7 @@
 #include <Cluster/Requests/ListDatabasesRequest.h>
 #include <Cluster/Requests/ListDisksRequest.h>
 #include <Cluster/Requests/ListFormatSchemasRequest.h>
+#include <Cluster/Requests/ListNamedCollectionsRequest.h>
 #include <Cluster/Requests/ListStoragePoliciesRequest.h>
 #include <Cluster/Requests/ListStreamsRequest.h>
 #include <Cluster/Requests/ListTasksRequest.h>
@@ -239,6 +243,18 @@ RequestPtr Request::parse(protocol::OpCode request_opcode, uint16_t request_vers
             break;
         case protocol::OpCode::GetTask:
             request = std::make_shared<GetTaskRequest>(request_version);
+            break;
+        case protocol::OpCode::CreateNamedCollection:
+            request = std::make_shared<CreateNamedCollectionRequest>(request_version);
+            break;
+        case protocol::OpCode::DeleteNamedCollection:
+            request = std::make_shared<DeleteNamedCollectionRequest>(request_version);
+            break;
+        case protocol::OpCode::ListNamedCollections:
+            request = std::make_shared<ListNamedCollectionsRequest>(request_version);
+            break;
+        case protocol::OpCode::GetNamedCollection:
+            request = std::make_shared<GetNamedCollectionRequest>(request_version);
             break;
         default:
             /// FIXME, when we support more request, add it here

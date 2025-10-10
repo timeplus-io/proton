@@ -1088,16 +1088,20 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
 bool ParserCreateNamedCollectionQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
-    ParserKeyword s_create("CREATE");
-    ParserKeyword s_attach("ATTACH");
-    ParserKeyword s_named_collection("NAMED COLLECTION");
-    ParserKeyword s_as("AS");
-
-    ParserToken s_comma(TokenType::Comma);
+    ParserKeyword s_create(Keyword::CREATE);
+    ParserKeyword s_named_collection(Keyword::NAMED_COLLECTION);
+    ParserKeyword s_if_not_exists(Keyword::IF_NOT_EXISTS);
+    /// ParserKeyword s_on(Keyword::ON);
+    ParserKeyword s_as(Keyword::AS);
+    ParserKeyword s_not_overridable(Keyword::NOT_OVERRIDABLE);
+    ParserKeyword s_overridable(Keyword::OVERRIDABLE);
     ParserIdentifier name_p;
+    ParserToken s_comma(TokenType::Comma);
+
+    String cluster_str;
+    bool if_not_exists = false;
 
     ASTPtr collection_name;
-    String cluster_str;
 
     if (!s_create.ignore(pos, expected))
         return false;
@@ -1105,10 +1109,13 @@ bool ParserCreateNamedCollectionQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
     if (!s_named_collection.ignore(pos, expected))
         return false;
 
+    if (s_if_not_exists.ignore(pos, expected))
+        if_not_exists = true;
+
     if (!name_p.parse(pos, collection_name, expected))
         return false;
 
-    /// if (ParserKeyword{"ON"}.ignore(pos, expected))
+    /// if (s_on.ignore(pos, expected))
     /// {
     ///     if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
     ///         return false;
@@ -1118,6 +1125,7 @@ bool ParserCreateNamedCollectionQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
         return false;
 
     SettingsChanges changes;
+    std::unordered_map<String, bool> overridability;
 
     while (true)
     {
@@ -1128,12 +1136,19 @@ bool ParserCreateNamedCollectionQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
 
         if (!ParserSetQuery::parseNameValuePair(changes.back(), pos, expected))
             return false;
+        if (s_not_overridable.ignore(pos, expected))
+            overridability.emplace(changes.back().name, false);
+        else if (s_overridable.ignore(pos, expected))
+            overridability.emplace(changes.back().name, true);
     }
 
     auto query = std::make_shared<ASTCreateNamedCollectionQuery>();
 
     tryGetIdentifierNameInto(collection_name, query->collection_name);
+    query->if_not_exists = if_not_exists;
     query->changes = changes;
+    query->cluster = std::move(cluster_str);
+    query->overridability = overridability;
 
     node = query;
     return true;

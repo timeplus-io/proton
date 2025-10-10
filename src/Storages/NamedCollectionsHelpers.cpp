@@ -10,6 +10,11 @@
 #include <Common/NamedCollections/NamedCollections.h>
 #include <Common/NamedCollections/NamedCollectionsFactory.h>
 
+/// proton: starts
+#include <Storages/ExternalStream/ExternalStreamSettings.h>
+#include <Storages/ExternalTable/ExternalTableSettings.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -139,6 +144,39 @@ MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides(
 
     return collection_copy;
 }
+
+/// proton: starts
+template <typename Settings>
+MutableNamedCollectionPtr
+tryGetNamedCollectionWithOverrides(const std::string & collection_name, const Settings & settings, ContextPtr context)
+{
+    if (collection_name.empty())
+        return nullptr;
+
+    context->checkAccess(AccessType::NAMED_COLLECTION, collection_name);
+
+    const auto & collection = NamedCollectionFactory::instance().get(collection_name);
+    auto collection_copy = collection->duplicate();
+
+    const auto allow_override_by_default = context->getSettingsRef().allow_named_collection_override_by_default;
+    for (const auto & setting : settings.allChanged())
+    {
+        const auto & key = setting.getName();
+        if (collection_copy->isOverridable(key, allow_override_by_default))
+            collection_copy->setOrUpdate<String>(key, setting.getValueString(), {});
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Override not allowed for '{}'", key);
+    }
+
+    return collection_copy;
+}
+
+template MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides<ExternalStreamSettings>(
+    const std::string & collection_name, const ExternalStreamSettings & settings, ContextPtr context);
+
+template MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides<ExternalTableSettings>(
+    const std::string & collection_name, const ExternalTableSettings & settings, ContextPtr context);
+/// proton: ends
 
 HTTPHeaderEntries getHeadersFromNamedCollection(const NamedCollection & collection)
 {

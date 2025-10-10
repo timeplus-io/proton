@@ -23,6 +23,8 @@
 #include <Cluster/Requests/CreateDiskResponse.h>
 #include <Cluster/Requests/CreateFormatSchemaRequest.h>
 #include <Cluster/Requests/CreateFormatSchemaResponse.h>
+#include <Cluster/Requests/CreateNamedCollectionRequest.h>
+#include <Cluster/Requests/CreateNamedCollectionResponse.h>
 #include <Cluster/Requests/CreateStoragePolicyRequest.h>
 #include <Cluster/Requests/CreateStoragePolicyResponse.h>
 #include <Cluster/Requests/CreateStreamRequest.h>
@@ -41,6 +43,8 @@
 #include <Cluster/Requests/DeleteDiskResponse.h>
 #include <Cluster/Requests/DeleteFormatSchemaRequest.h>
 #include <Cluster/Requests/DeleteFormatSchemaResponse.h>
+#include <Cluster/Requests/DeleteNamedCollectionRequest.h>
+#include <Cluster/Requests/DeleteNamedCollectionResponse.h>
 #include <Cluster/Requests/DeleteStoragePolicyRequest.h>
 #include <Cluster/Requests/DeleteStoragePolicyResponse.h>
 #include <Cluster/Requests/DeleteStreamRequest.h>
@@ -57,6 +61,8 @@
 #include <Cluster/Requests/GetDatabaseResponse.h>
 #include <Cluster/Requests/GetFormatSchemaRequest.h>
 #include <Cluster/Requests/GetFormatSchemaResponse.h>
+#include <Cluster/Requests/GetNamedCollectionRequest.h>
+#include <Cluster/Requests/GetNamedCollectionResponse.h>
 #include <Cluster/Requests/GetStreamRequest.h>
 #include <Cluster/Requests/GetStreamResponse.h>
 #include <Cluster/Requests/GetTaskRequest.h>
@@ -73,6 +79,8 @@
 #include <Cluster/Requests/ListDisksResponse.h>
 #include <Cluster/Requests/ListFormatSchemasRequest.h>
 #include <Cluster/Requests/ListFormatSchemasResponse.h>
+#include <Cluster/Requests/ListNamedCollectionsRequest.h>
+#include <Cluster/Requests/ListNamedCollectionsResponse.h>
 #include <Cluster/Requests/ListStoragePoliciesRequest.h>
 #include <Cluster/Requests/ListStoragePoliciesResponse.h>
 #include <Cluster/Requests/ListStreamsRequest.h>
@@ -209,6 +217,11 @@ public:
     ListTasksResponsePtr listTasks(ListTasksRequestPtr req) const;
     GetTaskResponsePtr getTask(GetTaskRequestPtr req) const;
 
+    /// Named Collection
+    CreateNamedCollectionResponsePtr createNamedCollection(CreateNamedCollectionRequestPtr req);
+    DeleteNamedCollectionResponsePtr deleteNamedCollection(DeleteNamedCollectionRequestPtr req);
+    ListNamedCollectionsResponsePtr listNamedCollections(ListNamedCollectionsRequestPtr req) const;
+    GetNamedCollectionResponsePtr getNamedCollection(GetNamedCollectionRequestPtr req) const;
 
     bool isLocalNode(const std::string & host, uint16_t tcp_port, const std::string & fqdn_name) const;
 

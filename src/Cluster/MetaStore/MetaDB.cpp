@@ -471,6 +471,78 @@ CallResultV<protocol::TaskDescriptorPtrs> MetaDB::listTasks(std::vector<std::str
     return getValues<protocol::TaskDescriptor>(encodeMetaTaskKey(), MetaKeySpace::Task, corrupted_keys);
 }
 
+Error MetaDB::saveNamedCollection(
+    const std::string & name, const protocol::NamedCollectionDescriptor & named_collection, AppliedSequence applied_sn)
+{
+    return mergeKeyValue(
+        encodeMetaNamedCollectionKey(name),
+        cluster::serialize<std::string>(named_collection, /*version=*/1),
+        applied_sn,
+        "named_collection");
+}
+
+Error MetaDB::deleteNamedCollection(const std::string & name, AppliedSequence applied_sn)
+{
+    return deleteKey(encodeMetaNamedCollectionKey(name), applied_sn, "named_collection");
+}
+
+Error MetaDB::deleteNamedCollection(const std::string & name)
+{
+    return deleteKey(encodeMetaNamedCollectionKey(name), std::nullopt, "named_collection");
+}
+
+CallResultV<protocol::NamedCollectionDescriptorPtr> MetaDB::getNamedCollection(const std::string & name) const
+{
+    return getValue<protocol::NamedCollectionDescriptor>(encodeMetaNamedCollectionKey(name), MetaKeySpace::NamedCollection);
+}
+
+CallResultV<protocol::NamedCollectionDescriptorPtrs> MetaDB::getNamedCollection(const std::string & name, size_t versions_requested) const
+{
+    return getValue<protocol::NamedCollectionDescriptor>(
+        encodeMetaNamedCollectionKey(name), MetaKeySpace::NamedCollection, versions_requested);
+}
+
+CallResultV<std::vector<std::string>> MetaDB::listNamedCollections() const
+{
+    std::string prefix_start = encodeMetaNamedCollectionKey();
+    std::string prefix_end = prefix_start;
+    DB::PrefixTreeEncode::keyPrefixEnd(prefix_end);
+
+    rocksdb::Slice prefix_start_slice = prefix_start;
+    rocksdb::Slice prefix_end_slice = prefix_end;
+
+    rocksdb::ReadOptions options;
+    options.auto_prefix_mode = true;
+    options.iterate_upper_bound = &prefix_end_slice;
+
+    std::unique_ptr<rocksdb::Iterator> iter{meta_db->NewIterator(options, default_cf_handle)};
+
+    CallResultV<std::vector<std::string>> result;
+
+    Error last_err;
+
+    iter->Seek(prefix_start_slice);
+    while (iter->Valid())
+    {
+        try
+        {
+            result.result.push_back(decodeMetaNamedCollectionKey(iter->key().ToStringView()));
+        }
+        catch (const Poco::Exception & e)
+        {
+            auto text = fmt::format("Failed to decode value: key={} error={}", iter->key().ToStringView(), e.displayText());
+            last_err = Error(e.code(), text);
+            LOG_ERROR(logger, "{}, will skip it", text);
+        }
+        iter->Next();
+    }
+
+    if (result.result.empty() && last_err.hasError())
+        result.err.swap(last_err);
+
+    return result;
+}
+
 Error MetaDB::deleteMaterializedViewAssignment(const cluster::Stream & mv)
 {
     return deleteKey(encodeMetaMaterializedViewAssignmentKey(mv.ns, mv.name), {}, "MaterializedViewAssignment");

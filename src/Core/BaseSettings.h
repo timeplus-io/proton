@@ -907,8 +907,6 @@ bool BaseSettings<Traits_>::SettingFieldRef::isObsolete() const
 }
 
 /// proton: starts
-std::unordered_map<std::string, std::string> loadSettingsFromConfigFile(const std::string & config_file);
-
 template <typename Traits_>
 void BaseSettings<Traits_>::loadFromConfigFile(const std::string & config_file_path)
 {

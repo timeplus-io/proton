@@ -48,6 +48,10 @@ std::string encodeMetaTaskKey(const std::string & ns, const std::string & name);
 
 std::string encodeMetaAppliedSequenceKey(const StreamIDShard & stream_shard);
 
+std::string encodeMetaNamedCollectionKey();
+std::string encodeMetaNamedCollectionKey(const std::string & name);
+std::string decodeMetaNamedCollectionKey(std::string_view data);
+
 std::string encodeMetaPendingRequestKey(uint64_t sequence_number);
 
 }

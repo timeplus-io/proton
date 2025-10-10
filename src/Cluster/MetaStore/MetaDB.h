@@ -9,6 +9,7 @@
 #include <Cluster/Protocol/DiskDescriptor.h>
 #include <Cluster/Protocol/FormatSchemaDescriptor.h>
 #include <Cluster/Protocol/MaterializedViewAssignment.h>
+#include <Cluster/Protocol/NamedCollectionDescriptor.h>
 #include <Cluster/Protocol/StoragePolicyDescriptor.h>
 #include <Cluster/Protocol/StreamDescriptor.h>
 #include <Cluster/Protocol/TaskDescriptor.h>
@@ -31,10 +32,7 @@ class MetaDB final
 {
 public:
     MetaDB(
-        const std::filesystem::path & meta_dir,
-        const StreamIDShard & meta_stream_shard_,
-        size_t metadata_keep_versions,
-        LoggerPtr logger_);
+        const std::filesystem::path & meta_dir, const StreamIDShard & meta_stream_shard_, size_t metadata_keep_versions, LoggerPtr logger_);
 
     ~MetaDB();
 
@@ -125,6 +123,15 @@ public:
     CallResultV<protocol::TaskDescriptorPtrs> listTasks(const std::string & ns) const;
     CallResultV<protocol::TaskDescriptorPtrs> listTasks(std::vector<std::string> * corrupted_keys = nullptr) const;
 
+    /// Named Collection CRUD
+    Error
+    saveNamedCollection(const std::string & name, const protocol::NamedCollectionDescriptor & named_collection, AppliedSequence applied_sn);
+    Error deleteNamedCollection(const std::string & name, AppliedSequence applied_sn);
+    Error deleteNamedCollection(const std::string & name);
+    CallResultV<protocol::NamedCollectionDescriptorPtr> getNamedCollection(const std::string & name) const;
+    CallResultV<protocol::NamedCollectionDescriptorPtrs> getNamedCollection(const std::string & name, size_t versions_requested) const;
+    CallResultV<std::vector<std::string>> listNamedCollections() const;
+
     /// Internal API, save / delete mv assignment from local metadb
     /// Materialized View Assignments
     Error saveMaterializedViewAssignment(const protocol::MaterializedViewAssignment & assignment, AppliedSequence applied_sn);
@@ -142,13 +149,13 @@ public:
     /// Pending request management
     /// Save a pending metadata request with sync write
     Error savePendingRequest(uint64_t sequence_number, const std::string & serialized_data);
-    
+
     /// Delete a pending request after successful apply
     Error deletePendingRequest(uint64_t sequence_number);
-    
+
     /// Iterate pending requests after given sequence number for recovery
     CallResultV<std::vector<std::pair<uint64_t, std::string>>> iteratePendingRequestsAfter(uint64_t after_sn) const;
-    
+
     /// Cleanup old pending requests up to and including the given applied sequence number
     Error cleanupOldPendingRequests(uint64_t applied_sn);
 

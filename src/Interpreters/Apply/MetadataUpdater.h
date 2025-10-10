@@ -4,6 +4,7 @@
 #include <Cluster/Protocol/AlertDescriptor.h>
 #include <Cluster/Protocol/FormatSchemaDescriptor.h>
 #include <Cluster/Protocol/InternalProtocol.h>
+#include <Cluster/Protocol/NamedCollectionDescriptor.h>
 #include <Cluster/Protocol/StreamDescriptor.h>
 #include <Cluster/Protocol/TaskDescriptor.h>
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
@@ -46,9 +47,11 @@ struct DeleteStoragePolicyRequest;
 struct AssignMaterializedViewRequest;
 struct CreateAlertRequest;
 struct DeleteAlertRequest;
-class AlterTaskRequest;
+struct AlterTaskRequest;
 struct CreateTaskRequest;
 struct DeleteTaskRequest;
+struct CreateNamedCollectionRequest;
+struct DeleteNamedCollectionRequest;
 struct RequestHeader;
 
 namespace protocol
@@ -208,6 +211,14 @@ private:
     void handleAlterTask(const cluster::AlterTaskRequest & request, const cluster::RequestHeader & request_header, uint64_t sn) const;
 
     cluster::CallResultV<cluster::protocol::TaskDescriptorPtr> loadTaskDescriptor(const std::string & ns, const std::string & name) const;
+
+    void handleCreateNamedCollection(
+        const cluster::CreateNamedCollectionRequest & request, const cluster::RequestHeader & request_header, uint64_t sn) const;
+
+    void handleDeleteNamedCollection(
+        const cluster::DeleteNamedCollectionRequest & request, const cluster::RequestHeader & request_header, uint64_t sn) const;
+
+    cluster::CallResultV<cluster::protocol::NamedCollectionDescriptorPtr> loadNamedCollection(const std::string & name) const;
 
     void updateInMemoryMetadataForStream(
         StoragePtr table,

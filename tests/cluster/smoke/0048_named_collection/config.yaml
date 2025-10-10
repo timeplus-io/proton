@@ -1,0 +1,5 @@
+name: named_collection
+description: Smoke tests covering the named collection use cases.
+tags:
+  - smoke
+  - named_collection

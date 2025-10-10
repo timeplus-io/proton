@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
+#include <Storages/NamedCollectionsHelpers.h>
 
 namespace DB
 {
@@ -56,6 +57,18 @@ StoragePtr ExternalTableFactory::getExternalTable(const StorageFactory::Argument
 
     if (!external_table_settings->config_file.value.empty())
         external_table_settings->loadFromConfigFile(external_table_settings->config_file.value);
+
+    if (!external_table_settings->named_collection.value.empty())
+    {
+        auto named_collection
+            = tryGetNamedCollectionWithOverrides(external_table_settings->named_collection.value, *external_table_settings, context);
+        for (const auto & key : *named_collection)
+        {
+            if (!external_table_settings->has(key))
+                BaseSettingsHelpers::throwSettingNotFound(key);
+            external_table_settings->setString(key, named_collection->get<String>(key));
+        }
+    }
 
     auto type = external_table_settings->type.value;
     if (!creators.contains(type))

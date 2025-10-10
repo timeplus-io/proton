@@ -12,6 +12,7 @@ enum class MetaKeySpace : uint8_t
     FormatSchema = 0xfa,
     Alert = 0xf9,
     Task = 0xf8,
+    NamedCollection = 0xf7,
     Database = 0xf4,
     Disk = 0xf3,
     StoragePolicy = 0xf2,

@@ -17,9 +17,6 @@ namespace ErrorCodes
 
 namespace NamedCollectionConfiguration
 {
-
-void setOverridable(Poco::Util::AbstractConfiguration & config, const std::string & path, bool value);
-
 bool hasConfigValue(
     const Poco::Util::AbstractConfiguration & config,
     const std::string & path)

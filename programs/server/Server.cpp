@@ -833,8 +833,6 @@ try
         server_settings.max_io_thread_pool_free_size,
         server_settings.io_thread_pool_queue_size);
 
-    NamedCollectionFactory::instance().loadIfNot();
-
     /// Initialize global local cache for remote filesystem.
     if (config().has("local_cache_for_remote_fs"))
     {
@@ -1205,6 +1203,10 @@ try
     RestRouterFactory::registerRestRouterHandlers();
 
     auto server_descriptor = global_context->getServerDescriptor();
+
+    /// Start named collection after bootstrap
+    NamedCollectionFactory::instance().loadIfNot();
+    /// proton: ends.
 
     for (auto & server : servers_to_start_before_tables)
     {

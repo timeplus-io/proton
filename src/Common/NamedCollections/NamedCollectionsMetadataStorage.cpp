@@ -1,296 +1,45 @@
-#include <filesystem>
-#include <IO/FileEncryptionCommon.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteBufferFromString.h>
+#include <Common/NamedCollections/NamedCollectionsMetadataStorage.h>
+
+/// proton: starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/Protocol/ExistsOperation.h>
+#include <Cluster/Protocol/NamedCollectionDescriptor.h>
+#include <Cluster/Requests/CreateNamedCollectionRequest.h>
+#include <Cluster/Requests/DeleteNamedCollectionRequest.h>
+#include <Cluster/Requests/GetNamedCollectionRequest.h>
+#include <Cluster/Requests/ListNamedCollectionsRequest.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/formatAST.h>
-#include <boost/algorithm/hex.hpp>
-#include <Common/NamedCollections/NamedCollectionConfiguration.h>
-#include <Common/NamedCollections/NamedCollectionsMetadataStorage.h>
-#include <Common/ZooKeeper/IKeeper.h>
-#include <Common/ZooKeeper/KeeperException.h>
-// #include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/NamedCollections/NamedCollections.h>
 #include <Common/escapeForFileName.h>
 #include <Common/logger_useful.h>
 
-namespace fs = std::filesystem;
+#include <memory>
+
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int NAMED_COLLECTION_ALREADY_EXISTS;
-    extern const int NAMED_COLLECTION_DOESNT_EXIST;
-    extern const int INVALID_CONFIG_PARAMETER;
-    extern const int BAD_ARGUMENTS;
-    extern const int LOGICAL_ERROR;
-    extern const int SUPPORT_IS_DISABLED;
+extern const int NAMED_COLLECTION_ALREADY_EXISTS;
+extern const int NAMED_COLLECTION_DOESNT_EXIST;
+extern const int INVALID_CONFIG_PARAMETER;
+extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
+extern const int SUPPORT_IS_DISABLED;
 }
 
-static const std::string named_collections_storage_config_path = "named_collections_storage";
-
-namespace
-{
-    std::string getFileName(const std::string & collection_name)
-    {
-        return escapeForFileName(collection_name) + ".sql";
-    }
-}
-
-class NamedCollectionsMetadataStorage::INamedCollectionsStorage
-{
-public:
-    virtual ~INamedCollectionsStorage() = default;
-
-    virtual bool exists(const std::string & path) const = 0;
-
-    virtual std::vector<std::string> list() const = 0;
-
-    virtual std::string read(const std::string & path) const = 0;
-
-    virtual void write(const std::string & path, const std::string & data, bool replace) = 0;
-
-    virtual void remove(const std::string & path) = 0;
-
-    virtual bool removeIfExists(const std::string & path) = 0;
-
-    virtual bool isReplicated() const = 0;
-
-    virtual bool waitUpdate(size_t /* timeout */) { return false; }
-};
-
-
-class NamedCollectionsMetadataStorage::LocalStorage : public INamedCollectionsStorage, protected WithContext
-{
-protected:
-    std::string root_path;
-
-public:
-    LocalStorage(ContextPtr context_, const std::string & path_)
-        : WithContext(context_)
-        , root_path(path_)
-    {
-        if (fs::exists(root_path))
-            cleanup();
-    }
-
-    ~LocalStorage() override = default;
-
-    bool isReplicated() const override { return false; }
-
-    std::vector<std::string> list() const override
-    {
-        if (!fs::exists(root_path))
-            return {};
-
-        std::vector<std::string> elements;
-        for (fs::directory_iterator it{root_path}; it != fs::directory_iterator{}; ++it)
-        {
-            const auto & current_path = it->path();
-            if (current_path.extension() == ".sql")
-            {
-                elements.push_back(it->path());
-            }
-            else
-            {
-                LOG_WARNING(
-                    getLogger("LocalStorage"),
-                    "Unexpected file {} in named collections directory",
-                    current_path.filename().string());
-            }
-        }
-        return elements;
-    }
-
-    bool exists(const std::string & file_name) const override
-    {
-        return fs::exists(getPath(file_name));
-    }
-
-    std::string read(const std::string & file_name) const override
-    {
-        ReadBufferFromFile in(getPath(file_name));
-        std::string data;
-        readStringUntilEOF(data, in);
-        return readHook(data);
-    }
-
-    virtual std::string readHook(const std::string & data) const
-    {
-        return data;
-    }
-
-    void write(const std::string & file_name, const std::string & data, bool replace) override
-    {
-        if (!replace && fs::exists(file_name))
-        {
-            throw Exception(
-                ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS,
-                "Metadata file {} for named collection already exists",
-                file_name);
-        }
-
-        fs::create_directories(root_path);
-
-        auto tmp_path = getPath(file_name + ".tmp");
-        auto write_data = writeHook(data);
-        WriteBufferFromFile out(tmp_path, write_data.size(), O_WRONLY | O_CREAT | O_EXCL);
-        writeString(write_data, out);
-
-        out.next();
-        if (getContext()->getSettingsRef().fsync_metadata)
-            out.sync();
-        out.close();
-
-        fs::rename(tmp_path, getPath(file_name));
-    }
-
-    virtual std::string writeHook(const std::string & data) const
-    {
-        return data;
-    }
-
-    void remove(const std::string & file_name) override
-    {
-        if (!removeIfExists(file_name))
-        {
-            throw Exception(
-                ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST,
-                "Cannot remove `{}`, because it doesn't exist", file_name);
-        }
-    }
-
-    bool removeIfExists(const std::string & file_name) override
-    {
-        return fs::remove(getPath(file_name));
-    }
-
-protected:
-    std::string getPath(const std::string & file_name) const
-    {
-        const auto file_name_as_path = fs::path(file_name);
-        if (file_name_as_path.is_absolute())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Filename {} cannot be an absolute path", file_name);
-
-        return fs::path(root_path) / file_name_as_path;
-    }
-
-private:
-    /// Delete .tmp files. They could be left undeleted in case of
-    /// some exception or abrupt server restart.
-    void cleanup()
-    {
-        std::vector<std::string> files_to_remove;
-        for (fs::directory_iterator it{root_path}; it != fs::directory_iterator{}; ++it)
-        {
-            const auto & current_path = it->path();
-            if (current_path.extension() == ".tmp")
-                files_to_remove.push_back(current_path);
-        }
-        for (const auto & file : files_to_remove)
-            fs::remove(file);
-    }
-};
-
-#if USE_SSL
-
-template <typename BaseMetadataStorage>
-class NamedCollectionsMetadataStorageEncrypted : public BaseMetadataStorage
-{
-public:
-    NamedCollectionsMetadataStorageEncrypted(ContextPtr context_, const std::string & path_)
-        : BaseMetadataStorage(context_, path_)
-    {
-        const auto & config = BaseMetadataStorage::getContext()->getConfigRef();
-        auto key_hex = config.getRawString("named_collections_storage.key_hex", "");
-        try
-        {
-            key = boost::algorithm::unhex(key_hex);
-            key_fingerprint = FileEncryption::calculateKeyFingerprint(key);
-        }
-        catch (const std::exception &)
-        {
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot read key_hex, check for valid characters [0-9a-fA-F] and length");
-        }
-
-        algorithm = FileEncryption::parseAlgorithmFromString(config.getString("named_collections_storage.algorithm", "aes_128_ctr"));
-    }
-
-    std::string readHook(const std::string & data) const override
-    {
-        ReadBufferFromString in(data);
-
-        FileEncryption::Header header;
-        try
-        {
-            header.read(in);
-        }
-        catch (Exception & e)
-        {
-            e.addMessage("While reading the header of encrypted data");
-            throw;
-        }
-
-        Memory<> encrypted_buffer(in.available());
-        size_t bytes_read = 0;
-        while (bytes_read < encrypted_buffer.size() && !in.eof())
-        {
-            bytes_read += in.read(encrypted_buffer.data() + bytes_read, encrypted_buffer.size() - bytes_read);
-        }
-
-        std::string decrypted_buffer;
-        decrypted_buffer.resize(bytes_read);
-        FileEncryption::Encryptor encryptor(header.algorithm, key, header.init_vector);
-        encryptor.decrypt(encrypted_buffer.data(), bytes_read, decrypted_buffer.data());
-
-        return decrypted_buffer;
-    }
-
-    std::string writeHook(const std::string & data) const override
-    {
-        FileEncryption::Header header{
-            .algorithm = algorithm,
-            .key_fingerprint = key_fingerprint,
-            .init_vector = FileEncryption::InitVector::random()
-        };
-
-        FileEncryption::Encryptor encryptor(header.algorithm, key, header.init_vector);
-        WriteBufferFromOwnString out;
-        header.write(out);
-        encryptor.encrypt(data.data(), data.size(), out);
-        return std::string(out.str());
-    }
-
-private:
-    std::string key;
-    UInt128 key_fingerprint;
-    FileEncryption::Algorithm algorithm;
-};
-
-class NamedCollectionsMetadataStorage::LocalStorageEncrypted : public NamedCollectionsMetadataStorageEncrypted<NamedCollectionsMetadataStorage::LocalStorage>
-{
-    using NamedCollectionsMetadataStorageEncrypted<NamedCollectionsMetadataStorage::LocalStorage>::NamedCollectionsMetadataStorageEncrypted;
-};
-
-#endif
-
-NamedCollectionsMetadataStorage::NamedCollectionsMetadataStorage(
-    std::shared_ptr<INamedCollectionsStorage> storage_,
-    ContextPtr context_)
+NamedCollectionsMetadataStorage::NamedCollectionsMetadataStorage(ContextPtr context_)
     : WithContext(context_)
-    , storage(std::move(storage_))
 {
 }
 
 MutableNamedCollectionPtr NamedCollectionsMetadataStorage::get(const std::string & collection_name) const
 {
-    const auto query = readCreateQuery(collection_name);
-    return NamedCollectionFromSQL::create(query);
+    auto desc = readDescriptor(collection_name);
+    chassert(desc);
+    return NamedCollectionFromDescriptor::create(collection_name, desc);
 }
 
 NamedCollectionsMap NamedCollectionsMetadataStorage::getAll() const
@@ -300,10 +49,7 @@ NamedCollectionsMap NamedCollectionsMetadataStorage::getAll() const
     {
         if (result.contains(collection_name))
         {
-            throw Exception(
-                ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS,
-                "Found duplicate named collection `{}`",
-                collection_name);
+            throw Exception(ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS, "Found duplicate named collection `{}`", collection_name);
         }
         result.emplace(collection_name, get(collection_name));
     }
@@ -313,120 +59,148 @@ NamedCollectionsMap NamedCollectionsMetadataStorage::getAll() const
 MutableNamedCollectionPtr NamedCollectionsMetadataStorage::create(const ASTCreateNamedCollectionQuery & create_query)
 {
     auto collection_ptr = NamedCollectionFromSQL::create(create_query);
-    writeCreateQuery(create_query.collection_name, collection_ptr->getCreateStatement(true));
+    writeCreateQuery(create_query, false);
     return collection_ptr;
+}
+
+cluster::protocol::NamedCollectionDescriptorPtr NamedCollectionsMetadataStorage::readDescriptor(const std::string & collection_name) const
+{
+    auto & metastore = Globals::getMetaStore();
+    int64_t timeout_ms = getContext()->getSettingsRef().query_timeout_sec * 1000;
+
+    auto req = std::make_shared<cluster::GetNamedCollectionRequest>(
+        collection_name,
+        /*versions_requested=*/1,
+        metastore.nodeID(),
+        /*consistent_read=*/false,
+        timeout_ms,
+        /*request_version=*/1);
+
+    auto resp = metastore.getNamedCollection(std::move(req));
+    const auto & err = resp->error();
+
+    if (err.isNotFound() || resp->data().named_collections.empty())
+        throw Exception(ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST, "Named collection {} not found", collection_name);
+
+    if (err.hasError())
+        throw Exception(err.error_code, "Failed to get named collection {}: {}", collection_name, err.error_message);
+
+    const auto & collections = resp->data().named_collections;
+    if (collections.size() != 1)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Expected exactly one named collection for '{}', got {}",
+            collection_name,
+            collections.size());
+
+    return collections[0];
+}
+
+void NamedCollectionsMetadataStorage::writeDescriptor(
+    const std::string & collection_name, const cluster::protocol::NamedCollectionDescriptorPtr & collection, bool replace)
+{
+    auto & metastore = Globals::getMetaStore();
+    auto timeout_ms = getContext()->getSettingsRef().query_timeout_sec * 1000;
+
+    auto req = std::make_shared<cluster::CreateNamedCollectionRequest>(
+        collection_name,
+        collection,
+        replace ? cluster::protocol::ExistsOperation::Replace : cluster::protocol::ExistsOperation::Throw,
+        getContext()->getUserName(),
+        metastore.nodeID(),
+        timeout_ms,
+        /*request_version=*/1);
+
+    auto resp = metastore.createNamedCollection(std::move(req));
+    if (resp->hasError())
+        throw Exception(resp->error().error_code, "Can not write named collection {}: {}", collection_name, resp->error().error_message);
+}
+
+void NamedCollectionsMetadataStorage::writeCreateQuery(const ASTCreateNamedCollectionQuery & create_query, bool replace)
+{
+    auto collection = std::make_shared<cluster::protocol::NamedCollectionDescriptor>();
+    collection->entries.reserve(create_query.changes.size());
+    for (const auto & change : create_query.changes)
+    {
+        auto overridability = cluster::protocol::NamedCollectionOverridability::Default;
+        if (auto iter = create_query.overridability.find(change.name); iter != create_query.overridability.end())
+            overridability = iter->second ? cluster::protocol::NamedCollectionOverridability::Overridable
+                                          : cluster::protocol::NamedCollectionOverridability::NotOverridable;
+        collection->entries.emplace_back(cluster::protocol::NamedCollectionEntry{
+            .key = change.name, .value = convertFieldToString(change.value), .overridability = overridability});
+    }
+
+    writeDescriptor(create_query.collection_name, collection, replace);
 }
 
 void NamedCollectionsMetadataStorage::remove(const std::string & collection_name)
 {
-    storage->remove(getFileName(collection_name));
+    if (!removeIfExists(collection_name))
+    {
+        throw Exception(ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST, "Cannot remove `{}`, because it doesn't exist", collection_name);
+    }
 }
 
 bool NamedCollectionsMetadataStorage::removeIfExists(const std::string & collection_name)
 {
-    return storage->removeIfExists(getFileName(collection_name));
+    auto & metastore = Globals::getMetaStore();
+    auto timeout_ms = getContext()->getSettingsRef().query_timeout_sec * 1000;
+
+    auto req = std::make_shared<cluster::DeleteNamedCollectionRequest>(
+        collection_name,
+        metastore.nodeID(),
+        timeout_ms,
+        /*request_version=*/1);
+
+    auto resp = metastore.deleteNamedCollection(std::move(req));
+    const auto & err = resp->error();
+
+    if (!err.hasError())
+        return true;
+
+    if (err.isNotFound())
+        return false;
+
+    throw Exception(err.error_code, "Can not delete named collection {}: {}", collection_name, err.error_message);
 }
 
 MutableNamedCollectionPtr NamedCollectionsMetadataStorage::update(const ASTAlterNamedCollectionQuery & query)
 {
-    auto create_query = readCreateQuery(query.collection_name);
-    auto collection_ptr = NamedCollectionFromSQL::create(create_query);
+    const auto & collection_name = query.collection_name;
+    auto desc = readDescriptor(collection_name);
+    auto collection_ptr = NamedCollectionFromDescriptor::create(collection_name, desc);
     collection_ptr->update(query);
-    writeCreateQuery(query.collection_name, collection_ptr->getCreateStatement(true), true);
+
+    chassert(collection_ptr->getSourceId() == NamedCollection::SourceId::DESCRIPTOR);
+    auto new_desc = std::static_pointer_cast<NamedCollectionFromDescriptor>(collection_ptr)->getDescriptor();
+    writeDescriptor(collection_name, new_desc, true);
 
     return collection_ptr;
 }
 
 std::vector<std::string> NamedCollectionsMetadataStorage::listCollections() const
 {
-    auto paths = storage->list();
-    std::vector<std::string> collections;
-    collections.reserve(paths.size());
-    for (const auto & path : paths)
-        collections.push_back(unescapeForFileName(std::filesystem::path(path).stem()));
-    return collections;
-}
+    auto & metastore = Globals::getMetaStore();
+    auto timeout_ms = getContext()->getSettingsRef().query_timeout_sec * 1000;
 
-ASTCreateNamedCollectionQuery NamedCollectionsMetadataStorage::readCreateQuery(const std::string & collection_name) const
-{
-    const auto path = getFileName(collection_name);
-    auto query = storage->read(path);
-    const auto & settings = getContext()->getSettingsRef();
+    auto req = std::make_shared<cluster::ListNamedCollectionsRequest>(
+        metastore.nodeID(),
+        /*consistent_read=*/false,
+        timeout_ms,
+        /*request_version=*/1);
 
-    ParserCreateNamedCollectionQuery parser;
-    auto ast = parseQuery(parser, query, "in file " + path, 0, settings.max_parser_depth);
-    const auto & create_query = ast->as<const ASTCreateNamedCollectionQuery &>();
-    return create_query;
-}
+    auto resp = metastore.listNamedCollections(std::move(req));
+    const auto & err = resp->error();
+    if (err.hasError())
+        throw Exception(err.error_code, "Failed to list named collections: {}", err.error_message);
 
-void NamedCollectionsMetadataStorage::writeCreateQuery(const String & collection_name, const String & create_statement, bool replace)
-{
-    storage->write(getFileName(collection_name), create_statement, replace);
-}
-
-bool NamedCollectionsMetadataStorage::isReplicated() const
-{
-    return storage->isReplicated();
-}
-
-bool NamedCollectionsMetadataStorage::waitUpdate()
-{
-    if (!storage->isReplicated())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Periodic updates are not supported");
-
-    const auto & config = Context::getGlobalContextInstance()->getConfigRef();
-    const size_t timeout = config.getUInt(named_collections_storage_config_path + ".update_timeout_ms", 5000);
-
-    return storage->waitUpdate(timeout);
+    return resp->data().collection_names;
 }
 
 std::unique_ptr<NamedCollectionsMetadataStorage> NamedCollectionsMetadataStorage::create(const ContextPtr & context_)
 {
-    const auto & config = context_->getConfigRef();
-    const auto storage_type = config.getString(named_collections_storage_config_path + ".type", "local");
-
-    if (storage_type == "local" || storage_type == "local_encrypted")
-    {
-        const auto path = config.getString(
-            named_collections_storage_config_path + ".path",
-            std::filesystem::path(context_->getPath()) / "named_collections");
-
-        LOG_TRACE(getLogger("NamedCollectionsMetadataStorage"),
-                  "Using local storage for named collections at path: {}", path);
-
-        std::unique_ptr<INamedCollectionsStorage> local_storage;
-        if (storage_type == "local")
-            local_storage = std::make_unique<NamedCollectionsMetadataStorage::LocalStorage>(context_, path);
-        else if (storage_type == "local_encrypted")
-        {
-#if USE_SSL
-            local_storage = std::make_unique<NamedCollectionsMetadataStorage::LocalStorageEncrypted>(context_, path);
-#else
-            throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Named collections encryption requires building with SSL support");
-#endif
-        }
-
-        return std::unique_ptr<NamedCollectionsMetadataStorage>(
-            new NamedCollectionsMetadataStorage(std::move(local_storage), context_));
-    }
-
-    /// proton: starts
-    // if (storage_type == "zookeeper" || storage_type == "keeper")
-    // {
-    //     const auto path = config.getString(named_collections_storage_config_path + ".path");
-    //     auto zk_storage = std::make_unique<NamedCollectionsMetadataStorage::ZooKeeperStorage>(context_, path);
-
-    //     LOG_TRACE(getLogger("NamedCollectionsMetadataStorage"),
-    //               "Using zookeeper storage for named collections at path: {}", path);
-
-    //     return std::unique_ptr<NamedCollectionsMetadataStorage>(
-    //         new NamedCollectionsMetadataStorage(std::move(zk_storage), context_));
-    // }
-    /// proton: ends
-
-    throw Exception(
-        ErrorCodes::INVALID_CONFIG_PARAMETER,
-        "Unknown storage for named collections: {}", storage_type);
+    return std::unique_ptr<NamedCollectionsMetadataStorage>(new NamedCollectionsMetadataStorage(context_));
 }
 
 }
+/// proton: ends

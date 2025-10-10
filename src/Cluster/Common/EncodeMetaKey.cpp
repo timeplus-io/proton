@@ -224,6 +224,29 @@ std::string encodeMetaTaskKey(const std::string & ns, const std::string & name)
     return key;
 }
 
+std::string encodeMetaNamedCollectionKey()
+{
+    std::string encoded_key;
+    DB::PrefixTreeEncode::encodeVarUIntAscending(std::to_underlying(MetaKeySpace::NamedCollection), encoded_key);
+    return encoded_key;
+}
+
+std::string encodeMetaNamedCollectionKey(const std::string & name)
+{
+    std::string encoded_key;
+    encoded_key.reserve(1 + name.size());
+    DB::PrefixTreeEncode::encodeVarUIntAscending(std::to_underlying(MetaKeySpace::NamedCollection), encoded_key);
+    DB::PrefixTreeEncode::encodeStringAscending(name, encoded_key);
+    return encoded_key;
+}
+
+std::string decodeMetaNamedCollectionKey(std::string_view data)
+{
+    DB::PrefixTreeEncode::decodeVarUIntAscending(data);
+    std::string decoded;
+    auto result = DB::PrefixTreeEncode::decodeStringAscending(data, decoded);
+    return std::string{result.data(), result.size()};
+}
 
 namespace
 {

@@ -21,6 +21,7 @@
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/NamedCollectionsHelpers.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
 
@@ -245,9 +246,21 @@ StorageExternalStream::StorageExternalStream(
 {
     auto external_stream_settings = std::make_unique<ExternalStreamSettings>();
     external_stream_settings->loadFromQuery(*storage_def);
-    /// Load the unchanged settings if the configuration file is specified.
+
     if (!external_stream_settings->config_file.value.empty())
         external_stream_settings->loadFromConfigFile(external_stream_settings->config_file.value);
+
+    if (!external_stream_settings->named_collection.value.empty())
+    {
+        auto named_collection
+            = tryGetNamedCollectionWithOverrides(external_stream_settings->named_collection.value, *external_stream_settings, context_);
+        for (const auto & key : *named_collection)
+        {
+            if (!external_stream_settings->has(key))
+                BaseSettingsHelpers::throwSettingNotFound(key);
+            external_stream_settings->setString(key, named_collection->get<String>(key));
+        }
+    }
 
     external_stream_type = external_stream_settings->type.value;
     ColumnsDescription columns = initColumnsDescription(columns_, *external_stream_settings, context_);

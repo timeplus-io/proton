@@ -85,6 +85,7 @@ class ASTStorage;
 #define ALL_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     M(String, type, "", "External stream type", 0) \
     M(String, config_file, "", "External stream configuration file path", 0) \
+    M(String, named_collection, "", "External stream named collection configuration", 0) \
     M(Bool, local, false, "In a distributed env, local=true means it is a stream which is local to that node only and is not visible to other nodes in the cluster", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     LOG_FILE_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \

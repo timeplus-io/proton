@@ -1,11 +1,16 @@
 #include <Common/NamedCollections/NamedCollections.h>
 
-#include <Interpreters/Context.h>
-#include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
-#include <Common/NamedCollections/NamedCollectionConfiguration.h>
+#include <IO/WriteBufferFromString.h>
+#include <Interpreters/Context.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/FieldVisitorToString.h>
+#include <Common/NamedCollections/NamedCollectionConfiguration.h>
+#include "Parsers/ASTCreateNamedCollectionQuery.h"
+
+/// proton: starts
+#include <Cluster/Protocol/NamedCollectionDescriptor.h>
+/// proton: ends
 
 #include <fmt/ranges.h>
 
@@ -448,6 +453,145 @@ void NamedCollectionFromSQL::update(const ASTAlterNamedCollectionQuery & alter_q
     for (const auto & key : alter_query.delete_keys)
         remove<true>(key);
 }
+
+/// proton: starts
+NamedCollectionFromDescriptor::NamedCollectionFromDescriptor(
+    const std::string & collection_name_, cluster::protocol::NamedCollectionDescriptorPtr desc_)
+: NamedCollection(nullptr, collection_name_, true), desc(std::move(desc_))
+{
+    auto config = Configuration::createEmptyConfiguration(collection_name);
+    std::set<std::string, std::less<>> keys;
+    for (const auto & [name, value, overridability] : desc->entries)
+    {
+        Configuration::setConfigValue<String>(*config, name, value);
+        if (overridability == cluster::protocol::NamedCollectionOverridability::NotOverridable)
+        {
+            Configuration::setOverridable(*config, name, false);
+        }
+        else if (overridability == cluster::protocol::NamedCollectionOverridability::Overridable)
+        {
+            Configuration::setOverridable(*config, name, true);
+        }
+
+        keys.insert(name);
+    }
+
+    pimpl = Impl::create(*config, collection_name, "", keys);
+}
+
+String NamedCollectionFromDescriptor::getCreateStatement(bool show_secrects)
+{
+    ASTCreateNamedCollectionQuery create_query;
+    create_query.collection_name = collection_name;
+    for (const auto & [name, value, overridability] : desc->entries)
+    {
+        create_query.changes.emplace_back(name, value);
+        switch (overridability)
+        {
+            case cluster::protocol::NamedCollectionOverridability::Default:
+                break;
+            case cluster::protocol::NamedCollectionOverridability::Overridable:
+                create_query.overridability.emplace(name, true);
+                break;
+            case cluster::protocol::NamedCollectionOverridability::NotOverridable:
+                create_query.overridability.emplace(name, false);
+                break;
+        }
+    }
+
+    auto & changes = create_query.changes;
+    std::sort(changes.begin(), changes.end(), [](const SettingChange & lhs, const SettingChange & rhs) { return lhs.name < rhs.name; });
+
+    return create_query.formatWithPossiblyHidingSensitiveData(
+        /*max_length=*/0,
+        /*one_line=*/true,
+        /*show_secrets=*/show_secrects);
+}
+
+void NamedCollectionFromDescriptor::update(const ASTAlterNamedCollectionQuery & alter_query)
+{
+    std::lock_guard lock(mutex);
+
+    std::unordered_map<std::string, Field> result_changes_map;
+    for (const auto & [name, value] : alter_query.changes)
+    {
+        auto [it, inserted] = result_changes_map.emplace(name, value);
+        if (!inserted)
+        {
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Value with key `{}` is used twice in the SET query (collection name: {})",
+                name, alter_query.collection_name);
+        }
+    }
+
+    std::unordered_map<std::string, bool> result_overridability_map;
+    for (const auto & [name, value] : alter_query.overridability)
+        result_overridability_map.emplace(name, value);
+
+    for (const auto & [name, value, overridability] : desc->entries)
+    {
+        result_changes_map.emplace(name, value);
+        switch (overridability)
+        {
+            case cluster::protocol::NamedCollectionOverridability::Default:
+                break;
+            case cluster::protocol::NamedCollectionOverridability::Overridable:
+                result_overridability_map.emplace(name, true);
+                break;
+            case cluster::protocol::NamedCollectionOverridability::NotOverridable:
+                result_overridability_map.emplace(name, false);
+                break;
+        }
+    }
+
+    for (const auto & delete_key : alter_query.delete_keys)
+    {
+        auto it = result_changes_map.find(delete_key);
+        if (it == result_changes_map.end())
+        {
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Cannot delete key `{}` because it does not exist in collection",
+                delete_key);
+        }
+
+        result_changes_map.erase(it);
+        auto it_override = result_overridability_map.find(delete_key);
+        if (it_override != result_overridability_map.end())
+            result_overridability_map.erase(it_override);
+    }
+
+    if (result_changes_map.empty())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Named collection cannot be empty (collection name: {})", collection_name);
+
+    auto new_desc = std::make_shared<cluster::protocol::NamedCollectionDescriptor>(*desc);
+    new_desc->entries.clear();
+    for (const auto & [name, value] : result_changes_map)
+    {
+        cluster::protocol::NamedCollectionOverridability overridability = cluster::protocol::NamedCollectionOverridability::Default;
+        if (auto iter = result_overridability_map.find(name); iter != result_overridability_map.end())
+            overridability = iter->second ? cluster::protocol::NamedCollectionOverridability::Overridable
+                                          : cluster::protocol::NamedCollectionOverridability::NotOverridable;
+
+        new_desc->entries.emplace_back(cluster::protocol::NamedCollectionEntry{.key=name, .value=convertFieldToString(value), .overridability=overridability});
+    }
+
+    desc = std::move(new_desc);
+
+    for (const auto & [name, value] : alter_query.changes)
+    {
+        auto it_override = alter_query.overridability.find(name);
+        if (it_override != alter_query.overridability.end())
+            setOrUpdate<String, true>(name, convertFieldToString(value), it_override->second);
+        else
+            setOrUpdate<String, true>(name, convertFieldToString(value), {});
+    }
+
+    for (const auto & key : alter_query.delete_keys)
+        remove<true>(key);
+}
+/// proton: ends
 
 template String NamedCollection::get<String>(const NamedCollection::Key & key) const;
 template UInt64 NamedCollection::get<UInt64>(const NamedCollection::Key & key) const;

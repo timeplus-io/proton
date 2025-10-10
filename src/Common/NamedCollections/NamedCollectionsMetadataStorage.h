@@ -1,13 +1,23 @@
 #pragma once
+
 #include <Parsers/ASTCreateNamedCollectionQuery.h>
 #include <Parsers/ASTAlterNamedCollectionQuery.h>
-#include <Parsers/ASTDropNamedCollectionQuery.h>
 #include <Common/NamedCollections/NamedCollections.h>
 #include <Interpreters/Context_fwd.h>
 
+
+/// proton: starts
+/// Deprecate the legacy local/config storage and read/write NamedCollectionDescriptor
+/// directly via MetaStore. SQL and CONFIG type named collections are no longer
+/// persisted locally after the change.
+namespace cluster::protocol
+{
+struct NamedCollectionDescriptor;
+using NamedCollectionDescriptorPtr = std::shared_ptr<NamedCollectionDescriptor>;
+}
+
 namespace DB
 {
-
 class NamedCollectionsMetadataStorage : private WithContext
 {
 public:
@@ -27,26 +37,18 @@ public:
 
     void shutdown();
 
-    /// Return true if update was made
-    bool waitUpdate();
-
-    bool isReplicated() const;
-
 private:
-    class INamedCollectionsStorage;
-    class LocalStorage;
-    class LocalStorageEncrypted;
+    explicit NamedCollectionsMetadataStorage(ContextPtr context_);
 
-    std::shared_ptr<INamedCollectionsStorage> storage;
+    [[nodiscard]] std::vector<std::string> listCollections() const;
 
-    NamedCollectionsMetadataStorage(std::shared_ptr<INamedCollectionsStorage> storage_, ContextPtr context_);
+    [[nodiscard]] cluster::protocol::NamedCollectionDescriptorPtr readDescriptor(const std::string & collection_name) const;
 
-    std::vector<std::string> listCollections() const;
+    void writeDescriptor(
+        const std::string & collection_name, const cluster::protocol::NamedCollectionDescriptorPtr & collection, bool replace = false);
 
-    ASTCreateNamedCollectionQuery readCreateQuery(const std::string & collection_name) const;
-
-    void writeCreateQuery(const String & collection_name, const String & create_statement, bool replace = false);
+    void writeCreateQuery(const ASTCreateNamedCollectionQuery & create_query, bool replace = false);
 };
-
+/// proton: ends
 
 }

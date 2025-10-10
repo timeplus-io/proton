@@ -72,6 +72,7 @@ void listKeys(
     std::set<std::string, std::less<>> & result,
     ssize_t depth);
 
+void setOverridable(Poco::Util::AbstractConfiguration & config, const std::string & path, bool value);    /// proton: updates
 std::optional<bool> isOverridable(const Poco::Util::AbstractConfiguration & config, const std::string & path);
 }
 

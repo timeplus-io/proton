@@ -1,0 +1,53 @@
+description: basic cases for named collection to config external table
+
+steps:
+  # create minio bucket
+  - type: minio
+    name: delete
+    bucket: smoketest-0048-named-collection
+
+  - type: minio
+    name: create
+    bucket: smoketest-0048-named-collection
+
+  # create external table
+  - type: query
+    sql: drop stream if exists ex_nc_00
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create named collection minio1 AS endpoint='http://minio:9000', access_key_id='minioroot', secret_access_key='minioroot';
+
+  - type: query
+    sql: |
+      create external table ex_nc_00 (
+        key string,
+        value int32
+      )
+      settings
+        type='s3', config_file='minio1', bucket='smoketest-0048-named-collection',
+        write_to='00_basic/data.json';
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      insert into ex_nc_00 values ('key No. 1', 10000)('key No. 2', 20000)('key No. 3', 40000)('key No. 4', 40000)('key No. 5', 50000)
+
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: nc-00-01
+    query: select unique(_file) as file_count from ex_nc_00
+    schema:
+      - name: file_count
+        type: uint64
+
+  - type: check
+    target_name: s3-00-01
+    expected_result:
+      - - 1

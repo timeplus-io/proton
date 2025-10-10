@@ -28,6 +28,13 @@ MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides(
 /// Dictionaries have collection name as name argument of dict configuration and other arguments are overrides.
 MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides(const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix, ContextPtr context);
 
+/// proton: starts
+/// Helper function to get named collection for external table and external stream.
+template <typename Settings>
+MutableNamedCollectionPtr
+tryGetNamedCollectionWithOverrides(const std::string & collection_name, const Settings & settings, ContextPtr context);
+/// proton: ends
+
 HTTPHeaderEntries getHeadersFromNamedCollection(const NamedCollection & collection);
 
 struct ExternalDatabaseEqualKeysSet

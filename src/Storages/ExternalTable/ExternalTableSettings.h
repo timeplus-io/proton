@@ -61,6 +61,7 @@ class ASTStorage;
       "The format of the data stored in the external table, for example JSONEachRow, not supported by all kinds of external tables.", \
       0) \
     M(String, config_file, "", "External table configuration file path", 0) \
+    M(String, named_collection, "", "External table named collection configuration", 0) \
     DBMS_EXTERNAL_TABLE_SETTINGS(M, ALIAS) \
     S3_EXTERNAL_TABLE_SETTINGS(M, ALIAS) \
     FORMAT_FACTORY_SETTINGS(M, ALIAS)

@@ -7,6 +7,14 @@
 
 namespace Poco { namespace Util { class AbstractConfiguration; } }
 
+/// proton: starts
+namespace cluster::protocol
+{
+struct NamedCollectionDescriptor;
+using NamedCollectionDescriptorPtr = std::shared_ptr<NamedCollectionDescriptor>;
+}
+/// proton: ends
+
 namespace DB
 {
 
@@ -32,6 +40,7 @@ public:
         NONE = 0,
         CONFIG = 1,
         SQL = 2,
+        DESCRIPTOR = 3, /// proton: added
     };
 
     bool has(const Key & key) const;
@@ -93,7 +102,6 @@ protected:
 
     void assertMutable() const;
 
-
     ImplPtr pimpl;
     const std::string collection_name;
     const bool is_mutable;
@@ -142,4 +150,28 @@ private:
         const Keys & keys);
 };
 
+/// proton: starts
+class NamedCollectionFromDescriptor final : public NamedCollection
+{
+public:
+    static MutableNamedCollectionPtr
+    create(const std::string & collection_name_, const cluster::protocol::NamedCollectionDescriptorPtr & descriptor)
+    {
+        return std::unique_ptr<NamedCollection>(new NamedCollectionFromDescriptor(collection_name_, descriptor));
+    }
+
+    String getCreateStatement(bool show_secrects) override;
+
+    void update(const ASTAlterNamedCollectionQuery & query) override;
+
+    NamedCollection::SourceId getSourceId() const override { return SourceId::DESCRIPTOR; }
+
+    cluster::protocol::NamedCollectionDescriptorPtr getDescriptor() const { return desc; }
+
+private:
+    NamedCollectionFromDescriptor(const std::string & collection_name_, cluster::protocol::NamedCollectionDescriptorPtr desc_);
+
+    cluster::protocol::NamedCollectionDescriptorPtr desc;
+};
+/// proton: ends
 }

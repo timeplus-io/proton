@@ -138,6 +138,12 @@ enum class OpCode : uint16_t
     AlterTask = 272,
     ListTasks = 273,
     GetTask = 274,
+
+    /// Named Collection CRUD
+    CreateNamedCollection = 280,
+    DeleteNamedCollection = 281,
+    ListNamedCollections = 282,
+    GetNamedCollection = 283,
 };
 
 /// Calculate request header version according to request opcode and request version

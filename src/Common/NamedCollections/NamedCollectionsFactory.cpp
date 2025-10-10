@@ -1,10 +1,10 @@
+#include <Core/BackgroundSchedulePool.h>
+#include <Interpreters/Context.h>
+#include <Parsers/ASTDropNamedCollectionQuery.h>
 #include <base/sleep.h>
 #include <Common/NamedCollections/NamedCollectionConfiguration.h>
 #include <Common/NamedCollections/NamedCollectionsFactory.h>
 #include <Common/NamedCollections/NamedCollectionsMetadataStorage.h>
-#include <Common/ZooKeeper/KeeperException.h>
-#include <Core/BackgroundSchedulePool.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -30,196 +30,109 @@ NamedCollectionFactory::~NamedCollectionFactory()
 
 void NamedCollectionFactory::shutdown()
 {
-    shutdown_called = true;
-    if (update_task)
-        update_task->deactivate();
     metadata_storage.reset();
 }
 
 bool NamedCollectionFactory::exists(const std::string & collection_name) const
 {
-    std::lock_guard lock(mutex);
-    return exists(collection_name, lock);
+    /// proton: starts
+    try
+    {
+        return get(collection_name) != nullptr;
+    }
+    catch (const Exception & ex)
+    {
+        if (ex.code() == ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST)
+            return false;
+        throw;
+    }
+    /// proton: ends
 }
 
 NamedCollectionPtr NamedCollectionFactory::get(const std::string & collection_name) const
 {
-    std::lock_guard lock(mutex);
-    auto collection = tryGet(collection_name, lock);
-    if (!collection)
-    {
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST,
-            "There is no named collection `{}`",
-            collection_name);
-    }
-    return collection;
+    /// proton: starts
+    return metadata_storage->get(collection_name);
+    /// proton: ends
 }
 
 NamedCollectionPtr NamedCollectionFactory::tryGet(const std::string & collection_name) const
 {
-    std::lock_guard lock(mutex);
-    return tryGet(collection_name, lock);
+    /// proton: starts
+    try
+    {
+        return get(collection_name);
+    }
+    catch (const Exception & ex)
+    {
+        if (ex.code() != ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST)
+            LOG_ERROR(log, "Failed to get named collection: name={} error={}", collection_name, ex.displayText());
+        return nullptr;
+    }
+    /// proton: ends
 }
 
 NamedCollectionsMap NamedCollectionFactory::getAll() const
 {
-    std::lock_guard lock(mutex);
-    return loaded_named_collections;
+    /// proton: starts
+    return metadata_storage->getAll();
+    /// proton: ends
 }
 
-bool NamedCollectionFactory::exists(const std::string & collection_name, std::lock_guard<std::mutex> &) const
+void NamedCollectionFactory::reloadFromConfig(const Poco::Util::AbstractConfiguration &)
 {
-    return loaded_named_collections.contains(collection_name);
+    /// proton: starts
+    /// Load from configuration is not implemented.
+    /// proton: ends
 }
 
-MutableNamedCollectionPtr NamedCollectionFactory::tryGet(
-    const std::string & collection_name,
-    std::lock_guard<std::mutex> &) const
+void NamedCollectionFactory::createFromSQL(const ASTCreateNamedCollectionQuery & query)
 {
-    auto it = loaded_named_collections.find(collection_name);
-    if (it == loaded_named_collections.end())
-        return nullptr;
-    return it->second;
+    /// proton: starts
+    metadata_storage->create(query);
+    /// proton: ends
 }
 
-MutableNamedCollectionPtr NamedCollectionFactory::getMutable(
-    const std::string & collection_name,
-    std::lock_guard<std::mutex> & lock) const
+void NamedCollectionFactory::removeFromSQL(const ASTDropNamedCollectionQuery & query)
 {
-    auto collection = tryGet(collection_name, lock);
-    if (!collection)
+    /// proton: starts
+    if (query.if_exists)
+        metadata_storage->removeIfExists(query.collection_name);
+    else
+        metadata_storage->remove(query.collection_name);
+    /// proton: ends
+}
+
+void NamedCollectionFactory::updateFromSQL(const ASTAlterNamedCollectionQuery & query)
+{
+    /// proton: starts
+    auto collection_name = query.collection_name;
+    if (!exists(collection_name))
     {
+        if (query.if_exists)
+            return;
+
         throw Exception(
             ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST,
-            "There is no named collection `{}`",
+            "Cannot update collection `{}`, because it doesn't exist",
             collection_name);
     }
-    if (!collection->isMutable())
-    {
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_IS_IMMUTABLE,
-            "Cannot get collection `{}` for modification, "
-            "because collection was defined as immutable",
-            collection_name);
-    }
-    return collection;
+    metadata_storage->update(query);
+    /// proton: ends
 }
 
-void NamedCollectionFactory::add(
-    const std::string & collection_name,
-    MutableNamedCollectionPtr collection,
-    std::lock_guard<std::mutex> &)
+void NamedCollectionFactory::reloadFromSQL()
 {
-    auto [it, inserted] = loaded_named_collections.emplace(collection_name, collection);
-    if (!inserted)
-    {
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS,
-            "A named collection `{}` already exists",
-            collection_name);
-    }
+    /// proton: starts
+    /// Do nothing as named collections are not cached
+    /// proton: ends
 }
 
-void NamedCollectionFactory::add(NamedCollectionsMap collections, std::lock_guard<std::mutex> & lock)
+bool NamedCollectionFactory::usesReplicatedStorage()
 {
-    for (const auto & [collection_name, collection] : collections)
-        add(collection_name, collection, lock);
-}
-
-void NamedCollectionFactory::remove(const std::string & collection_name, std::lock_guard<std::mutex> & lock)
-{
-    bool removed = removeIfExists(collection_name, lock);
-    if (!removed)
-    {
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST,
-            "There is no named collection `{}`",
-            collection_name);
-    }
-}
-
-bool NamedCollectionFactory::removeIfExists(
-    const std::string & collection_name,
-    std::lock_guard<std::mutex> & lock)
-{
-    auto collection = tryGet(collection_name, lock);
-    if (!collection)
-        return false;
-
-    if (!collection->isMutable())
-    {
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_IS_IMMUTABLE,
-            "Cannot get collection `{}` for modification, "
-            "because collection was defined as immutable",
-            collection_name);
-    }
-    loaded_named_collections.erase(collection_name);
-    return true;
-}
-
-void NamedCollectionFactory::removeById(NamedCollection::SourceId id, std::lock_guard<std::mutex> &)
-{
-    std::erase_if(
-        loaded_named_collections,
-        [&](const auto & value) { return value.second->getSourceId() == id; });
-}
-
-namespace
-{
-    constexpr auto NAMED_COLLECTIONS_CONFIG_PREFIX = "named_collections";
-
-    std::vector<std::string> listCollections(const Poco::Util::AbstractConfiguration & config)
-    {
-        Poco::Util::AbstractConfiguration::Keys collections_names;
-        config.keys(NAMED_COLLECTIONS_CONFIG_PREFIX, collections_names);
-        return collections_names;
-    }
-
-    MutableNamedCollectionPtr getCollection(
-        const Poco::Util::AbstractConfiguration & config,
-        const std::string & collection_name)
-    {
-        const auto collection_prefix = fmt::format("{}.{}", NAMED_COLLECTIONS_CONFIG_PREFIX, collection_name);
-        std::queue<std::string> enumerate_input;
-        std::set<std::string, std::less<>> enumerate_result;
-
-        enumerate_input.push(collection_prefix);
-        NamedCollectionConfiguration::listKeys(config, std::move(enumerate_input), enumerate_result, -1);
-
-        /// Collection does not have any keys. (`enumerate_result` == <collection_path>).
-        const bool collection_is_empty = enumerate_result.size() == 1
-            && *enumerate_result.begin() == collection_prefix;
-
-        std::set<std::string, std::less<>> keys;
-        if (!collection_is_empty)
-        {
-            /// Skip collection prefix and add +1 to avoid '.' in the beginning.
-            for (const auto & path : enumerate_result)
-                keys.emplace(path.substr(collection_prefix.size() + 1));
-        }
-
-        return NamedCollectionFromConfig::create(
-            config, collection_name, collection_prefix, keys);
-    }
-
-    NamedCollectionsMap getNamedCollections(const Poco::Util::AbstractConfiguration & config)
-    {
-        NamedCollectionsMap result;
-        for (const auto & collection_name : listCollections(config))
-        {
-            if (result.contains(collection_name))
-            {
-                throw Exception(
-                    ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS,
-                    "Found duplicate named collection `{}`",
-                    collection_name);
-            }
-            result.emplace(collection_name, getCollection(config, collection_name));
-        }
-        return result;
-    }
+    /// proton: starts
+    return false;
+    /// proton: ends
 }
 
 void NamedCollectionFactory::loadIfNot()
@@ -236,180 +149,8 @@ bool NamedCollectionFactory::loadIfNot([[maybe_unused]] std::lock_guard<std::mut
     auto context = Context::getGlobalContextInstance();
     metadata_storage = NamedCollectionsMetadataStorage::create(context);
 
-    loadFromConfig(context->getConfigRef(), lock);
-    loadFromSQL(lock);
-
-    if (metadata_storage->isReplicated())
-    {
-        update_task = context->getSchedulePool().createTask("NamedCollectionsMetadataStorage", [this]{ updateFunc(); });
-        update_task->activate();
-        update_task->schedule();
-    }
-
     loaded = true;
     return true;
-}
-
-void NamedCollectionFactory::loadFromConfig(const Poco::Util::AbstractConfiguration & config, std::lock_guard<std::mutex> & lock)
-{
-    auto collections = getNamedCollections(config);
-    LOG_TEST(log, "Loaded {} collections from config", collections.size());
-    add(std::move(collections), lock);
-}
-
-void NamedCollectionFactory::reloadFromConfig(const Poco::Util::AbstractConfiguration & config)
-{
-    std::lock_guard lock(mutex);
-    if (loadIfNot(lock))
-        return;
-
-    auto collections = getNamedCollections(config);
-    LOG_TEST(log, "Loaded {} collections from config", collections.size());
-
-    removeById(NamedCollection::SourceId::CONFIG, lock);
-    add(std::move(collections), lock);
-}
-
-void NamedCollectionFactory::loadFromSQL(std::lock_guard<std::mutex> & lock)
-{
-    auto collections = metadata_storage->getAll();
-    LOG_TEST(log, "Loaded {} collections from sql", collections.size());
-    add(std::move(collections), lock);
-}
-
-void NamedCollectionFactory::createFromSQL(const ASTCreateNamedCollectionQuery & query)
-{
-    std::lock_guard lock(mutex);
-    loadIfNot(lock);
-
-    if (exists(query.collection_name, lock))
-    {
-        if (query.if_not_exists)
-            return;
-
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS,
-            "A named collection `{}` already exists",
-            query.collection_name);
-    }
-
-    add(query.collection_name, metadata_storage->create(query), lock);
-}
-
-void NamedCollectionFactory::removeFromSQL(const ASTDropNamedCollectionQuery & query)
-{
-    std::lock_guard lock(mutex);
-    loadIfNot(lock);
-
-    if (!exists(query.collection_name, lock))
-    {
-        if (query.if_exists)
-            return;
-
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST,
-            "Cannot remove collection `{}`, because it doesn't exist",
-            query.collection_name);
-    }
-
-    metadata_storage->remove(query.collection_name);
-    remove(query.collection_name, lock);
-}
-
-void NamedCollectionFactory::updateFromSQL(const ASTAlterNamedCollectionQuery & query)
-{
-    std::lock_guard lock(mutex);
-    loadIfNot(lock);
-
-    auto collection_name = query.collection_name;
-    if (!exists(collection_name, lock))
-    {
-        if (query.if_exists)
-            return;
-
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_DOESNT_EXIST,
-            "Cannot update collection `{}`, because it doesn't exist",
-            collection_name);
-    }
-    auto updated_collection_ptr = metadata_storage->update(query);
-
-    auto it = loaded_named_collections.find(collection_name);
-    if (it == loaded_named_collections.end())
-    {
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "The named collection {} unexpectedly does not exist.",
-            collection_name);
-    }
-
-    if (!it->second->isMutable())
-    {
-        throw Exception(
-            ErrorCodes::NAMED_COLLECTION_IS_IMMUTABLE,
-            "Cannot get collection `{}` for modification, "
-            "because collection was defined as immutable",
-            collection_name);
-    }
-    it->second = updated_collection_ptr;
-}
-
-void NamedCollectionFactory::reloadFromSQL()
-{
-    std::lock_guard lock(mutex);
-    if (loadIfNot(lock))
-        return;
-
-    auto collections = metadata_storage->getAll();
-    removeById(NamedCollection::SourceId::SQL, lock);
-    add(std::move(collections), lock);
-}
-
-bool NamedCollectionFactory::usesReplicatedStorage()
-{
-    std::lock_guard lock(mutex);
-    loadIfNot(lock);
-    return metadata_storage->isReplicated();
-}
-
-void NamedCollectionFactory::updateFunc()
-{
-    LOG_TRACE(log, "Named collections background updating thread started");
-
-    while (!shutdown_called.load())
-    {
-        if (metadata_storage->waitUpdate())
-        {
-            try
-            {
-                reloadFromSQL();
-            }
-            catch (const Coordination::Exception & e)
-            {
-                if (Coordination::isHardwareError(e.code))
-                {
-                    LOG_INFO(log, "Lost ZooKeeper connection, will try to connect again: {}",
-                            DB::getCurrentExceptionMessage(true));
-
-                    sleepForSeconds(1);
-                }
-                else
-                {
-                    tryLogCurrentException(__PRETTY_FUNCTION__);
-                    chassert(false);
-                }
-                continue;
-            }
-            catch (...)
-            {
-                DB::tryLogCurrentException(__PRETTY_FUNCTION__);
-                chassert(false);
-                continue;
-            }
-        }
-    }
-
-    LOG_TRACE(log, "Named collections background updating thread finished");
 }
 
 }

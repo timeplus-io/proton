@@ -424,6 +424,18 @@ void MetadataUpdater::apply(cluster::EntryPtrs entries)
                 handleAlterTask(*req, request_header, sn);
                 break;
             }
+            case cluster::protocol::OpCode::CreateNamedCollection:
+            {
+                auto req = std::dynamic_pointer_cast<cluster::CreateNamedCollectionRequest>(req_with_size.request);
+                handleCreateNamedCollection(*req, request_header, sn);
+                break;
+            }
+            case cluster::protocol::OpCode::DeleteNamedCollection:
+            {
+                auto req = std::dynamic_pointer_cast<cluster::DeleteNamedCollectionRequest>(req_with_size.request);
+                handleDeleteNamedCollection(*req, request_header, sn);
+                break;
+            }
             default:
             {
                 LOG_ERROR(logger, "{} is not implemented", magic_enum::enum_name(request_header.requestOpCode()));
