@@ -17,8 +17,8 @@ jobs:
   update_version:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
     with:
-      ec2-instance-type: t4g.medium
-      ec2-image-id: ${{ vars.ARM_AMI }}
+      ec2-instance-type: c5.large
+      ec2-image-id: ami-042a37e33a285c22b
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
       upjob: update_version
@@ -28,7 +28,7 @@ jobs:
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
-        
+
         # update version
         if [ "${{ inputs.prerelease }}" == "true" ]; then
           ./release --rc --version patch
@@ -131,11 +131,14 @@ jobs:
         cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
         rm -rf resources/protos/google/protobuf/unittest_*
 
-        # build docker image (using the stripped binary)
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/$PROTON_BINARY -t timeplus/proton:${GITHUB_SHA}_amd64
+        # build docker image for both Docker Hub and GHCR (using the stripped binary)
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/$PROTON_BINARY \
+          -t timeplus/proton:${GITHUB_SHA}_amd64 \
+          -t ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64
 
-        # push docker image
+        # push docker image to both registries
         docker push timeplus/proton:${GITHUB_SHA}_amd64
+        docker push ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -219,11 +222,14 @@ jobs:
         cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
         rm -rf resources/protos/google/protobuf/unittest_*
 
-        # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:${GITHUB_SHA}_arm64v8
+        # build docker image for both Docker Hub and GHCR
+        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton \
+          -t timeplus/proton:${GITHUB_SHA}_arm64v8 \
+          -t ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
 
-        # push docker image
+        # push docker image to both registries
         docker push timeplus/proton:${GITHUB_SHA}_arm64v8
+        docker push ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
 
         # upload build cache
         tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -252,10 +258,14 @@ jobs:
         # git config
         git config user.name "proton-robot"
         git config user.email "proton_robot@timeplus.io"
-        
+
+        # Pull images from both registries
         docker pull timeplus/proton:${GITHUB_SHA}_amd64
         docker pull timeplus/proton:${GITHUB_SHA}_arm64v8
+        docker pull ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64
+        docker pull ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
 
+        # Create and push Docker Hub manifests
         docker manifest create timeplus/proton:develop \
           timeplus/proton:${GITHUB_SHA}_amd64 \
           timeplus/proton:${GITHUB_SHA}_arm64v8
@@ -267,13 +277,34 @@ jobs:
         docker manifest push timeplus/proton:develop
         docker manifest push timeplus/proton:latest
 
+        # Create and push GHCR manifests
+        docker manifest create ghcr.io/timeplus-io/proton:develop \
+          ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64 \
+          ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
+
+        docker manifest create ghcr.io/timeplus-io/proton:latest \
+          ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64 \
+          ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
+
+        docker manifest push ghcr.io/timeplus-io/proton:develop
+        docker manifest push ghcr.io/timeplus-io/proton:latest
+
+        # Get version tag and create version-specific manifests for both registries
         PROTON_TAG="$(docker history --no-trunc timeplus/proton:${GITHUB_SHA}_amd64 | grep -Eo 'ARG version=[0-9]+.[0-9]+.[0-9]+(-[a-zA-Z0-9.]+)?' -o | grep -Eo '[0-9]+.[0-9]+.[0-9]+(-[a-zA-Z0-9.]+)?')"
 
+        # Docker Hub version tag
         docker manifest create timeplus/proton:$PROTON_TAG \
           timeplus/proton:${GITHUB_SHA}_amd64 \
           timeplus/proton:${GITHUB_SHA}_arm64v8
 
         docker manifest push timeplus/proton:$PROTON_TAG
+
+        # GHCR version tag
+        docker manifest create ghcr.io/timeplus-io/proton:$PROTON_TAG \
+          ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64 \
+          ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
+
+        docker manifest push ghcr.io/timeplus-io/proton:$PROTON_TAG
 
         export REF="${GITHUB_REF#refs/heads/}"
         echo "branch_name: $REF"
