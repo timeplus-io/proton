@@ -2,7 +2,8 @@ name: NightlyTest
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
-  schedule:
+  # Disabled nightly test schedule
+  # schedule:
     # *     *     *     *     *
     # ┬     ┬     ┬     ┬     ┬
     # │     │     │     │     │
@@ -13,8 +14,8 @@ on: # yamllint disable-line rule:truthy
     # │     └──────────────────── hour (0 - 23)
     # └───────────────────────── minute (0 - 59)
     # build at 00:30(UTC) on every day
-    - cron:  '00 23 * * 0,1,2,3,4,6'
-    - cron:  '00 23 * * 5'
+#    - cron:  '00 23 * * 0,1,2,3,4,6'
+#    - cron:  '00 23 * * 5'
 
 jobs:
   prepare_sanitizer_build:

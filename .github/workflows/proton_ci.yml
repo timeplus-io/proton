@@ -54,6 +54,10 @@ jobs:
         # compiling
         ./docker/packager/packager --package-type binary --docker-image-version clang-19 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
+        # upload ccache back to S3
+        tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
+
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache
         rm -rf build_docker
