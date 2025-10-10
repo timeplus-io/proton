@@ -1,0 +1,2 @@
+# SSL certificates and keys - generated dynamically by cert.sh
+deployment/clickhouse/certs/
