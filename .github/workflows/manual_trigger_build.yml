@@ -237,7 +237,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   build_x64:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'x64' && github.event.inputs.build_type != 'release')
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -260,7 +260,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_x64_release_or_debug:
     needs: prepare_release_or_debug
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'x64' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'relwithdebinfo'))
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
@@ -283,7 +283,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm:
     needs: prepare_sanitizer
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'arm' && github.event.inputs.build_type != 'release')
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -306,7 +306,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   build_arm_release_or_debug:
     needs: prepare_release_or_debug
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.OS == 'linux' && (github.event.inputs.arch == 'arm' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'relwithdebinfo'))
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
@@ -331,7 +331,7 @@ jobs:
 
   Build_macOS_X86_64:
     if: github.event.inputs.OS == 'macos' && github.event.inputs.arch == 'x64'
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6i.8xlarge
       ec2-image-id: ami-042a37e33a285c22b

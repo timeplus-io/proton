@@ -183,7 +183,7 @@ jobs:
   upload_data_x64:
     needs: [prepare_upload_data]
     if: ${{ inputs.arch == 'x64' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c7i.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -209,7 +209,7 @@ jobs:
   upload_data_arm:
     needs: [prepare_upload_data]
     if: ${{ inputs.arch == 'arm' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -235,7 +235,7 @@ jobs:
   compatibility_test_x64:
     needs: [prepare_compatibility_test]
     if: ${{ inputs.arch == 'x64' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c7i.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -261,7 +261,7 @@ jobs:
   compatibility_test_arm:
     needs: [prepare_compatibility_test]
     if: ${{ inputs.arch == 'arm' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -287,7 +287,7 @@ jobs:
   binary_size_regression_test_x64:
     needs: [prepare_binary_size_regression_test]
     if: ${{ inputs.arch == 'x64' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@proton-3.0-migration
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.large
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
