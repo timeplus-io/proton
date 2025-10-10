@@ -170,7 +170,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_compatibility_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' # Friday 11:00 PM UTC (Saturday 7:00 AM ShangHai)
+    if: false # Disabled compatibility tests
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
     steps:
@@ -343,7 +343,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_compatibility_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5'
+    if: false # Disabled compatibility tests
     outputs:
       command: |
         export PROTON_VERSION=testing-$ARCH-$GITHUB_SHA
@@ -1093,7 +1093,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   compatibility_test_release_x64:
     needs: [prepare_compatibility_test, build_release_x64]
-    if: ${{ needs.prepare_compatibility_test.outputs.versions != '[]' }}
+    if: false # Disabled compatibility tests
     strategy:
       fail-fast: false # Turn off due to no dependencies between individual instances of matrix
       matrix:

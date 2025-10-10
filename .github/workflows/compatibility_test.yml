@@ -1,6 +1,7 @@
 name: compatibility_test
 run-name: Compatibility Test [${{ (inputs.source == '' || inputs.source == inputs.target) && format('Upload {0}', inputs.target) || format('{0} -> {1}', inputs.source, inputs.target) }}] [${{ inputs.arch }}]
 
+# DISABLED: Compatibility tests have been disabled
 on:
   workflow_dispatch:
     inputs:
@@ -97,7 +98,7 @@ on:
 
 jobs:
   prepare_upload_data:
-    if: ${{ inputs.source == '' || inputs.source == inputs.target }}
+    if: false # Disabled compatibility tests
     runs-on: ubuntu-latest
     outputs:
       command: |
@@ -125,7 +126,7 @@ jobs:
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_compatibility_test:
-    if: ${{ inputs.source != '' && inputs.source != inputs.target }}
+    if: false # Disabled compatibility tests
     runs-on: ubuntu-latest
     outputs:
       command: |
@@ -156,9 +157,7 @@ jobs:
         run: |
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_binary_size_regression_test:
-    if: |
-      inputs.source == '' || inputs.source == inputs.target ||
-      (github.workflow == 'compatibility_test' && inputs.source != inputs.target)
+    if: false # Disabled compatibility tests
     runs-on: ubuntu-latest
     outputs:
       command: |

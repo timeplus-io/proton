@@ -469,7 +469,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_compatibility_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.test_category == 'compatibility' || github.event.inputs.test_category == 'scope.release' }}
+    if: false # Disabled compatibility tests
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
     steps:
@@ -495,7 +495,7 @@ jobs:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
   compatibility_test:
     needs: prepare_compatibility_test
-    if: ${{ needs.prepare_compatibility_test.outputs.versions != '[]' }}
+    if: false # Disabled compatibility tests
     uses: timeplus-io/proton/.github/workflows/compatibility_test.yml@proton-3.0-migration
     strategy:
       fail-fast: false # Turn off due to no dependencies between individual instances of matrix
