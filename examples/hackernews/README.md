@@ -5,7 +5,7 @@ Inspired by https://bytewax.io/blog/polling-hacker-news, you can call Hacker New
 ## Start the example
 
 Simply run `docker compose up` in this folder and it will start
-1. ghcr.io/timeplus-io/proton:latest, with pre-configured streams, materialized views and views.
+1. d.timeplus.com/timeplus-io/proton:latest, with pre-configured streams, materialized views and views.
 2. timeplus/hackernews_bytewax:latest, leveraging [bytewax](https://bytewax.io) to call Hacker News HTTP API with Bytewax and send latest news to Proton. [Source code](https://github.com/timeplus-io/proton-python-driver/tree/develop/example/bytewax)
 3. A pre-configured Grafana instance to visulaize the live data.
 
@@ -36,7 +36,7 @@ With all those streams and views, you can query the data in whatever ways, e.g.
 ```sql
 select * from comment;
 
-select 
+select
     story._tp_time as story_time,comment._tp_time as comment_time,
     story.id as story_id, comment.id as comment_id,
     substring(story.title,1,20) as title,substring(comment.raw:text,1,20) as comment

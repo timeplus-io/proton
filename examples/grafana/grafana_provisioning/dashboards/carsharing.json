@@ -65,9 +65,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
@@ -80,7 +78,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select now()",
+          "sql": "select now()",
           "refId": "A"
         }
       ],
@@ -123,9 +121,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -140,7 +136,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select count() from car_live_data",
+          "sql": "select count() from car_live_data",
           "refId": "A"
         }
       ],
@@ -183,9 +179,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -200,7 +194,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select count() from car_live_data where _tp_time>earliest_ts()",
+          "sql": "select count() from car_live_data where _tp_time>earliest_ts()",
           "refId": "A"
         }
       ],
@@ -321,11 +315,11 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select longitude, latitude,speed_kmh,cid from car_live_data where cid like '%1'",
+          "sql": "select longitude, latitude,speed_kmh,cid from car_live_data where cid like '%1'",
           "refId": "A"
         }
       ],
-      "title": "Panel Title",
+      "title": "Car Locations",
       "type": "geomap"
     }
   ],

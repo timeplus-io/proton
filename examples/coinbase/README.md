@@ -1,20 +1,17 @@
 # Demo for Benthos data pipeline and Coinbase websocket data
 
-
-
-This docker compose file demonstrates how to ingest WebSocket data into Proton by using Benthos pipeline. 
-
-
+This docker compose file demonstrates how to ingest WebSocket data into Timeplus Proton by using Benthos(a.k.a. Redpanda Connect) pipeline.
 
 ## Start the stack
 
 Simply run `docker compose up` in this folder. Three docker containers in the stack:
 
-1. ghcr.io/timeplus-io/proton:latest, as the streaming database
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming database
 2. jeffail/benthos:latest, a [Benthos](https://www.benthos.dev/) service as the data pipeline
-3. init container, create the tickers stream when Proton database server is ready
+3. init_timeplus_resources, create the tickers stream when Proton database server is ready
+4. init-pipeline, create the Benthos pipeline to ingest data to Proton
 
-the ddl to create the stream is:
+The ddl to create the stream is:
 
 ```sql
 CREATE STREAM IF NOT EXISTS tickers (
@@ -38,11 +35,9 @@ CREATE STREAM IF NOT EXISTS tickers (
 )
 ```
 
-## Create a ingest data pipeline
+The following ingest pipeline will be created by `init-pipeline` container
 
-following ingest pipeline will be created by `init-pipeline` container
-
-```
+```yaml
 input:
   label: coinbase
   websocket:
@@ -54,7 +49,7 @@ output:
   http_client:
     url: http://proton:8123/proton/v1/ingest/streams/tickers
     verb: POST
-    headers: 
+    headers:
       Content-Type: application/json
     batching:
       count: 10
@@ -68,12 +63,12 @@ output:
 
 ```
 
-this pipeline will read data from coinbase websocket and then send the result to proton ingest api in a batch
+This pipeline will read data from Coinbase WebSocket and then send the result to Proton ingest API in a batch.
 
 
 ## Query you crypto price data with SQL
 
-now you can run following query to get the OHLC of the crypto data:
+Now you can run the following query to get the OHLC of the crypto data:
 
 ```sql
 SELECT
@@ -86,4 +81,10 @@ GROUP BY
   window_start, product_id
 ```
 
-
+Sample output:
+```
+┌─────────────window_start─┬─product_id─┬────open─┬────high─┬─────low─┬───close─┐
+│ 2025-04-19 18:16:00.000Z │ ETH-EUR    │ 1420.28 │  1420.3 │ 1420.03 │ 1420.28 │
+│ 2025-04-19 18:16:00.000Z │ ETH-USD    │    1618 │ 1618.02 │ 1617.75 │    1618 │
+└──────────────────────────┴────────────┴─────────┴─────────┴─────────┴─────────┘
+```

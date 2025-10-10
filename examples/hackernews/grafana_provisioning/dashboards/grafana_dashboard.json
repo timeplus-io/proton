@@ -58,9 +58,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -75,7 +73,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select count() from story",
+          "sql": "select count() from story",
           "refId": "A"
         }
       ],
@@ -118,9 +116,7 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -135,7 +131,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select count() from comment",
+          "sql": "select count() from comment",
           "refId": "A"
         }
       ],
@@ -227,7 +223,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select `by`,count() as comments,emit_version() from comment where `by`<>'' group by `by` order by comments desc limit 5 by emit_version()",
+          "sql": "select `by`,count() as comments,emit_version() from comment where `by`<>'' group by `by` order by comments desc limit 5 by emit_version()",
           "refId": "A"
         }
       ],
@@ -337,9 +333,7 @@
         "footer": {
           "countRows": true,
           "fields": "",
-          "reducer": [
-            "count"
-          ],
+          "reducer": ["count"],
           "show": true
         },
         "showHeader": true,
@@ -353,7 +347,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select _tp_time,id,`by`,title from story",
+          "sql": "select _tp_time,id,`by`,title from story",
           "refId": "A"
         }
       ],
@@ -469,9 +463,7 @@
         "footer": {
           "countRows": true,
           "fields": "",
-          "reducer": [
-            "count"
-          ],
+          "reducer": ["count"],
           "show": true
         },
         "showHeader": true,
@@ -485,7 +477,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select _tp_time,id,root_id,`by`,raw:text as text from comment",
+          "sql": "select _tp_time,id,root_id,`by`,raw:text as text from comment",
           "refId": "A"
         }
       ],
@@ -649,9 +641,7 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true,
@@ -665,7 +655,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "queryText": "select \n    story._tp_time as story_time,comment._tp_time as comment_time,\n    story.id as story_id, comment.id as comment_id,\n    story.title as title,comment.raw:text as comment\nfrom story join comment on story.id=comment.root_id",
+          "sql": "select \n    story._tp_time as story_time,comment._tp_time as comment_time,\n    story.id as story_id, comment.id as comment_id,\n    story.title as title,comment.raw:text as comment\nfrom story join comment on story.id=comment.root_id",
           "refId": "A"
         }
       ],

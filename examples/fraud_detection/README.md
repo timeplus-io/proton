@@ -5,7 +5,7 @@ This docker compose file demonstrates how to leverage proton to build a real-tim
 ## Start the example
 
 Simply run `docker compose up` in this folder. three docker containers in the stack:
-1. ghcr.io/timeplus-io/proton:latest, as the streaming database.
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming database.
 2. timeplus/fraud:latest, a online payment transaction data generator
 3. jupyter/scipy-notebook:latest, jupyter notebook
 
@@ -13,4 +13,3 @@ Simply run `docker compose up` in this folder. three docker containers in the st
 ## Run Notebook
 
 Visit `http://localhost:8888/notebooks/work/fraud_detection.ipynb` to access the notebook. And then just follow the code in the notebook step by step.
-

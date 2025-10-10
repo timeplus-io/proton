@@ -105,8 +105,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "isStreaming": true,
-          "queryText": "select array_join(xyz) as v, multi_if(v[1]=1,'x',v[1]=2,'y','z') as axis, v[2] as value, time from(\nselect to_datetime64((p:time::int64)/1000000000,3) as time,[[1,to_float32_or_zero(p:values.x)],[2,to_float32_or_zero(p:values.y)],[3,to_float32_or_zero(p:values.z)]] as xyz from (select array_join(json_extract_array(raw,'payload')) as p from phone where p:name='gyroscope')\n)",
+          "sql": "select array_join(xyz) as v, multi_if(v[1]=1,'x',v[1]=2,'y','z') as axis, v[2] as value, time from(\nselect to_datetime64((p:time::int64)/1000000000,3) as time,[[1,to_float32_or_zero(p:values.x)],[2,to_float32_or_zero(p:values.y)],[3,to_float32_or_zero(p:values.z)]] as xyz from (select array_join(json_extract_array(raw,'payload')) as p from phone where p:name='gyroscope')\n)",
           "refId": "A"
         }
       ],
@@ -168,9 +167,7 @@
       "id": 2,
       "options": {
         "dims": {
-          "exclude": [
-            "z"
-          ]
+          "exclude": ["z"]
         },
         "legend": {
           "calcs": [],
@@ -192,8 +189,7 @@
             "type": "timeplus-proton-datasource",
             "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
           },
-          "isStreaming": true,
-          "queryText": "select to_datetime64((p:time::int64)/1000000000,3) as time,to_float32_or_zero(p:values.x) as x,to_float32_or_zero(p:values.y) as y,to_float32_or_zero(p:values.z) as z from (select array_join(json_extract_array(raw,'payload')) as p from phone where p:name='gyroscope')\n",
+          "sql": "select to_datetime64((p:time::int64)/1000000000,3) as time,to_float32_or_zero(p:values.x) as x,to_float32_or_zero(p:values.y) as y,to_float32_or_zero(p:values.z) as z from (select array_join(json_extract_array(raw,'payload')) as p from phone where p:name='gyroscope')\n",
           "refId": "A"
         }
       ],

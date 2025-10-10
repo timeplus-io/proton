@@ -15,13 +15,13 @@ Install [Docker Desktop](https://docs.docker.com/desktop/) and fork this repo or
 Wait for about half a minute to have all containers up running.
 
 ### Step 2: install mobile app and push data to Proton
-Download Sensor Logger at www.tszheichoi.com/sensorlogger. 
+Download Sensor Logger at www.tszheichoi.com/sensorlogger.
 
 | Android | iOS |
 |:-:|:-:|
 | [<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="50">](https://play.google.com/store/apps/details?id=com.kelvin.sensorapp&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1) | [<img src="https://developer.apple.com/app-store/marketing/guidelines/images/badge-example-preferred_2x.png" height="50">](https://apps.apple.com/app/id1531582925) |
 
-Open the app, and go to the settings page, by clicking the button at the bottom. 
+Open the app, and go to the settings page, by clicking the button at the bottom.
 1. Click the `Data Streaming` menu.
 2. Turn on `Enable HTTP Push`.
 3. Get your IP for your server (on Mac, you can hold Option key and click the WiFi icon to get the IP address), and set the `Push URL` as `http://<ip>:8000`
@@ -29,6 +29,4 @@ Open the app, and go to the settings page, by clicking the button at the bottom.
 
 ### Step 3: view the live dashboard in Grafana
 
-In your laptop/server, access `http://localhost:3000` and open the `Phone Sensor`
-
-
+In your laptop/server, access the Grafana UI via `http://localhost:3000` and open the `Phone Sensor` dashboard.

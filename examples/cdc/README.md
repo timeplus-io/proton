@@ -5,7 +5,8 @@ This docker compose file demonstrates how to capture live database change from a
 ## Start the example
 
 Simply run `docker compose up` in this folder. Five docker containers in the stack:
-1. ghcr.io/timeplus-io/proton:latest, as the streaming database.
+
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming database.
 2. docker.redpanda.com/redpandadata/redpanda, as the Kafka compatiable streaming message bus
 3. docker.redpanda.com/redpandadata/console, as the web UI to explore data in Kafka/Redpanda
 4. debezium/connect, as the CDC engine to read changes from OLTP and send data to Kafka/Redpanda
@@ -29,7 +30,9 @@ PRIMARY KEY (id);
 ```
 
 ## Create the CDC job
+
 Perform the following command in your host server, since port 8083 is exposed from Debezium Connect.
+
 ```shell
 curl --request POST \
   --url http://localhost:8083/connectors \
