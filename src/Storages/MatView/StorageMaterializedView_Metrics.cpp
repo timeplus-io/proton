@@ -70,8 +70,11 @@ StorageMaterializedView::PipelineResourceMetrics StorageMaterializedView::getPip
     /// of the query context object.
     auto query_context_holder = pipeline_state.query_context;
     auto block_io = pipeline_state.io.load();
+    if (!block_io)
+        return metrics;
+
     auto process_list_entry = block_io->process_list_entry;
-    if (!block_io || !process_list_entry)
+    if (!process_list_entry)
         return metrics;
 
     /// Get dynamic metrics only (memory and CPU) - skip static thread_list
@@ -185,8 +188,11 @@ StorageMaterializedView::Metrics StorageMaterializedView::getMetrics() const
 String StorageMaterializedView::getPipelineMetrics() const
 {
     auto block_io = pipeline_state.io.load();
+    if (!block_io)
+        return "";
+
     auto process_list_entry = block_io->process_list_entry;
-    if (!block_io || !process_list_entry)
+    if (!process_list_entry)
         return "";
 
     return process_list_entry->getQueryStatus()->getPipelineMetric(pipeline_state.cached_thread_ids);
