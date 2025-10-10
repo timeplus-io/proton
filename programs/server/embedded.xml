@@ -51,14 +51,17 @@
       <asynchronous_metrics>true</asynchronous_metrics>
       <status_info>true</status_info>
       <external_stream>true</external_stream>
+      <materialized_view>true</materialized_view>
+      <query_info>true</query_info>
+      <cluster>true</cluster>
   </prometheus>
 
   <stream_metric_log>
       <engine>
-        engine Stream(1, 1, rand())
+        engine Stream(1, rand())
         order by (to_hour(_tp_time), database, name)
         ttl to_datetime(_tp_time) + INTERVAL 1 YEAR DELETE
-        settings logstore_codec='zstd', index_granularity=8192
+        settings logstore_codec='zstd'
       </engine>
       <database>system</database>
       <table>stream_metric_log</table>
@@ -68,11 +71,11 @@
 
   <stream_state_log>
    <engine>
-        engine Stream(1, 1, weak_hash32(node_id))
+        engine Stream(1, weak_hash32(node_id))
         primary key (database, name, state_name, dimension, node_id)
         order by (database, name, state_name, dimension, node_id)
         ttl to_datetime(_tp_time) + INTERVAL 2 MONTH DELETE
-        settings mode = 'versioned_kv', logstore_codec='zstd', index_granularity=8192
+        settings mode = 'versioned_kv', logstore_codec='zstd'
    </engine>
       <database>system</database>
       <table>stream_state_log</table>
@@ -82,7 +85,7 @@
 
   <mat_view_dlq>
    <engine>
-        engine Stream(1, 1, weak_hash32(node_id))
+        engine Stream(1, weak_hash32(node_id))
         order by (to_hour(_tp_time), database, view_name)
         ttl to_datetime(_tp_time) + INTERVAL 2 MONTH DELETE
         settings logstore_codec='zstd'
@@ -102,8 +105,8 @@
             shard uint64,
             sn int64
         )
-        TTL to_datetime(_tp_time) + INTERVAL 3 MONTH DELETE
         PRIMARY KEY (uuid, shard)
+        TTL to_datetime(_tp_time) + INTERVAL 3 MONTH DELETE
         SETTINGS mode='versioned_kv'
       </ddl>
     </alert_ckpt_log>
@@ -198,27 +201,35 @@
       <max_insert_block_size>65409</max_insert_block_size>
       <nlog_adhoc_pool_size>16</nlog_adhoc_pool_size>
       <optimize_aggregation_emit_on_updates>true</optimize_aggregation_emit_on_updates>
+      <recovery_retry_for_same_error>1000000000000</recovery_retry_for_same_error>
+      <v8_log_interval_ms>30000</v8_log_interval_ms>
+      <max_hot_keys>100000</max_hot_keys>
+      <default_hash_table>memory</default_hash_table>
+      <default_hash_join>memory</default_hash_join>
+      <query_timeout_sec>30</query_timeout_sec>
+      <allow_fallback_to_historical_store>true</allow_fallback_to_historical_store>
+      <asterisk_include_tp_sn_column>false</asterisk_include_tp_sn_column>
     </global>
     <stream>
       <default_shards>1</default_shards>
-      <default_replication_factor>1</default_replication_factor>
       <default_sharding_expr></default_sharding_expr>
-      <ingest_mode>async</ingest_mode>
+      <ingest_mode>sync</ingest_mode>
       <logstore>nativelog</logstore>
-      <logstore_replication_factor>1</logstore_replication_factor>
       <storage_type>hybrid</storage_type>
       <logstore_codec>none</logstore_codec>
+      <logstore_retention_bytes>0</logstore_retention_bytes>
+      <logstore_retention_ms>0</logstore_retention_ms>
     </stream>
   </settings>
 
   <display_name>proton</display_name>
   <node>
-    <cluster_id>proton</cluster_id>
     <advertised_host />
     <locality>region=us-east-1,datacenter=us-east-1a</locality>
     <attrs />
     <roles>
       <role>Metadata</role>
+      <role>Data</role>
     </roles>
     <http>
       <port>3218</port>
@@ -243,13 +254,24 @@
   </node>
   <query_state_spill_path>./proton-data/query_states_spilled/</query_state_spill_path>
   <query_state_checkpoint>
-    <storage_type>auto</storage_type>
     <path>./proton-data/checkpoint/</path>
-    <interval>900</interval>
+    <interval>0</interval>
+    <min_interval>60</min_interval>
+    <light_state_interval>5</light_state_interval>
+    <heavy_state_size_threshold>524288000</heavy_state_size_threshold>
+    <heavy_state_interval>900</heavy_state_interval>
     <last_access_ttl>604800</last_access_ttl>
     <last_access_check_interval>7200</last_access_check_interval>
     <delete_grace_interval>60</delete_grace_interval>
     <teardown_flush_timeout>60</teardown_flush_timeout>
+    <log_segment_size>1073741824</log_segment_size>
+    <log_max_entry_size>10485760</log_max_entry_size>
+    <log_max_cached_entries>0</log_max_cached_entries>
+    <log_flush_interval_entries>1</log_flush_interval_entries>
+    <log_flush_bytes>1</log_flush_bytes>
+    <log_retention_size>1</log_retention_size>
+    <log_retention_ms>7200000</log_retention_ms>
+    <log_min_size_to_keep>1</log_min_size_to_keep>
   </query_state_checkpoint>
   <metadata>
     <server>
@@ -303,20 +325,24 @@
       <enforce_quorum_commit_log_truncation>true</enforce_quorum_commit_log_truncation>
     </raft>
     <metastore>
+      <metadata_keep_versions>10</metadata_keep_versions>
+      <metadata_max_retries>10</metadata_max_retries>
       <data_dirs>./proton-data/metastore/</data_dirs>
       <log>
         <check_crcs>false</check_crcs>
+        <retention_check_ms>30000</retention_check_ms>
         <fetch_max_wait_ms>500</fetch_max_wait_ms>
         <fetch_max_bytes>65536</fetch_max_bytes>
-        <max_entry_size>10485760</max_entry_size>
-        <segment_size>1073741824</segment_size>
-        <min_size_to_keep>1073741824</min_size_to_keep>
+        <max_entry_size>1048576</max_entry_size>
+        <segment_size>10485760</segment_size>
         <retention_size>1</retention_size>
-        <retention_ms>7200000</retention_ms>
+        <retention_ms>86400000</retention_ms>
+        <min_size_to_keep>1</min_size_to_keep>
         <index_interval_bytes>4294967296</index_interval_bytes>
         <index_interval_entries>100000000</index_interval_entries>
         <flush_interval_ms>120000</flush_interval_ms>
         <flush_interval_entries>1</flush_interval_entries>
+        <flush_bytes>1</flush_bytes>
         <compression_codec>none</compression_codec>
         <cache_max_cached_entries_per_shard>100</cache_max_cached_entries_per_shard>
         <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
@@ -385,13 +411,14 @@
       <data_dirs>./proton-data/nativelog/</data_dirs>
       <log>
         <check_crcs>false</check_crcs>
+        <retention_check_ms>300000</retention_check_ms>
         <fetch_max_wait_ms>500</fetch_max_wait_ms>
         <fetch_max_bytes>65536</fetch_max_bytes>
         <max_entry_size>10485760</max_entry_size>
         <segment_size>2147483648</segment_size>
-        <min_size_to_keep>2147483648</min_size_to_keep>
         <retention_size>1</retention_size>
         <retention_ms>86400000</retention_ms>
+        <min_size_to_keep>2147483648</min_size_to_keep>
         <index_interval_bytes>1048576</index_interval_bytes>
         <index_interval_entries>1000</index_interval_entries>
         <flush_interval_ms>120000</flush_interval_ms>
@@ -400,14 +427,30 @@
         <compression_codec>none</compression_codec>
         <cache_max_cached_entries_per_shard>100</cache_max_cached_entries_per_shard>
         <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
-        <preallocate>false</preallocate>
+        <preallocate>true</preallocate>
         <incremental_flush>true</incremental_flush>
       </log>
     </datastore>
   </data>
   <cluster>
     <metadata_node_quorum>localhost:8464</metadata_node_quorum>
+    <id>proton</id>
+    <secret>proton</secret>
   </cluster>
+
+  <cluster_id>proton</cluster_id>
+  <intercluster_secret>proton</intercluster_secret>
+
+  <local_meta_queue>
+    <max_queue_entries>10000</max_queue_entries>
+    <max_queue_bytes>104857600</max_queue_bytes>
+  </local_meta_queue>
+
+  <cleanup_timer>
+    <thread_pool_size>1</thread_pool_size>
+    <tick_interval_ms>60000</tick_interval_ms>
+    <cleanup_interval_ms>60000</cleanup_interval_ms>
+  </cleanup_timer>
   <logstore>
     <kafkalog>
       <enabled>false</enabled>
@@ -451,4 +494,30 @@
   <max_connections>4096</max_connections>
   <keep_alive_timeout>3</keep_alive_timeout>
   <custom_local_disks_base_directory>./proton-data/local-shared/</custom_local_disks_base_directory>
+
+  <neutron_database>neutron</neutron_database>
+  <default_database>default</default_database>
+  <default_profile>default</default_profile>
+
+  <max_server_memory_usage>0</max_server_memory_usage>
+  <max_server_memory_usage_to_ram_ratio>0.8</max_server_memory_usage_to_ram_ratio>
+  <cache_size_to_ram_max_ratio>0.5</cache_size_to_ram_max_ratio>
+
+  <uncompressed_cache_size>8589934592</uncompressed_cache_size>
+  <compiled_expression_cache_size>134217728</compiled_expression_cache_size>
+  <mmap_cache_size>1000</mmap_cache_size>
+
+  <max_concurrent_queries>1000</max_concurrent_queries>
+  <max_concurrent_insert_queries>1000</max_concurrent_insert_queries>
+  <max_concurrent_select_queries>1000</max_concurrent_select_queries>
+
+  <asynchronous_metrics_update_period_s>2</asynchronous_metrics_update_period_s>
+  <max_thread_pool_size>10000</max_thread_pool_size>
+  <telemetry_interval_ms>300000</telemetry_interval_ms>
+  <max_local_disk_usage_ratio>0.9</max_local_disk_usage_ratio>
+  <total_memory_profiler_step>4194304</total_memory_profiler_step>
+  <total_memory_tracker_sample_probability>0</total_memory_tracker_sample_probability>
+  <builtin_dictionaries_reload_interval>3600</builtin_dictionaries_reload_interval>
+  <max_session_timeout>3600</max_session_timeout>
+  <default_session_timeout>60</default_session_timeout>
 </proton>
