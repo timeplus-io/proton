@@ -10,8 +10,6 @@ add_subdirectory(Protocol)
 
 add_subdirectory(Requests)
 
-add_subdirectory(Entry)
-
 add_subdirectory(LocalLog)
 
 add_subdirectory(SchemaRecord)
@@ -31,7 +29,6 @@ target_link_libraries(cluster
         # cluster_base
         cluster_rocks
         cluster_common
-        cluster_entry 
         cluster_protocol
         cluster_requests
         nlog
