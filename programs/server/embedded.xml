@@ -427,7 +427,7 @@
         <compression_codec>none</compression_codec>
         <cache_max_cached_entries_per_shard>100</cache_max_cached_entries_per_shard>
         <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
-        <preallocate>true</preallocate>
+        <preallocate>false</preallocate>
         <incremental_flush>true</incremental_flush>
       </log>
     </datastore>
