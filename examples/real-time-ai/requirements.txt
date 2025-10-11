@@ -1,7 +1,7 @@
 torch>=2.8.0
 transformers>=4.38.0
 unstructured==0.14.3
-bytewax==0.18.2
+bytewax==0.21.1
 fake-useragent==1.4.0
 icecream
 proton-driver
