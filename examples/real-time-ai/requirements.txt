@@ -1,4 +1,4 @@
-torch==2.7.1-rc1
+torch>=2.8.0
 transformers>=4.38.0
 unstructured==0.14.3
 bytewax==0.18.2

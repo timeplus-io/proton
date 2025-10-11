@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # Python - Tests dependencies
+  - package-ecosystem: "pip"
+    directory: "/tests"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # Python - Test helpers
+  - package-ecosystem: "pip"
+    directory: "/tests/stream/helpers"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Python - Test compatibility
+  - package-ecosystem: "pip"
+    directory: "/tests/stream/test_compatibility"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Python - CI dependencies
+  - package-ecosystem: "pip"
+    directory: "/tests/proton_ci"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Python - Examples
+  - package-ecosystem: "pip"
+    directory: "/examples/real-time-ai"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+# Note: docs/tools is intentionally excluded as it's not used in production

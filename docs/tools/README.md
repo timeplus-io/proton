@@ -1,6 +1,12 @@
+## ARCHIVED - Documentation Build Tools Not in Use
+
+**Note:** This documentation build system is not currently maintained or used in Proton. The dependency files (requirements.txt, package.json) have been removed to eliminate security vulnerabilities from unused dependencies.
+
+---
+
 ## How ClickHouse documentation is generated? {#how-clickhouse-documentation-is-generated}
 
-ClickHouse documentation is built using [build.py](build.py) script that uses [mkdocs](https://www.mkdocs.org) library and it’s dependencies to separately build all version of documentations (all languages in either single and multi page mode) as static HTMLs for each single page version. The results are then put in the correct directory structure. It is recommended to use Python 3.7 to run this script.
+ClickHouse documentation is built using [build.py](build.py) script that uses [mkdocs](https://www.mkdocs.org) library and it's dependencies to separately build all version of documentations (all languages in either single and multi page mode) as static HTMLs for each single page version. The results are then put in the correct directory structure. It is recommended to use Python 3.7 to run this script.
 
 [release.sh](release.sh) also pulls static files needed for [official ClickHouse website](https://clickhouse.com) from [../../website](../../website) folder then pushes to specified GitHub repo to be served via [GitHub Pages](https://pages.github.com).
 
