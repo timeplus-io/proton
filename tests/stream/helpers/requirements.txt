@@ -1,7 +1,7 @@
 pytest==6.2.5
 requests>=2.32.4
 pyOpenSSL==23.0.0
-pytest-cases==3.6.5
+pytest-cases==3.9.1
 unidiff==0.7.0
 docker-compose==1.29.2
 boto3==1.20.4
