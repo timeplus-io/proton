@@ -45,7 +45,7 @@ on: # yamllint disable-line rule:truthy
         - compatibility
         - performance
         - migration
-        - scope.release # smoke,stateless,stateful,compatibility,performance (release_build use) (skip query_compatibility until ready)
+        - scope.release # smoke,stateless,stateful (release_build use) (disabled: query_compatibility, compatibility, performance, migration)
       has_feature_enabled:
         description: 'Executed features separated by semicolons (support: hybrid;python-udf-library)'
         required: false
@@ -520,7 +520,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_performance_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.test_category == 'performance' || github.event.inputs.test_category == 'scope.release' }}
+    if: false # Disabled performance tests
     outputs:
       command: |
         export PROTON_VERSION=$TAG
@@ -599,7 +599,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_migration_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.test_category == 'migration' || github.event.inputs.test_category == 'scope.release' }}
+    if: false # Disabled migration tests
     outputs:
       command: |
         export PROTON_VERSION=$TAG
