@@ -314,7 +314,7 @@ jobs:
           -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN"\
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
-          -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"scope.release\"}}\""
+          -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"scope.release\", \"nodes\":\"1\"}}\""
 
         curl -L \
           -X POST \
@@ -322,7 +322,7 @@ jobs:
           -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN"\
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
-          -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"arm\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"scope.release\"}}\""
+          -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"arm\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"scope.release\", \"nodes\":\"1\"}}\""
 
         curl -L \
           -X POST \
@@ -330,7 +330,7 @@ jobs:
           -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN"\
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
-          -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"smoke\", \"has_feature_enabled\":\"hybrid\"}}\""
+          -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"smoke\", \"has_feature_enabled\":\"hybrid\", \"nodes\":\"1\"}}\""
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
