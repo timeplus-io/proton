@@ -52,13 +52,13 @@ private:
         {
         }
 
-        enum Status : uint8_t
+        enum class Status : uint8_t
         {
             None = 100,
             Initializing = 0,
-            CheckingDependencies = 1,
-            BuildingPipeline = 2,
-            ExecutingPipeline = 3,
+            Checking = 1,
+            Building = 2,
+            Executing = 3,
 
             Error = 4,
             /// Removed Suspended state (was 5)

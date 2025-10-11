@@ -7,7 +7,7 @@ WITH running_mvs_in_last_5m AS
     SELECT
       database, name
     FROM system.stream_state_log
-    WHERE (_tp_time > (now() - 5m)) AND (dimension = 'materialized_view') AND (state_name = 'status') AND (state_string_value = 'ExecutingPipeline')
+    WHERE (_tp_time > (now() - 5m)) AND (dimension = 'materialized_view') AND (state_name = 'status') AND (state_string_value = 'Executing')
     ORDER BY _tp_time DESC -- order here to make sure we have the latest state
     SETTINGS query_mode = 'table'
 )

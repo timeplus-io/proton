@@ -439,17 +439,17 @@ void StorageMaterializedView::runPipeline() noexcept
                         initialize();
                         break;
                     }
-                    case PipelineState::Status::CheckingDependencies:
+                    case PipelineState::Status::Checking:
                     {
                         checkDependencies();
                         break;
                     }
-                    case PipelineState::Status::BuildingPipeline:
+                    case PipelineState::Status::Building:
                     {
                         buildBackgroundPipeline();
                         break;
                     }
-                    case PipelineState::Status::ExecutingPipeline:
+                    case PipelineState::Status::Executing:
                     {
                         executeBackgroundPipeline();
                         break;
@@ -552,12 +552,12 @@ void StorageMaterializedView::initialize()
         }
     }
 
-    pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::CheckingDependencies);
+    pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::Checking);
 }
 
 void StorageMaterializedView::checkDependencies()
 {
-    auto current_status = PipelineState::Status::CheckingDependencies;
+    auto current_status = PipelineState::Status::Checking;
     /// During server bootstrap, we shall startup all tables in parallel, so here
     /// needs validity check underlying tables.
     LOG_INFO(logger, "Checking dependencies for query_id={}", getInnerQueryId());
@@ -619,12 +619,12 @@ void StorageMaterializedView::checkDependencies()
     }
 
     /// Next status
-    pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::BuildingPipeline);
+    pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::Building);
 }
 
 void StorageMaterializedView::buildBackgroundPipeline()
 {
-    auto current_status = PipelineState::Status::BuildingPipeline;
+    auto current_status = PipelineState::Status::Building;
     LOG_INFO(logger, "Building pipeline for query_id={}", getInnerQueryId());
     try
     {
@@ -699,7 +699,7 @@ void StorageMaterializedView::buildBackgroundPipeline()
         }
         else
         {
-            pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::ExecutingPipeline);
+            pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::Executing);
         }
     }
     catch (...)
@@ -827,7 +827,7 @@ QueryPipeline StorageMaterializedView::buildQueryPipelineImpl(
 
 void StorageMaterializedView::executeBackgroundPipeline()
 {
-    auto current_status = PipelineState::Status::ExecutingPipeline;
+    auto current_status = PipelineState::Status::Executing;
 
     LOG_INFO(logger, "Executing pipeline on mode '{}' for query_id={}", pipeline_state.exec_mode, getInnerQueryId());
 
@@ -851,7 +851,7 @@ void StorageMaterializedView::executeBackgroundPipeline()
         {
             executor.setCancelCallback(
                 [&status_changed, this] {
-                    status_changed |= !pipeline_state.checkStatus(PipelineState::Status::ExecutingPipeline);
+                    status_changed |= !pipeline_state.checkStatus(PipelineState::Status::Executing);
                     return status_changed;
                 },
                 internal_recheck_interval_ms);
@@ -1147,7 +1147,7 @@ int StorageMaterializedView::flushAndStop(PipelineState::Status to_status, int64
         }
 
         /// Trigger a checkpoint before stopping the pipeline
-        if (current_status != PipelineState::Status::ExecutingPipeline)
+        if (current_status != PipelineState::Status::Executing)
             return update_status();
 
         std::shared_ptr<Poco::Event> event = std::make_shared<Poco::Event>();
@@ -1165,7 +1165,7 @@ int StorageMaterializedView::flushAndStop(PipelineState::Status to_status, int64
         std::shared_ptr<Poco::Event> triggered_event;
         while (true)
         {
-            if (!pipeline_state.checkStatus(PipelineState::Status::ExecutingPipeline))
+            if (!pipeline_state.checkStatus(PipelineState::Status::Executing))
                 return update_status();
 
             if (timeout_ms > 0 && stopwatch.elapsedMilliseconds() >= static_cast<UInt64>(timeout_ms))
