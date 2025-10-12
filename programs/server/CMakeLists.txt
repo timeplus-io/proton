@@ -4,6 +4,7 @@ set(CLICKHOUSE_SERVER_SOURCES
     MetricsTransmitter.cpp
     Server.cpp
     Server_Python.cpp
+    Server_V8.cpp
 )
 
 set (LINK_RESOURCE_LIB INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:clickhouse_server_configs> -Wl,${NO_WHOLE_ARCHIVE}")
