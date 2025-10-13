@@ -223,13 +223,21 @@ jobs:
 
       - name: Release binary
         if: ${{ !inputs.s3_upload && inputs.upload_files != '' }}
-        uses: softprops/action-gh-release@v2.2.1
+        uses: softprops/action-gh-release@v2.4.1
         with:
           files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease }}
           tag_name: ${{ steps.execute.outputs.tag_name }}
+          body: |
+            ## Docker Images Available
+
+            ```bash
+            docker pull d.timeplus.com/timeplus-io/proton:latest
+            ```
+
+            For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
 
       - name: Upload Artifact
         if: ${{ always() && inputs.upjob != '' }}
