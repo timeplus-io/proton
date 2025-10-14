@@ -222,8 +222,10 @@ jobs:
         cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
         rm -rf resources/protos/google/protobuf/unittest_*
 
-        # build docker image for both Docker Hub and GHCR
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton \
+        # build docker image (skip Python UDF pieces on ARM64)
+        docker build . --network host \
+          --build-arg ENABLE_PYTHON_UDF=0 \
+          --build-arg single_binary_location_url=http://localhost:8080/proton \
           -t timeplus/proton:${GITHUB_SHA}_arm64v8 \
           -t ghcr.io/timeplus-io/proton:${GITHUB_SHA}_arm64v8
 

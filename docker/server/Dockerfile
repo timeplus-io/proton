@@ -19,6 +19,7 @@ ARG deb_location_url=""
 # docker build . --network host --build-arg single_binary_location_url=http://192.168.0.16:8000/build_docker/programs/proton -t timeplus/proton
 # note: proton-odbc-bridge is not supported there.
 ARG single_binary_location_url=""
+ARG ENABLE_PYTHON_UDF=1
 
 # see https://github.com/moby/moby/issues/4032#issuecomment-192327844
 ARG DEBIAN_FRONTEND=noninteractive
@@ -129,8 +130,15 @@ RUN chown -R timeplus:timeplus /var/lib/proton /var/log/proton-server /etc/proto
 # Run pip as timeplus so installed files are not root-owned
 USER 101:101
 
-RUN /usr/share/proton/bin/python3.10 -m pip install --upgrade truststore \
- && /usr/share/proton/bin/python3.10 -m pip install --force-reinstall --no-cache-dir -t /usr/share/proton/lib/python3.10/site-packages timeplus-neutrino==0.1.12
+# Skip Python package installation on ARM64 since Python UDF is unsupported.
+# Also allow opting out via build-arg ENABLE_PYTHON_UDF=0.
+RUN arch="$(uname -m)" \
+ && if [ "${ENABLE_PYTHON_UDF}" = "1" ] && ! echo "${arch}" | grep -qiE '^(aarch64|arm64)$'; then \
+      /usr/share/proton/bin/python3.10 -m pip install --upgrade pip truststore \
+      && /usr/share/proton/bin/python3.10 -m pip install --no-cache-dir --timeout 180 --retries 8 -t /usr/share/proton/lib/python3.10/site-packages timeplus-neutrino==0.1.12 ; \
+    else \
+      echo "Skipping Python package install (ENABLE_PYTHON_UDF=${ENABLE_PYTHON_UDF}, arch=${arch})" ; \
+    fi
 VOLUME /var/lib/proton
 
 ENV PROTON_CONFIG /etc/proton-server/config.yaml
