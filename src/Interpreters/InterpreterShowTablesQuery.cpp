@@ -132,6 +132,10 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
     /// proton: starts. Hide inner table names starts with '.inner.', e.g. `.inner.target...`
     if (!getContext()->getSettingsRef().include_internal_streams.value)
         rewritten_query << " AND NOT starts_with(name, '.inner.')";
+
+    /// Exclude Alerts
+    if (!query.dictionaries)
+        rewritten_query << " AND engine != 'StorageAlert'";
     /// proton: ends.
 
     if (!query.like.empty())
