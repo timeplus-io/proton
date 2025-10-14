@@ -1353,7 +1353,7 @@ void InterpreterSelectQuery::executeLightShuffling(QueryPlan & query_plan, const
     query_plan.addStep(std::make_unique<LightShufflingStep>(
         query_plan.getCurrentDataStream(),
         std::move(key_positions),
-        settings_ref.num_target_shards.value != 0 ? settings_ref.num_target_shards.value : settings_ref.max_threads.value));
+        settings_ref.substreams.value != 0 ? settings_ref.substreams.value : settings_ref.max_threads.value));
 }
 
 }

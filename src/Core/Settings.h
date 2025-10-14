@@ -1105,7 +1105,7 @@ Possible values: non-negative numbers. Note that if the value is too small or to
     M(Bool, output_format_opensearch_include_index_column_in_document, false, "Set to true to include the index column in the document.", 0) \
     M(String, output_format_opensearch_id_column, "", "The name of the column whose value will be used as the id of the document.", 0) \
     M(Bool, output_format_opensearch_include_id_column_in_document, false, "Set to true to include the id column in the document.", 0) \
-    M(UInt64, num_target_shards, 0, "For shuffle by, number of target shards after shuffling. 0 means system will automatically pick a number", 0) \
+    M(UInt64, substreams, 0, "For shuffle by, number of substreams after shuffling. 0 means system will automatically pick a number", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
