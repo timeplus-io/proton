@@ -98,12 +98,12 @@ void ExpressionTransformWithSubstream::transform(Chunk & chunk)
         chunk.setColumns(block.getColumns(), num_rows);
     }
 
-    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    if (auto now = MonotonicMilliseconds::now(); now - last_log_ts > log_metrics_interval_ms)
     {
         if (substream_stateful_functions)
             LOG_INFO(logger, "Substream metrics: {}", substream_stateful_functions->metricsString());
 
-        last_log_ts = MonotonicMilliseconds::now();
+        last_log_ts = now;
     }
 }
 

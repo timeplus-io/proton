@@ -113,6 +113,9 @@ IProcessor::Status JoinTransform::prepare()
 
 void JoinTransform::work()
 {
+    auto start_ns = MonotonicNanoseconds::now();
+    uint64_t in_rows = 0;
+    uint64_t in_bytes = 0;
     int64_t local_watermark = std::numeric_limits<int64_t>::max();
 
     bool has_watermark = false;
@@ -157,7 +160,11 @@ void JoinTransform::work()
                 }
 
                 if (input_chunk.hasRows())
+                {
                     has_data = true;
+                    in_rows += input_chunk.getNumRows();
+                    in_bytes += input_chunk.bytes();
+                }
 
                 chunks[i].swap(input_chunk);
             }
@@ -199,11 +206,15 @@ void JoinTransform::work()
         output_chunks.back().setCheckpointContext(std::move(requested_ckpt));
     }
 
-    if (MonotonicSeconds::now() - last_log_ts > 60)
+    if (auto now = MonotonicSeconds::now(); now - last_log_ts > 60)
     {
         LOG_INFO(logger, "{}, watermark={}", join->metricsString(), watermark);
-        last_log_ts = MonotonicSeconds::now();
+        last_log_ts = now;
     }
+
+    metrics.processed_rows += in_rows;
+    metrics.processed_bytes += in_bytes;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
 inline void JoinTransform::propagateWatermark(int64_t local_watermark)

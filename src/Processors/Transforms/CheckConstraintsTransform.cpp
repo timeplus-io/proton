@@ -10,6 +10,9 @@
 #include <Common/FieldVisitorToString.h>
 #include <Common/assert_cast.h>
 #include <Common/quoteString.h>
+/// proton: starts
+#include <base/ClockUtils.h>
+/// proton: ends
 
 
 namespace DB
@@ -37,6 +40,10 @@ CheckConstraintsTransform::CheckConstraintsTransform(
 
 void CheckConstraintsTransform::onConsume(Chunk chunk)
 {
+    /// proton: starts. Measure rows/bytes/time for constraints checking
+    auto start_ns = MonotonicNanoseconds::now();
+    auto in_rows = chunk.getNumRows();
+    auto in_bytes = chunk.bytes();
     if (chunk.getNumRows() > 0)
     {
         Block block_to_calculate = getInputPort().getHeader().cloneWithColumns(chunk.getColumns());
@@ -128,6 +135,10 @@ void CheckConstraintsTransform::onConsume(Chunk chunk)
 
     rows_written += chunk.getNumRows();
     cur_chunk = std::move(chunk);
+    metrics.processed_rows += in_rows;
+    metrics.processed_bytes += in_bytes;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends
 }
 
 }

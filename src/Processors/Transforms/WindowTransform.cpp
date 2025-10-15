@@ -1397,8 +1397,14 @@ void WindowTransform::work()
 
     try
     {
+        /// proton: starts. Measure rows/bytes/time for window processing
+        auto start_ns = MonotonicNanoseconds::now();
+        metrics.processed_bytes += input_data.chunk.bytes();
+        metrics.processed_rows += input_data.chunk.getNumRows();
         has_input = false;
         appendChunk(input_data.chunk);
+        metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+        /// proton: ends
     }
     catch (DB::Exception &)
     {

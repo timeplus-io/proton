@@ -209,7 +209,7 @@ void WatermarkStamper::logLateEvents()
 {
     if (late_events > last_logged_late_events)
     {
-        if (MonotonicSeconds::now() - last_logged_late_events_ts >= LOG_LATE_EVENTS_INTERVAL_SECONDS)
+        if (auto now = MonotonicSeconds::now(); now - last_logged_late_events_ts >= LOG_LATE_EVENTS_INTERVAL_SECONDS)
         {
             LOG_WARNING(
                 logger,
@@ -217,7 +217,7 @@ void WatermarkStamper::logLateEvents()
                 late_events - last_logged_late_events,
                 late_events,
                 watermark_ts);
-            last_logged_late_events_ts = MonotonicSeconds::now();
+            last_logged_late_events_ts = now;
             last_logged_late_events = late_events;
         }
     }

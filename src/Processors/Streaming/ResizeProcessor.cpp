@@ -98,6 +98,7 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
         auto & input_with_data = input_ports[inputs_with_data.front()];
         inputs_with_data.pop();
 
+        auto start_ns = MonotonicNanoseconds::now();
         auto data = input_with_data.port->pullData(/*set_not_needed=*/true);
         if (updateAndAlignWatermark(input_with_data, data.chunk) || updateAndRequestCheckpoint(input_with_data, data.chunk))
         {
@@ -116,7 +117,12 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
             ++num_finished_inputs;
         }
 
+        /// metrics
+        metrics.processed_bytes += data.chunk.bytes();
+        metrics.processed_rows += data.chunk.rows();
+
         output.pushData(std::move(data));
+        metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
         return Status::PortFull;
     }
 
@@ -332,7 +338,13 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
                 assert(num_checkpoint_requests == 0);
                 auto & waiting_output = *waiting_outputs.front();
                 waiting_outputs.pop_front();
+                auto bytes = data.chunk.bytes();
+                auto rows = data.chunk.rows();
+                auto start_ns = MonotonicNanoseconds::now();
                 waiting_output.port->pushData(std::move(data));
+                metrics.processed_bytes += bytes;
+                metrics.processed_rows += rows;
+                metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
                 waiting_output.propagate_flag = OutputPortWithStatus::NO_PROPAGATE;
                 waiting_output.status = OutputStatus::NotActive;
             }
@@ -480,7 +492,14 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
 
         if (waiting_output.status != OutputStatus::Finished)
         {
-            waiting_output.port->pushData(input_with_data.port->pullData(/* set_not_needed = */ true));
+            auto data = input_with_data.port->pullData(/* set_not_needed = */ true);
+            auto bytes = data.chunk.bytes();
+            auto rows = data.chunk.rows();
+            auto start_ns = MonotonicNanoseconds::now();
+            waiting_output.port->pushData(std::move(data));
+            metrics.processed_bytes += bytes;
+            metrics.processed_rows += rows;
+            metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
             waiting_output.status = OutputStatus::NotActive;
         }
         else
@@ -509,7 +528,13 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
         auto & waiting_output = output_ports[waiting_outputs.front()];
         waiting_outputs.pop();
 
+        auto bytes = abandoned_chunks.back().chunk.bytes();
+        auto rows = abandoned_chunks.back().chunk.rows();
+        auto start_ns = MonotonicNanoseconds::now();
         waiting_output.port->pushData(std::move(abandoned_chunks.back()));
+        metrics.processed_bytes += bytes;
+        metrics.processed_rows += rows;
+        metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
         abandoned_chunks.pop_back();
 
         waiting_output.status = OutputStatus::NotActive;

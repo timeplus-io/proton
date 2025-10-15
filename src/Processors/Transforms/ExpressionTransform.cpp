@@ -96,6 +96,12 @@ ConvertingTransform::ConvertingTransform(const Block & header_, ExpressionAction
 
 void ConvertingTransform::onConsume(Chunk chunk)
 {
+    /// proton: starts. Update processor metrics
+    auto start_ns = MonotonicNanoseconds::now();
+    auto bytes = chunk.bytes();
+    auto rows = chunk.getNumRows();
+    /// proton: ends
+
     size_t num_rows = chunk.getNumRows();
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 
@@ -103,6 +109,12 @@ void ConvertingTransform::onConsume(Chunk chunk)
 
     chunk.setColumns(block.getColumns(), num_rows);
     cur_chunk = std::move(chunk);
+
+    /// proton: starts. Update metrics after conversion
+    metrics.processed_bytes += bytes;
+    metrics.processed_rows += rows;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends
 }
 
 }

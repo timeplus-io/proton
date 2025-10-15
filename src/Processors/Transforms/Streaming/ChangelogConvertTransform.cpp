@@ -184,7 +184,7 @@ void ChangelogConvertTransform::work()
         transformEmptyChunk();
 
     /// Every 30 seconds, log metrics
-    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    if (auto now = MonotonicMilliseconds::now(); now - last_log_ts > log_metrics_interval_ms)
     {
         size_t hash_total_row_count = index.getTotalRowCount();
         size_t hash_total_row_refs_bytes = hash_total_row_count * sizeof(RefCountDataBlock<LightChunk>);
@@ -205,7 +205,7 @@ void ChangelogConvertTransform::work()
             late_rows,
             source_chunks.empty() ? 0 : source_chunks.begin()->refCount());
 
-        last_log_ts = MonotonicMilliseconds::now();
+        last_log_ts = now;
     }
 }
 

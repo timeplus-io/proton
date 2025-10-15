@@ -1,6 +1,12 @@
 #include <Processors/Transforms/SquashingChunksTransform.h>
 #include "Processors/ProcessorID.h"
+
+/// proton: starts
+#include <base/ClockUtils.h>
+/// proton: ends
+
 #include <iostream>
+
 
 namespace DB
 {
@@ -14,10 +20,18 @@ SquashingChunksTransform::SquashingChunksTransform(
 
 void SquashingChunksTransform::onConsume(Chunk chunk)
 {
+    /// proton: starts. Measure rows/bytes/time for squashing
+    auto start_ns = MonotonicNanoseconds::now();
+    auto in_rows = chunk.getNumRows();
+    auto in_bytes = chunk.bytes();
     if (auto block = squashing.add(getInputPort().getHeader().cloneWithColumns(chunk.detachColumns())))
     {
         cur_chunk.setColumns(block.getColumns(), block.rows());
     }
+    metrics.processed_rows += in_rows;
+    metrics.processed_bytes += in_bytes;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends
 }
 
 SquashingChunksTransform::GenerateResult SquashingChunksTransform::onGenerate()

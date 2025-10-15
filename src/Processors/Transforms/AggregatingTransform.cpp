@@ -445,7 +445,16 @@ private:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Some ready chunks expected");
 
         auto & output = outputs.front();
-        output.push(std::move(single_level_chunks.back()));
+        {
+            auto & ch = single_level_chunks.back();
+            auto bytes = ch.bytes();
+            auto rows = ch.rows();
+            auto start_ns = MonotonicNanoseconds::now();
+            output.push(std::move(ch));
+            metrics.processed_bytes += bytes;
+            metrics.processed_rows += rows;
+            metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+        }
         single_level_chunks.pop_back();
 
         if (finished && single_level_chunks.empty())
@@ -481,7 +490,16 @@ private:
         if (!two_level_chunks[current_bucket_num])
             return Status::NeedData;
 
-        output.push(std::move(two_level_chunks[current_bucket_num]));
+        {
+            auto & ch = two_level_chunks[current_bucket_num];
+            auto bytes = ch.bytes();
+            auto rows = ch.rows();
+            auto start_ns = MonotonicNanoseconds::now();
+            output.push(std::move(ch));
+            metrics.processed_bytes += bytes;
+            metrics.processed_rows += rows;
+            metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+        }
 
         ++current_bucket_num;
         if (current_bucket_num == NUM_BUCKETS)
@@ -514,7 +532,16 @@ private:
         if (shuffled_chunks.empty())
             return Status::NeedData;
 
-        output.push(std::move(shuffled_chunks.front()));
+        {
+            auto & ch = shuffled_chunks.front();
+            auto bytes = ch.bytes();
+            auto rows = ch.rows();
+            auto start_ns = MonotonicNanoseconds::now();
+            output.push(std::move(ch));
+            metrics.processed_bytes += bytes;
+            metrics.processed_rows += rows;
+            metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+        }
         shuffled_chunks.pop_front();
 
         if ((num_buckets_processed == shuffled_shared_data->is_bucket_processed.size()) && shuffled_chunks.empty())

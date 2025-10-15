@@ -110,7 +110,7 @@ void VersionsFilterTransform::transform(Chunk & chunk)
     }
 
     /// Every 30 seconds, log metrics
-    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    if (auto now = MonotonicMilliseconds::now(); now - last_log_ts > log_metrics_interval_ms)
     {
         size_t hash_total_row_count = latest_version_map.getTotalRowCount();
         size_t hash_buffer_bytes = latest_version_map.getBufferSizeInBytes();
@@ -127,7 +127,7 @@ void VersionsFilterTransform::transform(Chunk & chunk)
             hash_buffer_cells,
             late_rows);
 
-        last_log_ts = MonotonicMilliseconds::now();
+        last_log_ts = now;
     }
 }
 

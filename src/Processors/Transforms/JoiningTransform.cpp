@@ -2,8 +2,6 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/JoinUtils.h>
 
-#include <Common/logger_useful.h>
-
 /// proton: starts.
 #include <Interpreters/Streaming/HashJoin/IHashJoin.h>
 /// proton: ends.
@@ -331,6 +329,10 @@ IProcessor::Status FillingRightJoinSideTransform::prepare()
 
 void FillingRightJoinSideTransform::work()
 {
+    /// proton: starts. Measure rows/bytes/time for building right side
+    auto start_ns = MonotonicNanoseconds::now();
+    auto rows = chunk.getNumRows();
+    auto bytes = chunk.bytes();
     auto block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
 
     if (for_totals)
@@ -339,6 +341,10 @@ void FillingRightJoinSideTransform::work()
         stop_reading = !join->addJoinedBlock(block);
 
     set_totals = for_totals;
+    metrics.processed_rows += rows;
+    metrics.processed_bytes += bytes;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends
 }
 
 DelayedJoinedBlocksWorkerTransform::DelayedJoinedBlocksWorkerTransform(

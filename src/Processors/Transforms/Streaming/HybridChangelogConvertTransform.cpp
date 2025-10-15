@@ -219,10 +219,10 @@ void HybridChangelogConvertTransform::work()
     }
 
     /// Every 30 seconds, log metrics
-    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    if (auto now = MonotonicMilliseconds::now(); now - last_log_ts > log_metrics_interval_ms)
     {
         LOG_INFO(logger, "Hybrid hashtable metrics={{{}}} approximate_keys={}", index.metrics().string(), index.approximateCount());
-        last_log_ts = MonotonicMilliseconds::now();
+        last_log_ts = now;
     }
 }
 

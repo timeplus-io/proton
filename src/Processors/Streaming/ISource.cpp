@@ -47,10 +47,10 @@ void ISource::resetStartSN(Int64 sn)
 std::optional<Chunk> ISource::tryGenerate()
 {
     SCOPE_EXIT({
-        if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+        if (auto now = MonotonicMilliseconds::now(); now - last_log_ts > log_metrics_interval_ms)
         {
             LOG_INFO(logger, "{}", getMetrics()->toString());
-            last_log_ts = MonotonicMilliseconds::now();
+            last_log_ts = now;
         }
     });
 

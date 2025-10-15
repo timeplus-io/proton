@@ -459,7 +459,8 @@ bool CheckpointCoordinator::checkAndSetHeavyCheckpointingInProgress(const String
     }
 
     /// If a heavy checkpoint lasts for more than 10 minutes, it's probably a bug, so we reset it
-    auto elapsed = MonotonicSeconds::now() - heavy_checkpointing_start_ts;
+    auto now = MonotonicSeconds::now();
+    auto elapsed = now - heavy_checkpointing_start_ts;
     if (elapsed > 600)
     {
         LOG_WARNING(
@@ -469,7 +470,7 @@ bool CheckpointCoordinator::checkAndSetHeavyCheckpointingInProgress(const String
             elapsed,
             *heavy_checkpointing_in_progress);
 
-        heavy_checkpointing_start_ts = MonotonicSeconds::now();
+        heavy_checkpointing_start_ts = now;
         heavy_checkpointing_in_progress = qid;
         return true;
     }

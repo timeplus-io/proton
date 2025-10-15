@@ -127,7 +127,7 @@ void AggregatingTransform::work()
 {
     Int64 start_ns = MonotonicNanoseconds::now();
     metrics.processed_bytes += current_chunk.bytes();
-    metrics.processed_rows += current_chunk.bytes();
+    metrics.processed_rows += current_chunk.rows();
 
     if (likely(!is_consume_finished))
     {

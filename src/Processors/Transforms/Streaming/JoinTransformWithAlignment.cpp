@@ -354,7 +354,7 @@ void JoinTransformWithAlignment::work()
 
     need_propagate_heartbeat = false;
 
-    if (DB::MonotonicSeconds::now() - last_stats_log_ts >= 60)
+    if (auto now = MonotonicSeconds::now(); now - last_stats_log_ts >= 60)
     {
         LOG_INFO(
             logger,
@@ -368,7 +368,7 @@ void JoinTransformWithAlignment::work()
             stats.left_quiesce_joins,
             stats.right_quiesce_joins);
 
-        last_stats_log_ts = DB::MonotonicSeconds::now();
+        last_stats_log_ts = now;
     }
 }
 

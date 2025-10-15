@@ -1,4 +1,7 @@
 #include <Processors/Transforms/ThrottlingTransform.h>
+/// proton: starts
+#include <base/ClockUtils.h>
+/// proton: ends
 
 namespace DB
 {
@@ -14,9 +17,16 @@ ThrottlingTransform::ThrottlingTransform(const Block & header, UInt64 limit_, UI
 
 void ThrottlingTransform::onConsume(Chunk chunk)
 {
+    /// proton: starts. Measure rows/bytes/time for throttling
+    auto start_ns = MonotonicNanoseconds::now();
+    auto in_rows = chunk.getNumRows();
+    auto in_bytes = chunk.bytes();
     if (chunk.rows() == 0)
     {
         cur_chunk = header_chunk.clone();
+        metrics.processed_rows += in_rows;
+        metrics.processed_bytes += in_bytes;
+        metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
         return;
     }
 
@@ -28,6 +38,9 @@ void ThrottlingTransform::onConsume(Chunk chunk)
                 callback();
 
             cur_chunk = header_chunk.clone();
+            metrics.processed_rows += in_rows;
+            metrics.processed_bytes += in_bytes;
+            metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
             return;
         }
 
@@ -38,6 +51,10 @@ void ThrottlingTransform::onConsume(Chunk chunk)
     auto rows = chunk.rows();
     cur_chunk.setColumns(chunk.detachColumns(), rows);
     ++count;
+    metrics.processed_rows += in_rows;
+    metrics.processed_bytes += in_bytes;
+    metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
+    /// proton: ends
 }
 
 ThrottlingTransform::GenerateResult ThrottlingTransform::onGenerate()

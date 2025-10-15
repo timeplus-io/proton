@@ -225,10 +225,10 @@ void WatermarkTransformWithSubstream::work()
         }
     }
 
-    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    if (auto now = MonotonicMilliseconds::now(); now - last_log_ts > log_metrics_interval_ms)
     {
         LOG_INFO(logger, "Substream metrics: {}", substream_watermarks->metricsString());
-        last_log_ts = MonotonicMilliseconds::now();
+        last_log_ts = now;
     }
 }
 
