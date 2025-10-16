@@ -71,19 +71,25 @@ function test_hybrid_config() {
         echo "FULL_LOG_DIR set to $FULL_LOG_DIR"
         bash log.sh --init
 
-        run_and_echo docker-compose -f ./deployment/docker-compose-p${NODES}k1.yaml -f ./deployment/docker-compose-p${NODES}k1.override.yaml -p "smoke_1" up -d
+        run_and_echo docker-compose -f ./deployment/docker-compose-p${NODES}k1.yaml -f ./deployment/docker-compose-p${NODES}k1.override.yaml -p "${DOCKER_PROJECT}" up -d
         run_and_echo sleep 5
         run_and_echo docker ps -a
 
+        # Determine container name for hybrid config verification
+        container_name="${CONTAINER_NAME_PREFIX}_proton-server"
+        if [ "${NODES}" != "1" ]; then
+            container_name="${CONTAINER_NAME_PREFIX}_proton-server1"
+        fi
+
         for field in "${HYBRID_FIELDS[@]}"; do
-            if ! run_and_echo docker exec 0_proton-server1 grep -q "$field" "/etc/proton-server/config.yaml"; then
+            if ! run_and_echo docker exec "${container_name}" grep -q "$field" "/etc/proton-server/config.yaml"; then
                 MISSING_FIELD=$field
-                run_and_echo docker exec 0_proton-server1 grep hybrid "/etc/proton-server/config.yaml"
+                run_and_echo docker exec "${container_name}" grep hybrid "/etc/proton-server/config.yaml"
                 break
             fi
         done
 
-        run_and_echo docker-compose -f ./deployment/docker-compose-p${NODES}k1.yaml -f ./deployment/docker-compose-p${NODES}k1.override.yaml -p "smoke_1" down -v
+        run_and_echo docker-compose -f ./deployment/docker-compose-p${NODES}k1.yaml -f ./deployment/docker-compose-p${NODES}k1.override.yaml -p "${DOCKER_PROJECT}" down -v
         run_and_echo sleep 10
         run_and_echo docker ps -a
 
