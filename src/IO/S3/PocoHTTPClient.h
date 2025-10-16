@@ -20,6 +20,7 @@
 #include <aws/core/http/HttpRequest.h>
 #include <aws/core/http/standard/StandardHttpResponse.h>
 
+
 namespace Aws::Http::Standard
 {
 class StandardHttpResponse;
@@ -27,12 +28,13 @@ class StandardHttpResponse;
 
 namespace DB
 {
-
 class Context;
 }
 
+
 namespace DB::S3
 {
+
 class ClientFactory;
 
 struct ClientConfigurationPerRequest
@@ -41,6 +43,7 @@ struct ClientConfigurationPerRequest
     String proxy_host;
     unsigned proxy_port = 0;
 };
+
 
 struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
 {
@@ -81,6 +84,7 @@ private:
     /// Constructor of Aws::Client::ClientConfiguration must be called after AWS SDK initialization.
     friend ClientFactory;
 };
+
 
 class PocoHTTPResponse : public Aws::Http::Standard::StandardHttpResponse
 {
@@ -127,10 +131,12 @@ private:
     Aws::Utils::Stream::ResponseStream body_stream;
 };
 
+
 class PocoHTTPClient : public Aws::Http::HttpClient
 {
 public:
     explicit PocoHTTPClient(const PocoHTTPClientConfiguration & client_configuration);
+    explicit PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration);
     ~PocoHTTPClient() override = default;
 
     std::shared_ptr<Aws::Http::HttpResponse> MakeRequest(
@@ -183,10 +189,10 @@ protected:
     std::function<void(const ClientConfigurationPerRequest &)> error_report;
     ConnectionTimeouts timeouts;
     const RemoteHostFilter & remote_host_filter;
-    unsigned int s3_max_redirects;
+    unsigned int s3_max_redirects = 0;
     bool s3_use_adaptive_timeouts = true;
-    bool enable_s3_requests_logging;
-    bool for_disk_s3;
+    bool enable_s3_requests_logging = false;
+    bool for_disk_s3 = false;
 
     /// Limits get request per second rate for GET, SELECT and all other requests, excluding throttled by put throttler
     /// (i.e. throttles GetObject, HeadObject)

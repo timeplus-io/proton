@@ -1,4 +1,6 @@
 #include <Poco/Timespan.h>
+#include <Common/NetException.h>
+#include <Common/config_version.h>
 #include "config.h"
 
 #if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
@@ -17,6 +19,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <IO/S3/ProviderType.h>
+#include <Interpreters/Context.h>
 
 #include <aws/core/http/HttpRequest.h>
 #include <aws/core/http/HttpResponse.h>
@@ -101,6 +104,8 @@ PocoHTTPClientConfiguration::PocoHTTPClientConfiguration(
     , put_request_throttler(put_request_throttler_)
     , s3_use_adaptive_timeouts(s3_use_adaptive_timeouts_)
 {
+    /// This is used to identify configurations created by us.
+    userAgent = std::string(VERSION_FULL) + VERSION_OFFICIAL;
 }
 
 void PocoHTTPClientConfiguration::updateSchemeAndRegion()
@@ -160,6 +165,19 @@ PocoHTTPClient::PocoHTTPClient(const PocoHTTPClientConfiguration & client_config
     , http_connection_pool_size(client_configuration.http_connection_pool_size)
     , wait_on_pool_size_limit(client_configuration.wait_on_pool_size_limit)
 {
+}
+
+PocoHTTPClient::PocoHTTPClient(const Aws::Client::ClientConfiguration & client_configuration)
+    : timeouts(ConnectionTimeouts()
+       .withConnectionTimeout(Poco::Timespan(client_configuration.connectTimeoutMs * 1000))
+       .withSendTimeout(Poco::Timespan(client_configuration.requestTimeoutMs * 1000))
+       .withReceiveTimeout(Poco::Timespan(client_configuration.requestTimeoutMs * 1000))
+       .withTCPKeepAliveTimeout(Poco::Timespan(
+           client_configuration.enableTcpKeepAlive ? client_configuration.tcpKeepAliveIntervalMs * 1000 : 0))),
+    remote_host_filter(Context::getGlobalContextInstance()->getRemoteHostFilter())
+{
+    /// Provide safe default when constructed from base AWS config (e.g. ECS/IMDS clients).
+    per_request_configuration = [] (const Aws::Http::HttpRequest &) { return ClientConfigurationPerRequest{}; };
 }
 
 std::shared_ptr<Aws::Http::HttpResponse> PocoHTTPClient::MakeRequest(
@@ -302,7 +320,11 @@ void PocoHTTPClient::makeRequestInternal(
     Aws::Utils::RateLimits::RateLimiterInterface * writeLimiter) const
 {
     /// Most sessions in pool are already connected and it is not possible to set proxy host/port to a connected session.
-    const auto request_configuration = per_request_configuration(request);
+    ClientConfigurationPerRequest request_configuration;
+    if (per_request_configuration)
+        request_configuration = per_request_configuration(request);
+    else
+        request_configuration = ClientConfigurationPerRequest{};
     if (http_connection_pool_size)
         makeRequestInternalImpl<true>(request, request_configuration, response, readLimiter, writeLimiter);
     else

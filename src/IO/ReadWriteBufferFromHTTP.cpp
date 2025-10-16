@@ -281,7 +281,7 @@ ReadWriteBufferFromHTTPBase<UpdatableSessionPtr>::ReadWriteBufferFromHTTPBase(
 
     if (iter == http_header_entries.end())
     {
-        http_header_entries.emplace_back("User-Agent", fmt::format("ClickHouse/{}", VERSION_STRING));
+        http_header_entries.emplace_back(user_agent, fmt::format("Timeplus/{}{}", VERSION_STRING, VERSION_OFFICIAL));
     }
 
     if (!delay_initialization)

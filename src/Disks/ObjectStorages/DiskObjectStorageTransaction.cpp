@@ -558,7 +558,7 @@ void DiskObjectStorageTransaction::moveFile(const String & from_path, const Stri
                 throw Exception(ErrorCodes::FILE_ALREADY_EXISTS, "File already exists: {}", to_path);
 
             if (!metadata_storage.exists(from_path))
-                throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "File {} doesn't exist, cannot move", to_path);
+                throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "File {} doesn't exist, cannot move", from_path);
 
             tx->moveFile(from_path, to_path);
         }));

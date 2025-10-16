@@ -1,3 +1,5 @@
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
 #include <IO/S3/Credentials.h>
 
 #if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
@@ -439,6 +441,7 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(
         static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
         static const char AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI[] = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
         static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
+        static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN_FILE[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE";
         static const char AWS_EC2_METADATA_DISABLED[] = "AWS_EC2_METADATA_DISABLED";
 
         /// The only difference from DefaultAWSCredentialsProviderChain::DefaultAWSCredentialsProviderChain()
@@ -482,8 +485,15 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(
         }
         else if (!absolute_uri.empty())
         {
-            const auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
-            AddProvider(std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(absolute_uri.c_str(), token.c_str()));
+            auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
+            const auto token_path = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN_FILE);
+
+            AddProvider(std::make_shared<Aws::Auth::GeneralHTTPCredentialsProvider>(
+                relative_uri,
+                absolute_uri,
+                token,
+                token_path
+            ));
 
             /// DO NOT log the value of the authorization token for security purposes.
             LOG_INFO(logger, "Added ECS credentials provider with URI: [{}] to the provider chain with a{} authorization token.",

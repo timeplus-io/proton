@@ -2198,6 +2198,11 @@ void StorageMergeTree::commitSN(Int64 sn)
     auto buf = sn_file.second->writeFile(tmpfile);
     DB::writeText(fmt::format("1\n{}", sn), *buf);
     buf->sync();
+    /// proton: starts - ensure metadata for tmp file is visible to object-storage disks
+    /// For remote/object-storage disks, writeFile returns a buffer that materializes
+    /// metadata on finalize. We must finalize before replaceFile moves the tmp into place.
+    try { buf->finalize(); } catch (...) { /* fallback to dtor finalize */ }
+    /// proton: ends
     sn_file.second->replaceFile(tmpfile, sn_file.first);
 
     setCommittedSN(sn);
