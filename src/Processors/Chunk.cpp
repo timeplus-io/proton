@@ -54,6 +54,9 @@ void Chunk::setColumns(Columns columns_, UInt64 num_rows_)
 {
     columns = std::move(columns_);
     num_rows = num_rows_;
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
     checkNumRowsIsConsistent();
 }
 
@@ -61,6 +64,9 @@ void Chunk::setColumns(MutableColumns columns_, UInt64 num_rows_)
 {
     columns = unmuteColumns(std::move(columns_));
     num_rows = num_rows_;
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
     checkNumRowsIsConsistent();
 }
 
@@ -84,6 +90,9 @@ MutableColumns Chunk::mutateColumns()
 
     columns.clear();
     num_rows = 0;
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
 
     return mut_columns;
 }
@@ -100,6 +109,9 @@ MutableColumns Chunk::cloneEmptyColumns() const
 Columns Chunk::detachColumns()
 {
     num_rows = 0;
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
     return std::move(columns);
 }
 
@@ -112,6 +124,9 @@ void Chunk::addColumn(ColumnPtr column)
             dumpStructure(), column->getName(), num_rows, column->size());
 
     columns.emplace_back(std::move(column));
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
 }
 
 void Chunk::addColumn(size_t position, ColumnPtr column)
@@ -128,6 +143,9 @@ void Chunk::addColumn(size_t position, ColumnPtr column)
                         column->getName(), num_rows, column->size());
 
     columns.emplace(columns.begin() + position, std::move(column));
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
 }
 
 void Chunk::erase(size_t position)
@@ -140,15 +158,32 @@ void Chunk::erase(size_t position)
                         toString(position), toString(columns.size() - 1));
 
     columns.erase(columns.begin() + position);
+    /// proton: starts
+    invalidateCachedBytes();
+    /// proton: ends
 }
 
 UInt64 Chunk::bytes() const
 {
+    /// proton: starts
+    if (cached_bytes != std::numeric_limits<UInt64>::max())
+    {
+#ifndef NDEBUG
+        UInt64 check = 0;
+        for (const auto & column : columns)
+            check += column->byteSize();
+        chassert(check == cached_bytes);
+#endif
+        return cached_bytes;
+    }
+
     UInt64 res = 0;
     for (const auto & column : columns)
         res += column->byteSize();
 
-    return res;
+    cached_bytes = res;
+    return cached_bytes;
+    /// proton: ends
 }
 
 UInt64 Chunk::allocatedBytes() const

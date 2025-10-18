@@ -25,9 +25,9 @@ void CountingTransform::onConsume(Chunk chunk)
     /// proton: ends
 
     if (quota)
-        quota->used(QuotaType::WRITTEN_BYTES, chunk.bytes());
+        quota->used(QuotaType::WRITTEN_BYTES, bytes_before);
 
-    Progress local_progress{WriteProgress(chunk.getNumRows(), chunk.bytes())};
+    Progress local_progress{WriteProgress(rows_before, bytes_before)};
     progress.incrementPiecewiseAtomically(local_progress);
 
     if (thread_status)

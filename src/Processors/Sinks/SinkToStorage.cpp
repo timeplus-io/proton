@@ -36,7 +36,7 @@ void SinkToStorage::onConsume(Chunk chunk)
 
     /// Process progress if consumption succeeded
     if (progress_callback)
-        progress_callback(Progress(WriteProgress(chunk.getNumRows(), chunk.bytes())));
+        progress_callback(Progress(WriteProgress(rows, bytes)));
 
     if (!lastBlockIsDuplicate())
         cur_chunk = std::move(chunk);

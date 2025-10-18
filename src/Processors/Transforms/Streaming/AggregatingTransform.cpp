@@ -126,8 +126,10 @@ IProcessor::Status AggregatingTransform::prepare()
 void AggregatingTransform::work()
 {
     Int64 start_ns = MonotonicNanoseconds::now();
-    metrics.processed_bytes += current_chunk.bytes();
-    metrics.processed_rows += current_chunk.rows();
+    const auto in_bytes = current_chunk.bytes();
+    const auto in_rows = current_chunk.rows();
+    metrics.processed_bytes += in_bytes;
+    metrics.processed_rows += in_rows;
 
     if (likely(!is_consume_finished))
     {
@@ -136,7 +138,7 @@ void AggregatingTransform::work()
         {
             many_data->addRowCount(num_rows, current_variant);
             src_rows += num_rows;
-            src_bytes += current_chunk.bytes();
+            src_bytes += in_bytes;
         }
 
         consume(std::move(current_chunk));

@@ -154,8 +154,10 @@ public:
         , num_rows(other.num_rows)
         , chunk_info(std::move(other.chunk_info))
         , chunk_ctx(std::move(other.chunk_ctx))
+        , cached_bytes(other.cached_bytes)
     {
         other.num_rows = 0;
+        other.cached_bytes = std::numeric_limits<UInt64>::max();
     }
 
     Chunk(Columns columns_, UInt64 num_rows_);
@@ -170,7 +172,9 @@ public:
         chunk_info = std::move(other.chunk_info);
         chunk_ctx = std::move(other.chunk_ctx);
         num_rows = other.num_rows;
+        cached_bytes = other.cached_bytes;
         other.num_rows = 0;
+        other.cached_bytes = std::numeric_limits<UInt64>::max();
         return *this;
     }
 
@@ -182,6 +186,9 @@ public:
         chunk_info.swap(other.chunk_info);
         chunk_ctx.swap(other.chunk_ctx);
         std::swap(num_rows, other.num_rows);
+        /// proton: starts
+        std::swap(cached_bytes, other.cached_bytes);
+        /// proton: ends
     }
 
     void clear()
@@ -190,6 +197,9 @@ public:
         columns.clear();
         chunk_info.reset();
         chunk_ctx.reset();
+        /// proton: starts
+        invalidateCachedBytes();
+        /// proton: ends
     }
 
     const Columns & getColumns() const { return columns; }
@@ -378,6 +388,14 @@ private:
     ChunkInfoPtr chunk_info;
     /// COW<ChunkContext>::Ptr, it can be shared by multiple processors (only copy on write)
     ChunkContextPtr chunk_ctx;
+
+    /// proton: starts
+    /// Cache for bytes() to avoid repeated per-column loops in hot paths.
+    /// It is invalidated on every columns/rows mutation.
+    mutable UInt64 cached_bytes = std::numeric_limits<UInt64>::max();
+
+    ALWAYS_INLINE void invalidateCachedBytes() { cached_bytes = std::numeric_limits<UInt64>::max(); }
+    /// proton: ends
 
     void checkNumRowsIsConsistent();
 };

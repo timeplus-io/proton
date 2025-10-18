@@ -105,8 +105,10 @@ void ISource::work()
         {
             /// proton: starts.
             metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
-            metrics.processed_bytes += chunk->bytes();
-            metrics.processed_rows += chunk->rows();
+            const auto in_bytes = chunk->bytes();
+            const auto in_rows = chunk->rows();
+            metrics.processed_bytes += in_bytes;
+            metrics.processed_rows += in_rows;
             /// proton: ends.
 
             current_chunk.chunk = std::move(*chunk);
@@ -115,9 +117,10 @@ void ISource::work()
                 has_input = true;
                 if (auto_progress && !read_progress_was_set)
                 {
-                    progress(current_chunk.chunk.getNumRows(), current_chunk.chunk.bytes());
+                    /// Reuse in_rows/in_bytes we just computed for metrics
+                    progress(in_rows, in_bytes);
                     if (progress_callback)
-                        progress_callback(Progress(DB::ReadProgress(current_chunk.chunk.getNumRows(), current_chunk.chunk.bytes())));
+                        progress_callback(Progress(DB::ReadProgress(in_rows, in_bytes)));
                 }
             }
         }
@@ -152,4 +155,3 @@ std::optional<Chunk> ISource::tryGenerate()
 }
 
 }
-
