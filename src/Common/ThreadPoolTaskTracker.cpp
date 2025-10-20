@@ -19,6 +19,10 @@ TaskTracker::TaskTracker(ThreadPoolCallbackRunner<void> scheduler_, size_t max_t
 
 TaskTracker::~TaskTracker()
 {
+    /// Tasks should be waited outside of dtor.
+    /// Important for WriteBufferFromS3/AzureBlobStorage, where TaskTracker is currently used.
+    chassert(finished_futures.empty() && futures.empty());
+
     safeWaitAll();
 }
 
@@ -167,4 +171,3 @@ bool TaskTracker::isAsync() const
 }
 
 }
-
