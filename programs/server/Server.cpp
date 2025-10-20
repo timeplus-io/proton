@@ -2117,24 +2117,45 @@ void Server::createServers(
     port_name = "prometheus.port";
     if (config.has(port_name))
     {
-        for (const auto & listen_host : listen_hosts)
-        {
-            UInt16 port = config.getUInt(port_name);
-            /// Prometheus (if defined and not setup yet with http_port)
-            createServer(config, listen_host, port_name, port, listen_try, start_servers, servers, [&](UInt16 port_) -> ProtocolServerAdapter
-            {
+        const UInt16 port = config.getUInt(port_name);
+
+        /// proton: starts
+        /// Lambda to create Prometheus server for a given listen_host
+        auto createPrometheusServer = [&](const std::string & host) {
+            createServer(config, host, port_name, port, listen_try, start_servers, servers, [&](UInt16 port_) -> ProtocolServerAdapter {
                 Poco::Net::ServerSocket socket;
-                auto address = socketBindListen(socket, listen_host, port_);
+                auto address = socketBindListen(socket, host, port_);
                 socket.setReceiveTimeout(settings.http_receive_timeout);
                 socket.setSendTimeout(settings.http_send_timeout);
-                return ProtocolServerAdapter(
-                    listen_host,
+                return {
+                    host,
                     port_name,
                     "Prometheus: http://" + address.toString(),
                     std::make_unique<HTTPServer>(
-                        context(), createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"), server_pool, socket, http_params));
+                        context(),
+                        createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"),
+                        server_pool,
+                        socket,
+                        http_params)};
             });
+        };
+
+        /// Check for Prometheus-specific listen_host configuration
+        const std::string prometheus_listen_host = config.getString("prometheus.listen_host", "");
+        if (!prometheus_listen_host.empty())
+        {
+            /// Use Prometheus-specific listen_host
+            createPrometheusServer(prometheus_listen_host);
         }
+        else
+        {
+            /// Fall back to global listen_hosts if no Prometheus-specific listen_host is configured
+            for (const auto & listen_host : listen_hosts)
+            {
+                createPrometheusServer(listen_host);
+            }
+        }
+        /// proton: ends
     }
 }
 }

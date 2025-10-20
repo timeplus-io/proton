@@ -551,6 +551,7 @@ access_control_improvements:
 #     asynchronous_metrics: false
 
 # Serve endpoint for Prometheus monitoring.
+# listen_host - host to bind Prometheus server. If not defined, uses node listen_host
 # endpoint - mertics path (relative to root, starting with "/")
 # port - port to setup server. If not defined or 0 than http_port used
 # metrics - send data from table system.metrics
@@ -559,6 +560,7 @@ access_control_improvements:
 # status_info - send data from different component from CH, ex: Dictionaries status
 
 prometheus:
+    # listen_host: 0.0.0.0
     endpoint: /metrics
     port: 9363
     metrics: true
