@@ -1,6 +1,6 @@
 services:
   probe:
-    image: timeplus/probe:0.1.13
+    image: timeplus/probe:0.1.15
     container_name: p3s1_probe
     stdin_open: true
     volumes:

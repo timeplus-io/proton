@@ -1,6 +1,6 @@
 services:
   probe:
-    image: timeplus/probe:0.1.13
+    image: timeplus/probe:0.1.15
     container_name: ${CONTAINER_NAME_PREFIX}_p1k1_probe
     stdin_open: true
     environment:

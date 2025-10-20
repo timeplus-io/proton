@@ -689,7 +689,7 @@ jobs:
       - name: Download Release Assets
         run: |
           export PROTON_VERSION=$TAG
-          export PROBE_VERSION=v0.1.13
+          export PROBE_VERSION=v0.1.15
           cd $GITHUB_WORKSPACE/tests/cluster/deployment/legacy/
           echo ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }} >> GH_PERSONAL_ACCESS_TOKEN
           gh auth login --with-token < GH_PERSONAL_ACCESS_TOKEN

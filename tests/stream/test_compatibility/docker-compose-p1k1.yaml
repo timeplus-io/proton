@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   probe:
-    image: timeplus/probe:0.1.13
+    image: timeplus/probe:0.1.15
     container_name: p1k1_probe
     stdin_open: true
     environment:
