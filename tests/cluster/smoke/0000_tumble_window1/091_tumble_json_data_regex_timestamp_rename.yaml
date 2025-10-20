@@ -9,7 +9,7 @@ cluster:
 steps:
   - type: stream
     name: '101'
-    query: select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end
+    query: select id, max(value), json_extract_bool(json, 'bool') as json_bool, to_date32(json_extract_string(json, '1953')) as to_date, replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex, json_extract_float(json, 'float') as json_float, json_extract_int(json, 'int') as json_extract_int, json_query(json, '$.array[*][0 to 2, 4]') as json_query, json_extract_array_raw(json, 'array') as json_extract_array_raw, json_value(json, '$.array[*][0 to 2, 4]') as json_value, window_end from tumble(test_smoke1, to_time(json_extract_string(json, 'create_time')), interval 5 second) where window_end < '2021-11-02 20:00:10' group by id, json, json_bool, json_float, json_extract_int, to_date, replace_regex, json_extract_array_raw, json_value, window_end
     schema:
       - name: id
         type: string

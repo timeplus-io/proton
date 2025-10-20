@@ -30,6 +30,7 @@ REGISTER_FUNCTION(Conversion)
     factory.registerFunction<FunctionToDate>();
     /// MySQL compatibility alias.
     /// proton: starts
+    factory.registerFunction<FunctionToDate>("to_date16", {});
     factory.registerFunction<FunctionToDate32>();
     factory.registerFunction<FunctionToDate32>("date", {}, FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToInt>();

@@ -55,7 +55,7 @@ SELECT format_datetime(to_datetime('2018-01-02 22:33:44'), '%%'), format_datetim
 SELECT format_datetime(to_datetime('2018-01-02 22:33:44'), 'no formatting pattern'), format_datetime(to_date('2018-01-02'), 'no formatting pattern');
 
 SELECT format_datetime(to_date('2018-01-01'), '%F %T');
-SELECT format_datetime(to_date('1927-01-01'), '%F %T');
+SELECT format_datetime(to_date32('1927-01-01'), '%F %T');
 
 SELECT
     format_datetime(to_datetime('2018-01-01 01:00:00', 'UTC'), '%F %T', 'UTC'),

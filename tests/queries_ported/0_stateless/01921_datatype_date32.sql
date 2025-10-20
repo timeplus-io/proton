@@ -113,7 +113,7 @@ select subtract_quarters(x1, 1) from t1;
 select '-------subtract_years---------';
 select subtract_years(x1, 1) from t1;
 select '-------to_date---------';
-select to_date('1900-01-01'), to_date(to_date('2000-01-01'));
+select to_date32('1900-01-01'), to_date32(to_date32('2000-01-01'));
 select to_date32_or_zero('1899-01-01'), to_date32_or_null('1899-01-01');
 select to_date32_or_zero(''), to_date32_or_null('');
 select (select to_date32_or_zero(''));

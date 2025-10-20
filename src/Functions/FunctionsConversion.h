@@ -1940,8 +1940,8 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 
 
 /// Declared early because used below.
-struct NameToDate { static constexpr auto name = "to_date16"; };
-struct NameToDate32 { static constexpr auto name = "to_date"; };
+struct NameToDate { static constexpr auto name = "to_date"; };
+struct NameToDate32 { static constexpr auto name = "to_date32"; };
 struct NameToDateTime { static constexpr auto name = "to_datetime"; };
 struct NameToDateTime32 { static constexpr auto name = "to_datetime32"; };
 struct NameToDateTime64 { static constexpr auto name = "to_datetime64"; };

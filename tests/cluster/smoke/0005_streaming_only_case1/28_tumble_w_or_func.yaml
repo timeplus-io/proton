@@ -14,7 +14,7 @@ steps:
       select id,
         max(value),
         json_extract_bool(json, 'bool') as json_bool,
-        to_date(json_extract_string(json, '1953')) as to_date,
+        to_date32(json_extract_string(json, '1953')) as to_date,
         replace_regex(json_extract_string(json, '1953'), '11*', 'a') as replace_regex,
         json_extract_float(json, 'float') as json_float,
         json_extract_int(json, 'int') as json_extract_int,
