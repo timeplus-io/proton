@@ -278,6 +278,7 @@ enum class ProcessorID : UInt32
     ThrowingExceptionSourceID = 11'055,
     IcebergSourceID = 11'100,
     MongoDBSourceID = 11'101,
+    TaskExecutionSourceID = 11'200,
 
     /// Sink Processors
     EmptySinkID = 20'000,

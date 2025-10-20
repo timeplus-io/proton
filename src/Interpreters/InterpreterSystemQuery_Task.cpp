@@ -13,6 +13,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
+#include <Processors/Sources/TaskExecutionSource.h>
 #include <QueryPipeline/QueryPipeline.h>
 #include <Task/TaskExecution.h>
 
@@ -103,42 +104,11 @@ BlockIO InterpreterSystemQuery::executeExecuteTask(const ASTSystemQuery & system
     if (database.empty())
         database = getContext()->getCurrentDatabase();
 
-    Task::TaskExecution task_execution(StorageID(database, system.getTable()));
-    auto result = task_execution.execute(getContext());
-
-    /// start, end, checkpoint, result
-    auto start_col = ColumnDateTime64::create(0, 3);
-    auto end_col = ColumnDateTime64::create(0, 3);
-    auto checkpoint_key_col = ColumnString::create();
-    auto checkpoint_val_col = ColumnString::create();
-    auto checkpoint_offset_col = ColumnArray::ColumnOffsets::create();
-    auto result_col = ColumnString::create();
-
-    /// Provision block from task execution result
-    start_col->insert(DateTime64(result.execution_start));
-    end_col->insert(DateTime64(result.execution_end));
-    for (const auto & [k, v] : result.checkpoint)
-    {
-        checkpoint_key_col->insert(k);
-        checkpoint_val_col->insert(v);
-    }
-    checkpoint_offset_col->insert(checkpoint_key_col->size());
-    result_col->insert(result.displayError());
-
-    Block result_block{
-        {std::move(start_col), std::make_shared<DataTypeDateTime64>(3), "start"},
-        {std::move(end_col), std::make_shared<DataTypeDateTime64>(3), "end"},
-        {ColumnMap::create(
-             ColumnPtr(std::move(checkpoint_key_col)),
-             ColumnPtr(std::move(checkpoint_val_col)),
-             ColumnPtr(std::move(checkpoint_offset_col))),
-         std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()),
-         "checkpoint"},
-        {std::move(result_col), std::make_shared<DataTypeString>(), "result"},
-    };
+    StorageID task_id{database, system.getTable()};
+    auto source = std::make_shared<TaskExecutionSource>(std::move(task_id), getContext());
 
     BlockIO res;
-    res.pipeline = QueryPipeline(std::make_shared<SourceFromSingleChunk>(std::move(result_block)));
+    res.pipeline = QueryPipeline(std::move(source));
     return res;
 }
 }

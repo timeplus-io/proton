@@ -66,6 +66,7 @@ void TaskScheduler::loadTaskDescriptors()
         std::scoped_lock lk{tasks_info_mutex};
         for (auto & task : resp->data().descs)
         {
+            LOG_INFO(logger, "Task added: {}.{} id={} data_version={}", task->ns, task->name, toString(task->id), task->data_version);
             addOrUpdateTaskUnlocked(std::move(task));
         }
 
@@ -106,7 +107,10 @@ void TaskScheduler::addOrUpdateTaskUnlocked(cluster::protocol::TaskDescriptorPtr
     if (!inserted)
     {
         if (iter->second->descriptor->data_version >= task->data_version)
+        {
+            /// Do not schedule again the task of the same or stale data version
             return;
+        }
         iter->second = task_info;
     }
 

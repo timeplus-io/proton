@@ -102,6 +102,7 @@ void MetadataUpdater::handleCreateUserDefinedFunction(
     else if (request_data.exists_op == cluster::protocol::ExistsOperation::Ignore)
     {
         meta_store->ackProposal(request_header.correlationID(), sn, DB::ErrorCodes::OK, /*error_message=*/"");
+        return;
     }
     else
     {

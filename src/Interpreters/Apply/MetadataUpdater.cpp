@@ -739,10 +739,7 @@ int MetadataUpdater::executeWithRetry(std::function<int()> func) const
             break;
 
         if (isPermanentError(err_code))
-        {
-            LOG_ERROR(logger, "Metadata updater execution failed by permanent error: code={}", err_code);
             break;
-        }
 
         std::this_thread::sleep_for(retry_delay);
         LOG_WARNING(logger, "Retry metadata updater execution: error={}", err_code);

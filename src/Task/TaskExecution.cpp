@@ -22,7 +22,6 @@
 #include <Storages/IStorage.h>
 #include <Task/TaskScheduler.h>
 #include <Task/Utils.h>
-#include <aws/crt/io/ChannelHandler.h>
 #include <Common/Exception.h>
 #include <Common/logger_useful.h>
 
@@ -37,6 +36,7 @@ extern const int METADATA_VERSION_CHANGED;
 extern const int TASK_IS_DISABLED;
 extern const int UNKNOWN_EXCEPTION;
 extern const int UNKNOWN_TASK;
+extern const int QUERY_WAS_CANCELLED;
 }
 
 namespace Task
@@ -250,8 +250,8 @@ Checkpoint TaskExecution::executeQuery(const std::string & query, const ContextP
     const auto timeout_ms = task_descriptor->getTimeoutMS();
     const auto now = MonotonicMilliseconds::now();
     executor.setCancelCallback(
-        [now, timeout_ms]() { return MonotonicMilliseconds::now() - now >= static_cast<Int64>(timeout_ms); },
-        std::min(timeout_ms, static_cast<uint64_t>(10000)));
+        [this, now, timeout_ms]() { return (MonotonicMilliseconds::now() - now >= static_cast<Int64>(timeout_ms)) || is_canceled.load(); },
+        std::min(timeout_ms, static_cast<uint64_t>(1'000)));
 
     executor.execute();
 
@@ -318,17 +318,35 @@ TaskExecutionResult TaskExecution::execute(const ContextPtr & context)
 
     result.execution_end = UTCMilliseconds::now();
 
-    if (!result.error.hasError() && result.execution_end - result.execution_start > static_cast<Int64>(task_descriptor->getTimeoutMS()))
+    if (!result.error.hasError())
     {
-        result.error.error_code = ErrorCodes::TIMEOUT_EXCEEDED;
-        result.error.error_message = "Task execution timeout.";
+        if (is_canceled)
+        {
+            result.error.error_code = ErrorCodes::QUERY_WAS_CANCELLED;
+            result.error.error_message = "Task execution was cancelled.";
+        }
+        else if (result.execution_end - result.execution_start > static_cast<Int64>(task_descriptor->getTimeoutMS()))
+        {
+            result.error.error_code = ErrorCodes::TIMEOUT_EXCEEDED;
+            result.error.error_message = "Task execution was timeout.";
+        }
     }
 
     const auto save_res = saveTaskExecutionResult(task_id, task_descriptor->data_version, result);
     if (save_res != ErrorCodes::OK)
-        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to save task execution state: {}", ErrorCodes::getName(save_res));
+    {
+        /// Task execution is finished but encounter error in saving result.
+        LOG_ERROR(logger, "Failed to save task execution state: error={}", ErrorCodes::getName(save_res));
+    }
 
     return result;
 }
+
+void TaskExecution::cancel() noexcept
+{
+    LOG_DEBUG(logger, "Task execution cancelled: {}", task_id.getFullTableName());
+    is_canceled = true;
+}
+
 }
 }

@@ -19,6 +19,7 @@ public:
     }
 
     TaskExecutionResult execute(const ContextPtr & context);
+    void cancel() noexcept;
 
 private:
     void getAndCheckTaskDescriptor(std::optional<uint32_t> data_version);
@@ -28,6 +29,8 @@ private:
 
     StorageID task_id;
     cluster::protocol::TaskDescriptorPtr task_descriptor;
+
+    std::atomic<bool> is_canceled{false};
 
     LoggerPtr logger;
 };
