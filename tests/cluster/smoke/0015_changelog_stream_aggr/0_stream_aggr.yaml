@@ -34,7 +34,7 @@ steps:
     <<else>>
     node: [p2]
     <<end>>
-    query: select count(), avg(i), sum(i), min(i), max(i), min(s), max(s) from changelog_stream_aggr emit periodic 1s
+    query: select count(), avg(i), sum(i), min(i), max(i), min(s), max(s) from changelog_stream_aggr emit periodic 1s settings seek_to='earliest'
     schema:
       - name: count()
         type: uint64
