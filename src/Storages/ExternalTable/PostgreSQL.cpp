@@ -5,9 +5,9 @@
 #include "config.h"
 
 #if USE_LIBPQXX
-#    include <Core/PostgreSQL/PoolWithFailover.h>
-#    include <Storages/StoragePostgreSQL.h>
-#    include <Common/parseRemoteDescription.h>
+#include <Core/PostgreSQL/PoolWithFailover.h>
+#include <Storages/StoragePostgreSQL.h>
+#include <Common/parseRemoteDescription.h>
 
 
 namespace DB
@@ -49,6 +49,7 @@ void PostgreSQL::init()
     common_configuration.database = settings->database.value;
     common_configuration.schema = settings->schema.value;
     common_configuration.table = remote_table_name;
+    common_configuration.on_conflict = settings->on_conflict.value;
     replicas_by_priority[0].emplace_back(std::move(common_configuration));
 
     auto connection_pool_size = settings->pooled_connections.changed ? settings->pooled_connections : DEFAULT_CONNECTION_POOL_SIZE;
@@ -67,7 +68,9 @@ void PostgreSQL::init()
         ColumnsDescription{},
         ConstraintsDescription{},
         /*comment=*/"",
-        context);
+        context,
+        settings->schema,
+        settings->on_conflict);
 }
 }
 }

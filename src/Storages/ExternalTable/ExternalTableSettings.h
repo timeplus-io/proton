@@ -35,19 +35,21 @@ class ASTStorage;
     M(String, ssl_cert_file, "", "Path to SSL certificate file", 0) \
     M(String, ssl_key_file, "", "Path to SSL private key file", 0) \
     M(String, database, "default", "The datababse to connect to", 0) \
-    M(String, schema, "", "PostgreSQL schema", 0) \
     M(String, table, "", "The remote database table to which the external table is mapped", 0) \
     M(UInt64, \
       pooled_connections, \
       std::numeric_limits<UInt64>::max(), \
       "Max pooled TCP connections to the database server. If not set, each external table type will pick its default value", \
       0) \
-    /** MongoDB */                       \
+    /** PostgreSQL */ \
+    M(String, schema, "", "PostgreSQL non-default schema", 0) \
+    M(String, on_conflict, "", "PostgreSQL conflict resolution strategy", 0) \
+    /** MongoDB */ \
     M(String, uri, "", "MongoDB server's connection URI", 0) \
     M(String, collection, "", "Remote collection name", 0) \
     M(String, connection_options, "", "MongoDB connection string options as a URL formatted string. e.g. 'authSource=admin&ssl=true'", 0) \
     M(String, oid_columns, "_id", "Comma-separated list of columns that should be treated as oid in the WHERE clause. _id by default", 0) \
-    /** MySQL */  \
+    /** MySQL */ \
     M(Bool, replace_query, false, "Flag that converts 'INSERT INTO' queries to 'REPLACE INTO'", 0) \
     M(String, on_duplicate_clause, "", "The 'ON DUPLICATE KEY on_duplicate_clause' expression that is added to the 'INSERT' query.", 0)
 
