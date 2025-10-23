@@ -19,7 +19,7 @@ jobs:
     with:
       ec2-instance-type: c5.large
       ec2-image-id: ami-042a37e33a285c22b
-      submodules: 'recursive'
+      submodules: 'false'
       run_mode: 'start' # start ec2 on demand instance
       upjob: update_version
       command: |
@@ -57,7 +57,8 @@ jobs:
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
       upload_files: |
-        proton-*-Linux-x86_64*
+        proton-*-Linux-x86_64.tar.gz
+        proton-*-Linux-x86_64-debug-symbols.tar.gz
         python-Linux-x86_64.tar.gz
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
@@ -122,6 +123,11 @@ jobs:
         echo "Final sizes:"
         ls -lh $PROTON_BINARY $PROTON_DEBUG
 
+        # Package the binary into a tar.gz for faster downloads
+        echo "Packaging binary tarball..."
+        tar -czf ${PROTON_BINARY}.tar.gz $PROTON_BINARY
+        ls -lh ${PROTON_BINARY}.tar.gz
+
         # Start static server for docker build
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
@@ -176,7 +182,8 @@ jobs:
       ec2-image-id: ${{ vars.ARM_AMI }}
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
-      upload_files: proton-*-Linux-aarch64
+      upload_files: |
+        proton-*-Linux-aarch64.tar.gz
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Linux_Arm64
@@ -238,6 +245,12 @@ jobs:
         aws s3 cp --no-progress ./cache-arm.tar.gz s3://tp-internal2/proton-oss/
         
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
+
+        # Package the binary into a tar.gz for faster downloads
+        echo "Packaging binary tarball..."
+        cd $GITHUB_WORKSPACE
+        tar -czf ${PROTON_BINARY}.tar.gz $PROTON_BINARY
+        ls -lh ${PROTON_BINARY}.tar.gz
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -349,7 +362,8 @@ jobs:
       ec2-image-id: ami-042a37e33a285c22b
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
-      upload_files: proton-*-Darwin-x86_64
+      upload_files: |
+        proton-*-Darwin-x86_64.tar.gz
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Darwin_X86_64
@@ -399,6 +413,12 @@ jobs:
         sha256sum $GITHUB_WORKSPACE/output/proton
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
+
+        # Package the binary into a tar.gz for faster downloads
+        echo "Packaging binary tarball..."
+        cd $GITHUB_WORKSPACE
+        tar -czf ${PROTON_BINARY}.tar.gz $PROTON_BINARY
+        ls -lh ${PROTON_BINARY}.tar.gz
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -475,7 +495,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   Build_Native_Darwin_arm64:
-    needs: Build_Linux_X86_64
+    needs: update_version
     runs-on: [self-hosted, macOS, ARM64]
     env:
       build_directory: ${{ github.workspace }}/build
@@ -590,6 +610,12 @@ jobs:
         run: |
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
           PYTHON_PACKAGE=${{ env.build_directory }}/programs/python-Darwin-arm64.tar.gz
+          TARBALL=${STRIPPED_BINARY}.tar.gz
+
+          # Create tar.gz package for faster downloads
+          echo "Packaging binary tarball..."
+          tar -czf "$TARBALL" -C "$(dirname "$STRIPPED_BINARY")" "$(basename "$STRIPPED_BINARY")"
+          ls -lh "$TARBALL"
           
           # Function to upload asset with retry
           upload_asset_with_retry() {
@@ -622,9 +648,9 @@ jobs:
             done
           }
           
-          # Upload binary with retry
-          if ! upload_asset_with_retry "$STRIPPED_BINARY" "${{ env.LATEST_TAG }}"; then
-            echo "Binary upload failed after all attempts"
+          # Upload tarball with retry
+          if ! upload_asset_with_retry "$TARBALL" "${{ env.LATEST_TAG }}"; then
+            echo "Tarball upload failed after all attempts"
             exit 1
           fi
           
