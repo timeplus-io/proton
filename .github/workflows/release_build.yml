@@ -495,7 +495,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   Build_Native_Darwin_arm64:
-    needs: update_version
+    needs: Build_Linux_X86_64 # Gate the job behind the Linux x86_64 job so the release exists before uploads.
     runs-on: [self-hosted, macOS, ARM64]
     env:
       build_directory: ${{ github.workspace }}/build

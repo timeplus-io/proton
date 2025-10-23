@@ -440,6 +440,17 @@ jobs:
           echo "BINARY_NAME=proton_${COMMIT_HASH}_${ARCH}" >> $GITHUB_ENV
           echo "BINARY_PATH=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}" >> $GITHUB_ENV
 
+          # Package the binary into a tar.gz for faster downloads
+          TARBALL_NAME="proton_${COMMIT_HASH}_${ARCH}.tar.gz"
+          TARBALL_PATH="${{ env.build_directory }}/programs/${TARBALL_NAME}"
+          echo "Packaging binary tarball: $TARBALL_NAME"
+          tar -czf "$TARBALL_PATH" -C "$(dirname "$STRIPPED_BINARY")" "$(basename "$STRIPPED_BINARY")"
+          ls -lh "$TARBALL_PATH"
+
+          # Export tarball info for subsequent steps
+          echo "TARBALL_NAME=$TARBALL_NAME" >> $GITHUB_ENV
+          echo "TARBALL_PATH=$TARBALL_PATH" >> $GITHUB_ENV
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
@@ -447,7 +458,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Upload Artifact To S3
+      - name: Upload Artifact To S3 (tar.gz)
         run: |
           # Improve S3 upload reliability with specific options
           max_attempts=5
@@ -463,8 +474,8 @@ jobs:
                --only-show-errors \
                --cli-connect-timeout 30 \
                --cli-read-timeout 600 \
-               "${{ env.BINARY_PATH }}" \
-               "s3://tp-internal2/proton-oss/native_build_macOS/${{ env.BINARY_NAME }}"; then
+               "${{ env.TARBALL_PATH }}" \
+               "s3://tp-internal2/proton-oss/native_build_macOS/${{ env.TARBALL_NAME }}"; then
               echo "Upload successful"
               break
             else
@@ -483,7 +494,7 @@ jobs:
             fi
           done
 
-      - name: Print SHA256 Checksum
+      - name: Print SHA256 Checksum (tar.gz)
         run: |
-          STRIPPED_BINARY=${{ env.build_directory }}/programs/${{ env.BINARY_NAME }}
-          shasum -a 256 $STRIPPED_BINARY
+          TARBALL=${{ env.TARBALL_PATH }}
+          shasum -a 256 "$TARBALL"
