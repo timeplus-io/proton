@@ -71,7 +71,7 @@ BENCHMARK_DEFINE_F(HybridTableFixture, Upsert)(benchmark::State & state)
     {
         auto key = fmt::format("key+++++++++++++++++_{}", ++i);
         DB::HybridEmplaceResult result
-            = new_key ? hybrid_table->emplaceNewKey(key) : hybrid_table->emplaceKey(key, /*disable_spill=*/false);
+            = new_key ? hybrid_table->emplaceNewKey(key, /*disable_spill=*/false) : hybrid_table->emplaceKey(key, /*disable_spill=*/false);
         if (result.isInserted())
         {
             auto * s = reinterpret_cast<std::string *>(result.find_result.getMutableMapped());
