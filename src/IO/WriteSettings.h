@@ -23,10 +23,6 @@ struct WriteSettings
 
     bool s3_allow_parallel_part_upload = true;
 
-
-    /// Monitoring
-    bool for_object_storage = false; // to choose which profile events should be incremented
-    
     bool use_adaptive_write_buffer = false;
     size_t adaptive_write_buffer_initial_size = 16 * 1024;
 

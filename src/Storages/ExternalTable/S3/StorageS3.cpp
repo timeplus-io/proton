@@ -1747,8 +1747,7 @@ std::optional<ColumnsDescription> StorageS3::tryGetColumnsFromCache(
                                              s3_configuration.url.version_id,
                                              s3_configuration.request_settings,
                                              /*with_metadata=*/false,
-                                             /*for_disk_s3=*/false,
-                                             /*throw_on_error= */ false)
+                                             /*throw_on_error=*/false)
                                              .last_modification_time;
             }
 

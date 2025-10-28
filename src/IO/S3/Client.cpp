@@ -3,7 +3,6 @@
 #if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
 
 #include <aws/core/client/CoreErrors.h>
-#include <aws/core/client/DefaultRetryStrategy.h>
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
@@ -13,8 +12,9 @@
 #include <aws/core/utils/HashingUtils.h>
 #include <aws/core/utils/logging/ErrorMacros.h>
 
+#include <Poco/Net/NetException.h>
+
 #include <IO/Expect404ResponseScope.h>
-#include <IO/S3Common.h>
 #include <IO/S3/Requests.h>
 #include <IO/S3/PocoHTTPClientFactory.h>
 #include <IO/S3/AWSLogger.h>
@@ -23,6 +23,25 @@
 
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
+#include <Common/CurrentMetrics.h>
+
+
+namespace ProfileEvents
+{
+    extern const Event S3WriteRequestsErrors;
+    extern const Event S3ReadRequestsErrors;
+
+    extern const Event DiskS3WriteRequestsErrors;
+    extern const Event DiskS3ReadRequestsErrors;
+
+    extern const Event S3Clients;
+    extern const Event TinyS3Clients;
+}
+
+namespace CurrentMetrics
+{
+    extern const Metric S3DiskNoKeyErrors;
+}
 
 namespace DB
 {
@@ -200,6 +219,8 @@ Client::Client(
 
     cache = std::make_shared<ClientCache>();
     ClientCacheRegistry::instance().registerClient(cache);
+
+    ProfileEvents::increment(ProfileEvents::S3Clients);
 }
 
 Client::Client(
@@ -220,6 +241,22 @@ Client::Client(
 {
     cache = std::make_shared<ClientCache>(*other.cache);
     ClientCacheRegistry::instance().registerClient(cache);
+
+    ProfileEvents::increment(ProfileEvents::TinyS3Clients);
+}
+
+
+Client::~Client()
+{
+    try
+    {
+        ClientCacheRegistry::instance().unregisterClient(cache.get());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
+        throw;
+    }
 }
 
 Aws::Auth::AWSCredentials Client::getCredentials() const
@@ -358,7 +395,8 @@ Model::HeadObjectOutcome Client::HeadObject(HeadObjectRequest & request) const
 
     /// The next call is NOT a recurcive call
     /// This is a virtuall call Aws::S3::S3Client::HeadObject(const Model::HeadObjectRequest&)
-    return HeadObject(static_cast<const Model::HeadObjectRequest&>(request));
+    return processRequestResult(
+        HeadObject(static_cast<const Model::HeadObjectRequest&>(request)));
 }
 
 /// For each request, we wrap the request functions from Aws::S3::Client with doRequest
@@ -366,34 +404,37 @@ Model::HeadObjectOutcome Client::HeadObject(HeadObjectRequest & request) const
 
 Model::ListObjectsV2Outcome Client::ListObjectsV2(ListObjectsV2Request & request) const
 {
-    return doRequest(request, [this](const Model::ListObjectsV2Request & req) { return ListObjectsV2(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ true>(
+        request, [this](const Model::ListObjectsV2Request & req) { return ListObjectsV2(req); });
 }
 
 Model::ListObjectsOutcome Client::ListObjects(ListObjectsRequest & request) const
 {
-    return doRequest(request, [this](const Model::ListObjectsRequest & req) { return ListObjects(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ true>(
+        request, [this](const Model::ListObjectsRequest & req) { return ListObjects(req); });
 }
 
 Model::GetObjectOutcome Client::GetObject(GetObjectRequest & request) const
 {
-    return doRequest(request, [this](const Model::GetObjectRequest & req) { return GetObject(req); });
+    return processRequestResult(
+        doRequest(request, [this](const Model::GetObjectRequest & req) { return GetObject(req); }));
 }
 
 Model::AbortMultipartUploadOutcome Client::AbortMultipartUpload(AbortMultipartUploadRequest & request) const
 {
-    return doRequest(
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
         request, [this](const Model::AbortMultipartUploadRequest & req) { return AbortMultipartUpload(req); });
 }
 
 Model::CreateMultipartUploadOutcome Client::CreateMultipartUpload(CreateMultipartUploadRequest & request) const
 {
-    return doRequest(
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
         request, [this](const Model::CreateMultipartUploadRequest & req) { return CreateMultipartUpload(req); });
 }
 
 Model::CompleteMultipartUploadOutcome Client::CompleteMultipartUpload(CompleteMultipartUploadRequest & request) const
 {
-    auto outcome = doRequest(
+    auto outcome = doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
         request, [this](const Model::CompleteMultipartUploadRequest & req) { return CompleteMultipartUpload(req); });
 
     const auto & key = request.GetKey();
@@ -440,32 +481,38 @@ Model::CompleteMultipartUploadOutcome Client::CompleteMultipartUpload(CompleteMu
 
 Model::CopyObjectOutcome Client::CopyObject(CopyObjectRequest & request) const
 {
-    return doRequest(request, [this](const Model::CopyObjectRequest & req) { return CopyObject(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, [this](const Model::CopyObjectRequest & req) { return CopyObject(req); });
 }
 
 Model::PutObjectOutcome Client::PutObject(PutObjectRequest & request) const
 {
-    return doRequest(request, [this](const Model::PutObjectRequest & req) { return PutObject(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, [this](const Model::PutObjectRequest & req) { return PutObject(req); });
 }
 
 Model::UploadPartOutcome Client::UploadPart(UploadPartRequest & request) const
 {
-    return doRequest(request, [this](const Model::UploadPartRequest & req) { return UploadPart(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, [this](const Model::UploadPartRequest & req) { return UploadPart(req); });
 }
 
 Model::UploadPartCopyOutcome Client::UploadPartCopy(UploadPartCopyRequest & request) const
 {
-    return doRequest(request, [this](const Model::UploadPartCopyRequest & req) { return UploadPartCopy(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, [this](const Model::UploadPartCopyRequest & req) { return UploadPartCopy(req); });
 }
 
 Model::DeleteObjectOutcome Client::DeleteObject(DeleteObjectRequest & request) const
 {
-    return doRequest(request, [this](const Model::DeleteObjectRequest & req) { Expect404ResponseScope scope; return DeleteObject(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, [this](const Model::DeleteObjectRequest & req) { Expect404ResponseScope scope; return DeleteObject(req); });
 }
 
 Model::DeleteObjectsOutcome Client::DeleteObjects(DeleteObjectsRequest & request) const
 {
-    return doRequest(request, [this](const Model::DeleteObjectsRequest & req) { Expect404ResponseScope scope; return DeleteObjects(req); });
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, [this](const Model::DeleteObjectsRequest & req) { Expect404ResponseScope scope; return DeleteObjects(req); });
 }
 
 Client::ComposeObjectOutcome Client::ComposeObject(ComposeObjectRequest & request) const
@@ -494,7 +541,8 @@ Client::ComposeObjectOutcome Client::ComposeObject(ComposeObjectRequest & reques
         return ComposeObjectOutcome(MakeRequest(req, endpointResolutionOutcome.GetResult(), Aws::Http::HttpMethod::HTTP_PUT));
     };
 
-    return doRequest(request, request_fn);
+    return doRequestWithRetryNetworkErrors</*IsReadMethod*/ false>(
+        request, request_fn);
 }
 
 template <typename RequestType, typename RequestFn>
@@ -584,6 +632,84 @@ Client::doRequest(RequestType & request, RequestFn request_fn) const
     }
 
     throw Exception(ErrorCodes::TOO_MANY_REDIRECTS, "Too many redirects");
+}
+
+template <bool IsReadMethod, typename RequestType, typename RequestFn>
+std::invoke_result_t<RequestFn, RequestType>
+Client::doRequestWithRetryNetworkErrors(RequestType & request, RequestFn request_fn) const
+{
+    auto with_retries = [this, request_fn_ = std::move(request_fn)] (const RequestType & request_)
+    {
+        chassert(client_configuration.retryStrategy);
+        const Int64 max_attempts = client_configuration.retryStrategy->GetMaxAttempts();
+        std::exception_ptr last_exception = nullptr;
+        for (Int64 attempt_no = 0; attempt_no < max_attempts; ++attempt_no)
+        {
+            try
+            {
+                /// S3 does retries network errors actually.
+                /// But it is matter when errors occur.
+                /// This code retries a specific case when
+                /// network error happens when XML document is being read from the response body.
+                /// Hence, the response body is a stream, network errors are possible at reading.
+                /// S3 doesn't retry them.
+
+                /// Not all requests can be retried in that way.
+                /// Requests that read out response body to build the result are possible to retry.
+                /// Requests that expose the response stream as an answer are not retried with that code. E.g. GetObject.
+                return request_fn_(request_);
+            }
+            catch (Poco::Net::ConnectionResetException &)
+            {
+
+                if constexpr (IsReadMethod)
+                {
+                    if (isClientForDisk())
+                        ProfileEvents::increment(ProfileEvents::DiskS3ReadRequestsErrors);
+                    else
+                        ProfileEvents::increment(ProfileEvents::S3ReadRequestsErrors);
+                }
+                else
+                {
+                    if (isClientForDisk())
+                        ProfileEvents::increment(ProfileEvents::DiskS3WriteRequestsErrors);
+                    else
+                        ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors);
+                }
+
+                tryLogCurrentException(log, "Will retry");
+                last_exception = std::current_exception();
+
+                auto error = Aws::Client::AWSError<Aws::Client::CoreErrors>(Aws::Client::CoreErrors::NETWORK_CONNECTION, /*retry*/ true);
+                client_configuration.retryStrategy->CalculateDelayBeforeNextRetry(error, attempt_no);
+                continue;
+            }
+        }
+
+        chassert(last_exception);
+        std::rethrow_exception(last_exception);
+    };
+
+    return doRequest(request, with_retries);
+}
+
+template <typename RequestResult>
+RequestResult Client::processRequestResult(RequestResult && outcome) const
+{
+    if (outcome.IsSuccess() || !isClientForDisk())
+        return std::forward<RequestResult>(outcome);
+
+    if (outcome.GetError().GetErrorType() == Aws::S3::S3Errors::NO_SUCH_KEY)
+        CurrentMetrics::add(CurrentMetrics::S3DiskNoKeyErrors);
+    String enriched_message = fmt::format(
+        "{} {}",
+        outcome.GetError().GetMessage(),
+        "This error happened for S3 disk.");
+
+    auto error = outcome.GetError();
+    error.SetMessage(enriched_message);
+
+    return RequestResult(error);
 }
 
 bool Client::supportsMultiPartCopy() const

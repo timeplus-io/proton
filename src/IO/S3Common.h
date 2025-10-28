@@ -91,9 +91,12 @@ struct AuthSettings
     std::optional<uint64_t> expiration_window_seconds;
     std::optional<bool> no_sign_request;
 
-    bool operator==(const AuthSettings & other) const = default;
+    bool hasUpdates(const AuthSettings & other) const;
 
     void updateFrom(const AuthSettings & from);
+    
+private:
+    bool operator==(const AuthSettings & other) const = default;
 };
 
 }

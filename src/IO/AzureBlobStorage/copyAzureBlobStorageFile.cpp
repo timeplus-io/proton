@@ -46,7 +46,6 @@ namespace
             const String & dest_blob_,
             std::shared_ptr<const AzureObjectStorageSettings> settings_,
             ThreadPoolCallbackRunner<void> schedule_,
-            bool for_disk_azure_blob_storage_,
             LoggerPtr log_)
             : create_read_buffer(create_read_buffer_)
             , client(client_)
@@ -56,7 +55,6 @@ namespace
             , dest_blob(dest_blob_)
             , settings(settings_)
             , schedule(schedule_)
-            , for_disk_azure_blob_storage(for_disk_azure_blob_storage_)
             , log(log_)
             , max_single_part_upload_size(settings_->max_single_part_upload_size)
         {
@@ -73,7 +71,6 @@ namespace
         const String & dest_blob;
         std::shared_ptr<const AzureObjectStorageSettings> settings;
         ThreadPoolCallbackRunner<void> schedule;
-        bool for_disk_azure_blob_storage;
         const LoggerPtr log;
         size_t max_single_part_upload_size;
 
@@ -222,7 +219,7 @@ namespace
         void processUploadPartRequest(UploadPartTask & task)
         {
             ProfileEvents::increment(ProfileEvents::AzureUploadPart);
-            if (for_disk_azure_blob_storage)
+            if (client->GetClickhouseOptions().IsClientForDisk)
                 ProfileEvents::increment(ProfileEvents::DiskAzureUploadPart);
 
             auto block_blob_client = client->GetBlockBlobClient(dest_blob);
@@ -274,10 +271,9 @@ void copyDataToAzureBlobStorageFile(
     const String & dest_container_for_logging,
     const String & dest_blob,
     std::shared_ptr<const AzureObjectStorageSettings> settings,
-    ThreadPoolCallbackRunner<void> schedule,
-    bool for_disk_azure_blob_storage)
+    ThreadPoolCallbackRunner<void> schedule)
 {
-    UploadHelper helper{create_read_buffer, dest_client, offset, size, dest_container_for_logging, dest_blob, settings, schedule, for_disk_azure_blob_storage, getLogger("copyDataToAzureBlobStorageFile")};
+    UploadHelper helper{create_read_buffer, dest_client, offset, size, dest_container_for_logging, dest_blob, settings, schedule, getLogger("copyDataToAzureBlobStorageFile")};
     helper.performCopy();
 }
 
@@ -293,14 +289,13 @@ void copyAzureBlobStorageFile(
     const String & dest_blob,
     std::shared_ptr<const AzureObjectStorageSettings> settings,
     const ReadSettings & read_settings,
-    ThreadPoolCallbackRunner<void> schedule,
-    bool for_disk_azure_blob_storage)
+    ThreadPoolCallbackRunner<void> schedule)
 {
 
     if (settings->use_native_copy)
     {
         ProfileEvents::increment(ProfileEvents::AzureCopyObject);
-        if (for_disk_azure_blob_storage)
+        if (dest_client->GetClickhouseOptions().IsClientForDisk)
             ProfileEvents::increment(ProfileEvents::DiskAzureCopyObject);
 
         auto block_blob_client_src = src_client->GetBlockBlobClient(src_blob);
@@ -335,7 +330,7 @@ void copyAzureBlobStorageFile(
             settings->max_single_download_retries);
         };
 
-        UploadHelper helper{create_read_buffer, dest_client, offset, size, dest_container_for_logging, dest_blob, settings, schedule, for_disk_azure_blob_storage, getLogger("copyAzureBlobStorageFile")};
+        UploadHelper helper{create_read_buffer, dest_client, offset, size, dest_container_for_logging, dest_blob, settings, schedule, getLogger("copyAzureBlobStorageFile")};
         helper.performCopy();
     }
 }

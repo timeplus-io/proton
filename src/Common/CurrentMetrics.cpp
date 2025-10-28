@@ -168,9 +168,9 @@
     M(FilesystemCacheReadBuffers, "Number of active cache buffers") \
     M(CacheFileSegments, "Number of existing cache file segments") \
     M(CacheDetachedFileSegments, "Number of existing detached cache file segments") \
-    M(S3Requests, "S3 requests") \
     M(FilesystemCacheSize, "Filesystem cache size in bytes") \
     M(FilesystemCacheElements, "Filesystem cache elements (file segments)") \
+    M(S3Requests, "S3 requests count") \
     M(BackgroundSchedulePoolNativeLogTask, "Number of active threads in the NativeLog schedule pool.") \
     M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
     M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \
@@ -178,6 +178,9 @@
     M(NumOfPhysicalCPUCores, "Number of physical CPU cores (vCPU)") \
     M(ByteVectorReallocates, "Number of times ByteVector reallocating memory because insufficient reserve") \
     M(LocalFileSystemShortWrite, "Short write to local file system") \
+    \
+    M(S3DiskNoKeyErrors, "The number of `NoSuchKey` errors that occur when reading data from S3 cloud storage through ClickHouse disks.") \
+
 
 namespace CurrentMetrics
 {

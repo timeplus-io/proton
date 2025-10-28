@@ -128,16 +128,13 @@ off_t ReadBufferFromAzureBlobStorage::seek(off_t offset_, int whence)
         throw Exception(ErrorCodes::SEEK_POSITION_OUT_OF_BOUND, "Seek position is out of bounds. Offset: {}", offset_);
 
     offset = offset_;
-
     return offset;
 }
-
 
 off_t ReadBufferFromAzureBlobStorage::getPosition()
 {
     return offset - available();
 }
-
 
 void ReadBufferFromAzureBlobStorage::initialize()
 {

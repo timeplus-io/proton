@@ -419,7 +419,10 @@
     M(DiskS3CompleteMultipartUpload, "Number of DiskS3 API CompleteMultipartUpload calls.") \
     M(DiskS3PutObject, "Number of DiskS3 API PutObject calls.") \
     M(DiskS3GetObject, "Number of DiskS3 API GetObject calls.") \
-\
+    \
+    M(S3Clients, "Number of created S3 clients.") \
+    M(TinyS3Clients, "Number of S3 clients copies which reuse an existing auth provider from another client.") \
+    \
     M(ReadBufferFromS3Microseconds, "Time spent on reading from S3.") \
     M(ReadBufferFromS3InitMicroseconds, "Time spent initializing connection to S3.") \
     M(ReadBufferFromS3Bytes, "Bytes read from S3.") \

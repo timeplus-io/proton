@@ -1226,7 +1226,7 @@ bool StorageS3::Configuration::update(ContextPtr context)
     request_settings = s3_settings.request_settings;
     request_settings.updateFromSettings(context->getSettings());
 
-    if (client && (static_configuration || s3_settings.auth_settings == auth_settings))
+    if (client && (static_configuration || !auth_settings.hasUpdates(s3_settings.auth_settings)))
         return false;
 
     auth_settings.updateFrom(s3_settings.auth_settings);
@@ -1415,10 +1415,11 @@ StorageS3::Configuration StorageS3::getConfiguration(ASTs & engine_args, Context
         if (engine_args_to_idx.contains("secret_access_key"))
             configuration.auth_settings.secret_access_key = checkAndGetLiteralArgument<String>(engine_args[engine_args_to_idx["secret_access_key"]], "secret_access_key");
 
-        configuration.auth_settings.no_sign_request = no_sign_request;
+        if (no_sign_request)
+            configuration.auth_settings.no_sign_request = no_sign_request;
     }
 
-    configuration.static_configuration = !configuration.auth_settings.access_key_id.empty();
+    configuration.static_configuration = !configuration.auth_settings.access_key_id.empty() || configuration.auth_settings.no_sign_request.has_value();
 
     configuration.keys = {configuration.url.key};
 
@@ -1623,7 +1624,6 @@ std::optional<ColumnsDescription> StorageS3::tryGetColumnsFromCache(
                     configuration.url.version_id,
                     configuration.request_settings,
                     /*with_metadata=*/ false,
-                    /*for_disk_s3=*/ false,
                     /*throw_on_error= */ false).last_modification_time;
             }
 

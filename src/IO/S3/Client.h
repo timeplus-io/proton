@@ -141,17 +141,7 @@ public:
     Client(Client && other) = delete;
     Client & operator=(Client &&) = delete;
 
-    ~Client() override
-    {
-        try
-        {
-            ClientCacheRegistry::instance().unregisterClient(cache.get());
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log);
-        }
-    }
+    ~Client() override;
 
     /// Returns the initial endpoint.
     const String & getInitialEndpoint() const { return initial_endpoint; }
@@ -237,6 +227,11 @@ public:
 
     bool supportsMultiPartCopy() const;
 
+    bool isClientForDisk() const
+    {
+        return client_configuration.for_disk_s3;
+    }
+
     void cancel() const
     {
         if(retry_context)
@@ -281,6 +276,10 @@ private:
     std::invoke_result_t<RequestFn, RequestType>
     doRequest(RequestType & request, RequestFn request_fn) const;
 
+    template <bool IsReadMethod, typename RequestType, typename RequestFn>
+    std::invoke_result_t<RequestFn, RequestType>
+    doRequestWithRetryNetworkErrors(RequestType & request, RequestFn request_fn) const;
+
     void updateURIForBucket(const std::string & bucket, S3::URI new_uri) const;
     std::optional<S3::URI> getURIFromError(const Aws::S3::S3Error & error) const;
     std::optional<Aws::S3::S3Error> updateURIForBucketForHead(const std::string & bucket) const;
@@ -290,6 +289,9 @@ private:
 
     bool checkIfWrongRegionDefined(const std::string & bucket, const Aws::S3::S3Error & error, std::string & region) const;
     void insertRegionOverride(const std::string & bucket, const std::string & region) const;
+
+    template <typename RequestResult>
+    RequestResult processRequestResult(RequestResult && outcome) const;
 
     String initial_endpoint;
     std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_provider;
