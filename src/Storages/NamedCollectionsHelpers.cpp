@@ -147,35 +147,67 @@ MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides(
 
 /// proton: starts
 template <typename Settings>
-MutableNamedCollectionPtr
-tryGetNamedCollectionWithOverrides(const std::string & collection_name, const Settings & settings, ContextPtr context)
+void updateSettingsByNamedCollection(Settings & settings, ContextPtr context)
 {
+    auto collection_name = settings.named_collection.value;
     if (collection_name.empty())
-        return nullptr;
+        return;
 
-    context->checkAccess(AccessType::NAMED_COLLECTION, collection_name);
-
-    const auto & collection = NamedCollectionFactory::instance().get(collection_name);
-    auto collection_copy = collection->duplicate();
+    const auto collection = NamedCollectionFactory::instance().get(collection_name);
+    chassert(collection);
 
     const auto allow_override_by_default = context->getSettingsRef().allow_named_collection_override_by_default;
-    for (const auto & setting : settings.allChanged())
+    for (const auto & key : *collection)
     {
-        const auto & key = setting.getName();
-        if (collection_copy->isOverridable(key, allow_override_by_default))
-            collection_copy->setOrUpdate<String>(key, setting.getValueString(), {});
+        if (settings.isChanged(key))
+        {
+            if (!collection->isOverridable(key, allow_override_by_default))
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Override not allowed for '{}'", key);
+        }
         else
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Override not allowed for '{}'", key);
+        {
+            settings.setString(key, collection->template get<String>(key));
+        }
     }
-
-    return collection_copy;
 }
 
-template MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides<ExternalStreamSettings>(
-    const std::string & collection_name, const ExternalStreamSettings & settings, ContextPtr context);
+template void updateSettingsByNamedCollection<ExternalStreamSettings>(ExternalStreamSettings & settings, ContextPtr context);
+template void updateSettingsByNamedCollection<ExternalTableSettings>(ExternalTableSettings & settings, ContextPtr context);
 
-template MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides<ExternalTableSettings>(
-    const std::string & collection_name, const ExternalTableSettings & settings, ContextPtr context);
+
+void updateConfigurationByNamedCollection(Poco::Util::AbstractConfiguration & config, const std::string & config_prefix)
+{
+    /// Read named_collection value from config
+    auto collection_name = config.getString(config_prefix + ".named_collection", "");
+    if (collection_name.empty())
+        return;
+
+    /// Load named collection
+    const auto collection = NamedCollectionFactory::instance().get(collection_name);
+    chassert(collection);
+
+    /// Read named collection values and update config with its key values
+    for (const auto & key : *collection)
+    {
+        /// Check if config already has the key defined in named collection
+        auto config_key = config_prefix + "." + key;
+        if (config.has(config_key))
+        {
+            /// Key already exists in config, check if it's overridable
+            if (!collection->isOverridable(key, true))
+            {
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS, "Override not allowed for key '{}' from named collection '{}'", key, collection_name);
+            }
+            /// Overridable and config already has the key, do nothing
+        }
+        else
+        {
+            /// Key doesn't exist in config, add it from named collection
+            config.setString(config_key, collection->get<String>(key));
+        }
+    }
+}
 /// proton: ends
 
 HTTPHeaderEntries getHeadersFromNamedCollection(const NamedCollection & collection)

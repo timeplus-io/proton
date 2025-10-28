@@ -14,6 +14,10 @@
 #include <Poco/DOM/Element.h>
 #include <Poco/DOM/Text.h>
 
+/// proton: starts
+#include <Storages/NamedCollectionsHelpers.h>
+/// proton: ends
+
 
 namespace DB
 {
@@ -80,6 +84,12 @@ DiskConfigurationPtr getDiskConfigurationFromAST(const std::string & root_name, 
     auto xml_document = getDiskConfigurationFromASTImpl(root_name, disk_args, context);
     Poco::AutoPtr<Poco::Util::XMLConfiguration> conf(new Poco::Util::XMLConfiguration());
     conf->load(xml_document);
+
+    /// proton: starts
+    /// Apply named collection when configuration has 'named_collection' key
+    updateConfigurationByNamedCollection(*conf, root_name);
+    /// proton: ends
+
     return conf;
 }
 

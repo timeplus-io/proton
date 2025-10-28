@@ -29,10 +29,12 @@ MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides(
 MutableNamedCollectionPtr tryGetNamedCollectionWithOverrides(const Poco::Util::AbstractConfiguration & config, const std::string & config_prefix, ContextPtr context);
 
 /// proton: starts
-/// Helper function to get named collection for external table and external stream.
+/// Helper function to update settings from named collection when 'named_collection' is specified in external table or external stream.
 template <typename Settings>
-MutableNamedCollectionPtr
-tryGetNamedCollectionWithOverrides(const std::string & collection_name, const Settings & settings, ContextPtr context);
+void updateSettingsByNamedCollection(Settings & settings, ContextPtr context);
+
+/// Helper function to update configuration from named collection when configuration has config_prefix + '.named_collection'.
+void updateConfigurationByNamedCollection(Poco::Util::AbstractConfiguration & config, const std::string & config_prefix);
 /// proton: ends
 
 HTTPHeaderEntries getHeadersFromNamedCollection(const NamedCollection & collection);
@@ -153,4 +155,3 @@ struct fmt::formatter<DB::NamedCollectionValidateKey<T>>
         return fmt::format_to(context.out(), "{}", elem.value);
     }
 };
-
