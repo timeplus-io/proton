@@ -155,9 +155,11 @@ size_t HashIndex::index(LightChunkWithTimestamp && block)
     return index(std::move(block), current_hash_index);
 }
 
-size_t HashIndex::index(LightChunkWithTimestamp && block, HybridHashJoinMapsVariantsPtr target_hash_index)
+size_t HashIndex::index([[maybe_unused]] LightChunkWithTimestamp && block, [[maybe_unused]] HybridHashJoinMapsVariantsPtr target_hash_index)
 {
-    return 0;
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
+        "index(LightChunkWithTimestamp && block, HybridHashJoinMapsVariantsPtr target_hash_index) is not implemented");
 }
 
 std::vector<HashIndex::BucketBlock> HashIndex::assignDataBlockToRangeBuckets(Block && block)

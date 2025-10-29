@@ -44,7 +44,7 @@ public:
         = 0;
 
     ColumnPtr
-    executeImplDryRun(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    executeImplDryRun([[maybe_unused]] const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         auto result_column = result_type->createColumn();
 

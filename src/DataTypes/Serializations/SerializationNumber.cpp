@@ -342,7 +342,7 @@ void SerializationNumber<T>::deserializeBinaryPrefixTree(
 
 template <typename T>
 ColumnVector<T>::ValueType
-SerializationNumber<T>::deserializeBinaryPrefixTree(std::string_view & data, const FormatSettings & settings, bool ascending) const
+SerializationNumber<T>::deserializeBinaryPrefixTree(std::string_view & data, [[maybe_unused]] const FormatSettings & settings, bool ascending) const
 {
     using VT = typename ColumnVector<T>::ValueType;
 

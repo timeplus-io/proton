@@ -289,7 +289,7 @@ void StorageMaterializedView::drop()
         Globals::getNativeLog().remove({logstore_ckpt_ctx->log_stream_shard});
 }
 
-void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
+void StorageMaterializedView::alter(const AlterCommands & commands, ContextPtr context_, [[maybe_unused]] AlterLockHolder & alter_lock_holder)
 {
     chassert(!commands.empty());
 

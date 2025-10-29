@@ -696,7 +696,7 @@ void StorageStream::checkTableCanBeDropped(ContextPtr context_) const
 }
 
 void StorageStream::checkAlterPartitionIsPossible(
-    const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const
+    const PartitionCommands & commands, [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const
 {
     for (const auto & stream_shard : stream_shards)
         if (stream_shard->storage)
@@ -709,7 +709,7 @@ void StorageStream::checkAlterPartitionIsPossible(
 /// underlying NativeLog which holds the data.
 /// Once the command is committed and every shard replica will pick it up in background to do the real partition altering.
 Pipe StorageStream::alterPartition(
-    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context)
+    [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context)
 {
     for (const auto & command : commands)
     {
@@ -781,7 +781,7 @@ void StorageStream::preRename(const StorageID & new_table_id)
 }
 
 void StorageStream::truncate(
-    const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, TableExclusiveLockHolder & holder)
+    const ASTPtr & query, [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, [[maybe_unused]] TableExclusiveLockHolder & holder)
 {
     auto table_id = getStorageID();
     auto truncate_command = DB::queryToString(query);
@@ -843,7 +843,7 @@ void StorageStream::applyAlterCommandsToAllShards(const AlterCommands & commands
     }
 }
 
-void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, AlterLockHolder & alter_lock_holder)
+void StorageStream::alter(const AlterCommands & commands, ContextPtr context_, [[maybe_unused]] AlterLockHolder & alter_lock_holder)
 {
     auto table_id = getStorageID();
 
@@ -983,7 +983,7 @@ void StorageStream::alterLogSettings(
 bool StorageStream::optimize(
     const ASTPtr & query,
     const StorageMetadataPtr & /*metadata_snapshot*/,
-    const ASTPtr & partition,
+    [[maybe_unused]] const ASTPtr & partition,
     bool final,
     bool deduplicate,
     const Names & deduplicate_by_columns,
@@ -1307,7 +1307,7 @@ std::unique_ptr<StreamSettings> StorageStream::getDefaultSettings() const
 }
 
 /// Distributed query related functions
-ClusterPtr StorageStream::getCluster(ContextPtr context_) const
+ClusterPtr StorageStream::getCluster(ContextPtr /*context_*/) const
 {
     // return empty cluster
     return nullptr;
@@ -1431,7 +1431,7 @@ IngestMode StorageStream::ingestMode() const
     return stream_shards.back()->ingestMode();
 }
 
-void StorageStream::poll(Int32 timeout_ms)
+void StorageStream::poll(Int32 /*timeout_ms*/)
 {
 }
 

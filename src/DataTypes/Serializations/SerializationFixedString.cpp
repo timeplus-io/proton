@@ -291,7 +291,7 @@ void SerializationFixedString::deserializeBinaryBulkDiscard(ReadBuffer & istr, s
 }
 
 void SerializationFixedString::serializeBinaryPrefixTree(
-    const Field & field, String & encoded, const FormatSettings & settings, bool ascending) const
+    const Field & field, String & encoded, [[maybe_unused]] const FormatSettings & settings, bool ascending) const
 {
     const auto & s = field.get<const String &>();
     if (ascending)
@@ -301,7 +301,7 @@ void SerializationFixedString::serializeBinaryPrefixTree(
 }
 
 void SerializationFixedString::serializeBinaryPrefixTree(
-    const IColumn & column, size_t row_num, String & encoded, const FormatSettings & settings, bool ascending) const
+    const IColumn & column, size_t row_num, String & encoded, [[maybe_unused]] const FormatSettings & settings, bool ascending) const
 {
     std::string_view s{reinterpret_cast<const char *>(&assert_cast<const ColumnFixedString &>(column).getChars()[n * row_num]), n};
     if (ascending)

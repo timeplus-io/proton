@@ -70,7 +70,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
 }
 
 RemoteQueryExecutor::RemoteQueryExecutor(
-    ConnectionPoolPtr pool,
+    ConnectionPoolPtr node_pool,
     const String & query_,
     const Block & header_,
     ContextPtr context_,
@@ -82,7 +82,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
     ConnectionPoolWithFailoverPtr connection_pool_with_failover_)
     : RemoteQueryExecutor(query_, header_, context_, scalars_, external_tables_, stage_, extension_)
 {
-    create_connections = [this, pool, throttler, extension_, connection_pool_with_failover_]()
+    create_connections = [this, node_pool, throttler, extension_, connection_pool_with_failover_]()
     {
         const Settings & current_settings = context->getSettingsRef();
         auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(current_settings);
@@ -93,12 +93,12 @@ RemoteQueryExecutor::RemoteQueryExecutor(
         {
             auto table_name = main_table.getQualifiedName();
 
-            ConnectionEstablisher connection_establisher(pool, &timeouts, current_settings, log, &table_name);
+            ConnectionEstablisher connection_establisher(node_pool, &timeouts, current_settings, log, &table_name);
             connection_establisher.run(result, fail_message);
         }
         else
         {
-            ConnectionEstablisher connection_establisher(pool, &timeouts, current_settings, log, nullptr);
+            ConnectionEstablisher connection_establisher(node_pool, &timeouts, current_settings, log, nullptr);
             connection_establisher.run(result, fail_message);
         }
 
@@ -115,12 +115,12 @@ RemoteQueryExecutor::RemoteQueryExecutor(
             chassert(!fail_message.empty());
             if (result.entry.isNull())
             {
-                LOG_DEBUG(log, "Failed to connect to replica {}. {}", pool->getAddress(), fail_message);
+                LOG_DEBUG(log, "Failed to connect to replica {}. {}", node_pool->getAddress(), fail_message);
                 if (connection_pool_with_failover_)
-                    connection_pool_with_failover_->incrementErrorCount(pool);
+                    connection_pool_with_failover_->incrementErrorCount(node_pool);
             }
             else
-                LOG_DEBUG(log, "Replica is not usable for remote query execution: {}. {}", pool->getAddress(), fail_message);
+                LOG_DEBUG(log, "Replica is not usable for remote query execution: {}. {}", node_pool->getAddress(), fail_message);
         }
 
         auto res = std::make_shared<MultiplexedConnections>(std::move(connection_entries), current_settings, throttler);

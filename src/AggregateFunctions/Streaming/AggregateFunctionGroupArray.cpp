@@ -143,7 +143,7 @@ public:
         }
     }
 
-    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, [[maybe_unused]] Arena * arena) const override
     {
         ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
         const auto & map = this->data(place).map;
@@ -237,7 +237,7 @@ private:
 
 template <bool is_sorted, bool is_uniqued>
 AggregateFunctionPtr createAggregateFunctionGroupArrayRetractImpl(
-    const std::string & name, const DataTypes & argument_types, const Array & parameters, size_t max_elems)
+    [[maybe_unused]] const std::string & name, const DataTypes & argument_types, const Array & parameters, size_t max_elems)
 {
     const auto & argument_type = *argument_types[0];
     if (auto res = AggregateFunctionPtr(createWithNumericType<GroupArrayImpl, GroupArrayTrait<is_sorted, is_uniqued>>(

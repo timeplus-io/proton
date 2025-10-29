@@ -21,8 +21,8 @@ namespace Streaming
 ChangelogTransform::ChangelogTransform(
     const DB::Block & input_header,
     const DB::Block & output_header,
-    std::vector<std::string> key_column_names,
-    const std::string & version_column_name)
+    [[maybe_unused]] std::vector<std::string> key_column_names,
+    [[maybe_unused]] const std::string & version_column_name)
     : IProcessor({input_header}, {output_header}, ProcessorID::ChangelogTransformID)
 /// , source_chunks(metrics)
 /// , last_log_ts(MonotonicMilliseconds::now())

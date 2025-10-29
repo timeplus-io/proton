@@ -441,7 +441,7 @@ ASTPtr DatabasePostgreSQL::getCreateTableQueryImpl(const String & table_name, Co
     /// proton: ends.
 }
 
-ASTPtr DatabasePostgreSQL::generateCreateTableQuery(const String & table_name, const StoragePtr & storage, bool throw_on_error) const
+ASTPtr DatabasePostgreSQL::generateCreateTableQuery([[maybe_unused]] const String & table_name, const StoragePtr & storage, [[maybe_unused]] bool throw_on_error) const
 {
 
     auto create_table_query = std::make_shared<ASTCreateQuery>();

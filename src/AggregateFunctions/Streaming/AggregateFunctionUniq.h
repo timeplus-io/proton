@@ -439,7 +439,7 @@ public:
 
     bool isAbleToParallelizeMerge() const override { return is_able_to_parallelize_merge; }
 
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, [[maybe_unused]] ThreadPool & thread_pool, [[maybe_unused]] std::atomic<bool> & is_cancelled, Arena *) const override
     {
         this->data(place).set.merge(this->data(rhs).set);
     }
@@ -572,7 +572,7 @@ public:
 
     bool isAbleToParallelizeMerge() const override { return is_able_to_parallelize_merge; }
 
-    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena *) const override
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, [[maybe_unused]] ThreadPool & thread_pool, [[maybe_unused]] std::atomic<bool> & is_cancelled, Arena *) const override
     {
         this->data(place).set.merge(this->data(rhs).set);
     }

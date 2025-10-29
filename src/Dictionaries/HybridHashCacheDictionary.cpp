@@ -89,7 +89,7 @@ void HybridHashCacheDictionary::initHashTable()
     config.value_object_size = sizeof(Cell);
     config.align_value_object_size = alignof(Cell);
     config.value_constructor = [](void * data) { new (data) Cell; };
-    config.value_destructor = [](void * data) { };
+    config.value_destructor = []([[maybe_unused]] void * data) {};
     config.value_serializer = [](const void * value, WriteBuffer & wb) { return static_cast<const Cell *>(value)->serialize(wb); };
     config.value_deserializer = [](void * value, ReadBuffer & rb) { return static_cast<Cell *>(value)->deserialize(rb); };
 

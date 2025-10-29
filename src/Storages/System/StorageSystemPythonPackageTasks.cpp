@@ -31,7 +31,7 @@ NamesAndTypesList StorageSystemPythonPackageTasks::getNamesAndTypes()
     };
 }
 
-void StorageSystemPythonPackageTasks::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
+void StorageSystemPythonPackageTasks::fillData([[maybe_unused]] MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, [[maybe_unused]] const SelectQueryInfo &) const
 {
 #if USE_PYTHON_UDF
     auto async_manager = context->getAsyncPythonPackageManager();

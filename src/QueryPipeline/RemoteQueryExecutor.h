@@ -51,7 +51,7 @@ public:
 
     /// Takes a connection pool for a node (not cluster)
     RemoteQueryExecutor(
-        ConnectionPoolPtr pool,
+        ConnectionPoolPtr node_pool,
         const String & query_,
         const Block & header_,
         ContextPtr context_,
@@ -76,7 +76,7 @@ public:
 
     /// Accepts several connections already taken from pool.
     RemoteQueryExecutor(
-        const ConnectionPoolWithFailoverPtr & pool,
+        const ConnectionPoolWithFailoverPtr & pool_,
         std::vector<IConnectionPool::Entry> && connections_,
         const String & query_,
         const Block & header_,
@@ -89,7 +89,7 @@ public:
 
     /// Takes a pool and gets one or several connections from it.
     RemoteQueryExecutor(
-        const ConnectionPoolWithFailoverPtr & pool,
+        const ConnectionPoolWithFailoverPtr & pool_,
         const String & query_,
         const Block & header_,
         ContextPtr context_,

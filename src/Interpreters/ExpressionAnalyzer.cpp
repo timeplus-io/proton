@@ -414,7 +414,7 @@ AggregateFunctionPtr getAggregateFunction(
     Names & argument_names,
     AggregateFunctionProperties & properties,
     ContextPtr context,
-    bool is_streaming,
+    [[maybe_unused]] bool is_streaming,
     bool is_changelog_input,
     bool throw_if_empty = true)
 /// proton: ends

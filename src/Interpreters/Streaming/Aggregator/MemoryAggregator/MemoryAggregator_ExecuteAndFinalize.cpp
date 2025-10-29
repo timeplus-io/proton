@@ -82,7 +82,7 @@ Block MemoryAggregator::executeAndFinalizePerRow(
     IAggregatedDataVariants & variants_result,
     ColumnRawPtrs & key_columns,
     AggregateColumns & aggregate_columns,
-    bool new_keys) const
+    bool /*new_keys*/) const
 {
     if (unlikely(row_end <= row_begin))
         return {};

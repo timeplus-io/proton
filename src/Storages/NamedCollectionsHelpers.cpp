@@ -32,7 +32,7 @@ namespace
     }
 
     std::optional<std::pair<std::string, std::variant<Field, ASTPtr>>>
-    getKeyValueFromASTImpl(ASTPtr ast, bool fallback_to_ast_value, ContextPtr context)
+    getKeyValueFromASTImpl(ASTPtr ast, [[maybe_unused]] bool fallback_to_ast_value, ContextPtr context)
     {
         const auto * function = ast->as<ASTFunction>();
         if (!function || function->name != "equals")

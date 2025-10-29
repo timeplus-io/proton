@@ -3,7 +3,7 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 #include <atomic>
 #include <chrono>

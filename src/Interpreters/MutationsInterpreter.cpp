@@ -358,7 +358,7 @@ static void validateUpdateColumns(
     const StorageMetadataPtr & metadata_snapshot,
     const NameSet & updated_columns,
     const std::unordered_map<String, Names> & column_to_affected_materialized,
-    const ContextPtr & context)
+    [[maybe_unused]] const ContextPtr & context)
 {
     NameSet key_columns = getKeyColumns(source, metadata_snapshot);
 

@@ -143,7 +143,7 @@ std::vector<Int64> HybridAggregator::buckets(const IAggregatedDataVariants & var
     return {};
 }
 
-void HybridAggregator::removeBucketsBefore(IAggregatedDataVariants & variants_result, Int64 max_bucket, UInt64 transform_id) const
+void HybridAggregator::removeBucketsBefore(IAggregatedDataVariants & variants_result, Int64 max_bucket, [[maybe_unused]] UInt64 transform_id) const
 {
     assert(variants_result.aggregatorType() == AggregatorType::Hybrid);
     auto & result = static_cast<HybridAggregatedDataVariants &>(variants_result);

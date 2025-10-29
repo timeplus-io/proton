@@ -39,7 +39,7 @@ extern const int NOT_IMPLEMENTED;
 }
 
 
-IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeInstallPythonPackage(const ASTSystemQuery & query)
+IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeInstallPythonPackage([[maybe_unused]] const ASTSystemQuery & query)
 {
 #if !USE_PYTHON_UDF
     throw Exception(
@@ -151,7 +151,7 @@ IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeInstallPythonPackage(c
 #endif
 }
 
-IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeUninstallPythonPackage(const ASTSystemQuery & query)
+IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeUninstallPythonPackage([[maybe_unused]] const ASTSystemQuery & query)
 {
 #if !USE_PYTHON_UDF
     throw Exception(

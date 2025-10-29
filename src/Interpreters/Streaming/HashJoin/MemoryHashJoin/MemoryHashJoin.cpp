@@ -389,7 +389,7 @@ struct Inserter
     }
 
     static ALWAYS_INLINE void insertMultiple(
-        const MemoryHashJoin & join,
+        [[maybe_unused]] const MemoryHashJoin & join,
         Map & map,
         KeyGetter & key_getter,
         JoinDataBlockList * blocks,

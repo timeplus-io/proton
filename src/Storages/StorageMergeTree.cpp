@@ -196,7 +196,7 @@ void StorageMergeTree::flush(bool dropping)
     flushAllInMemoryPartsIfNeeded();
 }
 
-void StorageMergeTree::shutdown(bool dropping)
+void StorageMergeTree::shutdown([[maybe_unused]] bool dropping)
 {
     if (isVirtualStorage())
         return;

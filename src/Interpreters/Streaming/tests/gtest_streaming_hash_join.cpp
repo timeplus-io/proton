@@ -439,7 +439,7 @@ void commonTestImpl(
     try
     {
         auto convert_block
-            = [&](Streaming::DataStreamSemanticEx data_stream_semantic, const auto & primary_key_column_indexes, Block & block) -> Block & {
+            = [&](Streaming::DataStreamSemanticEx data_stream_semantic, [[maybe_unused]] const auto & primary_key_column_indexes, Block & block) -> Block & {
             /// So far not support primary key column + version column
             // if (Streaming::isKeyedStorage(data_stream_semantic))
             // {

@@ -97,7 +97,7 @@ WindowsWithBuckets SessionAggregatingTransformWithSubstream::getWindowsWithBucke
     return SessionWindowHelper::getWindowsWithBuckets(substream_ctx->getField<SessionInfoQueue>());
 }
 
-Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamAggregatedDataPtr & substream_ctx) const
+Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow([[maybe_unused]] const SubstreamAggregatedDataPtr & substream_ctx) const
 {
     /// The finalized sessions already are removed, so we don't care it.
     return {INVALID_WATERMARK, INVALID_WATERMARK};

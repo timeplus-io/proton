@@ -101,7 +101,6 @@ private:
     /// If the left / right_block is a retraction block : rows in `_tp_delta` column all have `-1`
     /// We erase the previous key / values from hash table
     /// Use for append JOIN changelog_kv / versioned_kv case
-    /// \return true if keys are erased, otherwise false
     template <bool is_left_block>
     void eraseExistingKeys(Block & block, JoinData & join_data);
 

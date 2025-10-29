@@ -1207,10 +1207,10 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
 }
 
 static ActionsDAGPtr buildFilterDAG(
-    const ContextPtr & context,
+    [[maybe_unused]] const ContextPtr & context,
     const PrewhereInfoPtr & prewhere_info,
     const ActionDAGNodes & added_filter_nodes,
-    const SelectQueryInfo & query_info)
+    [[maybe_unused]] const SelectQueryInfo & query_info)
 {
     ActionsDAG::NodeRawConstPtrs nodes;
 

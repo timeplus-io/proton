@@ -20,7 +20,7 @@ public:
     GILGuard() : GILGuard(false) { }
 
     /// Constructor with explicit cleanup control
-    /// \param use_need_cleanup: if true, uses PyGILState_Release for proper cleanup
+    /// \param use_need_cleanup if true, uses PyGILState_Release for proper cleanup
     ///                           if false, uses PyEval_SaveThread for pybind11 compatibility
     explicit GILGuard(bool use_need_cleanup) : acquired(false), need_cleanup(use_need_cleanup)
     {

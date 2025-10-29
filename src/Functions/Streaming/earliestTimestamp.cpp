@@ -39,9 +39,9 @@ public:
     /// If used, optimization for LC may execute function only for dictionary, which gives wrong result.
     bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return return_type; }
+    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override { return return_type; }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl([[maybe_unused]] const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         return result_type->createColumnConst(input_rows_count, UInt64(0));
     }

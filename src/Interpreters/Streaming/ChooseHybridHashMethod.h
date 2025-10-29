@@ -13,7 +13,6 @@ namespace Streaming
 {
 
 /// Choose best hash method for key columns
-/// \return hash type and key sizes pair
 struct HybridHashMethod
 {
     explicit HybridHashMethod(HybridHashType type_) : type(type_) { }

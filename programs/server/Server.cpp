@@ -111,7 +111,7 @@
 
 #include <Poco/Net/NetworkInterface.h>
 
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 bool LOG_PANIC_ABORT = true;
 
@@ -417,7 +417,7 @@ Poco::Net::SocketAddress Server::socketBindListen(Poco::Net::ServerSocket & sock
 }
 
 void Server::createServer(
-    Poco::Util::AbstractConfiguration & config,
+    [[maybe_unused]] Poco::Util::AbstractConfiguration & config,
     const std::string & listen_host,
     const char * port_name,
     uint64_t port,
@@ -1212,7 +1212,7 @@ try
         config_path,
         include_from_path,
         config().getString("path", ""),
-        [&](ConfigurationPtr config, bool initial_loading)
+        [&](ConfigurationPtr config, [[maybe_unused]] bool initial_loading)
         {
             Settings::checkNoSettingNamesAtTopLevel(*config, config_path);
 

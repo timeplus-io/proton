@@ -18,7 +18,7 @@ extern const int DWAL_FATAL_ERROR;
 }
 
 StreamingStoreSourceMultiplexer::StreamingStoreSourceMultiplexer(
-    UInt32 id_, StreamShardStorePtr stream_shard_store_, ContextPtr global_context, LoggerPtr logger_)
+    UInt32 id_, StreamShardStorePtr stream_shard_store_, ContextPtr /*global_context*/, LoggerPtr logger_)
     : id(id_)
     , stream_shard_store(std::move(stream_shard_store_))
     , poller(std::make_unique<ThreadPool>(CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, 1))

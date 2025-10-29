@@ -43,7 +43,7 @@ NamesAndTypesList StorageSystemServer::getNamesAndTypes()
     };
 }
 
-void StorageSystemServer::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
+void StorageSystemServer::fillData(MutableColumns & res_columns, ContextPtr, const SelectQueryInfo &) const
 {
     /// Get server descriptor from Globals
     const auto & server = Globals::getServerDescriptor();

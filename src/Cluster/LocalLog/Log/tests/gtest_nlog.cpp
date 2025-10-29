@@ -436,7 +436,7 @@ TEST_F(LogTestFixture, TrimTwo)
 {
     auto expect_entry = [&](const cluster::nlog::FetchResult & fetch_result,
                             const cluster::EntryPtr & expected_entry,
-                            const DB::Block & expected_block,
+                            [[maybe_unused]] const DB::Block & expected_block,
                             int64_t expected_next_sn,
                             int64_t expected_sn,
                             size_t expected_size,
@@ -506,7 +506,7 @@ TEST_F(LogTestFixture, TrimTrailing)
 {
     auto expect_entry = [&](const cluster::nlog::FetchResult & fetch_result,
                             const cluster::EntryPtr & expected_entry,
-                            const DB::Block & expected_block,
+                            [[maybe_unused]] const DB::Block & expected_block,
                             int64_t expected_next_sn,
                             int64_t expected_sn,
                             size_t expected_size,

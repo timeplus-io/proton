@@ -60,7 +60,7 @@ public:
 
     bool isTwoLevel() const noexcept { return false; }
 
-    void init(HybridHashType type_, HybridKeyListConfig config, const std::vector<size_t> & key_sizes, LoggerPtr logger)
+    void init(HybridHashType type_, HybridKeyListConfig config, [[maybe_unused]] const std::vector<size_t> & key_sizes, LoggerPtr logger)
     {
         switch (type_)
         {

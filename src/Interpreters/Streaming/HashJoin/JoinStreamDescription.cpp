@@ -32,8 +32,8 @@ void JoinStreamDescription::calculateColumnPositions(JoinStrictness strictness)
         return;
 
     /// Usually, the formats of column clashes:
-    /// 1) for left table, `<column>`
-    /// 2) for right table, `<table>.<column>`
+    /// 1) for left table, `column`
+    /// 2) for right table, `table.column`
     auto calc_column_position = [this](const auto & col_name) -> std::optional<size_t> {
         if (input_header.has(col_name))
             return input_header.getPositionByName(col_name);

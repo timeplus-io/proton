@@ -151,7 +151,7 @@ void QueryPlan::addStep(QueryPlanStepPtr step)
 QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     const QueryPlanOptimizationSettings & optimization_settings,
     const BuildQueryPipelineSettings & build_pipeline_settings,
-    ContextPtr query_context)
+    [[maybe_unused]] ContextPtr query_context)
 {
     checkInitialized();
     optimize(optimization_settings);

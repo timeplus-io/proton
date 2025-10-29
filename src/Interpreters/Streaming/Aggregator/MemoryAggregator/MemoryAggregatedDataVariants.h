@@ -344,7 +344,7 @@ SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
         /// proton: ends;
     }
 
-    /// \param reset - clean up all in memory states and the corresponding arena pools used to hold these states
+    /// clean up all in memory states and the corresponding arena pools used to hold these states
     void reset() override;
 
     void resetAndCreateAggregatesPools()

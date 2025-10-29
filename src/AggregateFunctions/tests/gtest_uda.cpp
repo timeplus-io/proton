@@ -813,7 +813,7 @@ TEST_F(UDATestCase, prepareArgumentsNullableUInt8)
         col_ptr->insert(256);
     };
 
-    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+    auto check_bool = []([[maybe_unused]] v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         const auto len = v8_arr->Length();
         ASSERT_EQ(len, 5);
         std::vector<std::optional<UInt8>> expect = {1, 2, 3, std::nullopt, 0};
@@ -842,7 +842,7 @@ TEST_F(UDATestCase, prepareArgumentsNullableDate)
         col_ptr->insert(112);
     };
 
-    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+    auto check_bool = []([[maybe_unused]] v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         const auto len = v8_arr->Length();
         ASSERT_EQ(len, 5);
         std::vector<std::optional<int64_t>> expect_days = {1, 2, 3, std::nullopt, 112};
@@ -884,7 +884,7 @@ TEST_F(UDATestCase, prepareArgumentsNullableDateTime)
         col_ptr->insert(112);
     };
 
-    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+    auto check_bool = []([[maybe_unused]] v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         const auto len = v8_arr->Length();
         ASSERT_EQ(len, 5);
         std::vector<std::optional<int64_t>> expect = {1, 2, 3, std::nullopt, 112};
@@ -919,7 +919,7 @@ TEST_F(UDATestCase, prepareArgumentsNullableDateTime64)
         col_ptr->insert(v);
     };
 
-    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+    auto check_bool = []([[maybe_unused]] v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         const auto len = v8_arr->Length();
         ASSERT_EQ(len, 5);
         std::vector<std::optional<int64_t>> expect = {1, 2, 3, std::nullopt, 112};
@@ -949,7 +949,7 @@ TEST_F(UDATestCase, prepareArgumentsNullableString)
         col_ptr->insert(Null());
     };
 
-    auto check_bool = [](v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
+    auto check_bool = []([[maybe_unused]] v8::Isolate * isolate, v8::Local<v8::Context> & local_ctx, v8::Local<v8::Array> & v8_arr) {
         ASSERT_EQ(v8_arr->Length(), 4);
         std::vector<String> expect = {"abc", "def", "ghl"};
         for (int i = 0; i < v8_arr->Length() - 1; i++)
@@ -1114,7 +1114,7 @@ TEST_F(UDATestCase, consoleModule)
     v8::HandleScope handle_scope(isolate);
 
     auto check
-        = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, v8::TryCatch & try_catch, v8::Local<v8::Value> & blueprint) {
+        = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & local_ctx, [[maybe_unused]] v8::TryCatch & try_catch, [[ maybe_unused]] v8::Local<v8::Value> & blueprint) {
               v8::Local<v8::Value> console_val;
               ASSERT_EQ(local_ctx->Global()->Get(local_ctx, V8::to_v8(isolate, "console")).ToLocal(&console_val), true);
               ASSERT_EQ(console_val->IsObject(), true);

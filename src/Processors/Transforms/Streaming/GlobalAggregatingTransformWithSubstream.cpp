@@ -38,7 +38,7 @@ void GlobalAggregatingTransformWithSubstream::initSubstreamContext(const Substre
         substream_ctx->setField(
             {retract_enabled,
              /// Field serializer
-             [](const std::any & field, WriteBuffer & wb, VersionType version) {
+             [](const std::any & field, WriteBuffer & wb, [[maybe_unused]] VersionType version) {
                  assert(version >= V2);
                  DB::writeBinary(std::any_cast<bool>(field), wb);
              },

@@ -43,7 +43,7 @@ public:
 
     bool isSuitableForConstantFolding() const override { return false; }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName &, [[maybe_unused]] const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         auto column = ColumnInt64::create(input_rows_count);
         std::iota(column->getData().begin(), column->getData().end(), start_num);

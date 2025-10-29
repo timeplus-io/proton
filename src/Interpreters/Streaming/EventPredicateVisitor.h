@@ -31,7 +31,7 @@ public:
         const TablesWithColumns & tables;
 
     public:
-        Data(const ASTSelectQuery & select, const TablesWithColumns & tables_, ContextPtr context_) : WithContext(context_), tables(tables_) { }
+        Data([[maybe_unused]] const ASTSelectQuery & select, const TablesWithColumns & tables_, ContextPtr context_) : WithContext(context_), tables(tables_) { }
 
         SeekToInfoPtr tryGetSeekToInfoForLeftStream() const { return tryGetSeekToInfo(0); }
         SeekToInfoPtr tryGetSeekToInfoForRightStream() const { return tryGetSeekToInfo(1); }

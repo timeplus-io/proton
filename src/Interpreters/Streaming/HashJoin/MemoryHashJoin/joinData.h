@@ -167,7 +167,7 @@ SERDE struct BufferedStreamData
 
     HashBlocksPtr newHashBlocks();
 
-    HashMapSizes hashMapSizes(const MemoryHashJoin * hash_join) const
+    HashMapSizes hashMapSizes([[maybe_unused]] const MemoryHashJoin * hash_join) const
     {
         if (!range_bucket_hash_blocks.empty())
         {

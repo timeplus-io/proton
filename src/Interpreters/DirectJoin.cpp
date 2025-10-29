@@ -62,7 +62,7 @@ bool DirectKeyValueJoin::needConvertBlockStructure() const
 /// Converts `columns` from `source_sample_block` structure to `result_sample_block`.
 /// Can select subset of columns and change types.
 MutableColumns
-DirectKeyValueJoin::convertBlockStructure(MutableColumns && columns, const PaddedPODArray<UInt8> & null_map, bool negate_null_column) const
+DirectKeyValueJoin::convertBlockStructure(MutableColumns && columns, const PaddedPODArray<UInt8> & null_map, [[maybe_unused]] bool negate_null_column) const
 {
     MutableColumns result_columns;
     for (const auto & out_sample_col : right_block_to_use)

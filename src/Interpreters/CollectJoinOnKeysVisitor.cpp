@@ -674,7 +674,7 @@ bool CollectJoinOnKeysMatcher::handleRightLiteralArgumentForRangeBetweenAsofJoin
     return is_first_arg_left_identifier;
 }
 
-void CollectJoinOnKeysMatcher::handleLagBehind(const ASTFunction & func, const ASTPtr & ast, Data & data)
+void CollectJoinOnKeysMatcher::handleLagBehind(const ASTFunction & func, [[maybe_unused]] const ASTPtr & ast, Data & data)
 {
     assert(func.name == "lag_behind");
 

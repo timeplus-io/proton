@@ -721,7 +721,7 @@ void StreamShardStore::commitSNLocal(int64_t commit_sn)
     }
 }
 
-void StreamShardStore::commitSNRemote(int64_t commit_sn)
+void StreamShardStore::commitSNRemote(int64_t /*commit_sn*/)
 {
 }
 

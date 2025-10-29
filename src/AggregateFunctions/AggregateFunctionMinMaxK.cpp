@@ -380,7 +380,7 @@ void buildValueReader(DataTypePtr data_type, std::vector<TupleOperators::Reader>
     }
     else
     {
-        readers.emplace_back([](ReadBuffer & buf, ArenaWithFreeLists * arena) -> std::any {
+        readers.emplace_back([](ReadBuffer & buf, [[maybe_unused]] ArenaWithFreeLists * arena) -> std::any {
             TYPE val;
             readBinary(val, buf);
             return val;
@@ -422,7 +422,7 @@ TupleOperators AggregateFunctionMinMaxKTuple<is_min>::buildTupleValueOperators()
 }
 
 template <typename TYPE>
-void appendSingleValue(DataTypePtr data_type, ColumnArray & arr_to, auto & top_k)
+void appendSingleValue([[maybe_unused]] DataTypePtr data_type, ColumnArray & arr_to, auto & top_k)
 {
     ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
     top_k.sort();

@@ -167,7 +167,7 @@ void DatabaseAtomic::dropTable(ContextPtr local_context, const String & table_na
     dropTableFromMetaStore(local_context, table_name, storage, sync, query);
 }
 
-void DatabaseAtomic::dropTableLocal(const ContextPtr & local_context, const String & table_name, bool sync)
+void DatabaseAtomic::dropTableLocal([[maybe_unused]] const ContextPtr & local_context, const String & table_name, bool sync)
 {
     String table_metadata_path = getObjectMetadataPath(table_name);
     String table_metadata_path_drop;

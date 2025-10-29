@@ -224,7 +224,7 @@ void checkObjectHasNoAmbiguosPaths(const PathsInData & paths)
 
 template<typename Type>
 static DataTypePtr getLeastCommonTypeForColumnWithNestedType(
-    const Type & type, const DataTypes & concrete_types, bool check_ambiguos_paths)
+    const Type & type, const DataTypes & concrete_types, [[maybe_unused]] bool check_ambiguos_paths)
 {
     DataTypes nested_types;
     nested_types.reserve(concrete_types.size());
@@ -242,7 +242,7 @@ static DataTypePtr getLeastCommonTypeForColumnWithNestedType(
 }
 
 DataTypePtr getLeastCommonTypeForDynamicColumns(
-    const DataTypePtr & type_in_storage, const DataTypes & concrete_types, bool check_ambiguos_paths)
+    const DataTypePtr & type_in_storage, const DataTypes & concrete_types, [[maybe_unused]] bool check_ambiguos_paths)
 {
     if (concrete_types.empty())
         return nullptr;

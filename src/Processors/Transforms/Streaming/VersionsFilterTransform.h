@@ -36,7 +36,8 @@ public:
 private:
     void transform(Chunk & chunk) override;
 
-    /// \param rows, columns - [in/out] rows and columns before/after filtering
+    /// \param rows [in/out] Number of rows before and after filtering.
+    /// \param columns [in/out] Columns before and after filtering.
     template <typename KeyGetter, typename Map>
     void doFilter(UInt64 & rows, Columns & columns, const ColumnRawPtrs & key_columns, const IColumn & version_column, Map & map);
 

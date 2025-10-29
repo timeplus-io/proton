@@ -91,7 +91,7 @@ String serializeAccessEntity(const IAccessEntity & entity)
     return buf.str();
 }
 
-AccessEntityPtr deserializeAccessEntity(const String & definition, const String & path)
+AccessEntityPtr deserializeAccessEntity(const String & definition, [[maybe_unused]] const String & path)
 {
     ASTs queries;
     ParserAttachAccessEntity parser;

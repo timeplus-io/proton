@@ -389,7 +389,7 @@ ASTPtr DatabaseApacheIceberg::getCreateTableQueryImpl(const String & name, Conte
     return generateCreateTableQuery(name, storage, throw_on_error);
 }
 
-ASTPtr DatabaseApacheIceberg::generateCreateTableQuery(const String & name, const StoragePtr & storage, bool /* throw_on_error */) const
+ASTPtr DatabaseApacheIceberg::generateCreateTableQuery(const String & name, [[maybe_unused]] const StoragePtr & storage, bool /* throw_on_error */) const
 {
     auto table_metadata = Apache::Iceberg::TableMetadata().withLocation().withSchema();
 

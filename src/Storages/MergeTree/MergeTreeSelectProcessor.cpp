@@ -208,6 +208,7 @@ namespace
     struct VirtualColumnsInserter
     {
         explicit VirtualColumnsInserter(Block & block_) : block(block_) {}
+        virtual ~VirtualColumnsInserter() = default;
 
         bool columnExists(const String & name) const { return block.has(name); }
 

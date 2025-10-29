@@ -877,7 +877,7 @@ SerializationPtr SerializationObject::TypedPathSubcolumnCreator::create(const DB
 }
 
 /// proton: starts.
-SerializationPtr getObjectSerialization(const String & schema_format, const Names & partial_deserialized_subcolumns)
+SerializationPtr getObjectSerialization(const String & schema_format, [[maybe_unused]] const Names & partial_deserialized_subcolumns)
 {
     /// FIXME ?
     /*

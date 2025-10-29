@@ -8,11 +8,11 @@ namespace Streaming
 {
 namespace TumbleWindowHelper
 {
-/// \brief Get max window can be finalized by the \param watermark
+/// \brief Get max window can be finalized by the watermark
 Window getLastFinalizedWindow(Int64 watermark, const TumbleWindowParams & params);
 
-/// \brief Get max exprired time bucket can be remove by the \param watermark
-/// \param is_start_time_bucket. true: <window start time>, false: <window end time>
+/// \brief Get max exprired time bucket can be remove by the watermark
+/// \param is_start_time_bucket true: <window start time>, false: <window end time>
 Int64 getLastExpiredTimeBucket(Int64 watermark, const TumbleWindowParams & params, bool is_start_time_bucket);
 
 /// \brief Get windows with their associated buckets.

@@ -4,7 +4,7 @@
 
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 namespace Poco
 {

@@ -7,7 +7,7 @@
 #include <Common/LoggingFormatStringHelpers.h>
 
 #include <span>
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 namespace DB
 {
@@ -46,7 +46,6 @@ void throwException(v8::Isolate * isolate, v8::TryCatch & try_catch, int code, c
 
 /// Compile Javascript code and prepare v8 context by call the 'function' in the new context
 /// @param func is like: [&](v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)
-/// @return the new local v8::Context
 void compileSource(
     v8::Isolate * isolate,
     const std::string & func_name,

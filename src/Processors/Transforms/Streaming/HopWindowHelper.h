@@ -10,11 +10,11 @@ namespace HopWindowHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2);
 
-/// \brief Get max window can be finalized by the \param watermark
+/// \brief Get max window can be finalized by the watermark
 Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params);
 
-/// \brief Get max exprired time bucket can be remove by the \param watermark
-/// \param is_start_time_bucket. true: <gcd window start time>, false: <gcd window end time>
+/// \brief Get max exprired time bucket can be remove by the watermark
+/// \param is_start_time_bucket true: <gcd window start time>, false: <gcd window end time>
 Int64 getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket);
 
 /// \brief Get windows with buckets

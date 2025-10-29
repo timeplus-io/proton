@@ -406,7 +406,7 @@ public:
         }
     }
 
-    int removeKey(const K & key)
+    int removeKey([[maybe_unused]] const K & key)
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Remove key from time bucket hybrid hash table is not supported yet");
     }

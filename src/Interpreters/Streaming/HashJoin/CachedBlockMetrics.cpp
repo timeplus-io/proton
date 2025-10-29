@@ -5,7 +5,7 @@
 
 namespace DB::Streaming
 {
-void CachedBlockMetrics::serialize(WriteBuffer & wb, VersionType version) const
+void CachedBlockMetrics::serialize(WriteBuffer & wb, [[maybe_unused]] VersionType version) const
 {
     assert(version <= SERDE_REQUIRED_MAX_VERSION);
     DB::writeBinary(total_blocks, wb);
@@ -15,7 +15,7 @@ void CachedBlockMetrics::serialize(WriteBuffer & wb, VersionType version) const
     DB::writeBinary(gced_blocks, wb);
 }
 
-void CachedBlockMetrics::deserialize(ReadBuffer & rb, VersionType version)
+void CachedBlockMetrics::deserialize(ReadBuffer & rb, [[maybe_unused]] VersionType version)
 {
     assert(version <= SERDE_REQUIRED_MAX_VERSION);
     /// V1 layout [current_total_blocks, current_total_bytes, total_blocks, total_bytes, gced_blocks]

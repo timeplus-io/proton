@@ -225,7 +225,7 @@ void NamedCollectionFactory::loadIfNot()
     loadIfNot(lock);
 }
 
-bool NamedCollectionFactory::loadIfNot(std::lock_guard<std::mutex> & lock)
+bool NamedCollectionFactory::loadIfNot([[maybe_unused]] std::lock_guard<std::mutex> & lock)
 {
     if (loaded)
         return false;

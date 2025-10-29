@@ -355,7 +355,7 @@ bool UserDefinedFunctionFactory::has(const String & function_name, ContextPtr co
     }
 }
 
-std::vector<std::pair<String, cluster::protocol::UDFType>> UserDefinedFunctionFactory::getRegisteredNameAndTypes(ContextPtr context)
+std::vector<std::pair<String, cluster::protocol::UDFType>> UserDefinedFunctionFactory::getRegisteredNameAndTypes(ContextPtr /*context*/)
 {
     /// timeout_ms was used for distributed requests, not needed in single-instance
     /// int64_t timeout_ms = context ? context->getSettingsRef().query_timeout_sec * 1000 : 10'000;
@@ -600,7 +600,7 @@ bool UserDefinedFunctionFactory::unregisterFunction(
 }
 
 bool UserDefinedFunctionFactory::forceUnregisterFunction(
-    const ContextMutablePtr & context, const String & function_name, bool throw_if_not_exists)
+    [[maybe_unused]] const ContextMutablePtr & context, const String & function_name, bool throw_if_not_exists)
 {
     auto & metastore = Globals::getMetaStore();
     auto delete_udf_req = std::make_shared<cluster::DeleteUserDefinedFunctionRequest>(

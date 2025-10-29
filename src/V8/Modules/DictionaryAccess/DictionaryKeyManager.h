@@ -2,7 +2,7 @@
 
 #include <Dictionaries/DictionaryStructure.h>
 
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 namespace DB::V8
 {

@@ -24,7 +24,7 @@ extern const int INVALID_SETTING_VALUE;
 }
 
 void DatabaseAtomic::dropTableFromMetaStore(
-    const ContextPtr & local_context, const String & /*table_name*/, StoragePtr storage, bool sync, const ASTPtr & query)
+    const ContextPtr & local_context, const String & /*table_name*/, StoragePtr storage, [[maybe_unused]] bool sync, const ASTPtr & query)
 {
     assert(query);
     assert(!storage->isLocal());
@@ -63,7 +63,7 @@ bool DatabaseAtomic::renameTableInMemory(
 }
 
 void DatabaseAtomic::renameTableInMetaStore(
-    const ContextPtr & local_context, StoragePtr table, const String & table_name, const String & to_table_name, bool /*dictionary*/)
+    const ContextPtr & local_context, StoragePtr table, [[maybe_unused]] const String & table_name, const String & to_table_name, [[maybe_unused]] bool /*dictionary*/)
 {
     chassert(!table->isLocal());
 

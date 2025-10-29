@@ -1215,7 +1215,7 @@ std::shared_ptr<const EnabledRolesInfo> Context::getRolesInfo() const
     return getAccess()->getRolesInfo();
 }
 
-void Context::calculateAccessRightsWithLock(const std::lock_guard<ContextSharedMutex> & lock)
+void Context::calculateAccessRightsWithLock([[maybe_unused]] const std::lock_guard<ContextSharedMutex> & lock)
 {
     if (user_id)
         access = getAccessControl()->getContextAccess(
@@ -4363,7 +4363,7 @@ void Context::checkDiskUtil() const
 
 /// Check if an ingest / insert is allowed
 /// Disk utilization check
-void Context::checkIngest(const String & database_name) const
+void Context::checkIngest(const String & /*database_name*/) const
 {
     checkDiskUtil();
 }

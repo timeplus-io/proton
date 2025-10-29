@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <typeinfo>
 #include <variant>
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 namespace DB
 {

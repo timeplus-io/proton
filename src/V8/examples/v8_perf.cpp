@@ -4,7 +4,7 @@
 #include <V8/Utils.h>
 #include <base/ClockUtils.h>
 #include <base/scope_guard.h>
-#include <v8.h>
+#include <V8/V8Includes.h>
 #include <Common/logger_useful.h>
 
 #include <Poco/AutoPtr.h>

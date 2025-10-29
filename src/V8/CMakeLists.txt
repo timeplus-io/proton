@@ -29,7 +29,7 @@ if (TARGET ch_contrib::jemalloc)
     target_link_libraries (V8 PRIVATE ch_contrib::jemalloc)
 endif()
 
-target_compile_options(V8 PUBLIC -Wno-newline-eof -Wno-non-virtual-dtor -Wno-undef -Wno-unused-parameter -Wno-documentation -Wno-undefined-reinterpret-cast -Wno-shadow-field-in-constructor)
+target_compile_options(V8 PRIVATE -Wno-newline-eof -Wno-non-virtual-dtor -Wno-undef -Wno-unused-parameter -Wno-documentation -Wno-undefined-reinterpret-cast -Wno-shadow-field-in-constructor)
 
 #if (ENABLE_TESTS)
 #    add_subdirectory(tests)

@@ -23,7 +23,7 @@ public:
     /// \param sn fetch start sequence number
     /// \param max_wait_ms_ max wait time for new data per fetch call if there is none
     /// \param max_bytes_ max bytes per fetch
-    /// \param queued_max_bytes queued bytes for prefetch
+    /// \param queued_max_bytes_ queued bytes for prefetch
     StreamingBlockReaderNativeLog(
         Int64 sn,
         Int64 max_wait_ms_,

@@ -90,11 +90,11 @@ void StorageS3Cluster::updateConfigurationIfChanged(ContextPtr local_context)
 
 /// The code executes on initiator
 Pipe StorageS3Cluster::read(
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr context,
-    QueryProcessingStage::Enum processed_stage,
+    [[maybe_unused]] const Names & column_names,
+    [[maybe_unused]] const StorageSnapshotPtr & storage_snapshot,
+    [[maybe_unused]] SelectQueryInfo & query_info,
+    [[maybe_unused]] ContextPtr context,
+    [[maybe_unused]] QueryProcessingStage::Enum processed_stage,
     size_t /*max_block_size*/,
     size_t /*num_streams*/)
 {

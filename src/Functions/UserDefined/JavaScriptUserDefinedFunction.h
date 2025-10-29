@@ -3,7 +3,7 @@
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Functions/UserDefined/UserDefinedFunctionBase.h>
 
-#include <v8.h>
+#include <V8/V8Includes.h>
 
 namespace DB
 {

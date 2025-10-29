@@ -126,7 +126,7 @@ using StringHashMapExt = HashMapTable<
     StringHashTableGrower<>,
     HashTableAllocator>;
 
-/// \param skip_dtor_on_destroy - If explicitly set to true, the caller needs to ensure that there are no memory leaks or other problems
+/// \tparam skip_dtor_on_destroy - If explicitly set to true, the caller needs to ensure that there are no memory leaks or other problems
 template <typename Mapped, bool skip_dtor_on_destroy = std::is_trivially_destructible_v<Mapped>>
 struct HashMapsTemplate
 {

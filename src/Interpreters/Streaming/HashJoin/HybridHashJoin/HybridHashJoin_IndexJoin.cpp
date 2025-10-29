@@ -487,7 +487,7 @@ size_t insertFromBlockImpl(
 
 }
 
-bool HybridHashJoin::addJoinedBlock(const Block & block, bool check_limits)
+bool HybridHashJoin::addJoinedBlock(const Block & block, [[maybe_unused]] bool check_limits)
 {
     doInsertBlock<false>(block, right_data.index->getCurrentMapsVariants()); /// Copy the block
     return true;
@@ -1053,7 +1053,7 @@ void HybridHashJoin::doEraseExistingKeys(
     map.spillIfNecessary();
 }
 
-void HybridHashJoin::joinBlock(Block & block, ExtraBlockPtr & not_processed)
+void HybridHashJoin::joinBlock(Block & block, [[maybe_unused]] ExtraBlockPtr & not_processed)
 {
     joinLeftBlock(block);
 }

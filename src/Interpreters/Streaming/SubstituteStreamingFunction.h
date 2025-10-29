@@ -60,3 +60,4 @@ struct SubstituteFunctionsData
 using SubstituteFunctionsVisitor = InDepthNodeVisitor<OneTypeMatcher<SubstituteFunctionsData>, false>;
 }
 }
+

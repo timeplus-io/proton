@@ -27,7 +27,7 @@ public:
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override { return std::make_shared<DataTypeString>(); }
+    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override { return std::make_shared<DataTypeString>(); }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t input_rows_count) const override
     {

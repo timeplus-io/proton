@@ -167,7 +167,7 @@ void SerializationUUID::deserializeBinaryBulkDiscard(ReadBuffer & istr, size_t l
     istr.ignore(sizeof(UUID) * limit);
 }
 
-void SerializationUUID::serializeBinaryPrefixTree(const Field & field, String & encoded, const DB::FormatSettings & settings, bool ascending) const
+void SerializationUUID::serializeBinaryPrefixTree(const Field & field, String & encoded, [[maybe_unused]] const DB::FormatSettings & settings, bool ascending) const
 {
     const UUID & uuid = field.get<const UUID &>();
     const auto & u128 = uuid.toUnderType();

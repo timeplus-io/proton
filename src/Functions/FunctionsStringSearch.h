@@ -143,7 +143,7 @@ public:
         /// proton: ends
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, [[maybe_unused]] size_t input_rows_count) const override
     {
         /// proton: starts.
         // using ResultType = typename Impl::ResultType;

@@ -607,7 +607,7 @@ void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Stream {} is not distributed", table_id.getNameForLogs());
 }
 
-void InterpreterSystemQuery::restartDisk(String & name)
+void InterpreterSystemQuery::restartDisk([[maybe_unused]] String & name)
 {
     getContext()->checkAccess(AccessType::SYSTEM_RESTART_DISK);
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "SYSTEM RESTART DISK is not supported");

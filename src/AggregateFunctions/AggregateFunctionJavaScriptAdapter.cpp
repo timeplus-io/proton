@@ -45,7 +45,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
     /// Analyze if this UDA's definition to initialize the blueprint
     auto init_and_validate = [&](v8::Isolate * isolate_,
                                  v8::Local<v8::Context> & local_ctx,
-                                 v8::TryCatch & try_catch,
+                                 [[maybe_unused]] v8::TryCatch & try_catch,
                                  v8::Local<v8::Value> & blueprint) {
         if (!blueprint->IsObject())
         {

@@ -364,7 +364,7 @@ class JSONValuesImpl
 public:
     using Element = typename JSONParser::Element;
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName & arguments)
+    static DataTypePtr getReturnType(const char *, [[maybe_unused]] const ColumnsWithTypeAndName & arguments)
     {
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
     }

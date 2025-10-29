@@ -35,7 +35,7 @@ namespace Streaming
 {
 namespace
 {
-ContextMutablePtr createProxySubqueryContext(const ContextPtr & context, const SelectQueryInfo & query_info, bool is_streaming)
+ContextMutablePtr createProxySubqueryContext(const ContextPtr & context, [[maybe_unused]] const SelectQueryInfo & query_info, bool is_streaming)
 {
     auto sub_context = Context::createCopy(context);
 
@@ -442,7 +442,7 @@ void ProxyStream::processDedupStep(QueryPlan & query_plan, const Names & require
         context_->getSpillDirForCurrentQuery("dedup")));
 }
 
-void ProxyStream::processRowifyStep(QueryPlan & query_plan, const ContextPtr & context_) const
+void ProxyStream::processRowifyStep(QueryPlan & query_plan, [[maybe_unused]] const ContextPtr & context_) const
 {
     /// Insert rowify step
     query_plan.addStep(std::make_unique<RowifyTransformStep>(query_plan.getCurrentDataStream()));

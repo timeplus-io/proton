@@ -261,7 +261,7 @@ ASTPtr DatabaseMaterializedPostgreSQL::getCreateTableQueryImpl(const String & ta
 }
 
 /// proton: starts.
-ASTPtr DatabaseMaterializedPostgreSQL::generateCreateTableQuery(StorageMaterializedPostgreSQL * storage, const String & table_name, bool throw_on_error) const
+ASTPtr DatabaseMaterializedPostgreSQL::generateCreateTableQuery(StorageMaterializedPostgreSQL * storage, const String & table_name, [[maybe_unused]] bool throw_on_error) const
 {
     ASTPtr ast_storage = replication_handler->getCreateNestedTableQuery(storage, table_name);
     if (ast_storage)

@@ -50,7 +50,7 @@ protected:
     std::pair<size_t, size_t> chunksAndRowsOfAggregateResults() const noexcept;
 
     SubstreamAggregatedDataPtr getOrCreateSubstreamContext(const SubstreamID & id);
-    virtual void initSubstreamContext(const SubstreamAggregatedDataPtr & substream_ctx) { }
+    virtual void initSubstreamContext([[maybe_unused]] const SubstreamAggregatedDataPtr & substream_ctx) { }
     bool removeSubstreamContext(const SubstreamID & id);
 
     virtual void clearExpiredState(Int64 /*finalized_watermark*/, const SubstreamAggregatedDataPtr &) { }

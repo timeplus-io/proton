@@ -160,7 +160,7 @@ AggregateFunctionPythonAdapter::~AggregateFunctionPythonAdapter()
     cpython::unloadModule(module_name);
 }
 
-void AggregateFunctionPythonAdapter::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
+void AggregateFunctionPythonAdapter::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, [[maybe_unused]] Arena * arena) const
 {
     this->data(place).add(columns, row_num);
 }

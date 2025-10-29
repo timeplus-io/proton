@@ -1364,7 +1364,7 @@ void StorageDistributed::delayInsertOrThrowIfNeeded() const
 
 void registerStorageDistributed(StorageFactory & factory)
 {
-    factory.registerStorage("Distributed", [](const StorageFactory::Arguments & args)  -> std::shared_ptr<IStorage>
+    factory.registerStorage("Distributed", []([[maybe_unused]] const StorageFactory::Arguments & args)  -> std::shared_ptr<IStorage>
     {
 /// proton: starts.
 /// we do not support Distributed engine at the moment

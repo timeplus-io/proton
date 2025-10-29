@@ -228,7 +228,7 @@ void VersionsFilterTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
 void VersionsFilterTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this]([[maybe_unused]] VersionType version_, ReadBuffer & rb) {
         FormatSettings format_settings;
         latest_version_map.deserialize(
             /*MappedDeserializer*/

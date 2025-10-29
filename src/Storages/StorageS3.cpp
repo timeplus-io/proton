@@ -1558,12 +1558,12 @@ void registerStorageS3Impl(const String & name, StorageFactory & factory)
 }
 #endif
 
-void registerStorageS3(StorageFactory & factory)
+void registerStorageS3([[maybe_unused]] StorageFactory & factory)
 {
     /// return registerStorageS3Impl("S3", factory);
 }
 
-void registerStorageCOS(StorageFactory & factory)
+void registerStorageCOS([[maybe_unused]] StorageFactory & factory)
 {
     /// return registerStorageS3Impl("COSN", factory);
 }

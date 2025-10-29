@@ -65,7 +65,6 @@ namespace DB::Streaming
     return should_finalize;
 }
 
-/// \param merged_variants if \param data_variants is merged which means it is temporary used to convert to blocks
 BlocksList HybridAggregator::convertToBlocksWithoutKey(HybridAggregatedDataVariants & data_variants, bool final_) const
 {
     if (params->tracking_updates_type == TrackingUpdatesType::UpdatesWithRetract)
