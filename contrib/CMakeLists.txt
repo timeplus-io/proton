@@ -178,8 +178,15 @@ add_contrib (xxHash-cmake xxHash)
 add_contrib (google-benchmark-cmake google-benchmark)
 
 # proton: starts
-# enable v8 build by default to support UDA and UDF
-add_contrib(v8-cmake)
+# V8 (JavaScript engine) — build by default. Can be disabled with -DENABLE_V8=OFF
+option(ENABLE_V8 "Enable building V8 JavaScript engine (UDF dependency)" ON)
+if (ENABLE_V8)
+    add_contrib(v8-cmake)
+    message(STATUS "Enable V8 support")
+else()
+    message(STATUS "Disable V8 support")
+endif()
+
 
 if (ENABLE_PYTHON_UDF)
     # add_contrib(numpy-cmake)

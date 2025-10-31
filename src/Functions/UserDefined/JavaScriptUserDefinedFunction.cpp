@@ -1,3 +1,7 @@
+#include "config.h"
+
+#if USE_V8
+
 #include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
 
 #include <V8/ConvertDataTypes.h>
@@ -98,3 +102,5 @@ ColumnPtr JavaScriptUserDefinedFunction::userDefinedExecuteImpl(
 }
 
 }
+
+#endif // USE_V8

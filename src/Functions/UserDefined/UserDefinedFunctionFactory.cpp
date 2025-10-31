@@ -1,15 +1,13 @@
+#include <Functions/UserDefined/ExecutableUserDefinedFunction.h>
+#include <Functions/UserDefined/RemoteUserDefinedFunction.h>
+#include <Functions/UserDefined/UDFHelper.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
 #include "config.h"
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/UserDefined/ExecutableUserDefinedFunction.h>
-#include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
-#include <Functions/UserDefined/RemoteUserDefinedFunction.h>
-#include <Functions/UserDefined/UDFHelper.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/EnsurePython.h>
 #include <Interpreters/FunctionNameNormalizer.h>
@@ -19,7 +17,18 @@
 #include <Parsers/ParserCreateFunctionQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
+
+#if USE_V8
+#include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
+#include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
 #include <V8/Utils.h>
+#endif
+
+#if USE_PYTHON_UDF
+#include <AggregateFunctions/AggregateFunctionPythonAdapter.h>
+#include <CPython/validatePython.h>
+#include <Functions/UserDefined/PythonUserDefinedFunction.h>
+#endif
 
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
@@ -28,11 +37,6 @@
 #include <Cluster/Requests/ListUserDefinedFunctionsRequest.h>
 #include <Cluster/Requests/ListUserDefinedFunctionsResponse.h>
 
-#if USE_PYTHON_UDF
-#include <AggregateFunctions/AggregateFunctionPythonAdapter.h>
-#include <CPython/validatePython.h>
-#include <Functions/UserDefined/PythonUserDefinedFunction.h>
-#endif
 
 #include <magic_enum.hpp>
 #include <Poco/Util/JSONConfiguration.h>
@@ -135,16 +139,16 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::get(const String & funct
 AggregateFunctionPtr UserDefinedFunctionFactory::tryGetAggregateFunction(
     const String & function_name,
     const DataTypes & types,
-    const Array & parameters,
+    [[maybe_unused]] const Array & parameters,
     AggregateFunctionProperties & /*properties*/,
     ContextPtr context,
-    bool is_changelog_input)
+    [[maybe_unused]] bool is_changelog_input)
 {
     auto udf_desc = tryGetUDFDescription(function_name, context);
     if (!udf_desc)
         return nullptr;
 
-    auto validate_arguments = [&](size_t num_args) {
+    [[maybe_unused]] auto validate_arguments = [&](size_t num_args) {
         if (types.size() != num_args)
             throw Exception(
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
@@ -171,6 +175,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::tryGetAggregateFunction(
     {
         case cluster::protocol::UDFType::Javascript:
         {
+#if USE_V8
             const auto & js_payload = assert_cast<const cluster::protocol::JavaScriptUserDefinedFunctionPayload &>(*udf_desc->payload);
             if (!js_payload.is_aggregation)
                 return nullptr;
@@ -191,6 +196,9 @@ AggregateFunctionPtr UserDefinedFunctionFactory::tryGetAggregateFunction(
                 is_changelog_input,
                 context->getSettingsRef().javascript_max_memory_bytes,
                 context->getSettingsRef().v8_log_interval_ms);
+#else
+            throw Exception(ErrorCodes::UNSUPPORTED, "JavaScript UDF is not enabled");
+#endif
         }
         case cluster::protocol::UDFType::Python:
         {
@@ -315,8 +323,12 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::tryGet(const String & fu
             }
             case UDFType::Javascript:
             {
+#if USE_V8
                 auto function = std::make_shared<JavaScriptUserDefinedFunction>(std::move(udf_desc), std::move(context));
                 return std::make_unique<FunctionToOverloadResolverAdaptor>(std::move(function));
+#else
+                throw Exception(ErrorCodes::UNSUPPORTED, "JavaScript UDF is not enabled");
+#endif
             }
             case UDFType::Python:
             {
@@ -454,6 +466,7 @@ bool UserDefinedFunctionFactory::registerFunction(
     return true;
 }
 
+#if USE_V8
 void UserDefinedFunctionFactory::validateJavaScriptFunction(Poco::JSON::Object::Ptr config)
 {
     const String & function_name = config->getValue<String>("name");
@@ -497,6 +510,13 @@ void UserDefinedFunctionFactory::validateJavaScriptFunction(Poco::JSON::Object::
         /// UDF
         V8::validateStatelessFunctionSource(function_name, config->get("source"));
 }
+#else
+[[noreturn]] void UserDefinedFunctionFactory::validateJavaScriptFunction(Poco::JSON::Object::Ptr config)
+{
+    UNUSED(config);
+    throw Exception(ErrorCodes::UNSUPPORTED, "JavaScript UDF is not enabled");
+}
+#endif
 
 void UserDefinedFunctionFactory::validatePythonFunction([[maybe_unused]] Poco::JSON::Object::Ptr config)
 {

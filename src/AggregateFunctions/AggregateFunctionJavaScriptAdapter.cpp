@@ -1,3 +1,7 @@
+#include "config.h"
+
+#if USE_V8
+
 #include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
 
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
@@ -402,6 +406,8 @@ void AggregateFunctionJavaScriptAdapter::merge(AggregateDataPtr __restrict place
     };
     V8::run(blueprint.isolate.get(), blueprint.global_context, std::move(merge_func));
 }
+
+#endif
 
 size_t AggregateFunctionJavaScriptAdapter::getEmitTimes(ConstAggregateDataPtr __restrict place) const
 {

@@ -82,4 +82,5 @@
 #cmakedefine01 USE_NUMPY
 #cmakedefine01 USE_PULSAR
 #cmakedefine01 USE_AWS_MSK_IAM
+#cmakedefine01 USE_V8
 /// proton: ends.

@@ -51,7 +51,10 @@ public:
         Poco::JSON::Object::Ptr json_func,
         bool throw_if_exists,
         bool replace_if_exists);
-    
+
+#if !USE_V8
+    [[noreturn]]
+#endif
     void validateJavaScriptFunction(Poco::JSON::Object::Ptr config);
     void validatePythonFunction(Poco::JSON::Object::Ptr config);
     void validateSQLFunction(ASTPtr function, const String & name);

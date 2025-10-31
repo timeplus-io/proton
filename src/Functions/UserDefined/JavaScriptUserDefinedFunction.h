@@ -1,5 +1,9 @@
 #pragma once
 
+#include "config.h"
+
+#if USE_V8
+
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Functions/UserDefined/UserDefinedFunctionBase.h>
 
@@ -46,3 +50,5 @@ private:
 };
 
 }
+
+#endif

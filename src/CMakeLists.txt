@@ -339,7 +339,8 @@ if (TARGET ch_contrib::krb5)
     dbms_target_link_libraries(PRIVATE ch_contrib::krb5)
 endif()
 
-if (TARGET ch_contrib::v8_libbase)
+# Build and link V8 glue only when V8 is available and enabled
+if (USE_V8)
     add_subdirectory(V8)
     dbms_target_link_libraries(PUBLIC V8)
     dbms_target_link_libraries(PUBLIC ${CMAKE_DL_LIBS})
@@ -552,6 +553,12 @@ if (ENABLE_TESTS)
 
     # attach all dbms gtest sources
     grep_gtest_sources("${proton_SOURCE_DIR}/src" dbms_gtest_sources)
+
+    # Exclude V8-dependent tests when JavaScript UDF is disabled or V8 is unavailable
+    if (NOT USE_V8)
+        list(REMOVE_ITEM dbms_gtest_sources
+            ${proton_SOURCE_DIR}/src/AggregateFunctions/tests/gtest_uda.cpp)
+    endif()
 
     proton_add_executable(unit_tests_dbms ${dbms_gtest_sources})
 

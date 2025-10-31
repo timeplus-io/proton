@@ -1,8 +1,10 @@
 #include "Server.h"
+#include "config.h"
 
+#if USE_V8
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
-
 #include <V8/V8Includes.h>
+#endif
 
 namespace DB
 {
@@ -10,6 +12,7 @@ namespace DB
 /// Init v8 engine for the whole proton process
 void Server::initV8()
 {
+#if USE_V8
     if (v8_initialized)
         return;
 
@@ -20,16 +23,26 @@ void Server::initV8()
 
     DB::V8::CacheDictionaryBridge::instance().initialize(global_context);
     v8_initialized = true;
+#endif
 }
 
 void Server::disposeV8()
 {
+#if USE_V8
     if (!v8_initialized)
         return;
 
     v8::V8::Dispose();
     v8::V8::DisposePlatform();
     v8_initialized = false;
+#endif
 }
 
+void Server::maybeDisposeV8()
+{
+#if USE_V8
+    if (v8_initialized)
+        disposeV8();
+#endif
+}
 }

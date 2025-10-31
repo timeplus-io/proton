@@ -138,6 +138,13 @@ if (TARGET ch_contrib::numpy)
     set(USE_NUMPY 1)
 endif()
 # proton: ends.
+# JavaScript (V8) UDF support
+# Follow the Python approach: feature flag derives solely from contrib availability.
+if (TARGET ch_contrib::v8_libbase)
+    set(USE_V8 1 CACHE BOOL "V8 available" FORCE)
+else()
+    set(USE_V8 0 CACHE BOOL "V8 available" FORCE)
+endif()
 # Enable / disable aggregation functions
 
 # Enable / disable functions

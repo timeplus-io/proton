@@ -31,10 +31,12 @@ namespace Poco
     }
 }
 
+#if USE_V8
 namespace v8
 {
     class Platform;
 }
+#endif
 
 namespace cluster
 {
@@ -87,6 +89,8 @@ public:
     std::string getDefaultPath() const;
     /// proton: ends
 
+    void maybeDisposeV8();
+
 protected:
     int run() override;
 
@@ -102,8 +106,10 @@ private:
     ContextMutablePtr global_context;
 
     /// proton: starts
+#if USE_V8
     std::unique_ptr<v8::Platform> platform;
     bool v8_initialized = false;
+#endif
 
 #if USE_PYTHON_UDF
     PyThreadState * mainstate = nullptr;

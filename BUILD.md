@@ -37,6 +37,12 @@ $ mkdir -p build && cd build && cmake ..
 $ ninja
 ```
 
+### Optional components
+
+- Disable JavaScript (V8) engine and JS UDFs (for smaller binaries or constrained builds):
+  - Configure with: `cmake -DENABLE_V8=OFF ..`
+  - JS UDF code is automatically excluded when V8 is not built.
+
 ## Redhat Linux - x86
 
 ### Build with docker container

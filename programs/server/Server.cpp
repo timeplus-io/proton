@@ -102,7 +102,9 @@
 #include <Interpreters/TelemetryCollector.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
 #include <Task/TaskScheduler.h>
+#if USE_V8
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
+#endif
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
 #if USE_AWS_MSK_IAM || USE_AWS_S3
@@ -111,7 +113,9 @@
 
 #include <Poco/Net/NetworkInterface.h>
 
+#if USE_V8
 #include <V8/V8Includes.h>
+#endif
 
 bool LOG_PANIC_ABORT = true;
 
@@ -1427,8 +1431,7 @@ try
 
         /// Materialized View shutdown operation depends on V8,
         /// we should dispose V8 after shutdown DatabaseCatelog
-        if (v8_initialized)
-            disposeV8();
+        maybeDisposeV8();
         /// proton: end.
 
         LOG_DEBUG(log, "Shut down storages.");

@@ -5,7 +5,9 @@
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
+#if USE_V8
 #include <V8/Utils.h>
+#endif
 
 #include <numeric>
 
