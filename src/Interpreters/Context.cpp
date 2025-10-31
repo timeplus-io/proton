@@ -2981,14 +2981,14 @@ std::shared_ptr<MaterializedViewDeadLetterQueue> Context::getMaterializedViewDLQ
     return shared->system_logs->mv_dlq;
 }
 
-std::shared_ptr<StreamStateLog> Context::getStreamStateLog() const
+std::shared_ptr<IntrospectionStateLog> Context::getIntrospectionStateLog() const
 {
     SharedLockGuard lock(shared->mutex);
 
     if (!shared->system_logs)
         return {};
 
-    return shared->system_logs->stream_state_log;
+    return shared->system_logs->introspection_state_log;
 }
 /// proton: ends.
 

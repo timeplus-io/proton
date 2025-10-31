@@ -11,7 +11,7 @@
 namespace DB
 {
 
-struct StreamStateLogElement
+struct IntrospectionStateLogElement
 {
     uint64_t node_id;
     String database;
@@ -25,7 +25,7 @@ struct StreamStateLogElement
 
     Field _tp_time;
 
-    static std::string name() { return "StreamStateLog"; }
+    static std::string name() { return "IntrospectionStateLog"; }
     static NamesAndTypesList getNamesAndTypes();
     static NamesAndAliases getNamesAndAliases() { return {}; }
     void appendToBlock(MutableColumns & columns) const;
@@ -34,12 +34,12 @@ struct StreamStateLogElement
 using AddElem
     = std::function<void(const StorageID & storage_id, std::string_view name, UInt64 value, String string_value, String dimension)>;
 
-class StreamStateLog : public SystemLog<StreamStateLogElement>
+class IntrospectionStateLog : public SystemLog<IntrospectionStateLogElement>
 {
-    using SystemLog<StreamStateLogElement>::SystemLog;
+    using SystemLog<IntrospectionStateLogElement>::SystemLog;
 
 public:
-    StreamStateLog(
+    IntrospectionStateLog(
         ContextPtr context_,
         const String & database_name_,
         const String & table_name_,

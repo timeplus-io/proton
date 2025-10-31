@@ -67,7 +67,7 @@ public:
 
     std::vector<AsyncTaskResultPtr> getAllTaskResults() const;
 
-    /// Get task metrics for StreamStateLog collection
+    /// Get task metrics for IntrospectionStateLog collection
     struct PackageMetrics
     {
         size_t scheduled_tasks = 0;

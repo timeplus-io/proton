@@ -39,11 +39,10 @@
 ///proton: starts
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
-#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/IntrospectionStateLog.h>
 #include <Interpreters/MaterializedViewDeadLetterQueue.h>
 #include <Interpreters/PipelineMetricLog.h>
 #include <Interpreters/StreamMetricLog.h>
-#include <Interpreters/StreamStateLog.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIndexDeclaration.h>
@@ -188,7 +187,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     /// proton: starts
     pipeline_metric_log = createSystemLog<PipelineMetricLog>(global_context, "system", "pipeline_metric_log", config, "pipeline_metric_log");
     stream_metric_log = createSystemLog<StreamMetricLog>(global_context, "system", "stream_metric_log", config, "stream_metric_log");
-    stream_state_log = createSystemLog<StreamStateLog>(global_context, "system", "stream_state_log", config, "stream_state_log");
+    introspection_state_log
+        = createSystemLog<IntrospectionStateLog>(global_context, "system", "introspection_state_log", config, "introspection_state_log");
     mv_dlq = createSystemLog<MaterializedViewDeadLetterQueue>(global_context, "system", "mat_view_dlq", config, "mat_view_dlq");
     /// proton: ends
     query_views_log = createSystemLog<QueryViewsLog>(global_context, "system", "query_views_log", config, "query_views_log");
@@ -222,8 +222,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(pipeline_metric_log.get());
     if (stream_metric_log)
         logs.emplace_back(stream_metric_log.get());
-    if (stream_state_log)
-        logs.emplace_back(stream_state_log.get());
+    if (introspection_state_log)
+        logs.emplace_back(introspection_state_log.get());
     if (mv_dlq)
         logs.emplace_back(mv_dlq.get());
     /// proton: ends
@@ -281,11 +281,11 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         stream_metric_log->startCollectMetrics(collect_interval_milliseconds);
     }
 
-    if (stream_state_log)
+    if (introspection_state_log)
     {
         int64_t collect_interval_milliseconds
-            = config.getInt64("stream_state_log.collect_interval_milliseconds", DEFAULT_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
-        stream_state_log->startCollectStates(collect_interval_milliseconds);
+            = config.getInt64("introspection_state_log.collect_interval_milliseconds", DEFAULT_METRIC_LOG_COLLECT_INTERVAL_MILLISECONDS);
+        introspection_state_log->startCollectStates(collect_interval_milliseconds);
     }
 
     /// proton: ends.

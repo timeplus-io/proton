@@ -17,10 +17,10 @@
 #include <IO/S3/BlobStorageLogWriter.h>
 
 /// proton: starts
+#include <Interpreters/IntrospectionStateLog.h>
+#include <Interpreters/MaterializedViewDeadLetterQueue.h>
 #include <Interpreters/PipelineMetricLog.h>
 #include <Interpreters/StreamMetricLog.h>
-#include <Interpreters/StreamStateLog.h>
-#include <Interpreters/MaterializedViewDeadLetterQueue.h>
 /// proton: ends
 
 

@@ -722,7 +722,7 @@ stream_metric_log:
     collect_interval_milliseconds: 5000
 
 # We use weak_hash32(node_id) here since it doesn't matter as it is single shard
-stream_state_log:
+introspection_state_log:
     engine: |-
         engine Stream(1, weak_hash32(node_id))
              primary key (database, name, state_name, dimension, node_id)
@@ -730,7 +730,7 @@ stream_state_log:
              ttl to_datetime(_tp_time) + INTERVAL 2 MONTH DELETE
              settings mode = 'versioned_kv', logstore_codec='zstd'
     database: system
-    table: stream_state_log
+    table: introspection_state_log
     flush_interval_milliseconds: 5000
     collect_interval_milliseconds: 5000
 

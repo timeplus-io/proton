@@ -7,7 +7,7 @@ WITH storage_sizes AS
     SELECT
       database, name, uuid, dimension AS store_type, any(state_string_value) AS stream_type, sum(state_value) AS total_bytes
     FROM
-      system.stream_state_log
+      system.introspection_state_log
     WHERE
       (_tp_time > (now() - 5m)) AND (state_name = 'disk_size') AND (database != 'neutron')
     GROUP BY
@@ -16,7 +16,7 @@ WITH storage_sizes AS
     SELECT
       database, name, uuid, 'ckpt_size' AS store_type, dimension AS stream_type, sum(state_value) AS total_bytes
     FROM
-      system.stream_state_log
+      system.introspection_state_log
     WHERE
       (_tp_time > (now() - 5m)) AND state_name = 'checkpoint_storage_size'
     GROUP BY
@@ -29,4 +29,4 @@ FROM
 ORDER BY
     total_bytes DESC
 SETTINGS query_mode = 'table'
-COMMENT 'version 1';
+COMMENT 'version 2';

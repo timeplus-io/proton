@@ -4,7 +4,7 @@ AS
 WITH last_5m_progressing_status AS
 (
   SELECT database, name, state_name, dimension, state_value, _tp_time AS ts
-  FROM system.stream_state_log
+  FROM system.introspection_state_log
   WHERE (_tp_time > (now() - 5m)) AND (state_name IN ('processed_sn', 'ckpt_sn', 'end_sn'))
   ORDER BY _tp_time DESC -- order here to make sure we have latest state
   SETTINGS query_mode = 'table'
@@ -43,4 +43,4 @@ SELECT
     if (ckpt_sn != 0 AND processed_sn != 0, processed_sn - ckpt_sn, 0) AS ckpt_lag,
     ts
 FROM mv_lagging_aggr_per_mv
-COMMENT 'version 2';
+COMMENT 'version 3';

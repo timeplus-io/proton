@@ -54,7 +54,7 @@ class TransactionsInfoLog;
 /// proton: starts
 class PipelineMetricLog;
 class StreamMetricLog;
-class StreamStateLog;
+class IntrospectionStateLog;
 class MaterializedViewDeadLetterQueue;
 /// proton: ends
 
@@ -84,7 +84,7 @@ struct SystemLogs
     /// proton: starts
     std::shared_ptr<PipelineMetricLog> pipeline_metric_log;   /// Used to log processor metrics used in query pipeline.
     std::shared_ptr<StreamMetricLog> stream_metric_log;                    /// Used to log stream metrics.
-    std::shared_ptr<StreamStateLog> stream_state_log; /// Used to log stream states.
+    std::shared_ptr<IntrospectionStateLog> introspection_state_log; /// Used to log stream states.
     std::shared_ptr<MaterializedViewDeadLetterQueue> mv_dlq; /// Used to log dropped messages in MVs.
     /// proton: ends
 

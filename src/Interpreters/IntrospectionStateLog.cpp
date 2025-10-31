@@ -1,4 +1,4 @@
-#include <Interpreters/StreamStateLog.h>
+#include <Interpreters/IntrospectionStateLog.h>
 
 #include <Bootstrap/Globals.h>
 #include <Cluster/Common/TimeWheel/TimerService.h>
@@ -36,7 +36,7 @@ bool ignoreDatabase(const String & name)
     return black_list.contains(name);
 }
 
-StreamStateLogElement makeStreamStateLogElement(
+IntrospectionStateLogElement makeIntrospectionStateLogElement(
     uint64_t node_id,
     const StorageID & storage_id,
     std::string_view state_name,
@@ -44,7 +44,7 @@ StreamStateLogElement makeStreamStateLogElement(
     String state_string_value,
     String dimension)
 {
-    StreamStateLogElement elem;
+    IntrospectionStateLogElement elem;
 
     elem.node_id = node_id;
     elem.database = storage_id.getDatabaseName();
@@ -171,7 +171,7 @@ void addMaterializedViewLog(const StorageMaterializedView * mv, const AddElem & 
         add_elem(
             storage_id,
             "pipeline",
-            /*state_value*/0,
+            /*state_value*/ 0,
             /*state_string_value=*/pipeline_metrics,
             /*dimension=*/mv_type);
     }
@@ -352,7 +352,7 @@ namespace ErrorCodes
 extern const int CANNOT_CREATE_TIMER;
 }
 
-NamesAndTypesList StreamStateLogElement::getNamesAndTypes()
+NamesAndTypesList IntrospectionStateLogElement::getNamesAndTypes()
 {
     return {
         {"node_id", std::make_shared<DataTypeUInt64>()},
@@ -368,7 +368,7 @@ NamesAndTypesList StreamStateLogElement::getNamesAndTypes()
     };
 }
 
-void StreamStateLogElement::appendToBlock(MutableColumns & columns) const
+void IntrospectionStateLogElement::appendToBlock(MutableColumns & columns) const
 {
     size_t column_idx = 0;
 
@@ -383,18 +383,18 @@ void StreamStateLogElement::appendToBlock(MutableColumns & columns) const
     columns[column_idx++]->insert(_tp_time);
 }
 
-StreamStateLog::StreamStateLog(
+IntrospectionStateLog::IntrospectionStateLog(
     ContextPtr context_,
     const String & database_name_,
     const String & table_name_,
     const String & storage_def_,
     size_t flush_interval_milliseconds_)
-    : SystemLog<StreamStateLogElement>(context_, database_name_, table_name_, storage_def_, flush_interval_milliseconds_)
+    : SystemLog<IntrospectionStateLogElement>(context_, database_name_, table_name_, storage_def_, flush_interval_milliseconds_)
 {
     is_force_prepare_tables = true;
 }
 
-void StreamStateLog::startCollectStates(int64_t collect_interval_milliseconds_)
+void IntrospectionStateLog::startCollectStates(int64_t collect_interval_milliseconds_)
 {
     collect_interval_milliseconds = collect_interval_milliseconds_;
 
@@ -403,7 +403,7 @@ void StreamStateLog::startCollectStates(int64_t collect_interval_milliseconds_)
         throw Exception(ErrorCodes::CANNOT_CREATE_TIMER, "Failed to add collect metrics task to timer");
 }
 
-void StreamStateLog::stopCollectStates()
+void IntrospectionStateLog::stopCollectStates()
 {
     if (stopped.test_and_set())
         return;
@@ -412,20 +412,20 @@ void StreamStateLog::stopCollectStates()
         timer_task->cancel();
 }
 
-void StreamStateLog::shutdown()
+void IntrospectionStateLog::shutdown()
 {
     stopCollectStates();
     stopFlushThread();
 }
 
-void StreamStateLog::collectStates()
+void IntrospectionStateLog::collectStates()
 {
     auto local_context = getContext();
     auto node_id = local_context->getNodeID();
 
     auto add_elem
         = [this, node_id](const StorageID & storage_id, std::string_view name, UInt64 value, String string_value, String dimension) {
-              this->add(makeStreamStateLogElement(node_id, storage_id, name, value, std::move(string_value), std::move(dimension)));
+              this->add(makeIntrospectionStateLogElement(node_id, storage_id, name, value, std::move(string_value), std::move(dimension)));
           };
 
     try
@@ -434,12 +434,11 @@ void StreamStateLog::collectStates()
     }
     catch (...)
     {
-        tryLogCurrentException(log, "Failed to collect stream states");
+        tryLogCurrentException(log, "Failed to collect introspection states");
     }
 }
 
-
-void StreamStateLog::doCollectStates(AddElem add_elem, ContextPtr local_context)
+void IntrospectionStateLog::doCollectStates(AddElem add_elem, ContextPtr local_context)
 {
     /// List all storages [in the specified database]
     Databases databases = DatabaseCatalog::instance().getDatabases();

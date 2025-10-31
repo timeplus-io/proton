@@ -97,7 +97,7 @@ steps:
 
   - name: view-18-1
     type: stream
-    query: select uuid from table(system.stream_state_log) where name='ckpt_mv' limit 1
+    query: select uuid from table(system.introspection_state_log) where name='ckpt_mv' limit 1
     schema:
       - name: uuid
         type: uuid
