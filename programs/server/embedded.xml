@@ -69,7 +69,7 @@
       <collect_interval_milliseconds>5000</collect_interval_milliseconds>
   </stream_metric_log>
 
-  <stream_state_log>
+  <introspection_state_log>
    <engine>
         engine Stream(1, weak_hash32(node_id))
         primary key (database, name, state_name, dimension, node_id)
@@ -78,10 +78,10 @@
         settings mode = 'versioned_kv', logstore_codec='zstd'
    </engine>
       <database>system</database>
-      <table>stream_state_log</table>
+      <table>introspection_state_log</table>
       <flush_interval_milliseconds>5000</flush_interval_milliseconds>
       <collect_interval_milliseconds>5000</collect_interval_milliseconds>
-  </stream_state_log>
+  </introspection_state_log>
 
   <mat_view_dlq>
    <engine>
