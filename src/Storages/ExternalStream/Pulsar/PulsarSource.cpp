@@ -42,8 +42,8 @@ inline String formatMessageId(const pulsar::MessageId & id)
 Int64 getGenerateTimeoutMs(const ContextPtr & context)
 {
     auto timeout_setting = context->getSettingsRef().record_consume_timeout_ms.value;
-    if (timeout_setting < 0)
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "record_consume_timeout_ms cannot be smaller than 0");
+    if (timeout_setting <= 0)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "record_consume_timeout_ms must be greater than 0");
 
     return timeout_setting;
 }
@@ -80,6 +80,13 @@ PulsarSource::PulsarSource(
         if (res != pulsar::ResultOk)
             throw Exception(
                 ErrorCodes::CANNOT_CONNECT_SERVER, "Failed to get last message id of topic {}: {}", getTopic(), pulsar::strResult(res));
+
+        LOG_DEBUG(
+            logger, "Last message ID for non-streaming read: topic='{}' message_id={}", getTopic(), formatMessageId(end_message_id));
+
+        /// Check if topic is empty
+        if (end_message_id.entryId() == -1)
+            is_finished = true;
     }
 
     initInputFormatExecutor(data_format, format_settings);
@@ -115,8 +122,12 @@ Chunk PulsarSource::generate()
         if (res == pulsar::ResultTimeout || res == pulsar::ResultAlreadyClosed)
         {
             /// For non-streaming queries, if there is no message available, no needs to wait for more messages.
-            if (!is_streaming)
+            if (!is_streaming && consumed_messages == 0)
+            {
+                LOG_WARNING(logger, "Finish non-streaming query read for no messages received from '{}' in {} ms (record_consume_timeout_ms)", getTopic(), timeout_ms);
                 is_finished = true;
+            }
+
             break;
         }
 
@@ -124,7 +135,7 @@ Chunk PulsarSource::generate()
             throw Exception(
                 ErrorCodes::CANNOT_RECEIVE_MESSAGE, "Failed to receive message from topic {}: {}", getTopic(), pulsar::strResult(res));
 
-        if (!is_streaming && msg.getMessageId() == end_message_id)
+        if (!is_streaming && msg.getMessageId() >= end_message_id)
             is_finished = true;
 
         timeout_ms = generate_timeout_ms - static_cast<Int64>(stopwatch.elapsedMilliseconds());

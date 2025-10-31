@@ -20,17 +20,17 @@ class PulsarSource final : public Streaming::ISource, public ExternalStreamSourc
 {
 public:
     PulsarSource(
-    const Block & header_,
-    const StorageSnapshotPtr & storage_snapshot_,
-    std::map<size_t, std::pair<DataTypePtr, std::function<Field(const pulsar::Message &)>>> virtual_header_,
-    bool is_streaming_,
-    const String & data_format,
-    const FormatSettings & format_settings,
-    pulsar::Reader && reader_,
-    const std::shared_ptr<Pulsar> & storage_,
-    ExternalStreamCounterPtr counter,
-    LoggerPtr logger_,
-    const ContextPtr & context_);
+        const Block & header_,
+        const StorageSnapshotPtr & storage_snapshot_,
+        std::map<size_t, std::pair<DataTypePtr, std::function<Field(const pulsar::Message &)>>> virtual_header_,
+        bool is_streaming_,
+        const String & data_format,
+        const FormatSettings & format_settings,
+        pulsar::Reader && reader_,
+        const std::shared_ptr<Pulsar> & storage_,
+        ExternalStreamCounterPtr counter,
+        LoggerPtr logger_,
+        const ContextPtr & context_);
 
     ~PulsarSource() override;
 
