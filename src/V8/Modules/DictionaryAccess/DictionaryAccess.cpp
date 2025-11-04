@@ -128,8 +128,7 @@ void DictionaryAccess::runBenchmark(size_t operation_count)
 
     try
     {
-        v8::V8::InitializeICUDefaultLocation(nullptr);
-        v8::V8::InitializeExternalStartupData(nullptr);
+        v8::V8::InitializeICU();
         std::unique_ptr<v8::Platform> platform = v8::platform::NewDefaultPlatform();
         v8::V8::InitializePlatform(platform.get());
         v8::V8::Initialize();

@@ -105,6 +105,7 @@ String UDA1 = R"###(
 
 void initV8()
 {
+    v8::V8::InitializeICU();
     v8::V8::SetFlagsFromString("--single-threaded");
     platform = v8::platform::NewSingleThreadedDefaultPlatform();
     v8::V8::InitializePlatform(platform.get());

@@ -16,6 +16,8 @@ void Server::initV8()
     if (v8_initialized)
         return;
 
+    /// Init ICU and default platform (work thread pool default to CPU count - 1)
+    v8::V8::InitializeICU();
     /// Init default platform which enable a work thread pool and the default pool size is: the number of CPU processors -1
     platform = v8::platform::NewDefaultPlatform();
     v8::V8::InitializePlatform(platform.get());
