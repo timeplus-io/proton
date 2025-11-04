@@ -24,7 +24,7 @@ struct TaskExecutionResult
     Int64 execution_end;
     cluster::Error error;
 
-    std::string displayError() const
+    [[nodiscard]] std::string displayError() const
     {
         return error.hasError() ? fmt::format("{}: {}", ErrorCodes::getName(error.error_code), error.error_message) : "OK";
     }

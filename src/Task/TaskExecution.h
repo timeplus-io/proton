@@ -7,7 +7,11 @@
 #include <Common/Logger.h>
 
 
-namespace DB::Task
+namespace DB
+{
+struct IntrospectionStateLogElement;
+
+namespace Task
 {
 class TaskExecution
 {
@@ -27,6 +31,9 @@ private:
     std::pair<std::string, Checkpoint> getQueryAndCheckpoint();
     Checkpoint executeQuery(const std::string & query, const ContextPtr & query_context);
 
+    void logTaskExecutionBegin(IntrospectionStateLogElement & elem, const TaskExecutionResult & result, const ContextPtr & context);
+    void logTaskExecutionEnd(IntrospectionStateLogElement & elem, const TaskExecutionResult & result, const ContextPtr & context);
+
     StorageID task_id;
     cluster::protocol::TaskDescriptorPtr task_descriptor;
 
@@ -34,4 +41,6 @@ private:
 
     LoggerPtr logger;
 };
+
+}
 }

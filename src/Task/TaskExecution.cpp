@@ -9,6 +9,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/IntrospectionStateLog.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -22,9 +24,17 @@
 #include <Storages/IStorage.h>
 #include <Task/TaskScheduler.h>
 #include <Task/Utils.h>
+#include <base/scope_guard.h>
 #include <Common/Exception.h>
 #include <Common/logger_useful.h>
+#include <Common/timeScale.h>
 
+
+namespace ProfileEvents
+{
+extern const Event UserTimeMicroseconds;
+extern const Event SystemTimeMicroseconds;
+}
 
 namespace DB
 {
@@ -297,6 +307,10 @@ TaskExecutionResult TaskExecution::execute(const ContextPtr & context)
     result.execution_node = Globals::getNodeID();
     result.execution_start = UTCMilliseconds::now();
 
+    IntrospectionStateLogElement elem;
+    logTaskExecutionBegin(elem, result, context);
+    SCOPE_EXIT({ logTaskExecutionEnd(elem, result, context); });
+
     try
     {
         auto [query, checkpoint] = getQueryAndCheckpoint();
@@ -346,6 +360,68 @@ void TaskExecution::cancel() noexcept
 {
     LOG_DEBUG(logger, "Task execution cancelled: {}", task_id.getFullTableName());
     is_canceled = true;
+}
+
+void TaskExecution::logTaskExecutionBegin(
+    IntrospectionStateLogElement & elem, const TaskExecutionResult & result, const ContextPtr & context)
+{
+    auto introspection_state_log = context->getIntrospectionStateLog();
+    if (likely(introspection_state_log))
+    {
+        elem.node_id = result.execution_node;
+        elem.database = task_descriptor->ns;
+        elem.stream_name = task_descriptor->name;
+        elem.uuid = task_descriptor->id;
+        elem.dimension = "task";
+
+        elem.state_name = "execution_start";
+        elem.state_value = result.execution_start;
+        elem.state_string_value = "";
+        elem._tp_time = nowSubsecond(3);
+        introspection_state_log->add(elem);
+    }
+}
+
+void TaskExecution::logTaskExecutionEnd(IntrospectionStateLogElement & elem, const TaskExecutionResult & result, const ContextPtr & context)
+{
+    auto introspection_state_log = context->getIntrospectionStateLog();
+    if (likely(introspection_state_log))
+    {
+        elem.state_name = "execution_time_ms";
+        elem.state_value = result.execution_end - result.execution_start;
+        elem.state_string_value = "";
+        elem._tp_time = nowSubsecond(3);
+        introspection_state_log->add(elem);
+
+        elem.state_name = "execution_result";
+        elem.state_value = static_cast<UInt64>(result.error.error_code);
+        elem.state_string_value = result.displayError();
+        introspection_state_log->add(elem);
+
+        if (auto query_status = context->getProcessListElement())
+        {
+            elem.state_string_value.clear();
+
+            auto add_metric = [&elem, &introspection_state_log](std::string name, auto value) {
+                elem.state_name = std::move(name);
+                elem.state_value = static_cast<UInt64>(value);
+                introspection_state_log->add(elem);
+            };
+
+            const auto query_status_info = query_status->getInfo(false, /*get_profile_events=*/true);
+            chassert(query_status_info.profile_counters);
+
+            add_metric("read_rows", query_status_info.read_rows);
+            add_metric("read_bytes", query_status_info.read_bytes);
+            add_metric("written_rows", query_status_info.written_rows);
+            add_metric("written_bytes", query_status_info.written_bytes);
+            add_metric("peek_memory_usage", query_status_info.peak_memory_usage);
+
+            const auto & counters = *query_status_info.profile_counters;
+            auto cpu_time = counters[ProfileEvents::SystemTimeMicroseconds] + counters[ProfileEvents::UserTimeMicroseconds];
+            add_metric("cpu_time_ms", cpu_time / 1000);
+        }
+    }
 }
 
 }
