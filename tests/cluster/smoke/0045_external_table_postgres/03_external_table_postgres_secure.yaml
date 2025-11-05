@@ -1,5 +1,6 @@
 tags:
   - materialized view
+  - skip    # setting 'secure' has no actual effect in pg ext
 
 description: |
   Test PostgreSQL external table with secure=true

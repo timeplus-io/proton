@@ -111,7 +111,7 @@ void registerDataTypeDecimal(DataTypeFactory & factory)
 
     factory.registerDataType("decimal", create, DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("DEC", "decimal", DataTypeFactory::CaseInsensitive);
-    /// factory.registerAlias("NUMERIC", "decimal", DataTypeFactory::CaseInsensitive);
+    factory.registerAlias("NUMERIC", "decimal", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("FIXED", "decimal", DataTypeFactory::CaseInsensitive);
 
     /// proton: starts

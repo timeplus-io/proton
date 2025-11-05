@@ -1,0 +1,46 @@
+tags:
+  - materialized view
+
+description: |
+  Test PostgreSQL external table with secure=true
+  Main Steps:
+    1.Create postgres table with numeric-type columns and ingest data
+    2.Create postgresql external table
+    3.Check external table data
+
+steps:
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "DROP TABLE IF EXISTS test_table;"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "CREATE TABLE test_table (id SERIAL PRIMARY KEY, price NUMERIC(10,2), quantity numeric);"
+
+  - type: command
+    node: [s1]
+    shell: docker exec <<.CONTAINER_NAME_PREFIX>>_postgres psql -U postgres -c "INSERT INTO test_table (price, quantity) VALUES (19.99, 1.234);"
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL TABLE pg_ext
+      SETTINGS type='postgresql', address='postgres:5432', 
+               user='postgres', password='postgres', 
+               database='postgres', table='test_table';
+
+  - name: pg-4-1
+    type: stream
+    query: SELECT price, quantity FROM pg_ext;
+    schema:
+      - name: price
+        type: nullable(decimal(10, 2))
+      - name: quantity
+        type: nullable(decimal(38, 19))
+
+  - type: check
+    target_name: pg-4-1
+    expected_result:
+      - ['19.99', '1.234']
