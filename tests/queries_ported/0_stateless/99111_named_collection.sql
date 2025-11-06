@@ -28,7 +28,15 @@ AS
 -- Not overridable setting
 CREATE DISK IF NOT EXISTS 99111_d4 disk(named_collection=nc2, type=local); -- { serverError BAD_ARGUMENTS }
 
+-- Named collection already exists
+CREATE NAMED COLLECTION nc2 AS foo='bar'; -- {serverError NAMED_COLLECTION_ALREADY_EXISTS }
+
+CREATE NAMED COLLECTION IF NOT EXISTS nc2 AS type='invalid'; 
+CREATE DISK IF NOT EXISTS 99111_d5 disk(named_collection=nc2);
+SELECT name, path, type FROM system.disks WHERE name = '99111_d5';
+
 DROP DISK IF EXISTS 99111_d1;
 DROP DISK IF EXISTS 99111_d3;
+DROP DISK IF EXISTS 99111_d5;
 DROP NAMED COLLECTION IF EXISTS nc1;
 DROP NAMED COLLECTION IF EXISTS nc2;

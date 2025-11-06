@@ -89,6 +89,17 @@ void NamedCollectionFactory::reloadFromConfig(const Poco::Util::AbstractConfigur
 void NamedCollectionFactory::createFromSQL(const ASTCreateNamedCollectionQuery & query)
 {
     /// proton: starts
+    if (exists(query.collection_name))
+    {
+        if (query.if_not_exists)
+            return;
+
+        throw Exception(
+            ErrorCodes::NAMED_COLLECTION_ALREADY_EXISTS,
+            "A named collection `{}` already exists",
+            query.collection_name);
+    }
+
     metadata_storage->create(query);
     /// proton: ends
 }
