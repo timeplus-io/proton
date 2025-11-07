@@ -228,7 +228,9 @@ jobs:
           files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           generate_release_notes: true
-          append_body: true
+          # Do not append body on repeated invocations from
+          # multiple build jobs; replace to avoid duplicates.
+          append_body: false
           prerelease: ${{ inputs.prerelease }}
           tag_name: ${{ steps.execute.outputs.tag_name }}
           body: |
