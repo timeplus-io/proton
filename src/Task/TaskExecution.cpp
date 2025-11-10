@@ -11,6 +11,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/IntrospectionStateLog.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/StreamMetricLog.h>
 #include <Interpreters/executeSelectQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -384,13 +385,21 @@ void TaskExecution::logTaskExecutionBegin(
 
 void TaskExecution::logTaskExecutionEnd(IntrospectionStateLogElement & elem, const TaskExecutionResult & result, const ContextPtr & context)
 {
+    auto now = nowSubsecond(3);
+    std::optional<QueryStatusInfo> query_status_info;
+    if (auto query_status = context->getProcessListElement())
+    {
+        query_status_info = query_status->getInfo(false, /*get_profile_events=*/true);
+        chassert(query_status_info->profile_counters);
+    }
+
     auto introspection_state_log = context->getIntrospectionStateLog();
     if (likely(introspection_state_log))
     {
         elem.state_name = "execution_time_ms";
         elem.state_value = result.execution_end - result.execution_start;
         elem.state_string_value = "";
-        elem._tp_time = nowSubsecond(3);
+        elem._tp_time = now;
         introspection_state_log->add(elem);
 
         elem.state_name = "execution_result";
@@ -398,7 +407,7 @@ void TaskExecution::logTaskExecutionEnd(IntrospectionStateLogElement & elem, con
         elem.state_string_value = result.displayError();
         introspection_state_log->add(elem);
 
-        if (auto query_status = context->getProcessListElement())
+        if (query_status_info.has_value())
         {
             elem.state_string_value.clear();
 
@@ -408,19 +417,39 @@ void TaskExecution::logTaskExecutionEnd(IntrospectionStateLogElement & elem, con
                 introspection_state_log->add(elem);
             };
 
-            const auto query_status_info = query_status->getInfo(false, /*get_profile_events=*/true);
-            chassert(query_status_info.profile_counters);
+            add_metric("read_rows", query_status_info->read_rows);
+            add_metric("read_bytes", query_status_info->read_bytes);
+            add_metric("written_rows", query_status_info->written_rows);
+            add_metric("written_bytes", query_status_info->written_bytes);
+            add_metric("peek_memory_usage", query_status_info->peak_memory_usage);
 
-            add_metric("read_rows", query_status_info.read_rows);
-            add_metric("read_bytes", query_status_info.read_bytes);
-            add_metric("written_rows", query_status_info.written_rows);
-            add_metric("written_bytes", query_status_info.written_bytes);
-            add_metric("peek_memory_usage", query_status_info.peak_memory_usage);
-
-            const auto & counters = *query_status_info.profile_counters;
+            const auto & counters = *query_status_info->profile_counters;
             auto cpu_time = counters[ProfileEvents::SystemTimeMicroseconds] + counters[ProfileEvents::UserTimeMicroseconds];
             add_metric("cpu_time_ms", cpu_time / 1000);
         }
+    }
+
+    /// Append to system.stream_metric_log
+    auto stream_metric_log = context->getStreamMetricLog();
+    if (likely(stream_metric_log))
+    {
+        StreamMetricLogElement metric_elem;
+        metric_elem.elapsed_ms = result.execution_end - result.execution_start;
+        metric_elem.node_id = result.execution_node;
+        metric_elem.database = task_descriptor->ns;
+        metric_elem.stream_name = task_descriptor->name;
+        metric_elem.uuid = task_descriptor->id;
+        metric_elem.type = "Task";
+        if (query_status_info.has_value())
+        {
+            metric_elem.read_bytes = query_status_info->read_bytes;
+            metric_elem.read_rows = query_status_info->read_rows;
+            metric_elem.written_bytes = query_status_info->written_bytes;
+            metric_elem.written_rows = query_status_info->written_rows;
+            metric_elem.external_ingress = false;
+        }
+        metric_elem._tp_time = now;
+        stream_metric_log->add(metric_elem);
     }
 }
 

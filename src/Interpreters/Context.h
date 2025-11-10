@@ -161,6 +161,7 @@ class IInputFormat;
 
 /// proton: starts.
 class PipelineMetricLog;
+class StreamMetricLog;
 class IntrospectionStateLog;
 class MaterializedViewDeadLetterQueue;
 struct StreamSettings;
@@ -1054,6 +1055,7 @@ public:
     /// proton: starts.
     std::shared_ptr<PipelineMetricLog> getPipelineMetricLog() const;
     std::shared_ptr<MaterializedViewDeadLetterQueue> getMaterializedViewDLQ() const;
+    std::shared_ptr<StreamMetricLog> getStreamMetricLog() const;
     std::shared_ptr<IntrospectionStateLog> getIntrospectionStateLog() const;
     /// proton: ends.
 
