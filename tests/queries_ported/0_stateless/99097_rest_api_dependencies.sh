@@ -14,6 +14,18 @@ CREATE STREAM IF NOT EXISTS db_99097.stream2(id int);
 CREATE STREAM IF NOT EXISTS db_99097.stream3(id int);
 CREATE MATERIALIZED VIEW IF NOT EXISTS db_99097.mv1 AS SELECT * FROM system.introspection_state_log;
 CREATE OR REPLACE TASK db_99097.task1 SCHEDULE 10d INTO db_99097.stream2 AS SELECT id FROM db_99097.stream1 a JOIN db_99097.stream3 b ON a.id=b.id;
+CREATE OR REPLACE FUNCTION print(value string) RETURNS string LANGUAGE PYTHON AS \$\$
+def print(value):
+    for v in value:
+        print(v)
+    return value
+\$\$;
+
+CREATE ALERT db_99097.alert1
+BATCH 10 EVENTS WITH TIMEOUT 5s
+LIMIT 1 ALERTS PER 15s
+CALL print
+AS SELECT '123' as value FROM stream1
 EOF
 
 echo "Check count"
@@ -43,5 +55,10 @@ echo "Get task1 dependencies"
 ${CLICKHOUSE_CURL} -sS -X GET "${REST_ENDPOINT}/db_99097/task1" | jq '.data.dependencies | length'
 ${CLICKHOUSE_CURL} -sS -X GET "${REST_ENDPOINT}/db_99097/task1" | jq '.data.data_flow[] | select(.from == "db_99097.task1")'
 
+echo "Get alert1 dependencies"
+${CLICKHOUSE_CURL} -sS -X GET "${REST_ENDPOINT}/db_99097/alert1" | jq '.data.dependencies | length'
+${CLICKHOUSE_CURL} -sS -X GET "${REST_ENDPOINT}/db_99097/alert1" | jq '.data.data_flow[] | select(.from == "db_99097.stream1")'
 
+$CLICKHOUSE_CLIENT -q "DROP ALERT db_99097.alert1"
+$CLICKHOUSE_CLIENT -q "DROP FUNCTION IF EXISTS print"
 $CLICKHOUSE_CLIENT -q "DROP DATABASE db_99097 CASCADE"

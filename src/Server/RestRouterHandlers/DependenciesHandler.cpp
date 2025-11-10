@@ -1,6 +1,7 @@
 #include <Server/RestRouterHandlers/DependenciesHandler.h>
 
 #include <Databases/IDatabase.h>
+#include <Storages/Alert/StorageAlert.h>
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
 #include <Storages/Stream/StorageStream.h>
@@ -118,6 +119,10 @@ void DependenciesHandler::loadStreams(const String & ns, const String & stream) 
             else if (const auto * storage_view = dynamic_cast<StorageView *>(storage.get()))
             {
                 source_table_ids = get_source_table_ids(storage_view);
+            }
+            else if (const auto * alert_storage = dynamic_cast<StorageAlert *>(storage.get()))
+            {
+                source_table_ids = get_source_table_ids(alert_storage);
             }
 
             for (const auto & storage_id : source_table_ids)

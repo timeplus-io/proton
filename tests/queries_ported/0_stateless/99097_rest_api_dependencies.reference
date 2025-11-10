@@ -1,6 +1,6 @@
 Check count
-4
-4
+5
+5
 Check mv1 dependencies
 {
   "from": "db_99097.mv1",
@@ -53,4 +53,12 @@ Get task1 dependencies
   "from_type": "Task",
   "to": "db_99097.stream2",
   "to_type": "Stream"
+}
+Get alert1 dependencies
+1
+{
+  "from": "db_99097.stream1",
+  "from_type": "Stream",
+  "to": "db_99097.alert1",
+  "to_type": "StorageAlert"
 }

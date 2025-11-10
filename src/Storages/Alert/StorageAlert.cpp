@@ -143,6 +143,9 @@ StorageAlert::StorageAlert(
 
     if (validation_level != ValidationLevel::None)
         validateSelectQuery(validation_level == ValidationLevel::Quick);
+    StorageInMemoryMetadata storage_metadata;
+    storage_metadata.setSelectQuery(select_query);
+    setInMemoryMetadata(storage_metadata);
 }
 
 StorageAlert::~StorageAlert()
