@@ -46,7 +46,6 @@ public:
 
     void resetFormatterImpl() override
     {
-        LOG_DEBUG(getLogger("RowOutputFormatWithExceptionHandlerAdaptor"), "resetFormatterImpl");
         Base::resetFormatterImpl();
         if (validating_ostr)
             validating_ostr = std::make_unique<WriteBufferValidUTF8>(*Base::getWriteBufferPtr());
