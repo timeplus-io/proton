@@ -28,7 +28,7 @@ on:
       submodules:
         type: string
         required: false
-        default: 'recursive'
+        default: 'true'
       command:
         type: string
         required: true

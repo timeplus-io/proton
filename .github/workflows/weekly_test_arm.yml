@@ -26,7 +26,7 @@ jobs:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
-      submodules: 'recursive'
+      submodules: 'true'
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       tag: 'sanitizer'
@@ -63,7 +63,7 @@ jobs:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
-      submodules: 'recursive'
+      submodules: 'true'
       sanitizer: "address"
       arch: ${{ vars.ARM_ARCH }}
       tag: 'sanitizer'

@@ -243,7 +243,7 @@ jobs:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
-      submodules: 'recursive'
+      submodules: 'true'
       sanitizer: ${{ github.event.inputs.build_type }}
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
@@ -266,7 +266,7 @@ jobs:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
-      submodules: 'recursive'
+      submodules: 'true'
       sanitizer: ""
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
@@ -289,7 +289,7 @@ jobs:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
-      submodules: 'recursive'
+      submodules: 'true'
       sanitizer: ${{ github.event.inputs.build_type }}
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
@@ -312,7 +312,7 @@ jobs:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
       ec2-volume-size: ${{ vars.VOLUME_SIZE }}
-      submodules: 'recursive'
+      submodules: 'true'
       sanitizer: ""
       arch: ${{ vars.ARM_ARCH }}
       tag: ${{ github.event.inputs.tag }}
@@ -335,7 +335,7 @@ jobs:
     with:
       ec2-instance-type: c6i.8xlarge
       ec2-image-id: ami-042a37e33a285c22b
-      submodules: 'recursive'
+      submodules: 'true'
       run_mode: 'start'
       s3_upload: true
       s3_output_path: 'proton/cross-compile/macOS-x86'
