@@ -375,7 +375,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # download the pre-built binary of v8 (this is only for cross-compile)
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/141/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
         chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
@@ -448,7 +448,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # download the pre-built binary of v8 (this is only for cross-compile)
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/141/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz
         chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
