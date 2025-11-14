@@ -57,7 +57,7 @@ private:
 
     void collectStates();
 
-    static void doCollectStates(AddElem add_elem, ContextPtr local_context);
+    static void doCollectStates(AddElem add_elem, ContextPtr local_context, LoggerPtr log_);
 
     size_t collect_interval_milliseconds;
     std::atomic_flag stopped;

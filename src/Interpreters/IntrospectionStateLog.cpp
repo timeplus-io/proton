@@ -430,7 +430,7 @@ void IntrospectionStateLog::collectStates()
 
     try
     {
-        doCollectStates(add_elem, std::move(local_context));
+        doCollectStates(add_elem, std::move(local_context), log);
     }
     catch (...)
     {
@@ -438,7 +438,7 @@ void IntrospectionStateLog::collectStates()
     }
 }
 
-void IntrospectionStateLog::doCollectStates(AddElem add_elem, ContextPtr local_context)
+void IntrospectionStateLog::doCollectStates(AddElem add_elem, ContextPtr local_context, LoggerPtr log_)
 {
     /// List all storages [in the specified database]
     Databases databases = DatabaseCatalog::instance().getDatabases();
@@ -455,35 +455,56 @@ void IntrospectionStateLog::doCollectStates(AddElem add_elem, ContextPtr local_c
 
         for (auto iterator = database->getTablesIterator(local_context); iterator->isValid(); iterator->next())
         {
-            const auto & storage = iterator->table();
-            if (!storage || !storage->isReady() || storage->isVirtualStorage())
-                continue;
+            try
+            {
+                const auto & storage = iterator->table();
+                if (!storage)
+                    continue;
 
-            if (const auto * storage_stream = dynamic_cast<StorageStream *>(storage.get()))
-            {
-                addStreamLog(storage_stream, add_elem);
-                num_running_shards += static_cast<uint32_t>(storage_stream->getPhysicalShards());
-            }
-            else if (const auto * storage_external_stream = dynamic_cast<StorageExternalStream *>(storage.get()))
-            {
-                addExternalStreamLog(storage_external_stream, add_elem);
-            }
-            else if (const auto * storage_materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
-            {
-                addMaterializedViewLog(storage_materialized_view, node_id, add_elem);
-                num_running_mvs += storage_materialized_view->isRunning();
-                if (storage_materialized_view->usesInnerStorage())
+                bool ready = false;
+                try
                 {
-                    if (const auto & inner_storage = storage_materialized_view->tryGetTargetTable())
+                    ready = storage->isReady();
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(log_, "Skip storage due to isReady() failure");
+                    continue;
+                }
+
+                if (!ready || storage->isVirtualStorage())
+                    continue;
+
+                if (const auto * storage_stream = dynamic_cast<StorageStream *>(storage.get()))
+                {
+                    addStreamLog(storage_stream, add_elem);
+                    num_running_shards += static_cast<uint32_t>(storage_stream->getPhysicalShards());
+                }
+                else if (const auto * storage_external_stream = dynamic_cast<StorageExternalStream *>(storage.get()))
+                {
+                    addExternalStreamLog(storage_external_stream, add_elem);
+                }
+                else if (const auto * storage_materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
+                {
+                    addMaterializedViewLog(storage_materialized_view, add_elem);
+                    num_running_mvs += storage_materialized_view->isRunning();
+                    if (storage_materialized_view->usesInnerStorage())
                     {
-                        if (const auto * inner_stream = dynamic_cast<StorageStream *>(inner_storage.get()))
-                            num_running_shards += static_cast<uint32_t>(inner_stream->getPhysicalShards());
+                        if (const auto & inner_storage = storage_materialized_view->tryGetTargetTable())
+                        {
+                            if (const auto * inner_stream = dynamic_cast<StorageStream *>(inner_storage.get()))
+                                num_running_shards += static_cast<uint32_t>(inner_stream->getPhysicalShards());
+                        }
                     }
                 }
+                else if (auto * storage_alert = dynamic_cast<StorageAlert *>(storage.get()))
+                {
+                    addAlertLog(storage_alert, add_elem);
+                }
             }
-            else if (auto * storage_alert = dynamic_cast<StorageAlert *>(storage.get()))
+            catch (...)
             {
-                addAlertLog(storage_alert, add_elem);
+                tryLogCurrentException(log_, "Skip storage due to metrics collection failure");
             }
         }
     }
@@ -492,10 +513,24 @@ void IntrospectionStateLog::doCollectStates(AddElem add_elem, ContextPtr local_c
     mutable_context->setTotalMaterializedViews(num_running_mvs);
     mutable_context->setTotalShards(num_running_shards);
 
-    addDictionaryLog(local_context, add_elem);
+    try
+    {
+        addDictionaryLog(local_context, add_elem);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log_, "AddDictionaryLog failed");
+    }
 
 #if USE_PYTHON_UDF
-    addPythonPackageLog(local_context, add_elem);
+    try
+    {
+        addPythonPackageLog(local_context, add_elem);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log_, "AddPythonPackageLog failed");
+    }
 #endif
 }
 
