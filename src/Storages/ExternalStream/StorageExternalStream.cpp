@@ -7,6 +7,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
+#include <LicenseManager/LicenseManager.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Processors/Formats/ISchemaReader.h>
 #include <Processors/QueryPlan/QueryPlan.h>

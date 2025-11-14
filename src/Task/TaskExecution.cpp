@@ -421,7 +421,7 @@ void TaskExecution::logTaskExecutionEnd(IntrospectionStateLogElement & elem, con
             add_metric("read_bytes", query_status_info->read_bytes);
             add_metric("written_rows", query_status_info->written_rows);
             add_metric("written_bytes", query_status_info->written_bytes);
-            add_metric("peek_memory_usage", query_status_info->peak_memory_usage);
+            add_metric("peak_memory_usage", query_status_info->peak_memory_usage);
 
             const auto & counters = *query_status_info->profile_counters;
             auto cpu_time = counters[ProfileEvents::SystemTimeMicroseconds] + counters[ProfileEvents::UserTimeMicroseconds];
