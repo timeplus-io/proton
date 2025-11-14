@@ -77,6 +77,8 @@ StoragePtr ExternalTableFactory::getExternalTable(const StorageFactory::Argument
         }
     }
 
+    storage_metadata.setVersion(args.schema_version);
+
     return creators.at(type)(args.table_id, storage_metadata, std::move(external_table_settings), args.attach, context);
 }
 

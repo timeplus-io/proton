@@ -261,6 +261,7 @@ StoragePtr DatabaseApacheIceberg::tryGetTable(const String & name [[maybe_unused
             /*table_id_=*/StorageID{getDatabaseName(), name},
             context_,
             ColumnsDescription(table_metadata.getSchema()),
+            /*schema_version=*/1,
             /*comment=*/"",
             &stream_storage,
             /*attach=*/false);

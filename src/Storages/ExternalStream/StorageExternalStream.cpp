@@ -1,6 +1,10 @@
 #include <Storages/ExternalStream/StorageExternalStream.h>
 
 #include <IO/Kafka/Connection.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -19,11 +23,6 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
-
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/WriteHelpers.h>
 
 #include <Poco/Net/AcceptCertificateHandler.h>
 #include <Poco/Net/KeyFileHandler.h>
@@ -238,6 +237,7 @@ StorageExternalStream::StorageExternalStream(
     const StorageID & table_id_,
     ContextPtr context_,
     const ColumnsDescription & columns_,
+    Int32 schema_version,
     const String & comment,
     ASTStorage * storage_def,
     bool attach)
@@ -253,6 +253,7 @@ StorageExternalStream::StorageExternalStream(
     ColumnsDescription columns = initColumnsDescription(columns_, *external_stream_settings, context_);
 
     StorageInMemoryMetadata storage_metadata;
+    storage_metadata.setVersion(schema_version);
     storage_metadata.setComment(comment);
     if (storage_def->partition_by != nullptr)
     {
@@ -290,6 +291,11 @@ void StorageExternalStream::read(
     getNested()->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
+void StorageExternalStream::alter(const AlterCommands &, ContextPtr, AlterLockHolder &)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command is not supported for external stream yet");
+}
+
 void registerStorageExternalStream(StorageFactory & factory)
 {
     /** * ExternalStream engine arguments : ExternalStream(shard_by_expr)
@@ -300,7 +306,7 @@ void registerStorageExternalStream(StorageFactory & factory)
 
         if (args.storage_def->settings != nullptr)
             return StorageExternalStream::create(
-                args.engine_args, args.table_id, args.getContext(), args.columns, args.comment, args.storage_def, args.attach);
+                args.engine_args, args.table_id, args.getContext(), args.columns, args.schema_version, args.comment, args.storage_def, args.attach);
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");
     };

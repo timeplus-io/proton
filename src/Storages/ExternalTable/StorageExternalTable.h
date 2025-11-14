@@ -47,6 +47,11 @@ public:
 
     void updateTableSchema(bool retry_in_background);
 
+    void alter(const AlterCommands &, ContextPtr, AlterLockHolder &) override
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command is not supported for external table yet");
+    }
+
 protected:
     StorageExternalTable(
         const StorageID & table_id,

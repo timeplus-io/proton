@@ -66,12 +66,15 @@ public:
 
     std::optional<String> preferredColumn() const override { return external_stream->preferredColumn(); }
 
+    void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
+
 protected:
     StorageExternalStream(
         const ASTs & engine_args,
         const StorageID & table_id_,
         ContextPtr context_,
         const ColumnsDescription & columns_,
+        Int32 schema_version,
         const String & comment,
         ASTStorage * storage_def,
         bool attach);
