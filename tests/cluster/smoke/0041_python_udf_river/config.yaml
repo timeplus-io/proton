@@ -14,7 +14,7 @@ setup:
   steps:
     # river
     - type: query
-      sql: SYSTEM INSTALL PYTHON PACKAGE 'river';
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'river==0.22.0';
 
     - type: wait
       time: 15
