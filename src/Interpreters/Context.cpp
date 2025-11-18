@@ -1555,6 +1555,23 @@ static bool findIdentifier(const ASTFunction * function)
     return false;
 }
 
+/// proton: starts.
+StoragePtr Context::getTableFunctionResults(const String & key) const
+{
+    SharedLockGuard lock(mutex);
+    auto it = table_function_results.find(key);
+    if (it != table_function_results.end())
+        return it->second;
+    return nullptr;
+}
+
+void Context::setTableFunctionResults(const String & key, const StoragePtr & table_function_result)
+{
+    std::lock_guard lock(mutex);
+    table_function_results.emplace(key, table_function_result);
+}
+/// proton: ends.
+
 StoragePtr Context::executeTableFunction(const ASTPtr & table_expression, const ASTSelectQuery * select_query_hint)
 {
     ASTFunction * function = assert_cast<ASTFunction *>(table_expression.get());
@@ -1598,7 +1615,9 @@ StoragePtr Context::executeTableFunction(const ASTPtr & table_expression, const 
     }
     auto hash = table_expression->getTreeHash();
     String key = toString(hash.first) + '_' + toString(hash.second);
-    StoragePtr & res = table_function_results[key];
+    /// proton: starts.
+    auto res = getTableFunctionResults(key);
+    /// proton: ends.
     if (!res)
     {
         TableFunctionPtr table_function_ptr;
@@ -1763,7 +1782,9 @@ StoragePtr Context::executeTableFunction(const ASTPtr & table_expression, const 
         if (hash != new_hash)
         {
             key = toString(new_hash.first) + '_' + toString(new_hash.second);
-            table_function_results[key] = res;
+            /// proton: starts.
+            setTableFunctionResults(key, res);
+            /// proton: ends.
         }
     }
     return res;

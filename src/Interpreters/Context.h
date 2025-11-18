@@ -800,6 +800,8 @@ public:
     void addRequiredColumns(RequiredColumnTuple && column_tuple) { required_columns.insert(std::move(column_tuple)); }
     /// Get data stream semantic for subquery
     DataStreamSemanticCache & getDataStreamSemanticCache() const;
+    StoragePtr getTableFunctionResults(const String & key) const;
+    void setTableFunctionResults(const String & key, const StoragePtr & table);
     /// proton: ends
 
     /// Id of initiating query for distributed queries; or current query id if it's not a distributed query.
