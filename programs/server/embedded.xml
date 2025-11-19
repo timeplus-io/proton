@@ -274,56 +274,6 @@
     <log_min_size_to_keep>1</log_min_size_to_keep>
   </query_state_checkpoint>
   <metadata>
-    <server>
-      <listen_host>0.0.0.0</listen_host>
-      <tcp_port>8464</tcp_port>
-      <is_port_tls>false</is_port_tls>
-      <reuse_socket_address>true</reuse_socket_address>
-      <listen_backlog>128</listen_backlog>
-      <socket_send_buffer_size>0</socket_send_buffer_size>
-      <socket_receive_buffer_size>0</socket_receive_buffer_size>
-      <connection_max_idle_ms>0</connection_max_idle_ms>
-      <idle_connection_check_interval_ms>1000</idle_connection_check_interval_ms>
-      <network_threads>1</network_threads>
-      <worker_threads>4</worker_threads>
-      <max_queued_requests>16</max_queued_requests>
-    </server>
-    <client>
-      <max_connections_per_ip>1</max_connections_per_ip>
-      <max_inflight_requests>10000</max_inflight_requests>
-      <socket_send_buffer_size>0</socket_send_buffer_size>
-      <socket_receive_buffer_size>0</socket_receive_buffer_size>
-      <tcp_keep_alive_probe_sec>10</tcp_keep_alive_probe_sec>
-      <tcp_nodelay>true</tcp_nodelay>
-      <reconnect_backoff_ms>500</reconnect_backoff_ms>
-      <reconnect_backoff_max_ms>6000</reconnect_backoff_max_ms>
-      <reconnect_max_retries>0</reconnect_max_retries>
-      <dns_refresh_on_fail_interval_sec>5</dns_refresh_on_fail_interval_sec>
-      <dns_resolution_backoff_ms>1000</dns_resolution_backoff_ms>
-      <dns_resolution_backoff_max_ms>8000</dns_resolution_backoff_max_ms>
-      <dns_resolution_max_retries>0</dns_resolution_max_retries>
-      <response_worker_threads>4</response_worker_threads>
-      <client_pool_size>1</client_pool_size>
-      <max_send_buffer_size>10485760</max_send_buffer_size>
-    </client>
-    <raft>
-      <tick_interval_ms>100</tick_interval_ms>
-      <reproposal_timeout_ticks>6</reproposal_timeout_ticks>
-      <heartbeat_ticks>2</heartbeat_ticks>
-      <election_ticks>4</election_ticks>
-      <max_size_per_message>10485760</max_size_per_message>
-      <max_committed_size>67108864</max_committed_size>
-      <max_uncommitted_entries_size>134217728</max_uncommitted_entries_size>
-      <max_inflight_messages>128</max_inflight_messages>
-      <max_inflight_bytes>134217728</max_inflight_bytes>
-      <async_storage_writes>true</async_storage_writes>
-      <check_quorum>true</check_quorum>
-      <pre_vote>true</pre_vote>
-      <read_only_option>Safe</read_only_option>
-      <disable_proposal_forwarding>false</disable_proposal_forwarding>
-      <disable_conf_change_validation>false</disable_conf_change_validation>
-      <enforce_quorum_commit_log_truncation>true</enforce_quorum_commit_log_truncation>
-    </raft>
     <metastore>
       <metadata_keep_versions>10</metadata_keep_versions>
       <metadata_max_retries>10</metadata_max_retries>
@@ -348,65 +298,18 @@
         <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
         <preallocate>true</preallocate>
         <incremental_flush>true</incremental_flush>
+        <hard_state_ckpt_log_size>1048576</hard_state_ckpt_log_size>
+        <hard_state_ckpt_log_preallocate>true</hard_state_ckpt_log_preallocate>
+        <leader_epoch_index_log_size>8388608</leader_epoch_index_log_size>
+        <leader_epoch_index_log_preallocate>true</leader_epoch_index_log_preallocate>
+        <timestamp_index_log_size>8388608</timestamp_index_log_size>
+        <timestamp_index_log_preallocate>true</timestamp_index_log_preallocate>
+        <log_position_index_log_size>8388608</log_position_index_log_size>
+        <log_position_index_log_preallocate>true</log_position_index_log_preallocate>
       </log>
     </metastore>
   </metadata>
   <data>
-    <server>
-      <listen_host>0.0.0.0</listen_host>
-      <tcp_port>8465</tcp_port>
-      <is_port_tls>false</is_port_tls>
-      <reuse_socket_address>true</reuse_socket_address>
-      <listen_backlog>128</listen_backlog>
-      <socket_send_buffer_size>0</socket_send_buffer_size>
-      <socket_receive_buffer_size>0</socket_receive_buffer_size>
-      <connection_max_idle_ms>0</connection_max_idle_ms>
-      <idle_connection_check_interval_ms>1000</idle_connection_check_interval_ms>
-      <network_threads>4</network_threads>
-      <worker_threads>8</worker_threads>
-      <max_queued_requests>128</max_queued_requests>
-    </server>
-    <client>
-      <max_connections_per_ip>8</max_connections_per_ip>
-      <max_inflight_requests>10000</max_inflight_requests>
-      <socket_send_buffer_size>0</socket_send_buffer_size>
-      <socket_receive_buffer_size>0</socket_receive_buffer_size>
-      <tcp_keep_alive_probe_sec>10</tcp_keep_alive_probe_sec>
-      <tcp_nodelay>true</tcp_nodelay>
-      <reconnect_backoff_ms>500</reconnect_backoff_ms>
-      <reconnect_backoff_max_ms>6000</reconnect_backoff_max_ms>
-      <reconnect_max_retries>0</reconnect_max_retries>
-      <dns_refresh_on_fail_interval_sec>5</dns_refresh_on_fail_interval_sec>
-      <dns_resolution_backoff_ms>1000</dns_resolution_backoff_ms>
-      <dns_resolution_backoff_max_ms>8000</dns_resolution_backoff_max_ms>
-      <dns_resolution_max_retries>0</dns_resolution_max_retries>
-      <response_worker_threads>4</response_worker_threads>
-      <client_pool_size>4</client_pool_size>
-      <app_client_pool_size>4</app_client_pool_size>
-      <fetch_session_max_shards>1</fetch_session_max_shards>
-      <max_send_buffer_size>268435456</max_send_buffer_size>
-    </client>
-    <raft>
-      <tick_interval_ms>200</tick_interval_ms>
-      <reproposal_timeout_ticks>6</reproposal_timeout_ticks>
-      <raft_scheduler_threads>0</raft_scheduler_threads>
-      <raft_scheduler_shard_threads>0</raft_scheduler_shard_threads>
-      <raft_snapshot_threads>8</raft_snapshot_threads>
-      <heartbeat_ticks>2</heartbeat_ticks>
-      <election_ticks>4</election_ticks>
-      <max_size_per_message>10485760</max_size_per_message>
-      <max_committed_size>67108864</max_committed_size>
-      <max_uncommitted_entries_size>134217728</max_uncommitted_entries_size>
-      <max_inflight_messages>128</max_inflight_messages>
-      <max_inflight_bytes>134217728</max_inflight_bytes>
-      <async_storage_writes>true</async_storage_writes>
-      <check_quorum>true</check_quorum>
-      <pre_vote>true</pre_vote>
-      <read_only_option>Safe</read_only_option>
-      <disable_proposal_forwarding>false</disable_proposal_forwarding>
-      <disable_conf_change_validation>false</disable_conf_change_validation>
-      <enforce_quorum_commit_log_truncation>true</enforce_quorum_commit_log_truncation>
-    </raft>
     <datastore>
       <data_dirs>./proton-data/nativelog/</data_dirs>
       <log>
@@ -427,13 +330,20 @@
         <compression_codec>none</compression_codec>
         <cache_max_cached_entries_per_shard>100</cache_max_cached_entries_per_shard>
         <cache_max_cached_bytes_per_shard>4194304</cache_max_cached_bytes_per_shard>
-        <preallocate>false</preallocate>
+        <preallocate>true</preallocate>
         <incremental_flush>true</incremental_flush>
+        <hard_state_ckpt_log_size>1048576</hard_state_ckpt_log_size>
+        <hard_state_ckpt_log_preallocate>true</hard_state_ckpt_log_preallocate>
+        <leader_epoch_index_log_size>8388608</leader_epoch_index_log_size>
+        <leader_epoch_index_log_preallocate>true</leader_epoch_index_log_preallocate>
+        <timestamp_index_log_size>8388608</timestamp_index_log_size>
+        <timestamp_index_log_preallocate>true</timestamp_index_log_preallocate>
+        <log_position_index_log_size>8388608</log_position_index_log_size>
+        <log_position_index_log_preallocate>true</log_position_index_log_preallocate>
       </log>
     </datastore>
   </data>
   <cluster>
-    <metadata_node_quorum>localhost:8464</metadata_node_quorum>
     <id>proton</id>
     <secret>proton</secret>
   </cluster>
