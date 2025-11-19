@@ -34,4 +34,6 @@ This folder lists some examples to run Timeplus Proton for various use cases. Fo
 
 - [udf](udf): how to build JavaScript User-Defined Functions
 
+- [proton3-benchmarks](proton3-benchmarks): SQL benchmark scenarios used in the Proton 3.0 performance blog.
+
 Would like to share your awesome use cases? Feel free to send us a PR and we'd like to [reward you](https://github.com/timeplus-io/proton/issues/527).
