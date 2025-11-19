@@ -32,7 +32,7 @@
 
 🚀 The fastest SQL pipeline engine in a single C++ binary, for stream processing, analytics, observability and AI. A simple, fast and efficient alternative to ksqlDB and Apache Flink, powered by ClickHouse engine. 
 
-🔥 SQL for everything : Native source/sink (Kafka, ClickHouse, MySQL, Postgres, S3/Iceberg etc.), Append-only or mutable stream, Multi-stream JOINs, Incremental Materialized View, Alert, Task, UDF in Python/JS etc.
+🔥 SQL for everything : Native source/sink (Kafka, ClickHouse, MySQL, Postgres, MongoDB, S3/Iceberg, OpenSearch etc.), Streaming ingestion, Multi-stream JOINs, Incremental Materialized Views, Alerting, Tasks, UDF in Python/JS etc.
 
 ⚡ No JVM. No ZooKeeper. Zero dependencies. Just speed, control and scale.
 
