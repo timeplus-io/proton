@@ -63,6 +63,16 @@ jobs:
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Linux_X86_64
+      generate_release_notes: true
+      # Provide Docker section once; other jobs set an empty body to avoid duplicating content.
+      release_body: |
+        ## Docker Images Available
+
+        ```bash
+        docker pull d.timeplus.com/timeplus-io/proton:latest
+        ```
+
+        For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -187,6 +197,8 @@ jobs:
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Linux_Arm64
+      generate_release_notes: false
+      release_body: ''
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -367,6 +379,8 @@ jobs:
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Darwin_X86_64
+      generate_release_notes: false
+      release_body: ''
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -440,6 +454,8 @@ jobs:
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Darwin_Arm64
+      generate_release_notes: false
+      release_body: ''
       command: |
         cd $GITHUB_WORKSPACE
 

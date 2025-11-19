@@ -77,6 +77,21 @@ on:
         required: false
         type: string
         default: ''
+      generate_release_notes:
+        required: false
+        type: boolean
+        default: true
+      release_body:
+        required: false
+        type: string
+        default: |
+          ## Docker Images Available
+
+          ```bash
+          docker pull d.timeplus.com/timeplus-io/proton:latest
+          ```
+
+          For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
     outputs:
       tag_name:
         description: "Tag name for releae build use"
@@ -227,20 +242,11 @@ jobs:
         with:
           files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          generate_release_notes: true
-          # Do not append body on repeated invocations from
-          # multiple build jobs; replace to avoid duplicates.
+          generate_release_notes: ${{ inputs.generate_release_notes }}
           append_body: false
           prerelease: ${{ inputs.prerelease }}
           tag_name: ${{ steps.execute.outputs.tag_name }}
-          body: |
-            ## Docker Images Available
-
-            ```bash
-            docker pull d.timeplus.com/timeplus-io/proton:latest
-            ```
-
-            For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
+          body: ${{ inputs.release_body }}
 
       - name: Upload Artifact
         if: ${{ always() && inputs.upjob != '' }}
