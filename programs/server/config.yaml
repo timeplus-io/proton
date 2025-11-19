@@ -956,7 +956,7 @@ telemetry_interval_ms: 300000   # 5 minutes
 #     <html ng-app="SMI2"><head><base href="http://ui.tabix.io/"></head><body><div ui-view="" class="content-ui"></div><script src="http://loader.tabix.io/master.js"></script></body></html>
 
 # Maximum local disk utilization. Once it is hit, all ingest will be errored out
-max_local_disk_usage_ratio: 1.9
+max_local_disk_usage_ratio: 0.9
 
 # Simple server-wide memory profiler. Collect a stack trace at every peak allocation step (in bytes).
 # Data will be stored in system.trace_log table with query_id = empty string.
