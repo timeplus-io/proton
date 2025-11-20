@@ -144,7 +144,7 @@ public:
 
 		std::string cipherList;
 			/// Specifies the supported ciphers in OpenSSL notation.
-			/// Defaults to "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH".
+			/// Defaults to "ALL:!ADH:!LOW:!EXP:!MD5:!3DES:@STRENGTH".
 
 		std::string dhParamsFile;
 			/// Specifies a file containing Diffie-Hellman parameters.
@@ -170,7 +170,7 @@ public:
 		VerificationMode verificationMode = VERIFY_RELAXED,
 		int verificationDepth = 9,
 		bool loadDefaultCAs = false,
-		const std::string& cipherList = "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
+		const std::string& cipherList = "ALL:!ADH:!LOW:!EXP:!MD5:!3DES:@STRENGTH");
 		/// Creates a Context.
 		///
 		///   * usage specifies whether the context is used by a client or server.
@@ -198,7 +198,7 @@ public:
 		VerificationMode verificationMode = VERIFY_RELAXED,
 		int verificationDepth = 9,
 		bool loadDefaultCAs = false,
-		const std::string& cipherList = "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
+		const std::string& cipherList = "ALL:!ADH:!LOW:!EXP:!MD5:!3DES:@STRENGTH");
 		/// Creates a Context.
 		///
 		///   * usage specifies whether the context is used by a client or server.
