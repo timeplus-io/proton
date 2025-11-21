@@ -332,7 +332,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
     if (args.size() < 2)
         throw Exception::createRuntime(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, SESSION_HELP_MESSAGE);
 
-    if (args.size() > 5)
+    if (args.size() > 6)
         throw Exception::createRuntime(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, SESSION_HELP_MESSAGE);
 
     ASTs asts;
