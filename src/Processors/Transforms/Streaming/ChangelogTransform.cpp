@@ -1,12 +1,11 @@
 #include <Processors/Transforms/Streaming/ChangelogTransform.h>
 
-/// #include <base/ClockUtils.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
+#include <base/ClockUtils.h>
+#include <base/scope_guard.h>
 #include <Common/ProtonCommon.h>
-/// #include <Common/SipHash.h>
 #include <Common/assert_cast.h>
-/// #include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -114,6 +113,12 @@ void ChangelogTransform::work()
         std::rethrow_exception(input_data.exception);
 
     const auto & chunk = input_data.chunk;
+
+    auto start_ns = MonotonicNanoseconds::now();
+    metrics.processed_bytes += chunk.bytes();
+    metrics.processed_rows += chunk.rows();
+    SCOPE_EXIT({ metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns; });
+
     if (auto ckpt_ctx = chunk.getCheckpointContext(); ckpt_ctx)
     {
         assert(chunk.rows() == 0);
