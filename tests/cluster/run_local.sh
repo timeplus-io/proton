@@ -3,12 +3,12 @@
 # Usage: sudo -E bash run_local.sh
 #
 # Required Environment Variables:
-# - PROTON_VERSION  Timeplusd version
+# - PROTON_VERSION  Proton version
 # - SUITE           Test suite name
 # - SSH_USER        Local ssh user
 # 
 # Optional Environment Variables:
-# - NODES           Deploy nodes number (support: 1, 3)
+# - NODES           Deploy nodes number (only support 1)
 # - HYBRID          Enable hybrid mode (default: '')
 #
 # Example::
@@ -21,8 +21,8 @@
 
 
 PROTON_VERSION=${PROTON_VERSION}
-PROTON_REPO=${PROTON_REPO:-"timeplus/timeplusd"}
-NODES=${NODES:-3}
+PROTON_REPO=${PROTON_REPO:-"timeplus/proton"}
+NODES=${NODES:-1}
 CLUSTER="p${NODES}k1"
 SUITE=${SUITE}
 LOG_DIR=./log
@@ -129,13 +129,13 @@ function collect_probe_log() {
     fi
 }
 
-function collect_timeplusd_log() {
+function collect_proton_log() {
     bash log.sh --log-dir ${LOG_DIR} --fatal-log ${LOG_DIR}/.fail
 }
 
 function summary_log() {
     collect_probe_log
-    collect_timeplusd_log
+    collect_proton_log
 
     echo "====================Migration Testing Result===================="
     if [ -f ${LOG_DIR}/.fail ]; then
