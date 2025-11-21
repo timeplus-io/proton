@@ -806,12 +806,15 @@ public:
             timer_pool.scheduleOrThrowOnError([this, max_upload_idle_seconds]() {
                 while (true)
                 {
+                    uint64_t sleep_time_sec = max_upload_idle_seconds;
+
                     {
                         std::lock_guard lock(cancel_mutex);
                         if (stopped)
                             break;
 
-                        if (upload_idle_timer.elapsedSeconds() >= max_upload_idle_seconds)
+                        auto elapsed_seconds = static_cast<uint64_t>(upload_idle_timer.elapsedSeconds());
+                        if (elapsed_seconds >= max_upload_idle_seconds)
                         {
                             try
                             {
@@ -823,8 +826,13 @@ public:
                                 release();
                             }
                         }
+                        else
+                        {
+                            sleep_time_sec = max_upload_idle_seconds - elapsed_seconds;
+                        }
                     }
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                    sleepForSeconds(sleep_time_sec);
                 }
             });
     }
@@ -854,7 +862,7 @@ public:
         if (cancelled)
             return;
 
-        if (current_total_size >= min_upload_file_size)
+        if (current_total_size >= min_upload_file_size && current_total_size > 0)
             /// Properly finalize the format writer and complete the current upload.
             finalize();
 

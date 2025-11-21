@@ -117,7 +117,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Bool, enable_s3_requests_logging, false, "Enable very explicit logging of S3 requests. Makes sense for debug only.", 0) \
     /* proton: starts */ \
     M(UInt64, s3_min_upload_file_size, 500*1024*1024, "The minimum size of file to upload to S3, i.e. once the file reaches this size, the multipart upload will finish, or the file will be uploaded via single part upload if this size is smaller than s3_max_single_part_upload_size.", 0) \
-    M(UInt64, s3_max_upload_idle_seconds, 0, "The maximum idle time (in seconds) to wait for new data before complete a upload to S3, 0 means no limits.", 0) \
+    M(UInt64, s3_max_upload_idle_seconds, 1, "The maximum idle time (in seconds) to wait for new data before complete a upload to S3, 0 means no limits.", 0) \
     /* proton: ends */ \
     M(UInt64, hdfs_replication, 0, "The actual number of replications can be specified when the hdfs file is created.", 0) \
     M(Bool, hdfs_truncate_on_insert, false, "Enables or disables truncate before insert in s3 engine tables", 0) \
