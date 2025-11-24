@@ -12,7 +12,12 @@
 #include <Common/typeid_cast.h>
 
 /// proton : starts
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/Requests/ListTasksRequest.h>
+#include <Cluster/Requests/ListTasksResponse.h>
 #include <Storages/Stream/storageUtil.h>
+#include <ranges>
 /// proton : ends
 
 namespace DB
@@ -347,14 +352,39 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
             getContext()->checkAccess(AccessType::DROP_DATABASE, database_name);
 
             /// proton: starts
-            /// Do not drop streams in the database without CASCADE
-            /// Note: We only do the check for Atomic database since dropping other database engine (such as Postgres)
-            ///       should not be restricted by this. For the external database, checking database->empty() 
-            //        and dropping database may fail due to the invalid configuration.
-            if (drop && !query.cascade && database->getEngineName() == "Atomic" && !database->empty())
+            auto & metastore = Globals::getMetaStore();
+            auto list_tasks_req = std::make_shared<cluster::ListTasksRequest>(
+                database_name,
+                "", /// name (empty for all tasks)
+                Globals::getNodeID(),
+                false, /// consistent_read
+                30000, /// timeout_ms
+                1 /// request_version
+            );
+            auto list_tasks_resp = metastore.listTasks(list_tasks_req);
+            if (list_tasks_resp->hasError())
+                throw Exception(
+                    list_tasks_resp->error().error_code,
+                    "Failed to list the tasks in database: {}",
+                    list_tasks_resp->error().error_message);
+
+            if (const auto & tasks = list_tasks_resp->data().descs; !tasks.empty())
                 throw Exception(
                     ErrorCodes::DATABASE_NOT_EMPTY,
-                    "Cannot DROP non-empty database. Add CASCADE parameter to also drop all associated streams");
+                    "Cannot DROP database because it contains tasks: [{}]",
+                    fmt::join(tasks | std::views::transform([](const auto & t) { return t->name; }), ", "));
+
+            if (drop && !query.cascade)
+            {
+                /// Do not drop streams in the database without CASCADE
+                /// Note: We only do the check for Atomic database since dropping other database engine (such as Postgres)
+                ///       should not be restricted by this. For the external database, checking database->empty()
+                //        and dropping database may fail due to the invalid configuration.
+                if (database->getEngineName() == "Atomic" && !database->empty())
+                    throw Exception(
+                        ErrorCodes::DATABASE_NOT_EMPTY,
+                        "Cannot DROP non-empty database. Add CASCADE parameter to also drop all associated streams");
+            }
             /// proton: ends
 
             if (query.kind == ASTDropQuery::Kind::Detach && query.permanently)
