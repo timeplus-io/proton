@@ -28,12 +28,6 @@
 #define NO_INLINE __attribute__((__noinline__))
 #define MAY_ALIAS __attribute__((__may_alias__))
 
-#if defined(__x86_64__) || defined(__aarch64__)
-#    define PRESERVE_MOST __attribute__((preserve_most))
-#else
-#    define PRESERVE_MOST
-#endif
-
 #if !defined(__x86_64__) && !defined(__aarch64__) && !defined(__PPC__) && !(defined(__riscv) && (__riscv_xlen == 64))
 #    error "The only supported platforms are x86_64 and AArch64, PowerPC (work in progress) and RISC-V 64 (experimental)"
 #endif

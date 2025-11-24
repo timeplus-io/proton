@@ -166,7 +166,7 @@ private:
 
     /// proton: starts
     /// Add next contiguous MemoryChunk of memory with size not less than specified.
-    void PRESERVE_MOST NO_INLINE addMemoryChunk(size_t min_size)
+    void NO_INLINE addMemoryChunk(size_t min_size)
     {
         if (recycle_enabled)
         {
