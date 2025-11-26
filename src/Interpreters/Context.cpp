@@ -1773,6 +1773,7 @@ StoragePtr Context::executeTableFunction(const ASTPtr & table_expression, const 
         }
 
         res = table_function_ptr->execute(table_expression, shared_from_this(), table_function_ptr->getName());
+        setTableFunctionResults(key, res);
 
         /// Since ITableFunction::parseArguments() may change table_expression, i.e.:
         ///
