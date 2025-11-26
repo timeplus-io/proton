@@ -196,6 +196,10 @@ void PulsarSink::waitForAcks() const
 
 void PulsarSink::checkpoint(CheckpointContextPtr context)
 {
+    /// Flush any pending messages in Pulsar's internal batch buffer before waiting for acks.
+    /// Without this, messages may be stuck in the batch buffer waiting for the batch timer,
+    /// causing waitForAcks() to timeout even though messages haven't been sent yet.
+    producer.flush();
     waitForAcks();
 
     state.reset();
