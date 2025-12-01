@@ -129,6 +129,12 @@ private:
     std::vector<OutputPortWithStatus> output_ports;
     std::list<OutputPortWithStatus *> waiting_outputs;
 
+    /// When an output receives a chunk marked as "consecutive",
+    /// switch that output into 'exclusive’ mode until the next chunk is read.
+    /// This guarantees that consecutive data is always delivered to the same output,
+    /// without affecting other outputs.
+    std::optional<OutputPortWithStatus *> exclusive_output;
+
     /// To propagate
     Chunk header_chunk;
     Int64 watermark = INVALID_WATERMARK;

@@ -258,6 +258,10 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
             {
                 ++num_finished_outputs;
                 output.status = OutputStatus::Finished;
+
+                // Clear exclusive_output if this port was exclusive
+                if (exclusive_output.has_value() && *exclusive_output == &output)
+                    exclusive_output.reset();
             }
 
             continue;
@@ -268,7 +272,16 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
             if (output.status != OutputStatus::NeedData)
             {
                 output.status = OutputStatus::NeedData;
-                waiting_outputs.push_back(&output);
+                if (exclusive_output.has_value() && *exclusive_output == &output)
+                {
+                    /// Prioritize outputs that require consecutive data
+                    waiting_outputs.push_front(*exclusive_output);
+                    exclusive_output.reset();
+                }
+                else
+                {
+                    waiting_outputs.push_back(&output);
+                }
             }
         }
     }
@@ -311,7 +324,7 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
     {
         input.setNeeded();
 
-        if (input.hasData())
+        if (input.hasData() && !exclusive_output.has_value())
         {
             auto data = input.pullData(/*set_not_needed*/ true);
             if (data.chunk.hasWatermark())
@@ -341,6 +354,11 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
                 auto bytes = data.chunk.bytes();
                 auto rows = data.chunk.rows();
                 auto start_ns = MonotonicNanoseconds::now();
+
+                /// Received consecutive data, make this output exclusive
+                if (data.chunk.isConsecutiveData())
+                    exclusive_output = &waiting_output;
+
                 waiting_output.port->pushData(std::move(data));
                 metrics.processed_bytes += bytes;
                 metrics.processed_rows += rows;

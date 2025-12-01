@@ -4,6 +4,7 @@
 #include <Interpreters/Streaming/HashJoin/joinKind.h>
 #include <Interpreters/TableJoin.h>
 #include <base/ClockUtils.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -148,6 +149,8 @@ void JoinTransform::work()
 
                 if (input_chunk.hasWatermark())
                 {
+                    chassert(!required_update_processing_index && "Watermark should not be present when update processing is required");
+
                     auto input_chunk_watermark = input_chunk.getChunkContext()->getWatermark();
 
                     local_watermark = std::min(local_watermark, input_chunk_watermark);
@@ -155,6 +158,8 @@ void JoinTransform::work()
                 }
                 else if (input_chunk.requestCheckpoint())
                 {
+                    chassert(!required_update_processing_index && "Checkpoint request should not occur when update processing is required");
+
                     ++requested_checkpoint_num;
                     continue; /// keep in input_ports_with_data until all inputs checkpoint requested
                 }
@@ -170,12 +175,6 @@ void JoinTransform::work()
             }
         }
 
-        /// We propagate empty chunk with or without watermark.
-        /// Skip propagate if needs to processing next consecutive chunk
-        /// to avoid downstream aggregation to emit transitive results we don't want
-        if (!has_data && !required_update_processing_index)
-            output_chunks.emplace_back(output_header_chunk.clone());
-
         /// All inputs request checkpoint
         if (requested_checkpoint_num == input_ports_with_data.size())
         {
@@ -187,22 +186,25 @@ void JoinTransform::work()
     if (has_data)
         doJoin(std::move(chunks));
 
+    /// If no output was produced, emit a heartbeat chunk.
+    /// Skip the heartbeat when the next "consecutive" chunk must be processed,
+    /// to avoid downstream aggregation to emit transitive results we don't want
+    if (output_chunks.empty() && !required_update_processing_index)
+        output_chunks.emplace_back(output_header_chunk.clone());
+
     /// Piggy-back watermark
     /// We only do this piggy-back once for the last output chunk if there is
     if (has_watermark)
     {
-        if (!output_chunks.empty())
-            setupWatermark(output_chunks.back(), local_watermark);
-        else
-            /// If there is no join result or chunks don't have data but have watermark, we still need propagate the watermark
-            propagateWatermark(local_watermark);
+        chassert(!output_chunks.empty());
+        setupWatermark(output_chunks.back(), local_watermark);
     }
     else if (requested_ckpt)
     {
         checkpoint(requested_ckpt);
 
         /// Propagate request checkpoint
-        assert(!output_chunks.empty());
+        chassert(!output_chunks.empty());
         output_chunks.back().setCheckpointContext(std::move(requested_ckpt));
     }
 
@@ -215,13 +217,6 @@ void JoinTransform::work()
     metrics.processed_rows += in_rows;
     metrics.processed_bytes += in_bytes;
     metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
-}
-
-inline void JoinTransform::propagateWatermark(int64_t local_watermark)
-{
-    auto chunk = output_header_chunk.clone();
-    if (setupWatermark(chunk, local_watermark))
-        output_chunks.emplace_back(std::move(chunk));
 }
 
 inline bool JoinTransform::setupWatermark(Chunk & chunk, int64_t local_watermark)

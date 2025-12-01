@@ -42,7 +42,6 @@ public:
 
 private:
     using Chunks = std::array<Chunk, 2>;
-    void propagateWatermark(int64_t local_watermark);
     bool setupWatermark(Chunk & chunk, int64_t local_watermark);
 
     void doJoin(Chunks chunks);
