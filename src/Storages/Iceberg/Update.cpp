@@ -27,6 +27,7 @@ void AddSnopshotUpdate::apply(Poco::JSON::Array & updates) const
     snapshot_obj.set("timestamp-ms", snapshot.timestamp_ms);
     snapshot_obj.set("manifest-list", snapshot.manifest_list);
     snapshot_obj.set("summary", summary_obj);
+    snapshot_obj.set("schema-id", snapshot.schema_id);
 
     Poco::JSON::Object obj;
     obj.set("action", action);

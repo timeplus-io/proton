@@ -297,6 +297,7 @@ void IcebergSink::commit()
             .total_position_deletes = std::to_string(total_position_deletes),
             .total_equality_deletes = std::to_string(total_equality_deletes),
         },
+        .schema_id = metadata.getCurrentSchemaID(),
     };
 
     Apache::Iceberg::Updates updates;

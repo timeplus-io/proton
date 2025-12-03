@@ -154,6 +154,9 @@ public:
     void setSchemaJSON(const std::string & schema_json_);
     const std::string & getSchemaJSON() const;
 
+    void setCurrentSchemaID(int64_t current_schema_id_);
+    int64_t getCurrentSchemaID() const;
+
     void setStorageCredentials(std::shared_ptr<IStorageCredentials> credentials_);
     std::shared_ptr<IStorageCredentials> getStorageCredentials() const;
 
@@ -188,6 +191,7 @@ private:
     std::string path;
     DB::NamesAndTypesList schema;
     std::string iceberg_schema;
+    int64_t current_schema_id{0};
 
     int64_t snapshot_id{0};
     uint64_t sequence_number{0};

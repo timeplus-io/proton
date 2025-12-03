@@ -649,6 +649,7 @@ void extractTableMetadata(const std::string & json_str, TableMetadata & result, 
                 snapshot.sequence_number = snapshot_obj->getValue<uint64_t>("sequence-number");
                 snapshot.timestamp_ms = snapshot_obj->getValue<int64_t>("timestamp-ms");
                 snapshot.manifest_list = snapshot_obj->getValue<std::string>("manifest-list");
+                snapshot.schema_id = snapshot_obj->optValue<int64_t>("schema-id", 0);
 
                 auto summary_obj = snapshot_obj->get("summary").extract<Poco::JSON::Object::Ptr>();
                 snapshot.summary.operation = summary_obj->getValue<std::string>("operation");
@@ -697,6 +698,7 @@ void extractTableMetadata(const std::string & json_str, TableMetadata & result, 
         auto schema = schema_processor.getTimeplusTableSchemaById(id);
         result.setSchema(*schema);
         result.setSchemaJSON(iceberg_schema_json);
+        result.setCurrentSchemaID(id);
     }
 
     if (result.requiresCredentials() && object->has("config"))

@@ -113,6 +113,22 @@ const std::string & TableMetadata::getSchemaJSON() const
     return iceberg_schema;
 }
 
+void TableMetadata::setCurrentSchemaID(int64_t current_schema_id_)
+{
+    if (!with_schema)
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Data schema was not requested");
+
+    current_schema_id = current_schema_id_;
+}
+
+int64_t TableMetadata::getCurrentSchemaID() const
+{
+    if (!with_schema)
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Data schema was not requested");
+
+    return current_schema_id;
+}
+
 void TableMetadata::setStorageCredentials(std::shared_ptr<IStorageCredentials> credentials_)
 {
     if (!with_storage_credentials)

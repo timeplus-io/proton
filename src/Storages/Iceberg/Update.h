@@ -52,6 +52,7 @@ struct Snapshot
     int64_t timestamp_ms{0};
     std::string manifest_list;
     Summary summary;
+    int64_t schema_id{0};
 
     bool isValid() const { return snapshot_id > 0; }
 };
