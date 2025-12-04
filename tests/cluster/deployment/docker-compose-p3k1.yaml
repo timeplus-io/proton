@@ -174,7 +174,7 @@ services:
       restart_policy:
         condition: on-failure
   splunk:
-    image: splunk/splunk:9.4
+    image: splunk/splunk@sha256:54cecca15bb2a8f3bdf79ec01f0775c18b388748dda3f6246cd4fe364d7ce7a3
     container_name: ${CONTAINER_NAME_PREFIX}_splunk
     environment:
       - SPLUNK_START_ARGS=--accept-license
