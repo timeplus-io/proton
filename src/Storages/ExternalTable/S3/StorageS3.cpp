@@ -859,7 +859,7 @@ public:
         if (cancelled)
             return;
 
-        if (writer && write_buf.count() >= min_upload_file_size && write_buf.count() > 0)
+        if (writer && write_buf->count() >= min_upload_file_size && write_buf->count() > 0)
             /// Properly finalize the format writer and complete the current upload.
             finalize();
 
