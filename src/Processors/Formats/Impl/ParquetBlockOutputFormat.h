@@ -33,8 +33,6 @@ public:
 
     String getContentType() const override { return "application/octet-stream"; }
 
-    const parquet::arrow::FileWriter & fileWriter() const { return *file_writer; } /// proton: added
-
 private:
     void consume(Chunk) override;
     void finalizeImpl() override;

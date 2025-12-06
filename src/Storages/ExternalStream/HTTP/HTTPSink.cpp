@@ -3,7 +3,6 @@
 #include <IO/ReadBufferFromIStream.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromHTTP.h>
-#include <IO/WriteBufferWithNextCallback.h>
 #include <Processors/Executors/MessageQueueFormatExecutor.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Storages/ExternalStream/HTTP/HTTPConfiguration.h>

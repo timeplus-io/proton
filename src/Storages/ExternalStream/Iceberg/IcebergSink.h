@@ -75,16 +75,15 @@ private:
     bool cancelled = false;
     std::mutex cancel_mutex;
 
-    size_t current_total_size{0};
     UInt64 min_upload_file_size{0};
     UInt64 max_upload_idle_seconds{0};
+
+    size_t current_record_count{0};
 
     ASTPtr file_exprssion_ast;
 
     bool stopped = false;
     Stopwatch upload_idle_timer;
-
-    std::function<void(size_t)> next_callback;
 
     String current_data_file_uri;
     String current_manifest_list_uri;

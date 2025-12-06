@@ -9,8 +9,6 @@
 #include <IO/IOThreadPool.h>
 #include <IO/S3/getObjectInfo.h>
 #include <IO/WriteBufferFromS3.h>
-#include <IO/WriteBufferWithNextCallback.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Processors/Formats/Impl/ParquetBlockOutputFormat.h>
 #include <Processors/Sinks/SinkToStorage.h>
@@ -81,7 +79,6 @@ IcebergSink::IcebergSink(
 {
     /// The timer should only start when data start flowing.
     upload_idle_timer.stop();
-    next_callback = [this](size_t total_data_size) { current_total_size = total_data_size; };
 }
 
 IcebergSink::~IcebergSink()
@@ -113,7 +110,7 @@ void IcebergSink::consume(Chunk chunk)
     if (cancelled)
         return;
 
-    if (current_total_size >= min_upload_file_size)
+    if (writer && write_buf->count() >= min_upload_file_size && write_buf->count() > 0)
         /// Properly finalize the format writer and complete the current upload.
         finalize();
 
@@ -133,23 +130,23 @@ void IcebergSink::consume(Chunk chunk)
             blob_log->query_id = context->getCurrentQueryId();
         }
 
-        write_buf = std::make_unique<WriteBufferWithNextCallback>(
-            std::make_unique<WriteBufferFromS3>(
-                s3_configuration.client,
-                bucket,
-                object_key,
-                DBMS_DEFAULT_BUFFER_SIZE,
-                s3_configuration.request_settings,
-                std::move(blob_log),
-                std::nullopt,
-                threadPoolCallbackRunner<void>(IOThreadPool::get(), "S3ParallelWrite"),
-                context->getWriteSettings()),
-            next_callback);
+        write_buf = std::make_unique<WriteBufferFromS3>(
+            s3_configuration.client,
+            bucket,
+            object_key,
+            DBMS_DEFAULT_BUFFER_SIZE,
+            s3_configuration.request_settings,
+            std::move(blob_log),
+            std::nullopt,
+            threadPoolCallbackRunner<void>(IOThreadPool::get(), "S3ParallelWrite"),
+            context->getWriteSettings());
         writer = FormatFactory::instance().getOutputFormatParallelIfPossible(format, *write_buf, sample_block, context, format_settings);
         writer->setAutoFlush();
     }
 
+    current_record_count += chunk.getNumRows();
     writer->write(getHeader().cloneWithColumns(chunk.detachColumns()));
+
     /// Restart the timer when there are new data, because we are calculating the idle time.
     upload_idle_timer.start();
 }
@@ -206,7 +203,7 @@ void IcebergSink::finalize()
 
     commit();
 
-    current_total_size = 0;
+    current_record_count = 0;
     upload_idle_timer.reset();
 }
 
@@ -374,7 +371,7 @@ void IcebergSink::generateManifestList(const UUID & commit_uuid, int64_t snapsho
 
     Apache::Iceberg::ManifestList manifest_list;
     manifest_list.manifest_path = current_manifest_uri;
-    manifest_list.manifest_length = current_total_size; /// FIXME
+    manifest_list.manifest_length = write_buf->count(); /// FIXME
     manifest_list.sequence_number = sequence_number;
     manifest_list.min_sequence_number = sequence_number;
     manifest_list.added_snapshot_id = snapshot_id;
@@ -459,8 +456,8 @@ void IcebergSink::generateManifest(const UUID & commit_uuid)
     /// avro, orc, parquet, or puffin
     manifest.data_file.file_format = "PARQUET";
     manifest.data_file.partition = {};
-    manifest.data_file.record_count = parquet_output_format->fileWriter().metadata()->num_rows();
-    manifest.data_file.file_size_in_bytes = current_total_size;
+    manifest.data_file.record_count = current_record_count;
+    manifest.data_file.file_size_in_bytes = write_buf->count();
     /// 0: DATA, 1: POSITION DELETES, 2: EQUALITY DELETES
     manifest.data_file.content = Apache::Iceberg::DataFileContent::Data;
 
