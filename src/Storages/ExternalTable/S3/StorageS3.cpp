@@ -62,6 +62,10 @@
 #include <Processors/Sinks/SinkToStorage.h>
 #include <QueryPipeline/Pipe.h>
 
+/// proton: starts
+#include <IO/WriteBufferDecorator.h>
+/// proton: ends
+
 namespace fs = std::filesystem;
 
 namespace CurrentMetrics
@@ -859,9 +863,21 @@ public:
         if (cancelled)
             return;
 
-        if (writer && write_buf->count() >= min_upload_file_size && write_buf->count() > 0)
-            /// Properly finalize the format writer and complete the current upload.
-            finalize();
+        if (writer)
+        {
+            WriteBuffer * out_buf = write_buf.get();
+            if (auto * decorator = dynamic_cast<WriteBufferWithOwnMemoryDecorator *>(out_buf); decorator != nullptr)
+            {
+                /// Get the nested buffer to check the compressed data size
+                out_buf = decorator->getNestedBuffer();
+            }
+
+            if (out_buf->count() >= min_upload_file_size && out_buf->count() > 0)
+            {
+                /// Properly finalize the format writer and complete the current upload.
+                finalize();
+            }
+        }
 
         if (!writer)
         {
@@ -900,6 +916,7 @@ public:
         /// proton: ends
 
         writer->write(getHeader().cloneWithColumns(chunk.detachColumns()));
+
         /// proton: starts
         /// Restart the timer when there are new data, because we are calculating the idle time.
         upload_idle_timer.start();
