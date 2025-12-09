@@ -191,5 +191,4 @@ String StorageMaterializedView::getPipelineMetrics() const
 
     return process_list_entry->getQueryStatus()->getPipelineMetric(pipeline_state.cached_thread_ids);
 }
-
 }

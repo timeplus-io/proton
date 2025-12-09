@@ -394,7 +394,7 @@ UInt64 CheckpointCoordinator::getStorageSize(CheckpointContextPtr ckpt_ctx) cons
         auto iter = queries.find(ckpt_ctx->qid);
         if (iter == queries.end())
             return 0;
-    
+
         if (DB::MonotonicSeconds::now() - iter->second->last_cached_ts <= 30 * 60) /// 30 mins
             return iter->second->cached_storage_size;
     }

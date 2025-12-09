@@ -132,7 +132,7 @@ CheckpointEpoch DiskCheckpointStorage::getLastCommittedEpoch(CheckpointContextPt
             auto curr_epoch = CheckpointEpoch::parse(path.has_stem() ? path.stem().string() : path.parent_path().stem().string());
             /// check if `committed` exists
             if (curr_epoch > max_epoch && disk->exists(path / COMMITTED_FILE))
-                 max_epoch = curr_epoch;
+                max_epoch = curr_epoch;
         }
         catch (...)
         {
@@ -174,7 +174,12 @@ void DiskCheckpointStorage::remove(CheckpointContextPtr ckpt_ctx) const
         catch (...)
         {
             /// Found a directory which is not an epoch number directory, delete this folder
-            LOG_WARNING(logger, "Remove unknown format checkpoint epoch directory '{}' on disk {}: {}", path, disk->logName(), getCurrentExceptionMessage(true));
+            LOG_WARNING(
+                logger,
+                "Remove unknown format checkpoint epoch directory '{}' on disk {}: {}",
+                path,
+                disk->logName(),
+                getCurrentExceptionMessage(true));
             disk->removeRecursive(path);
             return;
         }

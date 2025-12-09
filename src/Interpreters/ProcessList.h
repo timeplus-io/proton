@@ -215,7 +215,8 @@ public:
     const String & getQuery() const { return query; }
     /// proton: ends.
 
-    QueryStatusInfo getInfo(bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false, bool get_pipeline_metrics = false) const;
+    QueryStatusInfo getInfo(
+        bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false, bool get_pipeline_metrics = false) const;
 
     CancellationCode cancelQuery(bool kill);
 
@@ -398,7 +399,8 @@ public:
     size_t size() const { return processes.size(); }
 
     /// Get current state of process list.
-    Info getInfo(bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false, bool get_pipeline_metrics = false) const;
+    Info getInfo(
+        bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false, bool get_pipeline_metrics = false) const;
 
     /// Get current state of process list per user.
     UserInfo getUserInfo(bool get_profile_events = false) const;
