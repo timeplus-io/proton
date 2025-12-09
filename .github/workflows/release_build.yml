@@ -14,6 +14,26 @@ on: # yamllint disable-line rule:truthy
   #   - cron:  '30 15 * * 4' #was 30 15 * * 2,5
 
 jobs:
+  create_release:
+    needs: update_version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub release with notes
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          tag_name: ${{ needs.update_version.outputs.tag_name }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          body: |
+            ## Docker Images Available
+
+            ```bash
+            docker pull d.timeplus.com/timeplus-io/proton:latest
+            ```
+
+            For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
+
   update_version:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
@@ -49,7 +69,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Linux_X86_64:
-    needs: update_version
+    needs: [update_version, create_release]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c7i.8xlarge
@@ -63,16 +83,9 @@ jobs:
       prerelease: ${{ inputs.prerelease }}
       ref: ${{ needs.update_version.outputs.tag_name }}
       upjob: Build_Linux_X86_64
-      generate_release_notes: true
-      # Provide Docker section once; other jobs set an empty body to avoid duplicating content.
-      release_body: |
-        ## Docker Images Available
-
-        ```bash
-        docker pull d.timeplus.com/timeplus-io/proton:latest
-        ```
-
-        For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
+      generate_release_notes: false
+      release_body: ''
+      upload_only: true
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -185,7 +198,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Linux_Arm64:
-    needs: update_version
+    needs: [update_version, create_release]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.8xlarge
@@ -199,6 +212,7 @@ jobs:
       upjob: Build_Linux_Arm64
       generate_release_notes: false
       release_body: ''
+      upload_only: true
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -367,7 +381,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Darwin_X86_64:
-    needs: update_version
+    needs: [update_version, create_release]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6i.8xlarge
@@ -381,6 +395,7 @@ jobs:
       upjob: Build_Darwin_X86_64
       generate_release_notes: false
       release_body: ''
+      upload_only: true
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -443,7 +458,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Darwin_Arm64:
     if: false
-    needs: update_version
+    needs: [update_version, create_release]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
@@ -456,6 +471,7 @@ jobs:
       upjob: Build_Darwin_Arm64
       generate_release_notes: false
       release_body: ''
+      upload_only: true
       command: |
         cd $GITHUB_WORKSPACE
 

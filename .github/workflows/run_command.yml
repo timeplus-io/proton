@@ -92,6 +92,10 @@ on:
           ```
 
           For detailed usage and more information, check out the Timeplus documentation: https://docs.timeplus.com/
+      upload_only:
+        required: false
+        type: boolean
+        default: false
     outputs:
       tag_name:
         description: "Tag name for releae build use"
@@ -236,9 +240,9 @@ jobs:
           # rm -rf $GITHUB_WORKSPACE/ccache
           # rm -rf $GITHUB_WORKSPACE/build_docker
 
-      - name: Release binary
-        if: ${{ !inputs.s3_upload && inputs.upload_files != '' }}
-        uses: softprops/action-gh-release@v2.4.1
+      - name: Create/overwrite release notes and upload assets
+        if: ${{ !inputs.s3_upload && inputs.upload_files != '' && !inputs.upload_only }}
+        uses: softprops/action-gh-release@v2.5.0
         with:
           files: ${{ inputs.upload_files }}
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
@@ -247,6 +251,15 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           tag_name: ${{ steps.execute.outputs.tag_name }}
           body: ${{ inputs.release_body }}
+
+      - name: Upload assets to existing release (no body changes)
+        if: ${{ !inputs.s3_upload && inputs.upload_files != '' && inputs.upload_only }}
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          files: ${{ inputs.upload_files }}
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          prerelease: ${{ inputs.prerelease }}
+          tag_name: ${{ steps.execute.outputs.tag_name }}
 
       - name: Upload Artifact
         if: ${{ always() && inputs.upjob != '' }}
