@@ -2,11 +2,13 @@
 
 #include <Checkpoint/CheckpointConfig.h>
 #include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointLease.h>
 #include <Checkpoint/CheckpointSettings.h>
 #include <Checkpoint/CheckpointStorage.h>
 #include <Cluster/Common/TimeWheel/TimerService.h>
 
 #include <Bootstrap/Globals.h>
+#include <Cluster/Node/Node.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Common/Random.h>
 
@@ -69,6 +71,23 @@ struct CheckpointableQuery
         return ctx->cloneWithEpoch(current_epoch, std::move(ckpt_request_ctx));
     }
 
+    CheckpointLease checkpointLease() const
+    {
+        CheckpointLease lease;
+        lease.timestamp = UTCMilliseconds::now();
+        lease.node_id = Globals::getNode().ID();
+        lease.curr_ckpt_epoch = current_epoch == 0 ? last_epoch : current_epoch;
+
+        /// Special case of pipeline executor getting stuck after cancellation
+        if (executor && executor->isCancelled())
+            lease.status = CheckpointLease::Status::Stopped;
+        else if (current_epoch == 0)
+            lease.status = CheckpointLease::Status::Running;
+        else
+            lease.status = CheckpointLease::Status::Checkpointing;
+
+        return lease;
+    }
 
     UInt64 checkpointInterval(const CheckpointConfig & config) const
     {
