@@ -29,6 +29,9 @@ MetaStore::MetaStore(StoreConfigPtr config_, std::shared_ptr<MetaDB> meta_db_)
 {
     /// Always node ID 1
     node_identity = 1;
+
+    /// Load cached UDF names early to avoid races after readiness
+    loadUserDefinedFunctions();
 }
 
 MetaStore::~MetaStore() noexcept
@@ -145,9 +148,6 @@ void MetaStore::init()
 
     /// Mark as ready
     setReady();
-
-    /// Load cached UDF names so UDF lookups work after restart
-    loadUserDefinedFunctions();
 
     LOG_DEBUG(logger, "MetaStore initialization complete");
 }
