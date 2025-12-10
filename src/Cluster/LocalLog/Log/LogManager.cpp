@@ -315,7 +315,7 @@ LogPtr LogManager::getOrCreateLog(const StreamShard & stream_shard, LogConfigPtr
     {
         LOG_INFO(
             logger,
-            "getOrCreateLog: Found existing log for stream_shard={}, log_ptr={}, next_sn={}",
+            "Found existing log for stream_shard={}, log_ptr={}, next_sn={}",
             stream_shard.string(),
             static_cast<const void *>(log.get()),
             log->nextLogSequence());
