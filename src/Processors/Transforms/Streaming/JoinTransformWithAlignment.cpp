@@ -119,11 +119,7 @@ IProcessor::Status JoinTransformWithAlignment::prepareLeftInput()
     }
 
     if (left_input.input_port->isFinished())
-    {
-        /// Close the other input port
-        right_input.input_port->close();
         return Status::Finished;
-    }
 
     if (!left_input.muted)
     {
@@ -154,11 +150,7 @@ IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
     }
 
     if (right_input.input_port->isFinished())
-    {
-        /// Close the other input port
-        left_input.input_port->close();
         return Status::Finished;
-    }
 
     if (!right_input.muted)
     {
@@ -205,13 +197,21 @@ IProcessor::Status JoinTransformWithAlignment::prepare()
     Status left_input_status = prepareLeftInput();
 
     if (right_input_status == Status::Ready || left_input_status == Status::Ready)
+    {
         /// One of the input still has buffered data, try to consume it
         /// The next round prepare, we will find all inputs are finished, then return Finished status
         return Status::Ready;
-    else if (right_input_status == Status::Finished && left_input_status == Status::Finished)
+    }
+    else if (right_input_status == Status::Finished || left_input_status == Status::Finished)
+    {
+        /// When cancelled, we just finish the transform directly
+        right_input.input_port->close();
+        left_input.input_port->close();
+        output.finish();
         return Status::Finished;
-    else
-        return Status::NeedData;
+    }
+    
+    return Status::NeedData;
 }
 
 /// FIXME: Separate enrichment join and biredictional join implementation
