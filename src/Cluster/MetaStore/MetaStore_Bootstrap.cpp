@@ -146,6 +146,9 @@ void MetaStore::init()
     /// Mark as ready
     setReady();
 
+    /// Load cached UDF names so UDF lookups work after restart
+    loadUserDefinedFunctions();
+
     LOG_DEBUG(logger, "MetaStore initialization complete");
 }
 
