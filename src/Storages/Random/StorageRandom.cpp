@@ -396,7 +396,7 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
 }
 
 ColumnPtr
-fillColumnWithData(const DataTypePtr type, UInt64 limit, std::tuple<Int64, Int32, pcg64> & data, ContextPtr context, String col_name)
+fillColumnWithData(const DataTypePtr type, UInt64 limit, std::tuple<Int64, Int64, pcg64> & data, ContextPtr context, String col_name)
 {
     if (col_name == ProtonConsts::RESERVED_SHARD)
     {
@@ -407,9 +407,7 @@ fillColumnWithData(const DataTypePtr type, UInt64 limit, std::tuple<Int64, Int32
     else if (col_name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
     {
         auto & sn = std::get<1>(data);
-        auto column = type->createColumnConst(limit, sn)->convertToFullColumnIfConst();
-        sn++;
-        return column;
+        return type->createColumnConst(limit, sn++)->convertToFullColumnIfConst();
     }
     else
     {
@@ -508,6 +506,10 @@ public:
             default_actions = std::make_shared<ExpressionActions>(
                 std::move(dag), ExpressionActionsSettings::fromContext(context, CompileExpressions::yes));
         }
+
+        /// If the SELECT doesn't ask for _tp_sn, we will need manually increase it
+        /// for checkpoint triggering
+        need_increment_sn = !block_to_fill.has(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
     }
 
     String getName() const override { return "Random"; }
@@ -608,6 +610,12 @@ protected:
         if (block_to_fill_as_result.has("_dummy"))
             block_to_fill_as_result.erase("_dummy");
 
+        if (need_increment_sn)
+            /// Increment sn
+            ++std::get<1>(data_generate_helper);
+
+        setLastProcessedSN(std::get<1>(data_generate_helper));
+
         block_to_fill_as_result = Nested::flatten(block_to_fill_as_result);
         return {block_to_fill_as_result.getColumns(), block_size_};
     }
@@ -616,7 +624,10 @@ protected:
     Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx) override
     {
         IProcessor::checkpoint(ckpt_ctx);
-        return header_chunk.clone();
+
+        auto result = header_chunk.clone();
+        result.setCheckpointContext(ckpt_ctx);
+        return result;
     }
     void doRecover(CheckpointContextPtr) override { }
     void doResetStartSN(Int64 /*sn*/) override { }
@@ -626,6 +637,7 @@ private:
 
     UInt64 max_block_size;
     Block block_to_fill;
+    bool need_increment_sn = false;
     const ColumnsDescription our_columns;
     ContextPtr context;
     Chunk header_chunk;
@@ -647,7 +659,7 @@ private:
 
     std::shared_ptr<ExpressionActions> default_actions = nullptr;
     /// <shard_num, sequence_num, rng>
-    std::tuple<Int64, Int32, pcg64> data_generate_helper;
+    std::tuple<Int64, Int64, pcg64> data_generate_helper;
 
     static Block & prepareBlockToFill(Block & block)
     {
