@@ -3,6 +3,7 @@
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/IRowOutputFormat.h>
 #include <Processors/ProcessorID.h>
+#include <Processors/Streaming/SizedChunkSplitter.h>
 
 namespace DB
 {
@@ -78,11 +79,16 @@ void MessageQueueFormatExecutor::execute(const Block & block, MessageCallback me
     }
     else
     {
-        format->write(block);
-        format->finalize();
-        message_callback(buffer->str(), rows_in_block);
-        format->resetFormatter();
-        buffer->restart();
+        Streaming::SizedChunkSplitter splitter{max_rows_per_message, max_message_size};
+        auto blocks = splitter.splitBlockForSingleShard(block, 0);
+        for (const auto & block_with_shard : blocks)
+        {
+            format->write(block_with_shard.block);
+            format->finalize();
+            message_callback(buffer->str(), block_with_shard.block.rows());
+            format->resetFormatter();
+            buffer->restart();
+        }
     }
 }
 
