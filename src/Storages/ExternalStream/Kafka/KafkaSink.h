@@ -75,12 +75,12 @@ private:
     /// the number of errors has been received so far for the current checkpoint period
     size_t errorCount() const noexcept { return state.error_count; }
     /// the number of outstanding messages for the current checkpoint period
-    size_t outstandings() const noexcept { return state.outstandings; }
+    size_t outstanding() const noexcept { return state.outstanding; }
     /// the last error code received from delivery report callback
     rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
-    /// check if there are no more outstandings (i.e. delivery reports have been recieved
+    /// check if there are no more outstanding produce requests (i.e. delivery reports have been receieved
     /// for all out-go messages, regardless if a message is successfully delivered or not)
-    size_t outstandingMessages() const noexcept { return state.outstandings - (state.acked + state.error_count); }
+    size_t outstandingMessages() const noexcept { return state.outstanding - (state.acked + state.error_count); }
 
     DB::Kafka::ProducerPtr producer;
 
@@ -107,7 +107,7 @@ private:
 
     struct State
     {
-        std::atomic_size_t outstandings{0};
+        std::atomic_size_t outstanding{0};
         std::atomic_size_t acked{0};
         std::atomic_size_t error_count{0};
         std::atomic_int32_t last_error_code{0};

@@ -1,8 +1,8 @@
 #include <Storages/ExternalStream/Kafka/KafkaSink.h>
 
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Kafka/mapErrorCode.h>
@@ -13,15 +13,13 @@
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Formats/IRowOutputFormat.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <base/sleep.h>
 #include <Common/ProtonCommon.h>
-
-#include <boost/algorithm/string/predicate.hpp>
-
-#include <rdkafka.h>
 
 #include <numeric>
 #include <unordered_map>
 
+#include <rdkafka.h>
 
 namespace DB
 {
@@ -123,7 +121,6 @@ std::unordered_map<String, String> getHeaders(const IColumn & column, size_t row
 namespace ExternalStream
 {
 using DB::Kafka::ProducerPtr;
-
 
 ChunkSharder::ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name)
     : sharding_expr(sharding_expr_), sharding_key_column_name(column_name)
@@ -273,7 +270,9 @@ KafkaSink::KafkaSink(
         partitioner = std::make_unique<ChunkSharder>(buildExpression(header, ast, context), ast->getColumnName());
     }
     else
+    {
         partitioner = std::make_unique<ChunkSharder>();
+    }
 
     if (refresh_topic_partitions)
     {
@@ -289,7 +288,7 @@ KafkaSink::KafkaSink(
                 if (is_finished.test())
                     break;
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+                sleepForMilliseconds(sleep_ms);
                 /// Fetch topic metadata for partition updates
                 if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
                     continue;
@@ -340,9 +339,7 @@ void KafkaSink::sendMessage(const String & message, ColumnPtr ts_column, ColumnP
         {.vtype = RD_KAFKA_VTYPE_OPAQUE, .u = {.ptr = this}},
     };
 
-    auto * err = rd_kafka_produceva(producer->getHandle(), vus, vu_size);
-
-    if (err != nullptr)
+    if (auto * err = rd_kafka_produceva(producer->getHandle(), vus, vu_size); err != nullptr)
     {
         external_stream_counter->addWrittenFailed(1);
 
@@ -356,7 +353,7 @@ void KafkaSink::sendMessage(const String & message, ColumnPtr ts_column, ColumnP
         throw Exception(ErrorCodes::CANNOT_WRITE_TO_KAFKA, "{}", msg);
     }
 
-    ++state.outstandings;
+    ++state.outstanding;
     external_stream_counter->addWrittenBytes(message.size());
     external_stream_counter->addWrittenRows(1);
 }
@@ -405,7 +402,9 @@ void KafkaSink::consume(Chunk chunk)
 
             format_executor->execute(
                 block_with_shard.block,
-                [this, &ts_column, &key_column, &headers_column](const String & message, size_t) { sendMessage(message, ts_column, headers_column, key_column); },
+                [this, &ts_column, &key_column, &headers_column](const String & message, size_t) {
+                    sendMessage(message, ts_column, headers_column, key_column);
+                },
                 /*flush_at_the_end=*/true);
         }
     }
@@ -433,7 +432,9 @@ void KafkaSink::consume(Chunk chunk)
 
             format_executor->execute(
                 block_with_shard.block,
-                [this, &ts_column, &headers_column](const String & message, size_t) { sendMessage(message, ts_column, headers_column, nullptr); },
+                [this, &ts_column, &headers_column](const String & message, size_t) {
+                    sendMessage(message, ts_column, headers_column, nullptr);
+                },
                 /*flush_at_the_end=*/true);
         }
     }
@@ -453,14 +454,14 @@ void KafkaSink::onFinish()
 
     format_executor->finish();
 
-    /// if there are no outstandings, no need to do flushing
+    /// if there are no outstanding messages, no need to do flushing
     if (outstandingMessages() == 0)
         return;
 
     /// Make sure all outstanding requests are transmitted and handled.
     /// It should not block for ever here, otherwise, it will block proton from stopping the job
     /// or block proton from terminating.
-    if (auto err = rd_kafka_flush(producer->getHandle(), 15000 /* time_ms */); err)
+    if (auto err = rd_kafka_flush(producer->getHandle(), /*timeout_ms=*/15000); err)
         LOG_ERROR(logger, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -468,10 +469,10 @@ void KafkaSink::onFinish()
 
     /// if flush does not return an error, the delivery report queue should be empty
     if (outstandingMessages() > 0)
-        LOG_ERROR(logger, "Not all messsages are sent successfully, expected={} actual={}", outstandings(), acked());
+        LOG_ERROR(logger, "Not all messages are sent successfully, expected={} actual={}", outstanding(), acked());
 }
 
-void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * /*opaque*/)
+void KafkaSink::onMessageDelivery(rd_kafka_t * /*producer*/, const rd_kafka_message_t * msg, void * /*opaque*/)
 {
     auto * sink = static_cast<KafkaSink *>(msg->_private);
     sink->onMessageDelivery(msg->err);
@@ -485,7 +486,9 @@ void KafkaSink::onMessageDelivery(rd_kafka_resp_err_t err)
         ++state.error_count;
     }
     else
+    {
         ++state.acked;
+    }
 }
 
 KafkaSink::~KafkaSink()
@@ -507,9 +510,9 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
             break;
 
         if (timer.elapsedMilliseconds() >= checkpoint_timeout_ms)
-            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Checkpoint timed out, outstandings={}", outstanding_msgs);
+            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Checkpoint timed out, outstanding={}", outstanding_msgs);
 
-        LOG_INFO(logger, "Waiting for {} outstandings on checkpointing", outstanding_msgs);
+        LOG_INFO(logger, "Waiting for {} outstanding on checkpointing", outstanding_msgs);
 
         if (is_finished.test())
         {
@@ -527,23 +530,24 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
             if (outstandingMessages() > 0)
                 throw Exception(
                     ErrorCodes::CANNOT_WRITE_TO_KAFKA,
-                    "Not all messsages are sent successfully, expected={} actual={}",
-                    outstandings(),
+                    "Not all messages are sent successfully, expected={} actual={}",
+                    outstanding(),
                     acked());
 
             break;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        sleepForMilliseconds(10);
     } while (true);
 
     state.reset();
+
     IProcessor::checkpoint(context);
 }
 
 void KafkaSink::State::reset()
 {
-    outstandings.store(0);
+    outstanding.store(0);
     acked.store(0);
     error_count.store(0);
     last_error_code.store(0);
