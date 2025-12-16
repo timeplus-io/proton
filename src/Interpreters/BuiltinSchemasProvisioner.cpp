@@ -19,7 +19,9 @@
 
 #include <Poco/Util/AbstractConfiguration.h>
 
+#include <filesystem>
 #include <memory>
+#include <vector>
 
 namespace DB
 {
@@ -31,6 +33,67 @@ extern const int BAD_ARGUMENTS;
 
 namespace
 {
+
+std::string resolveLogPath(const Poco::Util::AbstractConfiguration & config, std::string_view config_key)
+{
+    namespace fs = std::filesystem;
+
+    const std::string configured = config.getString(std::string{config_key}, "");
+    if (configured.empty())
+        return {};
+
+    auto exists = [](const std::string & p) { return !p.empty() && fs::exists(fs::path{p}); };
+
+    if (exists(configured))
+        return configured;
+
+    /// Fallbacks for embedded.xml based local/dev bootstraps.
+    std::vector<std::string> candidates;
+    candidates.reserve(8);
+
+    if (config_key == "logger.log")
+    {
+        candidates.emplace_back("./proton-data/var/log/proton-server/proton-server.log");
+        candidates.emplace_back("./proton-data/server_logs/server.log"); /// legacy local cluster location
+    }
+    else if (config_key == "logger.errorlog")
+    {
+        candidates.emplace_back("./proton-data/var/log/proton-server/proton-server.err.log");
+        candidates.emplace_back("./proton-data/server_logs/server.err.log"); /// legacy local cluster location
+    }
+
+    /// Try to derive a base directory from <path>.
+    /// Note: in local cluster mode we may set <path> to ".../tables/", so we normalize back to the data root.
+    if (config.has("path"))
+    {
+        fs::path base = fs::path{config.getString("path")};
+
+        /// If path points to a "tables" subdir, treat its parent as data root.
+        if (base.filename() == "tables")
+            base = base.parent_path();
+
+        /// Sometimes <path> is the data root with a trailing slash; keep both base and base/.. attempts minimal.
+        const fs::path data_root = base;
+
+        if (config_key == "logger.log")
+        {
+            candidates.emplace_back((data_root / "var/log/proton-server/proton-server.log").string());
+            candidates.emplace_back((data_root / "server_logs/server.log").string());
+        }
+        else if (config_key == "logger.errorlog")
+        {
+            candidates.emplace_back((data_root / "var/log/proton-server/proton-server.err.log").string());
+            candidates.emplace_back((data_root / "server_logs/server.err.log").string());
+        }
+    }
+
+    for (const auto & candidate : candidates)
+        if (exists(candidate))
+            return candidate;
+
+    /// As last resort, keep the configured path (even if missing) to preserve old behavior.
+    return configured;
+}
 
 const char * proton_err_log_ddl = R"(CREATE EXTERNAL STREAM system.proton_err_log(
     raw string,
@@ -89,7 +152,7 @@ void BuiltinSchemasProvisioner::addOtherBuiltinSchemas(const Poco::Util::Abstrac
     for (const auto & log_info :
          {LogInfo{proton_log_ddl, "proton_log", "logger.log"}, LogInfo{proton_err_log_ddl, "proton_err_log", "logger.errorlog"}})
     {
-        auto log_path = config.getString(log_info.config_key, "");
+        auto log_path = resolveLogPath(config, log_info.config_key);
         if (log_path.empty())
             continue;
 
