@@ -402,7 +402,7 @@
     </kafkalog>
   </logstore>
   <max_connections>4096</max_connections>
-  <keep_alive_timeout>3</keep_alive_timeout>
+  <keep_alive_timeout>60</keep_alive_timeout>
   <custom_local_disks_base_directory>./proton-data/local-shared/</custom_local_disks_base_directory>
 
   <neutron_database>neutron</neutron_database>

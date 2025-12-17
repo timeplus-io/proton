@@ -947,7 +947,7 @@ settings:
 # Global Settings
 #
 # For 'Connection: keep-alive' in HTTP 1.1
-keep_alive_timeout: 3
+keep_alive_timeout: 60
 
 telemetry_interval_ms: 300000   # 5 minutes
 
