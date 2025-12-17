@@ -18,22 +18,22 @@ format_row_no_newline
 2\tgood
 JSONEachRow
 format_row
-{"number":"0","good":"good"}\n
-{"number":"1","good":"good"}\n
-{"number":"2","good":"good"}\n
+{"number":0,"good":"good"}\n
+{"number":1,"good":"good"}\n
+{"number":2,"good":"good"}\n
 format_row_no_newline
-{"number":"0","good":"good"}
-{"number":"1","good":"good"}
-{"number":"2","good":"good"}
+{"number":0,"good":"good"}
+{"number":1,"good":"good"}
+{"number":2,"good":"good"}
 JSONCompactEachRow
 format_row
-["0", "good"]\n
-["1", "good"]\n
-["2", "good"]\n
+[0, "good"]\n
+[1, "good"]\n
+[2, "good"]\n
 format_row_no_newline
-["0", "good"]
-["1", "good"]
-["2", "good"]
+[0, "good"]
+[1, "good"]
+[2, "good"]
 TSKV
 format_row
 number=0\tgood=good\n
@@ -81,22 +81,22 @@ Row 1:\n──────\nnumber: 1\ngood:   good
 Row 1:\n──────\nnumber: 2\ngood:   good
 JSON
 format_row
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": "0",\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}\n
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": "1",\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}\n
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": "2",\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}\n
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": 0,\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}\n
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": 1,\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}\n
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": 2,\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}\n
 format_row_no_newline
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": "0",\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": "1",\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": "2",\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": 0,\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": 1,\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t{\n\t\t\t"number": 2,\n\t\t\t"good": "good"\n\t\t}\n\t],\n\n\t"rows": 1\n}
 JSONCompact
 format_row
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t["0", "good"]\n\t],\n\n\t"rows": 1\n}\n
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t["1", "good"]\n\t],\n\n\t"rows": 1\n}\n
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t["2", "good"]\n\t],\n\n\t"rows": 1\n}\n
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t[0, "good"]\n\t],\n\n\t"rows": 1\n}\n
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t[1, "good"]\n\t],\n\n\t"rows": 1\n}\n
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t[2, "good"]\n\t],\n\n\t"rows": 1\n}\n
 format_row_no_newline
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t["0", "good"]\n\t],\n\n\t"rows": 1\n}
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t["1", "good"]\n\t],\n\n\t"rows": 1\n}
-{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t["2", "good"]\n\t],\n\n\t"rows": 1\n}
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t[0, "good"]\n\t],\n\n\t"rows": 1\n}
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t[1, "good"]\n\t],\n\n\t"rows": 1\n}
+{\n\t"meta":\n\t[\n\t\t{\n\t\t\t"name": "number",\n\t\t\t"type": "uint64"\n\t\t},\n\t\t{\n\t\t\t"name": "good",\n\t\t\t"type": "string"\n\t\t}\n\t],\n\n\t"data":\n\t[\n\t\t[2, "good"]\n\t],\n\n\t"rows": 1\n}
 Values
 format_row
 (0,\'good\')

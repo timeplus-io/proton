@@ -990,7 +990,7 @@ Possible values: non-negative numbers. Note that if the value is too small or to
     M(Bool, input_format_binary_read_json_as_string, false, "Read values of json data type as JSON string values in RowBinary input format.", 0) \
     M(Bool, output_format_binary_write_json_as_string, false, "Write values of json data type as JSON string values in RowBinary output format.", 0) \
     \
-    M(Bool, output_format_json_quote_64bit_integers, true, "Controls quoting of 64-bit integers in JSON output format.", 0) \
+    M(Bool, output_format_json_quote_64bit_integers, false, "Controls quoting of 64-bit integers in JSON output format.", 0) \
     M(Bool, output_format_json_quote_denormals, false, "Enables '+nan', '-nan', '+inf', '-inf' outputs in JSON output format.", 0) \
     M(Bool, output_format_json_quote_decimals, false, "Controls quoting of decimals in JSON output format.", 0) \
     M(Bool, output_format_json_quote_64bit_floats, false, "Controls quoting of 64-bit float numbers in JSON output format.", 0) \
