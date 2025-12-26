@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Iceberg REST Catalog
+  iceberg-rest:
+    image: tabulario/iceberg-rest:latest
+    container_name: iceberg-rest
+    ports:
+      - "8181:8181"
+    environment:
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_ACCESS__KEY__ID=admin
+      - CATALOG_S3_SECRET__ACCESS__KEY=Password!
+      - CATALOG_S3_PATH__STYLE__ACCESS=true
+      - AWS_REGION=us-east-1
+      - CATALOG_S3_REGION=us-east-1
+      - CATALOG_URI__MAPPING=s3://warehouse/:http://minio:9000/warehouse/
+    depends_on:
+      - minio
+
+  # MinIO for storage
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: Password!
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc alias set myminio http://minio:9000 admin Password!;
+      /usr/bin/mc mb myminio/warehouse;
+      exit 0;
+      "
+
+  proton:
+    image: d.timeplus.com/timeplus-io/proton:latest
+    platform: linux/amd64
+    ports:
+      - 8002:8000
+      - 8463:8463
+      - 8123:8123
+      - 3218:3218
+    environment:
+      - ENABLE_DATA_PREALLOCATE=false
+    volumes:
+      - proton_data:/var/lib/proton/
+      - ./conf/proton-server.yaml:/etc/proton-server/config.d/proton-server.yaml:ro
+
+  # Jupyter Notebook
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter-iceberg
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - GRANT_SUDO=yes
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+    depends_on:
+      - iceberg-rest
+      - minio
+    user: root
+    working_dir: /home/jovyan/work
+
+volumes:
+  minio-data:
+  proton_data:

@@ -1,0 +1,3 @@
+url_scheme_mappers:
+  s3:
+    to: http://minio:9000/{bucket}
