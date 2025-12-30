@@ -1,9 +1,15 @@
 
-this demo shows how to read/write iceberg table using proton.
+This demo shows how to read and write Iceberg tables using Proton.
 
-quick start:
-1. run `docker compose up` to start the whole stack
-2. open `localhost:8888` from the broswer and run all the python code that create iceberg table and write read data from `IcebergPythonTest` notebook
-3. run `proton-client --user proton --password proton@t+` to start a proton client cli in the proton container
-4. run all the script in `script/proton.sql` to query the iceberg table and write some data into iceberg table
-5. in the notebook, rerun the cell that read the iceberg table and check the newly inserted data from proton.
+Quick start:
+1. `cd examples/iceberg`
+2. `docker compose up -d`
+3. Open `http://localhost:8888` and run `notebooks/IcebergPythonTest.ipynb` to create and populate the Iceberg table.
+4. Run the SQL script from your host:
+   `docker compose exec -T proton proton-client --multiquery --user proton --password 'proton@t+' < script/proton.sql`
+5. Optional (interactive): `docker compose exec proton proton-client --user proton --password 'proton@t+'`
+6. Re-run the notebook cell that reads the Iceberg table to see the new rows.
+
+Notes:
+- `storage_endpoint` stays as `s3://warehouse/` because HTTP endpoints are rewritten to `s3://<host>/...` and would point at the wrong bucket.
+- Jupyter binds to `127.0.0.1`; change the port mapping if you need remote access.

@@ -4,6 +4,7 @@ SETTINGS
     catalog_uri = 'http://iceberg-rest:8181',
     catalog_type = 'rest',
     warehouse = 's3://warehouse/',
+    -- Keep s3:// here: HTTP endpoints are rewritten to s3://<host>/... and would target the wrong bucket.
     storage_endpoint = 's3://warehouse/',
     rest_catalog_sigv4_enabled = false,
     rest_catalog_signing_region = 'us-east-1',
@@ -43,4 +44,3 @@ INSERT INTO demo.proton_events (id, timestamp, user_id, event_type, value)
 VALUES (101, now64(6), 'user_9', 'login', NULL);
 
 SELECT id, timestamp, user_id, event_type, value FROM demo.proton_events;
-

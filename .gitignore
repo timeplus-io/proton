@@ -69,6 +69,7 @@ cmake-build-*
 *.pyc
 __pycache__
 *.pytest_cache
+.ipynb_checkpoints/
 
 test.cpp
 CPackConfig.cmake
@@ -161,4 +162,3 @@ website/package-lock.json
 /tests/stream/.status
 .gdb_history
 report_*.html
-
