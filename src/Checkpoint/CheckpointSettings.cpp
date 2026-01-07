@@ -16,7 +16,6 @@ extern const int INVALID_SETTING_VALUE;
 
 namespace
 {
-#if 0
 bool parseBoolTextWord(const std::string & str, std::string_view setting_name)
 {
     if (str.empty())
@@ -39,7 +38,6 @@ bool parseBoolTextWord(const std::string & str, std::string_view setting_name)
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid setting '{}': {}", setting_name, e.what());
     }
 }
-#endif
 }
 
 void CheckpointSettings::serialize(VersionType, WriteBuffer & wb) const
@@ -68,7 +66,13 @@ void CheckpointSettings::deserialize(VersionType version, ReadBuffer & rb)
 
         /// Repair raw settings
         std::string replication_type_str = "local_file_system"; // Always local
-        raw_settings = fmt::format("type={};replication_type={};interval={};", "file", replication_type_str, interval);
+        raw_settings = fmt::format(
+            "type={};replication_type={};interval={};async={};incremental={}",
+            "file",
+            replication_type_str,
+            interval,
+            isAsync(),
+            isIncremental());
     }
 }
 
@@ -152,6 +156,12 @@ void CheckpointSettings::parseImpl()
 
     if (auto iter = settings_map.find("interval"); iter != settings_map.end())
         interval = std::stoul(iter->second);
+
+    if (auto iter = settings_map.find("async"); iter != settings_map.end())
+        strategy.async = parseBoolTextWord(iter->second, "async");
+
+    if (auto iter = settings_map.find("incremental"); iter != settings_map.end())
+        strategy.incremental = parseBoolTextWord(iter->second, "incremental");
 
     /// Other unknown settings are ignored
 }
