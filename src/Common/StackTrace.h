@@ -7,7 +7,8 @@
 #include <array>
 #include <optional>
 #include <functional>
-#include <signal.h>
+#include <csignal>
+#include <csetjmp>
 
 #ifdef OS_DARWIN
 // ucontext is not available without _XOPEN_SOURCE
@@ -78,3 +79,8 @@ protected:
 };
 
 std::string signalToErrorMessage(int sig, const siginfo_t & info, const ucontext_t & context);
+
+/// Special handling for errors during asynchronous stack unwinding,
+/// Which is used in Query Profiler
+extern thread_local bool asynchronous_stack_unwinding;
+extern thread_local sigjmp_buf asynchronous_stack_unwinding_signal_jump_buffer;

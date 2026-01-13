@@ -357,7 +357,8 @@
       "Number of times we drop processing of a query profiler signal due to overrun plus the number of signals that OS has not delivered " \
       "due to overrun.") \
     M(QueryProfilerRuns, "Number of times QueryProfiler had been run.") \
-\
+    M(QueryProfilerErrors, "Invalid memory accesses during asynchronous stack unwinding.") \
+    \
     M(CreatedLogEntryForMerge, "Successfully created log entry to merge parts in ReplicatedMergeTree.") \
     M(NotCreatedLogEntryForMerge, \
       "Log entry to merge parts in ReplicatedMergeTree is not created due to concurrent log update by another replica.") \

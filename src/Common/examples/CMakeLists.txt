@@ -84,3 +84,6 @@ endif()
 
 proton_add_executable (interval_tree interval_tree.cpp)
 target_link_libraries (interval_tree PRIVATE dbms)
+
+proton_add_executable (check_pointer_valid check_pointer_valid.cpp)
+target_link_libraries (check_pointer_valid PRIVATE clickhouse_common_io)

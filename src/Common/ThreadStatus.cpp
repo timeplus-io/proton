@@ -25,6 +25,13 @@ thread_local ThreadStatus constinit * current_thread = nullptr;
 namespace
 {
 
+#if defined(__aarch64__)
+/// For aarch64 16KiB is not enough for stack unwinding.
+static constexpr size_t UNWIND_MINSIGSTKSZ = 32 << 10;
+#else
+static constexpr size_t UNWIND_MINSIGSTKSZ = 16 << 10;
+#endif
+
 /// Alternative stack for signal handling.
 ///
 /// This stack should not be located in the TLS (thread local storage), since:
@@ -46,17 +53,17 @@ struct ThreadStack
         /// (and since the stack grows downward, we need to protect the first page).
         mprotect(data, getPageSize(), PROT_NONE);
     }
-    ~ThreadStack()
-    {
-        mprotect(data, getPageSize(), PROT_WRITE|PROT_READ);
-        free(data);
-    }
+	    ~ThreadStack()
+	    {
+	        mprotect(data, getPageSize(), PROT_WRITE|PROT_READ);
+	        free(data);
+	    }
 
-    static size_t getSize() { return std::max<size_t>(16 << 10, MINSIGSTKSZ); }
-    void * getData() const { return data; }
+	    static size_t getSize() { return std::max<size_t>(UNWIND_MINSIGSTKSZ, MINSIGSTKSZ); }
+	    void * getData() const { return data; }
 
-private:
-    /// 16 KiB - not too big but enough to handle error.
+	private:
+	    /// 16 KiB - not too big but enough to handle error.
     void * data;
 };
 
