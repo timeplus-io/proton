@@ -78,6 +78,8 @@ public:
 
     bool isDeterministic() const override { return false; }
 
+    bool isDeterministicInScopeOfQuery() const override { return false; }
+
     bool isVariadic() const override { return true; }
 
     size_t getNumberOfArguments() const override { return 0; }
