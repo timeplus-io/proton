@@ -33,7 +33,7 @@ void InterpreterSystemQuery::updateTaskStatus(String database, const String & ta
 
     getContext()->checkAccess(AccessType::SYSTEM_TASK, database, task_name);
 
-    const auto & meta_store = Globals::getMetaStore();
+    auto & meta_store = Globals::getMetaStore();
     auto req = std::make_shared<cluster::GetTaskRequest>(
         database,
         task_name,
