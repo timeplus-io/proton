@@ -14,7 +14,7 @@ TEST(GetTaskResponseDataTest, SerializeDeserializeNoError)
 
     TaskDescriptor task_desc;
 
-    task_desc.id = DB::UUIDHelpers::generateV4();  
+    task_desc.id = DB::UUIDHelpers::generateV4();
     task_desc.ns = "default_namespace";
     task_desc.name = "task_123";
     task_desc.sql = "SELECT * FROM test_table";

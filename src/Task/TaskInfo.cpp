@@ -40,4 +40,3 @@ TaskInfo::TaskInfo(cluster::protocol::TaskDescriptorPtr descriptor_) : descripto
 }
 
 }
-

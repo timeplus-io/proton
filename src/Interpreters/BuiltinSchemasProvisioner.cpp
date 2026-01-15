@@ -138,7 +138,6 @@ PRIMARY KEY (uuid, version)
 TTL to_datetime(_tp_time) + INTERVAL 3 MONTH DELETE
 SETTINGS mode='versioned_kv'
 COMMENT 'version 2';)";
-
 }
 
 void BuiltinSchemasProvisioner::addOtherBuiltinSchemas(const Poco::Util::AbstractConfiguration & config)

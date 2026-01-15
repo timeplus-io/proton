@@ -452,6 +452,5 @@ void TaskExecution::logTaskExecutionEnd(IntrospectionStateLogElement & elem, con
         stream_metric_log->add(metric_elem);
     }
 }
-
 }
 }

@@ -8,10 +8,10 @@
 #include <Cluster/Requests/ListTasksResponse.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeSelectQuery.h>
-#include <Common/CurrentThread.h>
 #include <base/ClockUtils.h>
 #include <base/scope_guard.h>
 #include <base/sleep.h>
+#include <Common/CurrentThread.h>
 
 
 namespace DB::Task

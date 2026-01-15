@@ -44,10 +44,7 @@ public:
 
     [[nodiscard]] bool isValid() const noexcept;
 
-    uint64_t getTimeoutMS() const
-    {
-        return std::max<uint64_t>(static_cast<uint64_t>(timeout_unit.toSeconds() * 1000 * timeout), 10'000);
-    }
+    uint64_t getTimeoutMS() const { return std::max<uint64_t>(static_cast<uint64_t>(timeout_unit.toSeconds() * 1000 * timeout), 10'000); }
 
     /// `schema_version` is version used in serde. Bump up it when the on-disk schema is changed.
     constexpr static uint32_t schema_version = 1;

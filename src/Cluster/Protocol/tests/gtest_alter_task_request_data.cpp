@@ -18,8 +18,7 @@ TEST(AlterTaskRequestDataTest, SerializeDeserialize)
         TaskStatus::Disabled,
         "alice",
         0xdeadbeef,
-        60000
-    );
+        60000);
 
     std::string buffer_str;
     DB::WriteBufferFromString wb(buffer_str);

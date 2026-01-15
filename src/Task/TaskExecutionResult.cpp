@@ -70,7 +70,8 @@ int saveTaskExecutionResult(StorageID id, uint32_t version, const TaskExecutionR
 
     WriteBufferFromOwnString buf;
     writeString(
-        "INSERT INTO system.task_execution_state (database, name, uuid, version, checkpoint, last_execution_node, last_execution_start, last_execution_end, "
+        "INSERT INTO system.task_execution_state (database, name, uuid, version, checkpoint, last_execution_node, last_execution_start, "
+        "last_execution_end, "
         "last_execution_result) VALUES ",
         buf);
 
@@ -133,7 +134,8 @@ int saveTaskExecutionResult(StorageID id, uint32_t version, const TaskExecutionR
     return ErrorCodes::OK;
 }
 
-cluster::CallResultV<TaskExecutionResult> loadTaskExecutionResult(UUID id, uint32_t data_version, const std::string & checkpoint_init_values)
+cluster::CallResultV<TaskExecutionResult>
+loadTaskExecutionResult(UUID id, uint32_t data_version, const std::string & checkpoint_init_values)
 {
     auto load_query = fmt::format(
         "SELECT checkpoint FROM table(system.task_execution_state) WHERE uuid = '{}' AND version = {}", toString(id), data_version);

@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
 
-#include <Cluster/Protocol/CreateTaskRequestData.h>
 #include <Cluster/Common/Nulls.h>
 #include <Cluster/Common/serde.h>
+#include <Cluster/Protocol/CreateTaskRequestData.h>
+#include <Core/UUID.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
-#include <Core/UUID.h>
 
 using namespace cluster;
 using namespace cluster::protocol;
@@ -26,7 +26,7 @@ TEST(CreateTaskRequestDataTest, SerializeDeserialize)
     task_desc.interval = 10;
     task_desc.interval_unit.kind = DB::IntervalKind::Kind::Second;
     task_desc.timeout = 5000;
-    task_desc.timeout_unit.kind  = DB::IntervalKind::Kind::Millisecond;
+    task_desc.timeout_unit.kind = DB::IntervalKind::Kind::Millisecond;
     task_desc.checkpoint_columns = {"col1", "col2"};
     task_desc.checkpoint_init_values = "init_val";
     task_desc.target_database_name = "db";
@@ -38,13 +38,7 @@ TEST(CreateTaskRequestDataTest, SerializeDeserialize)
     ExistsOperation exists_op = ExistsOperation::Throw;
     std::string requested_by = "tester";
 
-    CreateTaskRequestData data(
-        std::move(task_desc),
-        exists_op,
-        requested_by,
-        initiator,
-        timeout_ms
-    );
+    CreateTaskRequestData data(std::move(task_desc), exists_op, requested_by, initiator, timeout_ms);
 
     DB::WriteBufferFromOwnString wb;
     data.serialize(wb, /*version*/ 1);

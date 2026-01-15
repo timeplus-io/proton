@@ -57,7 +57,7 @@ private:
     void executeResumeTask(const ASTSystemQuery & system);
     BlockIO executeExecuteTask(const ASTSystemQuery & system);
     void updateTaskStatus(String database, const String & task_name, bool enable);
-    #if !USE_PYTHON_UDF
+#if !USE_PYTHON_UDF
     [[noreturn]] void executeInstallPythonPackage(const ASTSystemQuery & system);
     [[noreturn]] void executeUninstallPythonPackage(const ASTSystemQuery & system);
     #else
