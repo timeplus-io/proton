@@ -137,7 +137,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: c5.9xlarge
+      ec2-instance-type: m6a.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '60'
       submodules: false
