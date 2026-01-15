@@ -59,26 +59,28 @@ extern const int UNSUPPORTED;
 
 namespace
 {
-/// Parse a string, containing at least one dot, into a two substrings:
-/// A.B.C.D.E -> A.B.C.D and E, where
-/// `A.B.C.D` is a table "namespace".
-/// `E` is a table name.
-std::pair<std::string, std::string> parseTableName(const std::string & name)
-{
-    auto pos = name.rfind('.');
-    if (pos == std::string::npos)
-        return {"", name};
-
-    auto table_name = name.substr(pos + 1);
-    auto namespace_name = name.substr(0, name.size() - table_name.size() - 1);
-    return {std::move(namespace_name), std::move(table_name)};
-}
-
 auto & tableCache()
 {
     static LRUCache<std::string, IStorage> table_cache{/*max_size_=*/1000};
     return table_cache;
 }
+}
+
+std::pair<std::string, std::string> DatabaseApacheIceberg::getNamespaceAndTableName(const std::string & stream_name) const
+{
+    /// Return <namespace_name, table_name> pair for ICatalog function's parameters
+    /// Parse the full stream name (`database_name`.`stream_name`) into a two substrings:
+    /// `A`.`B.C.D.E` -> A.B.C.D and E, where
+    /// `A.B.C.D` is a table "namespace".
+    /// `E` is a table name.
+
+    auto pos = stream_name.rfind('.');
+    if (pos == std::string::npos)
+        return {getDatabaseName(), stream_name};
+
+    auto table_name = stream_name.substr(pos + 1);
+    auto namespace_name = fmt::format("{}.{}", getDatabaseName(), stream_name.substr(0, stream_name.size() - table_name.size() - 1));
+    return {std::move(namespace_name), std::move(table_name)};
 }
 
 DatabaseApacheIceberg::DatabaseApacheIceberg(
@@ -220,9 +222,8 @@ bool DatabaseApacheIceberg::empty() const
 
 bool DatabaseApacheIceberg::isTableExist(const String & name, ContextPtr /* context_ */) const
 {
-    const auto [namespace_name, table_name] = parseTableName(name);
-    return getCatalog()->existsTable(
-        namespace_name.empty() ? getDatabaseName() : fmt::format("{}.{}", getDatabaseName(), namespace_name), table_name);
+    const auto [namespace_name, table_name] = getNamespaceAndTableName(name);
+    return getCatalog()->existsTable(namespace_name, table_name);
 }
 
 StoragePtr DatabaseApacheIceberg::tryGetTable(const String & name [[maybe_unused]], ContextPtr context_ [[maybe_unused]]) const
@@ -234,9 +235,9 @@ StoragePtr DatabaseApacheIceberg::tryGetTable(const String & name [[maybe_unused
     if (with_vended_credentials)
         table_metadata = table_metadata.withStorageCredentials();
 
-    auto cache_key = fmt::format("{}.{}", getDatabaseName(), name);
-
-    if (!catalog->tryGetTableMetadata(getDatabaseName(), name, table_metadata))
+    const auto [namespace_name, table_name] = getNamespaceAndTableName(name);
+    auto cache_key = fmt::format("{}.{}", namespace_name, table_name);
+    if (!catalog->tryGetTableMetadata(namespace_name, table_name, table_metadata))
     {
         tableCache().remove(cache_key);
         return nullptr;
@@ -389,9 +390,10 @@ void DatabaseApacheIceberg::createTable(ContextPtr /*context*/, const String & n
     const auto & new_create_query = parseCreateQueryFromAST(origin_create_query, getDatabaseName(), name);
     table->setInMemoryCreateQuery(new_create_query);
 
+    const auto [namespace_name, table_name] = getNamespaceAndTableName(name);
     getCatalog()->createTable(
-        getDatabaseName(),
-        name,
+        namespace_name,
+        table_name,
         endpoint + (endpoint.ends_with('/') ? "" : "/") + name,
         table->getInMemoryMetadata().getColumns().getAllPhysical(),
         std::nullopt,
@@ -402,8 +404,9 @@ void DatabaseApacheIceberg::createTable(ContextPtr /*context*/, const String & n
 
 void DatabaseApacheIceberg::dropTable(ContextPtr /*context*/, const String & name, bool /*sync = false*/, const ASTPtr & /*query*/)
 {
-    getCatalog()->deleteTable(getDatabaseName(), name);
-    tableCache().remove(fmt::format("{}.{}", getDatabaseName(), name));
+    const auto [namespace_name, table_name] = getNamespaceAndTableName(name);
+    getCatalog()->deleteTable(namespace_name, table_name);
+    tableCache().remove(fmt::format("{}.{}", namespace_name, table_name));
 }
 
 ASTPtr DatabaseApacheIceberg::getCreateTableQueryImpl(const String & name, ContextPtr context_, bool throw_on_error) const
@@ -423,9 +426,8 @@ ASTPtr DatabaseApacheIceberg::generateCreateTableQuery(const String & name, [[ma
 {
     auto table_metadata = Apache::Iceberg::TableMetadata().withLocation().withSchema();
 
-    const auto [namespace_name, table_name] = parseTableName(name);
-    getCatalog()->getTableMetadata(
-        namespace_name.empty() ? getDatabaseName() : fmt::format("{}.{}", getDatabaseName(), namespace_name), table_name, table_metadata);
+    const auto [namespace_name, table_name] = getNamespaceAndTableName(name);
+    getCatalog()->getTableMetadata(namespace_name, table_name, table_metadata);
 
     auto create_table_query = std::make_shared<ASTCreateQuery>();
 

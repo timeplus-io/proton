@@ -151,7 +151,7 @@ std::string encodeNamespaceName(const std::string & namespace_name)
         else
             /// 0x1F is a unit separator
             /// https://github.com/apache/iceberg/blob/70d87f1750627b14b3b25a0216a97db86a786992/open-api/rest-catalog-open-api.yaml#L264
-            result.push_back(static_cast<char>(0x1F));
+            result += "%1F";
     }
     return result;
 }
@@ -479,7 +479,7 @@ Poco::URI::QueryParameters RestCatalog::createParentNamespaceParams(const std::s
 
 DB::Names RestCatalog::getTablesImpl(const std::string & base_namespace, size_t limit) const
 {
-    const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / base_namespace / "tables";
+    const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / encodeNamespaceName(base_namespace) / "tables";
     auto buf = createReadBuffer(
         config.prefix / endpoint,
         Poco::Net::HTTPRequest::HTTP_GET,
@@ -632,8 +632,12 @@ void extractTableMetadata(const std::string & json_str, TableMetadata & result, 
     result.setSequenceNumber(metadata_object->getValue<uint64_t>("last-sequence-number"));
     result.setTableUUID(metadata_object->getValue<std::string>("table-uuid"));
 
-    auto snapshot_id = metadata_object->getValue<int64_t>("current-snapshot-id");
-    result.setSnapshotID(snapshot_id);
+    int64_t snapshot_id = 0;
+    if (metadata_object->has("current-snapshot-id"))
+    {
+        snapshot_id = metadata_object->getValue<int64_t>("current-snapshot-id");
+        result.setSnapshotID(snapshot_id);
+    }
 
     auto snapshots = metadata_object->get("snapshots");
     if (!snapshots.isEmpty() && snapshots.isArray())
@@ -817,7 +821,7 @@ bool RestCatalog::tryGetTableMetadata(const std::string & namespace_name, const 
 void RestCatalog::getTableMetadata(const std::string & namespace_name, const std::string & table_name, TableMetadata & result) const
 {
     if (!getTableMetadataImpl(namespace_name, table_name, result))
-        throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "No response from iceberg catalog");
+        throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Table not found from iceberg catalog: namespace={} table={}", namespace_name, table_name);
 }
 
 bool RestCatalog::getTableMetadataImpl(const std::string & namespace_name, const std::string & table_name, TableMetadata & result) const

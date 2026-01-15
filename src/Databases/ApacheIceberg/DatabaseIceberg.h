@@ -51,6 +51,8 @@ protected:
 
     ASTPtr generateCreateTableQuery(const String & table_name, const StoragePtr & storage, bool throw_on_error) const;
 
+    std::pair<std::string, std::string> getNamespaceAndTableName(const std::string & stream_name) const;
+
 private:
     void validateSettings();
     void parseStorageCredentials();

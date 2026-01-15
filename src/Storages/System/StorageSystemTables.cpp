@@ -140,7 +140,12 @@ ColumnPtr getFilteredTables(const ActionsDAG::Node * predicate, const ColumnPtr 
         {
             database_column->insert(table_it->name());
             if (engine_column)
-                engine_column->insert(table_it->table()->getName());
+            {
+                if (const auto & storage = table_it->table(); storage)
+                    engine_column->insert(table_it->table()->getName());
+                else
+                    engine_column->insert("Unknown");
+            }
         }
     }
 
