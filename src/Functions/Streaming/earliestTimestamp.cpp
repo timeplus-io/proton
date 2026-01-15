@@ -27,8 +27,6 @@ public:
 
     String getName() const override { return name; }
 
-    bool isDeterministic() const override { return false; }
-
     bool isVariadic() const override { return true; }
 
     size_t getNumberOfArguments() const override { return 0; }
@@ -56,8 +54,6 @@ public:
     static constexpr auto name = "earliest_timestamp";
 
     String getName() const override { return name; }
-
-    bool isDeterministic() const override { return false; }
 
     bool isVariadic() const override { return true; }
 

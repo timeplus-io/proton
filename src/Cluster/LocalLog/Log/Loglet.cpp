@@ -505,8 +505,6 @@ FileLogEntriesPtr Loglet::doFetch(
 
 CallResult<std::optional<int64_t>> Loglet::sequenceForTimestamp(int64_t ts, bool /*append_time*/) const
 {
-    assert(ts > 0);
-
     auto ts_sn = event_ts_sn_index->leftLowerBoundSequenceForTimestamp(ts);
     if (ts_sn.hasError())
         return CallResult{std::optional<int64_t>{}, ts_sn.error_code};
