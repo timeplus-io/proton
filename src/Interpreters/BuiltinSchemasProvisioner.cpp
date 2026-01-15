@@ -123,7 +123,7 @@ const char * proton_log_ddl = R"(CREATE EXTERNAL STREAM system.proton_log(
     local=true
     COMMENT 'version 1';)";
 
-const char * task_execution_state_ddl = R"(CREATE MUTABLE STREAM system.task_execution_state(
+const char * task_execution_state_ddl = R"(CREATE STREAM system.task_execution_state(
     database string,
     name string,
     uuid uuid,
@@ -135,7 +135,8 @@ const char * task_execution_state_ddl = R"(CREATE MUTABLE STREAM system.task_exe
     last_execution_result string
 )
 PRIMARY KEY (uuid, version)
-SETTINGS ttl_seconds=7776000
+TTL to_datetime(_tp_time) + INTERVAL 3 MONTH DELETE
+SETTINGS mode='versioned_kv'
 COMMENT 'version 2';)";
 
 }
