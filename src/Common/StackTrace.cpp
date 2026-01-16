@@ -40,6 +40,13 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
                 error << " Access: write.";
             else
                 error << " Access: read.";
+
+#if defined(__linux__)
+            /// proton: starts
+            if (err_mask & 0x20)
+                error << " (pkey).";
+            /// proton: ends
+#endif
 #endif
 
             switch (info.si_code)
@@ -50,9 +57,21 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
                 case SEGV_MAPERR:
                     error << " Address not mapped to object.";
                     break;
-                default:
-                    error << " Unknown si_code.";
+                    /// proton: starts
+#if defined(SEGV_BNDERR)
+                case SEGV_BNDERR:
+                    error << " Bound check failure.";
                     break;
+#endif
+#if defined(SEGV_PKUERR)
+                case SEGV_PKUERR:
+                    error << " Memory protection keys (PKU) violation.";
+                    break;
+#endif
+                default:
+                    error << " Unknown si_code (" << info.si_code << ").";
+                    break;
+                    /// proton: ends
             }
             break;
         }

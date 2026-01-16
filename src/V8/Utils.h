@@ -7,6 +7,7 @@
 #include <Common/LoggingFormatStringHelpers.h>
 
 #include <span>
+#include <V8/PkuSupport.h>
 #include <V8/V8Includes.h>
 
 namespace DB
@@ -58,6 +59,7 @@ run(v8::Isolate * isolate,
     const v8::Persistent<v8::Context> & context,
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &)> func)
 {
+    [[maybe_unused]] PkuSupport::ThreadPkruGuard pkru_guard;
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);

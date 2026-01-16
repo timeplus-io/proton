@@ -141,6 +141,17 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     if (asynchronous_stack_unwinding && sig == SIGSEGV)
         siglongjmp(asynchronous_stack_unwinding_signal_jump_buffer, 1);
 
+    /// proton: starts
+    /// Avoid re-entrant QueryProfiler unwinding while handling fatal signals.
+    sigset_t sig_set;
+    if (sigemptyset(&sig_set) == 0)
+    {
+        sigaddset(&sig_set, SIGUSR1);
+        sigaddset(&sig_set, SIGUSR2);
+        sigprocmask(SIG_BLOCK, &sig_set, nullptr);
+    }
+    /// proton: ends
+
     DENY_ALLOCATIONS_IN_SCOPE;
     auto saved_errno = errno;   /// We must restore previous value of errno in signal handler.
 

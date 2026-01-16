@@ -3,6 +3,7 @@
 
 #if USE_V8
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
+#include <V8/PkuSupport.h>
 #include <V8/V8Includes.h>
 #endif
 
@@ -22,6 +23,8 @@ void Server::initV8()
     platform = v8::platform::NewDefaultPlatform();
     v8::V8::InitializePlatform(platform.get());
     v8::V8::Initialize();
+
+    V8::PkuSupport::captureBaselinePkruForV8();
 
     DB::V8::CacheDictionaryBridge::instance().initialize(global_context);
     v8_initialized = true;

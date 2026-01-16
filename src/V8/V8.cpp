@@ -1,4 +1,5 @@
 #include <Interpreters/Context.h>
+#include <V8/PkuSupport.h>
 #include <V8/V8.h>
 #include <base/getMemoryAmount.h>
 #include <Common/logger_useful.h>
@@ -66,6 +67,10 @@ void V8::startup()
     platform = v8::platform::NewDefaultPlatform();
     v8::V8::InitializePlatform(platform.get());
     v8::V8::Initialize();
+
+    /// proton: starts
+    PkuSupport::captureBaselinePkruForV8();
+    /// proton: ends
 
     allocator.reset(new ArrayBufferAllocator);
 }
