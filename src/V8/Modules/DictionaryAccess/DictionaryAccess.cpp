@@ -1,5 +1,6 @@
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
 #include <V8/Modules/DictionaryAccess/DictionaryAccess.h>
+#include <V8/PkuSupport.h>
 
 #include <Common/Stopwatch.h>
 
@@ -132,6 +133,9 @@ void DictionaryAccess::runBenchmark(size_t operation_count)
         std::unique_ptr<v8::Platform> platform = v8::platform::NewDefaultPlatform();
         v8::V8::InitializePlatform(platform.get());
         v8::V8::Initialize();
+
+        PkuSupport::captureBaselinePkruForV8();
+        [[maybe_unused]] PkuSupport::ThreadPkruGuard pkru_guard;
 
         v8::Isolate::CreateParams create_params;
         create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();

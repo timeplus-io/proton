@@ -7,6 +7,7 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 
+#include <V8/PkuSupport.h>
 #include <V8/V8Includes.h>
 
 #include <atomic>
@@ -18,7 +19,11 @@ struct JavaScriptBlueprint
 {
     struct IsolateDeleter
     {
-        void operator()(v8::Isolate * isolate_) const { isolate_->Dispose(); }
+        void operator()(v8::Isolate * isolate_) const
+        {
+            [[maybe_unused]] V8::PkuSupport::ThreadPkruGuard pkru_guard;
+            isolate_->Dispose();
+        }
     };
 
     JavaScriptBlueprint(const String & name, const String & source);

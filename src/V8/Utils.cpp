@@ -600,7 +600,12 @@ void validateFunctionSource(
     isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
     isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
 
-    auto isolate_deleter = [](v8::Isolate * isolate_) { isolate_->Dispose(); };
+    [[maybe_unused]] PkuSupport::ThreadPkruGuard pkru_guard;
+
+    auto isolate_deleter = [](v8::Isolate * isolate_) {
+        [[maybe_unused]] PkuSupport::ThreadPkruGuard dispose_pkru_guard;
+        isolate_->Dispose();
+    };
     std::unique_ptr<v8::Isolate, void (*)(v8::Isolate *)> isolate_ptr(v8::Isolate::New(isolate_params), isolate_deleter);
 
     compileSource(

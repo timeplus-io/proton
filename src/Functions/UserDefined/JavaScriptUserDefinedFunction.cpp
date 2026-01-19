@@ -21,6 +21,8 @@ extern const int UDF_COMPILE_ERROR;
 
 JavaScriptExecutionContext::JavaScriptExecutionContext(const String & name, const String & source, ContextPtr ctx, LoggerPtr logger)
 {
+    [[maybe_unused]] V8::PkuSupport::ThreadPkruGuard pkru_guard;
+
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());

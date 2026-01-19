@@ -27,6 +27,8 @@ extern const int UDF_INTERNAL_ERROR;
 
 JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source)
 {
+    [[maybe_unused]] V8::PkuSupport::ThreadPkruGuard pkru_guard;
+
     /// FIXME, create isolate from V8::V8 global isolates pool
     v8::Isolate::CreateParams isolate_params;
     size_t max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
