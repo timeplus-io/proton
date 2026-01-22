@@ -102,6 +102,7 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV TZ UTC
+ENV SETUPTOOLS_USE_DISTUTILS=stdlib
 
 RUN mkdir /docker-entrypoint-initdb.d \
  && mkdir -p /usr/share/proton
@@ -134,8 +135,10 @@ USER 101:101
 # Also allow opting out via build-arg ENABLE_PYTHON_UDF=0.
 RUN arch="$(uname -m)" \
  && if [ "${ENABLE_PYTHON_UDF}" = "1" ] && ! echo "${arch}" | grep -qiE '^(aarch64|arm64)$'; then \
-      /usr/share/proton/bin/python3.10 -m pip install --upgrade pip truststore \
-      && /usr/share/proton/bin/python3.10 -m pip install --no-cache-dir --timeout 180 --retries 8 -t /usr/share/proton/lib/python3.10/site-packages timeplus-neutrino==0.1.12 ; \
+      export PYTHONHOME=/usr/share/proton PYTHONNOUSERSITE=1 \
+      && /usr/share/proton/bin/python3.10 -m pip install --no-cache-dir --upgrade --prefix /usr/share/proton pip setuptools wheel truststore \
+      && /usr/share/proton/bin/python3.10 -m pip install --no-cache-dir --timeout 180 --retries 8 --upgrade --prefix /usr/share/proton timeplus-neutrino==0.1.12 \
+      && /usr/share/proton/bin/python3.10 -c 'import importlib.metadata as md, os, re, shutil, sys, sysconfig; from pathlib import Path; sp=Path(sysconfig.get_paths()[\"purelib\"]); paths=sorted(sp.glob(\"setuptools-*.dist-info\")); ver=lambda p: tuple(int(x) for x in re.findall(r\"\\d+\", p.name.removeprefix(\"setuptools-\").removesuffix(\".dist-info\"))); (len(paths)>1) and [shutil.rmtree(p) for p in paths if p!=max(paths, key=ver)]; vs=sorted({d.version for d in md.distributions() if (d.metadata.get(\"Name\") or \"\").lower()==\"setuptools\"}); (len(vs)!=1) and (sys.stderr.write(f\"expected exactly one setuptools distribution, got: {vs}\\n\"), sys.exit(1)); (os.environ.get(\"SETUPTOOLS_USE_DISTUTILS\")==\"stdlib\") and __import__(\"setuptools\")' \
     else \
       echo "Skipping Python package install (ENABLE_PYTHON_UDF=${ENABLE_PYTHON_UDF}, arch=${arch})" ; \
     fi
