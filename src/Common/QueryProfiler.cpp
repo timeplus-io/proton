@@ -79,14 +79,14 @@ namespace
         }
         else
         {
-            ProfileEvents::incrementNoTrace(ProfileEvents::QueryProfilerErrors);
+            ProfileEvents::increment(ProfileEvents::QueryProfilerErrors);
         }
         asynchronous_stack_unwinding = false;
 
         if (stack_trace)
             TraceCollector::collect(trace_type, *stack_trace, 0);
 
-        ProfileEvents::incrementNoTrace(ProfileEvents::QueryProfilerRuns);
+        ProfileEvents::increment(ProfileEvents::QueryProfilerRuns);
         errno = saved_errno;
     }
 
