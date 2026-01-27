@@ -21,6 +21,7 @@
 #    include <DataTypes/DataTypeArray.h>
 #    include <DataTypes/DataTypeDateTime.h>
 #    include <DataTypes/DataTypeFixedString.h>
+#    include <DataTypes/DataTypeNullable.h>
 #    include <DataTypes/DataTypeString.h>
 #    include <DataTypes/DataTypeTuple.h>
 #    include <DataTypes/DataTypesNumber.h>
@@ -156,6 +157,75 @@ TEST_F(CPythonTest, ColumnInt64)
             ASSERT_TRUE(PyLong_Check(item));
             ASSERT_EQ(PyLong_AsLong(item), v);
         });
+    });
+}
+
+TEST_F(CPythonTest, ColumnNullableInt32)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("nullable(int32)");
+        auto col = data_type->createColumn();
+
+        col->insert(Field(Int32(1)));
+        col->insert(Field{});
+        col->insert(Field(Int32(-3)));
+
+        auto py_list = cpython::convertColumnToPythonList(*col, data_type, 0, col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        PyObject * item0 = PyList_GetItem(py_list.get(), 0);
+        ASSERT_TRUE(PyLong_Check(item0));
+        ASSERT_EQ(PyLong_AsLong(item0), 1);
+
+        PyObject * item1 = PyList_GetItem(py_list.get(), 1);
+        ASSERT_TRUE(Py_IsNone(item1));
+
+        PyObject * item2 = PyList_GetItem(py_list.get(), 2);
+        ASSERT_TRUE(PyLong_Check(item2));
+        ASSERT_EQ(PyLong_AsLong(item2), -3);
+
+        auto res_col = cpython::convertPythonListToColumn(py_list, data_type);
+        ASSERT_TRUE(res_col != nullptr);
+        ASSERT_EQ(res_col->size(), col->size());
+        for (size_t i = 0; i < res_col->size(); i++)
+            ASSERT_TRUE((*res_col)[i] == (*col)[i]);
+    });
+}
+
+TEST_F(CPythonTest, ColumnArrayNullableInt32)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("array(nullable(int32))");
+        auto col = data_type->createColumn();
+
+        col->insert(Field(Array{Field(Int32(1)), Field{}, Field(Int32(3))}));
+        col->insert(Field(Array{Field{}, Field(Int32(2))}));
+
+        auto py_list = cpython::convertColumnToPythonList(*col, data_type, 0, col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 2);
+
+        PyObject * row0 = PyList_GetItem(py_list.get(), 0);
+        ASSERT_TRUE(PyList_Check(row0));
+        ASSERT_EQ(PyList_Size(row0), 3);
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(row0, 0)), 1);
+        ASSERT_TRUE(Py_IsNone(PyList_GetItem(row0, 1)));
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(row0, 2)), 3);
+
+        PyObject * row1 = PyList_GetItem(py_list.get(), 1);
+        ASSERT_TRUE(PyList_Check(row1));
+        ASSERT_EQ(PyList_Size(row1), 2);
+        ASSERT_TRUE(Py_IsNone(PyList_GetItem(row1, 0)));
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(row1, 1)), 2);
+
+        auto res_col = cpython::convertPythonListToColumn(py_list, data_type);
+        ASSERT_TRUE(res_col != nullptr);
+        ASSERT_EQ(res_col->size(), col->size());
+        for (size_t i = 0; i < res_col->size(); i++)
+            ASSERT_TRUE((*res_col)[i] == (*col)[i]);
     });
 }
 

@@ -54,7 +54,7 @@ SELECT ts.id, ts.name, ts.options, ts.value, CAST(ts.created_at AS Nullable(Date
 
 -- subquery
 SELECT id, name, value, CAST(toDate(created_at) AS Date) AS created_date FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE options = 'large' AND value > 50) AND is_active = true ORDER BY value DESC;
-SELECT id, name, value, options, toHour(created_at) AS created_hour FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE toStartOfDay(created_at) = toStartOfDay(toDate('2025-03-10'))) AND is_active = true ORDER BY created_hour;
+SELECT id, name, value, options, toHour(created_at) AS created_hour FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE toStartOfDay(created_at) = toStartOfDay(toDate('2025-03-10'))) AND is_active = true ORDER BY created_hour, id;
 SELECT id, name, value, toDate(created_at) AS created_date, addDays(toDate(created_at), 7) AS date_plus_seven FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE value > 50) AND is_active = true ORDER BY created_date;
 
 
@@ -75,7 +75,7 @@ SELECT ts.id, ts.name, ts.options, ts.value, CAST(ts.created_at AS nullable(date
 
 -- subquery
 SELECT id, name, value, CAST(to_date(created_at) AS Date) AS created_date FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE options = 'large' AND value > 50) AND is_active = true ORDER BY value DESC;
-SELECT id, name, value, options, to_hour(created_at) AS created_hour FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE to_start_of_day(created_at) = to_start_of_day(to_date('2025-03-10'))) AND is_active = true ORDER BY created_hour;
+SELECT id, name, value, options, to_hour(created_at) AS created_hour FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE to_start_of_day(created_at) = to_start_of_day(to_date('2025-03-10'))) AND is_active = true ORDER BY created_hour, id;
 SELECT id, name, value, to_date(created_at) AS created_date, add_days(to_date(created_at), 7) AS date_plus_seven FROM test_stream_1  WHERE id IN (SELECT id FROM test_stream_1  WHERE value > 50) AND is_active = true ORDER BY created_date;
 
 DROP STREAM IF EXISTS test_stream_1 ;

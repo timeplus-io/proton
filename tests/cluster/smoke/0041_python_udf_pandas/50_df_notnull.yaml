@@ -1,6 +1,5 @@
 tags:
   - uda
-  - bug # https://github.com/timeplus-io/proton-enterprise/issues/6689
 
 description: Test covering simple python uda test
 

@@ -11,6 +11,7 @@
 #include <Core/DecimalFunctions.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Common/DateLUT.h>
 #include <Common/Exception.h>
@@ -264,8 +265,17 @@ PyObjectPtr convertToPythonObject(const Field & data, const DataTypePtr & type)
         //     break;
         // case TypeIndex::Interval:
         //     break;
-        // case TypeIndex::Nullable:
-        //     break;
+        case TypeIndex::Nullable:
+        {
+            if (data.isNull())
+                return PyObjectPtr::borrow(Py_None);
+
+            auto nullable_type = std::dynamic_pointer_cast<const DataTypeNullable>(type);
+            if (!nullable_type)
+                throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Expected Nullable type, but got {}", type->getName());
+
+            return convertToPythonObject(data, nullable_type->getNestedType());
+        }
         // case TypeIndex::Function:
         //     break;
         // case TypeIndex::AggregateFunction:
@@ -443,7 +453,7 @@ ALWAYS_INLINE UInt32 loadDateTimeFromPyDateTime(PyObject * object)
 
         return static_cast<UInt32>(local_datetime.to_time_t(time_zone));
     }
-    catch(const Exception & e)
+    catch (const Exception & e)
     {
         raiseConvertionException("datetime", object, e.displayText());
     }
@@ -594,8 +604,17 @@ Field loadFromPythonObject(PyObject * object, const DataTypePtr & type)
         //     break;
         // case TypeIndex::Interval:
         //     break;
-        // case TypeIndex::Nullable:
-        //     break;
+        case TypeIndex::Nullable:
+        {
+            if (Py_IsNone(object))
+                return Null{};
+
+            auto nullable_type = std::dynamic_pointer_cast<const DataTypeNullable>(type);
+            if (!nullable_type)
+                throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Expected Nullable type, but got {}", type->getName());
+
+            return loadFromPythonObject(object, nullable_type->getNestedType());
+        }
         // case TypeIndex::Function:
         //     break;
         // case TypeIndex::AggregateFunction:
