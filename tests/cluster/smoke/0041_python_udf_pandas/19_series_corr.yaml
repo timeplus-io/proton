@@ -1,6 +1,5 @@
 tags:
   - uda
-  - bug # https://github.com/timeplus-io/proton-enterprise/issues/6768
 
 description: Test covering simple python uda test
 
@@ -11,9 +10,15 @@ steps:
     time: 1
 
   - type: query
+    sql: SYSTEM INSTALL PYTHON PACKAGE 'scipy'
+
+  - type: wait
+    time: 15
+
+  - type: query
     sql: create stream udf_stream (valuea array(float), valueb array(float));
   - type: wait
-    time: 1
+    time: 2
 
   - type: query
     sql: |
@@ -32,7 +37,7 @@ steps:
       $$;
 
   - type: wait
-    time: 1
+    time: 3
 
   - name: python-udf3-1-1
     type: stream
@@ -42,7 +47,7 @@ steps:
         type: float32
 
   - type: wait
-    time: 1
+    time: 2
 
   - type: query
     sql: insert into udf_stream(valuea, valueb) values 
