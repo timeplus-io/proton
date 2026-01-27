@@ -11,12 +11,15 @@ description: |
 
 steps:
   - type: query
+    node: [p1]
     sql: drop stream if exists input_stream
 
   - type: query
+    node: [p1]
     sql: drop stream if exists py_sum
 
   - type: query
+    node: [p1]
     sql: |
       create stream input_stream
       (
@@ -24,10 +27,15 @@ steps:
         j int32
       )
 
-  - type: query
-    sql: insert into input_stream(i, j) values (1, 10), (2, 20), (3, 30);
+  - type: wait
+    time: 3
 
   - type: query
+    node: [p1]
+    sql: INSERT INTO input_stream(i, j) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 VALUES (1, 10), (2, 20), (3, 30);
+
+  - type: query
+    node: [p1]
     sql: |
       create external stream py_sum
       (
@@ -41,6 +49,7 @@ steps:
 
   - type: stream
     name: py-sum-table-func
+    node: [p1]
     query: select * from python_table(py_sum, table(input_stream), i, j) order by sum
     schema:
       - name: sum

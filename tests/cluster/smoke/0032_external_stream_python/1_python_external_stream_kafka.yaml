@@ -29,6 +29,7 @@ steps:
 
   - type: check
     target_name: check-kafka-python-install
+    timeout: 120
     expected_result:
       - ["Completed", 0, ""]
 
@@ -58,12 +59,15 @@ steps:
     time: 2
 
   - type: query
+    node: [p1]
     sql: drop stream if exists py_kafka_stream
 
   - type: query
+    node: [p1]
     sql: drop stream if exists native_kafka_sink_read
 
   - type: query
+    node: [p1]
     sql: |
       create external stream py_kafka_stream
       (
@@ -84,7 +88,7 @@ steps:
           )
           try:
               for msg in consumer:
-                  yield [msg.value["value"]]
+                  yield [(int(msg.value["value"]),)]
           finally:
               consumer.close()
 
@@ -95,7 +99,7 @@ steps:
           )
           try:
               for v in values:
-                  producer.send("py_write", v)
+                  producer.send("py_write", int(v))
               producer.flush()
           finally:
               producer.close()
@@ -104,6 +108,7 @@ steps:
 
   - type: stream
     name: py-kafka-read
+    node: [p1]
     query: select * from py_kafka_stream
     schema:
       - name: value
@@ -120,10 +125,12 @@ steps:
 
   - type: check
     target_name: py-kafka-read
+    timeout: 30
     expected_result:
       - - 7
 
   - type: query
+    node: [p1]
     sql: create external stream native_kafka_sink_read
         (
           value int32
@@ -132,6 +139,7 @@ steps:
 
   - type: stream
     name: py-kafka-write
+    node: [p1]
     query: select * from native_kafka_sink_read
     schema:
       - name: value
@@ -141,9 +149,11 @@ steps:
     time: 1
 
   - type: query
+    node: [p1]
     sql: insert into py_kafka_stream values (42);
 
   - type: check
     target_name: py-kafka-write
+    timeout: 30
     expected_result:
       - - 42
