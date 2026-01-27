@@ -6,7 +6,6 @@ description: Test covering scalar
 
 cluster:
   - p1k1
-  - p3k1
 
 steps:
   - name: python_udf-8

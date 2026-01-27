@@ -2,7 +2,6 @@ description: Test covering asyncio run
 
 cluster:
   - p1k1
-  - p3k1
 
 steps:
   - type: query

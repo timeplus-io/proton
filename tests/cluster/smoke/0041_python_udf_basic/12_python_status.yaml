@@ -4,7 +4,6 @@ tags:
 description: check python status
 cluster:
   - p1k1
-  - p3k1
 steps:
   - name: '4112'
     type: rest
