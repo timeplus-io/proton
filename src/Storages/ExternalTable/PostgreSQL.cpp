@@ -18,6 +18,7 @@ void registerPostgreSQLExternalTable(ExternalTableFactory & factory) /// NOLINT
         "postgresql",
         [](const StorageID & table_id,
            const StorageInMemoryMetadata & storage_metadata,
+           const ASTCreateQuery &,
            std::unique_ptr<ExternalTableSettings> settings,
            bool attach,
            ContextPtr context) {

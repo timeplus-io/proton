@@ -9,7 +9,6 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ExternalTable/ExternalTableFactory.h>
@@ -234,6 +233,7 @@ void registerClickHouseExternalTable(ExternalTableFactory & factory)
         "clickhouse",
         [](const StorageID & table_id,
            const StorageInMemoryMetadata & storage_metadata,
+           const ASTCreateQuery &,
            std::unique_ptr<ExternalTableSettings> settings,
            bool attach,
            ContextPtr context) -> StoragePtr {

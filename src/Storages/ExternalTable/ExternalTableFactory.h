@@ -21,6 +21,7 @@ public:
     using Creator = std::function<StoragePtr(
         const StorageID & table_id,
         const StorageInMemoryMetadata & storage_metadata,
+        const ASTCreateQuery & create_query,
         std::unique_ptr<ExternalTableSettings> settings_,
         bool attach,
         ContextPtr context_)>;

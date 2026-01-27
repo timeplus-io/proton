@@ -98,6 +98,7 @@ public:
 
     ASTSetQuery * storage_settings;
     ASTPtr mv_inner_storage_ttl;
+    std::optional<std::string> exec_script; /// Attached executable code, for python table function
     /// proton : ends
 
     ASTColumns * columns_list = nullptr;

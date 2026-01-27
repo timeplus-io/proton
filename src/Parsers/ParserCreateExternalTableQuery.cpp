@@ -1,12 +1,18 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/CommonParsers.h>
+#include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ParserCreateExternalTableQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+}
 
 namespace
 {
@@ -29,6 +35,7 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_external_table("EXTERNAL TABLE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
+    ParserKeyword s_as("AS");
     ParserKeyword s_settings("SETTINGS");
 
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -37,12 +44,14 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     ParserTablePropertiesDeclarationList table_properties_p;
 
     ParserStorage storage_p;
+    ParserStringLiteral string_literal_parser;
 
     ParserCompoundIdentifier table_name_p(true, true);
 
     ASTPtr table;
     ASTPtr columns_list;
     ASTPtr storage;
+    ASTPtr exec_script;
 
     bool attach = false;
     bool or_replace = false;
@@ -74,6 +83,12 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
             return false;
 
         if (!s_rparen.ignore(pos, expected))
+            return false;
+    }
+
+    if (s_as.ignore(pos, expected))
+    {
+        if (!string_literal_parser.parse(pos, exec_script, expected))
             return false;
     }
 
@@ -119,6 +134,15 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
 
     create_query->set(create_query->columns_list, columns_list);
     create_query->set(create_query->storage, storage);
+
+    if (exec_script)
+    {
+        const auto * script_literal = exec_script->as<ASTLiteral>();
+        if (!script_literal || script_literal->value.getType() != Field::Types::String)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Inline script table function definition must be a string literal");
+
+        create_query->exec_script = script_literal->value.get<String>();
+    }
 
     if (comment)
         create_query->set(create_query->comment, comment);

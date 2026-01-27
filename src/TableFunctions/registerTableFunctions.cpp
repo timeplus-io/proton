@@ -45,6 +45,7 @@ void registerTableFunctions()
     Streaming::registerTableFunctionRowify(factory);
 
     registerTableFunctionPythonCall(factory);
+    registerTableFunctionPythonQuery(factory);
     /// proton: ends
 }
 

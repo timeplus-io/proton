@@ -1,15 +1,15 @@
 #include <Storages/ExternalTable/MySQL.h>
 
 #if USE_MYSQL
-#    include <Bootstrap/Globals.h>
-#    include <Databases/MySQL/FetchTablesColumnsList.h>
-#    include <Interpreters/Context.h>
-#    include <Storages/ColumnsDescription.h>
-#    include <Storages/ExternalTable/ExternalTableFactory.h>
-#    include <Storages/ExternalTable/ExternalTableSettings.h>
-#    include <Storages/MySQL/MySQLHelpers.h>
-#    include <Storages/MySQL/MySQLSettings.h>
-#    include <Common/parseRemoteDescription.h>
+#include <Bootstrap/Globals.h>
+#include <Databases/MySQL/FetchTablesColumnsList.h>
+#include <Interpreters/Context.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/ExternalTable/ExternalTableFactory.h>
+#include <Storages/ExternalTable/ExternalTableSettings.h>
+#include <Storages/MySQL/MySQLHelpers.h>
+#include <Storages/MySQL/MySQLSettings.h>
+#include <Common/parseRemoteDescription.h>
 
 
 namespace DB
@@ -28,6 +28,7 @@ void registerMySQLExternalTable(ExternalTableFactory & factory)
         "mysql",
         [](const StorageID & table_id,
            const StorageInMemoryMetadata & storage_metadata,
+           const ASTCreateQuery &,
            std::unique_ptr<ExternalTableSettings> settings,
            bool attach,
            ContextPtr context) -> StoragePtr {

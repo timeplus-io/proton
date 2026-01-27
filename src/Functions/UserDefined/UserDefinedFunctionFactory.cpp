@@ -28,6 +28,7 @@
 #include <AggregateFunctions/AggregateFunctionPythonAdapter.h>
 #include <CPython/validatePython.h>
 #include <Functions/UserDefined/PythonUserDefinedFunction.h>
+#include <boost/algorithm/string/predicate.hpp>
 #endif
 
 #include <Bootstrap/Globals.h>
@@ -523,6 +524,10 @@ void UserDefinedFunctionFactory::validatePythonFunction([[maybe_unused]] Poco::J
     ensurePythonInited();
 #if USE_PYTHON_UDF
     const String & function_name = config->getValue<String>("name");
+    auto return_type = config->getValue<String>("return_type");
+    if (boost::istarts_with(return_type, "table"))
+        throw Exception(ErrorCodes::UNSUPPORTED, "Python UDF does not support TABLE return type. Use a Python external table instead.");
+
     if (!config->has("source"))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "Missing 'source' property of Python function '{}'", function_name);
 

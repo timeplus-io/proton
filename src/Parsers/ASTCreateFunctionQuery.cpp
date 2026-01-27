@@ -144,19 +144,20 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
         return func;
     }
 
-    assert(arguments && !arguments->children.empty());
-
     Poco::JSON::Array::Ptr json_args = new Poco::JSON::Array(Poco::JSON_PRESERVE_KEY_ORDER);
-    for (auto ast : arguments->children[0]->children)
+    if (arguments && !arguments->children.empty())
     {
-        Poco::JSON::Object::Ptr json_arg = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
-        ASTNameTypePair * arg = ast->as<ASTNameTypePair>();
-        assert(arg);
-        json_arg->set("name", arg->name);
-        WriteBufferFromOwnString buf;
-        formatAST(*(arg->type), buf, false);
-        json_arg->set("type", buf.str());
-        json_args->add(json_arg);
+        for (auto ast : arguments->children[0]->children)
+        {
+            Poco::JSON::Object::Ptr json_arg = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
+            ASTNameTypePair * arg = ast->as<ASTNameTypePair>();
+            assert(arg);
+            json_arg->set("name", arg->name);
+            WriteBufferFromOwnString buf;
+            formatAST(*(arg->type), buf, false);
+            json_arg->set("type", buf.str());
+            json_args->add(json_arg);
+        }
     }
     inner_func->set("arguments", json_args);
 

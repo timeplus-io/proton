@@ -456,8 +456,15 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     frame.expression_list_always_start_on_new_line = false; //-V519
 
+    ASTPtr storage_to_format;
     if (storage)
-        storage->formatImpl(settings, state, frame);
+        storage_to_format = storage->clone();
+
+    if (exec_script)
+        settings.ostr << settings.nl_or_ws << "AS $$\n" << *exec_script << "\n$$";
+
+    if (storage_to_format)
+        storage_to_format->formatImpl(settings, state, frame);
 
     if (dictionary)
         dictionary->formatImpl(settings, state, frame);

@@ -2,11 +2,11 @@
 
 #if USE_AWS_S3
 
-#    include <Formats/FormatFactory.h>
-#    include <Storages/ExternalDataSourceConfiguration.h>
-#    include <Storages/ExternalTable/ExternalTableFactory.h>
-#    include <Storages/ExternalTable/S3/StorageS3.h>
-#    include <Storages/PartitionedSink.h>
+#include <Formats/FormatFactory.h>
+#include <Storages/ExternalDataSourceConfiguration.h>
+#include <Storages/ExternalTable/ExternalTableFactory.h>
+#include <Storages/ExternalTable/S3/StorageS3.h>
+#include <Storages/PartitionedSink.h>
 
 namespace DB
 {
@@ -233,6 +233,7 @@ void registerS3ExternalTable(ExternalTableFactory & factory)
         "s3",
         [](const StorageID & table_id,
            const StorageInMemoryMetadata & storage_metadata,
+           const ASTCreateQuery &,
            std::unique_ptr<ExternalTableSettings> settings,
            bool attach,
            ContextPtr context) -> StoragePtr {

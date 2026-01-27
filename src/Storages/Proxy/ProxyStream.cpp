@@ -326,8 +326,16 @@ Block ProxyStream::checkAndGetOutputHeader(const Names & required_columns, const
 void ProxyStream::validateProxyChain() const
 {
     /// We only support this sequence changelog(tumble(rowify(dedup(table(...), ...)), ...), ...)
-    static const std::unordered_map<String, UInt8> func_name_order_map
-        = {{"table", 1}, {"dedup", 2}, {"rowify", 3}, {"tumble", 4}, {"hop", 4}, {"session", 4}, {"changelog", 5}};
+    static const std::unordered_map<String, UInt8> func_name_order_map = {
+        {"table", 1},
+        {"python", 1},
+        {"dedup", 2},
+        {"rowify", 3},
+        {"tumble", 4},
+        {"hop", 4},
+        {"session", 4},
+        {"changelog", 5},
+    };
 
     auto prev_name = internal_name;
     auto prev = func_name_order_map.at(prev_name);

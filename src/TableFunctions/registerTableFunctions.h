@@ -49,6 +49,7 @@ void registerTableFunctionRowify(TableFunctionFactory & factory);
 }
 
 void registerTableFunctionPythonCall(TableFunctionFactory & factory);
+void registerTableFunctionPythonQuery(TableFunctionFactory & factory);
 /// proton: ends
 
 void registerTableFunctions();
