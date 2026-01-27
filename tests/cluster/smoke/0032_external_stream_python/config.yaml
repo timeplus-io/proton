@@ -1,0 +1,7 @@
+name: external_stream_python
+description: Tests covering python external stream read/write scenarios
+tags:
+  - smoke
+  - external_stream
+  - python_external_stream
+  - kafka

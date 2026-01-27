@@ -46,6 +46,7 @@ void registerTableFunctions()
 
     registerTableFunctionPythonCall(factory);
     registerTableFunctionPythonQuery(factory);
+    registerTableFunctionPythonTable(factory);
     /// proton: ends
 }
 

@@ -1,0 +1,149 @@
+tags:
+  - python_external_stream
+  - external_stream
+  - kafka
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Python external stream read/write with Kafka topics.
+
+steps:
+  - type: query
+    sql: SYSTEM INSTALL PYTHON PACKAGE 'kafka-python'
+
+  - type: wait
+    time: 12
+
+  - name: check-kafka-python-install
+    type: stream
+    query: SELECT status, error_code, error_message FROM system.python_package_tasks WHERE package_name = 'kafka-python' AND operation = 'install' ORDER BY created_at DESC LIMIT 1
+    schema:
+      - name: status
+        type: string
+      - name: error_code
+        type: int32
+      - name: error_message
+        type: string
+
+  - type: check
+    target_name: check-kafka-python-install
+    expected_result:
+      - ["Completed", 0, ""]
+
+  - type: kafka
+    name: delete
+    topic: py_read
+
+  - type: kafka
+    name: delete
+    topic: py_write
+
+  - type: kafka
+    name: create
+    topic: py_read
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: kafka
+    name: create
+    topic: py_write
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists py_kafka_stream
+
+  - type: query
+    sql: drop stream if exists native_kafka_sink_read
+
+  - type: query
+    sql: |
+      create external stream py_kafka_stream
+      (
+        value int32
+      )
+      AS $$
+      from kafka import KafkaConsumer, KafkaProducer
+      import json
+
+      def py_kafka_read():
+          consumer = KafkaConsumer(
+              "py_read",
+              bootstrap_servers="k1:9092",
+              auto_offset_reset="earliest",
+              enable_auto_commit=True,
+              group_id="py_kafka_read_probe",
+              value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+          )
+          try:
+              for msg in consumer:
+                  yield [msg.value["value"]]
+          finally:
+              consumer.close()
+
+      def py_kafka_sink(values):
+          producer = KafkaProducer(
+              bootstrap_servers="k1:9092",
+              value_serializer=lambda v: json.dumps({"value": v}).encode("utf-8"),
+          )
+          try:
+              for v in values:
+                  producer.send("py_write", v)
+              producer.flush()
+          finally:
+              producer.close()
+      $$
+      SETTINGS type='python', read_function_name='py_kafka_read', write_function_name='py_kafka_sink', mode='streaming';
+
+  - type: stream
+    name: py-kafka-read
+    query: select * from py_kafka_stream
+    schema:
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: py_read
+    messages:
+      - value: 7
+
+  - type: check
+    target_name: py-kafka-read
+    expected_result:
+      - - 7
+
+  - type: query
+    sql: create external stream native_kafka_sink_read
+        (
+          value int32
+        )
+        settings type='kafka', brokers='k1:9092', topic='py_write', data_format='JSONEachRow';
+
+  - type: stream
+    name: py-kafka-write
+    query: select * from native_kafka_sink_read
+    schema:
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into py_kafka_stream values (42);
+
+  - type: check
+    target_name: py-kafka-write
+    expected_result:
+      - - 42

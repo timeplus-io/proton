@@ -1,0 +1,69 @@
+tags:
+  - python_external_stream
+  - external_stream
+  - bug
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Python external stream with list output in batch mode.
+
+steps:
+  - type: query
+    sql: drop view if exists py_batch_mv
+
+  - type: query
+    sql: drop stream if exists py_batch_stream
+
+  - type: query
+    sql: drop stream if exists py_batch_target
+
+  - type: query
+    sql: |
+      create stream py_batch_target
+      (
+        value int32
+      )
+
+  - type: query
+    sql: |
+      create external stream py_batch_stream
+      (
+        value int32
+      )
+      AS $$
+      def py_batch_stream():
+          return [1]
+      $$
+      SETTINGS type='python';
+
+  - type: query
+    sql: |
+      create materialized view py_batch_mv
+      into py_batch_target
+      as select * from py_batch_stream
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: py-batch-mv-count
+    query: select to_uint8(count() = 1) as ok from table(py_batch_target)
+    schema:
+      - name: ok
+        type: uint8
+
+  - type: check
+    target_name: py-batch-mv-count
+    expected_result:
+      - - 1
+
+  - type: query
+    sql: drop view if exists py_batch_mv
+
+  - type: query
+    sql: drop stream if exists py_batch_stream
+
+  - type: query
+    sql: drop stream if exists py_batch_target

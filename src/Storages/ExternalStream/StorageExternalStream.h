@@ -6,6 +6,8 @@
 #include <Storages/StorageProxy.h>
 #include <Common/SettingsChanges.h>
 
+#include <optional>
+
 #include <base/shared_ptr_helper.h>
 
 namespace DB
@@ -77,7 +79,8 @@ protected:
         Int32 schema_version,
         const String & comment,
         ASTStorage * storage_def,
-        bool attach);
+        bool attach,
+        const std::optional<String> & exec_script);
 
 private:
     static ColumnsDescription initColumnsDescription(

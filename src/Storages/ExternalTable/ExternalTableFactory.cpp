@@ -21,7 +21,6 @@ void registerClickHouseExternalTable(ExternalTableFactory & factory);
 void registerMySQLExternalTable(ExternalTableFactory & factory);
 void registerPostgreSQLExternalTable(ExternalTableFactory & factory);
 void registerMongoDBExternalTable(ExternalTableFactory & factory);
-void registerPythonExternalTable(ExternalTableFactory & factory);
 
 ExternalTableFactory & ExternalTableFactory::instance()
 {
@@ -64,11 +63,6 @@ StoragePtr ExternalTableFactory::getExternalTable(const StorageFactory::Argument
         updateSettingsByNamedCollection(*external_table_settings, context);
 
     auto type = external_table_settings->type.value;
-    if (type == "python" && (!args.query.exec_script || args.query.exec_script->empty()))
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "python external table requires inline definition with AS $$...$$");
-    if (type == "python" && args.columns.empty())
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "python external table requires explicit column definitions");
-
     if (!creators.contains(type))
         throw Exception(ErrorCodes::UNKNOWN_TYPE, "Unknown external table type {}", type);
 
@@ -100,7 +94,6 @@ ExternalTableFactory::ExternalTableFactory()
     registerMySQLExternalTable(*this);
     registerPostgreSQLExternalTable(*this);
     registerMongoDBExternalTable(*this);
-    registerPythonExternalTable(*this);
 }
 
 }

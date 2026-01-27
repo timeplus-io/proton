@@ -1,0 +1,54 @@
+tags:
+  - python_external_stream
+  - external_stream
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Basic python external stream read and sink without external dependencies.
+
+steps:
+  - type: query
+    sql: drop stream if exists py_basic_stream
+
+  - type: query
+    sql: |
+      create external stream py_basic_stream
+      (
+        value int32
+      )
+      AS $$
+      def py_basic_read():
+          return [1, 2]
+
+      def py_basic_sink(value):
+          if value != [42]:
+              raise Exception(f"Unexpected input for sink: {value}")
+      $$
+      SETTINGS type='python', read_function_name='py_basic_read', write_function_name='py_basic_sink';
+
+  - type: stream
+    name: py-basic-read
+    query: select * from py_basic_stream
+    schema:
+      - name: value
+        type: int32
+
+  - type: check
+    target_name: py-basic-read
+    expected_result:
+      - - 1
+      - - 2
+
+  - type: query
+    sql: insert into py_basic_stream values (42);
+
+  - name: py-basic-sink-error
+    type: stream
+    query: insert into py_basic_stream values (423);
+
+  - type: check
+    target_name: py-basic-sink-error
+    expected_result:
+      - ["error_code:2624"]

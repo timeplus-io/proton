@@ -9,6 +9,7 @@ add_headers_and_sources(external_stream Timeplus)
 add_headers_and_sources(external_stream S3)
 add_headers_and_sources(external_stream Iceberg)
 add_headers_and_sources(external_stream HTTP)
+add_headers_and_sources(external_stream Python)
 
 add_library(external_stream ${external_stream_headers} ${external_stream_sources})
 

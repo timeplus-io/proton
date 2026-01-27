@@ -11,7 +11,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/parseColumnsListForTableFunction.h>
 #include <Parsers/ASTFunction.h>
-#include <Storages/ExternalTable/StoragePythonTable.h>
+#include <Storages/ExternalStream/Python/StoragePythonTable.h>
 #include <Storages/Proxy/ProxyStream.h>
 #include <Storages/checkAndGetLiteralArgument.h>
 #include <TableFunctions/TableFunctionFactory.h>

@@ -732,4 +732,307 @@ def func(i):
         unloadModule(module_name);
     });
 }
+
+TEST_F(CPythonTest, isGeneratorWithGenerator)
+{
+    assertNoLeak([]() {
+        const char * gen_def = R"(
+def gen_func():
+    yield 1
+    yield 2
+    yield 3
+)";
+
+        auto byte_code = compile(gen_def);
+        EXPECT_TRUE(byte_code);
+
+        auto module_name = randomModuleName();
+
+        auto exec_res = executeByteCode(byte_code, module_name);
+        EXPECT_TRUE(exec_res);
+
+        auto py_func = getFunction("gen_func", module_name);
+        EXPECT_TRUE(py_func);
+
+        /// Call the generator function to get a generator object
+        auto generator = executeObject(py_func);
+        EXPECT_TRUE(generator);
+
+        /// The result should be a generator
+        EXPECT_TRUE(isGenerator(generator));
+
+        unloadModule(module_name);
+    });
+}
+
+TEST_F(CPythonTest, isGeneratorWithList)
+{
+    assertNoLeak([]() {
+        auto py_list = PyObjectPtr{PyList_New(3)};
+        PyList_SetItem(py_list.get(), 0, PyLong_FromLong(1));
+        PyList_SetItem(py_list.get(), 1, PyLong_FromLong(2));
+        PyList_SetItem(py_list.get(), 2, PyLong_FromLong(3));
+
+        /// A list is not a generator
+        EXPECT_FALSE(isGenerator(py_list));
+    });
+}
+
+TEST_F(CPythonTest, isGeneratorWithIterator)
+{
+    assertNoLeak([]() {
+        auto py_list = PyObjectPtr{PyList_New(3)};
+        PyList_SetItem(py_list.get(), 0, PyLong_FromLong(1));
+        PyList_SetItem(py_list.get(), 1, PyLong_FromLong(2));
+        PyList_SetItem(py_list.get(), 2, PyLong_FromLong(3));
+
+        /// Get iterator from list
+        auto iterator = getIterator(py_list);
+        EXPECT_TRUE(iterator);
+
+        /// An iterator should be detected as generator-like
+        EXPECT_TRUE(isGenerator(iterator));
+    });
+}
+
+TEST_F(CPythonTest, isIterable)
+{
+    assertNoLeak([]() {
+        auto py_list = PyObjectPtr{PyList_New(0)};
+        EXPECT_TRUE(isIterable(py_list));
+
+        auto py_int = PyObjectPtr{PyLong_FromLong(42)};
+        EXPECT_FALSE(isIterable(py_int));
+    });
+}
+
+TEST_F(CPythonTest, getIterator)
+{
+    assertNoLeak([]() {
+        auto py_list = PyObjectPtr{PyList_New(3)};
+        PyList_SetItem(py_list.get(), 0, PyLong_FromLong(10));
+        PyList_SetItem(py_list.get(), 1, PyLong_FromLong(20));
+        PyList_SetItem(py_list.get(), 2, PyLong_FromLong(30));
+
+        auto iterator = getIterator(py_list);
+        EXPECT_TRUE(iterator);
+    });
+}
+
+TEST_F(CPythonTest, iterNextBasic)
+{
+    assertNoLeak([]() {
+        auto py_list = PyObjectPtr{PyList_New(3)};
+        PyList_SetItem(py_list.get(), 0, PyLong_FromLong(10));
+        PyList_SetItem(py_list.get(), 1, PyLong_FromLong(20));
+        PyList_SetItem(py_list.get(), 2, PyLong_FromLong(30));
+
+        auto iterator = getIterator(py_list);
+        EXPECT_TRUE(iterator);
+
+        /// First item
+        auto item1 = iterNext(iterator);
+        EXPECT_TRUE(item1);
+        EXPECT_EQ(PyLong_AsLong(item1.get()), 10);
+
+        /// Second item
+        auto item2 = iterNext(iterator);
+        EXPECT_TRUE(item2);
+        EXPECT_EQ(PyLong_AsLong(item2.get()), 20);
+
+        /// Third item
+        auto item3 = iterNext(iterator);
+        EXPECT_TRUE(item3);
+        EXPECT_EQ(PyLong_AsLong(item3.get()), 30);
+
+        /// Iterator exhausted
+        auto item4 = iterNext(iterator);
+        EXPECT_FALSE(item4);
+    });
+}
+
+TEST_F(CPythonTest, iterNextWithGenerator)
+{
+    assertNoLeak([]() {
+        const char * gen_def = R"(
+def gen_func():
+    yield 100
+    yield 200
+    yield 300
+)";
+
+        auto byte_code = compile(gen_def);
+        EXPECT_TRUE(byte_code);
+
+        auto module_name = randomModuleName();
+
+        auto exec_res = executeByteCode(byte_code, module_name);
+        EXPECT_TRUE(exec_res);
+
+        auto py_func = getFunction("gen_func", module_name);
+        EXPECT_TRUE(py_func);
+
+        /// Call the generator function to get a generator object
+        auto generator = executeObject(py_func);
+        EXPECT_TRUE(generator);
+        EXPECT_TRUE(isGenerator(generator));
+
+        /// Iterate through generator
+        auto item1 = iterNext(generator);
+        EXPECT_TRUE(item1);
+        EXPECT_EQ(PyLong_AsLong(item1.get()), 100);
+
+        auto item2 = iterNext(generator);
+        EXPECT_TRUE(item2);
+        EXPECT_EQ(PyLong_AsLong(item2.get()), 200);
+
+        auto item3 = iterNext(generator);
+        EXPECT_TRUE(item3);
+        EXPECT_EQ(PyLong_AsLong(item3.get()), 300);
+
+        /// Generator exhausted
+        auto item4 = iterNext(generator);
+        EXPECT_FALSE(item4);
+
+        unloadModule(module_name);
+    });
+}
+
+TEST_F(CPythonTest, normalizePythonListForTupleListOfScalars)
+{
+    assertNoLeak([]() {
+        auto py_list = PyObjectPtr{PyList_New(2)};
+        PyList_SetItem(py_list.get(), 0, PyLong_FromLong(10));
+        PyList_SetItem(py_list.get(), 1, PyLong_FromLong(20));
+
+        auto normalized = normalizePythonListForTuple(py_list, 1);
+        EXPECT_TRUE(PyList_Check(normalized.get()));
+        EXPECT_EQ(PyList_Size(normalized.get()), 2);
+
+        auto * first = PyList_GetItem(normalized.get(), 0);
+        ASSERT_TRUE(PyTuple_Check(first));
+        EXPECT_EQ(PyTuple_Size(first), 1);
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(first, 0)), 10);
+    });
+}
+
+TEST_F(CPythonTest, normalizePythonListForTupleScalarSingleColumn)
+{
+    assertNoLeak([]() {
+        auto py_value = PyObjectPtr{PyLong_FromLong(42)};
+        auto normalized = normalizePythonListForTuple(py_value, 1);
+        EXPECT_TRUE(PyList_Check(normalized.get()));
+        EXPECT_EQ(PyList_Size(normalized.get()), 1);
+
+        auto * item = PyList_GetItem(normalized.get(), 0);
+        ASSERT_TRUE(PyTuple_Check(item));
+        EXPECT_EQ(PyTuple_Size(item), 1);
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(item, 0)), 42);
+    });
+}
+
+TEST_F(CPythonTest, normalizePythonListForTupleTupleRow)
+{
+    assertNoLeak([]() {
+        auto py_row = PyObjectPtr{PyTuple_New(2)};
+        PyTuple_SetItem(py_row.get(), 0, PyLong_FromLong(1));
+        PyTuple_SetItem(py_row.get(), 1, PyLong_FromLong(2));
+
+        auto normalized = normalizePythonListForTuple(py_row, 2);
+        EXPECT_TRUE(PyList_Check(normalized.get()));
+        EXPECT_EQ(PyList_Size(normalized.get()), 1);
+
+        auto * item = PyList_GetItem(normalized.get(), 0);
+        ASSERT_TRUE(PyTuple_Check(item));
+        EXPECT_EQ(PyTuple_Size(item), 2);
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(item, 0)), 1);
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(item, 1)), 2);
+    });
+}
+
+TEST_F(CPythonTest, normalizePythonListForTupleTupleOfRows)
+{
+    assertNoLeak([]() {
+        auto py_row1 = PyObjectPtr{PyTuple_New(2)};
+        PyTuple_SetItem(py_row1.get(), 0, PyLong_FromLong(1));
+        PyTuple_SetItem(py_row1.get(), 1, PyLong_FromLong(2));
+
+        auto py_row2 = PyObjectPtr{PyTuple_New(2)};
+        PyTuple_SetItem(py_row2.get(), 0, PyLong_FromLong(3));
+        PyTuple_SetItem(py_row2.get(), 1, PyLong_FromLong(4));
+
+        auto py_rows = PyObjectPtr{PyTuple_New(2)};
+        PyTuple_SetItem(py_rows.get(), 0, py_row1.release());
+        PyTuple_SetItem(py_rows.get(), 1, py_row2.release());
+
+        auto normalized = normalizePythonListForTuple(py_rows, 2);
+        EXPECT_TRUE(PyList_Check(normalized.get()));
+        EXPECT_EQ(PyList_Size(normalized.get()), 2);
+
+        auto * item = PyList_GetItem(normalized.get(), 1);
+        ASSERT_TRUE(PyTuple_Check(item));
+        EXPECT_EQ(PyTuple_Size(item), 2);
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(item, 0)), 3);
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(item, 1)), 4);
+    });
+}
+
+TEST_F(CPythonTest, normalizePythonListForTupleIterableSingleColumn)
+{
+    assertNoLeak([]() {
+        auto range_obj = PyObjectPtr{PyObject_CallFunction(reinterpret_cast<PyObject *>(&PyRange_Type), "ii", 0, 3)};
+        ASSERT_TRUE(range_obj);
+
+        auto normalized = normalizePythonListForTuple(range_obj, 1);
+        EXPECT_TRUE(PyList_Check(normalized.get()));
+        EXPECT_EQ(PyList_Size(normalized.get()), 3);
+
+        auto * item = PyList_GetItem(normalized.get(), 2);
+        ASSERT_TRUE(PyTuple_Check(item));
+        EXPECT_EQ(PyLong_AsLong(PyTuple_GetItem(item, 0)), 2);
+    });
+}
+
+TEST_F(CPythonTest, streamingPythonTableSimulation)
+{
+    /// This test simulates how a streaming Python table would work
+    assertNoLeak([]() {
+        const char * gen_def = R"(
+def streaming_source():
+    """Simulates a streaming data source that yields batches"""
+    for batch_num in range(3):
+        # Each batch is a list of tuples (representing rows)
+        batch = [(batch_num * 10 + i, f"item_{batch_num}_{i}") for i in range(2)]
+        yield batch
+)";
+
+        auto byte_code = compile(gen_def);
+        EXPECT_TRUE(byte_code);
+
+        auto module_name = randomModuleName();
+
+        auto exec_res = executeByteCode(byte_code, module_name);
+        EXPECT_TRUE(exec_res);
+
+        auto py_func = getFunction("streaming_source", module_name);
+        EXPECT_TRUE(py_func);
+
+        auto generator = executeObject(py_func);
+        EXPECT_TRUE(generator);
+        EXPECT_TRUE(isGenerator(generator));
+
+        /// Collect all batches
+        int batch_count = 0;
+        while (auto batch = iterNext(generator))
+        {
+            EXPECT_TRUE(PyList_Check(batch.get()));
+            EXPECT_EQ(PyList_Size(batch.get()), 2); /// 2 rows per batch
+            batch_count++;
+        }
+
+        EXPECT_EQ(batch_count, 3);
+
+        unloadModule(module_name);
+    });
+}
 #endif

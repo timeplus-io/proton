@@ -82,6 +82,35 @@ void ApplyWithSubqueryVisitor::visit(ASTTableExpression & table, const Data & da
             }
         }
     }
+
+    if (table.table_function)
+    {
+        auto * func = table.table_function->as<ASTFunction>();
+        if (!func || !func->arguments || func->arguments->children.empty())
+            return;
+
+        const auto & factory = TableFunctionFactory::instance();
+        if (factory.hasBuiltInNameOrAlias(func->name))
+            return;
+
+        auto & arg = func->arguments->children[0];
+        if (const auto * identifier = arg->as<ASTIdentifier>())
+        {
+            if (identifier->isShort())
+            {
+                auto name = identifier->shortName(); // NOLINT
+                auto subquery_it = data.subqueries.find(name);
+                if (subquery_it != data.subqueries.end())
+                {
+                    auto old_alias = arg->tryGetAlias();
+                    arg = subquery_it->second->clone();
+                    arg->as<ASTSubquery &>().cte_name = name;
+                    if (!old_alias.empty())
+                        arg->setAlias(old_alias);
+                }
+            }
+        }
+    }
 }
 
 void ApplyWithSubqueryVisitor::visit(ASTFunction & func, const Data & data)

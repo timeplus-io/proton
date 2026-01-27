@@ -93,6 +93,7 @@ enum class ProcessorID : UInt32
     PartitionedStorageURLSinkID = 72,
     DistributedSinkID = 73,
     MergeTreeSinkID = 74,
+    PythonSinkID = 75,
     StreamSinkID = 76,
     SetOrJoinSinkID = 77,
     NullSinkToStorageID = 78,
@@ -279,6 +280,8 @@ enum class ProcessorID : UInt32
     IcebergSourceID = 11'100,
     MongoDBSourceID = 11'101,
     TaskExecutionSourceID = 11'200,
+    PythonStreamingSourceID = 11'201,
+    PythonTableTransformID = 11'202,
 
     /// Sink Processors
     EmptySinkID = 20'000,

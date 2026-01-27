@@ -1,0 +1,9 @@
+CREATE EXTERNAL STREAM default.py_table_ext\n(\n  `name` string,\n  `score` int32\n)\nAS $$\n\n\ndef py_table_ext():\n    return [(\'alice\', 5), (\'bob\', 3)]\n\n\n$$\nENGINE = ExternalStream\nSETTINGS type = \'python\'
+bob	3
+alice	5
+alice
+bob
+Expression ((Projection + Before ORDER BY))
+  ReadFromStorage (PythonTable)
+bob	3
+alice	5

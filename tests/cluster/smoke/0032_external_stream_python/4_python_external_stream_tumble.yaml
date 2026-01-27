@@ -1,0 +1,61 @@
+tags:
+  - python_external_stream
+  - external_stream
+  - tumble_window
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Tumble window aggregation over a Python external stream with a timestamp column.
+
+steps:
+  - type: query
+    sql: drop stream if exists py_tumble_stream
+
+  - type: query
+    sql: |
+      create external stream py_tumble_stream
+      (
+        ts datetime64(3),
+        value int32
+      )
+      AS $$
+      from datetime import datetime
+
+      def py_tumble_stream():
+          rows = [
+              (datetime(2020, 2, 2, 20, 0, 0), 10),
+              (datetime(2020, 2, 2, 20, 0, 3), 20),
+              (datetime(2020, 2, 2, 20, 0, 7), 30),
+          ]
+          for row in rows:
+              yield [row]
+      $$
+      SETTINGS type='python';
+
+  - type: stream
+    name: py-tumble-window
+    query: |
+      select
+        window_start,
+        window_end,
+        max(value) as max_value
+      from tumble(py_tumble_stream, ts, interval 5 second)
+      group by window_start, window_end
+      emit on update
+    schema:
+      - name: window_start
+        type: datetime64(3)
+      - name: window_end
+        type: datetime64(3)
+      - name: max_value
+        type: int32
+
+  - type: check
+    target_name: py-tumble-window
+    mode: <<or .aggregation_check_mode "sequence">>
+    expected_result:
+      - ['2020-02-02 20:00:00', '2020-02-02 20:00:05', '10']
+      - ['2020-02-02 20:00:00', '2020-02-02 20:00:05', '20']
+      - ['2020-02-02 20:00:05', '2020-02-02 20:00:10', '30']

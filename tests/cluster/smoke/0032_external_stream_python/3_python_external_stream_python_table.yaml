@@ -1,0 +1,54 @@
+tags:
+  - python_external_stream
+  - external_stream
+  - python_table
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Python table function with input data from a table() source.
+
+steps:
+  - type: query
+    sql: drop stream if exists input_stream
+
+  - type: query
+    sql: drop stream if exists py_sum
+
+  - type: query
+    sql: |
+      create stream input_stream
+      (
+        i int32,
+        j int32
+      )
+
+  - type: query
+    sql: insert into input_stream(i, j) values (1, 10), (2, 20), (3, 30);
+
+  - type: query
+    sql: |
+      create external stream py_sum
+      (
+        sum int32
+      )
+      AS $$
+      def py_sum(col1, col2):
+          return [c1 + c2 for c1, c2 in zip(col1, col2)]
+      $$
+      SETTINGS type='python';
+
+  - type: stream
+    name: py-sum-table-func
+    query: select * from python_table(py_sum, table(input_stream), i, j) order by sum
+    schema:
+      - name: sum
+        type: int32
+
+  - type: check
+    target_name: py-sum-table-func
+    expected_result:
+      - - 11
+      - - 22
+      - - 33

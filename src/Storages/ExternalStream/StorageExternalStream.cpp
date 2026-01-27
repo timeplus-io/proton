@@ -18,6 +18,9 @@
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Pulsar/Pulsar.h>
+#if USE_PYTHON_UDF
+#include <Storages/ExternalStream/Python/StoragePythonTable.h>
+#endif
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #include <Storages/IStorage_fwd.h>
@@ -25,6 +28,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
 
+#include <boost/algorithm/string.hpp>
 #include <Poco/Net/AcceptCertificateHandler.h>
 #include <Poco/Net/KeyFileHandler.h>
 #include <Poco/Net/SSLManager.h>
@@ -75,6 +79,7 @@ StoragePtr createExternalStream(
     const ASTs & engine_args,
     ASTStorage * storage_def,
     bool attach,
+    [[maybe_unused]] const std::optional<String> & exec_script,
     ExternalStreamCounterPtr external_stream_counter,
     ContextPtr context)
 {
@@ -131,6 +136,46 @@ StoragePtr createExternalStream(
             std::move(external_stream_counter),
             std::move(context));
 
+#endif
+#if USE_PYTHON_UDF
+    if (type == ExternalStreamTypes::PYTHON)
+    {
+        if (!exec_script || exec_script->empty())
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS, "Python external stream requires python body defined in CREATE EXTERNAL STREAM ... AS $$...$$");
+
+        String function_name = external_stream_settings->read_function_name.value;
+        if (function_name.empty())
+            function_name = storage_id.getTableName();
+
+        PythonTableMode mode = PythonTableMode::Auto;
+        String mode_value = external_stream_settings->mode.value;
+        boost::algorithm::trim(mode_value);
+        boost::algorithm::to_lower(mode_value);
+        if (mode_value.empty() || mode_value == "auto")
+        {
+            mode = PythonTableMode::Auto;
+        }
+        else if (mode_value == "streaming")
+        {
+            mode = PythonTableMode::Streaming;
+        }
+        else if (mode_value == "batch")
+        {
+            mode = PythonTableMode::Batch;
+        }
+        else
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid mode '{}', expected 'auto', 'streaming', or 'batch'", mode_value);
+        }
+
+        String sink_function_name = external_stream_settings->write_function_name.value;
+        return StoragePythonTable::create(
+            storage_id, storage_metadata.getColumns(), std::move(function_name), *exec_script, mode, std::move(sink_function_name));
+    }
+#else
+    if (type == ExternalStreamTypes::PYTHON)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Python external stream is disabled, rebuild with USE_PYTHON_UDF");
 #endif
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external stream type: {}", type);
 }
@@ -241,7 +286,8 @@ StorageExternalStream::StorageExternalStream(
     Int32 schema_version,
     const String & comment,
     ASTStorage * storage_def,
-    bool attach)
+    bool attach,
+    const std::optional<String> & exec_script)
     : StorageProxy(table_id_), WithContext(context_->getGlobalContext()), external_stream_counter(std::make_shared<ExternalStreamCounter>())
 {
     auto external_stream_settings = std::make_unique<ExternalStreamSettings>();
@@ -275,6 +321,7 @@ StorageExternalStream::StorageExternalStream(
         engine_args,
         storage_def,
         attach,
+        exec_script,
         external_stream_counter,
         std::move(context_));
     external_stream.swap(stream);
@@ -310,7 +357,15 @@ void registerStorageExternalStream(StorageFactory & factory)
 
         if (args.storage_def->settings != nullptr)
             return StorageExternalStream::create(
-                args.engine_args, args.table_id, args.getContext(), args.columns, args.schema_version, args.comment, args.storage_def, args.attach);
+                args.engine_args,
+                args.table_id,
+                args.getContext(),
+                args.columns,
+                args.schema_version,
+                args.comment,
+                args.storage_def,
+                args.attach,
+                args.query.exec_script);
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");
     };

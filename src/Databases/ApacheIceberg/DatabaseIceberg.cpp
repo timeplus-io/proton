@@ -281,7 +281,8 @@ StoragePtr DatabaseApacheIceberg::tryGetTable(const String & name [[maybe_unused
             /*schema_version=*/1,
             /*comment=*/"",
             &stream_storage,
-            /*attach=*/false);
+            /*attach=*/false,
+            /*exec_script=*/std::nullopt);
 
         /// Set in-memory create query to ensure system.tables queries always use the in-memory metadata
         /// rather than falling back to ClickHouse's legacy code path, which could lead to inconsistencies

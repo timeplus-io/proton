@@ -1,15 +1,22 @@
 #pragma once
 
+#include <base/types.h>
+
 namespace DB
 {
 namespace StreamTypes
 {
-    const String KAFKA = "kafka";
-    const String REDPANDA = "redpanda";
-    const String PULSAR = "pulsar";
-    const String TIMEPLUS = "timeplus";
-    const String LOG = "log";
-    const String ICEBERG = "iceberg";
-    const String HTTP = "http";
+    inline constexpr String KAFKA = "kafka";
+    inline constexpr String REDPANDA = "redpanda";
+    inline constexpr String PULSAR = "pulsar";
+    inline constexpr String TIMEPLUS = "timeplus";
+    inline constexpr String LOG = "log";
+    inline constexpr String ICEBERG = "iceberg";
+    inline constexpr String HTTP = "http";
+}
+
+namespace ExternalStreamTypes
+{
+    inline constexpr String PYTHON = "python";
 }
 }

@@ -526,7 +526,7 @@ void UserDefinedFunctionFactory::validatePythonFunction([[maybe_unused]] Poco::J
     const String & function_name = config->getValue<String>("name");
     auto return_type = config->getValue<String>("return_type");
     if (boost::istarts_with(return_type, "table"))
-        throw Exception(ErrorCodes::UNSUPPORTED, "Python UDF does not support TABLE return type. Use a Python external table instead.");
+        throw Exception(ErrorCodes::UNSUPPORTED, "Python UDF does not support TABLE return type. Use a Python external stream instead.");
 
     if (!config->has("source"))
         throw Exception(ErrorCodes::FUNCTION_ALREADY_EXISTS, "Missing 'source' property of Python function '{}'", function_name);

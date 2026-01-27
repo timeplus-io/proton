@@ -1,0 +1,126 @@
+tags:
+  - python_external_stream
+  - external_stream
+  - bug
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Python external stream generator: continuous stream and single-yield stream.
+
+steps:
+  - type: query
+    sql: drop view if exists py_generator_mv
+
+  - type: query
+    sql: drop stream if exists py_generator_stream
+
+  - type: query
+    sql: drop stream if exists py_generator_target
+
+  - type: query
+    sql: |
+      create stream py_generator_target
+      (
+        value int32
+      )
+
+  - type: query
+    sql: |
+      create external stream py_generator_stream
+      (
+        value int32
+      )
+      AS $$
+      import random
+      import time
+
+      def py_generator_stream():
+          while True:
+              yield [(random.randint(0, 100))]
+              time.sleep(0.1)
+      $$
+      SETTINGS type='python';
+
+  - type: query
+    sql: |
+      create materialized view py_generator_mv
+      into py_generator_target
+      as select * from py_generator_stream
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: py-generator-mv-count
+    query: select to_uint8(count() > 1) as ok from table(py_generator_target)
+    schema:
+      - name: ok
+        type: uint8
+
+  - type: check
+    target_name: py-generator-mv-count
+    expected_result:
+      - - 1
+
+  - type: query
+    sql: drop view if exists py_generator_mv
+
+  - type: query
+    sql: drop stream if exists py_generator_stream
+
+  - type: query
+    sql: drop stream if exists py_generator_target
+
+  - type: query
+    sql: |
+      create stream py_generator_once_target
+      (
+        value int32
+      )
+
+  - type: query
+    sql: |
+      create external stream py_generator_once_stream
+      (
+        value int32
+      )
+      AS $$
+      import random
+      import time
+
+      def py_generator_once_stream():
+          yield [random.randint(0, 100)]
+      $$
+      SETTINGS type='python';
+
+  - type: query
+    sql: |
+      create materialized view py_generator_once_mv
+      into py_generator_once_target
+      as select * from py_generator_once_stream
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: py-generator-once-mv-count
+    query: select to_uint8(count() = 1) as ok from table(py_generator_once_target)
+    schema:
+      - name: ok
+        type: uint8
+
+  - type: check
+    target_name: py-generator-once-mv-count
+    expected_result:
+      - - 1
+
+  - type: query
+    sql: drop view if exists py_generator_once_mv
+
+  - type: query
+    sql: drop stream if exists py_generator_once_stream
+
+  - type: query
+    sql: drop stream if exists py_generator_once_target

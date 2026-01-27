@@ -87,6 +87,9 @@ class ASTStorage;
     M(String, config_file, "", "External stream configuration file path", 0) \
     M(String, named_collection, "", "External stream named collection configuration", 0) \
     M(Bool, local, false, "In a distributed env, local=true means it is a stream which is local to that node only and is not visible to other nodes in the cluster", 0) \
+    M(String, read_function_name, "", "Python external stream entrypoint name, defaults to stream name", 0) \
+    M(String, write_function_name, "", "Python external stream sink function name, defaults to read_function_name", 0) \
+    M(String, mode, "", "Python external stream execution mode: 'auto', 'streaming', or 'batch' (empty defaults to auto)", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     LOG_FILE_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \

@@ -1,16 +1,17 @@
 #include <IO/ReadHelpers.h>
 #include <Parsers/ASTConstraintDeclaration.h>
+#include <Parsers/ASTCreateNamedCollectionQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
-#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTCreateNamedCollectionQuery.h>
 #include <Parsers/ASTTableOverrides.h>
+#include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDictionary.h>
@@ -511,6 +512,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserSelectWithUnionQuery select_p;
     ParserFunction table_function_p;
     ParserNameList names_p;
+    ParserStringLiteral string_literal_parser;
 
     ASTPtr table;
     ASTPtr columns_list;
@@ -520,6 +522,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ASTPtr as_table_function;
     ASTPtr select;
     ASTPtr from_path;
+    ASTPtr exec_script;
 
     String cluster_str;
     bool attach = false;
@@ -620,15 +623,34 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         if (!s_rparen.ignore(pos, expected))
             return false;
 
+        if (type == ASTCreateQuery::Type::ExternalStream)
+        {
+            auto pos_before_as = pos;
+            ASTPtr script_literal;
+            if (s_as.ignore(pos, expected) && string_literal_parser.parse(pos, script_literal, expected))
+            {
+                exec_script = script_literal;
+            }
+            else
+            {
+                pos = pos_before_as;
+            }
+        }
+
         auto storage_parse_result = storage_p.parse(pos, storage, expected);
 
-        if (storage_parse_result && s_as.ignore(pos, expected))
+        if (exec_script)
+        {
+            if (!storage_parse_result)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "SETTINGS is required in CREATE EXTERNAL STREAM.");
+        }
+        else if (storage_parse_result && s_as.ignore(pos, expected))
         {
             if (!select_p.parse(pos, select, expected))
                 return false;
         }
 
-        if (!storage_parse_result && !is_temporary)
+        if (!exec_script && !storage_parse_result && !is_temporary)
         {
             if (!s_as.ignore(pos, expected))
                 return false;
@@ -710,6 +732,15 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     query->set(query->columns_list, columns_list);
     query->set(query->storage, storage);
+
+    if (exec_script)
+    {
+        const auto * script_literal = exec_script->as<ASTLiteral>();
+        if (!script_literal || script_literal->value.getType() != Field::Types::String)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Inline script definition must be a string literal");
+
+        query->exec_script = script_literal->value.get<String>();
+    }
 
     if (comment)
         query->set(query->comment, comment);
