@@ -37,7 +37,7 @@ String buildSuccessResponse(const String & message, const String & query_id)
 }
 
 std::map<String, std::map<String, String>> INSTALL_PYTHON_PACKAGE_SCHEMA
-    = {{"required", {{"name", "string"}}}, {"optional", {{"version", "string"}}}};
+    = {{"required", {{"name", "string"}}}, {"optional", {{"version", "string"}, {"VERSION", "string"}}}};
 
 std::map<String, std::map<String, String>> UNINSTALL_PYTHON_PACKAGE_SCHEMA = {{"required", {{"name", "string"}}}};
 }
@@ -124,8 +124,24 @@ std::pair<String, Int32> PythonPackageHandler::executePost(const Poco::JSON::Obj
         String package_name = payload->get("name").toString();
         String package_version;
 
+        if (payload->has("version") && payload->has("VERSION"))
+        {
+            const auto lower = payload->get("version").toString();
+            const auto upper = payload->get("VERSION").toString();
+            if (lower != upper)
+            {
+                return {
+                    jsonErrorResponse(
+                        "Conflicting parameters: both 'version' and 'VERSION' are provided with different values",
+                        ErrorCodes::BAD_REQUEST_PARAMETER),
+                    HTTPResponse::HTTP_BAD_REQUEST};
+            }
+        }
+
         if (payload->has("version"))
             package_version = payload->get("version").toString();
+        else if (payload->has("VERSION"))
+            package_version = payload->get("VERSION").toString();
 
         if (package_name.empty())
             return {jsonErrorResponse("Package name cannot be empty", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
@@ -144,7 +160,7 @@ std::pair<String, Int32> PythonPackageHandler::executePost(const Poco::JSON::Obj
             String escaped_package_version = package_version;
             boost::replace_all(escaped_package_name, "'", "''");
             boost::replace_all(escaped_package_version, "'", "''");
-            query = fmt::format("SYSTEM INSTALL PYTHON PACKAGE '{}' VERSION '{}'", escaped_package_name, escaped_package_version);
+            query = fmt::format("SYSTEM INSTALL PYTHON PACKAGE '{}' '{}'", escaped_package_name, escaped_package_version);
         }
 
         LOG_DEBUG(log, "Executing Python package install query: {}", query);
