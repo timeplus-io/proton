@@ -487,7 +487,12 @@ void StreamShardStore::readConcat(
     for (const auto & plan : plans)
         input_streams.emplace_back(plan->getCurrentDataStream());
 
-    query_plan.unitePlans(std::make_unique<Streaming::ConcatStep>(std::move(input_streams), /*disable_concat_callback=*/false), std::move(plans));
+    query_plan.unitePlans(
+        std::make_unique<Streaming::ConcatStep>(
+            std::move(input_streams),
+            /*disable_concat_callback_=*/false,
+            context->getSettingsRef().backfill_max_threads.value),
+        std::move(plans));
 }
 
 cluster::CallResultV<int64_t>

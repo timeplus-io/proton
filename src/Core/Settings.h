@@ -1136,6 +1136,7 @@ Possible values: non-negative numbers. Note that if the value is too small or to
     M(Bool, emit_during_backfill, false, "Enable emit intermediate aggr result during backfill historical data", 0) \
     M(Bool, force_backfill_in_order, false, "Requires backfill data in order", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
+    M(UInt64, backfill_max_threads, 0, "Max threads used to backfill historical data per shard. 0 means system defaults", 0) \
     M(UInt64, join_max_buffered_bytes, 524288000, "Max buffered bytes for stream to stream join", 0) \
     M(UInt64, join_buffered_data_block_size, 0, "For streaming join, when buffered data in memory, the data block size directs to merge small data blocks to form bigger ones to improve memory efficiency. 0 means disable merging small data blocks.", 0) \
     M(Int64, join_quiesce_threshold_ms, 0, "For streaming join, when left or right stream is in quiesce, the maximum time to wait before the join.", 0) \
