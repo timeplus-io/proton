@@ -3,8 +3,7 @@
 #if USE_PYTHON_UDF
 
 #include <Bootstrap/Globals.h>
-#include <Cluster/Client/Client.h>
-#include <Cluster/Node/Node.h>
+#include <Cluster/MetaStore/MetaStore.h>
 #include <Cluster/Requests/ListUserDefinedFunctionsRequest.h>
 #include <Core/Streaming/DataStreamSemantic.h>
 #include <Interpreters/Context.h>
@@ -35,11 +34,11 @@ namespace
 cluster::protocol::UserDefinedFunctionDescriptorPtr getUDFDescription(const String & function_name, const ContextPtr & context)
 {
     auto timeout_ms = context->getSettingsRef().query_timeout_sec * 1000;
-    auto meta_client = Globals::getNode().getAppMetaClient();
+    auto & metastore = Globals::getMetaStore();
 
     auto udf_req = std::make_shared<cluster::ListUserDefinedFunctionsRequest>(
-        function_name, meta_client->nodeID(), /*consistent_read_=*/false, timeout_ms, /*request_version=*/2);
-    auto udf_resp = meta_client->listUserDefinedFunctions(udf_req, /*use_local=*/true);
+        function_name, metastore.nodeID(), /*consistent_read_=*/false, timeout_ms, /*request_version=*/2);
+    auto udf_resp = metastore.listUserDefinedFunctions(udf_req);
 
     if (udf_resp->hasError())
         throw Exception(udf_resp->error().error_code, "Failed to load UDF {}, error={}", function_name, udf_resp->error().error_message);
