@@ -12,6 +12,7 @@ namespace DB::ErrorCodes
 extern const int UDF_INTERNAL_ERROR;
 extern const int UDF_COMPILE_ERROR;
 extern const int UDF_RUNNING_ERROR;
+extern const int QUERY_WAS_CANCELLED;
 }
 
 namespace DB::cpython
@@ -46,7 +47,7 @@ std::string convertPyObjectToString(const PyObjectPtr & obj)
 
 bool hasException()
 {
-    return static_cast<bool>(PyObjectPtr{PyErr_Occurred()});
+    return PyErr_Occurred() != nullptr;
 }
 
 /// This function only accesses the attributes of the object itself and does not involve changes to the reference count.
@@ -291,6 +292,11 @@ PyObjectPtr executeByteCode(const PyObjectPtr & byte_code, const std::string & m
 
     if (!exe_result)
     {
+        if (hasException() && (PyErr_ExceptionMatches(PyExc_KeyboardInterrupt) || PyErr_ExceptionMatches(PyExc_GeneratorExit)))
+        {
+            PyErr_Clear();
+            throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Query was cancelled");
+        }
         std::string error_message = getExceptionMessage();
         throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "UDF running error, detail message: {}", error_message);
     }
@@ -304,6 +310,11 @@ PyObjectPtr executeObject(const PyObjectPtr & obj, const PyObjectPtr & args)
 
     if (!exe_result)
     {
+        if (hasException() && (PyErr_ExceptionMatches(PyExc_KeyboardInterrupt) || PyErr_ExceptionMatches(PyExc_GeneratorExit)))
+        {
+            PyErr_Clear();
+            throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Query was cancelled");
+        }
         std::string error_message = getExceptionMessage();
         throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "UDF running error, detail message: {}", error_message);
     }
@@ -372,6 +383,11 @@ PyObjectPtr iterNext(const PyObjectPtr & iterator)
     {
         if (hasException())
         {
+            if (PyErr_ExceptionMatches(PyExc_KeyboardInterrupt) || PyErr_ExceptionMatches(PyExc_GeneratorExit))
+            {
+                PyErr_Clear();
+                throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Query was cancelled");
+            }
             std::string error_message = getExceptionMessage();
             throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Iterator error: {}", error_message);
         }

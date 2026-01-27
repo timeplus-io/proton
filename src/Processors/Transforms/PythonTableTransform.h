@@ -30,6 +30,8 @@ public:
     String getName() const override { return "PythonTableTransform"; }
 
 protected:
+    void onCancel() noexcept override;
+
     void transform(Chunk & chunk) override;
 
 private:
@@ -47,6 +49,9 @@ private:
     String python_source;
     String function_name;
     cpython::PyObjectPtr py_function;
+
+    std::atomic<unsigned long> python_thread_id{0};
+    std::atomic_bool cancel_requested{false};
 };
 }
 

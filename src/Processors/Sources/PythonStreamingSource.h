@@ -7,6 +7,7 @@
 #include <CPython/PyObjectPtr.h>
 #include <Processors/ISource.h>
 
+
 namespace DB
 {
 /// PythonStreamingSource reads data from a Python generator/iterator
@@ -21,6 +22,8 @@ public:
     String getName() const override { return "PythonStreamingSource"; }
 
 protected:
+    void onCancel() noexcept override;
+
     Chunk generate() override;
 
 private:
@@ -36,6 +39,9 @@ private:
     bool needs_projection_pushdown = false;
 
     bool exhausted = false;
+
+    std::atomic<unsigned long> python_thread_id{0};
+    std::atomic_bool cancel_requested{false};
 };
 }
 

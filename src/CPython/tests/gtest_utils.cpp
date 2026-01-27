@@ -361,6 +361,8 @@ TEST_F(CPythonTest, getFunctionNotFound)
             EXPECT_EQ(e.code(), DB::ErrorCodes::UDF_INTERNAL_ERROR);
             EXPECT_STREQ(e.what(), "The python function name is not the same as the user defined function name: proton_func_not_found");
         }
+
+        unloadModule("__main__");
     });
 }
 

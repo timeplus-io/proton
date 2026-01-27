@@ -5,6 +5,7 @@
 #include <Python.h>
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <unordered_set>
 
 class CPythonTest : public ::testing::Test
@@ -12,7 +13,28 @@ class CPythonTest : public ::testing::Test
 protected:
     std::unordered_set<PyObject *> before_objects;
 
-    void SetUp() override { Py_Initialize(); }
+    static void SetUpTestSuite() { Py_Initialize(); }
+
+    static void TearDownTestSuite()
+    {
+        if (!Py_IsInitialized())
+            return;
+
+        /// Some tests (and production code paths) release the GIL with `PyEval_SaveThread()`,
+        /// leaving the main thread without an active thread state. Always reacquire the GIL
+        /// before touching the runtime and finalizing.
+        PyGILState_STATE state = PyGILState_Ensure();
+
+        if (PyErr_Occurred())
+        {
+            PyErr_Print();
+            ADD_FAILURE() << "TearDownTestSuite: Python error occurred during tests.";
+        }
+
+        /// Do NOT call `PyGILState_Release` after `Py_Finalize()`.
+        Py_Finalize();
+        (void)state;
+    }
 
     void collectObjects()
     {
@@ -91,9 +113,6 @@ protected:
         if (!Py_IsInitialized())
             return;
 
-        /// Some tests (and production code paths) release the GIL with `PyEval_SaveThread()`,
-        /// leaving the main thread without an active thread state. Always reacquire the GIL
-        /// before touching the runtime and finalizing.
         PyGILState_STATE state = PyGILState_Ensure();
 
         if (PyErr_Occurred())
@@ -102,8 +121,6 @@ protected:
             ADD_FAILURE() << "TearDown: Python error occurred during test.";
         }
 
-        /// Do NOT call `PyGILState_Release` after `Py_Finalize()`.
-        Py_Finalize();
-        (void)state;
+        PyGILState_Release(state);
     }
 };

@@ -9,11 +9,43 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <Common/assert_cast.h>
 
+#include <base/scope_guard.h>
+
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int UDF_RUNNING_ERROR;
+}
+
+namespace
+{
+/// Best-effort cancellation hook. Connector iterators can implement cancel()/close() to
+/// release blocking IO and terminate quickly on query cancellation.
+bool tryCallNoArgMethod(PyObject * obj, const char * method_name)
+{
+    if (!obj || !method_name)
+        return false;
+
+    if (!PyObject_HasAttrString(obj, method_name))
+        return false;
+
+    DB::cpython::PyObjectPtr method{PyObject_GetAttrString(obj, method_name)};
+    if (!method)
+    {
+        PyErr_Clear();
+        return false;
+    }
+
+    DB::cpython::PyObjectPtr result{PyObject_CallObject(method.get(), nullptr)};
+    if (!result)
+    {
+        PyErr_Clear();
+        return false;
+    }
+
+    return true;
+}
 }
 
 PythonStreamingSource::PythonStreamingSource(Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, String module_name_)
@@ -49,6 +81,41 @@ PythonStreamingSource::~PythonStreamingSource()
         py_iterator.reset();
         if (!module_name.empty())
             cpython::unloadModule(module_name);
+    }
+}
+
+void PythonStreamingSource::onCancel() noexcept
+{
+    cancel_requested.store(true, std::memory_order_release);
+
+    if (!Py_IsInitialized())
+        return;
+
+    try
+    {
+        cpython::GILGuard gil_guard;
+
+        if (py_iterator)
+        {
+            bool cancelled = tryCallNoArgMethod(py_iterator.get(), "cancel");
+            cancelled = tryCallNoArgMethod(py_iterator.get(), "close") || cancelled;
+
+            /// If the iterator doesn't provide a cancellation hook, try to interrupt the executing thread.
+            if (!cancelled)
+            {
+                const auto thread_id = python_thread_id.load(std::memory_order_acquire);
+                if (thread_id != 0)
+                {
+                    const int set = PyThreadState_SetAsyncExc(thread_id, PyExc_KeyboardInterrupt);
+                    if (set > 1)
+                        PyThreadState_SetAsyncExc(thread_id, nullptr);
+                }
+            }
+        }
+    }
+    catch (...)
+    {
+        /// no-throw on cancellation path
     }
 }
 
@@ -146,10 +213,19 @@ Chunk PythonStreamingSource::generate()
     if (exhausted)
         return {};
 
+    if (isCancelled() || cancel_requested.load(std::memory_order_acquire))
+    {
+        exhausted = true;
+        return {};
+    }
+
     if (Py_IsInitialized() == 0)
         throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Python Interpreter is not initialized, please check the python_path configuration");
 
     cpython::GILGuard gil_guard;
+
+    python_thread_id.store(PyThread_get_thread_ident(), std::memory_order_release);
+    SCOPE_EXIT({ python_thread_id.store(0, std::memory_order_release); });
 
     auto next_item = cpython::iterNext(py_iterator);
     if (!next_item)

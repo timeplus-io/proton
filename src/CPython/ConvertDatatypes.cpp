@@ -284,12 +284,17 @@ PyObjectPtr convertToPythonObject(const Field & data, const DataTypePtr & type)
                 for (size_t i = 0; i < value.size(); i++)
                 {
                     auto tuple = convertToPythonObject(value[i], pair_type);
-                    if (!PyTuple_Check(tuple.get()) && PyTuple_Size(tuple.get()) != 2)
+                    if (!PyTuple_Check(tuple.get()) || PyTuple_Size(tuple.get()) != 2)
                         throw Exception(
                             ErrorCodes::UDF_INTERNAL_ERROR, "Failed to convert {} to Python tuple", fieldTypeToString(data.getType()));
-                    auto key = PyObjectPtr::borrow(PyTuple_GetItem(tuple.get(), 0));
-                    auto value = PyObjectPtr::borrow(PyTuple_GetItem(tuple.get(), 1));
-                    PyDict_SetItem(py_dict.get(), key.release(), value.release());
+                    PyObject * key = PyTuple_GetItem(tuple.get(), 0); /// Borrowed reference
+                    PyObject * mapped_value = PyTuple_GetItem(tuple.get(), 1); /// Borrowed reference
+                    if (!key || !mapped_value)
+                        throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to extract key/value from Python tuple");
+
+                    if (PyDict_SetItem(py_dict.get(), key, mapped_value) != 0)
+                        throw Exception(
+                            ErrorCodes::UDF_INTERNAL_ERROR, "Failed to insert map item into Python dict: {}", getExceptionMessage());
                 }
 
                 return py_dict;

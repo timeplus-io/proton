@@ -6,10 +6,12 @@
 
 #include <CPython/GILGuard.h>
 #include <CPython/PyObjectPtr.h>
+#include <CPython/Utils.h>
 #include <CPython/tests/CPythonTest.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/ISink.h>
 #include <Processors/Sources/PythonStreamingSource.h>
+#include <Common/Exception.h>
 #include <Common/assert_cast.h>
 
 #include <Columns/ColumnString.h>
@@ -20,7 +22,19 @@
 
 #include <datetime.h>
 
+#include <base/scope_guard.h>
+
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 using namespace DB;
+
+namespace DB::ErrorCodes
+{
+extern const int QUERY_WAS_CANCELLED;
+}
 
 namespace
 {
@@ -37,6 +51,35 @@ protected:
     void consume(Chunk chunk) override { blocks.emplace_back(getPort().getHeader().cloneWithColumns(chunk.detachColumns())); }
 
 private:
+    std::vector<Block> blocks;
+};
+
+class NotifyingCollectBlocksSink final : public ISink
+{
+public:
+    explicit NotifyingCollectBlocksSink(Block header) : ISink(std::move(header), ProcessorID::EmptySinkID) { }
+
+    String getName() const override { return "NotifyingCollectBlocksSink"; }
+
+    bool waitForBlocks(size_t count, std::chrono::milliseconds timeout)
+    {
+        std::unique_lock lock(mutex);
+        return cv.wait_for(lock, timeout, [&] { return blocks.size() >= count; });
+    }
+
+    const std::vector<Block> & getBlocks() const { return blocks; }
+
+protected:
+    void consume(Chunk chunk) override
+    {
+        std::lock_guard lock(mutex);
+        blocks.emplace_back(getPort().getHeader().cloneWithColumns(chunk.detachColumns()));
+        cv.notify_all();
+    }
+
+private:
+    std::mutex mutex;
+    std::condition_variable cv;
     std::vector<Block> blocks;
 };
 }
@@ -150,6 +193,187 @@ TEST_F(CPythonTest, PythonStreamingSourceProjectionSkipsUnselectedConversion)
 
         const auto & col = assert_cast<const ColumnString &>(*block.getByName("type").column);
         ASSERT_EQ(col.getDataAt(0).toString(), "ticker");
+    });
+}
+
+TEST_F(CPythonTest, PythonStreamingSourceCancelUnblocksIterator)
+{
+    assertNoLeak([&]() {
+        auto string_type = std::make_shared<DataTypeString>();
+
+        DataTypes element_types = {string_type};
+        Strings element_names = {"type"};
+        auto tuple_type = std::make_shared<DataTypeTuple>(element_types, element_names);
+
+        Block header = {ColumnWithTypeAndName{string_type->createColumn(), string_type, "type"}};
+
+        cpython::PyObjectPtr iterator;
+        cpython::PyObjectPtr iterator_owner;
+        String module_name;
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+
+            module_name = "test_cancel_" + cpython::randomModuleName();
+            const std::string python_source = R"PY(
+class BlockingIterator:
+    def __init__(self):
+        self._cancelled = False
+        self._yielded = False
+
+    def __iter__(self):
+        return self
+
+    def cancel(self):
+        self._cancelled = True
+
+    def __next__(self):
+        if self._cancelled:
+            raise StopIteration
+        if not self._yielded:
+            self._yielded = True
+            return [("ticker",)]
+        while not self._cancelled:
+            pass
+        raise StopIteration
+)PY";
+
+            auto byte_code = cpython::compile(python_source);
+            cpython::executeByteCode(byte_code, module_name);
+
+            auto blocking_iter_class = cpython::getClass("BlockingIterator", module_name);
+            iterator_owner = cpython::newInstance(blocking_iter_class);
+            ASSERT_TRUE(iterator_owner);
+
+            iterator = cpython::getIterator(iterator_owner);
+            ASSERT_TRUE(iterator);
+        }
+
+        String first_type_value;
+        bool got_first_block = false;
+        {
+            auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, module_name);
+            auto sink = std::make_shared<NotifyingCollectBlocksSink>(source->getPort().getHeader());
+
+            connect(source->getPort(), sink->getPort());
+
+            auto processors = std::make_shared<Processors>();
+            processors->emplace_back(source);
+            processors->emplace_back(sink);
+
+            QueryStatusPtr element;
+            PipelineExecutor executor(processors, element);
+
+            std::mutex finished_mutex;
+            std::condition_variable finished_cv;
+            bool finished = false;
+            std::exception_ptr execution_exception;
+
+            /// Release the GIL on the main test thread so the executor thread can run Python.
+            /// Otherwise the executor thread may block forever on PyGILState_Ensure().
+            {
+                cpython::GILGuard release_gil;
+            }
+
+            std::thread executor_thread([&] {
+                try
+                {
+                    executor.execute(1);
+                }
+                catch (...)
+                {
+                    execution_exception = std::current_exception();
+                }
+
+                {
+                    std::lock_guard lock(finished_mutex);
+                    finished = true;
+                }
+                finished_cv.notify_one();
+            });
+
+            SCOPE_EXIT({
+                executor.cancel();
+                if (executor_thread.joinable())
+                    executor_thread.join();
+            });
+
+            got_first_block = sink->waitForBlocks(1, std::chrono::seconds(5));
+            EXPECT_TRUE(got_first_block);
+
+            executor.cancel();
+
+            {
+                std::unique_lock lock(finished_mutex);
+                if (!finished_cv.wait_for(lock, std::chrono::seconds(1), [&] { return finished; }))
+                {
+                    /// Avoid hanging the test if cancellation breaks: unblock the iterator explicitly.
+                    cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+                    if (iterator_owner && PyObject_HasAttrString(iterator_owner.get(), "cancel"))
+                    {
+                        cpython::PyObjectPtr cancel_method{PyObject_GetAttrString(iterator_owner.get(), "cancel")};
+                        EXPECT_TRUE(cancel_method);
+                        cpython::PyObjectPtr cancel_result{PyObject_CallObject(cancel_method.get(), nullptr)};
+                        if (!cancel_result)
+                            PyErr_Clear();
+                    }
+
+                    EXPECT_TRUE(finished_cv.wait_for(lock, std::chrono::seconds(2), [&] { return finished; }));
+                }
+            }
+
+            if (execution_exception)
+            {
+                try
+                {
+                    std::rethrow_exception(execution_exception);
+                }
+                catch (const Exception & e)
+                {
+                    if (e.code() != ErrorCodes::QUERY_WAS_CANCELLED)
+                        ADD_FAILURE() << "Unexpected exception: " << e.displayText();
+                }
+                catch (...)
+                {
+                    ADD_FAILURE() << "Unexpected exception type";
+                }
+            }
+
+            {
+                cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+                iterator_owner.reset();
+            }
+
+            if (got_first_block)
+            {
+                EXPECT_EQ(sink->getBlocks().size(), 1U);
+                if (!sink->getBlocks().empty())
+                {
+                    const auto & block = sink->getBlocks().front();
+                    EXPECT_EQ(block.columns(), 1U);
+                    EXPECT_TRUE(block.has("type"));
+                    if (block.has("type"))
+                    {
+                        const auto & col = assert_cast<const ColumnString &>(*block.getByName("type").column);
+                        if (col.size() > 0)
+                            first_type_value = col.getDataAt(0).toString();
+                    }
+                }
+            }
+        }
+
+        /// Class objects and their MRO tuples can form reference cycles; collect them explicitly
+        /// so assertNoLeak doesn't report a false-positive.
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+            cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
+            ASSERT_TRUE(gc_module);
+            cpython::PyObjectPtr collect_result{PyObject_CallMethod(gc_module.get(), "collect", nullptr)};
+            if (!collect_result)
+                PyErr_Clear();
+        }
+
+        if (got_first_block)
+            EXPECT_EQ(first_type_value, "ticker");
     });
 }
 

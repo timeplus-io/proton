@@ -10,6 +10,8 @@
 #include <Common/Exception.h>
 #include <Common/assert_cast.h>
 
+#include <base/scope_guard.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -76,6 +78,31 @@ PythonTableTransform::~PythonTableTransform()
     }
 }
 
+void PythonTableTransform::onCancel() noexcept
+{
+    cancel_requested.store(true, std::memory_order_release);
+
+    if (!Py_IsInitialized())
+        return;
+
+    try
+    {
+        cpython::GILGuard gil_guard;
+
+        const auto thread_id = python_thread_id.load(std::memory_order_acquire);
+        if (thread_id == 0)
+            return;
+
+        const int set = PyThreadState_SetAsyncExc(thread_id, PyExc_KeyboardInterrupt);
+        if (set > 1)
+            PyThreadState_SetAsyncExc(thread_id, nullptr);
+    }
+    catch (...)
+    {
+        /// no-throw on cancellation path
+    }
+}
+
 void PythonTableTransform::initPython()
 {
     if (Py_IsInitialized() == 0)
@@ -132,7 +159,16 @@ void PythonTableTransform::transform(Chunk & chunk)
         return;
     }
 
+    if (isCancelled() || cancel_requested.load(std::memory_order_acquire))
+    {
+        chunk.setColumns(getOutputPort().getHeader().cloneEmptyColumns(), 0);
+        return;
+    }
+
     cpython::GILGuard gil_guard;
+
+    python_thread_id.store(PyThread_get_thread_ident(), std::memory_order_release);
+    SCOPE_EXIT({ python_thread_id.store(0, std::memory_order_release); });
 
     Block input_block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
     cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(input_positions.size()))};
