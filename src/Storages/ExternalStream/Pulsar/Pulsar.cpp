@@ -138,6 +138,25 @@ Pulsar::Pulsar(
 
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
 
+    if (columns.has(ProtonConsts::RESERVED_EVENT_TIME))
+    {
+        if (attach)
+        {
+            LOG_WARNING(
+                logger,
+                "Column `{}` is a reserved virtual column for Pulsar external streams and is no longer supported as a physical column. "
+                "It will be ignored in payload parsing and treated as transport metadata.",
+                ProtonConsts::RESERVED_EVENT_TIME);
+        }
+        else
+        {
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN,
+                "Column `{}` is a reserved virtual column for Pulsar external streams and cannot be defined as a physical column",
+                ProtonConsts::RESERVED_EVENT_TIME);
+        }
+    }
+
     if (columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
     {
         validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);

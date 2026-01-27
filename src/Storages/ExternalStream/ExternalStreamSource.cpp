@@ -20,12 +20,18 @@ ExternalStreamSource::ExternalStreamSource(
 void ExternalStreamSource::getPhysicalHeader()
 {
     auto non_virtual_header = storage_snapshot->metadata->getSampleBlockNonMaterialized();
+
+    auto is_reserved_virtual = [&](const String & name) -> bool
+    {
+        /// Reserved columns are populated from transport metadata, not payload.
+        return name == ProtonConsts::RESERVED_EVENT_TIME || name == ProtonConsts::RESERVED_MESSAGE_KEY
+            || name == ProtonConsts::RESERVED_MESSAGE_HEADERS;
+    };
+
     for (const auto & col : header)
     {
-        /// The _tp_message_key column always maps to the message key.
-        /// The _tp_time column always maps to the message timestamp.
-        /// The _tp_message_headers column always maps to the message properties.
-        if (col.name == ProtonConsts::RESERVED_MESSAGE_KEY || col.name == ProtonConsts::RESERVED_EVENT_TIME || col.name == ProtonConsts::RESERVED_MESSAGE_HEADERS)
+        /// Skip reserved virtual columns - they are populated from transport metadata, not payload.
+        if (is_reserved_virtual(col.name))
             continue;
 
         if (std::ranges::any_of(non_virtual_header, [&col](auto & non_virtual_column) { return non_virtual_column.name == col.name; }))

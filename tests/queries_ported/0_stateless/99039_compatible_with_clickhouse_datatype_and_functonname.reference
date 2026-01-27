@@ -79,8 +79,8 @@ large	Member	1	78.2	tag6	1	2025-03-10 14:43:21
 2	Bob	small	45.3	2025-03-10 14:43:21.000	false	Guest
 3	Charlie	large	78.2	2025-03-10 14:43:21.000	true	Member
 3	Charlie	78.2	2025-03-10
-3	Charlie	78.2	large	14
 1	Alice	99.5	medium	14
+3	Charlie	78.2	large	14
 3	Charlie	78.2	2025-03-10	2025-03-17
 1	Alice	99.5	2025-03-10	2025-03-17
 127.0.0.1	127.0.0.1

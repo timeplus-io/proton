@@ -27,10 +27,6 @@ StorageExternalStreamImpl::StorageExternalStreamImpl(
     if (!settings->input_format_skip_unknown_fields.changed)
         settings->input_format_skip_unknown_fields = true;
 
-    if (storage_metadata.columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
-    {
-        LOG_INFO(logger, "yeah");
-    }
     setInMemoryMetadata(storage_metadata);
 }
 

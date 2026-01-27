@@ -1,6 +1,6 @@
 tags:
   - timestamp
-description: Test settings kafka message timestamp
+description: Verify `_tp_time` is virtual (not schema-defined) for Kafka external streams
 cluster:
   - p1k1
   - p3k1
@@ -18,10 +18,6 @@ steps:
 
   - type: query
     sql: drop stream if exists test_ts
-  - type: query
-    sql: drop stream if exists test_ts_and_key
-  - type: query
-    sql: drop stream if exists test_key_and_ts
 
   - type: wait
     time: 1
@@ -31,28 +27,7 @@ steps:
         (
           key string,
           value int32,
-          _tp_time datetime64(3, 'UTC')
-        )
-        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_ts'
-
-  # test_ts_and_key and test_key_and_ts for testing _tp_time and _tp_message_key can work together
-  - type: query
-    sql: create external stream test_ts_and_key
-        (
-          key string,
-          _tp_time datetime64(3, 'UTC'),
-          value int32,
           _tp_message_key string
-        )
-        settings type = 'kafka', brokers = 'k1:9092', topic = 'test_ts'
-
-  - type: query
-    sql: create external stream test_key_and_ts
-        (
-          _tp_message_key string,
-          key string,
-          _tp_time datetime64(3, 'UTC'),
-          value int32
         )
         settings type = 'kafka', brokers = 'k1:9092', topic = 'test_ts'
 
@@ -61,82 +36,25 @@ steps:
 
   - type: stream
     name: select_from_test_ts
-    query: select * from test_ts
+    query: select key, value, to_type_name(_tp_time), _tp_message_key from test_ts order by key
     schema:
     - name: key
       type: string
     - name: value
       type: int32
-    - name: _tp_time
-      type: datetime64(3, 'UTC')
-
-  - type: stream
-    name: select_from_test_ts_and_key
-    query: select * from test_ts_and_key
-    schema:
-    - name: key
+    - name: to_type_name(_tp_time)
       type: string
-    - name: _tp_time
-      type: datetime64(3, 'UTC')
-    - name: value
-      type: int32
     - name: _tp_message_key
       type: string
-
-  - type: stream
-    name: select_from_test_key_and_ts
-    query: select * from test_key_and_ts
-    schema:
-    - name: _tp_message_key
-      type: string
-    - name: key
-      type: string
-    - name: _tp_time
-      type: datetime64(3, 'UTC')
-    - name: value
-      type: int32
 
   - type: wait
     time: 2
 
   - type: query
-    sql: insert into test_ts values ('one', 1, '2025-04-27T01:31:01.001Z')('two', 2, '2025-04-27T01:32:02.012Z')
-
-  - type: query
-    sql: insert into test_ts_and_key values ('three', '2025-04-27T01:33:03.123Z', 3, 'key_three')('four', '2025-04-27T01:34:04.234Z', 4, 'key_four')
-
-  - type: query
-    sql: insert into test_key_and_ts values ('key_five', 'five', '2025-04-27T01:35:05.345Z', 5)('key_six', 'six', '2025-04-27T01:36:06.456Z', 6)
+    sql: insert into test_ts values ('one', 1, 'key_one')('two', 2, 'key_two')
 
   - type: check
     target_name: select_from_test_ts
-    mode: random
     expected_result:
-      - ['one', 1, '2025-04-27 01:31:01.001']
-      - ['two', 2, '2025-04-27 01:32:02.012']
-      - ['three', 3, '2025-04-27 01:33:03.123']
-      - ['four', 4, '2025-04-27 01:34:04.234']
-      - ['five', 5, '2025-04-27 01:35:05.345']
-      - ['six', 6, '2025-04-27 01:36:06.456']
-
-  - type: check
-    target_name: select_from_test_ts_and_key
-    mode: random
-    expected_result:
-      - ['one', '2025-04-27 01:31:01.001', 1, '']
-      - ['two', '2025-04-27 01:32:02.012', 2, '']
-      - ['three', '2025-04-27 01:33:03.123', 3, 'key_three']
-      - ['four', '2025-04-27 01:34:04.234', 4, 'key_four']
-      - ['five', '2025-04-27 01:35:05.345', 5, 'key_five']
-      - ['six', '2025-04-27 01:36:06.456', 6, 'key_six']
-
-  - type: check
-    target_name: select_from_test_key_and_ts
-    mode: random
-    expected_result:
-      - ['', 'one', '2025-04-27 01:31:01.001', 1]
-      - ['', 'two', '2025-04-27 01:32:02.012', 2]
-      - ['key_three', 'three', '2025-04-27 01:33:03.123', 3]
-      - ['key_four', 'four', '2025-04-27 01:34:04.234', 4]
-      - ['key_five', 'five', '2025-04-27 01:35:05.345', 5]
-      - ['key_six', 'six', '2025-04-27 01:36:06.456', 6]
+      - ['one', 1, "datetime64(3, 'UTC')", 'key_one']
+      - ['two', 2, "datetime64(3, 'UTC')", 'key_two']

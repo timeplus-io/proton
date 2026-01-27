@@ -272,8 +272,30 @@ void Kafka::validateSettings(bool attach)
     }
 
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
-    if (columns.has(ProtonConsts::RESERVED_EVENT_TIME) || columns.has(ProtonConsts::RESERVED_MESSAGE_KEY)
-        || columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
+    const bool has_event_time = columns.has(ProtonConsts::RESERVED_EVENT_TIME);
+    const bool has_message_key = columns.has(ProtonConsts::RESERVED_MESSAGE_KEY);
+    const bool has_message_headers = columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS);
+
+    if (has_event_time)
+    {
+        if (attach)
+        {
+            LOG_WARNING(
+                logger,
+                "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and is no longer supported as a physical column. "
+                "It will be ignored in payload parsing and treated as transport metadata.",
+                ProtonConsts::RESERVED_EVENT_TIME);
+        }
+        else
+        {
+            throw Exception(
+                ErrorCodes::ILLEGAL_COLUMN,
+                "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and cannot be defined as a physical column",
+                ProtonConsts::RESERVED_EVENT_TIME);
+        }
+    }
+
+    if (has_event_time || has_message_key || has_message_headers)
     {
         if (settings->isChanged("one_message_per_row") && !settings->one_message_per_row)
             throw Exception(

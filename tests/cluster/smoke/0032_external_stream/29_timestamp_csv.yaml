@@ -3,7 +3,7 @@ tags:
   - message_key
   - csv
   - bug
-description: Verify CSV format can work with _tp_time and _tp_message_key, issue#8852
+description: Verify CSV format can work with virtual `_tp_time` and `_tp_message_key`, issue#8852
 cluster:
   - p1k1
   - p3k1
@@ -30,7 +30,6 @@ steps:
     sql: create external stream test_ts_csv
         (
           key string,
-          _tp_time datetime64(3, 'UTC'),
           value int32,
           _tp_message_key string
         )
@@ -41,14 +40,14 @@ steps:
 
   - type: stream
     name: select_from_test_ts_csv
-    query: select * from test_ts_csv
+    query: select key, value, to_type_name(_tp_time), _tp_message_key from test_ts_csv order by key
     schema:
     - name: key
       type: string
-    - name: _tp_time
-      type: datetime64(3)
     - name: value
       type: int32
+    - name: to_type_name(_tp_time)
+      type: string
     - name: _tp_message_key
       type: string
 
@@ -56,7 +55,7 @@ steps:
     time: 1
 
   - type: query
-    sql: insert into test_ts_csv values ('three', '2025-04-27T01:33:03.123Z', 3, 'key_three')('four', '2025-04-27T01:34:04.234Z', 4, 'key_four')
+    sql: insert into test_ts_csv values ('three', 3, 'key_three')('four', 4, 'key_four')
 
   - type: wait
     time: 1
@@ -64,5 +63,5 @@ steps:
   - type: check
     target_name: select_from_test_ts_csv
     expected_result:
-      - ['three', '2025-04-27 01:33:03.123', 3, 'key_three']
-      - ['four', '2025-04-27 01:34:04.234', 4, 'key_four']
+      - ['four', 4, "datetime64(3, 'UTC')", 'key_four']
+      - ['three', 3, "datetime64(3, 'UTC')", 'key_three']
