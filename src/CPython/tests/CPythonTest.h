@@ -16,6 +16,8 @@ protected:
 
     void collectObjects()
     {
+        PyGILState_STATE state = PyGILState_Ensure();
+
         before_objects.clear();
 
         /// Get initial objects
@@ -36,10 +38,14 @@ protected:
                 }
             }
         }
+
+        PyGILState_Release(state);
     }
 
     void assertObjectLeak()
     {
+        PyGILState_STATE state = PyGILState_Ensure();
+
         /// Check for Python object leaks
         DB::cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
         if (gc_module)
@@ -69,6 +75,8 @@ protected:
                 }
             }
         }
+
+        PyGILState_Release(state);
     }
 
     void assertNoLeak(std::function<void()> func)
@@ -80,13 +88,22 @@ protected:
 
     void TearDown() override
     {
-        /// Check for any python exceptions before finalizing
+        if (!Py_IsInitialized())
+            return;
+
+        /// Some tests (and production code paths) release the GIL with `PyEval_SaveThread()`,
+        /// leaving the main thread without an active thread state. Always reacquire the GIL
+        /// before touching the runtime and finalizing.
+        PyGILState_STATE state = PyGILState_Ensure();
+
         if (PyErr_Occurred())
         {
             PyErr_Print();
             ADD_FAILURE() << "TearDown: Python error occurred during test.";
         }
 
+        /// Do NOT call `PyGILState_Release` after `Py_Finalize()`.
         Py_Finalize();
+        (void)state;
     }
 };

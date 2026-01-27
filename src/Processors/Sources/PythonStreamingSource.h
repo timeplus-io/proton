@@ -26,9 +26,15 @@ protected:
 private:
     Block convertPythonResultToBlock(const cpython::PyObjectPtr & py_result) const;
 
+    Block convertPythonResultToOutputBlock(const cpython::PyObjectPtr & py_result) const;
+
     cpython::PyObjectPtr py_iterator;
     DataTypePtr tuple_type;
     String module_name;
+
+    std::vector<size_t> output_tuple_positions;
+    bool needs_projection_pushdown = false;
+
     bool exhausted = false;
 };
 }
