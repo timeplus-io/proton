@@ -38,6 +38,7 @@ public:
         String sink_function_name_ = {});
 
     bool isRemote() const override { return false; }
+    bool isLocal() const override { return false; }  /// Needs to be replicated across cluster nodes
     bool supportsSubcolumns() const override { return true; }
     bool supportsStreamingQuery() const override { return true; }
     bool supportsParallelInsert() const override { return false; }
