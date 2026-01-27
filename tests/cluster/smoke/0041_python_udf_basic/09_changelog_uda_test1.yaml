@@ -12,7 +12,7 @@ steps:
   - type: query
     sql: drop stream if exists test41_stream;
   - type: wait
-    time: 1
+    time: 2
 
   - type: query
     sql: create stream test41_stream (id int, value float64) primary key id settings mode='changelog_kv';
@@ -50,7 +50,7 @@ steps:
       $$
 
   - type: wait
-    time: 1
+    time: 2
 
   - name: python_udf-9
     type: stream
