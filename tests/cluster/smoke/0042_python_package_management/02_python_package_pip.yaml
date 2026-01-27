@@ -1,0 +1,61 @@
+tags:
+  - bug # https://github.com/timeplus-io/proton-enterprise/issues/10573
+
+cluster:
+  - p1k1
+
+description: |
+  Test for Python libraries operation with pip:
+  Main Steps:
+    1. Install 3rd library python package (arrow) on each node
+    2. Check package install successful
+    3. Uninstall python package on each node
+    4. Check package uninstall successful
+
+steps:
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      proton python --config-file /etc/proton-server/config.yaml -m pip install --user arrow
+
+  - type: wait
+    time: 10
+
+  - type: command
+    name: python-pkg-02-install
+    node: [p1]
+    shell: |
+      proton python --config-file /etc/proton-server/config.yaml -m pip list | grep arrow | wc -l
+  
+  - type: check
+    target_name: python-pkg-02-install
+    expected_result: ['1']
+
+  - type: wait
+    time: 1
+
+  - type: command
+    <<if eq .nodes "1">>
+    node: [p1]
+    <<else>>
+    node: [p1, p2, p3]
+    <<end>>
+    shell: |
+      proton python --config-file /etc/proton-server/config.yaml -m pip uninstall -y arrow
+
+  - type: wait
+    time: 5
+
+  - type: command
+    name: python-pkg-02-uninstall
+    node: [p1]
+    shell: |
+      proton python --config-file /etc/proton-server/config.yaml -m pip list | grep arrow | wc -l
+  
+  - type: check
+    target_name: python-pkg-02-uninstall
+    expected_result: ['0']

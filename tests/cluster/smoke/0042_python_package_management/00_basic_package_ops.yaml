@@ -3,7 +3,6 @@ tags:
   - basic
 cluster:
   - p1k1
-  - p3k1
 
 description: |
   Basic test for Python package management system:
