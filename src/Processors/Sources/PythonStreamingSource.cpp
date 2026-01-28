@@ -149,6 +149,7 @@ Block PythonStreamingSource::convertPythonResultToOutputBlock(const cpython::PyO
         return res_block;
 
     const auto * tuple_type_ptr = assert_cast<const DataTypeTuple *>(tuple_type.get());
+    const size_t expected_row_size = tuple_type_ptr->getElements().size();
     auto normalized = cpython::normalizePythonListForTuple(py_result, tuple_type_ptr->getElements().size());
 
     if (!normalized)
@@ -179,16 +180,35 @@ Block PythonStreamingSource::convertPythonResultToOutputBlock(const cpython::PyO
             if (!row)
                 throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Failed to access row {} from Python generator output", row_idx);
 
-            PyObject * item = nullptr;
-            if (PyTuple_Check(row))
-                item = PyTuple_GetItem(row, tuple_pos);
-            else if (PyList_Check(row))
-                item = PyList_GetItem(row, tuple_pos);
-            else
+            const bool is_tuple = PyTuple_Check(row);
+            const bool is_list = PyList_Check(row);
+            if (!is_tuple && !is_list)
                 throw Exception(
                     ErrorCodes::UDF_RUNNING_ERROR,
                     "PythonStreamingSource expected each row to be tuple/list, got {}",
                     cpython::getObjectType(cpython::PyObjectPtr::borrow(row)));
+
+            const Py_ssize_t row_size = is_tuple ? PyTuple_Size(row) : PyList_Size(row);
+            if (row_size < 0)
+            {
+                if (cpython::hasException())
+                    throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Failed to read row size: {}", cpython::getExceptionMessage());
+                throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Failed to read row size (negative)");
+            }
+
+            if (static_cast<size_t>(row_size) != expected_row_size)
+                throw Exception(
+                    ErrorCodes::UDF_RUNNING_ERROR,
+                    "PythonStreamingSource row {} has wrong arity: expected {}, got {}",
+                    row_idx,
+                    expected_row_size,
+                    static_cast<size_t>(row_size));
+
+            PyObject * item = nullptr;
+            if (is_tuple)
+                item = PyTuple_GetItem(row, tuple_pos);
+            else
+                item = PyList_GetItem(row, tuple_pos);
 
             if (!item)
             {

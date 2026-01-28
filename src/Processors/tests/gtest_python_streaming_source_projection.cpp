@@ -34,6 +34,7 @@ using namespace DB;
 namespace DB::ErrorCodes
 {
 extern const int QUERY_WAS_CANCELLED;
+extern const int UDF_RUNNING_ERROR;
 }
 
 namespace
@@ -215,6 +216,60 @@ TEST_F(CPythonTest, PythonStreamingSourceProjectionSkipsUnselectedConversion)
 
         const auto & col = assert_cast<const ColumnString &>(*block.getByName("type").column);
         ASSERT_EQ(col.getDataAt(0).toString(), "ticker");
+    });
+}
+
+TEST_F(CPythonTest, PythonStreamingSourceProjectionRejectsWrongArity)
+{
+    assertNoLeak([&]() {
+        auto string_type = std::make_shared<DataTypeString>();
+        auto int32_type = std::make_shared<DataTypeInt32>();
+
+        DataTypes element_types = {string_type, int32_type};
+        Strings element_names = {"type", "value"};
+        auto tuple_type = std::make_shared<DataTypeTuple>(element_types, element_names);
+
+        /// Project only the first column, but the generator returns rows of the wrong arity (1 instead of 2).
+        Block header = {ColumnWithTypeAndName{string_type->createColumn(), string_type, "type"}};
+
+        cpython::PyObjectPtr iterator;
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+
+            cpython::PyObjectPtr rows{PyList_New(1)};
+            ASSERT_TRUE(rows);
+
+            PyObject * row = PyList_New(1);
+            ASSERT_TRUE(row);
+            PyList_SET_ITEM(row, 0, PyUnicode_FromString("ticker"));
+
+            PyList_SET_ITEM(rows.get(), 0, row);
+
+            iterator = cpython::PyObjectPtr{PyObject_GetIter(rows.get())};
+            ASSERT_TRUE(iterator);
+        }
+
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto sink = std::make_shared<CollectBlocksSink>(source->getPort().getHeader());
+
+        connect(source->getPort(), sink->getPort());
+
+        auto processors = std::make_shared<Processors>();
+        processors->emplace_back(source);
+        processors->emplace_back(sink);
+
+        QueryStatusPtr element;
+        PipelineExecutor executor(processors, element);
+
+        try
+        {
+            executor.execute(1);
+            FAIL() << "Expected DB::Exception due to row arity mismatch";
+        }
+        catch (const DB::Exception & e)
+        {
+            EXPECT_EQ(e.code(), DB::ErrorCodes::UDF_RUNNING_ERROR);
+        }
     });
 }
 
