@@ -123,7 +123,8 @@ Pipe StoragePythonTable::read(
     size_t /*max_block_size*/,
     size_t /*num_streams*/)
 {
-    storage_snapshot->check(column_names);
+    if (!column_names.empty())
+        storage_snapshot->check(column_names);
 
     auto tuple_type = buildTupleType(getInMemoryMetadataPtr()->getColumns());
     String module_name;
@@ -210,7 +211,8 @@ Pipe StoragePythonTable::read(
         for (const auto & name : column_names)
             filtered_block.insert(block.getByName(name));
 
-        Chunk chunk(filtered_block.getColumns(), filtered_block.rows());
+        const auto row_count = column_names.empty() ? block.rows() : filtered_block.rows();
+        Chunk chunk(filtered_block.getColumns(), row_count);
         return Pipe(std::make_shared<SourceFromSingleChunk>(filtered_block.cloneEmpty(), std::move(chunk)));
     }
 }
