@@ -679,9 +679,27 @@ Field loadFromPythonObject(PyObject * object, const DataTypePtr & type)
         // case TypeIndex::IPv6:
         //     break;
         default:
-            PyObject * repr = PyObject_Repr(object);
+        {
+            PyObjectPtr repr{PyObject_Repr(object)};
+            if (!repr)
+            {
+                std::string python_error;
+                if (hasException())
+                    python_error = getExceptionMessage();
+                throw Exception(
+                    ErrorCodes::UDF_INTERNAL_ERROR,
+                    "Failed to convert Python object to {} (repr failed{})",
+                    type->getName(),
+                    python_error.empty() ? "" : fmt::format(": {}", python_error));
+            }
+
+            const char * repr_str = PyUnicode_AsUTF8(repr.get());
             throw Exception(
-                ErrorCodes::UDF_INTERNAL_ERROR, "Failed to convert Python Object {} to {}", PyUnicode_AsUTF8(repr), type->getName());
+                ErrorCodes::UDF_INTERNAL_ERROR,
+                "Failed to convert Python object {} to {}",
+                repr_str ? repr_str : "<non-utf8 repr>",
+                type->getName());
+        }
     }
 }
 

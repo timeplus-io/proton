@@ -36,42 +36,88 @@ protected:
         (void)state;
     }
 
-    void collectObjects()
+    static void warmUpReprThreadState()
     {
-        PyGILState_STATE state = PyGILState_Ensure();
+        /// `Py_ReprEnter` / `Py_ReprLeave` lazily allocate per-thread objects stored in the
+        /// thread state's dict (key "Py_Repr"). Those objects persist for the lifetime of the
+        /// thread state and would look like "leaks" if first created inside the code under test.
+        ///
+        /// Force this initialization before taking the baseline GC snapshot.
+        (void)PyThreadState_GetDict();
 
-        before_objects.clear();
-
-        /// Get initial objects
-        DB::cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
-        if (gc_module)
+        DB::cpython::PyObjectPtr list{PyList_New(1)};
+        if (!list)
         {
-            DB::cpython::PyObjectPtr gc_get_objects{PyObject_GetAttrString(gc_module.get(), "get_objects")};
-            if (gc_get_objects && PyCallable_Check(gc_get_objects.get()))
-            {
-                DB::cpython::PyObjectPtr objects{PyObject_CallObject(gc_get_objects.get(), nullptr)};
-                if (objects)
-                {
-                    Py_ssize_t size = PyList_Size(objects.get());
-                    for (Py_ssize_t i = 0; i < size; ++i)
-                    {
-                        before_objects.insert(PyList_GetItem(objects.get(), i));
-                    }
-                }
-            }
+            if (PyErr_Occurred())
+                PyErr_Clear();
+            return;
         }
 
-        PyGILState_Release(state);
+        Py_INCREF(list.get());
+        PyList_SET_ITEM(list.get(), 0, list.get()); /// steals the reference, creating a temporary self-cycle
+
+        DB::cpython::PyObjectPtr repr{PyObject_Repr(list.get())};
+        if (PyErr_Occurred())
+            PyErr_Clear();
+
+        Py_INCREF(Py_None);
+        (void)PyList_SetItem(list.get(), 0, Py_None); /// steals; breaks the self-cycle by DECREF'ing the old item
+        if (PyErr_Occurred())
+            PyErr_Clear();
     }
 
-    void assertObjectLeak()
+    void collectObjectsAssumeGILHeld()
     {
-        PyGILState_STATE state = PyGILState_Ensure();
+        before_objects.clear();
 
-        /// Check for Python object leaks
+        DB::cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
+        if (!gc_module)
+            return;
+
+        /// Run a collection to reduce noise from cyclic garbage.
+        DB::cpython::PyObjectPtr gc_collect{PyObject_GetAttrString(gc_module.get(), "collect")};
+        if (gc_collect && PyCallable_Check(gc_collect.get()))
+        {
+            DB::cpython::PyObjectPtr unused{PyObject_CallObject(gc_collect.get(), nullptr)};
+            if (PyErr_Occurred())
+                PyErr_Clear();
+        }
+        else if (PyErr_Occurred())
+        {
+            PyErr_Clear();
+        }
+
+        DB::cpython::PyObjectPtr gc_get_objects{PyObject_GetAttrString(gc_module.get(), "get_objects")};
+        if (!gc_get_objects || !PyCallable_Check(gc_get_objects.get()))
+            return;
+
+        DB::cpython::PyObjectPtr objects{PyObject_CallObject(gc_get_objects.get(), nullptr)};
+        if (!objects)
+            return;
+
+        Py_ssize_t size = PyList_Size(objects.get());
+        for (Py_ssize_t i = 0; i < size; ++i)
+            before_objects.insert(PyList_GetItem(objects.get(), i));
+    }
+
+    void assertObjectLeakAssumeGILHeld()
+    {
         DB::cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
         if (gc_module)
         {
+            /// Run a collection to reduce noise from cyclic garbage.
+            DB::cpython::PyObjectPtr gc_collect{PyObject_GetAttrString(gc_module.get(), "collect")};
+            if (gc_collect && PyCallable_Check(gc_collect.get()))
+            {
+                DB::cpython::PyObjectPtr unused{PyObject_CallObject(gc_collect.get(), nullptr)};
+                if (PyErr_Occurred())
+                    PyErr_Clear();
+            }
+            else if (PyErr_Occurred())
+            {
+                PyErr_Clear();
+            }
+
             DB::cpython::PyObjectPtr gc_get_objects{PyObject_GetAttrString(gc_module.get(), "get_objects")};
             if (gc_get_objects && PyCallable_Check(gc_get_objects.get()))
             {
@@ -97,15 +143,24 @@ protected:
                 }
             }
         }
-
-        PyGILState_Release(state);
     }
 
     void assertNoLeak(std::function<void()> func)
     {
-        collectObjects();
+        {
+            PyGILState_STATE state = PyGILState_Ensure();
+            warmUpReprThreadState();
+            collectObjectsAssumeGILHeld();
+            PyGILState_Release(state);
+        }
+
         func();
-        assertObjectLeak();
+
+        {
+            PyGILState_STATE state = PyGILState_Ensure();
+            assertObjectLeakAssumeGILHeld();
+            PyGILState_Release(state);
+        }
     }
 
     void TearDown() override
