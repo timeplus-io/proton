@@ -352,7 +352,14 @@ bool isIterable(const PyObjectPtr & obj)
         return false;
 
     /// Check if it has __iter__ method
-    return PyObject_HasAttrString(obj.get(), "__iter__") || PySequence_Check(obj.get());
+    int has_iter = PyObject_HasAttrString(obj.get(), "__iter__");
+    if (has_iter < 0)
+    {
+        PyErr_Clear();
+        return false;
+    }
+
+    return has_iter || PySequence_Check(obj.get());
 }
 
 PyObjectPtr getIterator(const PyObjectPtr & obj)

@@ -1628,32 +1628,41 @@ StoragePtr Context::executeTableFunction(const ASTPtr & table_expression, const 
             const auto * external_stream = table->as<StorageExternalStream>();
             if (external_stream && external_stream->getType() == ExternalStreamTypes::PYTHON)
             {
-                const auto * args = function->arguments ? function->arguments->as<ASTExpressionList>() : nullptr;
-                if (!args || args->children.empty())
-                    return table;
-
-                ASTs python_args;
-                python_args.reserve(args->children.size() + 1);
-                if (!database_name.empty())
-                    python_args.emplace_back(std::make_shared<ASTIdentifier>(std::vector<String>{database_name, table_name}));
-                else
-                    python_args.emplace_back(std::make_shared<ASTIdentifier>(table_name));
-                for (const auto & arg : args->children)
-                    python_args.emplace_back(arg->clone());
-
-                auto python_table_ast = makeASTFunction("python_table", std::move(python_args));
-
-                try
+                /// Prefer built-in table functions/aliases over external stream rewrites to avoid
+                /// surprising name collisions (e.g. external stream named "remote"/"python").
+                if (TableFunctionFactory::instance().tryGetProperties(function->name))
                 {
-                    auto python_table_func = TableFunctionFactory::instance().get(python_table_ast, shared_from_this());
-                    res = python_table_func->execute(python_table_ast, shared_from_this(), python_table_func->getName());
-                    setTableFunctionResults(key, res);
-                    return res;
+                    /// Fall through to the normal table function resolution path below.
                 }
-                catch (Exception & e)
+                else
                 {
-                    e.addMessage(" while resolving Python external stream '{}'", table->getStorageID().getNameForLogs());
-                    throw;
+                    const auto * args = function->arguments ? function->arguments->as<ASTExpressionList>() : nullptr;
+                    if (!args || args->children.empty())
+                        return table;
+
+                    ASTs python_args;
+                    python_args.reserve(args->children.size() + 1);
+                    if (!database_name.empty())
+                        python_args.emplace_back(std::make_shared<ASTIdentifier>(std::vector<String>{database_name, table_name}));
+                    else
+                        python_args.emplace_back(std::make_shared<ASTIdentifier>(table_name));
+                    for (const auto & arg : args->children)
+                        python_args.emplace_back(arg->clone());
+
+                    auto python_table_ast = makeASTFunction("python_table", std::move(python_args));
+
+                    try
+                    {
+                        auto python_table_func = TableFunctionFactory::instance().get(python_table_ast, shared_from_this());
+                        res = python_table_func->execute(python_table_ast, shared_from_this(), python_table_func->getName());
+                        setTableFunctionResults(key, res);
+                        return res;
+                    }
+                    catch (Exception & e)
+                    {
+                        e.addMessage(" while resolving Python external stream '{}'", table->getStorageID().getNameForLogs());
+                        throw;
+                    }
                 }
             }
         }

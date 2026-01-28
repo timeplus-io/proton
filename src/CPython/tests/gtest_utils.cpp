@@ -94,6 +94,28 @@ TEST_F(CPythonTest, getExceptionMessage)
     });
 }
 
+TEST_F(CPythonTest, isIterableClearsPyObjectHasAttrError)
+{
+    const char * class_def = R"(
+class FaultGetAttribute:
+    def __getattribute__(self, name):
+        raise RuntimeError("Simulated __getattribute__ failure")
+)";
+
+    PyRun_SimpleString(class_def);
+
+    assertNoLeak([&]() {
+        auto py_class = getClass("FaultGetAttribute", "__main__");
+        EXPECT_TRUE(py_class);
+
+        auto instance = newInstance(py_class);
+        EXPECT_TRUE(instance);
+
+        EXPECT_FALSE(isIterable(instance));
+        EXPECT_FALSE(hasException());
+    });
+}
+
 TEST_F(CPythonTest, getAttr)
 {
     assertNoLeak([]() {
