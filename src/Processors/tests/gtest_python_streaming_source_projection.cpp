@@ -272,6 +272,67 @@ TEST_F(CPythonTest, PythonStreamingSourcePreservesRowCountWhenNoColumnsProjected
     });
 }
 
+TEST_F(CPythonTest, PythonStreamingSourceSkipsEmptyBatches)
+{
+    assertNoLeak([&]() {
+        auto string_type = std::make_shared<DataTypeString>();
+        auto int32_type = std::make_shared<DataTypeInt32>();
+
+        DataTypes element_types = {string_type, int32_type};
+        Strings element_names = {"type", "value"};
+        auto tuple_type = std::make_shared<DataTypeTuple>(element_types, element_names);
+
+        Block header = {ColumnWithTypeAndName{string_type->createColumn(), string_type, "type"}};
+
+        cpython::PyObjectPtr iterator;
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+
+            cpython::PyObjectPtr batches{PyList_New(2)};
+            ASSERT_TRUE(batches);
+
+            /// First batch is empty ([]), second batch has one row.
+            PyObject * empty_batch = PyList_New(0);
+            ASSERT_TRUE(empty_batch);
+            PyList_SET_ITEM(batches.get(), 0, empty_batch);
+
+            PyObject * non_empty_batch = PyList_New(1);
+            ASSERT_TRUE(non_empty_batch);
+
+            PyObject * row = PyTuple_New(2);
+            ASSERT_TRUE(row);
+            PyTuple_SET_ITEM(row, 0, PyUnicode_FromString("ticker"));
+            PyTuple_SET_ITEM(row, 1, PyLong_FromLong(42));
+            PyList_SET_ITEM(non_empty_batch, 0, row);
+            PyList_SET_ITEM(batches.get(), 1, non_empty_batch);
+
+            iterator = cpython::PyObjectPtr{PyObject_GetIter(batches.get())};
+            ASSERT_TRUE(iterator);
+        }
+
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto sink = std::make_shared<CollectBlocksSink>(source->getPort().getHeader());
+
+        connect(source->getPort(), sink->getPort());
+
+        auto processors = std::make_shared<Processors>();
+        processors->emplace_back(source);
+        processors->emplace_back(sink);
+
+        QueryStatusPtr element;
+        PipelineExecutor executor(processors, element);
+        executor.execute(1);
+
+        ASSERT_EQ(sink->getBlocks().size(), 1U);
+        const auto & block = sink->getBlocks().front();
+        ASSERT_EQ(block.columns(), 1U);
+        ASSERT_TRUE(block.has("type"));
+
+        const auto & col = assert_cast<const ColumnString &>(*block.getByName("type").column);
+        ASSERT_EQ(col.getDataAt(0).toString(), "ticker");
+    });
+}
+
 TEST_F(CPythonTest, PythonStreamingSourceCancelUnblocksIterator)
 {
     assertNoLeak([&]() {

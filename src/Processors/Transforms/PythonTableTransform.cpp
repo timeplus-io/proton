@@ -141,7 +141,7 @@ Block PythonTableTransform::convertPythonResultToBlock(const cpython::PyObjectPt
 Block PythonTableTransform::filterOutputBlock(Block && block) const
 {
     if (requested_output_columns.empty())
-        return std::move(block);
+        return {};
 
     Block filtered_block;
     filtered_block.reserve(requested_output_columns.size());
@@ -232,8 +232,10 @@ void PythonTableTransform::transform(Chunk & chunk)
         res_block = convertPythonResultToBlock(py_result);
     }
 
+    const auto result_rows = res_block.rows();
     auto filtered_block = filterOutputBlock(std::move(res_block));
-    chunk.setColumns(filtered_block.getColumns(), filtered_block.rows());
+    const auto output_rows = requested_output_columns.empty() ? result_rows : filtered_block.rows();
+    chunk.setColumns(filtered_block.getColumns(), output_rows);
 }
 }
 

@@ -227,51 +227,62 @@ Chunk PythonStreamingSource::generate()
     python_thread_id.store(PyThread_get_thread_ident(), std::memory_order_release);
     SCOPE_EXIT({ python_thread_id.store(0, std::memory_order_release); });
 
-    auto next_item = cpython::iterNext(py_iterator);
-    if (!next_item)
-    {
-        /// Iterator exhausted
-        exhausted = true;
-        return {};
-    }
-
     const auto & output_header = getPort().getHeader();
-    if (output_header.columns() == 0)
+
+    while (true)
     {
-        const auto * tuple_type_ptr = assert_cast<const DataTypeTuple *>(tuple_type.get());
-        auto normalized = cpython::normalizePythonListForTuple(next_item, tuple_type_ptr->getElements().size());
-
-        if (!normalized)
+        if (isCancelled() || cancel_requested.load(std::memory_order_acquire))
+        {
+            exhausted = true;
             return {};
+        }
 
-        if (!PyList_Check(normalized.get()))
-            throw Exception(
-                ErrorCodes::UDF_RUNNING_ERROR,
-                "PythonStreamingSource expected a list of rows from Python generator, got {}",
-                cpython::getObjectType(normalized));
-
-        const Py_ssize_t rows = PyList_Size(normalized.get());
-        if (rows <= 0)
+        auto next_item = cpython::iterNext(py_iterator);
+        if (!next_item)
+        {
+            /// Iterator exhausted
+            exhausted = true;
             return {};
+        }
 
-        return Chunk(Columns{}, static_cast<UInt64>(rows));
+        if (output_header.columns() == 0)
+        {
+            const auto * tuple_type_ptr = assert_cast<const DataTypeTuple *>(tuple_type.get());
+            auto normalized = cpython::normalizePythonListForTuple(next_item, tuple_type_ptr->getElements().size());
+
+            /// Skip empty batches rather than terminating the stream.
+            if (!normalized)
+                continue;
+
+            if (!PyList_Check(normalized.get()))
+                throw Exception(
+                    ErrorCodes::UDF_RUNNING_ERROR,
+                    "PythonStreamingSource expected a list of rows from Python generator, got {}",
+                    cpython::getObjectType(normalized));
+
+            const Py_ssize_t rows = PyList_Size(normalized.get());
+            if (rows <= 0)
+                continue;
+
+            return Chunk(Columns{}, static_cast<UInt64>(rows));
+        }
+
+        /// Convert the yielded Python object to a Block.
+        /// The yielded item should be a list of tuples (batch of rows).
+        auto block = needs_projection_pushdown ? convertPythonResultToOutputBlock(next_item) : convertPythonResultToBlock(next_item);
+
+        if (block.rows() == 0)
+            continue;
+
+        /// StoragePythonTable may request only a subset of columns (projection pushdown).
+        /// Python generator still yields full rows, so we must align the emitted chunk with OutputPort header.
+        Columns output_columns;
+        output_columns.reserve(output_header.columns());
+        for (const auto & header_col : output_header)
+            output_columns.emplace_back(block.getByName(header_col.name).column);
+
+        return Chunk(std::move(output_columns), block.rows());
     }
-
-    /// Convert the yielded Python object to a Block
-    /// The yielded item should be a list of tuples (batch of rows)
-    auto block = needs_projection_pushdown ? convertPythonResultToOutputBlock(next_item) : convertPythonResultToBlock(next_item);
-
-    if (block.rows() == 0)
-        return {};
-
-    /// StoragePythonTable may request only a subset of columns (projection pushdown).
-    /// Python generator still yields full rows, so we must align the emitted chunk with OutputPort header.
-    Columns output_columns;
-    output_columns.reserve(output_header.columns());
-    for (const auto & header_col : output_header)
-        output_columns.emplace_back(block.getByName(header_col.name).column);
-
-    return Chunk(std::move(output_columns), block.rows());
 }
 }
 
