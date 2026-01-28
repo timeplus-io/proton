@@ -27,6 +27,7 @@
 #    include <DataTypes/DataTypesNumber.h>
 #    include <IO/ReadBufferFromString.h>
 #    include <IO/ReadHelpers.h>
+#    include <Common/Exception.h>
 #    include <Common/LocalDate.h>
 #    include <Common/LocalDateTime.h>
 #    include <Common/LocalDateTime64.h>
@@ -430,6 +431,69 @@ TEST_F(CPythonTest, ColumnTuple)
                 ASSERT_TRUE(PyUnicode_Check(second));
                 ASSERT_EQ(PyUnicode_AsUTF8(second), v[1].get<String>());
             });
+    });
+}
+
+TEST_F(CPythonTest, ColumnTupleFromListRows)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("tuple(uint32, string)");
+
+        cpython::PyObjectPtr py_list{PyList_New(2)};
+        ASSERT_TRUE(py_list);
+
+        cpython::PyObjectPtr row0{PyList_New(2)};
+        ASSERT_TRUE(row0);
+        PyList_SET_ITEM(row0.get(), 0, PyLong_FromUnsignedLong(1));
+        PyList_SET_ITEM(row0.get(), 1, PyUnicode_FromString("hello"));
+        PyList_SET_ITEM(py_list.get(), 0, row0.release());
+
+        cpython::PyObjectPtr row1{PyList_New(2)};
+        ASSERT_TRUE(row1);
+        PyList_SET_ITEM(row1.get(), 0, PyLong_FromUnsignedLong(2));
+        PyList_SET_ITEM(row1.get(), 1, PyUnicode_FromString("world"));
+        PyList_SET_ITEM(py_list.get(), 1, row1.release());
+
+        auto expected = data_type->createColumn();
+        Tuple tuple0;
+        tuple0.push_back(UInt32(1));
+        tuple0.push_back(String("hello"));
+        expected->insert(tuple0);
+
+        Tuple tuple1;
+        tuple1.push_back(UInt32(2));
+        tuple1.push_back(String("world"));
+        expected->insert(tuple1);
+
+        auto res_col = cpython::convertPythonListToColumn(py_list, data_type);
+        ASSERT_TRUE(res_col != nullptr);
+        ASSERT_EQ(res_col->size(), expected->size());
+        for (size_t i = 0; i < expected->size(); i++)
+            ASSERT_TRUE((*res_col)[i] == (*expected)[i]);
+    });
+}
+
+TEST_F(CPythonTest, ColumnTupleRejectsWrongArity)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("tuple(uint32, string)");
+
+        cpython::PyObjectPtr py_list{PyList_New(1)};
+        ASSERT_TRUE(py_list);
+
+        cpython::PyObjectPtr row0{PyList_New(1)};
+        ASSERT_TRUE(row0);
+        PyList_SET_ITEM(row0.get(), 0, PyLong_FromUnsignedLong(1));
+        PyList_SET_ITEM(py_list.get(), 0, row0.release());
+
+        try
+        {
+            (void)cpython::convertPythonListToColumn(py_list, data_type);
+            FAIL() << "Expected DB::Exception due to tuple/list arity mismatch";
+        }
+        catch (const DB::Exception &)
+        {
+        }
     });
 }
 
