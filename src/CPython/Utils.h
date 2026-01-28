@@ -51,6 +51,10 @@ PyObjectPtr executeObject(const PyObjectPtr & obj, const PyObjectPtr & args = Py
 /// Check if Python object is a generator or iterator
 bool isGenerator(const PyObjectPtr & obj);
 
+/// Check if Python object is an async coroutine or async generator.
+/// These objects are not compatible with synchronous iteration via PyIter_Next.
+bool isAsyncGeneratorOrCoroutine(const PyObjectPtr & obj);
+
 /// Check if Python object is iterable (has __iter__ method)
 bool isIterable(const PyObjectPtr & obj);
 

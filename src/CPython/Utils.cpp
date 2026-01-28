@@ -331,15 +331,19 @@ bool isGenerator(const PyObjectPtr & obj)
     if (PyGen_Check(obj.get()))
         return true;
 
-    /// Check if it's a coroutine or async generator
-    if (PyCoro_CheckExact(obj.get()) || PyAsyncGen_CheckExact(obj.get()))
-        return true;
-
     /// Check if it has __next__ method (iterator protocol)
     if (PyIter_Check(obj.get()))
         return true;
 
     return false;
+}
+
+bool isAsyncGeneratorOrCoroutine(const PyObjectPtr & obj)
+{
+    if (!obj)
+        return false;
+
+    return PyCoro_CheckExact(obj.get()) || PyAsyncGen_CheckExact(obj.get());
 }
 
 bool isIterable(const PyObjectPtr & obj)

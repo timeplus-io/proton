@@ -18,6 +18,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int UDF_RUNNING_ERROR;
+extern const int UNSUPPORTED;
 }
 
 namespace
@@ -180,6 +181,12 @@ void PythonTableTransform::transform(Chunk & chunk)
     }
 
     auto py_result = cpython::executeObject(py_function, py_args);
+
+    if (cpython::isAsyncGeneratorOrCoroutine(py_result))
+        throw Exception(
+            ErrorCodes::UNSUPPORTED,
+            "Python external stream does not support coroutine/async generator results. "
+            "Return a synchronous iterator (implementing __iter__/__next__) or a list.");
 
     const bool result_is_generator = cpython::isGenerator(py_result);
     if (mode == PythonTableMode::Streaming && !result_is_generator)

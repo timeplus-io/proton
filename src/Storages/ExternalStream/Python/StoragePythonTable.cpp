@@ -21,6 +21,7 @@ namespace ErrorCodes
 {
 extern const int UDF_RUNNING_ERROR;
 extern const int BAD_ARGUMENTS;
+extern const int UNSUPPORTED;
 }
 
 namespace
@@ -135,6 +136,16 @@ Pipe StoragePythonTable::read(
     bool result_is_generator = false;
     {
         cpython::GILGuard gil_guard;
+
+        if (cpython::isAsyncGeneratorOrCoroutine(py_result))
+        {
+            py_result.reset();
+            cpython::unloadModule(module_name);
+            throw Exception(
+                ErrorCodes::UNSUPPORTED,
+                "Python external stream does not support coroutine/async generator results. "
+                "Return a synchronous iterator (implementing __iter__/__next__) or a list.");
+        }
 
         result_is_generator = cpython::isGenerator(py_result);
 
