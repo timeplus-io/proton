@@ -82,6 +82,28 @@ private:
     std::condition_variable cv;
     std::vector<Block> blocks;
 };
+
+class RowCountSink final : public ISink
+{
+public:
+    explicit RowCountSink(Block header) : ISink(std::move(header), ProcessorID::EmptySinkID) { }
+
+    String getName() const override { return "RowCountSink"; }
+
+    size_t getRowCount() const { return row_count; }
+    size_t getColumnCount() const { return column_count; }
+
+protected:
+    void consume(Chunk chunk) override
+    {
+        row_count += chunk.getNumRows();
+        column_count = chunk.getColumns().size();
+    }
+
+private:
+    size_t row_count = 0;
+    size_t column_count = 0;
+};
 }
 
 TEST_F(CPythonTest, PythonStreamingSourceProjectionRespectsHeader)
@@ -193,6 +215,60 @@ TEST_F(CPythonTest, PythonStreamingSourceProjectionSkipsUnselectedConversion)
 
         const auto & col = assert_cast<const ColumnString &>(*block.getByName("type").column);
         ASSERT_EQ(col.getDataAt(0).toString(), "ticker");
+    });
+}
+
+TEST_F(CPythonTest, PythonStreamingSourcePreservesRowCountWhenNoColumnsProjected)
+{
+    assertNoLeak([&]() {
+        auto string_type = std::make_shared<DataTypeString>();
+        auto int32_type = std::make_shared<DataTypeInt32>();
+
+        DataTypes element_types = {string_type, int32_type};
+        Strings element_names = {"type", "value"};
+        auto tuple_type = std::make_shared<DataTypeTuple>(element_types, element_names);
+
+        Block header;
+
+        cpython::PyObjectPtr iterator;
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+
+            cpython::PyObjectPtr rows{PyList_New(3)};
+            ASSERT_TRUE(rows);
+
+            auto make_row = [](const char * type_value, int int_value) {
+                PyObject * row = PyTuple_New(2);
+                if (!row)
+                    return row;
+                PyTuple_SET_ITEM(row, 0, PyUnicode_FromString(type_value));
+                PyTuple_SET_ITEM(row, 1, PyLong_FromLong(int_value));
+                return row;
+            };
+
+            PyList_SET_ITEM(rows.get(), 0, make_row("a", 1));
+            PyList_SET_ITEM(rows.get(), 1, make_row("b", 2));
+            PyList_SET_ITEM(rows.get(), 2, make_row("c", 3));
+
+            iterator = cpython::PyObjectPtr{PyObject_GetIter(rows.get())};
+            ASSERT_TRUE(iterator);
+        }
+
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto sink = std::make_shared<RowCountSink>(source->getPort().getHeader());
+
+        connect(source->getPort(), sink->getPort());
+
+        auto processors = std::make_shared<Processors>();
+        processors->emplace_back(source);
+        processors->emplace_back(sink);
+
+        QueryStatusPtr element;
+        PipelineExecutor executor(processors, element);
+        executor.execute(1);
+
+        EXPECT_EQ(sink->getColumnCount(), 0U);
+        EXPECT_EQ(sink->getRowCount(), 3U);
     });
 }
 
