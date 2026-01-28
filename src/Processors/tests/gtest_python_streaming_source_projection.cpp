@@ -327,6 +327,59 @@ TEST_F(CPythonTest, PythonStreamingSourcePreservesRowCountWhenNoColumnsProjected
     });
 }
 
+TEST_F(CPythonTest, PythonStreamingSourceNoColumnsRejectsWrongArity)
+{
+    assertNoLeak([&]() {
+        auto string_type = std::make_shared<DataTypeString>();
+        auto int32_type = std::make_shared<DataTypeInt32>();
+
+        DataTypes element_types = {string_type, int32_type};
+        Strings element_names = {"type", "value"};
+        auto tuple_type = std::make_shared<DataTypeTuple>(element_types, element_names);
+
+        Block header; /// no columns projected
+
+        cpython::PyObjectPtr iterator;
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+
+            cpython::PyObjectPtr rows{PyList_New(1)};
+            ASSERT_TRUE(rows);
+
+            /// Wrong arity row (1 instead of 2).
+            PyObject * row = PyTuple_New(1);
+            ASSERT_TRUE(row);
+            PyTuple_SET_ITEM(row, 0, PyUnicode_FromString("ticker"));
+            PyList_SET_ITEM(rows.get(), 0, row);
+
+            iterator = cpython::PyObjectPtr{PyObject_GetIter(rows.get())};
+            ASSERT_TRUE(iterator);
+        }
+
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto sink = std::make_shared<RowCountSink>(source->getPort().getHeader());
+
+        connect(source->getPort(), sink->getPort());
+
+        auto processors = std::make_shared<Processors>();
+        processors->emplace_back(source);
+        processors->emplace_back(sink);
+
+        QueryStatusPtr element;
+        PipelineExecutor executor(processors, element);
+
+        try
+        {
+            executor.execute(1);
+            FAIL() << "Expected DB::Exception due to row arity mismatch";
+        }
+        catch (const DB::Exception & e)
+        {
+            EXPECT_EQ(e.code(), DB::ErrorCodes::UDF_RUNNING_ERROR);
+        }
+    });
+}
+
 TEST_F(CPythonTest, PythonStreamingSourceSkipsEmptyBatches)
 {
     assertNoLeak([&]() {
