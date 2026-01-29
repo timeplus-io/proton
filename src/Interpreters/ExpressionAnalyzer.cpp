@@ -1294,8 +1294,8 @@ static std::shared_ptr<IJoin> tryCreateJoin(
     {
         const auto & settings = context->getSettings();
 
-        /// proton: starts. Enable hybrid hash table at right side for case `Stream join Table`
-        if (streaming && settings.default_hash_join.value == HashJoinType::Hybrid)
+        /// proton: starts. Enable hybrid hash table at right side for case `Stream join Table` (Only works with one disjunct)
+        if (streaming && settings.default_hash_join.value == HashJoinType::Hybrid && analyzed_join->oneDisjunct())
         {
             const auto & tables = analyzed_join->getTablesWithColumns();
             assert(tables.size() == 2);
