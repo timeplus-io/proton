@@ -481,7 +481,7 @@ jobs:
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   update_cache_address_x64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: ./.github/workflows/run_command.yml
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.cache_only }}
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}

@@ -215,7 +215,11 @@ jobs:
         timeout-minutes: ${{ inputs.timeout }}
         run: |
           {
-            echo "Command: ${{ inputs.command }}"
+            echo "::group::Command"
+            cat <<'__PROTON_COMMAND_EOF__'
+          ${{ inputs.command }}
+          __PROTON_COMMAND_EOF__
+            echo "::endgroup::"
             echo "--- Command Output ---"
             ${{ inputs.command }}
           } 1> >(tee /artifacts/${{ inputs.upjob }}_execute_command_${{ github.run_id }}.txt)
