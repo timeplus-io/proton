@@ -2,6 +2,12 @@ name: NightlyTest
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
+    inputs:
+      cache_only:
+        description: 'Only refresh the S3 build cache (skip image build/push and all tests)'
+        required: false
+        default: false
+        type: boolean
   # Disabled nightly test schedule
   # schedule:
     # *     *     *     *     *
@@ -75,6 +81,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_unit_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -96,6 +103,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_smoke_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     outputs:
       command: |
         # run smoke test
@@ -122,6 +130,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateless_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -146,6 +155,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateful_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -196,6 +206,7 @@ jobs:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
   prepare_sanitizer_performance_test:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     outputs:
       command: |
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
@@ -386,6 +397,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_address_build:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -445,6 +457,7 @@ jobs:
   build_address_x64:
     needs: prepare_address_build
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -467,9 +480,76 @@ jobs:
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+  update_cache_address_x64:
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.cache_only }}
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_AMI }}
+      ec2-volume-size: ${{ vars.VOLUME_SIZE }}
+      submodules: 'true'
+      sanitizer: "address"
+      arch: ${{ vars.X64_ARCH }}
+      tag: 'sanitizer'
+      upjob: update_cache_address_x64
+      command: |
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE"
+
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
+        CACHE_TARBALL="cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz"
+        CACHE_S3_URI="s3://tp-internal2/proton-oss/$CACHE_TARBALL"
+
+        mkdir -p "$GITHUB_WORKSPACE/ccache"
+        echo "max_size = 100.0G" > "$GITHUB_WORKSPACE/ccache/ccache.conf"
+
+        if aws s3 ls "$CACHE_S3_URI" >/dev/null 2>&1; then
+          aws s3 cp --no-progress "$CACHE_S3_URI" "$CACHE_TARBALL"
+          tar -zxf "$CACHE_TARBALL" -C "$GITHUB_WORKSPACE/ccache"
+          rm -f "$CACHE_TARBALL"
+        else
+          echo "No existing cache found at $CACHE_S3_URI; starting from empty ccache."
+        fi
+
+        ./docker/packager/packager \
+          --package-type binary \
+          --docker-image-version clang-19 \
+          --sanitizer "$SANITIZER" \
+          --proton-build \
+          --enable-proton-local \
+          --cache ccache \
+          --ccache_dir "$GITHUB_WORKSPACE/ccache" \
+          --output-dir "$GITHUB_WORKSPACE/output"
+
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton failed (missing output/proton)"
+          exit 127
+        fi
+
+        tar -zcf "$CACHE_TARBALL" -C "$GITHUB_WORKSPACE/ccache" .
+        aws s3 cp --no-progress "$CACHE_TARBALL" "s3://tp-internal2/proton-oss/"
+
+        rm -rf "$GITHUB_WORKSPACE/ccache"
+        rm -rf "$GITHUB_WORKSPACE/output"
+        rm -rf "$GITHUB_WORKSPACE/build_docker"
+        rm -f "$CACHE_TARBALL"
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_address_x64:
     needs: [prepare_sanitizer_unit_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -496,6 +576,7 @@ jobs:
   smoke_test_address_x64:
     needs: [prepare_sanitizer_smoke_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     with:
       ec2-instance-type: c5.9xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -522,6 +603,7 @@ jobs:
   stateless_test_address_x64:
     needs: [prepare_sanitizer_stateless_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -548,6 +630,7 @@ jobs:
   stateful_test_address_x64:
     needs: [prepare_sanitizer_stateful_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -574,6 +657,7 @@ jobs:
   performance_test_address_x64:
     needs: [prepare_sanitizer_performance_test, build_address_x64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.cache_only }}
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
