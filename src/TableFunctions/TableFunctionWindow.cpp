@@ -151,7 +151,10 @@ TableFunctionWindow::createTimestampFunctionDescription(ASTPtr timestamp_expr_as
     const auto & time_column = timestamp_func_expr->getSampleBlock().getByPosition(0);
     assert(time_column.name == ProtonConsts::STREAMING_TIMESTAMP_ALIAS);
     if (!isDateTime(time_column.type) && !isDateTime64(time_column.type))
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "The resulting type of time column expression shall be datetime or datetime64");
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "The resulting type of time column expression shall be datetime or datetime64. Current type: {}",
+            time_column.type->getName());
 
     return std::make_shared<TimestampFunctionDescription>(
         std::move(timestamp_expr_ast), std::move(timestamp_func_expr), syntax_analyzer_result->requiredSourceColumns(), is_now_func);
