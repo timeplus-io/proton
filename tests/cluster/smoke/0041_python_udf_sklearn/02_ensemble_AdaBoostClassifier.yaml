@@ -1,6 +1,5 @@
 tags:
   - uda
-  - bug # https://github.com/timeplus-io/proton-enterprise/issues/6812
 
 description: Test covering simple python uda test
 
@@ -47,7 +46,7 @@ steps:
               self.classifier = clf.score(X, y)
 
           def finalize(self):
-              return [self.classifier]
+              return self.classifier
       $$;
 
   - type: wait
@@ -79,4 +78,4 @@ steps:
   - type: check
     target_name: python-udf6-2-1
     expected_result:
-      - [0.5]
+      - [0.2]

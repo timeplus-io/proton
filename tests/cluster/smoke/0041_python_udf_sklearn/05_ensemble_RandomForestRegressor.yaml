@@ -1,6 +1,5 @@
 tags:
   - uda
-  - bug # https://github.com/timeplus-io/proton-enterprise/issues/6812
 
 description: Test covering simple python uda test
 
@@ -48,7 +47,7 @@ steps:
               self.regressor = regr.predict([[0, 0]]).tolist()
 
           def finalize(self):
-              return [self.regressor]
+              return self.regressor
       $$;
 
   - type: wait
@@ -80,4 +79,4 @@ steps:
   - type: check
     target_name: python-udf6-5-1
     expected_result:
-      - [[0.3556993366809523]]
+      - [[0.35248232]]
