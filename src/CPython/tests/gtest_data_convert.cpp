@@ -161,6 +161,82 @@ TEST_F(CPythonTest, ColumnInt64)
     });
 }
 
+#if USE_NUMPY
+
+TEST_F(CPythonTest, ColumnInt64FromNumpyScalar)
+{
+    bool has_numpy = true;
+
+    assertNoLeak([&]() {
+        cpython::PyObjectPtr numpy{PyImport_ImportModule("numpy")};
+        if (!numpy)
+        {
+            if (PyErr_Occurred())
+                PyErr_Clear();
+            has_numpy = false;
+            return;
+        }
+
+        cpython::PyObjectPtr int64_type{PyObject_GetAttrString(numpy.get(), "int64")};
+        ASSERT_TRUE(int64_type);
+
+        cpython::PyObjectPtr arg{PyLong_FromLongLong(15)};
+        ASSERT_TRUE(arg);
+
+        cpython::PyObjectPtr scalar{PyObject_CallFunctionObjArgs(int64_type.get(), arg.get(), nullptr)};
+        ASSERT_TRUE(scalar);
+
+        auto data_type = makeDataType("int64");
+        auto column = data_type->createColumn();
+        cpython::insertPythonObjectToColumn(*column, scalar, data_type);
+
+        auto & col = assert_cast<ColumnInt64 &>(*column);
+        ASSERT_EQ(col.size(), 1);
+        ASSERT_EQ(col[0], 15);
+    });
+
+    if (!has_numpy)
+        GTEST_SKIP() << "numpy is not available in the test environment";
+}
+
+TEST_F(CPythonTest, ColumnUInt64FromNumpyScalar)
+{
+    bool has_numpy = true;
+
+    assertNoLeak([&]() {
+        cpython::PyObjectPtr numpy{PyImport_ImportModule("numpy")};
+        if (!numpy)
+        {
+            if (PyErr_Occurred())
+                PyErr_Clear();
+            has_numpy = false;
+            return;
+        }
+
+        cpython::PyObjectPtr uint64_type{PyObject_GetAttrString(numpy.get(), "uint64")};
+        ASSERT_TRUE(uint64_type);
+
+        cpython::PyObjectPtr arg{PyLong_FromLongLong(15)};
+        ASSERT_TRUE(arg);
+
+        cpython::PyObjectPtr scalar{PyObject_CallFunctionObjArgs(uint64_type.get(), arg.get(), nullptr)};
+        ASSERT_TRUE(scalar);
+
+        auto data_type = makeDataType("uint64");
+        auto column = data_type->createColumn();
+        cpython::insertPythonObjectToColumn(*column, scalar, data_type);
+
+        auto & col = assert_cast<ColumnUInt64 &>(*column);
+        ASSERT_EQ(col.size(), 1);
+        ASSERT_EQ(col[0], 15);
+    });
+
+    if (!has_numpy)
+        GTEST_SKIP() << "numpy is not available in the test environment";
+}
+
+#endif
+
 TEST_F(CPythonTest, ColumnNullableInt32)
 {
     assertNoLeak([]() {

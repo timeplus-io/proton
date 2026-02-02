@@ -337,6 +337,50 @@ PyObjectPtr columnToPythonList(const IColumn & col, const DataTypePtr & type, UI
     return py_list;
 }
 
+namespace
+{
+ALWAYS_INLINE PyObject * ensurePyLongObject(PyObject * object, const char * target_type_name, PyObjectPtr & tmp_py_long)
+{
+    if (PyLong_Check(object))
+        return object;
+
+    tmp_py_long.reset(PyNumber_Index(object)); /// New reference on success
+    if (!tmp_py_long)
+        raiseConvertionException(target_type_name, object, hasException() ? getExceptionMessage() : "failed to call __index__()");
+
+    if (!PyLong_Check(tmp_py_long.get()))
+        raiseConvertionException(target_type_name, object, "PyNumber_Index() returned non-int");
+
+    return tmp_py_long.get();
+}
+
+template <typename T>
+ALWAYS_INLINE std::decay_t<T> loadSignedFromPyLong(PyObject * object, const char * target_type_name)
+{
+    PyObjectPtr tmp_py_long;
+    PyObject * py_long = ensurePyLongObject(object, target_type_name, tmp_py_long);
+
+    long value = PyLong_AsLong(py_long);
+    if (hasException())
+        raiseConvertionException(target_type_name, object, getExceptionMessage());
+
+    return static_cast<std::decay_t<T>>(value);
+}
+
+template <typename T>
+ALWAYS_INLINE std::decay_t<T> loadUnsignedFromPyLong(PyObject * object, const char * target_type_name)
+{
+    PyObjectPtr tmp_py_long;
+    PyObject * py_long = ensurePyLongObject(object, target_type_name, tmp_py_long);
+
+    unsigned long value = PyLong_AsUnsignedLong(py_long);
+    if (hasException())
+        raiseConvertionException(target_type_name, object, getExceptionMessage());
+
+    return static_cast<std::decay_t<T>>(value);
+}
+}
+
 ALWAYS_INLINE bool loadFromPyBool(PyObject * object)
 {
     if (!PyBool_Check(object))
@@ -348,37 +392,39 @@ ALWAYS_INLINE bool loadFromPyBool(PyObject * object)
 template <typename T>
 ALWAYS_INLINE std::decay_t<T> loadFromPyUnsignedLong(PyObject * object)
 {
-    if (!PyLong_Check(object))
-        raiseConvertionException("unsigned long", object);
-
-    return static_cast<std::decay_t<T>>(PyLong_AsUnsignedLong(object));
+    return loadUnsignedFromPyLong<T>(object, "unsigned long");
 }
 
 template <>
 ALWAYS_INLINE UInt64 loadFromPyUnsignedLong<UInt64>(PyObject * object)
 {
-    if (!PyLong_Check(object))
-        raiseConvertionException("unsigned long", object);
+    PyObjectPtr tmp_py_long;
+    PyObject * py_long = ensurePyLongObject(object, "unsigned long", tmp_py_long);
 
-    return PyLong_AsUnsignedLongLong(object);
+    UInt64 value = PyLong_AsUnsignedLongLong(py_long);
+    if (hasException())
+        raiseConvertionException("unsigned long", object, getExceptionMessage());
+
+    return value;
 }
 
 template <typename T>
 ALWAYS_INLINE std::decay_t<T> loadFromPyLong(PyObject * object)
 {
-    if (!PyLong_Check(object))
-        raiseConvertionException("long", object);
-
-    return static_cast<std::decay_t<T>>(PyLong_AsLong(object));
+    return loadSignedFromPyLong<T>(object, "long");
 }
 
 template <>
 ALWAYS_INLINE Int64 loadFromPyLong<Int64>(PyObject * object)
 {
-    if (!PyLong_Check(object))
-        raiseConvertionException("long", object);
+    PyObjectPtr tmp_py_long;
+    PyObject * py_long = ensurePyLongObject(object, "long", tmp_py_long);
 
-    return PyLong_AsLongLong(object);
+    Int64 value = PyLong_AsLongLong(py_long);
+    if (hasException())
+        raiseConvertionException("long", object, getExceptionMessage());
+
+    return value;
 }
 
 template <typename T>
