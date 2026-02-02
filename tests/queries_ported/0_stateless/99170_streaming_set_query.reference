@@ -1,0 +1,15 @@
+(CreatingSets)
+DelayedPorts 2 → 1
+  (Expression)
+  ExpressionTransform
+    (Filter)
+    FilterTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99170_main,shard=0
+  (CreatingSet)
+  CreatingSetsTransform
+    (Expression)
+    ExpressionTransform
+      (ReadFromPreparedSource)
+      NullSource 0 → 1

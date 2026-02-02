@@ -15,6 +15,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 static ITransformingStep::Traits getTraits()
@@ -176,6 +177,11 @@ std::vector<std::unique_ptr<QueryPlan>> DelayedCreatingSetsStep::makePlansForSet
         auto plan = future_set->build(step.context);
         if (!plan)
             continue;
+
+        /// proton: starts
+        if (plan->isStreaming())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Building set for subquery in streaming mode is not supported");
+        /// proton: ends
 
         plan->optimize(QueryPlanOptimizationSettings::fromContext(step.context));
 
