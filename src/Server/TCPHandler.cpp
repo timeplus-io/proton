@@ -1442,7 +1442,7 @@ void TCPHandler::receiveQuery()
         else
         {
             LOG_DEBUG(log, "User (initial, interserver mode): {}", client_info.initial_user);
-            session->authenticate(AlwaysAllowCredentials{client_info.initial_user}, client_info.initial_address);
+            session->authenticate(AlwaysAllowCredentials{client_info.initial_user}, *client_info.initial_address);
         }
 #else
         auto exception = Exception(ErrorCodes::AUTHENTICATION_FAILED,

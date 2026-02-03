@@ -515,7 +515,7 @@ std::shared_ptr<const ContextAccess> AccessControl::getContextAccess(
     params.allow_introspection = settings.allow_introspection_functions;
     params.interface = client_info.interface;
     params.http_method = client_info.http_method;
-    params.address = client_info.current_address.host();
+    params.address = client_info.current_address->host();
     params.quota_key = client_info.quota_key;
 
     /// Extract the last entry from comma separated list of X-Forwarded-For addresses.

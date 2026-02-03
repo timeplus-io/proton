@@ -338,7 +338,7 @@ void Session::authenticate(const Credentials & credentials_, const Poco::Net::So
     }
 
     prepared_client_info->current_user = credentials_.getUserName();
-    prepared_client_info->current_address = address;
+    prepared_client_info->current_address = std::make_shared<Poco::Net::SocketAddress>(address);
 
     /// proton : starts
     if (const auto * basic_cred = typeid_cast<const BasicCredentials *>(&credentials_))
@@ -355,7 +355,7 @@ void Session::onAuthenticationFailure(const std::optional<String> & user_name, c
     {
         /// Add source address to the log
         auto info_for_log = *prepared_client_info;
-        info_for_log.current_address = address_;
+        info_for_log.current_address = std::make_shared<Poco::Net::SocketAddress>(address_);
         session_log->addLoginFailure(auth_id, info_for_log, user_name, e);
     }
 }
@@ -496,7 +496,9 @@ ContextMutablePtr Session::makeQueryContextImpl(const ClientInfo * client_info_t
     if (prepared_client_info && !prepared_client_info->current_user.empty())
     {
         res_client_info.current_user = prepared_client_info->current_user;
-        res_client_info.current_address = prepared_client_info->current_address;
+        /// Do not share the same address instance between contexts.
+        /// Upstream uses Context::setCurrentAddress(), which deep-copies into a fresh shared_ptr.
+        res_client_info.current_address = std::make_shared<Poco::Net::SocketAddress>(*prepared_client_info->current_address);
     }
 
     /// Set parameters of initial query.
@@ -506,7 +508,10 @@ ContextMutablePtr Session::makeQueryContextImpl(const ClientInfo * client_info_t
     if (res_client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
     {
         res_client_info.initial_user = res_client_info.current_user;
-        res_client_info.initial_address = res_client_info.current_address;
+        /// Do not alias `initial_address` with `current_address`:
+        /// `current_address` can be updated later (e.g. for nested/secondary contexts),
+        /// while "initial" must remain a snapshot of the original client address.
+        res_client_info.initial_address = std::make_shared<Poco::Net::SocketAddress>(*res_client_info.current_address);
     }
 
     /// Sets that row policies of the initial user should be used too.
@@ -548,4 +553,3 @@ void Session::releaseSessionID()
 }
 
 }
-

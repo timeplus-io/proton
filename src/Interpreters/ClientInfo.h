@@ -5,6 +5,8 @@
 #include <base/types.h>
 #include <Common/OpenTelemetryTraceContext.h>
 
+#include <memory>
+
 namespace DB
 {
 
@@ -21,6 +23,8 @@ class ReadBuffer;
 class ClientInfo
 {
 public:
+    ClientInfo();
+
     enum class Interface : uint8_t
     {
         TCP = 1,
@@ -56,12 +60,12 @@ public:
     String current_user;
     String current_user_password;
     String current_query_id;
-    Poco::Net::SocketAddress current_address;
+    std::shared_ptr<Poco::Net::SocketAddress> current_address;
 
     /// When query_kind == INITIAL_QUERY, these values are equal to current.
     String initial_user;
     String initial_query_id;
-    Poco::Net::SocketAddress initial_address;
+    std::shared_ptr<Poco::Net::SocketAddress> initial_address;
     time_t initial_query_start_time{};
     Decimal64 initial_query_start_time_microseconds{};
 
