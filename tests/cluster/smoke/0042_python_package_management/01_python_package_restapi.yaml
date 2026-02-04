@@ -1,6 +1,5 @@
 tags:
   - restapi
-  - skip
 
 cluster:
   - p1k1
@@ -51,9 +50,19 @@ steps:
     name: python-pkg-01-get-pandas
     node: [p1]
     shell: |
-      curl -X GET http://localhost:8123/proton/v1/python_packages \
-        -H "x-timeplus-user: proton" \
-        -H "x-timeplus-key: proton@t+" 2>/dev/null | jq -c '.data[] | select(.name == "pandas")'
+      i=0
+      resp=""
+      while [ "$i" -lt 60 ]; do
+        resp="$(curl -X GET http://localhost:8123/proton/v1/python_packages -H 'x-timeplus-user: proton' -H 'x-timeplus-key: proton@t+' 2>/dev/null)"
+        out="$(printf '%s' "$resp" | jq -c '.data[]? | select(.name == "pandas") | {name: .name, version: .version}' 2>/dev/null)"
+        if [ -n "$out" ]; then
+          printf '%s\n' "$out"
+          exit 0
+        fi
+        i=$((i+1))
+        sleep 2
+      done
+      printf '%s\n' "$resp" | jq -c '.' 2>/dev/null || printf '%s\n' "$resp"
 
   - type: check
     target_name: python-pkg-01-get-arrow
@@ -96,15 +105,37 @@ steps:
     name: python-pkg-01-uninstall-arrow
     node: [p1]
     shell: |
-      curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "arrow") | length > 0'
+      i=0
+      last=""
+      while [ "$i" -lt 60 ]; do
+        resp="$(curl -X GET http://localhost:8123/proton/v1/python_packages 2>/dev/null)"
+        out="$(printf '%s' "$resp" | jq -c '.data[]? | select(.name == "arrow") | {name: .name, version: .version}' 2>/dev/null)"
+        if [ -z "$out" ]; then
+          exit 0
+        fi
+        last="$out"
+        i=$((i+1))
+        sleep 2
+      done
+      printf '%s\n' "$last"
 
   - type: command
     name: python-pkg-01-uninstall-pandas
     node: [p1]
     shell: |
-      curl -X GET http://localhost:8123/proton/v1/python_packages \
-        -H "x-timeplus-user: proton" \
-        -H "x-timeplus-key: proton@t+" 2>/dev/null | jq -c '.data[] | select(.name == "arrow") | length > 0'
+      i=0
+      last=""
+      while [ "$i" -lt 60 ]; do
+        resp="$(curl -X GET http://localhost:8123/proton/v1/python_packages -H 'x-timeplus-user: proton' -H 'x-timeplus-key: proton@t+' 2>/dev/null)"
+        out="$(printf '%s' "$resp" | jq -c '.data[]? | select(.name == "pandas") | {name: .name, version: .version}' 2>/dev/null)"
+        if [ -z "$out" ]; then
+          exit 0
+        fi
+        last="$out"
+        i=$((i+1))
+        sleep 2
+      done
+      printf '%s\n' "$last"
 
   - type: check
     target_name: python-pkg-01-uninstall-arrow
