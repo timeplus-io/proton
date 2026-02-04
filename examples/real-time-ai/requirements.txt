@@ -1,6 +1,6 @@
 torch>=2.8.0
 transformers>=4.38.0
-unstructured==0.14.3
+unstructured==0.18.18
 bytewax==0.18.2
 fake-useragent==1.4.0
 icecream
