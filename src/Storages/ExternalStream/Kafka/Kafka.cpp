@@ -623,7 +623,7 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
         getLogger(fmt::format("{}.{}", getLoggerName(), producer->name())),
         context);
 
-    producer->start(/*need_poll=*/context->isQueryFromMaterializedView());
+    producer->start(/*need_poll=*/true);
     return sink;
 }
 
