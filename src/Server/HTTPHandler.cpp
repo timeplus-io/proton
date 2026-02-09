@@ -1,4 +1,4 @@
-#include <Server/HTTPHandler.h>
+﻿#include <Server/HTTPHandler.h>
 
 #include <Access/Authentication.h>
 #include <Access/Credentials.h>
@@ -46,6 +46,8 @@
 
 #include <chrono>
 #include <sstream>
+#include <string_view>
+#include <vector>
 
 
 namespace DB
@@ -695,7 +697,7 @@ void HTTPHandler::processQuery(
         {
             /// Other than query parameters are treated as settings.
             if (!customizeQueryParam(context, key, value))
-                settings_changes.push_back({key, value});
+                settings_changes.setSetting(key, value);
         }
     }
 
