@@ -1,0 +1,22 @@
+Test 1: Lambda as second argument without parentheses
+uint64
+Test 2: Lambda as third argument without parentheses
+uint64
+Test 3: Lambda with parentheses (still supported)
+uint64
+Test 4: Single-param lambda as first arg
+[2,3,4]
+Test 5: Lambda in nested function call
+[4,6,8]
+Test 6: Lambda with complex expression
+uint32
+Test 7: Multi-param lambda without parentheses
+[11,22,33]
+Test 8: Multi-param lambda with parentheses
+[11,22,33]
+Test 9: Multi-param lambda with parentheses after non-identifier arg
+5
+Test 10: Lambda as second arg in array_sort
+[3,2,1]
+Test 11: Chained higher-order functions
+[4,6]

@@ -1400,13 +1400,32 @@ public:
             pushOperand(std::move(elements.back()));
             elements.pop_back();
         }
-        /// 3. Put all elements in a single tuple
+        /// proton: starts. Fix lambda parsing when lambda is not the first function argument (#9688)
+        /// Collect a contiguous suffix of identifiers from the elements list as lambda parameters,
+        /// leave everything before them as function arguments.
+        /// e.g., `f('uint64', x -> x + 1)`: suffix = [x], remaining = ['uint64']
+        /// e.g., `array_map(x, y -> x + y, ...)`: suffix = [x, y], remaining = []
+        /// e.g., `f('a', x, y -> expr)`: suffix = [x, y], remaining = ['a']
         else
         {
-            auto function = makeASTFunction("tuple_cast", std::move(elements));
-            elements.clear();
+            /// Scan from the end to find the contiguous suffix of identifiers
+            size_t first_lambda_param = elements.size();
+            while (first_lambda_param > 0 && typeid_cast<ASTIdentifier *>(elements[first_lambda_param - 1].get()))
+            {
+                --first_lambda_param;
+            }
+
+            /// Explicitly fail if we have elements but no lambda parameters (e.g., f(1 -> 2))
+            if (first_lambda_param == elements.size())
+                return false;
+
+            ASTs lambda_params(std::make_move_iterator(elements.begin() + first_lambda_param), std::make_move_iterator(elements.end()));
+            elements.resize(first_lambda_param);
+
+            auto function = makeASTFunction("tuple_cast", std::move(lambda_params));
             pushOperand(function);
         }
+        /// proton: ends.
 
         /// We must check that tuple arguments are identifiers
         auto * func_ptr = operands.back()->as<ASTFunction>();
