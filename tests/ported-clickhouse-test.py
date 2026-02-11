@@ -78,11 +78,6 @@ class HTTPError(Exception):
 # Helpers to execute queries via HTTP interface.
 def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default_format=None):
     #print(f"clickhouse_execute_http, base_args = {base_args}, query = {query}")
-    client = http.client.HTTPConnection(
-        host=base_args.tcp_host,
-        port=base_args.http_port,
-        timeout=timeout)
-
     timeout = int(timeout)
     params = {
         'query': query,
@@ -107,7 +102,13 @@ def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default
         params['default_format'] = default_format
     request_body = '/?' + base_args.client_options_query_str + urllib.parse.urlencode(params)
     #print(f"clickhouse_execute_http request_body = {request_body}")
+    res = None
+    data = b""
     for i in range(MAX_RETRIES):
+        client = http.client.HTTPConnection(
+            host=base_args.tcp_host,
+            port=base_args.http_port,
+            timeout=timeout)
         try:
             client.request('POST', request_body)
             res = client.getresponse()
@@ -118,6 +119,8 @@ def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default
                 raise
 
             sleep(i+1)
+        finally:
+            client.close()
 
     #print(f"clickhouse_execute_http data = {data}")
     if res.status != 200:
@@ -164,9 +167,15 @@ def stop_tests():
 
             # send signal to all processes in group to avoid hung check triggering
             # (to avoid terminating clickhouse-test itself, the signal should be ignored)
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
-            os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
-            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            # Only use killpg if we are the process group leader (i.e., new process group was created)
+            try:
+                if os.getpgrp() == os.getpid():
+                    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                    os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
+                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            except OSError:
+                # Ignore errors if process group operations fail
+                pass
 
 
 def get_db_engine(args, database_name):
@@ -1372,7 +1381,10 @@ if __name__ == '__main__':
     # Move to a new process group and kill it at exit so that we don't have any
     # infinite tests processes left
     # (new process group is required to avoid killing some parent processes)
-    os.setpgid(0, 0)
+    try:
+        os.setpgid(0, 0)
+    except PermissionError:
+        sys.stderr.write("WARNING: os.setpgid(0, 0) not permitted; continuing without new process group\n")
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGHUP, signal_handler)
