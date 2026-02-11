@@ -160,6 +160,7 @@ DECLARE_SETTINGS_TRAITS(ExternalStreamSettingsTraits, LIST_OF_EXTERNAL_STREAM_SE
 struct ExternalStreamSettings : public BaseSettings<ExternalStreamSettingsTraits>
 {
     void loadFromQuery(ASTStorage & storage_def, bool throw_on_unknown = true);
+    void apply(const SettingChange & change, bool throw_on_unknown);
 
     KafkaExternalStreamSettings getKafkaSettings() const
     {

@@ -46,6 +46,8 @@ public:
     void startup() override;
     void shutdown(bool dropping) override;
 
+    void verifySettings(const ExternalStreamSettingsPtr & new_settings, bool change_settings, ContextPtr context_) const override;
+
     bool supportsAccurateSeekTo() const noexcept override { return true; }
     bool supportsSubcolumns() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
@@ -76,7 +78,7 @@ public:
     bool hasSslCaPem() const { return !settings->ssl_ca_pem.value.empty(); }
 
 private:
-    void validateSettings(bool attach);
+    void validateSettings(const ExternalStreamSettingsPtr & settings_, bool throw_on_error);
 
     DB::Kafka::Conf createConf(KafkaExternalStreamSettings settings_);
     void cacheVirtualColumnNamesAndTypes();

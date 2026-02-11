@@ -1,0 +1,8 @@
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9171, target_stream = \'db99171.hec_target1\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9171, target_stream = \'db99171.hec_target1\'\nCOMMENT \'Comment v1\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9171, target_stream = \'db99171.hec_target1\'\nCOMMENT \'Comment v2\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9171, target_stream = \'db99171.hec_target1\'\nCOMMENT \'Comment v2\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9172, target_stream = \'db99171.hec_target1\'\nCOMMENT \'Comment v2\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9172, target_stream = \'db99171.hec_target1\'\nCOMMENT \'Comment v2\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9172, target_stream = \'db99171.hec_target2\'\nCOMMENT \'Comment v2\'
+CREATE EXTERNAL STREAM default.test_alter_external_stream\nENGINE = ExternalStream\nSETTINGS type = \'splunk-hec\', tcp_port = 9172, target_stream = \'db99171.hec_target2\'\nCOMMENT \'Comment v3\'

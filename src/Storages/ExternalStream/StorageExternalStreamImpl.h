@@ -11,6 +11,7 @@
 
 namespace DB
 {
+
 /// Base class of StorageExternalStreamImpl
 class StorageExternalStreamImpl : public IStorage
 {
@@ -51,6 +52,11 @@ public:
     String getLoggerName() const;
 
     bool isLocal() const override { return settings->local.value; }
+
+    /// Check `new_settings` and throw if not meet external stream requirenment.
+    /// `change_settings` is set true when verification is during altering current external setting.
+    /// The function is expected called when: 1) New external stream is created. 2) ALTER STREAM MODIFY SETTINGS command.
+    virtual void verifySettings(const ExternalStreamSettingsPtr & /*new_settings*/, bool /*change_settings*/, ContextPtr /*context_*/) const { }
 
 protected:
     void inferDataFormat();

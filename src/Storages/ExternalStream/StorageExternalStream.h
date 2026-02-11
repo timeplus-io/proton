@@ -64,11 +64,13 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context_) const override;
+    void checkAlterSettingsIsPossible(const AlterCommands & commands, ContextPtr context_) const;
+    void alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder & alter_lock_holder) override;
+
     String getType() const { return external_stream_type; }
 
     std::optional<String> preferredColumn() const override { return external_stream->preferredColumn(); }
-
-    void alter(const AlterCommands & commands, ContextPtr context, AlterLockHolder & alter_lock_holder) override;
 
 protected:
     StorageExternalStream(

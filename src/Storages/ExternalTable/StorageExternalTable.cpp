@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/ExternalTable/ExternalTableFactory.h>
 #include <base/sleep.h>
 #include <Common/logger_useful.h>
@@ -106,6 +107,20 @@ SinkToStoragePtr StorageExternalTable::write(const ASTPtr & query, const Storage
 {
     setThreadName("ExtTblWriter");
     return writeImpl(query, metadata_snapshot, local_context);
+}
+
+void StorageExternalTable::alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder &)
+{
+    if (unlikely(params.empty()))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command can not be empty.");
+
+    auto table_id = getStorageID();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    params.apply(new_metadata, context_);
+
+    /// Propose stream metadata change and alter command. External table metadata will be updated by Metadata Updater.
+    auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+    db->alterTable(context_, table_id, new_metadata, params.front().typeString(), params.astCommands(table_id));
 }
 
 void StorageExternalTable::updateTableSchema()

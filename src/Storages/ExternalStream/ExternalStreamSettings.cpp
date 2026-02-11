@@ -18,26 +18,29 @@ extern const int UNKNOWN_SETTING;
 
 IMPLEMENT_SETTINGS_TRAITS(ExternalStreamSettingsTraits, LIST_OF_EXTERNAL_STREAM_SETTINGS)
 
+void ExternalStreamSettings::apply(const SettingChange & change, bool throw_on_unknown)
+{
+    if (has(change.name))
+    {
+        set(change.name, change.value);
+    }
+    else if (change.name.starts_with("http_header_")) /// dynamic HTTP headers
+    {
+        return;
+    }
+    else
+    {
+        if (throw_on_unknown)
+            throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown setting {}: for storage ExternalStream", change.name);
+    }
+}
+
 void ExternalStreamSettings::loadFromQuery(ASTStorage & storage_def, bool throw_on_unknown)
 {
     if (storage_def.settings != nullptr)
     {
         for (const auto & change : storage_def.settings->changes)
-        {
-            if (has(change.name))
-            {
-                set(change.name, change.value);
-            }
-            else if (change.name.starts_with("http_header_")) /// dynamic HTTP headers
-            {
-                continue;
-            }
-            else
-            {
-                if (throw_on_unknown)
-                    throw Exception(ErrorCodes::UNKNOWN_SETTING, "Unknown setting {}: for storage ExternalStream", change.name);
-            }
-        }
+            apply(change, throw_on_unknown);
     }
     else
     {

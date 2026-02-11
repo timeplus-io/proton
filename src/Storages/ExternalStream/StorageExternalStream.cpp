@@ -1,3 +1,4 @@
+#include <memory>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 
 #include <IO/Kafka/Connection.h>
@@ -11,6 +12,7 @@
 #include <Processors/Formats/ISchemaReader.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/HTTP/HTTP.h>
@@ -47,8 +49,10 @@ extern const int BAD_ARGUMENTS;
 extern const int INCORRECT_NUMBER_OF_COLUMNS;
 extern const int INCORRECT_QUERY;
 extern const int INVALID_SETTING_VALUE;
+extern const int LICENSE_VIOLATED;
 extern const int NOT_IMPLEMENTED;
 extern const int TYPE_MISMATCH;
+extern const int UNSUPPORTED;
 }
 
 namespace
@@ -320,6 +324,7 @@ StorageExternalStream::StorageExternalStream(
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setVersion(schema_version);
     storage_metadata.setComment(comment);
+    storage_metadata.setSettingsChanges(storage_def->settings->ptr());
     if (storage_def->partition_by != nullptr)
     {
         ASTPtr partition_by_ast{storage_def->partition_by->clone()};
@@ -357,9 +362,57 @@ void StorageExternalStream::read(
     getNested()->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
-void StorageExternalStream::alter(const AlterCommands &, ContextPtr, AlterLockHolder &)
+void StorageExternalStream::checkAlterIsPossible(const AlterCommands & commands, ContextPtr context_) const
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command is not supported for external stream yet");
+    bool alter_settings = false;
+    for (const auto & command : commands)
+    {
+        if (!command.isCommentAlter() && !command.isSettingsAlter())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command '{}' is not supported by external stream");
+
+        if (command.isSettingsAlter())
+            alter_settings = true;
+    }
+    if (alter_settings)
+        checkAlterSettingsIsPossible(commands, context_);
+}
+
+void StorageExternalStream::checkAlterSettingsIsPossible(const AlterCommands & commands, ContextPtr context_) const
+{
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    commands.apply(new_metadata, context_);
+
+    auto new_settings = std::make_unique<ExternalStreamSettings>();
+    const auto & new_changes = new_metadata.settings_changes->as<const ASTSetQuery &>().changes;
+    for (const auto & change : new_changes)
+        new_settings->apply(change, true);
+
+    if (!new_settings->config_file.value.empty())
+        new_settings->loadFromConfigFile(new_settings->config_file.value);
+
+    if (!new_settings->named_collection.value.empty())
+        updateSettingsByNamedCollection(*new_settings, context_);
+
+    if (new_settings->type.value != external_stream_type)
+        throw Exception(ErrorCodes::UNSUPPORTED, "Alter external stream type is not supported");
+
+    if (auto impl = std::dynamic_pointer_cast<StorageExternalStreamImpl>(external_stream))
+        impl->verifySettings(new_settings, /*change_settings*/true, context_);
+}
+
+void StorageExternalStream::alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder &)
+{
+    if (unlikely(params.empty()))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command can not be empty.");
+
+    auto table_id = getStorageID();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    params.apply(new_metadata, context_);
+
+    /// Propose stream metadata change and alter command. External stream metadata will be updated by Metadata Updater.
+    /// The nested stream (usually ExternalStreamImpl) metadata will not be updated until restart.
+    auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+    db->alterTable(context_, table_id, new_metadata, params.front().typeString(), params.astCommands(table_id));
 }
 
 void registerStorageExternalStream(StorageFactory & factory)

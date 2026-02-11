@@ -35,6 +35,8 @@
 /// proton: starts.
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/ExternalTable/StorageExternalTable.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 /// proton: ends.
@@ -1427,8 +1429,12 @@ void AlterCommands::validate(const StoragePtr & table, ContextPtr context) const
     /// Parameterized views do not have 'columns' in their metadata
     bool is_parameterized_view = table->as<StorageView>() && table->as<StorageView>()->isParameterizedView();
 
-    if (!is_parameterized_view && all_columns.empty())
+    /// proton: starts. External stream/table may have no 'columns'.
+    bool is_external_stream_or_table = table->as<StorageExternalStream>() || table->as<StorageExternalTable>();
+
+    if (!is_parameterized_view && !is_external_stream_or_table && all_columns.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot DROP or CLEAR all columns");
+    /// proton: ends
 
     validateColumnsDefaultsAndGetSampleBlock(default_expr_list, all_columns.getAll(), context);
 }
