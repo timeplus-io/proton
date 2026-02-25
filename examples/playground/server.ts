@@ -27,7 +27,10 @@ import * as http from "http";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
-import { URL } from "url";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const SERVER_PORT = parseInt(process.env.PORT || "8000");
@@ -36,8 +39,9 @@ const PROTON_PORT = parseInt(process.env.PROTON_PORT || "3218");
 const PROTON_PROTO = process.env.PROTON_PROTO || "http";
 const PROTON_USER = process.env.PROTON_USER || "";
 const PROTON_PASS = process.env.PROTON_PASS || "";
-const STATIC_ROOT = process.cwd();
+const STATIC_ROOT = path.resolve(__dirname);
 const PROTON_URL = `${PROTON_PROTO}://${PROTON_HOST}:${PROTON_PORT}`;
+const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB limit for proxy buffering
 
 // Pre-compute the server-side Basic Auth header (if env vars are set)
 const SERVER_AUTH_HEADER = PROTON_USER
@@ -58,7 +62,7 @@ const MIME: Record<string, string> = {
 };
 
 const CORS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "http://localhost:" + SERVER_PORT,
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers": "*",
@@ -66,10 +70,13 @@ const CORS: Record<string, string> = {
 
 // ── Static file serving ───────────────────────────────────────────────────────
 function serveStatic(urlPath: string, res: http.ServerResponse): boolean {
-  const filePath = path.join(
-    STATIC_ROOT,
-    urlPath === "/" ? "index.html" : urlPath.split("?")[0]
-  );
+  // Sanitize path to prevent traversal - block anything with ".."
+  if (urlPath.includes("..")) {
+    res.writeHead(403); res.end("Forbidden"); return true;
+  }
+  const normalizedPath = urlPath === "/" ? "/index.html" : urlPath.split("?")[0];
+  const filePath = path.join(STATIC_ROOT, normalizedPath);
+
   if (!filePath.startsWith(STATIC_ROOT)) {
     res.writeHead(403); res.end("Forbidden"); return true;
   }
@@ -112,9 +119,19 @@ function resolveAuthHeader(clientHeaders: http.IncomingHttpHeaders): string {
 function proxyToProton(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
   const chunks: Buffer[] = [];
 
-  clientReq.on("data", (chunk: Buffer) => chunks.push(chunk));
+  clientReq.on("data", (chunk: Buffer) => {
+    chunks.push(chunk);
+    const totalLength = chunks.reduce((acc, cur) => acc + cur.length, 0);
+    if (totalLength > MAX_BODY_SIZE) {
+      console.error("[proxy] request body too large");
+      clientRes.writeHead(413, { ...CORS, "Content-Type": "application/json" });
+      clientRes.end(JSON.stringify({ error: "Request body too large", limit: "10MB" }));
+      clientReq.destroy();
+    }
+  });
 
   clientReq.on("end", () => {
+    if (clientRes.writableEnded) return;
     const body = Buffer.concat(chunks);
 
     // Build clean headers — strip hop-by-hop, then set our own
@@ -211,7 +228,6 @@ const server = http.createServer((req, res) => {
       // Tell the UI whether server-side credentials are pre-configured,
       // so it can show "server auth active" instead of empty username/password fields.
       serverAuth: !!SERVER_AUTH_HEADER,
-      serverUser: PROTON_USER || null,
     }));
     return;
   }
@@ -258,7 +274,7 @@ const server = http.createServer((req, res) => {
   proxyToProton(req, res);
 });
 
-server.listen(SERVER_PORT, () => {
+server.listen(SERVER_PORT, "127.0.0.1", () => {
   const authLine = PROTON_USER
     ? `Auth     →  server-env (user: ${PROTON_USER})`
     : `Auth     →  client-supplied (or none)`;

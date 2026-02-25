@@ -12,14 +12,14 @@
     rel="stylesheet" />
 
   <!-- React 18 -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 
   <!-- Vistral peer dependencies -->
-  <script src="https://unpkg.com/lodash@4/lodash.min.js"></script>
-  <script src="https://unpkg.com/ramda@0.29/dist/ramda.min.js"></script>
-  <script src="https://unpkg.com/@antv/g2@5/dist/g2.min.js"></script>
-  <script src="https://unpkg.com/@antv/s2@2/dist/s2.min.js"></script>
+  <script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
+  <script src="https://unpkg.com/ramda@0.29.1/dist/ramda.min.js"></script>
+  <script src="https://unpkg.com/@antv/g2@5.4.8/dist/g2.min.js"></script>
+  <script src="https://unpkg.com/@antv/s2@2.5.0/dist/s2.min.js"></script>
 
   <script>
     window.process = window.process || { env: { NODE_ENV: 'production' } };
@@ -27,10 +27,10 @@
   </script>
 
   <!-- Vistral UMD -->
-  <script src="https://unpkg.com/@timeplus/vistral/dist/index.umd.min.js"></script>
+  <script src="https://unpkg.com/@timeplus/vistral@0.1.4/dist/index.umd.min.js"></script>
 
   <!-- Proton JavaScript Driver -->
-  <script src="https://unpkg.com/@timeplus/proton-javascript-driver/dist/index.umd.js"></script>
+  <script src="https://unpkg.com/@timeplus/proton-javascript-driver@0.1.3/dist/index.umd.js"></script>
 
   <style>
     :root {
@@ -249,6 +249,7 @@
     }
 
     input[type="text"],
+    input[type="password"],
     input[type="number"],
     select,
     textarea {
@@ -266,6 +267,7 @@
     }
 
     input[type="text"]:focus,
+    input[type="password"]:focus,
     input[type="number"]:focus,
     select:focus,
     textarea:focus {
@@ -659,7 +661,7 @@
               </div>
               <div class="config-field">
                 <div class="field-label">PASSWORD</div>
-                <input type="text" id="conn-pass" placeholder="(none)" />
+                <input type="password" id="conn-pass" placeholder="(none)" />
               </div>
             </div>
             <div id="conn-auth-note"
@@ -1016,6 +1018,17 @@
       }
     }
 
+    // ─── Security helpers ──────────────────────────────────────────────────────────
+    function escapeHTML(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     // ─── Infer columns from first row ─────────────────────────────────────────────
     function inferColumns(row) {
       return Object.entries(row).map(([name, value]) => ({
@@ -1028,8 +1041,8 @@
 
     // ─── Column option helpers ─────────────────────────────────────────────────────
     function colOptions(cols, emptyLabel) {
-      return (emptyLabel ? `<option value="">${emptyLabel}</option>` : '') +
-        cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+      return (emptyLabel ? `<option value="">${escapeHTML(emptyLabel)}</option>` : '') +
+        cols.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
     }
     function setSelectPreserve(id, options) {
       const el = document.getElementById(id);
@@ -1063,7 +1076,7 @@
       const xEl = document.getElementById('cfg-xAxis');
       const yEl = document.getElementById('cfg-yAxis');
       if (!xEl.value) xEl.value = (ct === 'bar' ? numCol : timeCol)?.name || '';
-      if (!yEl.value) yEl.value = (ct === 'bar' ? timeCol : numCol)?.name || '';
+      if (!yEl.value) yEl.value = (ct === 'bar' ? (strCol || numeric[1] || timeCol) : numCol)?.name || '';
       if (!document.getElementById('cfg-color').value && strCol) document.getElementById('cfg-color').value = strCol.name;
       if (!document.getElementById('cfg-temporalField').value && timeCol) document.getElementById('cfg-temporalField').value = timeCol.name;
       if (!document.getElementById('cfg-svValue').value && numCol) document.getElementById('cfg-svValue').value = numCol.name;
@@ -1165,7 +1178,15 @@
       // Temporal binding
       let temporal;
       if (chartConfig.temporal !== 'none') {
-        const tfield = chartConfig.temporalField || chartConfig.xAxis || undefined;
+        // For bar chart the category role lives in chartConfig.yAxis; elsewhere in xAxis.
+        const defaultField = ct === 'bar' ? chartConfig.yAxis : chartConfig.xAxis;
+        // In 'key' mode temporal.field is the CATEGORY/group-by field (e.g. 'symbol').
+        // cfg-temporalField is auto-populated with the time column, which is wrong for
+        // key mode — so for key mode we prefer the category (defaultField).
+        // In 'axis'/'frame' modes temporal.field is the time field, so keep current priority.
+        const tfield = chartConfig.temporal === 'key'
+          ? (defaultField || chartConfig.temporalField || undefined)
+          : (chartConfig.temporalField || defaultField || undefined);
         temporal = {
           mode: chartConfig.temporal,
           field: tfield,
@@ -1207,7 +1228,7 @@
           };
 
         case 'bar':
-          // Bar is transposed: user "X (value)" → config.yAxis, user "Y (category)" → config.xAxis
+          // Bar is transposed in Vistral: user "X (value)" → config.yAxis (horizontal), user "Y (category)" → config.xAxis (vertical)
           return {
             ...base, chartType: 'bar',
             xAxis: chartConfig.yAxis,  // category role
@@ -1264,8 +1285,7 @@
     }
 
     // ─── Render chart ──────────────────────────────────────────────────────────────
-    let _lastChartType = null;
-
+    let _lastConfigHash = null;
     function renderChart() {
       if (state.columns.length === 0) return;
 
@@ -1275,10 +1295,12 @@
       const config = buildVistralConfig();
       if (!config) return; // required fields not yet populated — skip render
 
-      // Unmount and remount the React root whenever the chart type changes.
-      // StreamChart does not respond to config.chartType prop changes after initial
-      // mount — a fresh root is the only reliable way to switch chart types.
-      if (config.chartType !== _lastChartType) {
+      // Unmount and remount the React root whenever the chart spec changes.
+      // Some Vistral components (StreamChart) may not respond correctly to deep 
+      // config prop changes (like binding swaps) after initial mount. 
+      // A fresh root ensures all internal scales and state are reset.
+      const configHash = JSON.stringify(config);
+      if (configHash !== _lastConfigHash) {
         if (state.chartRoot) {
           state.chartRoot.unmount();
           state.chartRoot = null;
@@ -1287,7 +1309,7 @@
           const fresh = mount.cloneNode(false);
           mount.parentNode.replaceChild(fresh, mount);
         }
-        _lastChartType = config.chartType;
+        _lastConfigHash = configHash;
       }
 
       if (!state.chartRoot) {
@@ -1298,10 +1320,29 @@
       const preview = document.getElementById('cfg-json-preview');
       if (preview) preview.textContent = JSON.stringify(config, null, 2);
 
+      // For 'key' temporal mode the spec engine keeps ALL rows that share the
+      // maximum timestamp for each key — but a raw stream often delivers many
+      // rows for the same key within the same second.  That leaves G2 with
+      // duplicate category entries and it silently renders the FIRST (oldest)
+      // occurrence, making the chart appear frozen.
+      // Fix: pre-deduplicate by temporal.field so only the most-recently-
+      // received row per key reaches the chart.  Iterating state.rows in
+      // arrival order and overwriting means the last write (newest arrival)
+      // survives for each key.
+      let renderRows = state.rows;
+      if (config.temporal && config.temporal.mode === 'key' && config.temporal.field) {
+        const keyField = config.temporal.field;
+        const deduped = new Map();
+        for (const row of state.rows) {
+          deduped.set(String(row[keyField]), row);
+        }
+        renderRows = [...deduped.values()];
+      }
+
       state.chartRoot.render(
         React.createElement(StreamChart, {
           config,
-          data: { columns: state.columns, data: state.rows, isStreaming: !!state.abort },
+          data: { columns: state.columns, data: renderRows, isStreaming: !!state.abort },
           theme: 'dark',
           height: document.getElementById('chart-mount').clientHeight || 400,
         })
@@ -1318,17 +1359,20 @@
       document.getElementById('table-wrap').classList.remove('hidden');
 
       const thead = document.getElementById('table-head');
-      thead.innerHTML = '<tr>' + state.columns.map(c =>
-        `<th title="${c.name}">${c.name}</th>`
-      ).join('') + '</tr>';
+      thead.innerHTML = '<tr>' + state.columns.map(c => {
+        const escaped = escapeHTML(c.name);
+        return `<th title="${escaped}">${escaped}</th>`;
+      }).join('') + '</tr>';
 
       const displayRows = state.rows.slice(-MAX_TABLE_ROWS);
       const tbody = document.getElementById('table-body');
       tbody.innerHTML = displayRows.map(row => {
         const cells = state.columns.map(col => {
           const v = row[col.name];
+          const val = v !== null && v !== undefined ? String(v) : '';
+          const escaped = escapeHTML(val);
           const cls = col.type === 'float64' ? 'num' : col.type === 'datetime64' ? 'date' : '';
-          return `<td class="${cls}" title="${v}">${v !== null && v !== undefined ? v : ''}</td>`;
+          return `<td class="${cls}" title="${escaped}">${escaped}</td>`;
         }).join('');
         return `<tr>${cells}</tr>`;
       }).join('');
@@ -1359,11 +1403,8 @@
       document.getElementById('table-empty').classList.remove('hidden');
       document.getElementById('table-wrap').classList.add('hidden');
       document.getElementById('raw-output').textContent = '';
-      document.querySelectorAll('#cfg-xAxis, #cfg-yAxis, #cfg-color').forEach(el => {
-        el.innerHTML = el.id === 'cfg-color'
-          ? '<option value="">— none —</option>'
-          : '<option value="">— auto —</option>';
-      });
+      // (We no longer clear #cfg-xAxis, #cfg-yAxis, #cfg-color here to preserve user selection across query restarts)
+
       updateStats();
       showError(null);
       // If a stream is still running, keep the running status and reset the timer
@@ -1426,7 +1467,7 @@
           }
 
           state.rows = [...state.rows.slice(-999), row];
-          state.rawLines.push(JSON.stringify(row));
+          state.rawLines = [...state.rawLines.slice(-999), JSON.stringify(row)];
           state.rowCount++;
 
           if (!renderPending) {
@@ -1482,21 +1523,19 @@
 
     // ─── Fetch server config (proton target URL + auth mode) ─────────────────────
     async function fetchConfig() {
+      const serverUrl = (document.getElementById('conn-url').value || '').trim().replace(/\/$/, '');
       try {
-        const res = await fetch('/api/config');
+        const res = await fetch(serverUrl + '/api/config');
         const data = await res.json();
         document.getElementById('proton-target').textContent = data.protonUrl;
 
-        // If the server has PROTON_USER/PROTON_PASS configured, show that and
-        // grey out the UI fields with a hint (they still override if filled in)
         if (data.serverAuth) {
           const userField = document.getElementById('conn-user');
           const passField = document.getElementById('conn-pass');
-          userField.placeholder = data.serverUser + ' (server env)';
+          userField.placeholder = 'server env active';
           passField.placeholder = '••••• (server env)';
           userField.style.color = 'var(--text3)';
           passField.style.color = 'var(--text3)';
-          // Show a note
           const note = document.getElementById('conn-auth-note');
           if (note) {
             note.textContent = '🔑 Using server-side credentials (PROTON_USER/PROTON_PASS). Fill fields above to override.';
@@ -1504,13 +1543,16 @@
           }
         }
       } catch {
-        document.getElementById('proton-target').textContent = '(server not reachable)';
-        document.getElementById('proton-target').style.color = 'var(--danger)';
+        const pt = document.getElementById('proton-target');
+        if (pt) {
+          pt.textContent = '(server not reachable)';
+          pt.style.color = 'var(--danger)';
+        }
       }
     }
 
-    // ─── Test Proton connection ────────────────────────────────────────────────────
     async function testConnection() {
+      const serverUrl = (document.getElementById('conn-url').value || '').trim().replace(/\/$/, '');
       const btn = document.getElementById('btn-test');
       const result = document.getElementById('conn-ping-result');
       btn.disabled = true;
@@ -1518,7 +1560,7 @@
       result.style.display = 'none';
 
       try {
-        const res = await fetch('/api/ping');
+        const res = await fetch(serverUrl + '/api/ping');
         const data = await res.json();
         result.style.display = 'block';
         if (data.ok) {

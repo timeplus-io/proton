@@ -2,10 +2,11 @@
   "name": "proton-playground",
   "version": "1.0.0",
   "description": "Proton Query Playground — browser UI + CORS proxy",
+  "type": "module",
   "private": true,
   "scripts": {
-    "start":      "ts-node server.ts",
-    "build":      "tsc server.ts --module commonjs --target es2020 --esModuleInterop --outDir dist",
+    "start": "ts-node server.ts",
+    "build": "tsc server.ts --module commonjs --target es2020 --esModuleInterop --outDir dist",
     "start:prod": "node dist/server.js"
   },
   "devDependencies": {
