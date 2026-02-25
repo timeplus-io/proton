@@ -3,17 +3,24 @@
  *
  * • Serves index.html on http://localhost:8000
  * • Proxies all non-static requests to Proton on localhost:3218
- * • /api/config  — returns the Proton target URL (used by the UI)
+ * • /api/config  — returns the Proton target URL and auth mode (used by the UI)
  * • /api/ping    — tests whether Proton is reachable
+ *
+ * Authentication priority (highest → lowest):
+ *   1. Client-supplied Authorization header (username/password from the UI)
+ *   2. PROTON_USER / PROTON_PASS env vars (server-side fallback)
+ *   3. No auth
  *
  * Usage:
  *   npx ts-node server.ts
  *
  * Environment variables:
- *   PORT         — server listen port       (default: 8000)
- *   PROTON_HOST  — Proton server host       (default: localhost)
- *   PROTON_PORT  — Proton HTTP/stream port  (default: 3218)
- *   PROTON_PROTO — http | https             (default: http)
+ *   PORT         — server listen port         (default: 8000)
+ *   PROTON_HOST  — Proton server host         (default: localhost)
+ *   PROTON_PORT  — Proton HTTP/stream port    (default: 3218)
+ *   PROTON_PROTO — http | https               (default: http)
+ *   PROTON_USER  — Proton username (optional)
+ *   PROTON_PASS  — Proton password (optional)
  */
 
 import * as http from "http";
@@ -27,8 +34,15 @@ const SERVER_PORT = parseInt(process.env.PORT || "8000");
 const PROTON_HOST = process.env.PROTON_HOST || "localhost";
 const PROTON_PORT = parseInt(process.env.PROTON_PORT || "3218");
 const PROTON_PROTO = process.env.PROTON_PROTO || "http";
+const PROTON_USER = process.env.PROTON_USER || "";
+const PROTON_PASS = process.env.PROTON_PASS || "";
 const STATIC_ROOT = process.cwd();
 const PROTON_URL = `${PROTON_PROTO}://${PROTON_HOST}:${PROTON_PORT}`;
+
+// Pre-compute the server-side Basic Auth header (if env vars are set)
+const SERVER_AUTH_HEADER = PROTON_USER
+  ? "Basic " + Buffer.from(`${PROTON_USER}:${PROTON_PASS}`).toString("base64")
+  : "";
 
 // ── MIME types ────────────────────────────────────────────────────────────────
 const MIME: Record<string, string> = {
@@ -80,9 +94,21 @@ const HOP_BY_HOP = new Set([
   "te", "trailers", "transfer-encoding", "upgrade",
 ]);
 
+// ── Resolve which Authorization header to use ─────────────────────────────────
+// Priority:
+//   1. Client sent an Authorization header (username/password typed in the UI)
+//   2. Server has PROTON_USER/PROTON_PASS env vars set → inject those
+//   3. Neither → omit the header entirely
+function resolveAuthHeader(clientHeaders: http.IncomingHttpHeaders): string {
+  const clientAuth = clientHeaders["authorization"];
+  if (clientAuth) return clientAuth as string;      // UI credentials take priority
+  if (SERVER_AUTH_HEADER) return SERVER_AUTH_HEADER; // fall back to env vars
+  return "";
+}
+
 // ── Proxy to Proton ───────────────────────────────────────────────────────────
-// We collect the full request body before forwarding so we can set an
-// accurate Content-Length — Proton rejects chunked-encoded query bodies.
+// Collects the full request body before forwarding so we can set an accurate
+// Content-Length — Proton rejects chunked-encoded query bodies.
 function proxyToProton(clientReq: http.IncomingMessage, clientRes: http.ServerResponse): void {
   const chunks: Buffer[] = [];
 
@@ -91,37 +117,47 @@ function proxyToProton(clientReq: http.IncomingMessage, clientRes: http.ServerRe
   clientReq.on("end", () => {
     const body = Buffer.concat(chunks);
 
-    // Build clean headers — strip hop-by-hop and let us set content-length ourselves
+    // Build clean headers — strip hop-by-hop, then set our own
     const forwardHeaders: http.OutgoingHttpHeaders = {};
     for (const [k, v] of Object.entries(clientReq.headers)) {
       if (!HOP_BY_HOP.has(k.toLowerCase())) forwardHeaders[k] = v;
     }
     forwardHeaders["host"] = `${PROTON_HOST}:${PROTON_PORT}`;
     forwardHeaders["content-length"] = body.length;
-    forwardHeaders["connection"] = "close";   // tell Proton to close after response
+    forwardHeaders["connection"] = "close"; // tell Proton to close after the response
+
+    // Auth: use client-supplied creds, fall back to server env vars, or omit
+    const auth = resolveAuthHeader(clientReq.headers);
+    if (auth) {
+      forwardHeaders["authorization"] = auth;
+    } else {
+      delete forwardHeaders["authorization"]; // ensure none leaks through
+    }
+
+    const authSource = clientReq.headers["authorization"] ? "client"
+      : SERVER_AUTH_HEADER ? "server-env"
+        : "none";
+    console.log(`[proxy] ${clientReq.method} ${clientReq.url} → ${PROTON_URL}${clientReq.url} (body ${body.length}b, auth: ${authSource})`);
 
     const options: http.RequestOptions = {
       hostname: PROTON_HOST,
       port: PROTON_PORT,
-      path: (clientReq.url ?? "/"),
+      path: clientReq.url ?? "/",
       method: clientReq.method,
       headers: forwardHeaders,
     };
 
     const transport = PROTON_PROTO === "https" ? https : http;
 
-    console.log(`[proxy] ${clientReq.method} ${clientReq.url} → ${PROTON_URL}${clientReq.url} (body ${body.length}b)`);
-
     const protonReq = transport.request(options, (protonRes) => {
       console.log(`[proxy] Proton responded ${protonRes.statusCode}`);
 
-      // Strip hop-by-hop from response too, inject CORS
+      // Strip hop-by-hop from response, inject CORS
       const responseHeaders: http.OutgoingHttpHeaders = { ...CORS };
       for (const [k, v] of Object.entries(protonRes.headers)) {
         if (!HOP_BY_HOP.has(k.toLowerCase())) responseHeaders[k] = v;
       }
-      // Don't forward content-length — streaming response length is unknown
-      delete responseHeaders["content-length"];
+      delete responseHeaders["content-length"]; // streaming — length is unknown
 
       clientRes.writeHead(protonRes.statusCode ?? 200, responseHeaders);
       protonRes.pipe(clientRes, { end: true });
@@ -146,9 +182,7 @@ function proxyToProton(clientReq: http.IncomingMessage, clientRes: http.ServerRe
       }
     });
 
-    // Abort the upstream request if the browser disconnects
     clientRes.on("close", () => protonReq.destroy());
-
     protonReq.end(body);
   });
 
@@ -168,18 +202,28 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // /api/config — tells the UI where this server is forwarding to
+  // /api/config — tells the UI where this server is forwarding to, and auth mode
   if (url === "/api/config") {
     res.writeHead(200, { "Content-Type": "application/json", ...CORS });
-    res.end(JSON.stringify({ protonUrl: PROTON_URL, serverPort: SERVER_PORT }));
+    res.end(JSON.stringify({
+      protonUrl: PROTON_URL,
+      serverPort: SERVER_PORT,
+      // Tell the UI whether server-side credentials are pre-configured,
+      // so it can show "server auth active" instead of empty username/password fields.
+      serverAuth: !!SERVER_AUTH_HEADER,
+      serverUser: PROTON_USER || null,
+    }));
     return;
   }
 
-  // /api/ping — tests whether Proton is reachable right now
+  // /api/ping — tests whether Proton is reachable (uses server-side auth if configured)
   if (url === "/api/ping") {
     const transport = PROTON_PROTO === "https" ? https : http;
+    const pingHeaders: http.OutgoingHttpHeaders = { connection: "close" };
+    if (SERVER_AUTH_HEADER) pingHeaders["authorization"] = SERVER_AUTH_HEADER;
+
     const probe = transport.request(
-      { hostname: PROTON_HOST, port: PROTON_PORT, path: "/ping", method: "GET" },
+      { hostname: PROTON_HOST, port: PROTON_PORT, path: "/ping", method: "GET", headers: pingHeaders },
       (r) => {
         res.writeHead(200, { "Content-Type": "application/json", ...CORS });
         res.end(JSON.stringify({ ok: true, status: r.statusCode }));
@@ -215,16 +259,22 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(SERVER_PORT, () => {
+  const authLine = PROTON_USER
+    ? `Auth     →  server-env (user: ${PROTON_USER})`
+    : `Auth     →  client-supplied (or none)`;
   console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║        Proton Query Playground  —  running             ║
 ╠════════════════════════════════════════════════════════╣
 ║  UI      →  http://localhost:${String(SERVER_PORT).padEnd(27)}║
 ║  Proton  →  ${String(PROTON_URL).padEnd(43)}║
+║  ${authLine.padEnd(53)}║
 ╚════════════════════════════════════════════════════════╝
 
 Open: http://localhost:${SERVER_PORT}
-Override Proton port: PROTON_PORT=8001 npm start
+
+Auth priority: UI fields > PROTON_USER/PROTON_PASS env vars > none
+Example: PROTON_USER=admin PROTON_PASS=secret npm start
 
 Press Ctrl+C to stop.
 `);

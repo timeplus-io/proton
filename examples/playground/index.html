@@ -668,8 +668,8 @@
               <button class="btn btn-ghost" id="btn-test" onclick="testConnection()"
                 style="padding:3px 8px;font-size:10px">Test</button>
             </div>
-            <div id="conn-ping-result" style="font-family:var(--mono);font-size:11px;margin-bottom:8px;display:none">
-            </div>
+            <div id="conn-ping-result"
+              style="font-family:var(--mono);font-size:11px;margin-bottom:8px;display:none;white-space:pre-wrap"></div>
             <div class="conn-row" style="grid-template-columns:1fr 1fr">
               <div class="config-field">
                 <div class="field-label">USERNAME</div>
@@ -679,6 +679,9 @@
                 <div class="field-label">PASSWORD</div>
                 <input type="text" id="conn-pass" placeholder="(none)" />
               </div>
+            </div>
+            <div id="conn-auth-note"
+              style="display:none;font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:6px;line-height:1.5">
             </div>
           </div>
         </div>
@@ -696,47 +699,124 @@
         </div>
 
         <!-- Chart config -->
-        <div class="panel-section">
+        <div class="panel-section" style="overflow-y:auto;flex:1;min-height:0">
           <div class="panel-section-header" onclick="toggleSection('chart-cfg')">
             <span class="panel-section-label">Visualization</span>
             <span class="panel-section-toggle open" id="chart-cfg-toggle">▼</span>
           </div>
           <div class="panel-section-body" id="chart-cfg-body">
-            <div class="config-grid config-grid-1" style="margin-bottom:8px">
-              <div class="config-field">
-                <div class="field-label">CHART TYPE</div>
-                <select id="cfg-chartType" onchange="updateChartConfig()">
-                  <option value="table">Table</option>
-                  <option value="line">Line</option>
-                  <option value="area">Area</option>
-                  <option value="bar">Bar</option>
-                  <option value="column">Column</option>
-                  <option value="scatter">Scatter</option>
-                  <option value="pie">Pie</option>
-                  <option value="metric">Metric</option>
+
+            <!-- Chart Type -->
+            <div class="config-field" style="margin-bottom:8px">
+              <div class="field-label">CHART TYPE</div>
+              <select id="cfg-chartType" onchange="onChartTypeChange()">
+                <option value="line">Line Chart</option>
+                <option value="area">Area Chart</option>
+                <option value="bar">Bar Chart</option>
+                <option value="column">Column Chart</option>
+                <option value="table">Data Table</option>
+                <option value="geo">Geo Map</option>
+                <option value="singleValue">Single Value</option>
+              </select>
+            </div>
+
+            <!-- Temporal Binding -->
+            <div style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px">
+              <div class="field-label" style="margin-bottom:6px;color:var(--text3);letter-spacing:0.06em">TEMPORAL
+                BINDING</div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label">MODE</div>
+                <select id="cfg-temporal" onchange="updateChartConfig()">
+                  <option value="none">None</option>
+                  <option value="axis">Axis — sliding window</option>
+                  <option value="frame">Frame — latest timestamp</option>
+                  <option value="key">Key — deduplicate</option>
                 </select>
               </div>
+              <div id="temporal-field-row" class="config-field hidden" style="margin-bottom:6px">
+                <div class="field-label">FIELD</div>
+                <select id="cfg-temporalField" onchange="updateChartConfig()">
+                  <option value="">— auto —</option>
+                </select>
+              </div>
+              <div id="temporal-range-row" class="config-field hidden">
+                <div class="field-label">RANGE (min)</div>
+                <input type="number" id="cfg-range" value="2" min="1" max="60" step="1" oninput="updateChartConfig()" />
+              </div>
             </div>
-            <div class="config-grid" id="axis-config">
-              <div class="config-field">
-                <div class="field-label">X AXIS</div>
+
+            <!-- Field Bindings: line / area / column -->
+            <div id="fields-standard" style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px">
+              <div class="field-label" style="margin-bottom:6px;color:var(--text3);letter-spacing:0.06em">FIELD BINDINGS
+              </div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label" id="xaxis-label">X AXIS</div>
                 <select id="cfg-xAxis" onchange="updateChartConfig()">
                   <option value="">— auto —</option>
                 </select>
               </div>
-              <div class="config-field">
-                <div class="field-label">Y AXIS</div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label" id="yaxis-label">Y AXIS</div>
                 <select id="cfg-yAxis" onchange="updateChartConfig()">
                   <option value="">— auto —</option>
                 </select>
               </div>
-              <div class="config-field">
-                <div class="field-label">COLOR / GROUP</div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label">COLOR</div>
                 <select id="cfg-color" onchange="updateChartConfig()">
                   <option value="">— none —</option>
                 </select>
               </div>
+            </div>
+
+            <!-- Field Bindings: singleValue -->
+            <div id="fields-singleValue" class="hidden"
+              style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px">
+              <div class="field-label" style="margin-bottom:6px;color:var(--text3);letter-spacing:0.06em">FIELD BINDINGS
+              </div>
               <div class="config-field">
+                <div class="field-label">VALUE</div>
+                <select id="cfg-svValue" onchange="updateChartConfig()">
+                  <option value="">— auto —</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Field Bindings: geo -->
+            <div id="fields-geo" class="hidden"
+              style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px">
+              <div class="field-label" style="margin-bottom:6px;color:var(--text3);letter-spacing:0.06em">FIELD BINDINGS
+              </div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label">LATITUDE</div>
+                <select id="cfg-lat" onchange="updateChartConfig()">
+                  <option value="">— auto —</option>
+                </select>
+              </div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label">LONGITUDE</div>
+                <select id="cfg-lng" onchange="updateChartConfig()">
+                  <option value="">— auto —</option>
+                </select>
+              </div>
+              <div class="config-field" style="margin-bottom:6px">
+                <div class="field-label">COLOR</div>
+                <select id="cfg-geoColor" onchange="updateChartConfig()">
+                  <option value="">— none —</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="field-label">SIZE</div>
+                <select id="cfg-geoSize" onchange="updateChartConfig()">
+                  <option value="">— none —</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Style Options -->
+            <div id="style-options" style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px">
+              <div class="field-label" style="margin-bottom:6px;color:var(--text3);letter-spacing:0.06em">STYLE</div>
+              <div class="config-field" style="margin-bottom:6px">
                 <div class="field-label">PALETTE</div>
                 <select id="cfg-palette" onchange="updateChartConfig()">
                   <option value="">Default</option>
@@ -746,22 +826,46 @@
                   <option value="Sunset">Sunset</option>
                 </select>
               </div>
-            </div>
-            <div class="config-grid mt8" id="temporal-config">
-              <div class="config-field">
-                <div class="field-label">TEMPORAL MODE</div>
-                <select id="cfg-temporal" onchange="updateChartConfig()">
-                  <option value="none">None</option>
-                  <option value="axis">Axis (sliding)</option>
-                  <option value="frame">Frame (latest N)</option>
-                  <option value="key">Key (group)</option>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px">
+                <label
+                  style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="cfg-legend" checked onchange="updateChartConfig()" /> Legend
+                </label>
+                <label
+                  style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="cfg-gridlines" checked onchange="updateChartConfig()" /> Gridlines
+                </label>
+                <label
+                  style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="cfg-dataLabel" onchange="updateChartConfig()" /> Data Labels
+                </label>
+              </div>
+              <!-- line/area only -->
+              <div id="style-lineStyle" class="config-field hidden" style="margin-top:8px">
+                <div class="field-label">LINE STYLE</div>
+                <select id="cfg-lineStyle" onchange="updateChartConfig()">
+                  <option value="curve">Curved</option>
+                  <option value="straight">Straight</option>
                 </select>
               </div>
-              <div class="config-field">
-                <div class="field-label">TIME RANGE (min)</div>
-                <input type="number" id="cfg-range" value="1" min="0.1" step="0.5" oninput="updateChartConfig()" />
+              <!-- bar/column only -->
+              <div id="style-groupType" class="config-field hidden" style="margin-top:8px">
+                <div class="field-label">GROUP TYPE</div>
+                <select id="cfg-groupType" onchange="updateChartConfig()">
+                  <option value="dodge">Side by Side</option>
+                  <option value="stack">Stacked</option>
+                </select>
               </div>
             </div>
+
+            <!-- Config JSON preview -->
+            <div style="border-top:1px solid var(--border);padding-top:8px">
+              <div class="field-label" style="margin-bottom:4px;color:var(--text3);letter-spacing:0.06em">CONFIG JSON
+              </div>
+              <pre id="cfg-json-preview"
+                style="font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px;overflow:auto;max-height:120px;line-height:1.5;margin:0"></pre>
+            </div>
+
           </div>
         </div>
 
@@ -788,8 +892,8 @@
       <!-- RIGHT PANEL -->
       <div class="right-panel">
         <div class="right-tabs">
-          <div class="tab active" data-tab="chart" onclick="switchTab('chart')">Chart</div>
-          <div class="tab" data-tab="table" onclick="switchTab('table')">Table</div>
+          <div class="tab active" data-tab="table" onclick="switchTab('table')">Table</div>
+          <div class="tab" data-tab="chart" onclick="switchTab('chart')">Chart</div>
           <div class="tab" data-tab="raw" onclick="switchTab('raw')">Raw JSON</div>
         </div>
         <div class="right-content" id="right-content">
@@ -801,7 +905,7 @@
           </div>
 
           <!-- Chart tab -->
-          <div id="tab-chart" style="height:100%">
+          <div id="tab-chart" class="hidden" style="height:100%">
             <div class="empty-state" id="chart-empty">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -812,7 +916,7 @@
           </div>
 
           <!-- Table tab -->
-          <div id="tab-table" class="hidden" style="height:100%;overflow:auto">
+          <div id="tab-table" style="height:100%;overflow:auto">
             <div class="empty-state" id="table-empty">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -854,19 +958,44 @@
       rawLines: [],
       abort: null,
       chartRoot: null,
-      currentTab: 'chart',
+      currentTab: 'table',
       startTime: null,
       rowCount: 0,
     };
 
+    // Per-chart-type temporal mode support (from Playground.tsx chartTypeInfo)
+    const CHART_TEMPORAL_SUPPORT = {
+      line: ['axis'],
+      area: ['axis'],
+      bar: ['frame', 'key'],
+      column: ['frame', 'key'],
+      table: ['frame', 'key'],
+      geo: ['frame', 'key'],
+      singleValue: [],
+    };
+
     let chartConfig = {
-      chartType: 'table',
+      chartType: 'line',
       xAxis: '',
       yAxis: '',
       color: '',
       palette: '',
       temporal: 'none',
-      range: 1,
+      temporalField: '',
+      range: 2,
+      // style
+      legend: true,
+      gridlines: true,
+      dataLabel: false,
+      lineStyle: 'curve',
+      groupType: 'dodge',
+      // geo
+      lat: '',
+      lng: '',
+      geoColor: '',
+      geoSize: '',
+      // singleValue
+      svValue: '',
     };
 
     // ─── Section toggle ───────────────────────────────────────────────────────────
@@ -918,38 +1047,89 @@
       }));
     }
 
-    // ─── Populate axis dropdowns from columns ──────────────────────────────────────
+    // ─── Column option helpers ─────────────────────────────────────────────────────
+    function colOptions(cols, emptyLabel) {
+      return (emptyLabel ? `<option value="">${emptyLabel}</option>` : '') +
+        cols.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    }
+    function setSelectPreserve(id, options) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const prev = el.value;
+      el.innerHTML = options;
+      if ([...el.options].some(o => o.value === prev)) el.value = prev;
+    }
+
+    // ─── Populate all dropdowns from columns ───────────────────────────────────────
     function populateAxisDropdowns(columns) {
-      const fields = ['cfg-xAxis', 'cfg-yAxis', 'cfg-color'];
-      const emptyOptions = [
-        '<option value="">— auto —</option>',
-        '<option value="">— auto —</option>',
-        '<option value="">— none —</option>',
-      ];
+      const numeric = columns.filter(c => ['float64', 'int64', 'int32', 'number'].includes(c.type));
+      const strings = columns.filter(c => c.type === 'string');
+      const timeCol = columns.find(c => c.type === 'datetime64' || c.name.includes('time')) || columns[0];
+      const numCol = numeric[0];
+      const strCol = strings[0];
+      const latCol = columns.find(c => c.name.toLowerCase().includes('lat'));
+      const lngCol = columns.find(c => c.name.toLowerCase().includes('lon') || c.name.toLowerCase().includes('lng'));
 
-      fields.forEach((id, i) => {
-        const el = document.getElementById(id);
-        const prev = el.value;
-        el.innerHTML = emptyOptions[i] + columns.map(c =>
-          `<option value="${c.name}"${c.name === prev ? ' selected' : ''}>${c.name}</option>`
-        ).join('');
-      });
+      setSelectPreserve('cfg-xAxis', colOptions(columns, '— auto —'));
+      setSelectPreserve('cfg-yAxis', colOptions(columns, '— auto —'));
+      setSelectPreserve('cfg-color', colOptions(strings, '— none —'));
+      setSelectPreserve('cfg-temporalField', colOptions(columns, '— auto —'));
+      setSelectPreserve('cfg-lat', colOptions(numeric, '— auto —'));
+      setSelectPreserve('cfg-lng', colOptions(numeric, '— auto —'));
+      setSelectPreserve('cfg-geoColor', colOptions(strings, '— none —'));
+      setSelectPreserve('cfg-geoSize', colOptions(numeric, '— none —'));
+      setSelectPreserve('cfg-svValue', colOptions(numeric, '— auto —'));
 
-      // Auto-detect sensible defaults
-      const timeCol = columns.find(c => c.type === 'datetime64' || c.name.includes('time') || c.name.includes('_tp_time'));
-      const numCol = columns.find(c => c.type === 'float64' || c.type === 'int64');
-      const strCol = columns.find(c => c.type === 'string' && c.name !== (timeCol?.name));
+      const ct = chartConfig.chartType;
+      const xEl = document.getElementById('cfg-xAxis');
+      const yEl = document.getElementById('cfg-yAxis');
+      if (!xEl.value) xEl.value = (ct === 'bar' ? numCol : timeCol)?.name || '';
+      if (!yEl.value) yEl.value = (ct === 'bar' ? timeCol : numCol)?.name || '';
+      if (!document.getElementById('cfg-color').value && strCol) document.getElementById('cfg-color').value = strCol.name;
+      if (!document.getElementById('cfg-temporalField').value && timeCol) document.getElementById('cfg-temporalField').value = timeCol.name;
+      if (!document.getElementById('cfg-svValue').value && numCol) document.getElementById('cfg-svValue').value = numCol.name;
+      if (!document.getElementById('cfg-lat').value && latCol) document.getElementById('cfg-lat').value = latCol.name;
+      if (!document.getElementById('cfg-lng').value && lngCol) document.getElementById('cfg-lng').value = lngCol.name;
 
-      if (timeCol && !document.getElementById('cfg-xAxis').value) {
-        document.getElementById('cfg-xAxis').value = timeCol.name;
-        document.getElementById('cfg-temporal').value = 'axis';
+      updateChartConfig();
+    }
+
+    // ─── Chart type change: filter temporal options + toggle field panels ──────────
+    function onChartTypeChange() {
+      const ct = document.getElementById('cfg-chartType').value;
+      chartConfig.chartType = ct;
+
+      const supported = CHART_TEMPORAL_SUPPORT[ct] || [];
+      const temporalSel = document.getElementById('cfg-temporal');
+      const prevMode = temporalSel.value;
+
+      temporalSel.innerHTML =
+        '<option value="none">None</option>' +
+        (supported.includes('axis') ? '<option value="axis">Axis — sliding window</option>' : '') +
+        (supported.includes('frame') ? '<option value="frame">Frame — latest timestamp</option>' : '') +
+        (supported.includes('key') ? '<option value="key">Key — deduplicate</option>' : '');
+
+      temporalSel.value = supported.includes(prevMode) ? prevMode
+        : supported.length > 0 ? supported[0]
+          : 'none';
+
+      // Show/hide field binding panels
+      const isStandard = ['line', 'area', 'bar', 'column'].includes(ct);
+      document.getElementById('fields-standard').classList.toggle('hidden', !isStandard);
+      document.getElementById('fields-singleValue').classList.toggle('hidden', ct !== 'singleValue');
+      document.getElementById('fields-geo').classList.toggle('hidden', ct !== 'geo');
+      document.getElementById('style-options').classList.toggle('hidden', ct === 'table' || ct === 'singleValue');
+
+      // Bar: swap axis labels to clarify transposition
+      if (document.getElementById('xaxis-label')) {
+        document.getElementById('xaxis-label').textContent = ct === 'bar' ? 'X AXIS (VALUE)' : 'X AXIS';
+        document.getElementById('yaxis-label').textContent = ct === 'bar' ? 'Y AXIS (CATEGORY)' : 'Y AXIS';
       }
-      if (numCol && !document.getElementById('cfg-yAxis').value) {
-        document.getElementById('cfg-yAxis').value = numCol.name;
-      }
-      if (strCol && !document.getElementById('cfg-color').value) {
-        document.getElementById('cfg-color').value = strCol.name;
-      }
+
+      // Show line style only for line/area; group type only for bar/column
+      document.getElementById('style-lineStyle').classList.toggle('hidden', !['line', 'area'].includes(ct));
+      document.getElementById('style-groupType').classList.toggle('hidden', !['bar', 'column'].includes(ct));
+
       updateChartConfig();
     }
 
@@ -964,53 +1144,180 @@
       }
     }
 
-    // ─── Chart config ──────────────────────────────────────────────────────────────
+    // ─── Collect all UI values into chartConfig, then re-render ───────────────────
     function updateChartConfig() {
-      chartConfig.chartType = document.getElementById('cfg-chartType').value;
-      chartConfig.xAxis = document.getElementById('cfg-xAxis').value;
-      chartConfig.yAxis = document.getElementById('cfg-yAxis').value;
-      chartConfig.color = document.getElementById('cfg-color').value;
-      chartConfig.palette = document.getElementById('cfg-palette').value;
-      chartConfig.temporal = document.getElementById('cfg-temporal').value;
-      chartConfig.range = parseFloat(document.getElementById('cfg-range').value) || 1;
+      const g = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+      const gb = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+
+      chartConfig.chartType = g('cfg-chartType');
+      chartConfig.temporal = g('cfg-temporal');
+      chartConfig.temporalField = g('cfg-temporalField');
+      chartConfig.range = parseInt(g('cfg-range')) || 2;
+      chartConfig.palette = g('cfg-palette');
+      chartConfig.legend = gb('cfg-legend');
+      chartConfig.gridlines = gb('cfg-gridlines');
+      chartConfig.dataLabel = gb('cfg-dataLabel');
+      chartConfig.lineStyle = g('cfg-lineStyle') || 'curve';
+      chartConfig.groupType = g('cfg-groupType') || 'dodge';
+      chartConfig.xAxis = g('cfg-xAxis');
+      chartConfig.yAxis = g('cfg-yAxis');
+      chartConfig.color = g('cfg-color');
+      chartConfig.svValue = g('cfg-svValue');
+      chartConfig.lat = g('cfg-lat');
+      chartConfig.lng = g('cfg-lng');
+      chartConfig.geoColor = g('cfg-geoColor');
+      chartConfig.geoSize = g('cfg-geoSize');
+
+      // Show/hide temporal sub-rows
+      const hasField = chartConfig.temporal !== 'none';
+      const hasRange = chartConfig.temporal === 'axis';
+      const tfRow = document.getElementById('temporal-field-row');
+      const trRow = document.getElementById('temporal-range-row');
+      if (tfRow) tfRow.classList.toggle('hidden', !hasField);
+      if (trRow) trRow.classList.toggle('hidden', !hasRange);
 
       if (state.rows.length > 0 && state.currentTab === 'chart') renderChart();
     }
 
-    // ─── Render chart ──────────────────────────────────────────────────────────────
-    function renderChart() {
-      if (state.columns.length === 0) return;
+    // ─── Build ChartConfig matching Playground.tsx exactly ────────────────────────
+    function buildVistralConfig() {
+      const ct = chartConfig.chartType;
 
-      document.getElementById('chart-empty').classList.add('hidden');
-      document.getElementById('chart-mount').classList.remove('hidden');
-
-      if (!state.chartRoot) {
-        state.chartRoot = ReactDOM.createRoot(document.getElementById('chart-mount'));
+      // Temporal binding
+      let temporal;
+      if (chartConfig.temporal !== 'none') {
+        const tfield = chartConfig.temporalField || chartConfig.xAxis || undefined;
+        temporal = {
+          mode: chartConfig.temporal,
+          field: tfield,
+          ...(chartConfig.temporal === 'axis' ? { range: chartConfig.range } : {}),
+        };
       }
 
       let palette;
       if (chartConfig.palette) {
         try { palette = findPaletteByLabel(chartConfig.palette); } catch (e) { }
       }
+      const colors = palette ? palette.values : undefined;
 
-      const config = {
-        chartType: chartConfig.chartType,
-        legend: true,
-        gridlines: true,
-        colors: palette ? palette.values : undefined,
-      };
+      const base = { temporal, colors };
 
-      if (chartConfig.xAxis) config.xAxis = chartConfig.xAxis;
-      if (chartConfig.yAxis) config.yAxis = chartConfig.yAxis;
-      if (chartConfig.color) config.color = chartConfig.color;
+      // Guard: return null if required fields are missing.
+      // Prevents Vistral's "Missing encode for x or y channel" error when
+      // dropdowns are not yet populated after a chart-type switch.
+      const needsXY = ['line', 'area', 'bar', 'column'].includes(ct);
+      const needsVal = ct === 'singleValue';
+      const needsGeo = ct === 'geo';
+      if (needsXY && (!chartConfig.xAxis || !chartConfig.yAxis)) return null;
+      if (needsVal && !chartConfig.svValue) return null;
+      if (needsGeo && (!chartConfig.lat || !chartConfig.lng)) return null;
 
-      if (chartConfig.temporal !== 'none' && chartConfig.xAxis) {
-        config.temporal = {
-          mode: chartConfig.temporal,
-          field: chartConfig.xAxis,
-          range: chartConfig.range,
-        };
+      switch (ct) {
+        case 'line':
+        case 'area':
+          return {
+            ...base, chartType: ct,
+            xAxis: chartConfig.xAxis,
+            yAxis: chartConfig.yAxis,
+            color: chartConfig.color || undefined,
+            legend: chartConfig.legend,
+            gridlines: chartConfig.gridlines,
+            dataLabel: chartConfig.dataLabel,
+            lineStyle: chartConfig.lineStyle,
+            fractionDigits: 2,
+          };
+
+        case 'bar':
+          // Bar is transposed: user "X (value)" → config.yAxis, user "Y (category)" → config.xAxis
+          return {
+            ...base, chartType: 'bar',
+            xAxis: chartConfig.yAxis,  // category role
+            yAxis: chartConfig.xAxis,  // value role
+            color: chartConfig.color || undefined,
+            legend: chartConfig.legend,
+            gridlines: chartConfig.gridlines,
+            dataLabel: chartConfig.dataLabel,
+            groupType: chartConfig.groupType,
+            fractionDigits: 2,
+          };
+
+        case 'column':
+          return {
+            ...base, chartType: 'column',
+            xAxis: chartConfig.xAxis,
+            yAxis: chartConfig.yAxis,
+            color: chartConfig.color || undefined,
+            legend: chartConfig.legend,
+            gridlines: chartConfig.gridlines,
+            dataLabel: chartConfig.dataLabel,
+            groupType: chartConfig.groupType,
+            fractionDigits: 2,
+          };
+
+        case 'table':
+          return { ...base, chartType: 'table', tableWrap: false };
+
+        case 'geo':
+          return {
+            ...base, chartType: 'geo',
+            latitude: chartConfig.lat,
+            longitude: chartConfig.lng,
+            color: chartConfig.geoColor || undefined,
+            size: chartConfig.geoSize ? { key: chartConfig.geoSize, min: 4, max: 16 } : undefined,
+            zoom: 6,
+            showZoomControl: true,
+            pointOpacity: 0.8,
+          };
+
+        case 'singleValue':
+          return {
+            ...base, chartType: 'singleValue',
+            yAxis: chartConfig.svValue,
+            fontSize: 64,
+            sparkline: true,
+            delta: true,
+            fractionDigits: 2,
+          };
+
+        default:
+          return null;
       }
+    }
+
+    // ─── Render chart ──────────────────────────────────────────────────────────────
+    let _lastChartType = null;
+
+    function renderChart() {
+      if (state.columns.length === 0) return;
+
+      document.getElementById('chart-empty').classList.add('hidden');
+      document.getElementById('chart-mount').classList.remove('hidden');
+
+      const config = buildVistralConfig();
+      if (!config) return; // required fields not yet populated — skip render
+
+      // Unmount and remount the React root whenever the chart type changes.
+      // StreamChart does not respond to config.chartType prop changes after initial
+      // mount — a fresh root is the only reliable way to switch chart types.
+      if (config.chartType !== _lastChartType) {
+        if (state.chartRoot) {
+          state.chartRoot.unmount();
+          state.chartRoot = null;
+          // Replace the DOM node so React starts truly fresh
+          const mount = document.getElementById('chart-mount');
+          const fresh = mount.cloneNode(false);
+          mount.parentNode.replaceChild(fresh, mount);
+        }
+        _lastChartType = config.chartType;
+      }
+
+      if (!state.chartRoot) {
+        state.chartRoot = ReactDOM.createRoot(document.getElementById('chart-mount'));
+      }
+
+      // Update JSON preview
+      const preview = document.getElementById('cfg-json-preview');
+      if (preview) preview.textContent = JSON.stringify(config, null, 2);
 
       state.chartRoot.render(
         React.createElement(StreamChart, {
@@ -1189,12 +1496,29 @@
       }
     });
 
-    // ─── Fetch server config (proton target URL) ──────────────────────────────────
+    // ─── Fetch server config (proton target URL + auth mode) ─────────────────────
     async function fetchConfig() {
       try {
         const res = await fetch('/api/config');
         const data = await res.json();
         document.getElementById('proton-target').textContent = data.protonUrl;
+
+        // If the server has PROTON_USER/PROTON_PASS configured, show that and
+        // grey out the UI fields with a hint (they still override if filled in)
+        if (data.serverAuth) {
+          const userField = document.getElementById('conn-user');
+          const passField = document.getElementById('conn-pass');
+          userField.placeholder = data.serverUser + ' (server env)';
+          passField.placeholder = '••••• (server env)';
+          userField.style.color = 'var(--text3)';
+          passField.style.color = 'var(--text3)';
+          // Show a note
+          const note = document.getElementById('conn-auth-note');
+          if (note) {
+            note.textContent = '🔑 Using server-side credentials (PROTON_USER/PROTON_PASS). Fill fields above to override.';
+            note.style.display = 'block';
+          }
+        }
       } catch {
         document.getElementById('proton-target').textContent = '(server not reachable)';
         document.getElementById('proton-target').style.color = 'var(--danger)';
@@ -1233,6 +1557,7 @@
 
     // ─── Init ──────────────────────────────────────────────────────────────────────
     setStatus('idle', 'idle');
+    onChartTypeChange(); // set correct temporal options + visible panels for default chart type
     fetchConfig();
   </script>
 </body>
