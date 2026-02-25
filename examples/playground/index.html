@@ -285,54 +285,50 @@
     }
 
     /* SQL Editor */
+    /* SQL editor — fixed height strip at top of right panel */
     .sql-editor-wrap {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .sql-editor-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 14px 7px;
-      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
-    }
-
-    .sql-editor-label {
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text3);
-      font-family: var(--mono);
-    }
-
-    .sql-editor-actions {
-      display: flex;
-      gap: 6px;
+      border-bottom: 1px solid var(--border);
     }
 
     textarea#sql-input {
-      flex: 1;
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      height: 96px;
       resize: none;
       border: none;
       border-radius: 0;
-      background: var(--bg);
+      background: var(--bg2);
       font-family: var(--mono);
       font-size: 12.5px;
       line-height: 1.6;
-      padding: 12px 14px;
+      padding: 10px 14px;
       color: var(--accent);
       caret-color: var(--text);
-      min-height: 120px;
     }
 
     textarea#sql-input:focus {
+      outline: none;
       border-color: transparent;
+    }
+
+    /* Action bar: stats left, buttons right */
+    .action-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+      gap: 12px;
+    }
+
+    .action-buttons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     /* ── Buttons ─────────────────────────────── */
@@ -403,15 +399,11 @@
       flex-direction: column;
     }
 
-    /* Result stats bar */
+    /* Stats inline inside action-bar */
     .stats-bar {
-      flex-shrink: 0;
       display: flex;
       align-items: center;
       gap: 16px;
-      padding: 7px 14px;
-      background: var(--bg3);
-      border-top: 1px solid var(--border);
       font-family: var(--mono);
       font-size: 11px;
       color: var(--text3);
@@ -610,16 +602,6 @@
     .mt8 {
       margin-top: 8px;
     }
-
-    /* run panel footer */
-    .run-panel {
-      flex-shrink: 0;
-      padding: 10px 14px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
   </style>
 </head>
 
@@ -686,20 +668,8 @@
           </div>
         </div>
 
-        <!-- SQL Editor -->
-        <div class="sql-editor-wrap">
-          <div class="sql-editor-toolbar">
-            <span class="sql-editor-label">SQL</span>
-            <div class="sql-editor-actions">
-              <button class="btn btn-ghost" onclick="clearSQL()" title="Clear">✕</button>
-            </div>
-          </div>
-          <textarea id="sql-input" spellcheck="false"
-            placeholder="SELECT _tp_time, * FROM my_stream LIMIT 100">SELECT now() as _tp_time, number % 5 as id, rand() % 1000 as value FROM numbers(200)</textarea>
-        </div>
-
         <!-- Chart config -->
-        <div class="panel-section" style="overflow-y:auto;flex:1;min-height:0">
+        <div id="chart-cfg-section" class="panel-section hidden" style="overflow-y:auto;flex:1;min-height:0">
           <div class="panel-section-header" onclick="toggleSection('chart-cfg')">
             <span class="panel-section-label">Visualization</span>
             <span class="panel-section-toggle open" id="chart-cfg-toggle">▼</span>
@@ -869,28 +839,34 @@
           </div>
         </div>
 
-        <!-- Run controls + stats -->
-        <div class="run-panel">
-          <button class="btn btn-primary" id="btn-run" onclick="runQuery()">
-            ▶ Run
-          </button>
-          <button class="btn btn-danger hidden" id="btn-stop" onclick="stopQuery()">
-            ■ Stop
-          </button>
-          <button class="btn btn-ghost" onclick="clearResults()">Clear</button>
-        </div>
-
-        <div class="stats-bar">
-          <div class="stat-item">Rows <span class="stat-value" id="stat-rows">0</span></div>
-          <div class="stat-item">Cols <span class="stat-value" id="stat-cols">0</span></div>
-          <div class="stat-item" id="stat-elapsed-wrap" style="display:none">
-            Time <span class="stat-value" id="stat-elapsed">—</span>
-          </div>
-        </div>
       </div>
 
       <!-- RIGHT PANEL -->
       <div class="right-panel">
+
+        <!-- SQL editor -->
+        <div class="sql-editor-wrap">
+          <textarea id="sql-input" spellcheck="false"
+            placeholder="SELECT _tp_time, * FROM my_stream LIMIT 100">SELECT now() as _tp_time, number % 5 as id, rand() % 1000 as value FROM numbers(200)</textarea>
+        </div>
+
+        <!-- Action bar: stats left, buttons right -->
+        <div class="action-bar">
+          <div class="stats-bar">
+            <div class="stat-item">Rows <span class="stat-value" id="stat-rows">0</span></div>
+            <div class="stat-item">Cols <span class="stat-value" id="stat-cols">0</span></div>
+            <div class="stat-item" id="stat-elapsed-wrap" style="display:none">
+              Time <span class="stat-value" id="stat-elapsed">—</span>
+            </div>
+          </div>
+          <div class="action-buttons">
+            <button class="btn btn-primary" id="btn-run" onclick="runQuery()">▶ Run</button>
+            <button class="btn btn-danger hidden" id="btn-stop" onclick="stopQuery()">■ Stop</button>
+            <button class="btn btn-ghost" onclick="clearSQL()">Clear SQL</button>
+            <button class="btn btn-ghost" onclick="clearResults()">Clear Results</button>
+          </div>
+        </div>
+
         <div class="right-tabs">
           <div class="tab active" data-tab="table" onclick="switchTab('table')">Table</div>
           <div class="tab" data-tab="chart" onclick="switchTab('chart')">Chart</div>
@@ -1015,6 +991,9 @@
       ['chart', 'table', 'raw'].forEach(t => {
         document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
       });
+      // Show visualization options only when on the chart tab
+      const vizSection = document.getElementById('chart-cfg-section');
+      if (vizSection) vizSection.classList.toggle('hidden', name !== 'chart');
       if (name === 'chart' && state.rows.length > 0) renderChart();
       if (name === 'table') renderTable();
       if (name === 'raw') renderRaw();
@@ -1387,8 +1366,14 @@
       });
       updateStats();
       showError(null);
-      setStatus('idle', 'idle');
-      document.getElementById('stat-elapsed-wrap').style.display = 'none';
+      // If a stream is still running, keep the running status and reset the timer
+      if (state.abort) {
+        state.startTime = Date.now();
+        setStatus('running', 'streaming');
+      } else {
+        setStatus('idle', 'idle');
+        document.getElementById('stat-elapsed-wrap').style.display = 'none';
+      }
     }
 
     // ─── Run Query ─────────────────────────────────────────────────────────────────
@@ -1431,14 +1416,13 @@
         state.abort = abort;
         setStatus('running', 'streaming');
 
-        let firstRow = true;
         let renderPending = false;
 
         for await (const row of stream) {
-          if (firstRow) {
+          // Re-infer columns if this is the first row OR results were cleared mid-stream
+          if (state.columns.length === 0) {
             state.columns = inferColumns(row);
             populateAxisDropdowns(state.columns);
-            firstRow = false;
           }
 
           state.rows = [...state.rows.slice(-999), row];
