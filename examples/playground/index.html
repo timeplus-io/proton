@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proton · Query Playground</title>
+
+  <!-- Google Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap"
+    rel="stylesheet" />
+
+  <!-- React 18 -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Vistral peer dependencies -->
+  <script src="https://unpkg.com/lodash@4/lodash.min.js"></script>
+  <script src="https://unpkg.com/ramda@0.29/dist/ramda.min.js"></script>
+  <script src="https://unpkg.com/@antv/g2@5/dist/g2.min.js"></script>
+  <script src="https://unpkg.com/@antv/s2@2/dist/s2.min.js"></script>
+
+  <script>
+    window.process = window.process || { env: { NODE_ENV: 'production' } };
+    window.global = window.global || window;
+  </script>
+
+  <!-- Vistral UMD -->
+  <script src="https://unpkg.com/@timeplus/vistral/dist/index.umd.min.js"></script>
+
+  <!-- Proton JavaScript Driver -->
+  <script src="https://unpkg.com/@timeplus/proton-javascript-driver/dist/index.umd.js"></script>
+
+  <style>
+    :root {
+      --bg: #0b0d14;
+      --bg2: #111320;
+      --bg3: #171a2e;
+      --bg4: #1d2035;
+      --border: #252840;
+      --border2: #31365a;
+      --accent: #00e5c0;
+      --accent2: #7b6cfa;
+      --accent3: #f7a84f;
+      --danger: #f76f6f;
+      --success: #4cde97;
+      --text: #d8ddef;
+      --text2: #8890b0;
+      --text3: #4a506e;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'DM Sans', system-ui, sans-serif;
+      --radius: 6px;
+      --radius-lg: 10px;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body,
+    #app {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ── Layout ──────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+    }
+
+    /* ── Top bar ─────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .topbar-logo svg {
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .topbar-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+    }
+
+    .topbar-version {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      background: rgba(123, 108, 250, 0.15);
+      color: var(--accent2);
+      border: 1px solid rgba(123, 108, 250, 0.3);
+      border-radius: 99px;
+      font-family: var(--mono);
+    }
+
+    .topbar-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text2);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text3);
+      transition: background 0.3s;
+    }
+
+    .status-dot.idle {
+      background: var(--text3);
+    }
+
+    .status-dot.running {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    .status-dot.done {
+      background: var(--success);
+    }
+
+    .status-dot.error {
+      background: var(--danger);
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.4
+      }
+    }
+
+    /* ── Main split ──────────────────────────── */
+    .main {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ──────────────────────────── */
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--bg2);
+    }
+
+    .panel-section {
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .panel-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 14px 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .panel-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text3);
+      font-family: var(--mono);
+    }
+
+    .panel-section-toggle {
+      font-size: 10px;
+      color: var(--text3);
+      transition: transform 0.2s;
+    }
+
+    .panel-section-toggle.open {
+      transform: rotate(180deg);
+    }
+
+    .panel-section-body {
+      padding: 0 14px 12px;
+    }
+
+    /* Connection row */
+    .conn-row {
+      display: grid;
+      grid-template-columns: 1fr 80px;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text2);
+      margin-bottom: 4px;
+      font-family: var(--mono);
+      letter-spacing: 0.04em;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 9px;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--accent2);
+    }
+
+    select {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a506e'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 24px;
+    }
+
+    select option {
+      background: var(--bg3);
+    }
+
+    /* SQL Editor */
+    .sql-editor-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sql-editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px 7px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .sql-editor-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text3);
+      font-family: var(--mono);
+    }
+
+    .sql-editor-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    textarea#sql-input {
+      flex: 1;
+      resize: none;
+      border: none;
+      border-radius: 0;
+      background: var(--bg);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.6;
+      padding: 12px 14px;
+      color: var(--accent);
+      caret-color: var(--text);
+      min-height: 120px;
+    }
+
+    textarea#sql-input:focus {
+      border-color: transparent;
+    }
+
+    /* ── Buttons ─────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: #00ccac;
+    }
+
+    .btn-danger {
+      background: rgba(247, 111, 111, 0.12);
+      color: var(--danger);
+      border-color: rgba(247, 111, 111, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(247, 111, 111, 0.2);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text2);
+      border-color: var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--bg4);
+      color: var(--text);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Chart config */
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .config-grid-1 {
+      grid-template-columns: 1fr;
+    }
+
+    .config-field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Result stats bar */
+    .stats-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 7px 14px;
+      background: var(--bg3);
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stat-value {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ── Right panel ─────────────────────────── */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .right-tabs {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      flex-shrink: 0;
+      height: 38px;
+    }
+
+    .tab {
+      font-size: 11px;
+      font-weight: 500;
+      font-family: var(--mono);
+      color: var(--text3);
+      padding: 0 14px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+      user-select: none;
+    }
+
+    .tab:hover {
+      color: var(--text2);
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .right-content {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+      position: relative;
+    }
+
+    /* Error panel */
+    .error-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: rgba(247, 111, 111, 0.07);
+      border: 1px solid rgba(247, 111, 111, 0.25);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--danger);
+      margin-bottom: 12px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 12px;
+      color: var(--text3);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .empty-state svg {
+      opacity: 0.3;
+    }
+
+    /* Chart area */
+    #chart-mount {
+      width: 100%;
+      height: calc(100% - 8px);
+      min-height: 300px;
+    }
+
+    /* Data table */
+    .data-table-wrap {
+      width: 100%;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 11.5px;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    th {
+      background: var(--bg3);
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text3);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text2);
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: var(--bg3);
+    }
+
+    td.num {
+      color: var(--accent3);
+    }
+
+    td.date {
+      color: var(--accent2);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border2);
+      border-radius: 99px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text3);
+    }
+
+    /* Utility */
+    .hidden {
+      display: none !important;
+    }
+
+    .flex-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mt8 {
+      margin-top: 8px;
+    }
+
+    /* run panel footer */
+    .run-panel {
+      flex-shrink: 0;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="layout" id="app">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-logo">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <circle cx="10" cy="10" r="9" stroke="#00e5c0" stroke-width="1.5" />
+          <path d="M6 10l3 3 5-6" stroke="#00e5c0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="topbar-title">proton · playground</span>
+      </div>
+      <div class="topbar-sep"></div>
+      <span class="topbar-version">JS Driver</span>
+      <div class="topbar-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">idle</span>
+      </div>
+    </header>
+
+    <!-- MAIN SPLIT -->
+    <div class="main">
+
+      <!-- LEFT PANEL -->
+      <div class="left-panel">
+
+        <!-- Connection config -->
+        <div class="panel-section">
+          <div class="panel-section-header" onclick="toggleSection('conn')">
+            <span class="panel-section-label">Connection</span>
+            <span class="panel-section-toggle open" id="conn-toggle">▼</span>
+          </div>
+          <div class="panel-section-body" id="conn-body">
+            <div class="config-field" style="margin-bottom:8px">
+              <div class="field-label">SERVER URL</div>
+              <input type="text" id="conn-url" value="http://localhost:8000" placeholder="http://localhost:8000" />
+            </div>
+            <!-- Proton target info row -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="flex:1;font-family:var(--mono);font-size:11px;color:var(--text3)">
+                Forwarding to: <span id="proton-target" style="color:var(--accent2)">…</span>
+              </div>
+              <button class="btn btn-ghost" id="btn-test" onclick="testConnection()"
+                style="padding:3px 8px;font-size:10px">Test</button>
+            </div>
+            <div id="conn-ping-result" style="font-family:var(--mono);font-size:11px;margin-bottom:8px;display:none">
+            </div>
+            <div class="conn-row" style="grid-template-columns:1fr 1fr">
+              <div class="config-field">
+                <div class="field-label">USERNAME</div>
+                <input type="text" id="conn-user" placeholder="default" />
+              </div>
+              <div class="config-field">
+                <div class="field-label">PASSWORD</div>
+                <input type="text" id="conn-pass" placeholder="(none)" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SQL Editor -->
+        <div class="sql-editor-wrap">
+          <div class="sql-editor-toolbar">
+            <span class="sql-editor-label">SQL</span>
+            <div class="sql-editor-actions">
+              <button class="btn btn-ghost" onclick="clearSQL()" title="Clear">✕</button>
+            </div>
+          </div>
+          <textarea id="sql-input" spellcheck="false"
+            placeholder="SELECT _tp_time, * FROM my_stream LIMIT 100">SELECT now() as _tp_time, number % 5 as id, rand() % 1000 as value FROM numbers(200)</textarea>
+        </div>
+
+        <!-- Chart config -->
+        <div class="panel-section">
+          <div class="panel-section-header" onclick="toggleSection('chart-cfg')">
+            <span class="panel-section-label">Visualization</span>
+            <span class="panel-section-toggle open" id="chart-cfg-toggle">▼</span>
+          </div>
+          <div class="panel-section-body" id="chart-cfg-body">
+            <div class="config-grid config-grid-1" style="margin-bottom:8px">
+              <div class="config-field">
+                <div class="field-label">CHART TYPE</div>
+                <select id="cfg-chartType" onchange="updateChartConfig()">
+                  <option value="table">Table</option>
+                  <option value="line">Line</option>
+                  <option value="area">Area</option>
+                  <option value="bar">Bar</option>
+                  <option value="column">Column</option>
+                  <option value="scatter">Scatter</option>
+                  <option value="pie">Pie</option>
+                  <option value="metric">Metric</option>
+                </select>
+              </div>
+            </div>
+            <div class="config-grid" id="axis-config">
+              <div class="config-field">
+                <div class="field-label">X AXIS</div>
+                <select id="cfg-xAxis" onchange="updateChartConfig()">
+                  <option value="">— auto —</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="field-label">Y AXIS</div>
+                <select id="cfg-yAxis" onchange="updateChartConfig()">
+                  <option value="">— auto —</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="field-label">COLOR / GROUP</div>
+                <select id="cfg-color" onchange="updateChartConfig()">
+                  <option value="">— none —</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="field-label">PALETTE</div>
+                <select id="cfg-palette" onchange="updateChartConfig()">
+                  <option value="">Default</option>
+                  <option value="Midnight">Midnight</option>
+                  <option value="Neon">Neon</option>
+                  <option value="Ocean">Ocean</option>
+                  <option value="Sunset">Sunset</option>
+                </select>
+              </div>
+            </div>
+            <div class="config-grid mt8" id="temporal-config">
+              <div class="config-field">
+                <div class="field-label">TEMPORAL MODE</div>
+                <select id="cfg-temporal" onchange="updateChartConfig()">
+                  <option value="none">None</option>
+                  <option value="axis">Axis (sliding)</option>
+                  <option value="frame">Frame (latest N)</option>
+                  <option value="key">Key (group)</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="field-label">TIME RANGE (min)</div>
+                <input type="number" id="cfg-range" value="1" min="0.1" step="0.5" oninput="updateChartConfig()" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Run controls + stats -->
+        <div class="run-panel">
+          <button class="btn btn-primary" id="btn-run" onclick="runQuery()">
+            ▶ Run
+          </button>
+          <button class="btn btn-danger hidden" id="btn-stop" onclick="stopQuery()">
+            ■ Stop
+          </button>
+          <button class="btn btn-ghost" onclick="clearResults()">Clear</button>
+        </div>
+
+        <div class="stats-bar">
+          <div class="stat-item">Rows <span class="stat-value" id="stat-rows">0</span></div>
+          <div class="stat-item">Cols <span class="stat-value" id="stat-cols">0</span></div>
+          <div class="stat-item" id="stat-elapsed-wrap" style="display:none">
+            Time <span class="stat-value" id="stat-elapsed">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div class="right-panel">
+        <div class="right-tabs">
+          <div class="tab active" data-tab="chart" onclick="switchTab('chart')">Chart</div>
+          <div class="tab" data-tab="table" onclick="switchTab('table')">Table</div>
+          <div class="tab" data-tab="raw" onclick="switchTab('raw')">Raw JSON</div>
+        </div>
+        <div class="right-content" id="right-content">
+
+          <!-- Error -->
+          <div class="error-banner hidden" id="error-panel">
+            <span>⚠</span>
+            <span id="error-text"></span>
+          </div>
+
+          <!-- Chart tab -->
+          <div id="tab-chart" style="height:100%">
+            <div class="empty-state" id="chart-empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              <span>Run a query to visualize results</span>
+            </div>
+            <div id="chart-mount" class="hidden"></div>
+          </div>
+
+          <!-- Table tab -->
+          <div id="tab-table" class="hidden" style="height:100%;overflow:auto">
+            <div class="empty-state" id="table-empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+              <span>No results yet</span>
+            </div>
+            <div class="data-table-wrap hidden" id="table-wrap">
+              <table id="data-table">
+                <thead id="table-head"></thead>
+                <tbody id="table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Raw JSON tab -->
+          <div id="tab-raw" class="hidden" style="height:100%;overflow:auto">
+            <pre id="raw-output"
+              style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.6;white-space:pre-wrap;word-break:break-all"></pre>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ─── State ────────────────────────────────────────────────────────────────────
+    const { ProtonDriver } = window;
+    const { ProtonClient } = ProtonDriver;
+    const { Vistral, React, ReactDOM } = window;
+    const { StreamChart, findPaletteByLabel } = Vistral;
+
+    let state = {
+      columns: [],
+      rows: [],
+      rawLines: [],
+      abort: null,
+      chartRoot: null,
+      currentTab: 'chart',
+      startTime: null,
+      rowCount: 0,
+    };
+
+    let chartConfig = {
+      chartType: 'table',
+      xAxis: '',
+      yAxis: '',
+      color: '',
+      palette: '',
+      temporal: 'none',
+      range: 1,
+    };
+
+    // ─── Section toggle ───────────────────────────────────────────────────────────
+    function toggleSection(id) {
+      const body = document.getElementById(id + '-body');
+      const toggle = document.getElementById(id + '-toggle');
+      const isOpen = !body.classList.contains('hidden');
+      body.classList.toggle('hidden', isOpen);
+      toggle.classList.toggle('open', !isOpen);
+      toggle.textContent = isOpen ? '▶' : '▼';
+    }
+
+    // ─── Tab switching ─────────────────────────────────────────────────────────────
+    function switchTab(name) {
+      state.currentTab = name;
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      ['chart', 'table', 'raw'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
+      });
+      if (name === 'chart' && state.rows.length > 0) renderChart();
+      if (name === 'table') renderTable();
+      if (name === 'raw') renderRaw();
+    }
+
+    // ─── Status helpers ────────────────────────────────────────────────────────────
+    function setStatus(cls, txt) {
+      document.getElementById('status-dot').className = 'status-dot ' + cls;
+      document.getElementById('status-text').textContent = txt;
+    }
+
+    function showError(msg) {
+      const p = document.getElementById('error-panel');
+      if (msg) {
+        document.getElementById('error-text').textContent = msg;
+        p.classList.remove('hidden');
+        setStatus('error', 'error');
+      } else {
+        p.classList.add('hidden');
+      }
+    }
+
+    // ─── Infer columns from first row ─────────────────────────────────────────────
+    function inferColumns(row) {
+      return Object.entries(row).map(([name, value]) => ({
+        name,
+        type: typeof value === 'number' ? 'float64'
+          : String(value).match(/^\d{4}-\d{2}-\d{2}/) ? 'datetime64'
+            : 'string',
+      }));
+    }
+
+    // ─── Populate axis dropdowns from columns ──────────────────────────────────────
+    function populateAxisDropdowns(columns) {
+      const fields = ['cfg-xAxis', 'cfg-yAxis', 'cfg-color'];
+      const emptyOptions = [
+        '<option value="">— auto —</option>',
+        '<option value="">— auto —</option>',
+        '<option value="">— none —</option>',
+      ];
+
+      fields.forEach((id, i) => {
+        const el = document.getElementById(id);
+        const prev = el.value;
+        el.innerHTML = emptyOptions[i] + columns.map(c =>
+          `<option value="${c.name}"${c.name === prev ? ' selected' : ''}>${c.name}</option>`
+        ).join('');
+      });
+
+      // Auto-detect sensible defaults
+      const timeCol = columns.find(c => c.type === 'datetime64' || c.name.includes('time') || c.name.includes('_tp_time'));
+      const numCol = columns.find(c => c.type === 'float64' || c.type === 'int64');
+      const strCol = columns.find(c => c.type === 'string' && c.name !== (timeCol?.name));
+
+      if (timeCol && !document.getElementById('cfg-xAxis').value) {
+        document.getElementById('cfg-xAxis').value = timeCol.name;
+        document.getElementById('cfg-temporal').value = 'axis';
+      }
+      if (numCol && !document.getElementById('cfg-yAxis').value) {
+        document.getElementById('cfg-yAxis').value = numCol.name;
+      }
+      if (strCol && !document.getElementById('cfg-color').value) {
+        document.getElementById('cfg-color').value = strCol.name;
+      }
+      updateChartConfig();
+    }
+
+    // ─── Stat counters ──────────────────────────────────────────────────────────────
+    function updateStats() {
+      document.getElementById('stat-rows').textContent = state.rowCount.toLocaleString();
+      document.getElementById('stat-cols').textContent = state.columns.length;
+      if (state.startTime) {
+        const elapsed = ((Date.now() - state.startTime) / 1000).toFixed(1) + 's';
+        document.getElementById('stat-elapsed').textContent = elapsed;
+        document.getElementById('stat-elapsed-wrap').style.display = '';
+      }
+    }
+
+    // ─── Chart config ──────────────────────────────────────────────────────────────
+    function updateChartConfig() {
+      chartConfig.chartType = document.getElementById('cfg-chartType').value;
+      chartConfig.xAxis = document.getElementById('cfg-xAxis').value;
+      chartConfig.yAxis = document.getElementById('cfg-yAxis').value;
+      chartConfig.color = document.getElementById('cfg-color').value;
+      chartConfig.palette = document.getElementById('cfg-palette').value;
+      chartConfig.temporal = document.getElementById('cfg-temporal').value;
+      chartConfig.range = parseFloat(document.getElementById('cfg-range').value) || 1;
+
+      if (state.rows.length > 0 && state.currentTab === 'chart') renderChart();
+    }
+
+    // ─── Render chart ──────────────────────────────────────────────────────────────
+    function renderChart() {
+      if (state.columns.length === 0) return;
+
+      document.getElementById('chart-empty').classList.add('hidden');
+      document.getElementById('chart-mount').classList.remove('hidden');
+
+      if (!state.chartRoot) {
+        state.chartRoot = ReactDOM.createRoot(document.getElementById('chart-mount'));
+      }
+
+      let palette;
+      if (chartConfig.palette) {
+        try { palette = findPaletteByLabel(chartConfig.palette); } catch (e) { }
+      }
+
+      const config = {
+        chartType: chartConfig.chartType,
+        legend: true,
+        gridlines: true,
+        colors: palette ? palette.values : undefined,
+      };
+
+      if (chartConfig.xAxis) config.xAxis = chartConfig.xAxis;
+      if (chartConfig.yAxis) config.yAxis = chartConfig.yAxis;
+      if (chartConfig.color) config.color = chartConfig.color;
+
+      if (chartConfig.temporal !== 'none' && chartConfig.xAxis) {
+        config.temporal = {
+          mode: chartConfig.temporal,
+          field: chartConfig.xAxis,
+          range: chartConfig.range,
+        };
+      }
+
+      state.chartRoot.render(
+        React.createElement(StreamChart, {
+          config,
+          data: { columns: state.columns, data: state.rows, isStreaming: !!state.abort },
+          theme: 'dark',
+          height: document.getElementById('chart-mount').clientHeight || 400,
+        })
+      );
+    }
+
+    // ─── Render table ──────────────────────────────────────────────────────────────
+    const MAX_TABLE_ROWS = 500;
+
+    function renderTable() {
+      if (state.columns.length === 0) return;
+
+      document.getElementById('table-empty').classList.add('hidden');
+      document.getElementById('table-wrap').classList.remove('hidden');
+
+      const thead = document.getElementById('table-head');
+      thead.innerHTML = '<tr>' + state.columns.map(c =>
+        `<th title="${c.name}">${c.name}</th>`
+      ).join('') + '</tr>';
+
+      const displayRows = state.rows.slice(-MAX_TABLE_ROWS);
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = displayRows.map(row => {
+        const cells = state.columns.map(col => {
+          const v = row[col.name];
+          const cls = col.type === 'float64' ? 'num' : col.type === 'datetime64' ? 'date' : '';
+          return `<td class="${cls}" title="${v}">${v !== null && v !== undefined ? v : ''}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+    }
+
+    // ─── Render raw ────────────────────────────────────────────────────────────────
+    function renderRaw() {
+      const lines = state.rawLines.slice(-200);
+      document.getElementById('raw-output').textContent = lines.join('\n');
+    }
+
+    // ─── Clear SQL / Results ────────────────────────────────────────────────────────
+    function clearSQL() {
+      document.getElementById('sql-input').value = '';
+    }
+
+    function clearResults() {
+      state.columns = [];
+      state.rows = [];
+      state.rawLines = [];
+      state.rowCount = 0;
+      if (state.chartRoot) {
+        state.chartRoot.unmount();
+        state.chartRoot = null;
+      }
+      document.getElementById('chart-empty').classList.remove('hidden');
+      document.getElementById('chart-mount').classList.add('hidden');
+      document.getElementById('table-empty').classList.remove('hidden');
+      document.getElementById('table-wrap').classList.add('hidden');
+      document.getElementById('raw-output').textContent = '';
+      document.querySelectorAll('#cfg-xAxis, #cfg-yAxis, #cfg-color').forEach(el => {
+        el.innerHTML = el.id === 'cfg-color'
+          ? '<option value="">— none —</option>'
+          : '<option value="">— auto —</option>';
+      });
+      updateStats();
+      showError(null);
+      setStatus('idle', 'idle');
+      document.getElementById('stat-elapsed-wrap').style.display = 'none';
+    }
+
+    // ─── Run Query ─────────────────────────────────────────────────────────────────
+    async function runQuery() {
+      if (state.abort) { stopQuery(); return; }
+
+      const sql = document.getElementById('sql-input').value.trim();
+      if (!sql) { showError('Please enter a SQL query.'); return; }
+
+      const rawUrl = (document.getElementById('conn-url').value || 'http://localhost:8000').trim();
+      const username = document.getElementById('conn-user').value || undefined;
+      const password = document.getElementById('conn-pass').value || undefined;
+
+      // Parse host + port from the server URL
+      let host = 'localhost', port = 8000;
+      try {
+        const u = new URL(rawUrl);
+        host = u.hostname;
+        port = u.port ? parseInt(u.port) : (u.protocol === 'https:' ? 443 : 80);
+      } catch {
+        showError('Invalid server URL: ' + rawUrl);
+        return;
+      }
+
+      clearResults();
+      showError(null);
+
+      document.getElementById('btn-run').classList.add('hidden');
+      document.getElementById('btn-stop').classList.remove('hidden');
+      setStatus('running', 'running…');
+      state.startTime = Date.now();
+
+      const clientCfg = { host, port };
+      if (username) clientCfg.username = username;
+      if (password) clientCfg.password = password;
+
+      try {
+        const client = new ProtonClient(clientCfg);
+        const { rows: stream, abort } = await client.query(sql);
+        state.abort = abort;
+        setStatus('running', 'streaming');
+
+        let firstRow = true;
+        let renderPending = false;
+
+        for await (const row of stream) {
+          if (firstRow) {
+            state.columns = inferColumns(row);
+            populateAxisDropdowns(state.columns);
+            firstRow = false;
+          }
+
+          state.rows = [...state.rows.slice(-999), row];
+          state.rawLines.push(JSON.stringify(row));
+          state.rowCount++;
+
+          if (!renderPending) {
+            renderPending = true;
+            requestAnimationFrame(() => {
+              renderPending = false;
+              if (state.currentTab === 'chart') renderChart();
+              else if (state.currentTab === 'table') renderTable();
+              else renderRaw();
+              updateStats();
+            });
+          }
+        }
+
+        setStatus('done', 'done');
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          // Try to extract a richer message from JSON error body (e.g. 502 proxy errors)
+          let msg = err.message;
+          try {
+            const body = JSON.parse(err.message);
+            if (body.error) msg = body.error + (body.hint ? ' — ' + body.hint : '');
+          } catch { }
+          showError(msg);
+          setStatus('error', 'error');
+        }
+      } finally {
+        state.abort = null;
+        document.getElementById('btn-run').classList.remove('hidden');
+        document.getElementById('btn-stop').classList.add('hidden');
+        updateStats();
+      }
+    }
+
+    // ─── Stop Query ────────────────────────────────────────────────────────────────
+    function stopQuery() {
+      if (state.abort) {
+        state.abort();
+        state.abort = null;
+        setStatus('done', 'stopped');
+      }
+      document.getElementById('btn-run').classList.remove('hidden');
+      document.getElementById('btn-stop').classList.add('hidden');
+    }
+
+    // ─── Keyboard shortcut: Ctrl/Cmd + Enter ──────────────────────────────────────
+    document.getElementById('sql-input').addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (state.abort) stopQuery(); else runQuery();
+      }
+    });
+
+    // ─── Fetch server config (proton target URL) ──────────────────────────────────
+    async function fetchConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        document.getElementById('proton-target').textContent = data.protonUrl;
+      } catch {
+        document.getElementById('proton-target').textContent = '(server not reachable)';
+        document.getElementById('proton-target').style.color = 'var(--danger)';
+      }
+    }
+
+    // ─── Test Proton connection ────────────────────────────────────────────────────
+    async function testConnection() {
+      const btn = document.getElementById('btn-test');
+      const result = document.getElementById('conn-ping-result');
+      btn.disabled = true;
+      btn.textContent = '…';
+      result.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/ping');
+        const data = await res.json();
+        result.style.display = 'block';
+        if (data.ok) {
+          result.style.color = 'var(--success)';
+          result.textContent = '✓ Proton reachable (HTTP ' + data.status + ')';
+        } else {
+          result.style.color = 'var(--danger)';
+          result.textContent = '✗ ' + data.error;
+          if (data.hint) result.textContent += '\n' + data.hint;
+        }
+      } catch (e) {
+        result.style.display = 'block';
+        result.style.color = 'var(--danger)';
+        result.textContent = '✗ Could not reach server: ' + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Test';
+      }
+    }
+
+    // ─── Init ──────────────────────────────────────────────────────────────────────
+    setStatus('idle', 'idle');
+    fetchConfig();
+  </script>
+</body>
+
+</html>
