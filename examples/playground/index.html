@@ -640,14 +640,15 @@
             <span class="panel-section-toggle open" id="conn-toggle">▼</span>
           </div>
           <div class="panel-section-body" id="conn-body">
-            <div class="config-field" style="margin-bottom:8px">
-              <div class="field-label">SERVER URL</div>
-              <input type="text" id="conn-url" value="http://localhost:8000" placeholder="http://localhost:8000" />
+            <!-- Proxy URL is always window.location.origin — not editable -->
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:6px">
+              Proxy: <span id="proxy-url" style="color:var(--text2)">…</span>
             </div>
             <!-- Proton target info row -->
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
               <div style="flex:1;font-family:var(--mono);font-size:11px;color:var(--text3)">
-                Forwarding to: <span id="proton-target" style="color:var(--accent2)">…</span>
+                Proton: <span id="proton-target" style="color:var(--accent2)">…</span>
+                <span style="color:var(--text3);font-size:10px">(set via PROTON_HOST/PORT env)</span>
               </div>
               <button class="btn btn-ghost" id="btn-test" onclick="testConnection()"
                 style="padding:3px 8px;font-size:10px">Test</button>
@@ -1424,20 +1425,13 @@
       const sql = document.getElementById('sql-input').value.trim();
       if (!sql) { showError('Please enter a SQL query.'); return; }
 
-      const rawUrl = (document.getElementById('conn-url').value || 'http://localhost:8000').trim();
       const username = document.getElementById('conn-user').value || undefined;
       const password = document.getElementById('conn-pass').value || undefined;
 
-      // Parse host + port from the server URL
-      let host = 'localhost', port = 8000;
-      try {
-        const u = new URL(rawUrl);
-        host = u.hostname;
-        port = u.port ? parseInt(u.port) : (u.protocol === 'https:' ? 443 : 80);
-      } catch {
-        showError('Invalid server URL: ' + rawUrl);
-        return;
-      }
+      // Always connect to the proxy that served this page
+      const u = new URL(window.location.origin);
+      const host = u.hostname;
+      const port = u.port ? parseInt(u.port) : (u.protocol === 'https:' ? 443 : 80);
 
       clearResults();
       showError(null);
@@ -1523,7 +1517,9 @@
 
     // ─── Fetch server config (proton target URL + auth mode) ─────────────────────
     async function fetchConfig() {
-      const serverUrl = (document.getElementById('conn-url').value || '').trim().replace(/\/$/, '');
+      const serverUrl = window.location.origin;
+      const proxyEl = document.getElementById('proxy-url');
+      if (proxyEl) proxyEl.textContent = serverUrl;
       try {
         const res = await fetch(serverUrl + '/api/config');
         const data = await res.json();
@@ -1552,7 +1548,7 @@
     }
 
     async function testConnection() {
-      const serverUrl = (document.getElementById('conn-url').value || '').trim().replace(/\/$/, '');
+      const serverUrl = window.location.origin;
       const btn = document.getElementById('btn-test');
       const result = document.getElementById('conn-ping-result');
       btn.disabled = true;
