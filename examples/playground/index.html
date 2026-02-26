@@ -1179,14 +1179,18 @@
       // Temporal binding
       let temporal;
       if (chartConfig.temporal !== 'none') {
-        // For bar chart the category role lives in chartConfig.yAxis; elsewhere in xAxis.
+        // For axis/frame modes temporal.field is the time field.
         const defaultField = ct === 'bar' ? chartConfig.yAxis : chartConfig.xAxis;
-        // In 'key' mode temporal.field is the CATEGORY/group-by field (e.g. 'symbol').
-        // cfg-temporalField is auto-populated with the time column, which is wrong for
-        // key mode — so for key mode we prefer the category (defaultField).
-        // In 'axis'/'frame' modes temporal.field is the time field, so keep current priority.
+        // In 'key' mode temporal.field is the entity/category to deduplicate by:
+        //   bar  → chartConfig.yAxis (the category axis)
+        //   geo  → chartConfig.color (the entity identifier, e.g. car_id / symbol)
+        //   others → chartConfig.xAxis (the category axis)
+        // cfg-temporalField defaults to the time column, which is wrong for key mode.
+        const defaultKeyField = ct === 'bar' ? chartConfig.yAxis
+          : ct === 'geo' ? (chartConfig.color || chartConfig.xAxis)
+          : chartConfig.xAxis;
         const tfield = chartConfig.temporal === 'key'
-          ? (defaultField || chartConfig.temporalField || undefined)
+          ? (defaultKeyField || chartConfig.temporalField || undefined)
           : (chartConfig.temporalField || defaultField || undefined);
         temporal = {
           mode: chartConfig.temporal,

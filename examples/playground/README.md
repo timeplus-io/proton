@@ -40,7 +40,7 @@ proton-playground/
 Proton's streaming REST API is on port **3218** by default.
 
 ```bash
-docker run -d -p 3218:3218 --name proton ghcr.io/timeplus-io/proton:latest
+docker run -d -p 3218:3218 --name proton --platform linux/amd64 ghcr.io/timeplus-io/proton:latest
 ```
 
 ### 2. Install deps & start the server
