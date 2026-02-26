@@ -1143,7 +1143,16 @@
       const gb = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
 
       chartConfig.chartType = g('cfg-chartType');
+      const prevTemporal = chartConfig.temporal;
       chartConfig.temporal = g('cfg-temporal');
+      // When entering 'key' mode the temporal field dropdown is auto-set to the time
+      // column (wrong — key mode needs the entity/category ID, not the time field).
+      // Clear it on the transition so the user picks the right field, and so
+      // buildVistralConfig falls back to the per-chart-type entity default.
+      if (chartConfig.temporal === 'key' && prevTemporal !== 'key') {
+        const tfEl = document.getElementById('cfg-temporalField');
+        if (tfEl) tfEl.value = '';
+      }
       chartConfig.temporalField = g('cfg-temporalField');
       chartConfig.range = parseInt(g('cfg-range')) || 2;
       chartConfig.palette = g('cfg-palette');
@@ -1181,16 +1190,24 @@
       if (chartConfig.temporal !== 'none') {
         // For axis/frame modes temporal.field is the time field.
         const defaultField = ct === 'bar' ? chartConfig.yAxis : chartConfig.xAxis;
-        // In 'key' mode temporal.field is the entity/category to deduplicate by:
-        //   bar  → chartConfig.yAxis (the category axis)
-        //   geo  → chartConfig.color (the entity identifier, e.g. car_id / symbol)
-        //   others → chartConfig.xAxis (the category axis)
-        // cfg-temporalField defaults to the time column, which is wrong for key mode.
+        // In 'key' mode temporal.field is the entity/category to deduplicate by.
+        // The per-chart-type default picks the natural entity identifier:
+        //   bar    → chartConfig.yAxis   (category axis)
+        //   column → chartConfig.xAxis   (category axis)
+        //   geo    → chartConfig.geoColor (entity identifier — NOTE: geo uses cfg-geoColor,
+        //            not cfg-color; fallback to color then xAxis for safety)
+        //   table  → chartConfig.color   (entity/row identifier)
+        // cfg-color / cfg-geoColor only list STRING columns, so if the entity ID is
+        // numeric the user must explicitly pick it in the FIELD dropdown (cfg-temporalField
+        // shows all columns).  Entering key mode clears that dropdown so the user's
+        // explicit choice always wins over the auto-defaulted time column.
         const defaultKeyField = ct === 'bar' ? chartConfig.yAxis
-          : ct === 'geo' ? (chartConfig.color || chartConfig.xAxis)
+          : ct === 'geo'   ? (chartConfig.geoColor || chartConfig.color || undefined)
+          : ct === 'table' ? (chartConfig.color || undefined)
           : chartConfig.xAxis;
         const tfield = chartConfig.temporal === 'key'
-          ? (defaultKeyField || chartConfig.temporalField || undefined)
+          // Explicit user selection in FIELD dropdown takes priority, then per-type default.
+          ? (chartConfig.temporalField || defaultKeyField || undefined)
           : (chartConfig.temporalField || defaultField || undefined);
         temporal = {
           mode: chartConfig.temporal,
@@ -1325,15 +1342,17 @@
       const preview = document.getElementById('cfg-json-preview');
       if (preview) preview.textContent = JSON.stringify(config, null, 2);
 
-      // For 'key' temporal mode the spec engine keeps ALL rows that share the
-      // maximum timestamp for each key — but a raw stream often delivers many
-      // rows for the same key within the same second.  That leaves G2 with
-      // duplicate category entries and it silently renders the FIRST (oldest)
-      // occurrence, making the chart appear frozen.
-      // Fix: pre-deduplicate by temporal.field so only the most-recently-
-      // received row per key reaches the chart.  Iterating state.rows in
-      // arrival order and overwriting means the last write (newest arrival)
-      // survives for each key.
+      // Pre-deduplicate for key mode before handing data to Vistral.
+      // G2-based charts (bar, column) apply temporal key-mode filtering via
+      // an internal transform that compares timestamps.  When a raw stream
+      // delivers multiple rows for the same key within the same second, G2
+      // sees duplicate category entries and silently renders the FIRST
+      // (oldest) one, making bars appear frozen.
+      // Sending only one row per key (last-write-wins by arrival order)
+      // guarantees G2 always renders the most-recently-received value.
+      // DataTable does its own last-write-wins dedup internally (no timestamp
+      // needed), so this is mainly an optimisation there — it reduces the
+      // payload from up to 999 raw rows to at most N_keys rows.
       let renderRows = state.rows;
       if (config.temporal && config.temporal.mode === 'key' && config.temporal.field) {
         const keyField = config.temporal.field;
