@@ -90,6 +90,31 @@ class ASTStorage;
     M(String, compression_method, "none", "Indicates that whether the HTTP body should be compressed. If the compression is enabled, the HTTP packets sent by the URL engine contain 'Content-Encoding' header to indicate which compression method is used.", 0) \
     M(Bool, use_chunked_encoding, true, "Indicates that whether to use the Chunked Transfer Encoding. If not, INSERT will create new HTTP request for each batch of data", 0)
 
+#define NATS_JETSTREAM_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
+    M(String, subject, "", "NATS JetStream subject filter for subscribing. Supports wildcards: orders.> or orders.*", 0) \
+    M(String, stream_name, "", "JetStream stream name. The stream must already exist on the NATS server.", 0) \
+    M(String, consumer_name, "", "Durable consumer name. If empty, auto-generated from the query ID.", 0) \
+    M(Bool, durable, true, "Create a durable consumer. Durable consumers persist across restarts.", 0) \
+    M(String, ack_policy, "explicit", "Ack policy: none (fire-and-forget), all (ack all up to latest), explicit (per-message ack for at-least-once)", 0) \
+    M(String, deliver_policy, "all", "Deliver policy: all, last, new, by_start_sequence, by_start_time", 0) \
+    M(UInt64, max_ack_pending, 1024, "Maximum number of outstanding acks before the server pauses delivery", 0) \
+    M(UInt64, batch_size, 256, "Number of messages to fetch per pull request", 0) \
+    M(UInt64, fetch_timeout_ms, 5000, "Timeout in milliseconds for each pull fetch request", 0) \
+    M(Milliseconds, nats_stall_timeout_ms, 60 * 1000, "Time in milliseconds without progress before the consumer subscription is considered stalled and recreated. Set to 0 to disable.", 0) \
+    M(String, nats_username, "", "NATS username for user/password authentication", 0) \
+    M(String, nats_password, "", "NATS password for user/password authentication", 0) \
+    M(String, nats_token, "", "NATS auth token for token-based authentication", 0) \
+    M(String, nats_nkey_seed, "", "NATS NKey seed for NKey-based authentication", 0) \
+    M(String, nats_creds_file, "", "Path to NATS credentials file for decentralized JWT authentication", 0) \
+    M(Bool, nats_tls, false, "Enable TLS. Auto-detected if URL starts with tls:// or nats+tls://", 0) \
+    M(String, nats_ca_file, "", "Path to TLS CA certificate file for server verification", 0) \
+    M(String, nats_cert_file, "", "Path to TLS client certificate for mTLS authentication", 0) \
+    M(String, nats_key_file, "", "Path to TLS client private key for mTLS authentication", 0) \
+    M(UInt64, reconnect_wait_ms, 2000, "Wait time in milliseconds between reconnect attempts", 0) \
+    M(Int64, max_reconnects, 60, "Maximum number of reconnect attempts. Set to -1 for unlimited.", 0) \
+    M(UInt64, start_sequence, 0, "Start sequence for deliver_policy=by_start_sequence", 0) \
+    M(String, start_time, "", "Start time (Unix timestamp in nanoseconds) for deliver_policy=by_start_time", 0)
+
 #define ALL_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     M(String, type, "", "External stream type", 0) \
     M(String, config_file, "", "External stream configuration file path", 0) \
@@ -103,7 +128,8 @@ class ASTStorage;
     TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     PULSAR_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     ICEBERG_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
-    HTTP_EXTERNAL_STREAM_SETTINGS(M, ALIAS)
+    HTTP_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
+    NATS_JETSTREAM_EXTERNAL_STREAM_SETTINGS(M, ALIAS)
 
 #define LIST_OF_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     ALL_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \

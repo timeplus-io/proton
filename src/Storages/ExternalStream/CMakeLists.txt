@@ -10,6 +10,7 @@ add_headers_and_sources(external_stream S3)
 add_headers_and_sources(external_stream Iceberg)
 add_headers_and_sources(external_stream HTTP)
 add_headers_and_sources(external_stream Python)
+add_headers_and_sources(external_stream NATSJetstream)
 
 add_library(external_stream ${external_stream_headers} ${external_stream_sources})
 
@@ -29,6 +30,10 @@ endif()
 
 if (TARGET ch_contrib::parquet)
     target_link_libraries(external_stream PRIVATE ch_contrib::parquet)
+endif()
+
+if (TARGET ch_contrib::nats_io)
+    target_link_libraries(external_stream PRIVATE ch_contrib::nats_io)
 endif()
 
 target_link_libraries(external_stream PRIVATE ch_contrib::uv)
