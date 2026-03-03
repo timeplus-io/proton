@@ -84,6 +84,7 @@ extern const int TOO_LARGE_STRING_SIZE;
 extern const int TOO_LARGE_ARRAY_SIZE;
 
 extern const int METADATA_VERSION_CHANGED;
+extern const int METADATA_MISMATCH;
 }
 
 void MetadataUpdater::handleCreateStream(
@@ -111,7 +112,12 @@ void MetadataUpdater::handleCreateStream(
         return;
     }
 
-    chassert(storage);
+    if (!storage)
+    {
+        /// This can happen when `if_not_exists` is true and the stream already exists, in that case we can just return ok
+        meta_store->ackProposal(request_header.correlationID(), sn, DB::ErrorCodes::OK, /*error_message=*/"");
+        return;
+    }
 
     /// Save stream definition to MetaDB
     res = executeWithRetry([this, &request_data, &sn]() {
@@ -140,11 +146,13 @@ void MetadataUpdater::handleCreateStream(
     {
         LOG_ERROR(logger, "Failed to start up stream {{{}}}, error={}", stream_info, e.message());
         meta_store->ackProposal(request_header.correlationID(), sn, e.code(), std::string{e.message()});
+        return;
     }
     catch (...)
     {
         tryLogCurrentException(logger, fmt::format("Failed to start up stream {{{}}}", stream_info));
         meta_store->ackProposal(request_header.correlationID(), sn, getCurrentExceptionCode(), /*error_message=*/"");
+        return;
     }
 
     meta_store->ackProposal(request_header.correlationID(), sn, DB::ErrorCodes::OK, /*error_message=*/"");
@@ -196,11 +204,10 @@ std::pair<StoragePtr, int32_t> MetadataUpdater::doHandleCreateStream(const clust
 
     if (auto table_storage = db->tryGetTable(request_data.desc.stream.name, global_context); table_storage)
     {
-        /// Stream name already exists, check the storage ID
-        if (table_storage->getStorageID().uuid == request_data.desc.stream.id)
+        if (create->if_not_exists)
         {
-            if (create->if_not_exists)
-                return {std::move(table_storage), DB::ErrorCodes::OK};
+            /// Return nullptr for no new stream is created; and OK status since if_not_exists is specified.
+            return {nullptr, DB::ErrorCodes::OK};
         }
 
         LOG_ERROR(logger, "Failed to create stream because stream {}.{} already exists", database, request_data.desc.stream.name);
@@ -221,6 +228,7 @@ std::pair<StoragePtr, int32_t> MetadataUpdater::doHandleCreateStream(const clust
 
     db->attachTable(global_context, request_data.desc.stream.name, storage, data_path);
 
+    /// issue-739, first change the in memory create query to avoid race
     const auto & new_create_query = parseCreateQueryFromAST(ast, database, table_name);
     storage->setInMemoryCreateQuery(new_create_query);
 
@@ -231,7 +239,7 @@ std::pair<StoragePtr, int32_t> MetadataUpdater::doHandleCreateStream(const clust
         QualifiedTableName qualified_name{database, table_name};
         TableNamesSet loading_dependencies = getDependenciesSetFromCreateQuery(global_context, qualified_name, ast);
         if (!loading_dependencies.empty())
-            DatabaseCatalog::instance().addLoadingDependencies(std::move(qualified_name), std::move(loading_dependencies));
+            DatabaseCatalog::instance().addLoadingDependencies(qualified_name, std::move(loading_dependencies));
     }
 
     return {std::move(storage), DB::ErrorCodes::OK};
@@ -246,13 +254,31 @@ void MetadataUpdater::handleDeleteStream(
     Stopwatch stopwatch;
     SCOPE_EXIT({ LOG_INFO(logger, "End DeleteStream {{{}}}, took={}ms", stream_info, stopwatch.elapsedMilliseconds()); });
 
-    /// Commented out: unused variable inmode
-    // bool is_mv = false;
-    // {
-    //     auto [_, storage] = DatabaseCatalog::instance().tryGetByUUID(request_data.stream.id);
-    //     if (storage && storage->getName() == "MaterializedView")
-    //         is_mv = true;
-    // }
+    auto [_, storage] = DatabaseCatalog::instance().tryGetByUUID(request_data.stream.id);
+    if (!storage)
+    {
+        handleFailedRequest(
+            request_header.correlationID(),
+            sn,
+            DB::ErrorCodes::UNKNOWN_STREAM,
+            fmt::format("Stream with UUID={} doesn't exist", DB::toString(request_data.stream.id)));
+        return;
+    }
+
+    if (auto storage_id = storage->getStorageID();
+        storage_id.database_name != request_data.stream.ns || storage_id.table_name != request_data.stream.name)
+    {
+        handleFailedRequest(
+            request_header.correlationID(),
+            sn,
+            DB::ErrorCodes::UNKNOWN_STREAM,
+            fmt::format(
+                "Stream with UUID={} has the different name {}.{}",
+                DB::toString(request_data.stream.id),
+                storage_id.database_name,
+                storage_id.table_name));
+        return;
+    }
 
     /// Try to commit delete stream to metadb until success or failed with unretriable error
     /// First, delete stream from the meta db
@@ -270,6 +296,8 @@ void MetadataUpdater::handleDeleteStream(
 
     /// Then, delete it from memory and clean up the data in background
     res = executeWithRetry([this, &request_data] { return doHandleDeleteStream(request_data); });
+    /// Deleting from memory and cleanup should always succeed. Keeping the error handling is for safety.
+    chassert(res == DB::ErrorCodes::OK);
     if (res != DB::ErrorCodes::OK)
     {
         handleFailedRequest(
@@ -357,6 +385,15 @@ MetadataUpdater::loadStreamDescriptor(const cluster::Stream & stream, const clus
         stream_desc = meta_store->getMetaDB().getStream(stream.ns, stream.name);
         return stream_desc.err.error_code;
     });
+
+    if (!stream_desc.hasError() && stream_desc.result->stream.id != stream.id)
+    {
+        stream_desc.err.error_code = DB::ErrorCodes::METADATA_MISMATCH;
+        stream_desc.err.error_message
+            = fmt::format("Stream UUID mismatch for stream={{{}}}: got UUID={}", stream_info, DB::toString(stream_desc.result->stream.id));
+
+        res = stream_desc.err.error_code;
+    }
 
     if (res != ErrorCodes::OK)
     {
