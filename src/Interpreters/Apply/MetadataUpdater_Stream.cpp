@@ -114,7 +114,17 @@ void MetadataUpdater::handleCreateStream(
 
     if (!storage)
     {
-        /// This can happen when `if_not_exists` is true and the stream already exists, in that case we can just return ok
+        /// This can happen when `if_not_exists` is true and the stream already exists.
+        /// Persist applied sequence for no-op create to avoid replaying the same request after restart.
+        res = executeWithRetry(
+            [this, &sn] { return meta_store->getMetaDB().saveAppliedSequence(cluster::AppliedSequence(sn)).error_code; });
+        if (res != DB::ErrorCodes::OK)
+        {
+            handleFailedRequest(
+                cid, sn, res, fmt::format("Failed to mark create stream no-op as applied: {{{}}}", stream_info));
+            return;
+        }
+
         meta_store->ackProposal(request_header.correlationID(), sn, DB::ErrorCodes::OK, /*error_message=*/"");
         return;
     }
@@ -206,8 +216,20 @@ std::pair<StoragePtr, int32_t> MetadataUpdater::doHandleCreateStream(const clust
     {
         if (create->if_not_exists)
         {
-            /// Return nullptr for no new stream is created; and OK status since if_not_exists is specified.
-            return {nullptr, DB::ErrorCodes::OK};
+            if (table_storage->getStorageID().uuid == request_data.desc.stream.id)
+            {
+                /// Return nullptr for no new stream is created; and OK status since if_not_exists is specified.
+                return {nullptr, DB::ErrorCodes::OK};
+            }
+
+            LOG_ERROR(
+                logger,
+                "Failed to create stream because stream {}.{} already exists with a different UUID: request_uuid={} existing_uuid={}",
+                database,
+                request_data.desc.stream.name,
+                DB::toString(request_data.desc.stream.id),
+                DB::toString(table_storage->getStorageID().uuid));
+            return {nullptr, DB::ErrorCodes::STREAM_ALREADY_EXISTS};
         }
 
         LOG_ERROR(logger, "Failed to create stream because stream {}.{} already exists", database, request_data.desc.stream.name);
