@@ -203,6 +203,22 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
             query_context->addQueryFactoriesInfo(Context::QueryLogFactories::AggregateFunctionCombinator, combinator_name);
 
         String nested_name = name.substr(0, name.size() - combinator_name.size());
+
+        /// proton: starts.
+        bool is_time_weighted_combinator = false;
+        if (combinator_name == "_time_weighted")
+        {
+            is_time_weighted_combinator = true;
+            const String nested_name_lowercase = Poco::toLower(nested_name);
+            if (nested_name_lowercase == "avg")
+                nested_name = "avg_weighted";
+            else if (nested_name_lowercase == "median")
+                nested_name = "median_exact_weighted";
+            else
+                throw Exception(ErrorCodes::ILLEGAL_AGGREGATION, "Unknown aggregate function '{}'", name);
+        }
+        /// proton: ends.
+
         /// Nested identical combinators (i.e. uniqCombinedIfIf) is not
         /// supported (since they don't work -- silently).
         ///
@@ -224,6 +240,8 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties, context, is_changelog_input);
         /// proton: starts.
         out_properties.use_arena = context ? context->getSettingsRef().default_hash_table != HashTableType::Hybrid : true;
+        if (is_time_weighted_combinator)
+            out_properties.is_order_dependent = true;
         /// proton: ends.
         return combinator->transformAggregateFunction(nested_function, out_properties, argument_types, parameters);
     }
@@ -284,10 +302,30 @@ std::optional<AggregateFunctionProperties> AggregateFunctionFactory::tryGetPrope
         if (combinator->isForInternalUsageOnly())
             return {};
 
-        String nested_name = name.substr(0, name.size() - combinator->getName().size());
+        /// proton: starts.
+        const std::string & combinator_name = combinator->getName();
+        String nested_name = name.substr(0, name.size() - combinator_name.size());
+        bool is_time_weighted_combinator = false;
+        if (combinator_name == "_time_weighted")
+        {
+            is_time_weighted_combinator = true;
+            const String nested_name_lowercase = Poco::toLower(nested_name);
+            if (nested_name_lowercase == "avg")
+                nested_name = "avg_weighted";
+            else if (nested_name_lowercase == "median")
+                nested_name = "median_exact_weighted";
+            else
+                return {};
+        }
 
         /// NOTE: It's reasonable to also allow to transform properties by combinator.
-        return tryGetPropertiesImpl(nested_name);
+        auto properties = tryGetPropertiesImpl(nested_name);
+        if (!properties)
+            return {};
+        if (is_time_weighted_combinator)
+            properties->is_order_dependent = true;
+        return properties;
+        /// proton: ends.
     }
 
     return {};
