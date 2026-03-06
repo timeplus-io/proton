@@ -206,12 +206,16 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
 
         /// proton: starts.
         bool is_time_weighted_combinator = false;
+        bool is_time_weighted_avg = false;
         if (combinator_name == "_time_weighted")
         {
             is_time_weighted_combinator = true;
             const String nested_name_lowercase = Poco::toLower(nested_name);
             if (nested_name_lowercase == "avg")
+            {
                 nested_name = "avg_weighted";
+                is_time_weighted_avg = true;
+            }
             else if (nested_name_lowercase == "median")
                 nested_name = "median_exact_weighted";
             else
@@ -235,6 +239,8 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         }
 
         DataTypes nested_types = combinator->transformArguments(argument_types);
+        if (is_time_weighted_avg)
+            nested_types[1] = std::make_shared<DataTypeFloat64>();
         Array nested_parameters = combinator->transformParameters(parameters);
 
         AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties, context, is_changelog_input);

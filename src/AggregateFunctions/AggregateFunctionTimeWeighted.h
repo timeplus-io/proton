@@ -40,10 +40,17 @@ class AggregateFunctionTimeWeighted final
     : public IAggregateFunctionDataHelper<TimeWeightedData<TimeType>, AggregateFunctionTimeWeighted<Value, TimeType>>
 {
 private:
+    enum class WeightColumnKind
+    {
+        UInt64,
+        Float64,
+    };
+
     using Data = TimeWeightedData<TimeType>;
     using Base = IAggregateFunctionDataHelper<Data, AggregateFunctionTimeWeighted<Value, TimeType>>;
 
     AggregateFunctionPtr nested_func;
+    WeightColumnKind weight_column_kind = WeightColumnKind::UInt64;
     size_t prefix_size = 0;
 
     AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
@@ -89,13 +96,34 @@ private:
         return nested_name + "_time_weighted";
     }
 
+    MutableColumnPtr createWeightColumn() const
+    {
+        if (weight_column_kind == WeightColumnKind::Float64)
+            return ColumnFloat64::create();
+
+        return ColumnUInt64::create();
+    }
+
+    void appendWeightValue(MutableColumnPtr & column, UInt64 weight) const
+    {
+        /// Time-weighted duration is always non-negative. For avg_time_weighted we may
+        /// feed Float64 weights to avoid signed/unsigned accumulator promotion issues.
+        if (weight_column_kind == WeightColumnKind::Float64)
+        {
+            assert_cast<ColumnFloat64 &>(*column).insertValue(static_cast<Float64>(weight));
+            return;
+        }
+
+        assert_cast<ColumnUInt64 &>(*column).insertValue(weight);
+    }
+
     void addWeightedValueToNested(AggregateDataPtr __restrict nested_place, const Field & value, UInt64 weight, Arena * arena) const
     {
         MutableColumnPtr value_column = this->argument_types[0]->createColumn();
         value_column->insert(value);
 
-        auto weight_column = ColumnUInt64::create();
-        weight_column->insert(weight);
+        auto weight_column = createWeightColumn();
+        appendWeightValue(weight_column, weight);
 
         ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
         nested_func->add(nested_place, raw_columns.data(), 0, arena);
@@ -163,6 +191,23 @@ public:
     AggregateFunctionTimeWeighted(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
         : Base(arguments, params_, nested_func_->getResultType()), nested_func(std::move(nested_func_))
     {
+        const auto & nested_argument_types = nested_func->getArgumentTypes();
+        if (nested_argument_types.size() < 2)
+            throw Exception(
+                ErrorCodes::INVALID_DATA, "Unexpected nested argument count {} for aggregate function {}", nested_argument_types.size(), nested_func->getName());
+
+        const WhichDataType nested_weight_type(nested_argument_types[1]);
+        if (nested_weight_type.isFloat64())
+            weight_column_kind = WeightColumnKind::Float64;
+        else if (nested_weight_type.isUInt64())
+            weight_column_kind = WeightColumnKind::UInt64;
+        else
+            throw Exception(
+                ErrorCodes::INVALID_DATA,
+                "Unsupported weight type {} for aggregate function {}",
+                nested_argument_types[1]->getName(),
+                nested_func->getName());
+
         const size_t nested_align = nested_func->alignOfData();
         prefix_size = (sizeof(Data) + nested_align - 1) / nested_align * nested_align;
     }
@@ -204,14 +249,14 @@ public:
 
         addLastIntervalToPlace(place, time_data[row_begin], arena);
 
-        auto weight_column = ColumnUInt64::create();
+        auto weight_column = createWeightColumn();
         /// Keep row indices aligned with the original input columns for nested addBatchSinglePlace().
         /// For row_begin > 0, prefix zeros so weight_column[i] is valid for i in [row_begin, row_end - 2].
         weight_column->reserve(row_end - 1);
         for (size_t i = 0; i < row_begin; ++i)
-            weight_column->insert(0);
+            appendWeightValue(weight_column, 0);
         for (size_t i = row_begin; i + 1 < row_end; ++i)
-            weight_column->insert(static_cast<UInt64>(time_data[i + 1] - time_data[i]));
+            appendWeightValue(weight_column, static_cast<UInt64>(time_data[i + 1] - time_data[i]));
 
         ColumnRawPtrs raw_columns{columns[0], weight_column.get()};
         nested_func->addBatchSinglePlace(row_begin, row_end - 1, getNestedPlace(place), raw_columns.data(), arena, -1, nullptr);

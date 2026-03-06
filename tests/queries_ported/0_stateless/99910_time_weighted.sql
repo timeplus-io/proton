@@ -32,6 +32,51 @@ FROM
     ORDER BY t64
 );
 
+SELECT round(avg_time_weighted(v, t), 6)
+FROM
+(
+    SELECT *
+    FROM
+    (
+        SELECT to_int32(-100) AS v, to_datetime('2024-01-01 00:00:00') AS t
+        UNION ALL
+        SELECT to_int32(3) AS v, to_datetime('2024-01-01 00:00:03') AS t
+        UNION ALL
+        SELECT to_int32(5) AS v, to_datetime('2024-01-01 00:00:05') AS t
+    )
+    ORDER BY t
+);
+
+SELECT round(avg_time_weighted(v, t, to_datetime('2024-01-01 00:00:09')), 6)
+FROM
+(
+    SELECT *
+    FROM
+    (
+        SELECT to_int32(-100) AS v, to_datetime('2024-01-01 00:00:00') AS t
+        UNION ALL
+        SELECT to_int32(3) AS v, to_datetime('2024-01-01 00:00:03') AS t
+        UNION ALL
+        SELECT to_int32(5) AS v, to_datetime('2024-01-01 00:00:05') AS t
+    )
+    ORDER BY t
+);
+
+SELECT round(avg_time_weighted(v, t), 6)
+FROM
+(
+    SELECT *
+    FROM
+    (
+        SELECT to_float64(1.5) AS v, to_datetime('2024-01-01 00:00:00') AS t
+        UNION ALL
+        SELECT to_float64(2.5) AS v, to_datetime('2024-01-01 00:00:02') AS t
+        UNION ALL
+        SELECT to_float64(10) AS v, to_datetime('2024-01-01 00:00:04') AS t
+    )
+    ORDER BY t
+);
+
 SELECT avg_time_weighted(val, a), avg_time_weighted(val, a, to_datetime('2024-11-29 12:12:28'))
 FROM
 (
