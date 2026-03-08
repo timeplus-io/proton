@@ -1,0 +1,48 @@
+tags:
+  - query_state
+description: global aggregation with function avg_time_weighted state checkpoint
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists test21_state_stream
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: create stream test21_state_stream (val int32, timestamp datetime64(3) default now64(3))
+
+  - type: wait
+    time: 1
+
+  - name: '1921'
+    query_id: '1921'
+    type: stream
+    query: subscribe to select round(avg_time_weighted(val, timestamp), 1) as avg_v from test21_state_stream emit periodic 1s settings checkpoint_interval=1
+    schema:
+      - name: avg_v
+        type: float64
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into test21_state_stream(val, timestamp) values (1, '2020-02-02 20:00:00'), (2, '2020-02-02 20:00:01'), (3, '2020-02-02 20:00:03'), (3, '2020-02-02 20:00:04'), (3, '2020-02-02 20:00:05')
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: kill query where query_id = '1921'
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: unsubscribe to '1921'
+
+  - type: check
+    target_name: '1921'
+    expected_result:
+      - [ 2.2 ]
