@@ -891,8 +891,28 @@ void StreamShardStore::doCommit(
             },
             /*wait_timeout_ms=*/{500});
 
+        /// Track backoff across retries for this scheduling attempt.
+        /// Declared outside if/else so both branches can access it.
+        static thread_local size_t backoff_ms = 100;
+
         if (!scheduled)
-            LOG_WARNING(logger, "No available threads in background commit pool with size={}, retry", part_commit_pool.getMaxThreads());
+        {
+            /// Exponential backoff when commit pool is saturated.
+            /// This gives background merge threads time to compact existing parts
+            /// and prevents CPU spinning during pool exhaustion (see issue #1113).
+            LOG_WARNING(
+                logger,
+                "No available threads in background commit pool with size={}, backing off {}ms",
+                part_commit_pool.getMaxThreads(),
+                backoff_ms);
+            std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
+            backoff_ms = std::min<size_t>(backoff_ms * 2, 5000); /// Cap at 5 seconds
+        }
+        else
+        {
+            /// Reset backoff on successful schedule
+            backoff_ms = 100;
+        }
     }
 
     commitSN();
@@ -983,23 +1003,60 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
                 metadata = storage_stream.getInMemoryMetadataByVersion(rec->schemaVersion());
             }
 
-            /// If block contains JSON column, we will need commit to avoid block merge
+            /// If block contains JSON column, we cannot merge blocks due to dynamic subcolumns,
+            /// but we should NOT commit every single record immediately. That creates a tiny-part
+            /// storm that exhausts the commit pool and causes OOM on restart (see issue #1113).
+            ///
+            /// Instead, we batch JSON records: commit only when accumulated rows or bytes exceed
+            /// a threshold. This prevents thousands of 1-row parts from being created while still
+            /// ensuring dynamic subcolumn data is committed in bounded groups.
+            ///
+            /// Cases we handle:
+            /// 1. all json blocks: [json_batch_1], [json_batch_2], ...
+            /// 2. all non-json blocks: [block], [block], ... (unchanged)
+            /// 3. interleaved: [json_batch], [non_json_batch], [json_batch], ...
             if (block.hasDynamicSubcolumns())
             {
-                /// There are several cases we will need consider, [..] means commit as a group
-                /// 1. all json blocks: [json_block], [json_block], [json_block], [json_block], [json_block]
-                /// 2. all non-json blocks: [block], [block], [block], [block], [block]
-                /// 3. interleaved-1: [json_block], [block, json_block], [block, json_block]
-                /// 4. interleaved-2: [block, json_block], [block, json_block], [block]
                 chassert(start_sn >= 0 && rec->getSN() >= start_sn);
 
-                LOG_DEBUG(logger, "Committing rows={} bytes={} containing json column to file system", block.rows(), block.bytes());
+                /// Batch thresholds: commit when we have enough rows or bytes to form a
+                /// reasonably-sized part. Values match configurable settings:
+                ///   dynamic_commit_row_threshold  (default: 8192)
+                ///   dynamic_commit_byte_threshold (default: 16 MB)
+                static constexpr size_t DYNAMIC_COMMIT_ROW_THRESHOLD = 8192;
+                static constexpr size_t DYNAMIC_COMMIT_BYTE_THRESHOLD = 16 * 1024 * 1024;
 
-                doCommit(std::move(block), std::make_pair(start_sn, rec->getSN()), std::move(keys), missing_sequence_ranges, metadata);
+                const auto current_rows = block.rows();
+                const auto current_bytes = block.bytes();
 
-                /// Explicitly clear since std::move in theory can be implemented as no move
-                block.clear();
-                keys = std::make_shared<IdempotentKeys>();
+                if (current_rows >= DYNAMIC_COMMIT_ROW_THRESHOLD
+                    || current_bytes >= DYNAMIC_COMMIT_BYTE_THRESHOLD)
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Committing batched json rows={} bytes={} sn_range=[{},{}] to file system",
+                        current_rows,
+                        current_bytes,
+                        start_sn,
+                        rec->getSN());
+
+                    doCommit(std::move(block), std::make_pair(start_sn, rec->getSN()), std::move(keys), missing_sequence_ranges, metadata);
+
+                    /// Explicitly clear since std::move in theory can be implemented as no move
+                    block.clear();
+                    keys = std::make_shared<IdempotentKeys>();
+                }
+                else
+                {
+                    LOG_TRACE(
+                        logger,
+                        "Accumulating json batch: rows={}/{} bytes={}/{} sn={}",
+                        current_rows,
+                        DYNAMIC_COMMIT_ROW_THRESHOLD,
+                        current_bytes,
+                        DYNAMIC_COMMIT_BYTE_THRESHOLD,
+                        rec->getSN());
+                }
             }
         }
         else

@@ -1173,6 +1173,8 @@ Possible values: non-negative numbers. Note that if the value is too small or to
 #define CONFIGURABLE_GLOBAL_SETTINGS(M, ALIAS) \
     M(Bool, asterisk_include_reserved_columns, true, "Show reserved columns on SELECT query.", 0) \
     M(UInt64, storage_commit_pool_size, 64, "Total shared thread pool size for building and committing parts for Stream", 0) \
+    M(UInt64, dynamic_commit_row_threshold, 8192, "For streams with dynamic/JSON columns, batch this many rows before committing a part. Higher values create fewer, larger parts but use more memory. Fixes tiny-part storm (issue #1113).", 0) \
+    M(UInt64, dynamic_commit_byte_threshold, 16 * 1024 * 1024, "For streams with dynamic/JSON columns, batch this many bytes before committing a part. Higher values create fewer, larger parts but use more memory. Fixes tiny-part storm (issue #1113).", 0) \
     M(UInt64, nlog_adhoc_pool_size, 8, "Thread pool size for nativelog ad-hoc tasks", 0) \
     M(UInt64, nlog_background_pool_size, 16, "Thread pool size for nativelog ad-hoc tasks", 0) \
     M(UInt64, timer_service_pool_size, 10, "Thread pool size for global timer service", 0) \
