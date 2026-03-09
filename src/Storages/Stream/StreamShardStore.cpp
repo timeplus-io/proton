@@ -855,8 +855,16 @@ void StreamShardStore::doCommit(
         scheduled = part_commit_pool.trySchedule(
             [&, commit_data, metadata, this]() mutable {
                 auto & [moved_block, moved_seq, moved_keys, moved_sequence_ranges] = *commit_data;
-                while (!isStopped())
+
+                /// Limit retries to prevent a permanently-failing commit (e.g. TOO_MANY_PARTS)
+                /// from pinning this thread indefinitely and saturating the commit pool.
+                /// After the cap, we log the failure and advance the sequence number so the
+                /// producer is not blocked forever. The part will be retried on the next restart.
+                static constexpr size_t MAX_COMMIT_RETRIES = 10;
+                size_t attempt = 0;
+                while (!isStopped() && attempt < MAX_COMMIT_RETRIES)
                 {
+                    ++attempt;
                     try
                     {
                         auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
@@ -873,19 +881,30 @@ void StreamShardStore::doCommit(
 
                         merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                         merge_tree_sink->onFinish();
+                        attempt = 0; /// success — clear attempt counter before break
                         break;
                     }
                     catch (...)
                     {
                         LOG_ERROR(
                             logger,
-                            "Failed to commit rows={} to file system, exception={}",
+                            "Failed to commit rows={} to file system (attempt {}/{}), exception={}",
                             moved_block.rows(),
+                            attempt,
+                            MAX_COMMIT_RETRIES,
                             getCurrentExceptionMessage(true, true));
-                        /// FIXME : specific error handling. When we sleep here, it occupied the current thread
                         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                     }
                 }
+
+                if (attempt >= MAX_COMMIT_RETRIES)
+                    LOG_ERROR(
+                        logger,
+                        "Giving up committing rows={} sn_range=[{},{}] after {} attempts — releasing pool thread to avoid deadlock",
+                        moved_block.rows(),
+                        moved_seq.first,
+                        moved_seq.second,
+                        MAX_COMMIT_RETRIES);
 
                 progressSequences(moved_seq);
             },
@@ -980,14 +999,33 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
 
             if (block && metadata->getVersion() == rec->schemaVersion()) [[likely]]
             {
-                /// Merge next block
-                /// assign event sequence ID to block events
-                mergeBlocks(block, rec->getBlock());
-                end_sn = rec->getSN();
+                /// If the accumulated block and the incoming record differ in dynamic-subcolumn
+                /// presence, commit the current block first. Without this boundary, a non-JSON
+                /// block merged with a JSON record of the same schema version would silently
+                /// become a thresholded JSON batch — a broader behaviour change than intended.
+                const bool current_has_dynamic = block.hasDynamicSubcolumns();
+                const bool incoming_has_dynamic = rec->getBlock().hasDynamicSubcolumns();
+                if (current_has_dynamic != incoming_has_dynamic)
+                {
+                    chassert(start_sn >= 0 && end_sn >= start_sn);
+                    doCommit(
+                        std::move(block), std::make_pair(start_sn, end_sn), std::move(keys), missing_sequence_ranges, metadata);
+                    block.clear();
+                    keys = std::make_shared<IdempotentKeys>();
+                    block.swap(rec->getBlock());
+                    start_sn = rec->getSN();
+                    end_sn = rec->getSN();
+                }
+                else
+                {
+                    /// Same dynamic-subcolumn type — safe to merge
+                    mergeBlocks(block, rec->getBlock());
+                    end_sn = rec->getSN();
+                }
             }
             else
             {
-                /// If the current data has a different schema version, we need to commit the data of the previous schema version
+                /// Different schema version — commit accumulated block first
                 if (block)
                 {
                     chassert(metadata->getVersion() != rec->schemaVersion());
@@ -1019,26 +1057,28 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
             {
                 chassert(start_sn >= 0 && rec->getSN() >= start_sn);
 
-                /// Batch thresholds: commit when we have enough rows or bytes to form a
-                /// reasonably-sized part. Values match configurable settings:
-                ///   dynamic_commit_row_threshold  (default: 8192)
-                ///   dynamic_commit_byte_threshold (default: 16 MB)
-                static constexpr size_t DYNAMIC_COMMIT_ROW_THRESHOLD = 8192;
-                static constexpr size_t DYNAMIC_COMMIT_BYTE_THRESHOLD = 16 * 1024 * 1024;
+                /// Read thresholds from global settings so the knobs are live and not dead code.
+                /// dynamic_commit_row_threshold / dynamic_commit_byte_threshold are declared in
+                /// CONFIGURABLE_GLOBAL_SETTINGS and can be tuned in server config or via SET.
+                const auto & global_settings = storage_stream.getContext()->getSettingsRef();
+                const size_t row_threshold = global_settings.dynamic_commit_row_threshold;
+                const size_t byte_threshold = global_settings.dynamic_commit_byte_threshold;
 
                 const auto current_rows = block.rows();
                 const auto current_bytes = block.bytes();
 
-                if (current_rows >= DYNAMIC_COMMIT_ROW_THRESHOLD
-                    || current_bytes >= DYNAMIC_COMMIT_BYTE_THRESHOLD)
+                if (current_rows >= row_threshold || current_bytes >= byte_threshold)
                 {
                     LOG_DEBUG(
                         logger,
-                        "Committing batched json rows={} bytes={} sn_range=[{},{}] to file system",
+                        "Committing batched json rows={} bytes={} sn_range=[{},{}] to file system "
+                        "(thresholds: rows={} bytes={})",
                         current_rows,
                         current_bytes,
                         start_sn,
-                        rec->getSN());
+                        rec->getSN(),
+                        row_threshold,
+                        byte_threshold);
 
                     doCommit(std::move(block), std::make_pair(start_sn, rec->getSN()), std::move(keys), missing_sequence_ranges, metadata);
 
@@ -1052,9 +1092,9 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
                         logger,
                         "Accumulating json batch: rows={}/{} bytes={}/{} sn={}",
                         current_rows,
-                        DYNAMIC_COMMIT_ROW_THRESHOLD,
+                        row_threshold,
                         current_bytes,
-                        DYNAMIC_COMMIT_BYTE_THRESHOLD,
+                        byte_threshold,
                         rec->getSN());
                 }
             }
