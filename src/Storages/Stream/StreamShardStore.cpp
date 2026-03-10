@@ -858,10 +858,13 @@ void StreamShardStore::doCommit(
 
                 /// Limit retries to prevent a permanently-failing commit (e.g. TOO_MANY_PARTS)
                 /// from pinning this thread indefinitely and saturating the commit pool.
-                /// After the cap, we log the failure and advance the sequence number so the
-                /// producer is not blocked forever. The part will be retried on the next restart.
+                /// After the cap, we log the failure and release the pool thread WITHOUT
+                /// advancing the committed sequence number. This leaves a gap in the SN
+                /// sequence, so the missing data will be re-fetched and re-committed on the
+                /// next restart (NativeLog replays from the last persisted SN).
                 static constexpr size_t MAX_COMMIT_RETRIES = 10;
                 size_t attempt = 0;
+                bool committed = false;
                 while (!isStopped() && attempt < MAX_COMMIT_RETRIES)
                 {
                     ++attempt;
@@ -881,7 +884,7 @@ void StreamShardStore::doCommit(
 
                         merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
                         merge_tree_sink->onFinish();
-                        attempt = 0; /// success — clear attempt counter before break
+                        committed = true;
                         break;
                     }
                     catch (...)
@@ -897,16 +900,26 @@ void StreamShardStore::doCommit(
                     }
                 }
 
-                if (attempt >= MAX_COMMIT_RETRIES)
+                if (committed)
+                {
+                    progressSequences(moved_seq);
+                }
+                else
+                {
+                    /// Do NOT call progressSequences() here. Advancing the committed SN
+                    /// without having written the part would let commitSNLocal() persist
+                    /// a sequence number for data that was never stored — causing data loss.
+                    /// By leaving the SN gap, NativeLog will replay this range on restart.
                     LOG_ERROR(
                         logger,
-                        "Giving up committing rows={} sn_range=[{},{}] after {} attempts — releasing pool thread to avoid deadlock",
+                        "Giving up committing rows={} sn_range=[{},{}] after {} attempts — "
+                        "releasing pool thread WITHOUT advancing sequence state so data can "
+                        "be recovered on restart",
                         moved_block.rows(),
                         moved_seq.first,
                         moved_seq.second,
                         MAX_COMMIT_RETRIES);
-
-                progressSequences(moved_seq);
+                }
             },
             /*wait_timeout_ms=*/{500});
 
