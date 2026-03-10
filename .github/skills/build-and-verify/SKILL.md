@@ -17,6 +17,16 @@ Use stripped binaries by default; fall back only if stripped binaries do not exi
 
 Why stripped: 90% smaller, faster startup, matches production/CI.
 
+## Source-root rule
+
+All commands in this skill assume you are already in the source tree whose code you want to validate.
+
+If you are working inside a git worktree:
+- create/use that worktree's own `build*` directories
+- do not run builds from the main checkout's `build*` directory unless it was configured for that exact same source root
+
+Reason: CMake/Ninja build directories embed absolute source paths, so a reused `build_release` from another checkout may silently compile the wrong tree or require a reconfigure that disrupts the original checkout.
+
 ## Build
 
 ```bash
