@@ -37,6 +37,8 @@ except ImportError:
 import random
 import string
 import multiprocessing
+import concurrent.futures
+import threading
 import socket
 from contextlib import closing
 
@@ -173,8 +175,9 @@ def stop_tests():
                     signal.signal(signal.SIGTERM, signal.SIG_IGN)
                     os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
                     signal.signal(signal.SIGTERM, signal.SIG_DFL)
-            except OSError:
-                # Ignore errors if process group operations fail
+            except (OSError, ValueError):
+                # Ignore errors if process group operations fail or signal
+                # is called from a non-main thread (ThreadPoolExecutor workers)
                 pass
 
 
@@ -275,7 +278,7 @@ def print_stacktraces() -> None:
 
     if server_pid and not args.replicated_database:
         print("")
-        print(f"Located ClickHouse server process {server_pid} listening at TCP port {args.tcp_port}")
+        print(f"Located Proton server process {server_pid} listening at TCP port {args.tcp_port}")
         print("Collecting stacktraces from all running threads with gdb:")
 
         bt = get_stacktraces_from_gdb(server_pid)
@@ -294,7 +297,7 @@ def print_stacktraces() -> None:
         return
 
     print(colored(
-        f"\nUnable to locate ClickHouse server process listening at TCP port {args.tcp_port}. "
+        f"\nUnable to locate Proton server process listening at TCP port {args.tcp_port}. "
          "It must have crashed or exited prematurely!",
         args, "red", attrs=["bold"]))
 
@@ -963,7 +966,8 @@ def run_tests_array(all_tests_with_params):
     failures_chain = 0
     start_time = datetime.now()
 
-    is_concurrent = multiprocessing.current_process().name != "MainProcess"
+    is_concurrent = (multiprocessing.current_process().name != "MainProcess"
+                     or threading.current_thread() is not threading.main_thread())
 
     client_options = get_additional_client_options(args)
 
@@ -1063,7 +1067,7 @@ server_logs_level = "warning"
 
 
 def check_server_started(args):
-    print("Connecting to ClickHouse server...", end='')
+    print("Connecting to Proton server...", end='')
 
     sys.stdout.flush()
     retry_count = args.server_check_retries
@@ -1173,18 +1177,35 @@ def do_run_tests(jobs, test_suite: TestSuite, parallel):
         for _ in range(jobs):
             parallel_tests_array.append((None, batch_size, test_suite))
 
-        with closing(multiprocessing.Pool(processes=jobs)) as pool:
-            pool.map_async(run_tests_array, parallel_tests_array)
+        if sys.platform == 'darwin':
+            # On macOS, coverage-instrumented binaries create massive Mach VM regions.
+            # fork() under high concurrency hits EAGAIN (errno 35). Use threads instead:
+            # workers only spawn subprocesses (IO-bound), so GIL is not a bottleneck.
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+                for p in parallel_tests_array:
+                    executor.submit(run_tests_array, p)
 
-            for suit in test_suite.parallel_tests:
-                queue.put(suit, timeout=args.timeout * 1.1)
+                for suit in test_suite.parallel_tests:
+                    queue.put(suit, timeout=args.timeout * 1.1)
 
-            for _ in range(jobs):
-                queue.put(None, timeout=args.timeout * 1.1)
+                for _ in range(jobs):
+                    queue.put(None, timeout=args.timeout * 1.1)
 
-            queue.close()
+                queue.close()
+            # ThreadPoolExecutor.__exit__ waits for all workers (equivalent to pool.join())
+        else:
+            with closing(multiprocessing.Pool(processes=jobs)) as pool:
+                pool.map_async(run_tests_array, parallel_tests_array)
 
-        pool.join()
+                for suit in test_suite.parallel_tests:
+                    queue.put(suit, timeout=args.timeout * 1.1)
+
+                for _ in range(jobs):
+                    queue.put(None, timeout=args.timeout * 1.1)
+
+                queue.close()
+
+            pool.join()
 
         run_tests_array((test_suite.sequential_tests, len(test_suite.sequential_tests), test_suite))
         return len(test_suite.sequential_tests) + len(test_suite.parallel_tests)
@@ -1389,7 +1410,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGHUP, signal_handler)
 
-    parser = ArgumentParser(description='ClickHouse functional tests')
+    parser = ArgumentParser(description='Proton functional tests')
     parser.add_argument('-q', '--queries', help='Path to queries dir')
     parser.add_argument('--tmp', help='Path to tmp dir')
 
