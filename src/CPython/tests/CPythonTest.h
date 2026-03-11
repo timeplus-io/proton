@@ -14,6 +14,7 @@
 class CPythonTest : public ::testing::Test
 {
 protected:
+    inline static wchar_t * program_name = nullptr;
     std::unordered_set<PyObject *> before_objects;
 
     static void SetUpTestSuite()
@@ -37,8 +38,15 @@ protected:
         if (!python_path.empty())
             setenv("PYTHONPATH", python_path.c_str(), /*overwrite=*/1);
 
-        if (wchar_t * program = Py_DecodeLocale(interpreter_info->path.c_str(), nullptr))
-            Py_SetProgramName(program);
+        if (program_name)
+        {
+            PyMem_RawFree(program_name);
+            program_name = nullptr;
+        }
+
+        program_name = Py_DecodeLocale(interpreter_info->path.c_str(), nullptr);
+        if (program_name)
+            Py_SetProgramName(program_name);
 
         Py_Initialize();
     }
@@ -61,6 +69,11 @@ protected:
 
         /// Do NOT call `PyGILState_Release` after `Py_Finalize()`.
         Py_Finalize();
+        if (program_name)
+        {
+            PyMem_RawFree(program_name);
+            program_name = nullptr;
+        }
         (void)state;
     }
 

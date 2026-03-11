@@ -31,7 +31,7 @@ void ServerDescriptor::loadFromConfig(const Poco::Util::AbstractConfiguration & 
     http_port = cluster::TCPPort(config.getUInt("node.http.port", 3218), config.getBool("node.http.is_tls_port", false));
 
     /// gRPC port
-    grpc_port = cluster::TCPPort(config.getUInt("node.grpc.port", 8090), config.getBool("node.grpc.is_tls_port", false));
+    grpc_port = cluster::TCPPort(config.getUInt("grpc.port", 8090), config.getBool("grpc.is_tls_port", false));
 
     /// Table TCP port
     table_tcp_port = cluster::TCPPort(config.getUInt("node.table_tcp.port", 7587), config.getBool("node.table_tcp.is_tls_port", false));
