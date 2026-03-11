@@ -821,26 +821,74 @@ void StreamShardStore::doCommit(
     SequenceRanges missing_sequence_ranges,
     StorageMetadataPtr metadata)
 {
+    /// Empty block (e.g. after deduplication): advance SN without writing anything.
+    /// This applies for both JSON and non-JSON paths.
+    if (!block)
     {
         std::lock_guard lock(sns_mutex);
         assert(seq_pair.first > last_sn);
-        /// We are sequentially consuming records, so seq_pair is always increasing
         outstanding_sns.push_back(seq_pair);
+        progressSequencesWithLockHeld(seq_pair);
+        return;
+    }
 
-        /// After deduplication, we may end up with empty block
-        /// We still mark these deduped blocks committed and moving forward
-        /// the offset checkpointing
-        if (!block)
+    /// Dynamic/JSON blocks: commit synchronously on the current (polling) thread.
+    ///
+    /// Key design points:
+    ///   - outstanding_sns is updated ONLY after the write succeeds, so there is
+    ///     never a gap-entry in the SN deque from a failed write.
+    ///   - On write failure the exception propagates to the caller
+    ///     (StreamCallbackData::doCommit), which stops the shard so NativeLog
+    ///     restarts from the last committed SN.
+    ///   - Because the caller already batches to the configured row/byte threshold,
+    ///     each synchronous write is a reasonably-sized part (not a 1-row flush).
+    if (block.hasDynamicSubcolumns())
+    {
+        /// Write first — outstanding_sns is not touched until success.
         {
-            progressSequencesWithLockHeld(seq_pair);
-            return;
+            auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
+
+            auto * merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
+            merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(seq_pair.first, seq_pair.second, keys));
+            merge_tree_sink->setMissingSequenceRanges(std::move(missing_sequence_ranges));
+
+            merge_tree_sink->onStart();
+
+            assignIndexTime(const_cast<ColumnWithTypeAndName *>(block.findByName(ProtonConsts::RESERVED_INDEX_TIME)));
+
+            merge_tree_sink->consume(Chunk(block.getColumns(), block.rows()));
+            merge_tree_sink->onFinish();
         }
 
+        /// Write succeeded: record and advance the committed SN atomically.
+        {
+            std::lock_guard lock(sns_mutex);
+            assert(seq_pair.first > last_sn);
+            outstanding_sns.push_back(seq_pair);
+            progressSequencesWithLockHeld(seq_pair);
+        }
+
+        LOG_DEBUG(
+            logger,
+            "Committed dynamic/JSON rows={} sn_range=[{},{}] synchronously",
+            block.rows(),
+            seq_pair.first,
+            seq_pair.second);
+
+        return;
+    }
+
+    /// Non-JSON blocks: commit asynchronously through the shared commit pool.
+    /// Enqueue the SN range before scheduling so the state machine can track
+    /// out-of-order completions via progressSequences().
+    {
+        std::lock_guard lock(sns_mutex);
+        assert(seq_pair.first > last_sn);
+        outstanding_sns.push_back(seq_pair);
         assert(outstanding_sns.size() >= local_committed_sns.size());
     }
 
-    /// Commit blocks to file system async
-    /// We use trySchedule to avoid blocking the current thread for a long time when the pool is full
+    /// We use trySchedule to avoid blocking the current thread for a long time when the pool is full.
     bool scheduled = false;
     using CommitData = std::tuple<Block, SequencePair, std::shared_ptr<IdempotentKeys>, SequenceRanges>;
     auto commit_data = std::make_shared<CommitData>(std::move(block), seq_pair, std::move(keys), std::move(missing_sequence_ranges));
@@ -858,10 +906,6 @@ void StreamShardStore::doCommit(
 
                 /// Limit retries to prevent a permanently-failing commit (e.g. TOO_MANY_PARTS)
                 /// from pinning this thread indefinitely and saturating the commit pool.
-                /// After the cap, we log the failure and release the pool thread WITHOUT
-                /// advancing the committed sequence number. This leaves a gap in the SN
-                /// sequence, so the missing data will be re-fetched and re-committed on the
-                /// next restart (NativeLog replays from the last persisted SN).
                 static constexpr size_t MAX_COMMIT_RETRIES = 10;
                 size_t attempt = 0;
                 bool committed = false;
@@ -872,14 +916,12 @@ void StreamShardStore::doCommit(
                     {
                         auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
 
-                        /// Setup sequence numbers to persistent them to file system
                         auto * merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
                         merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
                         merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
 
                         merge_tree_sink->onStart();
 
-                        /// Reset index time here
                         assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(ProtonConsts::RESERVED_INDEX_TIME)));
 
                         merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
@@ -901,54 +943,39 @@ void StreamShardStore::doCommit(
                 }
 
                 if (committed)
-                {
                     progressSequences(moved_seq);
-                }
                 else
-                {
-                    /// Do NOT call progressSequences() here. Advancing the committed SN
-                    /// without having written the part would let commitSNLocal() persist
-                    /// a sequence number for data that was never stored — causing data loss.
-                    /// By leaving the SN gap, NativeLog will replay this range on restart.
                     LOG_ERROR(
                         logger,
-                        "Giving up committing rows={} sn_range=[{},{}] after {} attempts — "
-                        "releasing pool thread WITHOUT advancing sequence state so data can "
-                        "be recovered on restart",
+                        "Giving up committing rows={} sn_range=[{},{}] after {} attempts",
                         moved_block.rows(),
                         moved_seq.first,
                         moved_seq.second,
                         MAX_COMMIT_RETRIES);
-                }
             },
             /*wait_timeout_ms=*/{500});
 
-        /// Track backoff across retries for this scheduling attempt.
-        /// Declared outside if/else so both branches can access it.
         static thread_local size_t backoff_ms = 100;
 
         if (!scheduled)
         {
             /// Exponential backoff when commit pool is saturated.
-            /// This gives background merge threads time to compact existing parts
-            /// and prevents CPU spinning during pool exhaustion (see issue #1113).
             LOG_WARNING(
                 logger,
                 "No available threads in background commit pool with size={}, backing off {}ms",
                 part_commit_pool.getMaxThreads(),
                 backoff_ms);
             std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
-            backoff_ms = std::min<size_t>(backoff_ms * 2, 5000); /// Cap at 5 seconds
+            backoff_ms = std::min<size_t>(backoff_ms * 2, 5000);
         }
         else
         {
-            /// Reset backoff on successful schedule
             backoff_ms = 100;
         }
     }
-
-    commitSN();
 }
+
+
 
 /// Merge `rhs` block to `lhs`
 void StreamShardStore::mergeBlocks(Block & lhs, Block & rhs)

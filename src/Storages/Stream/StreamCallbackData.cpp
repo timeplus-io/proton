@@ -83,11 +83,16 @@ inline void StreamCallbackData::doCommit(cluster::SchemaRecordPtrs records, Sequ
     }
     catch (...)
     {
-        LOG_ERROR(
+        /// Log the failure at FATAL level so it is always visible in production.
+        /// Re-throw so the NativeLog consumer thread stops this shard cleanly
+        /// and restarts from the last committed SN — this is the intended recovery
+        /// path for synchronous dynamic/JSON write failures.
+        LOG_FATAL(
             stream_shard_store->logger,
-            "Failed to commit data for shard={}, exception={}",
+            "Failed to commit data for shard={}, stopping shard for restart/recovery. exception={}",
             stream_shard_store->shard(),
             getCurrentExceptionMessage(true, true));
+        throw;
     }
 }
 
