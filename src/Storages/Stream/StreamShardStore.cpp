@@ -929,14 +929,9 @@ void StreamShardStore::doCommit(
             [&, commit_data, metadata, this]() mutable {
                 auto & [moved_block, moved_seq, moved_keys, moved_sequence_ranges] = *commit_data;
 
-                /// Limit retries to prevent a permanently-failing commit (e.g. TOO_MANY_PARTS)
-                /// from pinning this thread indefinitely and saturating the commit pool.
-                static constexpr size_t MAX_COMMIT_RETRIES = 10;
-                size_t attempt = 0;
                 bool committed = false;
-                while (!isStopped() && attempt < MAX_COMMIT_RETRIES)
+                while (!isStopped())
                 {
-                    ++attempt;
                     try
                     {
                         auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
@@ -958,10 +953,8 @@ void StreamShardStore::doCommit(
                     {
                         LOG_ERROR(
                             logger,
-                            "Failed to commit rows={} to file system (attempt {}/{}), exception={}",
+                            "Failed to commit rows={} to file system, exception={}",
                             moved_block.rows(),
-                            attempt,
-                            MAX_COMMIT_RETRIES,
                             getCurrentExceptionMessage(true, true));
                         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                     }
@@ -970,13 +963,13 @@ void StreamShardStore::doCommit(
                 if (committed)
                     progressSequences(moved_seq);
                 else
-                    LOG_ERROR(
+                    LOG_INFO(
                         logger,
-                        "Giving up committing rows={} sn_range=[{},{}] after {} attempts",
+                        "Stopping commit retries for rows={} sn_range=[{},{}] because shard={} is stopping",
                         moved_block.rows(),
                         moved_seq.first,
                         moved_seq.second,
-                        MAX_COMMIT_RETRIES);
+                        shard());
             },
             /*wait_timeout_ms=*/{500});
 
