@@ -26,6 +26,8 @@
 #include <Common/ProtonCommon.h>
 #include <Common/setThreadName.h>
 
+#include <utility>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -640,8 +642,7 @@ void StreamShardStore::backgroundPollNativeLog()
         /// Final batch
         if (!batch.empty())
         {
-            auto final_batch = std::move(batch);
-            batch = cluster::SchemaRecordPtrs{};
+            auto final_batch = std::exchange(batch, cluster::SchemaRecordPtrs{});
             try
             {
                 stream_commit.commit(std::move(final_batch));
