@@ -1,19 +1,55 @@
 #pragma once
 
 #include <CPython/PyObjectPtr.h>
+#include <CPython/PythonInterpreterInfo.h>
 
 #include <Python.h>
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <functional>
+#include <string>
 #include <unordered_set>
 
 class CPythonTest : public ::testing::Test
 {
 protected:
+    inline static wchar_t * program_name = nullptr;
     std::unordered_set<PyObject *> before_objects;
 
-    static void SetUpTestSuite() { Py_Initialize(); }
+    static void SetUpTestSuite()
+    {
+        auto [interpreter_info, error_message] = DB::cpython::PythonInterpreterInfo::tryCollect("");
+        if (!interpreter_info.has_value())
+        {
+            GTEST_SKIP() << "Python 3.10 interpreter not found, skipping CPython tests: " << error_message;
+            return;
+        }
+
+        setenv("PYTHONHOME", interpreter_info->prefix.c_str(), /*overwrite=*/1);
+
+        std::string python_path;
+        for (const auto & sp : interpreter_info->site_packages)
+        {
+            if (!python_path.empty())
+                python_path += ':';
+            python_path += sp;
+        }
+        if (!python_path.empty())
+            setenv("PYTHONPATH", python_path.c_str(), /*overwrite=*/1);
+
+        if (program_name)
+        {
+            PyMem_RawFree(program_name);
+            program_name = nullptr;
+        }
+
+        program_name = Py_DecodeLocale(interpreter_info->path.c_str(), nullptr);
+        if (program_name)
+            Py_SetProgramName(program_name);
+
+        Py_Initialize();
+    }
 
     static void TearDownTestSuite()
     {
@@ -33,6 +69,11 @@ protected:
 
         /// Do NOT call `PyGILState_Release` after `Py_Finalize()`.
         Py_Finalize();
+        if (program_name)
+        {
+            PyMem_RawFree(program_name);
+            program_name = nullptr;
+        }
         (void)state;
     }
 
@@ -161,6 +202,12 @@ protected:
             assertObjectLeakAssumeGILHeld();
             PyGILState_Release(state);
         }
+    }
+
+    void SetUp() override
+    {
+        if (!Py_IsInitialized())
+            GTEST_SKIP() << "Python 3.10 interpreter not found, skipping CPython tests";
     }
 
     void TearDown() override

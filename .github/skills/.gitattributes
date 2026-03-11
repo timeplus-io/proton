@@ -1,0 +1,3 @@
+# Ensure skills are properly recognized
+*.md linguist-documentation=false
+SKILL.md linguist-language=Markdown

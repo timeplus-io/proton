@@ -11,6 +11,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # Part 1: Memory Engine Test
 echo "==== Testing Memory Engine ===="
 # Create a database and a stream in the Memory engine
+$CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS 99056Mem;"
 $CLICKHOUSE_CLIENT -q "CREATE DATABASE 99056Mem ENGINE = Memory();"
 sleep 1
 $CLICKHOUSE_CLIENT -q "CREATE STREAM 99056Mem.u (id INT) ENGINE = Memory();"
@@ -61,11 +62,24 @@ echo "Memory DB test passed successfully!"
 # Part 2: MySQL DB Test
 echo -e "\n==== Testing MySQL Integration ===="
 # Create a database connection to MySQL
-$CLICKHOUSE_CLIENT -q "CREATE DATABASE mysql_tpch SETTINGS type = 'mysql', \
-    address = 'mysql-timeplus.g.aivencloud.com:28851', \
+MYSQL_ADDRESS='mysql-timeplus.g.aivencloud.com:28851'
+$CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS mysql_tpch;"
+mysql_create_output=$($CLICKHOUSE_CLIENT -q "CREATE DATABASE mysql_tpch SETTINGS type = 'mysql', \
+    address = '${MYSQL_ADDRESS}', \
     user = 'avnadmin', \
     password = 'AVNS_1Bp64RDeSwm_mo3-BmN', \
-    database = 'tpch';"
+    database = 'tpch';" 2>&1) || mysql_create_rc=$?
+
+if [ -n "${mysql_create_rc:-}" ]; then
+    if grep -Eq "ALL_CONNECTION_TRIES_FAILED|mysqlxx::ConnectionFailed|Unknown MySQL server host|Name or service not known|Temporary failure in name resolution|No route to host|Connection timed out" <<<"$mysql_create_output"; then
+        echo "@@SKIP@@ external MySQL endpoint is unreachable from this environment"
+        exit 0
+    fi
+
+    echo "$mysql_create_output"
+    exit "$mysql_create_rc"
+fi
+
 sleep 1
 
 # Query the region table from the REST API
