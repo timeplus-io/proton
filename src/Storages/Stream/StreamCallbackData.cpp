@@ -3,6 +3,7 @@
 #include <Storages/Stream/StreamShardStore.h>
 
 #include <Common/logger_useful.h>
+#include <base/scope_guard.h>
 
 namespace DB
 {
@@ -24,6 +25,7 @@ void StreamCallbackData::wait() const
 void StreamCallbackData::commit(cluster::SchemaRecordPtrs records)
 {
     ++outstanding_commits;
+    SCOPE_EXIT(--outstanding_commits;);
 
     if (finishRecovery())
     {
@@ -45,10 +47,7 @@ void StreamCallbackData::commit(cluster::SchemaRecordPtrs records)
         /// Wait until we consume a record which has sequence number larger
         /// than max committed sn
         if (recovery_records.back()->getSN() < stream_shard_store->maxCommittedSN())
-        {
-            --outstanding_commits;
             return;
-        }
 
         auto range_buckets{
             categorizeRecordsAccordingToSequenceRanges(recovery_records, missing_sequence_ranges, stream_shard_store->maxCommittedSN())};
@@ -71,8 +70,6 @@ void StreamCallbackData::commit(cluster::SchemaRecordPtrs records)
         recovery_records.clear();
         missing_sequence_ranges.clear();
     }
-
-    --outstanding_commits;
 }
 
 inline void StreamCallbackData::doCommit(cluster::SchemaRecordPtrs records, SequenceRanges sequence_ranges)
@@ -83,11 +80,10 @@ inline void StreamCallbackData::doCommit(cluster::SchemaRecordPtrs records, Sequ
     }
     catch (...)
     {
-        /// Log the failure at FATAL level so it is always visible in production.
-        /// Re-throw so the NativeLog consumer thread stops this shard cleanly
-        /// and restarts from the last committed SN — this is the intended recovery
-        /// path for synchronous dynamic/JSON write failures.
-        LOG_FATAL(
+        /// Log the failure before re-throwing to stop this shard's consume path.
+        /// Re-throw so the background consumer loop can stop this shard's
+        /// consume path and rely on restart recovery from the last committed SN.
+        LOG_ERROR(
             stream_shard_store->logger,
             "Failed to commit data for shard={}, stopping shard for restart/recovery. exception={}",
             stream_shard_store->shard(),

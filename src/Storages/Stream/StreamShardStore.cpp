@@ -639,7 +639,20 @@ void StreamShardStore::backgroundPollNativeLog()
 
         /// Final batch
         if (!batch.empty())
-            stream_commit.commit(std::move(batch));
+        {
+            auto final_batch = std::move(batch);
+            batch = cluster::SchemaRecordPtrs{};
+            try
+            {
+                stream_commit.commit(std::move(final_batch));
+            }
+            catch (...)
+            {
+                tryLogCurrentException(
+                    logger,
+                    fmt::format("Stopping consume loop after final batch commit failure next_sn={}", storage->committedSN() + 1));
+            }
+        }
 
         stream_commit.wait();
 
@@ -669,11 +682,23 @@ void StreamShardStore::backgroundPollNativeLog()
             {
                 if (!batch.empty())
                 {
-                    stream_commit.commit(std::move(batch));
+                    auto current_batch = std::move(batch);
 
                     /// We like to re-init `batch` as after move, its state is undefined
                     batch = cluster::SchemaRecordPtrs{};
                     batch.reserve(batch_size);
+
+                    try
+                    {
+                        stream_commit.commit(std::move(current_batch));
+                    }
+                    catch (...)
+                    {
+                        tryLogCurrentException(
+                            logger,
+                            fmt::format("Stopping consume loop after commit failure next_sn={}", storage->committedSN() + 1));
+                        return;
+                    }
 
                     /// Reset
                     last_batch_commit = MonotonicMilliseconds::now();

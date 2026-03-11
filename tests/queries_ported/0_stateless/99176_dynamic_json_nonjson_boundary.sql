@@ -17,8 +17,7 @@ SELECT sleep(1) FORMAT Null;
 INSERT INTO test_nonjson_stream (id, name) VALUES (10, 'alpha'), (11, 'beta'), (12, 'gamma');
 
 -- Insert into JSON stream
-INSERT INTO test_json_stream (id, payload)
-VALUES (20, '{"x":1}'), (21, '{"x":2}'), (22, '{"x":3}');
+INSERT INTO test_json_stream (id, payload) VALUES (20, '{"x":1}'), (21, '{"x":2}'), (22, '{"x":3}');
 
 SELECT sleep(1) FORMAT Null;
 
