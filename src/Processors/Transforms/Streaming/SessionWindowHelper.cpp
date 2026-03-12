@@ -5,6 +5,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Streaming/TimeTransformHelper.h>
 
+#include <algorithm>
 #include <ranges>
 
 namespace DB
@@ -242,6 +243,15 @@ SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions)
             return *riter;
     }
     return nullptr;
+}
+
+Int64 getWatermarkForPeriodicEmit(const SessionInfoQueue & sessions, Int64 current_watermark)
+{
+    if (sessions.empty())
+        return current_watermark;
+
+    assert(sessions.size() == 1 && sessions.front()->active);
+    return std::max(current_watermark, sessions.front()->win_start);
 }
 
 SessionID removeExpiredSessions(SessionInfoQueue & sessions, Int64 finalized_watermark)

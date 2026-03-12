@@ -25,6 +25,9 @@ void assignWindow(
 /// \return last finalized session info, return nullptr if no finalized session
 SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions);
 
+/// \brief Keep periodic session emits monotonic when an active session is still open
+Int64 getWatermarkForPeriodicEmit(const SessionInfoQueue & sessions, Int64 current_watermark);
+
 /// \brief Remove expired sessions that not active
 /// \return last removed expired session id
 SessionID removeExpiredSessions(SessionInfoQueue & sessions, Int64 finalized_watermark);
