@@ -13,6 +13,7 @@
 #   include <Formats/KafkaSchemaRegistry.h>
 #   include <IO/VarInt.h>
 #   include <span>
+#   include <unordered_set>
 
 #   include <google/protobuf/compiler/parser.h>
 #   include <google/protobuf/descriptor.pb.h>
@@ -251,35 +252,121 @@ public:
 private:
     const google::protobuf::FileDescriptor * getSchema(uint32_t id)
     {
-        const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
-        if (loaded_descriptor != nullptr)
-            return loaded_descriptor;
-
+        {
+            std::lock_guard lock(mutex);
+            const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
+            if (loaded_descriptor != nullptr)
+                return loaded_descriptor;
+        }
         return fetchSchema(id);
     }
 
     const google::protobuf::FileDescriptor * fetchSchema(uint32_t id)
     {
-        std::lock_guard lock(mutex);
-        /// Just in case we got beaten
-        const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
-        if (loaded_descriptor != nullptr)
-            return loaded_descriptor;
+        return fetchSchemaById(id, std::to_string(id));
+    }
 
-        auto schema = registry.fetchSchema(id);
-        google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
-        google::protobuf::io::Tokenizer tokenizer(&input, this);
+    /// Fetch schema by id and register it in the pool under `file_name`.
+    /// `file_name` must match the import path so that the pool can resolve import statements.
+    const google::protobuf::FileDescriptor * fetchSchemaById(uint32_t id, const String & file_name)
+    {
+        /// Fast path: check cache without network call
+        {
+            std::lock_guard lock(mutex);
+            const auto * loaded = descriptor_pool.FindFileByName(file_name);
+            if (loaded != nullptr)
+                return loaded;
+            loaded = descriptor_pool.FindFileByName(std::to_string(id));
+            if (loaded != nullptr)
+                return loaded;
+        }
+
+        /// Fetch schema and its references from registry
+        auto schema_with_refs = registry.fetchSchemaWithReferences(id);
+
+        /// Resolve all referenced schemas into the pool before building this one
+        std::unordered_set<uint32_t> resolved_ids;
+        resolveReferences(schema_with_refs.references, resolved_ids);
+
+        /// Parse schema text
         google::protobuf::FileDescriptorProto file_descriptor;
-        file_descriptor.set_name(std::to_string(id));
-        google::protobuf::compiler::Parser parser;
-        parser.RecordErrorsTo(this);
-        parser.Parse(&tokenizer, &file_descriptor);
+        file_descriptor.set_name(file_name);
+        {
+            google::protobuf::io::ArrayInputStream input{
+                schema_with_refs.schema.data(), static_cast<int>(schema_with_refs.schema.size())};
+            google::protobuf::io::Tokenizer tokenizer(&input, this);
+            google::protobuf::compiler::Parser parser;
+            parser.RecordErrorsTo(this);
+            parser.Parse(&tokenizer, &file_descriptor);
+        }
 
-        auto const * descriptor = descriptor_pool.BuildFile(file_descriptor);
+        std::lock_guard lock(mutex);
+        /// Re-check under lock: another thread may have built this schema while we were parsing.
+        /// DescriptorPool::BuildFile returns nullptr for duplicate file names.
+        if (const auto * existing = descriptor_pool.FindFileByName(file_name))
+            return existing;
+        if (const auto * existing = descriptor_pool.FindFileByName(std::to_string(id)))
+            return existing;
+        const auto * descriptor = descriptor_pool.BuildFile(file_descriptor);
         if ((descriptor != nullptr) && descriptor->message_type_count() > 0)
             return descriptor;
 
-        throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema");
+        throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema id={}", id);
+    }
+
+    /// Recursively fetch and build all referenced schemas into the pool.
+    /// `ref.name` is used as the file name so that import statements resolve correctly.
+    void resolveReferences(
+        const std::vector<KafkaSchemaRegistry::SchemaReference> & references,
+        std::unordered_set<uint32_t> & resolved_ids)
+    {
+        for (const auto & ref : references)
+        {
+            /// Skip if already loaded by this name
+            {
+                std::lock_guard lock(mutex);
+                if (descriptor_pool.FindFileByName(ref.name) != nullptr)
+                    continue;
+            }
+
+            /// Try Google's well-known types from the generated pool first
+            const auto * generated_file
+                = google::protobuf::DescriptorPool::generated_pool()->FindFileByName(ref.name);
+            if (generated_file != nullptr)
+            {
+                google::protobuf::FileDescriptorProto generated_proto;
+                generated_file->CopyTo(&generated_proto);
+                std::lock_guard lock(mutex);
+                descriptor_pool.BuildFile(generated_proto);
+                continue;
+            }
+
+            /// Fetch the referenced schema at its pinned version
+            auto [ref_schema_id, ref_schema_with_refs] = registry.fetchSchemaBySubjectVersion(ref.subject, ref.version);
+
+            /// Guard against circular references
+            if (resolved_ids.contains(ref_schema_id))
+                continue;
+            resolved_ids.insert(ref_schema_id);
+
+            /// Recursively resolve nested references before building this one
+            resolveReferences(ref_schema_with_refs.references, resolved_ids);
+
+            /// Parse the referenced schema text
+            google::protobuf::FileDescriptorProto ref_file_descriptor;
+            ref_file_descriptor.set_name(ref.name);
+            {
+                google::protobuf::io::ArrayInputStream ref_input{
+                    ref_schema_with_refs.schema.data(), static_cast<int>(ref_schema_with_refs.schema.size())};
+                google::protobuf::io::Tokenizer ref_tokenizer(&ref_input, this);
+                google::protobuf::compiler::Parser ref_parser;
+                ref_parser.RecordErrorsTo(this);
+                ref_parser.Parse(&ref_tokenizer, &ref_file_descriptor);
+            }
+
+            std::lock_guard lock(mutex);
+            descriptor_pool.BuildFile(ref_file_descriptor);
+        }
     }
 
     std::mutex mutex;

@@ -100,6 +100,81 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id) const
     }
 }
 
+KafkaSchemaRegistry::SchemaWithReferences KafkaSchemaRegistry::fetchSchemaWithReferences(UInt32 id) const
+{
+    try
+    {
+        try
+        {
+            Poco::URI url(base_url, std::format("schemas/ids/{}", id));
+            LOG_TRACE(logger, "Fetching schema with references id = {}", id);
+
+            auto timeouts = ConnectionTimeouts()
+                .withConnectionTimeout(5)
+                .withSendTimeout(5)
+                .withReceiveTimeout(5);
+
+            Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
+            request.setHost(url.getHost());
+
+            if (!credentials.empty())
+                credentials.authenticate(request);
+
+            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            std::istream * response_body{};
+            try
+            {
+                session->sendRequest(request);
+
+                Poco::Net::HTTPResponse response;
+                response_body = receiveResponse(*session, request, response, false);
+            }
+            catch (const Poco::Exception & e)
+            {
+                session->attachSessionData(e.message());
+                throw;
+            }
+            Poco::JSON::Parser parser;
+            auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
+            auto schema = json_body->getValue<std::string>("schema");
+
+            std::vector<SchemaReference> references;
+            if (json_body->has("references"))
+            {
+                auto refs_array = json_body->getArray("references");
+                if (refs_array)
+                {
+                    for (UInt32 i = 0; i < refs_array->size(); ++i)
+                    {
+                        auto ref_obj = refs_array->getObject(i);
+                        SchemaReference ref;
+                        ref.name = ref_obj->getValue<std::string>("name");
+                        ref.subject = ref_obj->getValue<std::string>("subject");
+                        ref.version = ref_obj->getValue<int32_t>("version");
+                        references.push_back(std::move(ref));
+                    }
+                }
+            }
+
+            LOG_TRACE(logger, "Successfully fetched schema id = {} with {} references\n{}", id, references.size(), schema);
+            return {std::move(schema), std::move(references)};
+        }
+        catch (const Exception &)
+        {
+            throw;
+        }
+        catch (const Poco::Exception & e)
+        {
+            throw Exception(Exception::CreateFromPocoTag{}, e);
+        }
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(std::format("while fetching schema with references for id {}", id));
+        throw;
+    }
+}
+
 std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const String & subject) const
 {
     auto subject_name = subject + "-value";
@@ -157,6 +232,83 @@ std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const
     catch (Exception & e)
     {
         e.addMessage(std::format("while fetching latest schema for subject {}", subject));
+        throw;
+    }
+}
+
+std::pair<UInt32, KafkaSchemaRegistry::SchemaWithReferences>
+KafkaSchemaRegistry::fetchSchemaBySubjectVersion(const String & subject, Int32 version) const
+{
+    try
+    {
+        try
+        {
+            Poco::URI url(base_url, std::format("subjects/{}/versions/{}", subject, version));
+            LOG_TRACE(logger, "Fetching subject = {} version = {}", subject, version);
+
+            auto timeouts = ConnectionTimeouts()
+                .withConnectionTimeout(5)
+                .withSendTimeout(5)
+                .withReceiveTimeout(5);
+
+            Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
+            request.setHost(url.getHost());
+
+            if (!credentials.empty())
+                credentials.authenticate(request);
+
+            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            std::istream * response_body{};
+            try
+            {
+                session->sendRequest(request);
+
+                Poco::Net::HTTPResponse response;
+                response_body = receiveResponse(*session, request, response, false);
+            }
+            catch (const Poco::Exception & e)
+            {
+                session->attachSessionData(e.message());
+                throw;
+            }
+            Poco::JSON::Parser parser;
+            auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
+            auto schema_id = json_body->getValue<uint32_t>("id");
+            auto schema = json_body->getValue<std::string>("schema");
+
+            std::vector<SchemaReference> references;
+            if (json_body->has("references"))
+            {
+                auto refs_array = json_body->getArray("references");
+                if (refs_array)
+                {
+                    for (UInt32 i = 0; i < refs_array->size(); ++i)
+                    {
+                        auto ref_obj = refs_array->getObject(i);
+                        SchemaReference ref;
+                        ref.name = ref_obj->getValue<std::string>("name");
+                        ref.subject = ref_obj->getValue<std::string>("subject");
+                        ref.version = ref_obj->getValue<int32_t>("version");
+                        references.push_back(std::move(ref));
+                    }
+                }
+            }
+
+            LOG_TRACE(logger, "Successfully fetched schema from subject = {} version = {} id = {}\n{}", subject, version, schema_id, schema);
+            return {schema_id, SchemaWithReferences{std::move(schema), std::move(references)}};
+        }
+        catch (const Exception &)
+        {
+            throw;
+        }
+        catch (const Poco::Exception & e)
+        {
+            throw Exception(Exception::CreateFromPocoTag{}, e);
+        }
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(std::format("while fetching schema for subject {} version {}", subject, version));
         throw;
     }
 }

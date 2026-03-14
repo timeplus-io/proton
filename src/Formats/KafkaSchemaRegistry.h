@@ -9,6 +9,8 @@
 #include <Poco/Net/HTTPBasicCredentials.h>
 #include <Poco/URI.h>
 
+#include <vector>
+
 namespace DB
 {
 
@@ -16,6 +18,21 @@ namespace DB
 class KafkaSchemaRegistry final
 {
 public:
+    /// A single reference entry from the schema registry response.
+    struct SchemaReference
+    {
+        String name;     /// The import path, e.g. "google/protobuf/timestamp.proto"
+        String subject;  /// The subject name in the registry
+        Int32 version;   /// The version of the referenced schema
+    };
+
+    /// Schema text together with its references.
+    struct SchemaWithReferences
+    {
+        String schema;
+        std::vector<SchemaReference> references;
+    };
+
     static UInt32 readSchemaId(ReadBuffer & in);
     static void writeSchemaId(WriteBuffer & out, UInt32 schema_id);
 
@@ -62,7 +79,9 @@ public:
         bool skip_cert_check);
 
     String fetchSchema(UInt32 id) const;
+    SchemaWithReferences fetchSchemaWithReferences(UInt32 id) const;
     std::pair<UInt32, String> fetchLatestSchemaForSubject(const String & subject) const;
+    std::pair<UInt32, SchemaWithReferences> fetchSchemaBySubjectVersion(const String & subject, Int32 version) const;
 
 private:
     UInt32 fetchLatestSubjectVersion(const String & subject_name) const;
