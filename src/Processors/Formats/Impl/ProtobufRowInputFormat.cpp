@@ -281,14 +281,12 @@ private:
                 return loaded;
         }
 
-        /// Fetch schema and its references from registry
         auto schema_with_refs = registry.fetchSchemaWithReferences(id);
 
         /// Resolve all referenced schemas into the pool before building this one
         std::unordered_set<uint32_t> resolved_ids;
         resolveReferences(schema_with_refs.references, resolved_ids);
 
-        /// Parse schema text
         google::protobuf::FileDescriptorProto file_descriptor;
         file_descriptor.set_name(file_name);
         {
@@ -352,7 +350,6 @@ private:
             /// Recursively resolve nested references before building this one
             resolveReferences(ref_schema_with_refs.references, resolved_ids);
 
-            /// Parse the referenced schema text
             google::protobuf::FileDescriptorProto ref_file_descriptor;
             ref_file_descriptor.set_name(ref.name);
             {
