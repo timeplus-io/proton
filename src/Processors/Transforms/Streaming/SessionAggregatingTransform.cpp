@@ -90,7 +90,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeColumns(Chunk & chunk,
         if (!sessions.empty())
         {
             assert(sessions.size() == 1 && sessions.front()->active);
-            chunk.setWatermark(sessions.front()->win_start);
+            chunk.setWatermark(SessionWindowHelper::getWatermarkForPeriodicEmit(sessions, chunk.getWatermark()));
         }
     }
 

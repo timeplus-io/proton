@@ -20,6 +20,7 @@
 *.log
 *.stderr
 *.stdout
+*.stdout-e
 
 /docs/build
 /docs/publish
@@ -162,3 +163,14 @@ website/package-lock.json
 /tests/stream/.status
 .gdb_history
 report_*.html
+
+# Coverage reports and profiling data
+/coverage_report/
+/coverage_profraw/
+*.profraw
+
+# Local database and data directories
+/db/
+/proton-data/
+/tmp_data_*/
+/.worktrees/

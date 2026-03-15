@@ -236,7 +236,8 @@ public:
         QueryPipelineBuilderPtr left,
         QueryPipelineBuilderPtr right,
         std::function<void(Int64)> concat_callback = {},
-        Processors * collected_processors = nullptr);
+        Processors * collected_processors = nullptr,
+        size_t backfill_max_threads = 0);
     /// proton: ends.
 
 private:

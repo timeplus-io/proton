@@ -330,6 +330,10 @@ if (TARGET ch_contrib::rdkafka)
 endif()
 # proton: ends
 
+if (TARGET ch_contrib::nats_io)
+    dbms_target_link_libraries(PRIVATE ch_contrib::nats_io ch_contrib::uv)
+endif()
+
 if (TARGET ch_contrib::sasl2)
     dbms_target_link_libraries(PRIVATE ch_contrib::sasl2)
 endif()

@@ -923,11 +923,14 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     return left;
 }
 
+/// \param left -> historical pipeline
+/// \param right -> streaming pipeline
 QueryPipelineBuilderPtr QueryPipelineBuilder::concatPipelines(
     QueryPipelineBuilderPtr left,
     QueryPipelineBuilderPtr right,
     std::function<void(Int64)> concat_callback,
-    Processors * collected_processors)
+    Processors * collected_processors,
+    size_t backfill_max_threads)
 {
     if (!(!left->isStreaming() && right->isStreaming()))
         throw Exception(
@@ -962,7 +965,13 @@ QueryPipelineBuilderPtr QueryPipelineBuilder::concatPipelines(
 
     left->pipe.processors->emplace_back(transform);
     left->pipe.processors->insert(left->pipe.processors->end(), streaming_pipe.processors->begin(), streaming_pipe.processors->end());
-    left->pipe.max_parallel_streams = std::max(left->pipe.max_parallel_streams, streaming_pipe.max_parallel_streams);
+
+    if (backfill_max_threads)
+        left->pipe.max_parallel_streams
+            = std::max(std::min(left->pipe.max_parallel_streams, backfill_max_threads), streaming_pipe.max_parallel_streams);
+    else
+        left->pipe.max_parallel_streams = std::max(left->pipe.max_parallel_streams, streaming_pipe.max_parallel_streams);
+
     return left;
 }
 

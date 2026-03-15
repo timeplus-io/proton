@@ -142,6 +142,7 @@ add_contrib (cyrus-sasl-cmake cyrus-sasl) # for krb5
 add_contrib (libgsasl-cmake libgsasl) # requires krb5
 add_contrib (libhdfs3-cmake libhdfs3) # requires: google-protobuf, krb5
 add_contrib (librdkafka-cmake confluentinc-librdkafka) # requires: libgsasl
+add_contrib (nats-io-cmake nats-io)
 
 option(ENABLE_LIBPQXX "Enable PostgreSQL" ${ENABLE_LIBRARIES})
 if (ENABLE_LIBPQXX)

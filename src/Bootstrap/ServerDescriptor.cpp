@@ -25,40 +25,22 @@ void ServerDescriptor::loadFromConfig(const Poco::Util::AbstractConfiguration & 
 
     /// Ports from config - check both plain and secure variants
     /// TCP port
-    if (config.has("tcp_secure.port"))
-        tcp_port = cluster::TCPPort(config.getUInt("tcp_secure.port"), true);
-    else
-        tcp_port = cluster::TCPPort(config.getUInt("tcp.port", 8463), false);
+    tcp_port = cluster::TCPPort(config.getUInt("node.tcp.port", 8463), config.getBool("node.tcp.is_tls_port", false));
 
     /// HTTP port
-    if (config.has("https.port"))
-        http_port = cluster::TCPPort(config.getUInt("https.port"), true);
-    else
-        http_port = cluster::TCPPort(config.getUInt("http.port", 3218), false);
+    http_port = cluster::TCPPort(config.getUInt("node.http.port", 3218), config.getBool("node.http.is_tls_port", false));
 
     /// gRPC port
-    if (config.has("grpc_secure.port"))
-        grpc_port = cluster::TCPPort(config.getUInt("grpc_secure.port"), true);
-    else
-        grpc_port = cluster::TCPPort(config.getUInt("grpc.port", 8090), false);
+    grpc_port = cluster::TCPPort(config.getUInt("grpc.port", 8090), config.getBool("grpc.is_tls_port", false));
 
     /// Table TCP port
-    if (config.has("table_tcp_secure.port"))
-        table_tcp_port = cluster::TCPPort(config.getUInt("table_tcp_secure.port"), true);
-    else
-        table_tcp_port = cluster::TCPPort(config.getUInt("table_tcp.port", 7587), false);
+    table_tcp_port = cluster::TCPPort(config.getUInt("node.table_tcp.port", 7587), config.getBool("node.table_tcp.is_tls_port", false));
 
     /// Table HTTP port
-    if (config.has("table_https.port"))
-        table_http_port = cluster::TCPPort(config.getUInt("table_https.port"), true);
-    else
-        table_http_port = cluster::TCPPort(config.getUInt("table_http.port", 8123), false);
+    table_http_port = cluster::TCPPort(config.getUInt("node.table_http.port", 8123), config.getBool("node.table_http.is_tls_port", false));
 
     /// PostgreSQL port
-    if (config.has("postgresql_secure.port"))
-        postgresql_port = cluster::TCPPort(config.getUInt("postgresql_secure.port"), true);
-    else
-        postgresql_port = cluster::TCPPort(config.getUInt("postgresql.port", 5432), false);
+    postgresql_port = cluster::TCPPort(config.getUInt("node.postgresql.port", 5432), config.getBool("node.postgresql.is_tls_port", false));
 
     /// Paths
     data_path = config.getString("path", "./");

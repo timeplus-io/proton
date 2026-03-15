@@ -271,6 +271,9 @@ void StorageStream::doRead(
     size_t streaming_shard_num_streams = std::max<size_t>(
         1ul, (context_->getSettingsRef().min_threads.value + shards_to_read.shards.size() - 1) / shards_to_read.shards.size());
     size_t shard_num_streams = std::max<size_t>(1ul, num_streams / shards_to_read.shards.size());
+    if (context_->getSettingsRef().backfill_max_threads.value > 0)
+        shard_num_streams = std::min<size_t>(shard_num_streams, context_->getSettingsRef().backfill_max_threads.value);
+
     /// Specially, we always read by single thread for keyed storage
     if (Streaming::isKeyedStorage(dataStreamSemantic()))
         shard_num_streams = 1;
@@ -782,7 +785,10 @@ void StorageStream::preRename(const StorageID & new_table_id)
 }
 
 void StorageStream::truncate(
-    const ASTPtr & query, [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, ContextPtr context_, [[maybe_unused]] TableExclusiveLockHolder & holder)
+    const ASTPtr & query,
+    [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot,
+    ContextPtr context_,
+    [[maybe_unused]] TableExclusiveLockHolder & holder)
 {
     auto table_id = getStorageID();
     auto truncate_command = DB::queryToString(query);
