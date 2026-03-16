@@ -1,0 +1,54 @@
+description: RawBLOB format for NATS JetStream external stream
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists ex_nats_02
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_nats_02 (
+        raw string
+      )
+      SETTINGS type = 'nats_jetstream',
+        url = 'nats://nats:4222',
+        stream_name = 'PROTON_TEST',
+        subject = 'proton.test.raw',
+        data_format = 'RawBLOB',
+        deliver_policy = 'new';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: nats-02-raw
+    query: select raw from ex_nats_02
+    schema:
+      - name: raw
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_02 (raw) VALUES ('hello nats')
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_02 (raw) VALUES ('jetstream works')
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: nats-02-raw
+    expected_result:
+      - ['hello nats']
+      - ['jetstream works']
+
+  - type: query
+    sql: drop stream if exists ex_nats_02

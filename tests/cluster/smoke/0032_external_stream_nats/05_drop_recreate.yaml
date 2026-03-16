@@ -1,0 +1,81 @@
+description: drop and recreate NATS JetStream external stream
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists ex_nats_05
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_nats_05 (
+        id int32,
+        msg string
+      )
+      SETTINGS type = 'nats_jetstream',
+        url = 'nats://nats:4222',
+        stream_name = 'PROTON_TEST',
+        subject = 'proton.test.drop',
+        data_format = 'JSONEachRow',
+        deliver_policy = 'new';
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_05 (id, msg) VALUES (1, 'before-drop')
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream ex_nats_05
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_nats_05 (
+        id int32,
+        msg string
+      )
+      SETTINGS type = 'nats_jetstream',
+        url = 'nats://nats:4222',
+        stream_name = 'PROTON_TEST',
+        subject = 'proton.test.drop',
+        data_format = 'JSONEachRow',
+        deliver_policy = 'new';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: nats-05-recreated
+    query: select id, msg from ex_nats_05
+    schema:
+      - name: id
+        type: int32
+      - name: msg
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_05 (id, msg) VALUES (2, 'after-recreate')
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: nats-05-recreated
+    expected_result:
+      - [2, 'after-recreate']
+
+  - type: query
+    sql: drop stream if exists ex_nats_05

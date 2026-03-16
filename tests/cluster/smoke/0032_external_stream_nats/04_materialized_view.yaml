@@ -1,0 +1,106 @@
+tags:
+  - materialized_view
+description: materialized view reading from NATS JetStream and writing to internal stream
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop view if exists ex_nats_04_mv
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists ex_nats_04_source
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists ex_nats_04_sink
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_nats_04_source (
+        raw string
+      )
+      SETTINGS type = 'nats_jetstream',
+        url = 'nats://nats:4222',
+        stream_name = 'PROTON_TEST',
+        subject = 'proton.test.mv.input',
+        data_format = 'RawBLOB',
+        deliver_policy = 'new';
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE STREAM ex_nats_04_sink (
+        key string,
+        value int32
+      )
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW ex_nats_04_mv INTO ex_nats_04_sink AS
+      SELECT
+        raw:a::string AS key,
+        raw:b::int32 AS value
+      FROM ex_nats_04_source
+      SETTINGS recovery_policy = 'best_effort'
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: nats-04-mv
+    query: select key, value from ex_nats_04_sink
+    schema:
+      - name: key
+        type: string
+      - name: value
+        type: int32
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_04_source (raw) VALUES ('{"a": "one", "b": 1}')
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_04_source (raw) VALUES ('{"a": "two", "b": 2}')
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_04_source (raw) VALUES ('{"a": "three", "b": 3}')
+
+  - type: wait
+    time: 5
+
+  - type: check
+    target_name: nats-04-mv
+    expected_result:
+      - ['one', 1]
+      - ['two', 2]
+      - ['three', 3]
+
+  - type: query
+    sql: drop view if exists ex_nats_04_mv
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists ex_nats_04_sink
+
+  - type: query
+    sql: drop stream if exists ex_nats_04_source

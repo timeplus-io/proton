@@ -27,6 +27,7 @@ public:
         const FormatSettings & format_settings,
         natsSubscription * subscription_,
         std::shared_ptr<NATSJetstream> storage_,
+        const String & consumer_name,
         size_t max_block_size_,
         UInt64 stall_timeout_ms,
         ExternalStreamCounterPtr counter,
