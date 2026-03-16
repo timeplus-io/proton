@@ -2,6 +2,7 @@
 
 #if USE_NATSIO
 
+#include <algorithm>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -55,6 +56,13 @@ void validateMessageHeadersColumnType(const DataTypePtr & type)
     const auto & map_type = dynamic_cast<const DataTypeMap &>(*type);
     if (!WhichDataType{map_type.getKeyType()}.isStringOrFixedString() || !WhichDataType{map_type.getValueType()}.isStringOrFixedString())
         throw Exception(ErrorCodes::ILLEGAL_COLUMN, "`_tp_message_headers` column must have type of map(string, string)");
+}
+
+/// NATS names (consumer, stream) must not contain '.' (subject token delimiter) or spaces.
+void sanitizeNATSName(String & name)
+{
+    std::replace(name.begin(), name.end(), '.', '-');
+    std::replace(name.begin(), name.end(), ' ', '-');
 }
 
 } /// anonymous namespace
@@ -239,6 +247,18 @@ void NATSJetstream::validateSettings(bool attach)
 
         settings->set("one_message_per_row", true);
     }
+
+    /// Reject user-specified consumer_name that contains characters invalid for NATS.
+    /// Silently rewriting would alias distinct names (e.g. foo.bar → foo-bar) to the
+    /// same durable consumer, risking cursor/ack state collisions. Auto-generated
+    /// names (from query ID) are sanitized separately in read().
+    const auto & cn = settings->consumer_name.value;
+    if (!cn.empty() && (cn.find('.') != String::npos || cn.find(' ') != String::npos))
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE,
+            "NATS JetStream: 'consumer_name' must not contain '.' or spaces "
+            "(dots are the NATS subject token delimiter), got '{}'",
+            cn);
 }
 
 natsOptions * NATSJetstream::createConnectionOptions()
@@ -548,10 +568,14 @@ Pipe NATSJetstream::read(
     auto streaming = query_info.isStreaming();
     auto format_settings = getFormatSettings(query_context);
 
-    /// Generate consumer name: user-specified or auto from query ID
+    /// User-specified consumer_name is already sanitized in validateSettings().
+    /// For auto-generated names (from query ID), sanitize here.
     String consumer_name = getConsumerName();
     if (consumer_name.empty())
+    {
         consumer_name = fmt::format("proton-{}", query_context->getCurrentQueryId());
+        sanitizeNATSName(consumer_name);
+    }
 
     auto * subscription = createPullSubscription(consumer_name, query_context);
 
@@ -565,6 +589,7 @@ Pipe NATSJetstream::read(
         format_settings,
         subscription,
         this_ptr,
+        consumer_name,
         max_block_size,
         stallTimeoutMs(),
         external_stream_counter,
