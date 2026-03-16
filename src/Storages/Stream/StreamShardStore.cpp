@@ -894,8 +894,6 @@ void StreamShardStore::doCommit(
     commitSN();
 }
 
-
-
 /// Merge `rhs` block to `lhs`
 void StreamShardStore::mergeBlocks(Block & lhs, Block & rhs)
 {
@@ -1016,9 +1014,6 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
             {
                 chassert(start_sn >= 0 && rec->getSN() >= start_sn);
 
-                /// Read thresholds from global settings so the knobs are live and not dead code.
-                /// dynamic_commit_row_threshold / dynamic_commit_byte_threshold are declared in
-                /// CONFIGURABLE_GLOBAL_SETTINGS and can be tuned in server config or via SET.
                 const auto & global_settings = storage_stream.getContext()->getSettingsRef();
                 const size_t row_threshold = global_settings.dynamic_commit_row_threshold;
                 const size_t byte_threshold = global_settings.dynamic_commit_byte_threshold;
