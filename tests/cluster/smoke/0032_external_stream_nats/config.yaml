@@ -1,0 +1,6 @@
+name: nats_jetstream
+description: Tests covering the NATS JetStream external stream smoke cases.
+tags:
+  - smoke
+  - external_stream
+  - nats

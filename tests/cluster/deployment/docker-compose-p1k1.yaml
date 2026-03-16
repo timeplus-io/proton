@@ -165,6 +165,39 @@ services:
       restart_policy:
         condition: on-failure
 
+  nats:
+    image: nats:2.11
+    command: ["--jetstream", "--store_dir=/data", "-p", "4222", "-m", "8222"]
+    container_name: ${CONTAINER_NAME_PREFIX}_nats
+    networks:
+      mynetwork:
+        aliases:
+          - nats
+    deploy:
+      restart_policy:
+        condition: on-failure
+  nats-setup:
+    image: natsio/nats-box:latest
+    depends_on:
+      - nats
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 15); do
+          nats -s nats://nats:4222 stream ls >/dev/null 2>&1 && break
+          echo "Waiting for NATS JetStream... ($$i/15)"
+          sleep 1
+        done
+        nats -s nats://nats:4222 stream info PROTON_TEST >/dev/null 2>&1 ||
+          nats -s nats://nats:4222 stream add PROTON_TEST --subjects 'proton.test.>' --defaults
+        echo "NATS JetStream stream PROTON_TEST ready"
+    networks:
+      - mynetwork
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
 networks:
   mynetwork:
     driver: bridge

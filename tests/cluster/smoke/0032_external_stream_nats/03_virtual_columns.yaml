@@ -1,0 +1,88 @@
+description: check virtual columns of NATS JetStream external stream
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists ex_nats_03
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_nats_03 (
+        data string
+      )
+      SETTINGS type = 'nats_jetstream',
+        url = '<<or .nats_url "nats://nats:4222">>',
+        stream_name = 'PROTON_TEST',
+        subject = 'proton.test.vcols',
+        data_format = 'RawBLOB',
+        deliver_policy = 'new';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: nats-03-vcols
+    query: >
+      select
+        to_type_name(_tp_sn) as sn_type,
+        to_type_name(_tp_time) as tp_time_type,
+        to_type_name(_tp_append_time) as append_time_type,
+        to_type_name(_tp_process_time) as process_time_type,
+        to_type_name(_tp_message_key) as msg_key_type,
+        to_type_name(_tp_message_headers) as msg_headers_type,
+        to_type_name(_nats_subject) as nats_subject_type,
+        to_type_name(_nats_timestamp) as nats_ts_type,
+        _nats_subject,
+        data
+      from ex_nats_03
+    schema:
+      - name: sn_type
+        type: string
+      - name: tp_time_type
+        type: string
+      - name: append_time_type
+        type: string
+      - name: process_time_type
+        type: string
+      - name: msg_key_type
+        type: string
+      - name: msg_headers_type
+        type: string
+      - name: nats_subject_type
+        type: string
+      - name: nats_ts_type
+        type: string
+      - name: _nats_subject
+        type: string
+      - name: data
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_03 (data) VALUES ('test-vcols')
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: nats-03-vcols
+    expected_result:
+      - - int64
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - datetime64(3, 'UTC')
+        - string
+        - map(string, string)
+        - string
+        - datetime64(3, 'UTC')
+        - proton.test.vcols
+        - test-vcols
+
+  - type: query
+    sql: drop stream if exists ex_nats_03

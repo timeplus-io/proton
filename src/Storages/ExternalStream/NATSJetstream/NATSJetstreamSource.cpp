@@ -107,6 +107,7 @@ NATSJetstreamSource::NATSJetstreamSource(
     const FormatSettings & format_settings,
     natsSubscription * subscription_,
     std::shared_ptr<NATSJetstream> storage_,
+    const String & consumer_name_,
     size_t max_block_size_,
     UInt64 stall_timeout_ms,
     ExternalStreamCounterPtr counter,
@@ -119,7 +120,7 @@ NATSJetstreamSource::NATSJetstreamSource(
     , storage(std::move(storage_))
     , subscription(subscription_)
     , current_subject(storage->getSubject())
-    , current_consumer_name(storage->getConsumerName())
+    , current_consumer_name(consumer_name_)
     , ignore_format_errors(format_settings.ignore_parsing_errors)
     , stall_detector(stall_timeout_ms, logger_)
     , external_stream_counter(std::move(counter))

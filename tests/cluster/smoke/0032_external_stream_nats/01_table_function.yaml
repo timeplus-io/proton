@@ -1,0 +1,62 @@
+description: streaming read with deliver_policy new for NATS JetStream external stream
+cluster:
+  - p1k1
+steps:
+  - type: query
+    sql: drop stream if exists ex_nats_01
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_nats_01 (
+        id int32,
+        name string
+      )
+      SETTINGS type = 'nats_jetstream',
+        url = '<<or .nats_url "nats://nats:4222">>',
+        stream_name = 'PROTON_TEST',
+        subject = 'proton.test.deliver',
+        data_format = 'JSONEachRow',
+        deliver_policy = 'new';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: nats-01-deliver
+    query: select id, name from ex_nats_01
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: string
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_01 (id, name) VALUES (10, 'first')
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_01 (id, name) VALUES (20, 'second')
+
+  - type: query
+    sql: |
+      INSERT INTO ex_nats_01 (id, name) VALUES (30, 'third')
+
+  - type: wait
+    time: 3
+
+  - type: check
+    target_name: nats-01-deliver
+    expected_result:
+      - [10, 'first']
+      - [20, 'second']
+      - [30, 'third']
+
+  - type: query
+    sql: drop stream if exists ex_nats_01
