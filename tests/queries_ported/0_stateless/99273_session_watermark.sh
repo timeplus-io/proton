@@ -60,7 +60,7 @@ done
 ${CLICKHOUSE_CLIENT} --query "SYSTEM FLUSH LOGS"
 ${CLICKHOUSE_CLIENT} --query "
     SELECT count() = 0
-    FROM table(system.timeplusd_err_log)
+    FROM table(system.proton_err_log)
     WHERE _tp_time > now() - 10s
         AND raw LIKE '%outdated watermark%'
 "
