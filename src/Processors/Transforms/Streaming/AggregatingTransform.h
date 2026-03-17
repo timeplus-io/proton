@@ -160,6 +160,11 @@ protected:
     bool backfill_started = false;
     bool backfill_done = false;
 
+    /// When a bounded input (e.g. CTE with LIMIT) finishes before any periodic
+    /// watermark fires, we inject a synthetic watermark so the aggregation
+    /// finalizes its buffered state instead of silently dropping it.
+    bool input_finished_finalized = false;
+
     LoggerPtr logger;
 };
 
