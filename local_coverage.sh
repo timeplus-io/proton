@@ -482,8 +482,8 @@ if [[ "${NEEDS_CONFIGURE}" -eq 1 ]]; then
         -DENABLE_URL_FUNCS=ON \
         -DENABLE_ARG_MIN_MAX_FUNCS=OFF \
         -DENABLE_AVRO=ON \
-        -DENABLE_PULSAR=OFF \
-        -DENABLE_CURL=OFF \
+        -DENABLE_PULSAR=ON \
+        -DENABLE_CURL=ON \
         -DENABLE_PYTHON_UDF=ON \
         -DENABLE_AWS_S3=ON \
         -DENABLE_AWS_MSK_IAM=ON \

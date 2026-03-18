@@ -92,8 +92,8 @@ cmake .. \
     -DENABLE_URL_FUNCS=ON \
     -DENABLE_ARG_MIN_MAX_FUNCS=OFF \
     -DENABLE_AVRO=ON \
-    -DENABLE_PULSAR=${is_not_darwin} \
-    -DENABLE_CURL=${is_not_darwin} \
+    -DENABLE_PULSAR=ON \
+    -DENABLE_CURL=ON \
     -DENABLE_PYTHON_UDF=ON \
     -DENABLE_AWS_S3=ON \
     -DENABLE_AWS_MSK_IAM=ON \

@@ -557,7 +557,7 @@ jobs:
           export CC=$(brew --prefix llvm@19)/bin/clang
           export CXX=$(brew --prefix llvm@19)/bin/clang++
           export PATH=$(brew --prefix llvm@19)/bin:$PATH
-          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PROTON_LOCAL=OFF -DENABLE_PULSAR=OFF -DENABLE_PYTHON_UDF=ON -DENABLE_PROTON_PYTHON=ON
+          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PROTON_LOCAL=OFF -DENABLE_PULSAR=ON -DENABLE_PYTHON_UDF=ON -DENABLE_PROTON_PYTHON=ON
 
       # Compile the project using Ninja
       - name: Build with Ninja
