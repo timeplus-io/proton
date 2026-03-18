@@ -8,12 +8,17 @@
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Cluster/Protocol/ExistsOperation.h>
 #include <Cluster/Protocol/TaskDescriptor.h>
+<<<<<<< HEAD
 #include <Cluster/Requests/CreateTaskRequest.h>
 #include <Cluster/Requests/CreateTaskResponse.h>
 #include <Cluster/Requests/GetTaskRequest.h>
 #include <Cluster/Requests/GetTaskResponse.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/ASTCreateTaskQuery.h>
+#include <Task/TaskExecutionResult.h>
+#include <Task/Utils.h>
+#include <Common/Exception.h>
 
 
 namespace DB
@@ -21,10 +26,11 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int BAD_ARGUMENTS;
 extern const int CANNOT_CREATE_TASK;
 extern const int RESOURCE_ALREADY_EXISTS;
+extern const int SYNTAX_ERROR;
 extern const int UNKNOWN_DATABASE;
-extern const int UNKNOWN_FUNCTION;
 extern const int UNSUPPORTED;
 }
 
@@ -63,11 +69,12 @@ BlockIO InterpreterCreateTaskQuery::execute()
         database = current_context->getCurrentDatabase();
     }
 
-    auto task_name = create_task_query.getName();
+    /// Validate the task query and target stream before creating the task
+    Task::validateCreateTaskQuery(&create_task_query, current_context);
 
+    auto task_name = create_task_query.getName();
     UInt32 version{1};
     DB::UUID id;
-
     auto req = std::make_shared<cluster::GetTaskRequest>(
         database,
         task_name,
