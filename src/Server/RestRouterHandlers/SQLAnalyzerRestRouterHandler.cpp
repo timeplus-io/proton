@@ -18,6 +18,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/Access/ASTGrantQuery.h>
+#include <Server/HTTP/exceptionCodeToHTTPStatus.h>
 
 #include <Parsers/ASTShowCreateFormatSchemaQuery.h>
 #include <Parsers/ASTShowCreateFunctionQuery.h>
@@ -73,6 +74,12 @@ namespace
 std::map<String, std::map<String, String>> POST_SCHEMA = {
     {"required", {{"query", "string"}}},
 };
+
+bool shouldReturnBadRequestForAnalyzer(const Exception & exception)
+{
+    const auto http_status = exceptionCodeToHTTPStatus(exception.code());
+    return http_status == HTTPResponse::HTTP_BAD_REQUEST || http_status == HTTPResponse::HTTP_NOT_FOUND;
+}
 
 String buildResponse(
     const String & original_query,
@@ -285,56 +292,69 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
 
     if (error_msg.empty())
     {
-        /// auto & [rewritten_query, ast] = res;
-
-        /// LOG_DEBUG(log, "Query rewrite, query_id={} rewritten={}", query_context->getCurrentQueryId(), rewritten_query);
-
-        QueryProfileMatcher::Data profile;
-        QueryProfileVisitor visitor(profile);
-        visitor.visit(ast);
-
-        /// Propagate WITH statement to children ASTSelect.
-        if (settings.enable_global_with_statement)
+        try
         {
-            ApplyWithGlobalVisitor().visit(ast);
+            /// auto & [rewritten_query, ast] = res;
+
+            /// LOG_DEBUG(log, "Query rewrite, query_id={} rewritten={}", query_context->getCurrentQueryId(), rewritten_query);
+
+            QueryProfileMatcher::Data profile;
+            QueryProfileVisitor visitor(profile);
+            visitor.visit(ast);
+
+            /// Propagate WITH statement to children ASTSelect.
+            if (settings.enable_global_with_statement)
+            {
+                ApplyWithGlobalVisitor().visit(ast);
+            }
+
+            Block block;
+
+            /// FIXME: CREATE STREAM ... AS SELECT ...
+            /// FIXME: INSERT INTO STREAM ... SELECT ...
+            bool has_aggr = false;
+            bool is_streaming = true;
+            std::set<String> group_by_columns;
+
+            if (auto * const /*select*/ _ = ast->as<ASTSelectWithUnionQuery>())
+            {
+                /// Interpreter will trigger ast analysis. One side effect is collecting
+                /// required columns during the analysis process
+                SelectQueryOptions query_options;
+                query_options.analyze(/*dry_run=*/true);
+
+                InterpreterSelectWithUnionQuery interpreter(ast, query_context, query_options);
+                has_aggr = interpreter.hasAggregation();
+                block = interpreter.getSampleBlock();
+                is_streaming = interpreter.isStreamingQuery();
+                group_by_columns = interpreter.getGroupByColumns();
+            }
+
+            auto query_type = queryType(ast);
+            return {
+                buildResponse(
+                    query,
+                    /// rewritten_query,
+                    query,
+                    query_type,
+                    profile,
+                    block,
+                    has_aggr,
+                    group_by_columns,
+                    is_streaming,
+                    query_context->requiredColumns()),
+                HTTPResponse::HTTP_OK};
         }
-
-        Block block;
-
-        /// FIXME: CREATE STREAM ... AS SELECT ...
-        /// FIXME: INSERT INTO STREAM ... SELECT ...
-        bool has_aggr = false;
-        bool is_streaming = true;
-        std::set<String> group_by_columns;
-
-        if (auto * const /*select*/ _ = ast->as<ASTSelectWithUnionQuery>())
+        catch (const Exception & e)
         {
-            /// Interpreter will trigger ast analysis. One side effect is collecting
-            /// required columns during the analysis process
-            SelectQueryOptions query_options;
-            query_options.analyze(/*dry_run=*/true);
+            if (!shouldReturnBadRequestForAnalyzer(e))
+                throw;
 
-            InterpreterSelectWithUnionQuery interpreter(ast, query_context, query_options);
-            has_aggr = interpreter.hasAggregation();
-            block = interpreter.getSampleBlock();
-            is_streaming = interpreter.isStreamingQuery();
-            group_by_columns = interpreter.getGroupByColumns();
+            LOG_WARNING(
+                log, "Query analyzer failed, query_id={} code={} error_msg={}", query_context->getCurrentQueryId(), e.code(), e.message());
+
+            return {jsonErrorResponse(e.message(), e.code()), HTTPResponse::HTTP_BAD_REQUEST};
         }
-
-        auto query_type = queryType(ast);
-        return {
-            buildResponse(
-                query,
-                /// rewritten_query,
-                query,
-                query_type,
-                profile,
-                block,
-                has_aggr,
-                group_by_columns,
-                is_streaming,
-                query_context->requiredColumns()),
-            HTTPResponse::HTTP_OK};
     }
     else
     {

@@ -15,6 +15,8 @@ ALTER VIEW 99020_mv MODIFY QUERY SETTING checkpoint_interval='15';
 
 ALTER VIEW 99020_mv MODIFY QUERY SETTING checkpoint_interval=-1;
 
+ALTER VIEW 99020_mv MODIFY QUERY SETTING javascript_max_memory_bytes=23333; --- { serverError NOT_IMPLEMENTED }
+
 ALTER VIEW 99020_stream MODIFY SETTING logstore_retention_ms = 3600000; --- { serverError INCORRECT_QUERY }
 
 SELECT sleep(2) FORMAT Null;
