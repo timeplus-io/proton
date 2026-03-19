@@ -22,6 +22,7 @@ class ASTStorage;
     M(String, ssl_ca_pem, "", "CA certificate string (PEM format) for verifying the server's key.", 0) \
     M(Bool, skip_ssl_cert_check, false, "If set to true, the server's certification won't be verified.", 0) \
     M(String, schema_subject_name, "", "Avro / Protobuf schema subject name in registry. Used to fetch schema in the registry when writing", 0) \
+    M(String, subject_name_strategy, "", "Avro / Protobuf subject name strategy in registry. Default is TopicNameStrategy if not configured. RecordNameStrategy, TopicRecordNameStrategy can be used to mix different type of records in the same topic", 0) \
     M(String, properties, "", "A semi-colon-separated key-value pairs for configuring the kafka client used by the external stream. A key-value pair is separated by a equal sign. Example: 'client.id=my-client-id;group.id=my-group-id'. Note, not all properties are supported, please check the document for supported properties.", 0) \
     M(UInt64, poll_waittime_ms, 500, "How long (in milliseconds) should poll waits.", 0) \
     M(String, sharding_expr, "", "An expression which will be evaluated on each row of data returned by the query to calculate the an integer which will be used to determine the ID of the partition to which the row of data will be sent. If not set, data are sent to any partition randomly.", 0) \
@@ -194,10 +195,33 @@ struct ExternalStreamSettings : public BaseSettings<ExternalStreamSettingsTraits
         /// This is needed otherwise using an external stream with ProtobufSingle format as the target stream
         /// of a MV (or in `INSERT ... SELECT ...`), i.e. more than one rows sent to the stream, exception will be thrown.
         format_settings.protobuf.allow_multiple_rows_without_delimiter = true;
-        /// In case of kafka schema registry is used, the topic name and subject name need to be passed to the
-        /// output format to fetch the schema.
-        format_settings.kafka_schema_registry.topic_name = topic;
-        format_settings.kafka_schema_registry.subject_name = schema_subject_name.value.empty() ? topic.value : schema_subject_name.value;
+
+        /// Derive subject name according to schema subject name strategy
+        /// https://developer.confluent.io/courses/schema-registry/schema-subjects/
+        if (subject_name_strategy.value.empty() || subject_name_strategy.value == "TopicNameStrategy")
+        {
+            /// Ingore subject_name_strategy setting when using TopicNameStrategy, because the subject name is derived from topic name.
+            format_settings.kafka_schema_registry.subject_name = fmt::format("{}-value", topic.value);
+        }
+        else if (subject_name_strategy.value == "TopicRecordNameStrategy")
+        {
+            if (schema_subject_name.value.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "schema_subject_name must be provided when using TopicRecordNameStrategy");
+
+            format_settings.kafka_schema_registry.subject_name = fmt::format("{}-{}", topic.value, schema_subject_name.value);
+            format_settings.kafka_schema_registry.consume_single_schema = true;
+        }
+        else
+        {
+            /// subject_name_strategy.value == "RecordNameStrategy" or CustomNameStrategy
+
+            if (schema_subject_name.value.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "schema_subject_name must be provided when using {}", subject_name_strategy.value);
+
+            format_settings.kafka_schema_registry.subject_name = schema_subject_name.value;
+            format_settings.kafka_schema_registry.consume_single_schema = true;
+        }
+
         /// Kafka schema registry may have multiple historical schema versions. Allow old data missed some fields and read as default value.
         format_settings.avro.allow_missing_fields = true;
 

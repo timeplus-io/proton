@@ -55,6 +55,7 @@
 #include <Poco/URI.h>
 
 /// proton: starts
+#include <base/defines.h>
 #include <Formats/KafkaSchemaRegistry.h>
 #include <Formats/Avro/Schemas.h>
 #include <IO/WriteBufferFromFile.h>
@@ -942,6 +943,11 @@ AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     , format_settings(format_settings_)
 
 {
+    if (format_settings.kafka_schema_registry.consume_single_schema)
+    {
+        auto schema = schema_registry->getSchemaForSubject(format_settings.kafka_schema_registry.subject_name);
+        target_schema_id = schema.first; 
+    }
 }
 
 /// proton: starts
@@ -975,6 +981,13 @@ bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExten
 
     /// proton: starts
     SchemaId schema_id = KafkaSchemaRegistry::readSchemaId(*in);
+    if (target_schema_id.has_value() && target_schema_id.value() != schema_id)
+    {
+        /// Skip record with non-target schema id, we assume in a single io stream, there is no mixed schema records 
+        in->tryIgnore(in->available());
+        return false;
+    }
+
     const auto & deserializer = getOrCreateDeserializer(schema_id);
     /// proton: ends
 
@@ -1209,11 +1222,8 @@ NamesAndTypesList AvroExternalSchemaReader::readSchema()
     const bool schema_registry = !format_settings.avro.schema_registry_url.empty() || !format_settings.kafka_schema_registry.url.empty();
     if (schema_registry)
     {
-        if (format_settings.kafka_schema_registry.topic_name.empty() || format_settings.kafka_schema_registry.subject_name.empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Can not read schema: schema registry topic or subject name is not set");
-
-        auto schema = KafkaSchemaRegistryForAvro::getOrCreate(format_settings)->getSchemaForTopic(
-            format_settings.kafka_schema_registry.topic_name,
+        chassert(!format_settings.kafka_schema_registry.subject_name.empty());
+        auto schema = KafkaSchemaRegistryForAvro::getOrCreate(format_settings)->getSchemaForSubject(
             format_settings.kafka_schema_registry.subject_name,
             format_settings.kafka_schema_registry.force_refresh_schema);
         root_node = schema.second.root();

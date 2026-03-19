@@ -1,6 +1,6 @@
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
-#include <iostream>
+#include <Common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -36,13 +36,16 @@ MutableColumns StreamingFormatExecutor::getResultColumns()
 size_t StreamingFormatExecutor::execute(ReadBuffer & buffer)
 {
     auto & initial_buf = format->getReadBuffer();
+    SCOPE_EXIT_SAFE({
+        /// Format destructor can touch read buffer (for example when we use PeekableReadBuffer),
+        /// but we cannot control lifetime of provided read buffer. To avoid heap use after free
+        /// we can set initial read buffer back, because initial read buffer was created before
+        /// format, so it will be destructed after it.
+        format->setReadBuffer(initial_buf);
+    });
+
     format->setReadBuffer(buffer);
     size_t rows = execute();
-    /// Format destructor can touch read buffer (for example when we use PeekableReadBuffer),
-    /// but we cannot control lifetime of provided read buffer. To avoid heap use after free
-    /// we can set initial read buffer back, because initial read buffer was created before
-    /// format, so it will be destructed after it.
-    format->setReadBuffer(initial_buf);
     return rows;
 }
 

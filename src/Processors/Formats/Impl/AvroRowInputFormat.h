@@ -200,6 +200,7 @@ private:
     std::unique_ptr<AvroInputStreamReadBufferAdapter> input_stream;
     avro::DecoderPtr decoder;
     FormatSettings format_settings;
+    std::optional<UInt32> target_schema_id;
 };
 
 /// proton: starts
