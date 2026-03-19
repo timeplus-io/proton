@@ -8,7 +8,6 @@
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Cluster/Protocol/ExistsOperation.h>
 #include <Cluster/Protocol/TaskDescriptor.h>
-<<<<<<< HEAD
 #include <Cluster/Requests/CreateTaskRequest.h>
 #include <Cluster/Requests/CreateTaskResponse.h>
 #include <Cluster/Requests/GetTaskRequest.h>
