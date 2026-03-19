@@ -185,7 +185,7 @@ jobs:
       versions: ${{ steps.get-versions.outputs.versions }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v5.0.1
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: false
