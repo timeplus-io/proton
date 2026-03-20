@@ -7,6 +7,7 @@
 #include <Common/setThreadName.h>
 
 #include <fcntl.h>
+#include <filesystem>
 
 namespace CurrentMetrics
 {
@@ -537,13 +538,35 @@ void LogManager::cleanupLogs()
 {
     LOG_DEBUG(logger, "Beginning log cleanup...");
 
+    /// Check disk pressure
+    bool disk_pressure = false;
+    for (const auto & root_dir : root_dirs)
+    {
+        std::error_code ec;
+        auto space_info = std::filesystem::space(root_dir, ec);
+        if (!ec && space_info.capacity > 0)
+        {
+            auto usage_percent = 100 * (space_info.capacity - space_info.available) / space_info.capacity;
+            if (usage_percent >= default_log_config->disk_usage_threshold_percent)
+            {
+                LOG_WARNING(
+                    logger,
+                    "Disk pressure detected on {}: {}% used (threshold: {}%)",
+                    root_dir.string(),
+                    usage_percent,
+                    default_log_config->disk_usage_threshold_percent);
+                disk_pressure = true;
+            }
+        }
+    }
+
     size_t total = 0;
     auto all_logs = current_logs.values();
 
     try
     {
         for (auto & log : all_logs)
-            total += log->deleteOldSegments(log->appliedSequence());
+            total += log->deleteOldSegments(log->appliedSequence(), disk_pressure);
     }
     catch (...)
     {

@@ -25,6 +25,7 @@ struct LogConfig
     static const uint64_t DEFAULT_INDEX_INTERVAL_ENTRIES = 1000ull;
     static const uint64_t DEFAULT_MAX_CACHED_ENTRIES_PER_SHARD = 100ull;
     static const uint64_t DEFAULT_MAX_CACHED_BYTES_PER_SHARD = 4194304ull;
+    static const uint64_t DEFAULT_DISK_USAGE_THRESHOLD_PERCENT = 90;
 
     uint64_t max_entry_size = DEFAULT_MAX_ENTRY_SIZE;
     uint64_t segment_size = DEFAULT_SEGMENT_SIZE;
@@ -58,6 +59,7 @@ struct LogConfig
     bool preallocate = true;
     bool inmemory = false;
     bool incremental_flush = false;
+    uint64_t disk_usage_threshold_percent = DEFAULT_DISK_USAGE_THRESHOLD_PERCENT;
 
     void validate();
 

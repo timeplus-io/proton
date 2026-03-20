@@ -52,6 +52,9 @@ void LogConfig::validate()
 
     if (log_position_index_log_size == 0 || log_position_index_log_size > 8 * 1024 * 1024)
         log_position_index_log_size = 8 * 1024 * 1024;
+
+    if (disk_usage_threshold_percent == 0 || disk_usage_threshold_percent > 100)
+        disk_usage_threshold_percent = DEFAULT_DISK_USAGE_THRESHOLD_PERCENT;
 }
 
 std::string LogConfig::string() const
@@ -62,7 +65,8 @@ std::string LogConfig::string() const
         "max_cached_bytes_per_shard={} codec={} min_size_to_keep={} preallocate={} inmemory={} incremental_flush={} "
         "hard_state_ckpt_log_size={} "
         "hard_state_ckpt_log_preallocate={} leader_epoch_ckpt_log_size={} leader_epoch_ckpt_log_preallocate={} timestamp_index_log_size={} "
-        "timestamp_index_log_preallocate={} log_position_index_log_size={} log_position_index_log_preallocate={}",
+        "timestamp_index_log_preallocate={} log_position_index_log_size={} log_position_index_log_preallocate={} "
+        "disk_usage_threshold_percent={}",
         max_entry_size,
         segment_size,
         segment_ms,
@@ -88,6 +92,7 @@ std::string LogConfig::string() const
         timestamp_index_log_size,
         timestamp_index_log_preallocate,
         log_position_index_log_size,
-        log_position_index_log_preallocate);
+        log_position_index_log_preallocate,
+        disk_usage_threshold_percent);
 }
 }

@@ -664,11 +664,18 @@ int64_t Log::sequenceForTimestamp(int64_t ts, bool append_time) const
     return log_start_sn;
 }
 
-size_t Log::deleteOldSegments(int64_t applied_sn)
+size_t Log::deleteOldSegments(int64_t applied_sn, bool disk_pressure)
 {
-    LOG_DEBUG(logger, "Garbage collecting applied_sn={} {}", applied_sn, log_config->string());
-    return deleteLogStartSequenceBreachedSegments(applied_sn) + deleteRetentionSizeBreachedSegments(applied_sn)
+    LOG_DEBUG(logger, "Garbage collecting applied_sn={} disk_pressure={} {}", applied_sn, disk_pressure, log_config->string());
+
+    auto total = deleteLogStartSequenceBreachedSegments(applied_sn)
+        + deleteRetentionSizeBreachedSegments(applied_sn)
         + deleteRetentionTimeBreachedSegments(applied_sn);
+
+    if (disk_pressure)
+        total += deleteDiskPressureBreachedSegments(applied_sn);
+
+    return total;
 }
 
 size_t Log::deleteLogStartSequenceBreachedSegments(int64_t applied_sn)
@@ -735,6 +742,26 @@ size_t Log::deleteRetentionTimeBreachedSegments(int64_t applied_sn)
     };
 
     return deleteOldSegments(should_delete, applied_sn, "retention_time_breached");
+}
+
+size_t Log::deleteDiskPressureBreachedSegments(int64_t applied_sn)
+{
+    auto total_bytes = loglet->size();
+    if (total_bytes == 0)
+        return 0;
+
+    /// Under disk pressure, bypass min_size_to_keep
+    auto should_delete = [total_bytes](LogSegmentPtr prev_segment, [[maybe_unused]] LogSegmentPtr current_segment) mutable {
+        auto prev_seg_size = prev_segment->size();
+        if (total_bytes > prev_seg_size)
+        {
+            total_bytes -= prev_seg_size;
+            return true;
+        }
+        return false;
+    };
+
+    return deleteOldSegments(should_delete, applied_sn, "disk_pressure_breached");
 }
 
 size_t Log::deleteOldSegments(std::function<bool(LogSegmentPtr, LogSegmentPtr)> should_delete, int64_t applied_sn, std::string_view reason)

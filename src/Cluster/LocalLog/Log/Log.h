@@ -253,7 +253,7 @@ public:
     /// If stream deletion is enabled, delete any local log segments that either expired due to time based
     /// retention or because the log size > retention_size
     /// Whether or not deletion is enabled, delete any local log segments that are before the log start offset
-    size_t deleteOldSegments(int64_t applied_sn);
+    size_t deleteOldSegments(int64_t applied_sn, bool disk_pressure = false);
 
     int64_t appliedSequence() const
     {
@@ -315,6 +315,7 @@ private:
     size_t deleteLogStartSequenceBreachedSegments(int64_t applied_sn);
     size_t deleteRetentionSizeBreachedSegments(int64_t applied_sn);
     size_t deleteRetentionTimeBreachedSegments(int64_t applied_sn);
+    size_t deleteDiskPressureBreachedSegments(int64_t applied_sn);
 
 private:
     /// API calls forwarding to Loglet
