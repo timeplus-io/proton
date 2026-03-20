@@ -301,3 +301,6 @@
 [submodule "contrib/ulid-c"]
 	path = contrib/ulid-c
 	url = https://github.com/ClickHouse/ulid-c.git
+[submodule "contrib/parallel-hashmap"]
+	path = contrib/parallel-hashmap
+	url = https://github.com/greg7mdp/parallel-hashmap.git
