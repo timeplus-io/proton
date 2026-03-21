@@ -115,11 +115,19 @@ bool ParserCreateTaskQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expecte
             return false;
 
         checkpoint_str = checkpoint->as<ASTLiteral>()->value.safeGet<String>();
-
         Poco::JSON::Parser parser;
-        auto obj = parser.parse(checkpoint_str).extract<Poco::JSON::Object::Ptr>();
+        Poco::JSON::Object::Ptr obj;
+        try
+        {
+            obj = parser.parse(checkpoint_str).extract<Poco::JSON::Object::Ptr>();
+        }
+        catch (...)
+        {
+            obj.reset();
+        }
         if (!obj)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "CHECKPOINT should be in JSON format: actual={}", checkpoint_str);
+
         auto keys = obj->getNames();
         for (auto & key : keys)
             checkpoint_columns.push_back(std::move(key));

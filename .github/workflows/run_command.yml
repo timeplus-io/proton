@@ -135,14 +135,15 @@ jobs:
       ec2-instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.2
+        uses: aws-actions/configure-aws-credentials@v6.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Start EC2 runner
         id: start-ec2-runner
-        uses: timeplus-io/ec2-github-runner@main
+        # Temporary pin to the Node 24-compatible fork until the companion ec2-github-runner PR merges.
+        uses: yokofly/ec2-github-runner@522cb941f0d76565385ce7aeb6771bf58451ba1b
         with:
           mode: ${{ inputs.run_mode }}
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
@@ -176,14 +177,14 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
       - name: Configure AWS credentials from Test account
-        uses: aws-actions/configure-aws-credentials@v4.0.2
+        uses: aws-actions/configure-aws-credentials@v6.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       
       - name: Login to DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v4.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -196,13 +197,13 @@ jobs:
           password: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
 
       - name: Checkout Repo
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v5.0.1
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: ${{ inputs.submodules }}
           ref: ${{ inputs.ref }}
       - name: Checkout quark
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v5.0.1
         with:
           repository: timeplus-io/quark
           path: quark
@@ -267,7 +268,7 @@ jobs:
 
       - name: Upload Artifact
         if: ${{ always() && inputs.upjob != '' }}
-        uses: actions/upload-artifact@v4.3.4
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: Artifact-${{ inputs.upjob }}-${{ github.run_id }}
           path: |
@@ -283,13 +284,14 @@ jobs:
     if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.2
+        uses: aws-actions/configure-aws-credentials@v6.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Stop EC2 runner
-        uses: timeplus-io/ec2-github-runner@main
+        # Keep the stop path on the same pinned fork revision as start.
+        uses: yokofly/ec2-github-runner@522cb941f0d76565385ce7aeb6771bf58451ba1b
         with:
           mode: stop
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}

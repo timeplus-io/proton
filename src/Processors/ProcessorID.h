@@ -282,6 +282,7 @@ enum class ProcessorID : UInt32
     TaskExecutionSourceID = 11'200,
     PythonStreamingSourceID = 11'201,
     PythonTableTransformID = 11'202,
+    NATSJetstreamSourceID = 11'203,
 
     /// Sink Processors
     EmptySinkID = 20'000,
@@ -292,6 +293,7 @@ enum class ProcessorID : UInt32
     HTTPSink = 20'201,
     PartitionedHTTPSink = 20'202,
     UDFSink = 20'203,
+    NATSJetstreamSinkID = 20'204,
 
     MySQLSourceID = 30'001,
     MySQLSinkID = 30'002,

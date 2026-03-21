@@ -103,6 +103,7 @@ void registerWindowFunctions(AggregateFunctionFactory & factory);
 void registerAggregateFunctionMinMaxK(AggregateFunctionFactory &);
 void registerAggregateFunctionsAlias(AggregateFunctionFactory &);
 void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
+void registerAggregateFunctionCombinatorTimeWeighted(AggregateFunctionCombinatorFactory &);
 
 /// changelog retract aggr
 namespace Streaming
@@ -243,11 +244,12 @@ void registerAggregateFunctions()
         registerAggregateFunctionCombinatorResample(factory);
         registerAggregateFunctionCombinatorDistinct(factory);
         registerAggregateFunctionCombinatorMap(factory);
-    
+
         /// proton: starts.
         Streaming::registerAggregateFunctionCombinatorDistinct(factory);
         Streaming::registerAggregateFunctionCombinatorDistinctRetract(factory);
         Streaming::registerAggregateFunctionCombinatorNullRetract(factory);
+        registerAggregateFunctionCombinatorTimeWeighted(factory);
         /// proton: ends.
     }
 }

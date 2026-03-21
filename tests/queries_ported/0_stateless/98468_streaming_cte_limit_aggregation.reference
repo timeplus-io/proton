@@ -1,0 +1,15 @@
+cte_count
+6
+cte_groupby
+1	15	2
+2	45	2
+3	45	2
+subquery_count
+6
+cte_passthrough
+1
+1
+2
+2
+3
+3

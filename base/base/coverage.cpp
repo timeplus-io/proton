@@ -7,7 +7,10 @@
 
 
 #    if defined(__clang__)
+#        pragma clang diagnostic push
+#        pragma clang diagnostic ignored "-Wreserved-identifier"
 extern "C" void __llvm_profile_dump(); // NOLINT
+#        pragma clang diagnostic pop
 #    elif defined(__GNUC__) || defined(__GNUG__)
 extern "C" void __gcov_exit();
 #    endif

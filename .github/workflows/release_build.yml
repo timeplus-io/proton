@@ -534,7 +534,7 @@ jobs:
       build_type: RelWithDebInfo
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5.0.1
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           fetch-depth: 0  # Fetch all history including all tags
@@ -557,7 +557,7 @@ jobs:
           export CC=$(brew --prefix llvm@19)/bin/clang
           export CXX=$(brew --prefix llvm@19)/bin/clang++
           export PATH=$(brew --prefix llvm@19)/bin:$PATH
-          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PROTON_LOCAL=OFF -DENABLE_PULSAR=OFF -DENABLE_PYTHON_UDF=ON -DENABLE_PROTON_PYTHON=ON
+          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PROTON_LOCAL=OFF -DENABLE_PULSAR=ON -DENABLE_PYTHON_UDF=ON -DENABLE_PROTON_PYTHON=ON
 
       # Compile the project using Ninja
       - name: Build with Ninja
@@ -574,7 +574,7 @@ jobs:
 
       # Set up AWS credentials for S3 upload
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.2
+        uses: aws-actions/configure-aws-credentials@v6.0.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

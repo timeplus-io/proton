@@ -9,7 +9,7 @@ namespace DB::Streaming
 class ConcatStep : public IQueryPlanStep
 {
 public:
-    explicit ConcatStep(DataStreams input_streams_, bool disable_concat_callback_);
+    explicit ConcatStep(DataStreams input_streams_, bool disable_concat_callback_, UInt64 backfill_max_threads_);
 
     String getName() const override { return "Concat"; }
 
@@ -20,6 +20,7 @@ public:
 private:
     Block header;
     bool disable_concat_callback;
+    UInt64 backfill_max_threads;
 };
 
 }

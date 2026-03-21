@@ -27,8 +27,8 @@ static Block checkHeaders(const DataStreams & input_streams)
     return res;
 }
 
-ConcatStep::ConcatStep(DataStreams input_streams_, bool disable_concat_callback_)
-    : header(checkHeaders(input_streams_)), disable_concat_callback(disable_concat_callback_)
+ConcatStep::ConcatStep(DataStreams input_streams_, bool disable_concat_callback_, UInt64 backfill_max_threads_)
+    : header(checkHeaders(input_streams_)), disable_concat_callback(disable_concat_callback_), backfill_max_threads(backfill_max_threads_)
 {
     input_streams = std::move(input_streams_);
     output_stream = DataStream{.header = header, .is_streaming = true};
@@ -72,7 +72,7 @@ QueryPipelineBuilderPtr ConcatStep::updatePipeline(QueryPipelineBuilders pipelin
     /// Concat historical pipeline and streaming pipeline via Streaming::ConcatProcessor, which will pulls all data from historical inputs,
     /// then get max_sn from historical inputs to reset streaming source, and then read all data from streaming inputs.
     return QueryPipelineBuilder::concatPipelines(
-        std::move(historical_pipeline), std::move(streaming_pipeline), std::move(concat_callback), &processors);
+        std::move(historical_pipeline), std::move(streaming_pipeline), std::move(concat_callback), &processors, backfill_max_threads);
 }
 
 void ConcatStep::describePipeline(FormatSettings & settings) const

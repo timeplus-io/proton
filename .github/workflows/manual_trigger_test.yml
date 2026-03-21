@@ -96,6 +96,7 @@ jobs:
       sanitizer: ''
       arch: ${{ vars.X64_ARCH }}
       tag: ${{ github.event.inputs.tag }}
+      timeout: 90 # cover python-udf smoke runs, consistent with proton_ci/nightly_test
       upjob: smoke_test_on_x64
       command: |
         ${{ needs.prepare_smoke_test.outputs.command }}
@@ -122,6 +123,7 @@ jobs:
       arch: ${{ vars.ARM_ARCH }}
       sanitizer: ''
       tag: ${{ github.event.inputs.tag }}
+      timeout: 90 # cover python-udf smoke runs, consistent with proton_ci/nightly_test
       upjob: smoke_test_on_arm
       command: |
         ${{ needs.prepare_smoke_test.outputs.command }}
@@ -473,7 +475,7 @@ jobs:
       versions: ${{ steps.get-versions.outputs.versions }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4.1.6
+        uses: actions/checkout@v5.0.1
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: false
@@ -678,7 +680,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v5.0.1
   
       - name: Get MacOS info
         run: |
