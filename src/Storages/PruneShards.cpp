@@ -14,6 +14,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/Stream/StorageStream.h>
 #include <Storages/parseShards.h>
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
@@ -257,6 +258,22 @@ QueryMode getQueryMode(ConstStoragePtr storage, const SelectQueryInfo & query_in
 
         if (require_back_fill_from_historical)
         {
+            /// For time-based seeks, try resolving via NativeLog first.
+            /// If the streaming store still has the data, skip the expensive
+            /// historical MergeTree scan entirely.
+            if (query_info.seek_to_info->isTimeBased())
+            {
+                if (const auto * stream_storage = dynamic_cast<const StorageStream *>(storage.get()))
+                {
+                    if (auto resolved = stream_storage->tryResolveTimeSeekViaStreamingStore(query_info.seek_to_info))
+                    {
+                        query_info.seek_to_info->seek_points = std::move(*resolved);
+                        query_info.seek_to_info->type = SeekToType::SEQUENCE_NUMBER;
+                        return QueryMode::Streaming;
+                    }
+                }
+            }
+
             /// By default, we will seek to earliest for backfill concat
             if (query_info.seek_to_info->getSeekTo().empty())
                 query_info.seek_to_info->seek_points = {cluster::Constants::EarliestSN};

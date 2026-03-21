@@ -1676,4 +1676,52 @@ IStorage::SnapshotDataWithExpiration StorageStream::readSnapshot(const Names & r
 
     return {std::move(result), std::move(snapshot_expired)};
 }
+
+std::optional<std::vector<Int64>> StorageStream::tryResolveTimeSeekViaStreamingStore(const SeekToInfoPtr & seek_to_info) const
+{
+    if (!seek_to_info || !seek_to_info->isTimeBased())
+        return std::nullopt;
+
+    auto local_shards = stream_shards;
+    if (local_shards.empty())
+        return std::nullopt;
+
+    try
+    {
+        for (const auto & shard : local_shards)
+        {
+            if (shard->isVirtualReplica() || shard->isInmemory())
+                continue;
+
+            auto seek_copy = std::make_shared<SeekToInfo>(*seek_to_info);
+            seek_copy->replicateForShards(shards);
+
+            auto resolved_sns = shard->sequencesForTimestamps(seek_copy->getSeekPoints());
+
+            /// Check all resolved SNs are still available in NativeLog
+            bool all_available = true;
+            for (UInt32 i = 0; i < shards && all_available; ++i)
+            {
+                auto range = local_shards[i]->sequenceRange();
+                if (range.first < 0 || resolved_sns[i] < range.first)
+                    all_available = false;
+            }
+
+            if (all_available)
+            {
+                LOG_INFO(log, "Time-based seek resolved via streaming store, skipping historical backfill");
+                return resolved_sns;
+            }
+
+            LOG_DEBUG(log, "Time-based seek data partially compacted, falling back to historical backfill");
+            return std::nullopt;
+        }
+    }
+    catch (...)
+    {
+        LOG_DEBUG(log, "Failed to resolve time-based seek via streaming store, falling back to historical backfill");
+    }
+
+    return std::nullopt;
+}
 }
