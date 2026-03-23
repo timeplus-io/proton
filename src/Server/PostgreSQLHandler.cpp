@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <IO/ReadBufferFromPocoSocket.h>
 #include <IO/ReadHelpers.h>
 #include <IO/ReadBufferFromString.h>
@@ -39,6 +40,7 @@ PostgreSQLHandler::PostgreSQLHandler(
     , ssl_enabled(ssl_enabled_)
     , connection_id(connection_id_)
     , authentication_manager(auth_methods_)
+    , stmt_manager(std::make_unique<PreparedStatementManager>())
 {
     changeIO(socket());
 }
@@ -67,7 +69,11 @@ void PostgreSQLHandler::run()
 
         while (tcp_server.isOpen())
         {
-            message_transport->send(PostgreSQLProtocol::Messaging::ReadyForQuery(), true);
+            if (send_ready_for_query)
+            {
+                message_transport->send(PostgreSQLProtocol::Messaging::ReadyForQuery(), true);
+                send_ready_for_query = false;
+            }
 
             constexpr size_t connection_check_timeout = 1; // 1 second
             while (!in->poll(1000000 * connection_check_timeout))
@@ -77,28 +83,45 @@ void PostgreSQLHandler::run()
 
             if (!tcp_server.isOpen())
                 return;
+
+            /// Skip messages until Sync after error in extended query
+            if (extended_query_error
+                && message_type != PostgreSQLProtocol::Messaging::FrontMessageType::SYNC
+                && message_type != PostgreSQLProtocol::Messaging::FrontMessageType::TERMINATE)
+            {
+                message_transport->dropMessage();
+                continue;
+            }
+
             switch (message_type)
             {
                 case PostgreSQLProtocol::Messaging::FrontMessageType::QUERY:
                     processQuery();
+                    send_ready_for_query = true;
                     break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::TERMINATE:
                     LOG_DEBUG(log, "Client closed the connection");
                     return;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::PARSE:
+                    processParse();
+                    break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::BIND:
+                    processBind();
+                    break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::DESCRIBE:
+                    processDescribe();
+                    break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::SYNC:
+                    processSync();
+                    break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::FLUSH:
+                    processFlush();
+                    break;
+                case PostgreSQLProtocol::Messaging::FrontMessageType::EXECUTE:
+                    processExecute();
+                    break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::CLOSE:
-                    message_transport->send(
-                        PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
-                            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
-                            "0A000",
-                            "proton doesn't support extended query mechanism"),
-                        true);
-                    LOG_ERROR(log, "Client tried to access via extended query protocol");
-                    message_transport->dropMessage();
+                    processClose();
                     break;
                 default:
                     message_transport->send(
@@ -109,6 +132,7 @@ void PostgreSQLHandler::run()
                         true);
                     LOG_ERROR(log, "Command is not supported. Command code {:d}", static_cast<Int32>(message_type));
                     message_transport->dropMessage();
+                    send_ready_for_query = true;
             }
         }
     }
@@ -285,6 +309,9 @@ void PostgreSQLHandler::processQuery()
             return;
         }
 
+        if (tryAnswerCatalogQuery(query->query))
+            return;
+
         const auto & settings = session->sessionContext()->getSettingsRef();
         std::vector<String> queries;
         auto parse_res = splitMultipartQuery(query->query, queries,
@@ -333,4 +360,384 @@ bool PostgreSQLHandler::isEmptyQuery(const String & query)
     return regex.match(query);
 }
 
+void PostgreSQLHandler::processParse()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::Parse>();
+        stmt_manager->parseStatement(msg->statement_name, msg->query, msg->param_oids);
+        message_transport->send(PostgreSQLProtocol::Messaging::ParseComplete());
+    }
+    catch (const Exception & e)
+    {
+        extended_query_error = true;
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "42601", "Parse failed.\n" + e.displayText()),
+            true);
+    }
 }
+
+void PostgreSQLHandler::processBind()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::Bind>();
+        stmt_manager->bindPortal(
+            msg->portal_name, msg->statement_name,
+            msg->param_values, msg->result_format_codes);
+        message_transport->send(PostgreSQLProtocol::Messaging::BindComplete());
+    }
+    catch (const Exception & e)
+    {
+        extended_query_error = true;
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "42601", "Bind failed.\n" + e.displayText()),
+            true);
+    }
+}
+
+void PostgreSQLHandler::processDescribe()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::Describe>();
+
+        if (msg->describe_type == 'S')
+        {
+            const auto * stmt = stmt_manager->getStatement(msg->name);
+            if (!stmt)
+            {
+                message_transport->send(
+                    PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                        PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                        "26000", "Prepared statement does not exist"),
+                    true);
+                return;
+            }
+            std::vector<Int32> oids;
+            if (!stmt->param_oids.empty())
+                oids = stmt->param_oids;
+            else
+                oids.assign(stmt->param_count, 0);  // 0 = unspecified type
+            message_transport->send(PostgreSQLProtocol::Messaging::ParameterDescription(std::move(oids)));
+            message_transport->send(PostgreSQLProtocol::Messaging::NoDataMsg());
+        }
+        else if (msg->describe_type == 'P')
+        {
+            message_transport->send(PostgreSQLProtocol::Messaging::NoDataMsg());
+        }
+    }
+    catch (const Exception & e)
+    {
+        extended_query_error = true;
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "26000", "Describe failed.\n" + e.displayText()),
+            true);
+    }
+}
+
+void PostgreSQLHandler::processExecute()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::Execute>();
+        const auto * portal = stmt_manager->getPortal(msg->portal_name);
+
+        if (!portal)
+        {
+            message_transport->send(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                    PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                    "34000", "Portal does not exist"),
+                true);
+            return;
+        }
+
+        const String & query = portal->bound_query;
+
+        if (isEmptyQuery(query))
+        {
+            message_transport->send(PostgreSQLProtocol::Messaging::EmptyQueryResponse());
+            return;
+        }
+
+        if (tryAnswerCatalogQuery(query))
+            return;
+
+        bool psycopg2_cond = query == "BEGIN" || query == "COMMIT" || query == "ROLLBACK";
+        bool jdbc_cond = query.find("SET extra_float_digits") != String::npos
+                      || query.find("SET application_name") != String::npos;
+        if (psycopg2_cond || jdbc_cond)
+        {
+            message_transport->send(
+                PostgreSQLProtocol::Messaging::CommandComplete(
+                    PostgreSQLProtocol::Messaging::CommandComplete::classifyQuery(query), 0));
+            return;
+        }
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<Int32> dis(0, INT32_MAX);
+        secret_key = dis(gen);
+
+        auto query_context = session->makeQueryContext();
+        query_context->setCurrentQueryId(fmt::format("postgres:{:d}:{:d}", connection_id, secret_key));
+
+        CurrentThread::QueryScope query_scope{query_context};
+        ReadBufferFromString read_buf(query);
+        executeQuery(read_buf, *out, false, query_context, {});
+
+        PostgreSQLProtocol::Messaging::CommandComplete::Command command =
+            PostgreSQLProtocol::Messaging::CommandComplete::classifyQuery(query);
+        message_transport->send(PostgreSQLProtocol::Messaging::CommandComplete(command, 0), true);
+    }
+    catch (const Exception & e)
+    {
+        extended_query_error = true;
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "2F000", "Execute failed.\n" + e.displayText()),
+            true);
+    }
+}
+
+void PostgreSQLHandler::processSync()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::SyncMsg>();
+        extended_query_error = false;
+        message_transport->send(PostgreSQLProtocol::Messaging::ReadyForQuery(), true);
+    }
+    catch (const Exception & e)
+    {
+        extended_query_error = false;
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "XX000", "Sync failed.\n" + e.displayText()),
+            true);
+        message_transport->send(PostgreSQLProtocol::Messaging::ReadyForQuery(), true);
+    }
+}
+
+void PostgreSQLHandler::processClose()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::CloseMsg>();
+        if (msg->close_type == 'S')
+            stmt_manager->closeStatement(msg->name);
+        else if (msg->close_type == 'P')
+            stmt_manager->closePortal(msg->name);
+
+        message_transport->send(PostgreSQLProtocol::Messaging::CloseCompleteMsg());
+    }
+    catch (const Exception & e)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "XX000", "Close failed.\n" + e.displayText()),
+            true);
+    }
+}
+
+void PostgreSQLHandler::processFlush()
+{
+    try
+    {
+        auto msg = message_transport->receive<PostgreSQLProtocol::Messaging::FlushMsg>();
+        message_transport->flush();
+    }
+    catch (const Exception & e)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse(
+                PostgreSQLProtocol::Messaging::ErrorOrNoticeResponse::ERROR,
+                "XX000", "Flush failed.\n" + e.displayText()),
+            true);
+    }
+}
+
+bool PostgreSQLHandler::tryAnswerCatalogQuery(const String & query)
+{
+    String upper_query = query;
+    std::transform(upper_query.begin(), upper_query.end(), upper_query.begin(),
+                   [](unsigned char c) { return std::toupper(c); });
+
+    if (upper_query.find("SET ") == 0)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 0));
+        return true;
+    }
+
+    if (upper_query.find("RESET ") == 0 || upper_query.find("DISCARD ") == 0)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 0));
+        return true;
+    }
+
+    if (upper_query.find("SHOW ") == 0)
+    {
+        if (upper_query.find("SERVER_VERSION") != String::npos)
+        {
+            std::vector<PostgreSQLProtocol::Messaging::FieldDescription> columns;
+            columns.emplace_back("server_version", TypeIndex::String);
+            message_transport->send(PostgreSQLProtocol::Messaging::RowDescription(columns));
+
+            std::vector<std::shared_ptr<PostgreSQLProtocol::Messaging::ISerializable>> row;
+            row.push_back(std::make_shared<PostgreSQLProtocol::Messaging::StringField>("14.0"));
+            message_transport->send(PostgreSQLProtocol::Messaging::DataRow(row));
+
+            message_transport->send(
+                PostgreSQLProtocol::Messaging::CommandComplete(
+                    PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 1));
+            return true;
+        }
+
+        if (upper_query.find("TRANSACTION_ISOLATION") != String::npos)
+        {
+            std::vector<PostgreSQLProtocol::Messaging::FieldDescription> columns;
+            columns.emplace_back("transaction_isolation", TypeIndex::String);
+            message_transport->send(PostgreSQLProtocol::Messaging::RowDescription(columns));
+
+            std::vector<std::shared_ptr<PostgreSQLProtocol::Messaging::ISerializable>> row;
+            row.push_back(std::make_shared<PostgreSQLProtocol::Messaging::StringField>("read committed"));
+            message_transport->send(PostgreSQLProtocol::Messaging::DataRow(row));
+
+            message_transport->send(
+                PostgreSQLProtocol::Messaging::CommandComplete(
+                    PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 1));
+            return true;
+        }
+
+        if (upper_query.find("STANDARD_CONFORMING_STRINGS") != String::npos)
+        {
+            std::vector<PostgreSQLProtocol::Messaging::FieldDescription> columns;
+            columns.emplace_back("standard_conforming_strings", TypeIndex::String);
+            message_transport->send(PostgreSQLProtocol::Messaging::RowDescription(columns));
+
+            std::vector<std::shared_ptr<PostgreSQLProtocol::Messaging::ISerializable>> row;
+            row.push_back(std::make_shared<PostgreSQLProtocol::Messaging::StringField>("on"));
+            message_transport->send(PostgreSQLProtocol::Messaging::DataRow(row));
+
+            message_transport->send(
+                PostgreSQLProtocol::Messaging::CommandComplete(
+                    PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 1));
+            return true;
+        }
+
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 0));
+        return true;
+    }
+
+    if (upper_query.find("DEALLOCATE") == 0)
+    {
+        auto pos = query.find_first_of(" \t", 10);
+        if (pos != String::npos)
+        {
+            String stmt_name = query.substr(pos + 1);
+            while (!stmt_name.empty() && (stmt_name.back() == ';' || stmt_name.back() == ' '))
+                stmt_name.pop_back();
+            String upper_name = stmt_name;
+            std::transform(upper_name.begin(), upper_name.end(), upper_name.begin(),
+                           [](unsigned char c) { return std::toupper(c); });
+            if (upper_name != "ALL")
+                stmt_manager->closeStatement(stmt_name);
+            else
+                stmt_manager->clearAll();
+        }
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 0));
+        return true;
+    }
+
+    if (upper_query.find("VERSION()") != String::npos)
+    {
+        std::vector<PostgreSQLProtocol::Messaging::FieldDescription> columns;
+        columns.emplace_back("version", TypeIndex::String);
+        message_transport->send(PostgreSQLProtocol::Messaging::RowDescription(columns));
+
+        std::vector<std::shared_ptr<PostgreSQLProtocol::Messaging::ISerializable>> row;
+        row.push_back(std::make_shared<PostgreSQLProtocol::Messaging::StringField>(
+            "Proton (PostgreSQL compatible, ClickHouse based)"));
+        message_transport->send(PostgreSQLProtocol::Messaging::DataRow(row));
+
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 1));
+        return true;
+    }
+
+    if (upper_query.find("CURRENT_SCHEMA") != String::npos)
+    {
+        std::vector<PostgreSQLProtocol::Messaging::FieldDescription> columns;
+        columns.emplace_back("current_schema", TypeIndex::String);
+        message_transport->send(PostgreSQLProtocol::Messaging::RowDescription(columns));
+
+        std::vector<std::shared_ptr<PostgreSQLProtocol::Messaging::ISerializable>> row;
+        row.push_back(std::make_shared<PostgreSQLProtocol::Messaging::StringField>("default"));
+        message_transport->send(PostgreSQLProtocol::Messaging::DataRow(row));
+
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 1));
+        return true;
+    }
+
+    if (upper_query == "BEGIN" || upper_query == "COMMIT" || upper_query == "ROLLBACK"
+        || upper_query == "END" || upper_query.find("SAVEPOINT ") == 0
+        || upper_query.find("RELEASE ") == 0)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::classifyQuery(query), 0));
+        return true;
+    }
+
+    if (upper_query.find("LISTEN ") == 0 || upper_query.find("UNLISTEN ") == 0)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 0));
+        return true;
+    }
+
+    if (upper_query.find("PG_CATALOG") != String::npos || upper_query.find("PG_TYPE") != String::npos
+        || upper_query.find("PG_NAMESPACE") != String::npos || upper_query.find("PG_CLASS") != String::npos
+        || upper_query.find("PG_ATTRIBUTE") != String::npos || upper_query.find("PG_DESCRIPTION") != String::npos
+        || upper_query.find("PG_CONSTRAINT") != String::npos || upper_query.find("PG_INDEX") != String::npos
+        || upper_query.find("PG_DATABASE") != String::npos || upper_query.find("PG_ROLES") != String::npos
+        || upper_query.find("PG_SETTINGS") != String::npos || upper_query.find("PG_AM") != String::npos
+        || upper_query.find("PG_PROC") != String::npos || upper_query.find("PG_TABLES") != String::npos
+        || upper_query.find("PG_STAT") != String::npos || upper_query.find("PG_EXTENSION") != String::npos
+        || upper_query.find("PG_COLLATION") != String::npos || upper_query.find("PG_MATVIEWS") != String::npos
+        || upper_query.find("PG_SHDESCRIPTION") != String::npos
+        || upper_query.find("INFORMATION_SCHEMA") != String::npos)
+    {
+        message_transport->send(
+            PostgreSQLProtocol::Messaging::CommandComplete(
+                PostgreSQLProtocol::Messaging::CommandComplete::Command::SELECT, 0));
+        return true;
+    }
+
+    return false;
+}
+
+}
+

@@ -5,6 +5,7 @@
 #include <Core/PostgreSQLProtocol.h>
 #include <Poco/Net/TCPServerConnection.h>
 #include "IServer.h"
+#include "PostgreSQLPreparedStatement.h"
 
 #if USE_SSL
 #   include <Poco/Net/SecureStreamSocket.h>
@@ -75,7 +76,22 @@ private:
 
     void processQuery();
 
+    void processParse();
+    void processBind();
+    void processDescribe();
+    void processExecute();
+    void processSync();
+    void processClose();
+    void processFlush();
+
+    bool tryAnswerCatalogQuery(const String & query);
+
     static bool isEmptyQuery(const String & query);
+
+    std::unique_ptr<PreparedStatementManager> stmt_manager;
+
+    bool extended_query_error = false;
+    bool send_ready_for_query = true;
 };
 
 }
