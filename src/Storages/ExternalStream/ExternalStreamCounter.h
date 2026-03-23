@@ -3,6 +3,7 @@
 #include <base/ClockUtils.h>
 
 #include <atomic>
+#include <map>
 
 namespace DB
 {

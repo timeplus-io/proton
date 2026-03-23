@@ -409,7 +409,9 @@ void InterpreterSelectWithUnionQuery::buildQueryPlan(QueryPlan & query_plan)
                 input_streams.emplace_back(plan->getCurrentDataStream());
 
             query_plan.unitePlans(
-                std::make_unique<Streaming::ConcatStep>(std::move(input_streams), /*disable_concat_callback=*/true), std::move(plans));
+                std::make_unique<Streaming::ConcatStep>(
+                    std::move(input_streams), /*disable_concat_callback_=*/true, settings.backfill_max_threads.value),
+                std::move(plans));
         }
         else
         {

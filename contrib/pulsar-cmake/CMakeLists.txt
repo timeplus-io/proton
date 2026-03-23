@@ -1,18 +1,9 @@
 # Needed when using Apache Pulsar external stream
-if (OS_DARWIN)
-    # the vendored libcurl does not compile on MacOS yet, disable Pulsar by default.
-    option (ENABLE_PULSAR "Enable Pulsar" 0)
-else()
-    option (ENABLE_PULSAR "Enable Pulsar" ${ENABLE_LIBRARIES})
-endif()
+option (ENABLE_PULSAR "Enable Pulsar" ${ENABLE_LIBRARIES})
 
 if (NOT ENABLE_PULSAR)
     message(STATUS "Not using pulsar")
     return()
-endif()
-
-if (OS_DARWIN)
-    message(FATAL_ERROR "Pulsar is not supported on MacOS yet")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)

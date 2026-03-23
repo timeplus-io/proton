@@ -102,6 +102,18 @@ IProcessor::Status AggregatingTransform::prepare()
     /// Get chunk from input.
     if (input.isFinished() && !need_process)
     {
+        /// When a bounded input (e.g. CTE with LIMIT) finishes before any
+        /// periodic watermark fires, inject a synthetic watermark so the
+        /// aggregation can finalize its buffered state.
+        if (src_rows > 0 && !input_finished_finalized)
+        {
+            input_finished_finalized = true;
+            current_chunk = Chunk{getInputs().front().getHeader().getColumns(), 0};
+            current_chunk.setWatermark(TIMEOUT_WATERMARK);
+            read_current_chunk = true;
+            return Status::Ready;
+        }
+
         is_consume_finished = true;
         output.finish();
         return Status::Finished;

@@ -204,6 +204,14 @@ template <typename Distribution>
 class FunctionRandomDistribution : public IFunction
 {
 private:
+    template <typename ResultType>
+    ResultType validateParameter(ResultType parameter, size_t parameter_number) const
+    {
+        if (isNaN(parameter) || !std::isfinite(parameter))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter number {} of function {} cannot be NaN of infinite", parameter_number, getName());
+
+        return parameter;
+    }
 
     template <typename ResultType>
     ResultType getParameterFromConstColumn(size_t parameter_number, const ColumnsWithTypeAndName & arguments) const
@@ -220,12 +228,90 @@ private:
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Parameter number {} of function {} must be constant.", parameter_number, getName());
 
         auto parameter = applyVisitor(FieldVisitorConvertToNumber<ResultType>(), assert_cast<const ColumnConst &>(*col).getField());
-
-        if (isNaN(parameter) || !std::isfinite(parameter))
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Parameter number {} of function {} cannot be NaN of infinite", parameter_number, getName());
-
-        return parameter;
+        return validateParameter(parameter, parameter_number);
     }
+
+    /// proton: starts. Support row-varying arguments for RANDOM STREAM dependent defaults.
+    template <typename ResultType>
+    ResultType getParameterFromColumn(size_t parameter_number, size_t row_number, const ColumnsWithTypeAndName & arguments) const
+    {
+        if (parameter_number >= arguments.size())
+            throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "Parameter number ({}) is greater than the size of arguments ({}). This is a bug",
+                            parameter_number, arguments.size());
+
+        auto parameter = applyVisitor(FieldVisitorConvertToNumber<ResultType>(), (*arguments[parameter_number].column)[row_number]);
+        return validateParameter(parameter, parameter_number);
+    }
+
+    template <typename Container, typename... Args>
+    auto generateSingleValue(Container & values, Args &&... args) const
+    {
+        Distribution::generate(std::forward<Args>(args)..., values);
+        return values[0];
+    }
+
+    ColumnPtr executeDynamicArguments(const ColumnsWithTypeAndName & arguments, size_t input_rows_count) const
+    {
+        if constexpr (std::is_same_v<Distribution, BernoulliDistribution>)
+        {
+            auto res_column = ColumnUInt8::create(input_rows_count);
+            auto & res_data = res_column->getData();
+            ColumnUInt8::Container values(1);
+            for (size_t row_number = 0; row_number < input_rows_count; ++row_number)
+                res_data[row_number] = generateSingleValue(values, getParameterFromColumn<Float64>(0, row_number, arguments));
+            return res_column;
+        }
+        else if constexpr (std::is_same_v<Distribution, BinomialDistribution> || std::is_same_v<Distribution, NegativeBinomialDistribution>)
+        {
+            auto res_column = ColumnUInt64::create(input_rows_count);
+            auto & res_data = res_column->getData();
+            ColumnUInt64::Container values(1);
+            for (size_t row_number = 0; row_number < input_rows_count; ++row_number)
+                res_data[row_number] = generateSingleValue(
+                    values,
+                    getParameterFromColumn<UInt64>(0, row_number, arguments), getParameterFromColumn<Float64>(1, row_number, arguments));
+            return res_column;
+        }
+        else if constexpr (std::is_same_v<Distribution, PoissonDistribution>)
+        {
+            auto res_column = ColumnUInt64::create(input_rows_count);
+            auto & res_data = res_column->getData();
+            ColumnUInt64::Container values(1);
+            for (size_t row_number = 0; row_number < input_rows_count; ++row_number)
+                res_data[row_number] = generateSingleValue(values, getParameterFromColumn<UInt64>(0, row_number, arguments));
+            return res_column;
+        }
+        else
+        {
+            auto res_column = ColumnFloat64::create(input_rows_count);
+            auto & res_data = res_column->getData();
+            ColumnFloat64::Container values(1);
+
+            for (size_t row_number = 0; row_number < input_rows_count; ++row_number)
+            {
+                if constexpr (Distribution::getNumberOfArguments() == 1)
+                {
+                    res_data[row_number] = generateSingleValue(values, getParameterFromColumn<Float64>(0, row_number, arguments));
+                }
+                else if constexpr (Distribution::getNumberOfArguments() == 2)
+                {
+                    res_data[row_number] = generateSingleValue(
+                        values,
+                        getParameterFromColumn<Float64>(0, row_number, arguments),
+                        getParameterFromColumn<Float64>(1, row_number, arguments));
+                }
+                else
+                {
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "More than two argument specified for function {}", getName());
+                }
+            }
+
+            return res_column;
+        }
+    }
+    /// proton: ends.
 
 public:
     static FunctionPtr create(ContextPtr)
@@ -245,17 +331,23 @@ public:
     {
         auto desired = Distribution::getNumberOfArguments();
         if (arguments.size() != desired && arguments.size() != desired + 1)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                            "Wrong number of arguments for function {}. Should be {} or {}",
-                            getName(), desired, desired + 1);
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Wrong number of arguments for function {}. Should be {} or {}",
+                getName(),
+                desired,
+                desired + 1);
 
         for (size_t i = 0; i < Distribution::getNumberOfArguments(); ++i)
         {
             const auto & type = arguments[i];
             WhichDataType which(type);
             if (!which.isFloat() && !which.isNativeUInt())
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Illegal type {} of argument of function {}, expected float64 or integer", type->getName(), getName());
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of argument of function {}, expected float64 or integer",
+                    type->getName(),
+                    getName());
         }
 
         return std::make_shared<typename Distribution::ReturnType>();
@@ -263,6 +355,14 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override
     {
+        /// proton: starts. Use row-wise generation only when arguments are not constant.
+        for (size_t i = 0; i < Distribution::getNumberOfArguments(); ++i)
+        {
+            if (!isColumnConst(*arguments[i].column))
+                return executeDynamicArguments(arguments, input_rows_count);
+        }
+        /// proton: ends.
+
         if constexpr (std::is_same_v<Distribution, BernoulliDistribution>)
         {
             auto res_column = ColumnUInt8::create(input_rows_count);

@@ -37,6 +37,8 @@ except ImportError:
 import random
 import string
 import multiprocessing
+import concurrent.futures
+import threading
 import socket
 from contextlib import closing
 
@@ -78,11 +80,6 @@ class HTTPError(Exception):
 # Helpers to execute queries via HTTP interface.
 def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default_format=None):
     #print(f"clickhouse_execute_http, base_args = {base_args}, query = {query}")
-    client = http.client.HTTPConnection(
-        host=base_args.tcp_host,
-        port=base_args.http_port,
-        timeout=timeout)
-
     timeout = int(timeout)
     params = {
         'query': query,
@@ -107,7 +104,13 @@ def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default
         params['default_format'] = default_format
     request_body = '/?' + base_args.client_options_query_str + urllib.parse.urlencode(params)
     #print(f"clickhouse_execute_http request_body = {request_body}")
+    res = None
+    data = b""
     for i in range(MAX_RETRIES):
+        client = http.client.HTTPConnection(
+            host=base_args.tcp_host,
+            port=base_args.http_port,
+            timeout=timeout)
         try:
             client.request('POST', request_body)
             res = client.getresponse()
@@ -118,6 +121,8 @@ def clickhouse_execute_http(base_args, query, timeout=30, settings=None, default
                 raise
 
             sleep(i+1)
+        finally:
+            client.close()
 
     #print(f"clickhouse_execute_http data = {data}")
     if res.status != 200:
@@ -144,6 +149,52 @@ class Terminated(KeyboardInterrupt):
 def signal_handler(sig, frame):
     raise Terminated(f'Terminated with {sig} signal')
 
+def _list_process_group_member_pids(current_pid):
+    pgid = os.getpgid(current_pid)
+    output = subprocess.check_output(['ps', '-axo', 'pid=,pgid='], text=True)
+
+    pids = []
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+
+        pid, process_group = map(int, parts)
+        if process_group == pgid and pid != current_pid:
+            pids.append(pid)
+
+    return pids
+
+
+def _terminate_process_group_members():
+    current_pid = os.getpid()
+    if os.getpgrp() != current_pid:
+        return
+
+    try:
+        member_pids = _list_process_group_member_pids(current_pid)
+    except (OSError, subprocess.CalledProcessError, ValueError) as err:
+        if threading.current_thread() is not threading.main_thread():
+            print(f"WARNING: cannot enumerate process-group children from worker thread: {err}")
+            return
+
+        previous_sigterm_handler = signal.getsignal(signal.SIGTERM)
+        try:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            os.killpg(os.getpgid(current_pid), signal.SIGTERM)
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm_handler)
+        return
+
+    for pid in member_pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            continue
+        except OSError as err:
+            print(f"WARNING: cannot terminate pid {pid}: {err}")
+
+
 def stop_tests():
     global stop_tests_triggered_lock
     global stop_tests_triggered
@@ -162,11 +213,10 @@ def stop_tests():
             # variable.
             restarted_tests = [*restarted_tests]
 
-            # send signal to all processes in group to avoid hung check triggering
-            # (to avoid terminating clickhouse-test itself, the signal should be ignored)
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
-            os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
-            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            # When stop_tests() runs from a ThreadPoolExecutor worker on macOS,
+            # signal.signal() is illegal there. Terminate sibling processes
+            # directly and only fall back to killpg() from the main thread.
+            _terminate_process_group_members()
 
 
 def get_db_engine(args, database_name):
@@ -266,7 +316,7 @@ def print_stacktraces() -> None:
 
     if server_pid and not args.replicated_database:
         print("")
-        print(f"Located ClickHouse server process {server_pid} listening at TCP port {args.tcp_port}")
+        print(f"Located Proton server process {server_pid} listening at TCP port {args.tcp_port}")
         print("Collecting stacktraces from all running threads with gdb:")
 
         bt = get_stacktraces_from_gdb(server_pid)
@@ -285,7 +335,7 @@ def print_stacktraces() -> None:
         return
 
     print(colored(
-        f"\nUnable to locate ClickHouse server process listening at TCP port {args.tcp_port}. "
+        f"\nUnable to locate Proton server process listening at TCP port {args.tcp_port}. "
          "It must have crashed or exited prematurely!",
         args, "red", attrs=["bold"]))
 
@@ -954,7 +1004,8 @@ def run_tests_array(all_tests_with_params):
     failures_chain = 0
     start_time = datetime.now()
 
-    is_concurrent = multiprocessing.current_process().name != "MainProcess"
+    is_concurrent = (multiprocessing.current_process().name != "MainProcess"
+                     or threading.current_thread() is not threading.main_thread())
 
     client_options = get_additional_client_options(args)
 
@@ -1054,7 +1105,7 @@ server_logs_level = "warning"
 
 
 def check_server_started(args):
-    print("Connecting to ClickHouse server...", end='')
+    print("Connecting to Proton server...", end='')
 
     sys.stdout.flush()
     retry_count = args.server_check_retries
@@ -1164,18 +1215,36 @@ def do_run_tests(jobs, test_suite: TestSuite, parallel):
         for _ in range(jobs):
             parallel_tests_array.append((None, batch_size, test_suite))
 
-        with closing(multiprocessing.Pool(processes=jobs)) as pool:
-            pool.map_async(run_tests_array, parallel_tests_array)
+        if sys.platform == 'darwin':
+            # On macOS, coverage-instrumented binaries create massive Mach VM regions.
+            # fork() under high concurrency hits EAGAIN (errno 35). Use threads instead:
+            # workers only spawn subprocesses (IO-bound), so GIL is not a bottleneck.
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+                futures = [executor.submit(run_tests_array, p) for p in parallel_tests_array]
 
-            for suit in test_suite.parallel_tests:
-                queue.put(suit, timeout=args.timeout * 1.1)
+                for suit in test_suite.parallel_tests:
+                    queue.put(suit, timeout=args.timeout * 1.1)
 
-            for _ in range(jobs):
-                queue.put(None, timeout=args.timeout * 1.1)
+                for _ in range(jobs):
+                    queue.put(None, timeout=args.timeout * 1.1)
 
-            queue.close()
+                queue.close()
+                for future in futures:
+                    future.result()
+            # ThreadPoolExecutor.__exit__ waits for all workers (equivalent to pool.join())
+        else:
+            with closing(multiprocessing.Pool(processes=jobs)) as pool:
+                pool.map_async(run_tests_array, parallel_tests_array)
 
-        pool.join()
+                for suit in test_suite.parallel_tests:
+                    queue.put(suit, timeout=args.timeout * 1.1)
+
+                for _ in range(jobs):
+                    queue.put(None, timeout=args.timeout * 1.1)
+
+                queue.close()
+
+            pool.join()
 
         run_tests_array((test_suite.sequential_tests, len(test_suite.sequential_tests), test_suite))
         return len(test_suite.sequential_tests) + len(test_suite.parallel_tests)
@@ -1372,12 +1441,15 @@ if __name__ == '__main__':
     # Move to a new process group and kill it at exit so that we don't have any
     # infinite tests processes left
     # (new process group is required to avoid killing some parent processes)
-    os.setpgid(0, 0)
+    try:
+        os.setpgid(0, 0)
+    except PermissionError:
+        sys.stderr.write("WARNING: os.setpgid(0, 0) not permitted; continuing without new process group\n")
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGHUP, signal_handler)
 
-    parser = ArgumentParser(description='ClickHouse functional tests')
+    parser = ArgumentParser(description='Proton functional tests')
     parser.add_argument('-q', '--queries', help='Path to queries dir')
     parser.add_argument('--tmp', help='Path to tmp dir')
 

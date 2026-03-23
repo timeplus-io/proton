@@ -1136,6 +1136,7 @@ Possible values: non-negative numbers. Note that if the value is too small or to
     M(Bool, emit_during_backfill, false, "Enable emit intermediate aggr result during backfill historical data", 0) \
     M(Bool, force_backfill_in_order, false, "Requires backfill data in order", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
+    M(UInt64, backfill_max_threads, 0, "Max threads used to backfill historical data per shard. 0 means system defaults", 0) \
     M(UInt64, join_max_buffered_bytes, 524288000, "Max buffered bytes for stream to stream join", 0) \
     M(UInt64, join_buffered_data_block_size, 0, "For streaming join, when buffered data in memory, the data block size directs to merge small data blocks to form bigger ones to improve memory efficiency. 0 means disable merging small data blocks.", 0) \
     M(Int64, join_quiesce_threshold_ms, 0, "For streaming join, when left or right stream is in quiesce, the maximum time to wait before the join.", 0) \
@@ -1172,6 +1173,8 @@ Possible values: non-negative numbers. Note that if the value is too small or to
 #define CONFIGURABLE_GLOBAL_SETTINGS(M, ALIAS) \
     M(Bool, asterisk_include_reserved_columns, true, "Show reserved columns on SELECT query.", 0) \
     M(UInt64, storage_commit_pool_size, 64, "Total shared thread pool size for building and committing parts for Stream", 0) \
+    M(UInt64, dynamic_commit_row_threshold, 8192, "For streams with dynamic/JSON columns, batch this many rows before committing a part. Higher values create fewer, larger parts but use more memory. Fixes tiny-part storm (issue #1113).", 0) \
+    M(UInt64, dynamic_commit_byte_threshold, 16 * 1024 * 1024, "For streams with dynamic/JSON columns, batch this many bytes before committing a part. Higher values create fewer, larger parts but use more memory. Fixes tiny-part storm (issue #1113).", 0) \
     M(UInt64, nlog_adhoc_pool_size, 8, "Thread pool size for nativelog ad-hoc tasks", 0) \
     M(UInt64, nlog_background_pool_size, 16, "Thread pool size for nativelog ad-hoc tasks", 0) \
     M(UInt64, timer_service_pool_size, 10, "Thread pool size for global timer service", 0) \

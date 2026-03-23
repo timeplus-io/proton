@@ -18,6 +18,9 @@
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Pulsar/Pulsar.h>
+#if USE_NATSIO
+#include <Storages/ExternalStream/NATSJetstream/NATSJetstream.h>
+#endif
 #if USE_PYTHON_UDF
 #include <Storages/ExternalStream/Python/StoragePythonTable.h>
 #endif
@@ -137,6 +140,17 @@ StoragePtr createExternalStream(
             std::move(context));
 
 #endif
+
+#if USE_NATSIO
+    if (type == StreamTypes::NATS_JETSTREAM)
+        return std::make_unique<ExternalStream::NATSJetstream>(
+            std::move(storage_id),
+            std::move(storage_metadata),
+            std::move(external_stream_settings),
+            attach,
+            std::move(external_stream_counter),
+            std::move(context));
+#endif
 #if USE_PYTHON_UDF
     if (type == ExternalStreamTypes::PYTHON)
     {
@@ -255,7 +269,8 @@ ColumnsDescription StorageExternalStream::initColumnsDescription(
         return columns;
 
     /// Try to infer columns from the format external schema
-    if (stream_type == StreamTypes::KAFKA || stream_type == StreamTypes::REDPANDA || stream_type == StreamTypes::PULSAR)
+    if (stream_type == StreamTypes::KAFKA || stream_type == StreamTypes::REDPANDA || stream_type == StreamTypes::PULSAR
+        || stream_type == StreamTypes::NATS_JETSTREAM)
     {
         if (external_stream_settings.data_format.value.empty())
             throw Exception(

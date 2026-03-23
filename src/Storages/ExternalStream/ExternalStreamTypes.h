@@ -13,6 +13,7 @@ namespace StreamTypes
     inline constexpr String LOG = "log";
     inline constexpr String ICEBERG = "iceberg";
     inline constexpr String HTTP = "http";
+    inline constexpr String NATS_JETSTREAM = "nats_jetstream";
 }
 
 namespace ExternalStreamTypes

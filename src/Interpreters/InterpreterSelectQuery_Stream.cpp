@@ -509,8 +509,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(
 
     Names keys;
 
+    /// FIXME: Always requires _tp_delta even if there is no aggregates ?
     ssize_t delta_col_pos = data_stream_semantic_pair.isChangelogInput()
-        ? header_before_aggregation.getPositionByName(ProtonConsts::RESERVED_DELTA_FLAG)
+        ? header_before_aggregation.tryGetPositionByName(ProtonConsts::RESERVED_DELTA_FLAG).value_or(-1)
         : -1;
 
     size_t window_keys_num = 0;
