@@ -174,11 +174,16 @@ public:
 };
 
 template <typename Name, template <typename> typename Impl>
-class FunctionSQLJSON : public IFunction, WithConstContext
+class FunctionSQLJSON : public IFunction
 {
 public:
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionSQLJSON>(context_); }
-    explicit FunctionSQLJSON(ContextPtr context_) : WithConstContext(context_) { }
+    explicit FunctionSQLJSON(ContextPtr context_)
+        : max_parser_depth(context_->getSettingsRef().max_parser_depth),
+          allow_simdjson(context_->getSettingsRef().allow_simdjson),
+          max_number_of_parameters_for_json_values(context_->getSettingsRef().max_number_of_parameters_for_json_values)
+    {
+    }
 
     static constexpr auto name = Name::name;
     String getName() const override { return Name::name; }
@@ -191,7 +196,7 @@ public:
     {
         if constexpr (std::is_same_v<Name, NameJSONValues>)
             return collections::map<ColumnNumbers>(
-                collections::range(1, getContext()->getSettingsRef().max_number_of_parameters_for_json_values.value),
+                collections::range(1, max_number_of_parameters_for_json_values),
                 [](const auto & idx) { return idx; });
         else
             return {1};
@@ -205,7 +210,7 @@ public:
         /// proton: starts.
         if constexpr (std::is_same_v<Name, NameJSONValues>)
         {
-            const auto & max_args_num = getContext()->getSettingsRef().max_number_of_parameters_for_json_values.value;
+            const auto & max_args_num = max_number_of_parameters_for_json_values;
             if (arguments.size() > max_args_num)
                 throw Exception(
                     ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION,
@@ -225,13 +230,17 @@ public:
         /// 2. Create ASTPtr
         /// 3. Parser(Tokens, ASTPtr) -> complete AST
         /// 4. Execute functions: call getNextItem on generator and handle each item
-        unsigned parse_depth = static_cast<unsigned>(getContext()->getSettingsRef().max_parser_depth);
+        unsigned parse_depth = static_cast<unsigned>(max_parser_depth);
 #if USE_SIMDJSON
-        if (getContext()->getSettingsRef().allow_simdjson)
+        if (allow_simdjson)
             return FunctionSQLJSONHelpers::Executor<Name, Impl, SimdJSONParser>::run(arguments, result_type, input_rows_count, parse_depth);
 #endif
         return FunctionSQLJSONHelpers::Executor<Name, Impl, DummyJSONParser>::run(arguments, result_type, input_rows_count, parse_depth);
     }
+private:
+    const size_t max_parser_depth;
+    const bool allow_simdjson;
+    const size_t max_number_of_parameters_for_json_values;
 };
 
 struct NameJSONExists
