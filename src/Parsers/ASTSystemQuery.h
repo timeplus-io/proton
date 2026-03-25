@@ -5,6 +5,8 @@
 
 #include "config.h"
 
+#include <vector>
+
 
 namespace DB
 {
@@ -140,6 +142,9 @@ public:
 
     String python_package_name;
     String python_package_version;
+    String python_package_requirements_text;
+    String python_package_index_url;
+    std::vector<String> python_package_extra_index_urls;
 
     String getID(char) const override { return "SYSTEM query"; }
 

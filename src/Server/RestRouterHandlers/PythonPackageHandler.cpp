@@ -1,15 +1,23 @@
+#include <Interpreters/executeSelectQuery.h>
 #include <Server/RestRouterHandlers/PythonPackageHandler.h>
 
 #if USE_PYTHON_UDF
 #include <CPython/PythonPackage.h>
-#include <Interpreters/EnsurePython.h>
-#include <Interpreters/executeSelectQuery.h>
-#include <Server/RestRouterHandlers/SchemaValidator.h>
 
 #include <boost/algorithm/string/replace.hpp>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int BAD_REQUEST_PARAMETER;
+extern const int UNKNOWN_EXCEPTION;
+extern const int BAD_ARGUMENTS;
+extern const int ACCESS_DENIED;
+extern const int RESOURCE_NOT_INITED;
+extern const int TIMEOUT_EXCEEDED;
+}
 
 namespace
 {
@@ -36,32 +44,147 @@ String buildSuccessResponse(const String & message, const String & query_id)
     return resp_str_stream.str();
 }
 
-std::map<String, std::map<String, String>> INSTALL_PYTHON_PACKAGE_SCHEMA
-    = {{"required", {{"name", "string"}}}, {"optional", {{"version", "string"}, {"VERSION", "string"}}}};
-
-std::map<String, std::map<String, String>> UNINSTALL_PYTHON_PACKAGE_SCHEMA = {{"required", {{"name", "string"}}}};
+String escapeSingleQuoted(const String & input)
+{
+    String escaped = input;
+    boost::replace_all(escaped, "'", "''");
+    return escaped;
 }
 
-namespace ErrorCodes
+std::vector<String> parseExtraIndexUrls(const Poco::JSON::Object::Ptr & payload)
 {
-extern const int BAD_REQUEST_PARAMETER;
-extern const int UNKNOWN_EXCEPTION;
-extern const int BAD_ARGUMENTS;
-extern const int ACCESS_DENIED;
-extern const int RESOURCE_NOT_INITED;
-extern const int TIMEOUT_EXCEEDED;
+    std::vector<String> extra_index_urls;
+    if (!payload->has("extra_index_url"))
+        return extra_index_urls;
+
+    const auto value = payload->get("extra_index_url");
+    if (value.isString())
+    {
+        extra_index_urls.push_back(value.toString());
+        return extra_index_urls;
+    }
+
+    if (!value.isArray())
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "'extra_index_url' must be a string or array of strings");
+
+    auto array = value.extract<Poco::JSON::Array::Ptr>();
+    for (size_t i = 0; i < array->size(); ++i)
+    {
+        const auto element = array->get(i);
+        if (!element.isString())
+            throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "'extra_index_url' array must contain only strings");
+        extra_index_urls.push_back(element.toString());
+    }
+
+    return extra_index_urls;
+}
+
+String buildInstallOptionsClause(const Poco::JSON::Object::Ptr & payload)
+{
+    String options_clause;
+
+    if (payload->has("index_url"))
+    {
+        const auto index_url = payload->get("index_url");
+        if (!index_url.isString())
+            throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "'index_url' must be a string");
+        options_clause += fmt::format(" INDEX_URL '{}'", escapeSingleQuoted(index_url.toString()));
+    }
+
+    for (const auto & extra_index_url : parseExtraIndexUrls(payload))
+        options_clause += fmt::format(" EXTRA_INDEX_URL '{}'", escapeSingleQuoted(extra_index_url));
+
+    return options_clause;
+}
 }
 
 bool PythonPackageHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String & error_msg) const
 {
-    if (!validateSchema(INSTALL_PYTHON_PACKAGE_SCHEMA, payload, error_msg))
-        return false;
+    const bool has_name = payload->has("name");
+    const bool has_packages = payload->has("packages");
+    const bool has_requirements = payload->has("requirements");
 
-    String package_name = payload->get("name").toString();
-
-    if (package_name.empty())
+    const size_t mode_count = static_cast<size_t>(has_name) + static_cast<size_t>(has_packages) + static_cast<size_t>(has_requirements);
+    if (mode_count == 0)
     {
-        error_msg = "Package name cannot be empty";
+        error_msg = "One of 'name', 'packages', or 'requirements' is required";
+        return false;
+    }
+    if (mode_count > 1)
+    {
+        error_msg = "Only one of 'name', 'packages', or 'requirements' can be provided";
+        return false;
+    }
+
+    if (has_name)
+    {
+        if (!payload->get("name").isString())
+        {
+            error_msg = "'name' must be a string";
+            return false;
+        }
+        if (payload->get("name").toString().empty())
+        {
+            error_msg = "Package name cannot be empty";
+            return false;
+        }
+    }
+
+    if (has_requirements)
+    {
+        if (!payload->get("requirements").isString())
+        {
+            error_msg = "'requirements' must be a string";
+            return false;
+        }
+        if (payload->get("requirements").toString().empty())
+        {
+            error_msg = "Requirements text cannot be empty";
+            return false;
+        }
+    }
+
+    if (has_packages)
+    {
+        if (!payload->get("packages").isArray())
+        {
+            error_msg = "'packages' must be an array";
+            return false;
+        }
+
+        auto packages = payload->getArray("packages");
+        if (packages->size() == 0)
+        {
+            error_msg = "'packages' cannot be empty";
+            return false;
+        }
+
+        for (size_t i = 0; i < packages->size(); ++i)
+        {
+            if (!packages->isObject(i))
+            {
+                error_msg = "'packages' array must contain objects";
+                return false;
+            }
+
+            auto package_obj = packages->getObject(i);
+            if (!package_obj->has("name") || !package_obj->get("name").isString() || package_obj->get("name").toString().empty())
+            {
+                error_msg = "Each package in 'packages' must have a non-empty string field 'name'";
+                return false;
+            }
+        }
+    }
+
+    if (has_requirements && (payload->has("version") || payload->has("VERSION")))
+    {
+        error_msg = "'version' and 'VERSION' are only valid for single package install";
+        return false;
+    }
+
+    if (has_packages && (payload->has("version") || payload->has("VERSION")))
+    {
+        error_msg = "Top-level 'version' and 'VERSION' are not allowed when 'packages' is provided";
         return false;
     }
 
@@ -116,83 +239,136 @@ std::pair<String, Int32> PythonPackageHandler::executePost(const Poco::JSON::Obj
 {
     try
     {
-        if (!payload->has("name"))
+        const String install_options_clause = buildInstallOptionsClause(payload);
+        std::vector<String> install_queries;
+        std::vector<String> install_targets;
+
+        if (payload->has("requirements"))
         {
-            return {jsonErrorResponse("Missing required field 'name'", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
+            String requirements_text = payload->get("requirements").toString();
+            install_queries.push_back(fmt::format(
+                "SYSTEM INSTALL PYTHON PACKAGE REQUIREMENTS '{}'{}", escapeSingleQuoted(requirements_text), install_options_clause));
+            install_targets.push_back("requirements");
         }
-
-        String package_name = payload->get("name").toString();
-        String package_version;
-
-        if (payload->has("version") && payload->has("VERSION"))
+        else if (payload->has("packages"))
         {
-            const auto lower = payload->get("version").toString();
-            const auto upper = payload->get("VERSION").toString();
-            if (lower != upper)
+            auto packages = payload->getArray("packages");
+            for (size_t i = 0; i < packages->size(); ++i)
             {
-                return {
-                    jsonErrorResponse(
-                        "Conflicting parameters: both 'version' and 'VERSION' are provided with different values",
-                        ErrorCodes::BAD_REQUEST_PARAMETER),
-                    HTTPResponse::HTTP_BAD_REQUEST};
+                auto package_obj = packages->getObject(i);
+                String package_name = package_obj->get("name").toString();
+                String package_version;
+
+                if (package_obj->has("version") && package_obj->has("VERSION"))
+                {
+                    const auto lower = package_obj->get("version").toString();
+                    const auto upper = package_obj->get("VERSION").toString();
+                    if (lower != upper)
+                    {
+                        return {
+                            jsonErrorResponse(
+                                "Conflicting parameters: both 'version' and 'VERSION' are provided with different values in 'packages'",
+                                ErrorCodes::BAD_REQUEST_PARAMETER),
+                            HTTPResponse::HTTP_BAD_REQUEST};
+                    }
+                }
+
+                if (package_obj->has("version"))
+                    package_version = package_obj->get("version").toString();
+                else if (package_obj->has("VERSION"))
+                    package_version = package_obj->get("VERSION").toString();
+
+                if (package_version.empty())
+                {
+                    install_queries.push_back(
+                        fmt::format("SYSTEM INSTALL PYTHON PACKAGE '{}'{}", escapeSingleQuoted(package_name), install_options_clause));
+                    install_targets.push_back(package_name);
+                }
+                else
+                {
+                    install_queries.push_back(fmt::format(
+                        "SYSTEM INSTALL PYTHON PACKAGE '{}' '{}'{}",
+                        escapeSingleQuoted(package_name),
+                        escapeSingleQuoted(package_version),
+                        install_options_clause));
+                    install_targets.push_back(fmt::format("{}@{}", package_name, package_version));
+                }
             }
-        }
-
-        if (payload->has("version"))
-            package_version = payload->get("version").toString();
-        else if (payload->has("VERSION"))
-            package_version = payload->get("VERSION").toString();
-
-        if (package_name.empty())
-            return {jsonErrorResponse("Package name cannot be empty", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
-
-        /// Construct the SYSTEM INSTALL PYTHON PACKAGE query
-        String query;
-        if (package_version.empty())
-        {
-            String escaped_package_name = package_name;
-            boost::replace_all(escaped_package_name, "'", "''");
-            query = fmt::format("SYSTEM INSTALL PYTHON PACKAGE '{}'", escaped_package_name);
         }
         else
         {
-            String escaped_package_name = package_name;
-            String escaped_package_version = package_version;
-            boost::replace_all(escaped_package_name, "'", "''");
-            boost::replace_all(escaped_package_version, "'", "''");
-            query = fmt::format("SYSTEM INSTALL PYTHON PACKAGE '{}' '{}'", escaped_package_name, escaped_package_version);
+            String package_name = payload->get("name").toString();
+            String package_version;
+
+            if (payload->has("version") && payload->has("VERSION"))
+            {
+                const auto lower = payload->get("version").toString();
+                const auto upper = payload->get("VERSION").toString();
+                if (lower != upper)
+                {
+                    return {
+                        jsonErrorResponse(
+                            "Conflicting parameters: both 'version' and 'VERSION' are provided with different values",
+                            ErrorCodes::BAD_REQUEST_PARAMETER),
+                        HTTPResponse::HTTP_BAD_REQUEST};
+                }
+            }
+
+            if (payload->has("version"))
+                package_version = payload->get("version").toString();
+            else if (payload->has("VERSION"))
+                package_version = payload->get("VERSION").toString();
+
+            if (package_version.empty())
+            {
+                install_queries.push_back(
+                    fmt::format("SYSTEM INSTALL PYTHON PACKAGE '{}'{}", escapeSingleQuoted(package_name), install_options_clause));
+                install_targets.push_back(package_name);
+            }
+            else
+            {
+                install_queries.push_back(fmt::format(
+                    "SYSTEM INSTALL PYTHON PACKAGE '{}' '{}'{}",
+                    escapeSingleQuoted(package_name),
+                    escapeSingleQuoted(package_version),
+                    install_options_clause));
+                install_targets.push_back(fmt::format("{}@{}", package_name, package_version));
+            }
         }
 
-        LOG_DEBUG(log, "Executing Python package install query: {}", query);
-
-        try
+        for (const auto & query : install_queries)
         {
+            LOG_DEBUG(log, "Executing Python package install query: {}", query);
             executeNonInsertQuery(query, query_context, /*callback=*/{}, /*internal=*/true);
         }
-        catch (const Exception & e)
-        {
-            Int32 http_status;
-            auto error_code = e.code();
 
-            if (error_code == ErrorCodes::BAD_ARGUMENTS)
-                http_status = HTTPResponse::HTTP_BAD_REQUEST;
-            else if (error_code == ErrorCodes::ACCESS_DENIED)
-                http_status = HTTPResponse::HTTP_FORBIDDEN;
-            else if (error_code == ErrorCodes::RESOURCE_NOT_INITED)
-                http_status = HTTPResponse::HTTP_SERVICE_UNAVAILABLE;
-            else if (error_code == ErrorCodes::TIMEOUT_EXCEEDED)
-                http_status = HTTPResponse::HTTP_REQUEST_TIMEOUT;
-            else
-                http_status = HTTPResponse::HTTP_INTERNAL_SERVER_ERROR;
-
-            return {jsonErrorResponse(fmt::format("Failed to install Python package: {}", e.message()), e.code()), http_status};
-        }
-
-        String message = fmt::format("Successfully installed Python package '{}'", package_name);
-        if (!package_version.empty())
-            message += fmt::format(" version '{}'", package_version);
+        String message;
+        if (payload->has("requirements"))
+            message = "Successfully installed Python requirements";
+        else if (install_targets.size() == 1)
+            message = fmt::format("Successfully installed Python package '{}'", install_targets.front());
+        else
+            message = fmt::format("Successfully installed {} Python packages", install_targets.size());
 
         return {buildSuccessResponse(message, query_context->getCurrentQueryId()), HTTPResponse::HTTP_OK};
+    }
+    catch (const Exception & e)
+    {
+        Int32 http_status;
+        auto error_code = e.code();
+
+        if (error_code == ErrorCodes::BAD_ARGUMENTS || error_code == ErrorCodes::BAD_REQUEST_PARAMETER)
+            http_status = HTTPResponse::HTTP_BAD_REQUEST;
+        else if (error_code == ErrorCodes::ACCESS_DENIED)
+            http_status = HTTPResponse::HTTP_FORBIDDEN;
+        else if (error_code == ErrorCodes::RESOURCE_NOT_INITED)
+            http_status = HTTPResponse::HTTP_SERVICE_UNAVAILABLE;
+        else if (error_code == ErrorCodes::TIMEOUT_EXCEEDED)
+            http_status = HTTPResponse::HTTP_REQUEST_TIMEOUT;
+        else
+            http_status = HTTPResponse::HTTP_INTERNAL_SERVER_ERROR;
+
+        return {jsonErrorResponse(fmt::format("Failed to install Python package: {}", e.message()), e.code()), http_status};
     }
     catch (const std::exception & e)
     {
@@ -210,13 +386,11 @@ std::pair<String, Int32> PythonPackageHandler::executeDelete(const Poco::JSON::O
 {
     try
     {
-        /// Get package name from path parameter (not JSON payload)
         String package_name = getPathParameter("name", "");
 
         if (package_name.empty())
             return {jsonErrorResponse("Missing package name in path", ErrorCodes::BAD_REQUEST_PARAMETER), HTTPResponse::HTTP_BAD_REQUEST};
 
-        /// Construct the SYSTEM UNINSTALL PYTHON PACKAGE query
         String escaped_package_name = package_name;
         boost::replace_all(escaped_package_name, "'", "''");
         String query = fmt::format("SYSTEM UNINSTALL PYTHON PACKAGE '{}'", escaped_package_name);
