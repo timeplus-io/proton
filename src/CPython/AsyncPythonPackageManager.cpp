@@ -1,9 +1,9 @@
 #include <CPython/AsyncPythonPackageManager.h>
 #include <CPython/PythonPackage.h>
 
+#include <Interpreters/Context.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/logger_useful.h>
-#include <Interpreters/Context.h>
 
 namespace CurrentMetrics
 {

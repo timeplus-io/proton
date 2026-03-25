@@ -261,8 +261,8 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
 
         for (const auto & extra_index_url : python_package_extra_index_urls)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " EXTRA_INDEX_URL "
-                          << (settings.hilite ? hilite_none : "") << quoteString(extra_index_url);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " EXTRA_INDEX_URL " << (settings.hilite ? hilite_none : "")
+                          << quoteString(extra_index_url);
         }
     }
     else if (type == Type::UNINSTALL_PYTHON_PACKAGE)

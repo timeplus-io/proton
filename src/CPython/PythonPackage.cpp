@@ -211,9 +211,9 @@ struct TemporaryRequirementsFile
         static std::atomic<uint64_t> counter = 0;
         file_path = std::filesystem::path("tmp")
             / fmt::format(
-                "python_requirements_{}_{}.txt",
-                std::chrono::steady_clock::now().time_since_epoch().count(),
-                counter.fetch_add(1, std::memory_order_relaxed));
+                        "python_requirements_{}_{}.txt",
+                        std::chrono::steady_clock::now().time_since_epoch().count(),
+                        counter.fetch_add(1, std::memory_order_relaxed));
         file_path_string = file_path.string();
 
         std::ofstream out(file_path, std::ios::out | std::ios::trunc);
