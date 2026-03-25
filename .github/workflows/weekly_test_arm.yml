@@ -53,8 +53,7 @@ jobs:
           darwin_asset=$(gh release view "$release_tag" \
             --repo "$PROTON_REPO" \
             --json assets \
-            --jq '.assets[] | select(.name | test("Darwin-(arm64|x86_64)\\.tar\\.gz$")) | .name' \
-            | head -n 1)
+            --jq 'first(.assets[] | select(.name | test("Darwin-(arm64|x86_64)\\.tar\\.gz$")) | .name)')
 
           if [ -z "$darwin_asset" ]; then
             echo "No Darwin tar.gz asset found in release $release_tag"
