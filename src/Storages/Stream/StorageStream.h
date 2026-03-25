@@ -270,9 +270,7 @@ public:
 
     std::vector<int64_t> getLastSNs() const;
 
-    /// For time-based seek_to, probe NativeLog to check if the streaming store
-    /// still has the requested data. Returns resolved sequence numbers per shard
-    /// if available, std::nullopt if the data has been compacted away.
+    /// Try resolving a time-based seek_to via the streaming store, returns std::nullopt if compacted.
     std::optional<std::vector<Int64>> tryResolveTimeSeekViaStreamingStore(const SeekToInfoPtr & seek_to_info) const;
 
     bool supportsStreamingQuery() const override { return true; }

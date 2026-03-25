@@ -1704,7 +1704,7 @@ std::optional<std::vector<Int64>> StorageStream::tryResolveTimeSeekViaStreamingS
 
             auto resolved_sns = shard->sequencesForTimestamps(seek_copy->getSeekPoints());
 
-            /// Check all resolved SNs are still available in NativeLog
+            /// Verify resolved SNs are still in NativeLog range
             bool all_available = true;
             for (UInt32 i = 0; i < shards && all_available; ++i)
             {
@@ -1715,17 +1715,17 @@ std::optional<std::vector<Int64>> StorageStream::tryResolveTimeSeekViaStreamingS
 
             if (all_available)
             {
-                LOG_INFO(log, "Time-based seek resolved via streaming store, skipping historical backfill");
+                LOG_INFO(log, "Time-based seek resolved via streaming store");
                 return resolved_sns;
             }
 
-            LOG_DEBUG(log, "Time-based seek data partially compacted, falling back to historical backfill");
+            LOG_DEBUG(log, "Seek data partially compacted, falling back to historical");
             return std::nullopt;
         }
     }
     catch (...)
     {
-        LOG_DEBUG(log, "Failed to resolve time-based seek via streaming store, falling back to historical backfill");
+        LOG_DEBUG(log, "Failed to resolve seek via streaming store");
     }
 
     return std::nullopt;

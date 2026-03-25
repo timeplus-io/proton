@@ -258,9 +258,8 @@ QueryMode getQueryMode(ConstStoragePtr storage, const SelectQueryInfo & query_in
 
         if (require_back_fill_from_historical)
         {
-            /// For time-based seeks, try resolving via NativeLog first.
-            /// If the streaming store still has the data, skip the expensive
-            /// historical MergeTree scan entirely.
+            /// Try resolving time-based seek via NativeLog first; if the data
+            /// is still there, skip the historical MergeTree scan.
             if (query_info.seek_to_info->isTimeBased())
             {
                 if (const auto * stream_storage = dynamic_cast<const StorageStream *>(storage.get()))
