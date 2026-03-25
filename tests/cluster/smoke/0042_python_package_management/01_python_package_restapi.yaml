@@ -15,21 +15,13 @@ description: |
 steps:
   - type: command
     name: python-pkg-01-install
-    <<if eq .nodes "1">>
     node: [p1]
-    <<else>>
-    node: [p2]
-    <<end>>
     shell: |
       curl -X POST http://localhost:8123/proton/v1/python_packages -H "Content-Type: text/plain; charset=utf-8" -d '{"name": "arrow"}' 2>/dev/null
 
   - type: command
     name: python-pkg-01-install-specified
-    <<if eq .nodes "1">>
     node: [p1]
-    <<else>>
-    node: [p2]
-    <<end>>
     shell: |
       curl -X POST http://localhost:8123/proton/v1/python_packages \
         -H "Content-Type: text/plain; charset=utf-8" \
@@ -72,15 +64,45 @@ steps:
     target_name: python-pkg-01-get-pandas
     expected_result: ['{"name":"pandas","version":"==2.3.2"}']
 
+  - type: command
+    name: python-pkg-01-install-requirements
+    node: [p1]
+    shell: |
+      curl -X POST http://localhost:8123/proton/v1/python_packages \
+        -H "Content-Type: text/plain; charset=utf-8" \
+        -d '{"requirements": "python-slugify==8.0.4", "index_url": "https://pypi.org/simple"}' 2>/dev/null
+
+  - type: wait
+    time: 5
+
+  - type: command
+    name: python-pkg-01-get-requirements-package
+    node: [p1]
+    shell: |
+      i=0
+      resp=""
+      while [ "$i" -lt 60 ]; do
+        resp="$(curl -X GET http://localhost:8123/proton/v1/python_packages 2>/dev/null)"
+        out="$(printf '%s' "$resp" | jq -c '.data[]? | select(.name == "python-slugify") | {name: .name, version: .version}' 2>/dev/null)"
+        if [ -n "$out" ]; then
+          printf '%s\n' "$out"
+          exit 0
+        fi
+        i=$((i+1))
+        sleep 2
+      done
+      printf '%s\n' "$resp" | jq -c '.' 2>/dev/null || printf '%s\n' "$resp"
+
+  - type: check
+    target_name: python-pkg-01-get-requirements-package
+    expected_result: ['{"name":"python-slugify","version":"==8.0.4"}']
+
   - type: wait
     time: 1
 
   - type: command
-    <<if eq .nodes "1">>
+    name: python-pkg-01-delete-arrow
     node: [p1]
-    <<else>>
-    node: [p3]
-    <<end>>
     shell: |
       curl -X DELETE http://localhost:8123/proton/v1/python_packages/arrow 2>/dev/null
 
@@ -88,15 +110,21 @@ steps:
     time: 1
 
   - type: command
-    <<if eq .nodes "1">>
+    name: python-pkg-01-delete-pandas
     node: [p1]
-    <<else>>
-    node: [p3]
-    <<end>>
     shell: |
       curl -X DELETE http://localhost:8123/proton/v1/python_packages/pandas \
         -H "x-timeplus-user: proton" \
         -H "x-timeplus-key: proton@t+" 2>/dev/null
+
+  - type: wait
+    time: 5
+
+  - type: command
+    name: python-pkg-01-delete-requirements-package
+    node: [p1]
+    shell: |
+      curl -X DELETE http://localhost:8123/proton/v1/python_packages/python-slugify 2>/dev/null
 
   - type: wait
     time: 5
@@ -143,4 +171,26 @@ steps:
 
   - type: check
     target_name: python-pkg-01-uninstall-pandas
+    expected_result: ['']
+
+  - type: command
+    name: python-pkg-01-uninstall-requirements-package
+    node: [p1]
+    shell: |
+      i=0
+      last=""
+      while [ "$i" -lt 60 ]; do
+        resp="$(curl -X GET http://localhost:8123/proton/v1/python_packages 2>/dev/null)"
+        out="$(printf '%s' "$resp" | jq -c '.data[]? | select(.name == "python-slugify") | {name: .name, version: .version}' 2>/dev/null)"
+        if [ -z "$out" ]; then
+          exit 0
+        fi
+        last="$out"
+        i=$((i+1))
+        sleep 2
+      done
+      printf '%s\n' "$last"
+
+  - type: check
+    target_name: python-pkg-01-uninstall-requirements-package
     expected_result: ['']

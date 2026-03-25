@@ -517,17 +517,50 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::INSTALL_PYTHON_PACKAGE:
         {
             /// SYSTEM INSTALL PYTHON PACKAGE 'package_name' ['version']
-            ASTPtr package_ast;
-            if (!ParserStringLiteral{}.parse(pos, package_ast, expected))
-                return false;
-
-            res->python_package_name = package_ast->as<ASTLiteral &>().value.safeGet<String>();
-
-            /// Optional version parameter
-            ASTPtr version_ast;
-            if (ParserStringLiteral{}.parse(pos, version_ast, expected))
+            /// SYSTEM INSTALL PYTHON PACKAGE REQUIREMENTS 'requirements_text'
+            if (ParserKeyword{"REQUIREMENTS"}.ignore(pos, expected))
             {
-                res->python_package_version = version_ast->as<ASTLiteral &>().value.safeGet<String>();
+                ASTPtr requirements_ast;
+                if (!ParserStringLiteral{}.parse(pos, requirements_ast, expected))
+                    return false;
+
+                res->python_package_requirements_text = requirements_ast->as<ASTLiteral &>().value.safeGet<String>();
+            }
+            else
+            {
+                ASTPtr package_ast;
+                if (!ParserStringLiteral{}.parse(pos, package_ast, expected))
+                    return false;
+
+                res->python_package_name = package_ast->as<ASTLiteral &>().value.safeGet<String>();
+
+                ASTPtr version_ast;
+                if (ParserStringLiteral{}.parse(pos, version_ast, expected))
+                    res->python_package_version = version_ast->as<ASTLiteral &>().value.safeGet<String>();
+            }
+
+            while (true)
+            {
+                if (ParserKeyword{"INDEX_URL"}.ignore(pos, expected))
+                {
+                    ASTPtr index_url_ast;
+                    if (!ParserStringLiteral{}.parse(pos, index_url_ast, expected))
+                        return false;
+
+                    res->python_package_index_url = index_url_ast->as<ASTLiteral &>().value.safeGet<String>();
+                }
+                else if (ParserKeyword{"EXTRA_INDEX_URL"}.ignore(pos, expected))
+                {
+                    ASTPtr extra_index_url_ast;
+                    if (!ParserStringLiteral{}.parse(pos, extra_index_url_ast, expected))
+                        return false;
+
+                    res->python_package_extra_index_urls.push_back(extra_index_url_ast->as<ASTLiteral &>().value.safeGet<String>());
+                }
+                else
+                {
+                    break;
+                }
             }
             break;
         }

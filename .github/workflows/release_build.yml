@@ -691,3 +691,15 @@ jobs:
             echo "Python package upload failed after all attempts"
             exit 1
           fi
+
+  Update_Homebrew_Tap:
+    if: ${{ !inputs.prerelease }}
+    needs:
+      - update_version
+      - Build_Darwin_X86_64
+      - Build_Native_Darwin_arm64
+    uses: ./.github/workflows/update_homebrew_tap.yml
+    with:
+      tag_name: ${{ needs.update_version.outputs.tag_name }}
+    secrets:
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}

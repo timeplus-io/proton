@@ -1170,9 +1170,8 @@ AvroSchemaSerializer::createAction(const Block & header, const avro::NodePtr & n
 AvroConfluentRowOutputFormat::AvroConfluentRowOutputFormat(WriteBuffer & out_, const Block & header_, const FormatSettings & settings_)
     : IRowOutputFormat(header_, out_, ProcessorID::AvroRowOutputFormatID), settings(settings_)
 {
-    chassert(!settings.kafka_schema_registry.topic_name.empty() && !settings.kafka_schema_registry.subject_name.empty());
-    auto schema = KafkaSchemaRegistryForAvro::getOrCreate(settings)->getSchemaForTopic(
-        settings.kafka_schema_registry.topic_name,
+    chassert(!settings.kafka_schema_registry.subject_name.empty());
+    auto schema = KafkaSchemaRegistryForAvro::getOrCreate(settings)->getSchemaForSubject(
         settings.kafka_schema_registry.subject_name,
         settings.kafka_schema_registry.force_refresh_schema);
     schema_id = schema.first;

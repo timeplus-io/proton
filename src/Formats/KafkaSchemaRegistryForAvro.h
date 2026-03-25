@@ -37,8 +37,8 @@ public:
     KafkaSchemaRegistryForAvro & operator=(const KafkaSchemaRegistryForAvro &) = delete;
 
     avro::ValidSchema getSchema(UInt32 id);
-    /// Returns the schema ID and schema for a topic.
-    std::pair<UInt32, avro::ValidSchema> getSchemaForTopic(const String & topic_name, const String & subject_name, bool force_refresh = false);
+    /// Returns the schema ID and schema for a subject.
+    std::pair<UInt32, avro::ValidSchema> getSchemaForSubject(const String & subject_name, bool force_refresh = false);
 
 private:
     avro::ValidSchema fetchAndCompileSchema(UInt32 id);
@@ -46,7 +46,7 @@ private:
 
     KafkaSchemaRegistry registry;
     CacheBase<UInt32, avro::ValidSchema> schema_cache;
-    CacheBase<String, UInt32> topic_schema_cache;
+    CacheBase<String, UInt32> subject_schema_cache;
 };
 
 }

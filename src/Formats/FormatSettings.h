@@ -300,13 +300,13 @@ struct FormatSettings
     {
         bool skip_cert_check = false;
         bool force_refresh_schema = false;
+        bool consume_single_schema = false; /// In one topic, there may be multiple mixed schema records (RecordNameStrategy for Avro for example)
         std::string url;
         std::string credentials;
         std::string private_key_file;
         std::string certificate_file;
         std::string ca_location;
         std::string subject_name; /// for schema subject name use to fetch the schema for writing
-        std::string topic_name;
     } kafka_schema_registry{};
     /// proton: ends
 

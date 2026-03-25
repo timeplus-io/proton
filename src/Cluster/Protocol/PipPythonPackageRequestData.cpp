@@ -13,7 +13,7 @@ namespace cluster::protocol
 
 PipPythonPackageRequestData::~PipPythonPackageRequestData() = default;
 
-void PipPythonPackageRequestData::serialize(DB::WriteBuffer & wb, uint16_t /*version*/) const
+void PipPythonPackageRequestData::serialize(DB::WriteBuffer & wb, uint16_t version) const
 {
     cluster::serializeEnum(operation, wb);
 
@@ -22,15 +22,24 @@ void PipPythonPackageRequestData::serialize(DB::WriteBuffer & wb, uint16_t /*ver
         DB::writeStringBinary(name, wb);
 
     DB::writeVarUInt(package_versions.size(), wb);
-    for (const auto & version : package_versions)
-        DB::writeStringBinary(version, wb);
+    for (const auto & package_version : package_versions)
+        DB::writeStringBinary(package_version, wb);
 
     DB::writeVarUInt(initiator, wb);
     DB::writeVarInt(timeout_ms, wb);
     DB::writeStringBinary(task_id, wb);
+
+    if (version >= 2)
+    {
+        DB::writeStringBinary(requirements_text, wb);
+        DB::writeStringBinary(index_url, wb);
+        DB::writeVarUInt(extra_index_urls.size(), wb);
+        for (const auto & extra_index_url : extra_index_urls)
+            DB::writeStringBinary(extra_index_url, wb);
+    }
 }
 
-void PipPythonPackageRequestData::doDeserialize(DB::ReadBuffer & rb, uint16_t /*version*/)
+void PipPythonPackageRequestData::doDeserialize(DB::ReadBuffer & rb, uint16_t version)
 {
     operation = cluster::deserializeEnum<Operation>(rb);
 
@@ -49,6 +58,24 @@ void PipPythonPackageRequestData::doDeserialize(DB::ReadBuffer & rb, uint16_t /*
     DB::readVarUInt(initiator, rb);
     DB::readVarInt(timeout_ms, rb);
     DB::readStringBinary(task_id, rb);
+
+    if (version >= 2)
+    {
+        DB::readStringBinary(requirements_text, rb);
+        DB::readStringBinary(index_url, rb);
+
+        size_t extra_index_urls_count;
+        DB::readVarUInt(extra_index_urls_count, rb);
+        extra_index_urls.resize(extra_index_urls_count);
+        for (size_t i = 0; i < extra_index_urls_count; ++i)
+            DB::readStringBinary(extra_index_urls[i], rb);
+    }
+    else
+    {
+        requirements_text.clear();
+        index_url.clear();
+        extra_index_urls.clear();
+    }
 }
 
 size_t PipPythonPackageRequestData::approximateSerializedSize() const noexcept
@@ -66,6 +93,11 @@ size_t PipPythonPackageRequestData::approximateSerializedSize() const noexcept
 
     /// task_id size
     size += approximateSerializedSizeOf(task_id);
+    size += approximateSerializedSizeOf(requirements_text);
+    size += approximateSerializedSizeOf(index_url);
+    size += sizeof(size_t);
+    for (const auto & extra_index_url : extra_index_urls)
+        size += approximateSerializedSizeOf(extra_index_url);
     return size;
 }
 
@@ -89,9 +121,13 @@ std::string PipPythonPackageRequestData::doString() const
     }
 
     return fmt::format(
-        "operation={} packages=[{}] initiator=0x{:x} timeout_ms={} task_id={}",
+        "operation={} packages=[{}] requirements_text_bytes={} index_url='{}' extra_index_urls={} initiator=0x{:x} timeout_ms={} "
+        "task_id={}",
         magic_enum::enum_name(operation),
         packages_str,
+        requirements_text.size(),
+        index_url,
+        fmt::join(extra_index_urls, ","),
         initiator,
         timeout_ms,
         task_id);

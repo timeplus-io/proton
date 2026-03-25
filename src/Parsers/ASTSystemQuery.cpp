@@ -240,10 +240,29 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
     else if (type == Type::INSTALL_PYTHON_PACKAGE)
     {
         /// SYSTEM INSTALL PYTHON PACKAGE 'package_name' ['version']
-        settings.ostr << " " << quoteString(python_package_name);
-        if (!python_package_version.empty())
+        /// SYSTEM INSTALL PYTHON PACKAGE REQUIREMENTS 'requirements_text'
+        if (!python_package_requirements_text.empty())
         {
-            settings.ostr << " " << quoteString(python_package_version);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " REQUIREMENTS " << (settings.hilite ? hilite_none : "")
+                          << quoteString(python_package_requirements_text);
+        }
+        else
+        {
+            settings.ostr << " " << quoteString(python_package_name);
+            if (!python_package_version.empty())
+                settings.ostr << " " << quoteString(python_package_version);
+        }
+
+        if (!python_package_index_url.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " INDEX_URL " << (settings.hilite ? hilite_none : "")
+                          << quoteString(python_package_index_url);
+        }
+
+        for (const auto & extra_index_url : python_package_extra_index_urls)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " EXTRA_INDEX_URL " << (settings.hilite ? hilite_none : "")
+                          << quoteString(extra_index_url);
         }
     }
     else if (type == Type::UNINSTALL_PYTHON_PACKAGE)

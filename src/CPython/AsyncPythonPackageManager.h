@@ -1,5 +1,7 @@
 #pragma once
 
+#include <CPython/PythonPackage.h>
+
 #include <Cluster/Common/CallResult.h>
 #include <Interpreters/Context_fwd.h>
 #include <Common/ThreadPool_fwd.h>
@@ -31,6 +33,9 @@ struct AsyncTaskResult
 
     /// Internal fields for processing (not exposed in system table)
     String _original_package_spec; /// Original specification used for installation (e.g., "requests>2.0")
+    String _requirements_text;
+    PipInstallOptions _install_options;
+    bool _install_from_requirements = false;
 
     AsyncTaskResult(const String & task_id_, const String & package_name_, const String & operation_, const String & original_spec_ = "")
         : task_id(task_id_)
@@ -60,7 +65,17 @@ public:
     ~AsyncPythonPackageManager();
 
     cluster::CallResultV<String> scheduleInstall(
-        const String & task_id, const String & package_name, const String & package_version = "", AsyncTaskCallback callback = nullptr);
+        const String & task_id,
+        const String & package_name,
+        const String & package_version = "",
+        const PipInstallOptions & install_options = {},
+        AsyncTaskCallback callback = nullptr);
+
+    cluster::CallResultV<String> scheduleInstallRequirements(
+        const String & task_id,
+        const String & requirements_text,
+        const PipInstallOptions & install_options = {},
+        AsyncTaskCallback callback = nullptr);
 
     cluster::CallResultV<String>
     scheduleUninstall(const String & task_id, const String & package_name, AsyncTaskCallback callback = nullptr);

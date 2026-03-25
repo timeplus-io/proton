@@ -622,4 +622,151 @@ class BlockingIterator:
     });
 }
 
+TEST_F(CPythonTest, PythonStreamingSourceCancelWithAsyncInterruptStopsCleanly)
+{
+    assertNoLeak([&]() {
+        auto string_type = std::make_shared<DataTypeString>();
+
+        DataTypes element_types = {string_type};
+        Strings element_names = {"type"};
+        auto tuple_type = std::make_shared<DataTypeTuple>(element_types, element_names);
+
+        Block header = {ColumnWithTypeAndName{string_type->createColumn(), string_type, "type"}};
+
+        cpython::PyObjectPtr iterator;
+        cpython::PyObjectPtr iterator_owner;
+        String module_name;
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+
+            module_name = "test_async_cancel_" + cpython::randomModuleName();
+            const std::string python_source = R"PY(
+class BlockingIteratorWithoutCancel:
+    def __init__(self):
+        self._yielded = False
+        self._stop_for_test = False
+
+    def __iter__(self):
+        return self
+
+    def stop_for_test(self):
+        self._stop_for_test = True
+
+    def __next__(self):
+        if not self._yielded:
+            self._yielded = True
+            return [("ticker",)]
+
+        while not self._stop_for_test:
+            pass
+        raise StopIteration
+)PY";
+
+            auto byte_code = cpython::compile(python_source);
+            cpython::executeByteCode(byte_code, module_name);
+
+            auto blocking_iter_class = cpython::getClass("BlockingIteratorWithoutCancel", module_name);
+            iterator_owner = cpython::newInstance(blocking_iter_class);
+            ASSERT_TRUE(iterator_owner);
+
+            iterator = cpython::getIterator(iterator_owner);
+            ASSERT_TRUE(iterator);
+        }
+
+        {
+            auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, module_name);
+            auto sink = std::make_shared<NotifyingCollectBlocksSink>(source->getPort().getHeader());
+
+            connect(source->getPort(), sink->getPort());
+
+            auto processors = std::make_shared<Processors>();
+            processors->emplace_back(source);
+            processors->emplace_back(sink);
+
+            QueryStatusPtr element;
+            PipelineExecutor executor(processors, element);
+
+            std::mutex finished_mutex;
+            std::condition_variable finished_cv;
+            bool finished = false;
+            std::exception_ptr execution_exception;
+
+            {
+                cpython::GILGuard release_gil;
+            }
+
+            std::thread executor_thread([&] {
+                try
+                {
+                    executor.execute(1);
+                }
+                catch (...)
+                {
+                    execution_exception = std::current_exception();
+                }
+
+                {
+                    std::lock_guard lock(finished_mutex);
+                    finished = true;
+                }
+                finished_cv.notify_one();
+            });
+
+            SCOPE_EXIT({
+                executor.cancel();
+                if (executor_thread.joinable())
+                    executor_thread.join();
+            });
+
+            ASSERT_TRUE(sink->waitForBlocks(1, std::chrono::seconds(5)));
+
+            executor.cancel();
+
+            bool finished_after_cancel = false;
+            {
+                std::unique_lock lock(finished_mutex);
+                finished_after_cancel = finished_cv.wait_for(lock, std::chrono::milliseconds(500), [&] { return finished; });
+            }
+
+            if (!finished_after_cancel)
+            {
+                cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+                cpython::PyObjectPtr stop_method{PyObject_GetAttrString(iterator_owner.get(), "stop_for_test")};
+                ASSERT_TRUE(stop_method);
+                cpython::PyObjectPtr stop_result{PyObject_CallObject(stop_method.get(), nullptr)};
+                if (!stop_result)
+                    PyErr_Clear();
+
+                std::unique_lock lock(finished_mutex);
+                EXPECT_TRUE(finished_cv.wait_for(lock, std::chrono::seconds(2), [&] { return finished; }));
+            }
+
+            EXPECT_TRUE(finished_after_cancel);
+
+            if (execution_exception)
+            {
+                try
+                {
+                    std::rethrow_exception(execution_exception);
+                }
+                catch (const Exception & e)
+                {
+                    ADD_FAILURE() << "Unexpected exception: " << e.displayText();
+                }
+                catch (...)
+                {
+                    ADD_FAILURE() << "Unexpected exception type";
+                }
+            }
+
+            EXPECT_EQ(sink->getBlocks().size(), 1U);
+        }
+
+        {
+            cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+            iterator_owner.reset();
+        }
+    });
+}
+
 #endif
