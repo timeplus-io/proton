@@ -4,6 +4,14 @@ name: debug_workflow
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
+      task:
+        description: 'Manual task to run'
+        required: true
+        default: debug
+        type: choice
+        options:
+        - debug
+        - check_gh_token
       max_minutes:
         description: 'After $max_minutes debug environment will be terminate. Or you can run `touch /finish` to terminate the env'
         required: true
@@ -19,9 +27,80 @@ on: # yamllint disable-line rule:truthy
 
 
 jobs:
+  check_gh_personal_access_token:
+    if: github.event.inputs.task == 'check_gh_token'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      PROTON_REPO: ${{ github.repository }}
+      TAP_REPO: timeplus-io/homebrew-timeplus
+    steps:
+      - name: Verify token identity
+        id: viewer
+        run: |
+          set -euo pipefail
+
+          viewer_login=$(gh api user --jq '.login')
+          echo "viewer_login=$viewer_login" >> "$GITHUB_OUTPUT"
+          echo "Authenticated GitHub user: $viewer_login"
+
+      - name: Verify Proton release access
+        id: release
+        run: |
+          set -euo pipefail
+
+          release_tag=$(gh release view --repo "$PROTON_REPO" --json tagName --jq '.tagName')
+          darwin_asset=$(gh release view "$release_tag" \
+            --repo "$PROTON_REPO" \
+            --json assets \
+            --jq '.assets[] | select(.name | test("Darwin-(arm64|x86_64)\\.tar\\.gz$")) | .name' \
+            | head -n 1)
+
+          if [ -z "$darwin_asset" ]; then
+            echo "No Darwin tar.gz asset found in release $release_tag"
+            exit 1
+          fi
+
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "darwin_asset=$darwin_asset" >> "$GITHUB_OUTPUT"
+          echo "Verified release $release_tag and found asset $darwin_asset"
+
+      - name: Verify tap repo access
+        id: tap
+        run: |
+          set -euo pipefail
+
+          default_branch=$(gh repo view "$TAP_REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')
+          viewer_permission=$(gh repo view "$TAP_REPO" --json viewerPermission --jq '.viewerPermission')
+          clone_url=$(gh api "repos/$TAP_REPO" --jq '.clone_url')
+          authenticated_clone_url="${clone_url/https:\/\//https:\/\/x-access-token:${GH_TOKEN}@}"
+          tap_dir="$GITHUB_WORKSPACE/tmp/homebrew-timeplus-token-check"
+
+          rm -rf "$tap_dir"
+          git clone --depth 1 --branch "$default_branch" "$authenticated_clone_url" "$tap_dir"
+
+          echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
+          echo "tap_dir=$tap_dir" >> "$GITHUB_OUTPUT"
+          echo "viewer_permission=$viewer_permission" >> "$GITHUB_OUTPUT"
+          echo "Verified tap access on $TAP_REPO with permission $viewer_permission"
+
+      - name: Verify dry-run push to tap default branch
+        run: |
+          set -euo pipefail
+
+          tap_dir="${{ steps.tap.outputs.tap_dir }}"
+          default_branch="${{ steps.tap.outputs.default_branch }}"
+
+          git -C "$tap_dir" config user.name "proton-robot"
+          git -C "$tap_dir" config user.email "proton_robot@timeplus.io"
+          git -C "$tap_dir" commit --allow-empty -m "ci: token permission check" >/dev/null
+
+          git -C "$tap_dir" push --dry-run origin "HEAD:$default_branch"
+          echo "Dry-run push to $TAP_REPO:$default_branch succeeded"
+
   debug_on_x64:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'x64'
+    if: github.event.inputs.task == 'debug' && github.event.inputs.arch == 'x64'
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -58,7 +137,7 @@ jobs:
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   debug_on_arm:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.inputs.arch == 'arm'
+    if: github.event.inputs.task == 'debug' && github.event.inputs.arch == 'arm'
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
