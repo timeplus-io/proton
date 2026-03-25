@@ -1,5 +1,6 @@
 #include <Cluster/Base/ByteVector.h>
 #include <Cluster/Common/Constants.h>
+#include <Cluster/LocalLog/Indexes/EpochSequenceIndex.h>
 #include <Cluster/LocalLog/Log/Log.h>
 
 #include <Columns/ColumnsNumber.h>
@@ -18,6 +19,7 @@
 #include <Common/ProtonCommon.h>
 #include <Common/SipHash.h>
 #include <Common/ThreadPool.h>
+#include <Common/logger_useful.h>
 
 #include <gtest/gtest.h>
 
@@ -87,7 +89,6 @@ protected:
         fs::remove_all(log_dir, ec);
     }
 
-protected:
     virtual cluster::nlog::LogConfigPtr logConfig() = 0;
 
     fs::path log_dir = "/tmp/nativelog/test/";
@@ -574,6 +575,42 @@ TEST_F(LogTestFixture, TrimTrailing)
         ASSERT_FALSE(res.hasError());
         EXPECT_EQ(res.result, active->size());
     }
+}
+
+TEST_F(LogTestFixture, LatestLeaderEpochIgnoresMultiplePendingEpochIndexEntries)
+{
+    auto block = createBlock(0, data_size, 1612286044);
+    auto entry = createEntry(block, false);
+
+    auto append_result = log->append({entry});
+    ASSERT_FALSE(append_result.hasError());
+    ASSERT_EQ(log->nextLogSequence(), cluster::Constants::LogStartSN + 1);
+
+    doTearDown();
+
+    {
+        cluster::nlog::EpochSequenceIndex index(log_dir, 8 * 1024 * 1024, /*preallocate_=*/true, getLogger("leader_epoch"));
+
+        auto index_result
+            = index.maybeIndexEpochStartSequence({cluster::Constants::LogStartEpoch + 1, cluster::Constants::LogStartSN + 1}, true);
+        ASSERT_FALSE(index_result.hasError());
+        ASSERT_TRUE(index_result.result);
+
+        index_result
+            = index.maybeIndexEpochStartSequence({cluster::Constants::LogStartEpoch + 2, cluster::Constants::LogStartSN + 1}, true);
+        ASSERT_FALSE(index_result.hasError());
+        ASSERT_TRUE(index_result.result);
+    }
+
+    doSetUp();
+
+    auto latest_epoch = log->latestLeaderEpoch();
+    ASSERT_TRUE(latest_epoch.has_value());
+    EXPECT_EQ(*latest_epoch, cluster::Constants::LogStartEpoch);
+
+    auto fetched_epoch = log->leaderEpochFor(cluster::Constants::LogStartSN);
+    ASSERT_TRUE(fetched_epoch.has_value());
+    EXPECT_EQ(*fetched_epoch, cluster::Constants::LogStartEpoch);
 }
 
 TEST_F(LogTestFixtureInvertedIndex, ReverseLookupSequenceForTimestampEveryEntry)
