@@ -16,7 +16,7 @@
 #include <Interpreters/EnsurePython.h>
 #endif
 
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 
 /// When Python UDF is disabled, these functions always throw and never return.
@@ -47,57 +47,98 @@ IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeInstallPythonPackage([
         "Python UDF support is not enabled. Rebuild with USE_PYTHON_UDF=1 to enable Python package management.");
 #else
 
-    cpython::PythonPackage::validatePackageSpecification(query.python_package_name);
     cpython::PythonPackage::ensurePythonInterpreterReady();
 
-    std::string package_with_version = query.python_package_name;
-    if (!query.python_package_version.empty())
+    const bool install_from_requirements = !query.python_package_requirements_text.empty();
+    if (install_from_requirements && !query.python_package_name.empty())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid install syntax: package name and REQUIREMENTS text cannot be used together");
+
+    if (!install_from_requirements && query.python_package_name.empty())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python package name cannot be empty");
+
+    cpython::PipInstallOptions install_options;
+    install_options.index_url = query.python_package_index_url;
+    install_options.extra_index_urls.assign(query.python_package_extra_index_urls.begin(), query.python_package_extra_index_urls.end());
+
+    if (!install_options.index_url.empty())
+        cpython::PythonPackage::validatePipIndexUrl(install_options.index_url, "--index-url");
+    for (const auto & extra_index_url : install_options.extra_index_urls)
+        cpython::PythonPackage::validatePipIndexUrl(extra_index_url, "--extra-index-url");
+
+    std::string package_with_version;
+    if (!install_from_requirements)
     {
-        static const re2::RE2 version_pattern(R"(^[a-zA-Z0-9\.\-_]+$)");
-        if (!re2::RE2::FullMatch(query.python_package_version, version_pattern))
+        cpython::PythonPackage::validatePackageSpecification(query.python_package_name);
+
+        package_with_version = query.python_package_name;
+        if (!query.python_package_version.empty())
         {
-            throw Exception(
-                ErrorCodes::BAD_ARGUMENTS,
-                "Invalid version format '{}'. Versions must contain only letters, numbers, dots, hyphens, and underscores",
-                query.python_package_version);
+            static const re2::RE2 version_pattern(R"(^[a-zA-Z0-9\.\-_]+$)");
+            if (!re2::RE2::FullMatch(query.python_package_version, version_pattern))
+            {
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Invalid version format '{}'. Versions must contain only letters, numbers, dots, hyphens, and underscores",
+                    query.python_package_version);
+            }
+            package_with_version += "==" + query.python_package_version;
         }
-        package_with_version += "==" + query.python_package_version;
     }
 
     auto base_timeout_sec = getContext()->getSettingsRef().query_timeout_sec;
     auto timeout_ms = std::max(30000UL, std::min(300000UL, static_cast<unsigned long>(base_timeout_sec * 1000))); /// 30s-5min bounds
 
-    auto package = cpython::PythonPackage(package_with_version);
+    auto package = install_from_requirements
+        ? cpython::PythonPackage::fromRequirementsText(query.python_package_requirements_text, install_options)
+        : cpython::PythonPackage(package_with_version, install_options);
 
     /// Pre-validation on initiator node: fail fast to avoid unnecessary raft operations
     try
     {
-        LOG_INFO(
-            log,
-            "Starting Python package installation (validating): package='{}', version='{}', timeout={}ms",
-            package.name,
-            package.version_spec.empty() ? "latest" : package.version_spec,
-            timeout_ms);
+        if (install_from_requirements)
+        {
+            LOG_INFO(
+                log,
+                "Starting Python requirements installation (validating): requirements_bytes={}, timeout={}ms",
+                query.python_package_requirements_text.size(),
+                timeout_ms);
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "Starting Python package installation (validating): package='{}', version='{}', timeout={}ms",
+                package.name,
+                package.version_spec.empty() ? "latest" : package.version_spec,
+                timeout_ms);
+        }
         package.validateInstall(log);
     }
     catch (const Exception & e)
     {
-        throw Exception(e.code(), "Failed to install Python package '{}': {}", package_with_version, e.message());
+        const auto install_target = install_from_requirements ? "requirements text" : package_with_version;
+        throw Exception(e.code(), "Failed to install Python package '{}': {}", install_target, e.message());
     }
     catch (...)
     {
-        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to install Python package '{}': Unknown error", package_with_version);
+        const auto install_target = install_from_requirements ? "requirements text" : package_with_version;
+        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to install Python package '{}': Unknown error", install_target);
     }
 
     auto & metastore = Globals::getMetaStore();
     std::string task_id = toString(UUIDHelpers::generateV4());
     std::string task_id_for_logging = task_id;
 
-    /// Use parsed package name and version from PythonPackage object for accurate tracking
-    std::vector<std::string> package_names = {package.name};
+    std::vector<std::string> package_names;
+    if (!install_from_requirements)
+        package_names = {package.name};
+
     std::vector<std::string> package_versions;
-    if (!package.version_spec.empty())
+    if (!install_from_requirements && !package.version_spec.empty())
         package_versions = {package.version_spec};
+
+    const uint16_t request_version
+        = (install_from_requirements || !install_options.index_url.empty() || !install_options.extra_index_urls.empty()) ? 2 : 1;
 
     try
     {
@@ -105,39 +146,62 @@ IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeInstallPythonPackage([
             cluster::protocol::PipPythonPackageRequestData::Install,
             std::move(package_names),
             std::move(package_versions),
+            install_from_requirements ? query.python_package_requirements_text : "",
+            install_options.index_url,
+            install_options.extra_index_urls,
             getContext()->getNodeID(),
             timeout_ms,
-            /*request_version=*/1,
+            request_version,
             std::move(task_id));
 
-        LOG_INFO(
-            log,
-            "Initiating cluster-wide Python package install: package='{}', version='{}', task_id='{}', timeout={}ms",
-            package.name,
-            package.version_spec.empty() ? "latest" : package.version_spec,
-            task_id_for_logging,
-            timeout_ms);
+        if (install_from_requirements)
+        {
+            LOG_INFO(
+                log,
+                "Initiating cluster-wide Python requirements install: requirements_bytes={}, task_id='{}', timeout={}ms",
+                query.python_package_requirements_text.size(),
+                task_id_for_logging,
+                timeout_ms);
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "Initiating cluster-wide Python package install: package='{}', version='{}', task_id='{}', timeout={}ms",
+                package.name,
+                package.version_spec.empty() ? "latest" : package.version_spec,
+                task_id_for_logging,
+                timeout_ms);
+        }
 
         auto system_command_resp = metastore.pythonPackageOperation(std::move(python_package_req));
 
         if (system_command_resp->hasError())
         {
             const auto & err = system_command_resp->error();
+            const auto install_target = install_from_requirements ? "requirements text" : query.python_package_name;
             LOG_ERROR(
                 log,
                 "Cluster operation failed for Python package '{}': error_code={}, error_message={}",
-                query.python_package_name,
+                install_target,
                 err.error_code,
                 err.error_message);
-            throw Exception(err.error_code, "Failed to install Python package '{}': {}", query.python_package_name, err.error_message);
+            throw Exception(err.error_code, "Failed to install Python package '{}': {}", install_target, err.error_message);
         }
 
-        LOG_INFO(
-            log,
-            "Successfully completed Python package installation: package='{}', version='{}', task_id='{}'",
-            package.name,
-            package.version_spec.empty() ? "latest" : package.version_spec,
-            task_id_for_logging);
+        if (install_from_requirements)
+        {
+            LOG_INFO(log, "Successfully completed Python requirements installation: task_id='{}'", task_id_for_logging);
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "Successfully completed Python package installation: package='{}', version='{}', task_id='{}'",
+                package.name,
+                package.version_spec.empty() ? "latest" : package.version_spec,
+                task_id_for_logging);
+        }
     }
     catch (const Exception &)
     {
@@ -145,8 +209,9 @@ IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeInstallPythonPackage([
     }
     catch (...)
     {
-        LOG_ERROR(log, "Cluster operation failed for Python package '{}': Unknown exception", query.python_package_name);
-        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to install Python package '{}': Unknown error", query.python_package_name);
+        const auto install_target = install_from_requirements ? "requirements text" : query.python_package_name;
+        LOG_ERROR(log, "Cluster operation failed for Python package '{}': Unknown exception", install_target);
+        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "Failed to install Python package '{}': Unknown error", install_target);
     }
 #endif
 }
@@ -195,6 +260,9 @@ IF_NO_PY_UDF_NORETURN void InterpreterSystemQuery::executeUninstallPythonPackage
             cluster::protocol::PipPythonPackageRequestData::Uninstall,
             std::move(package_names),
             std::move(package_versions),
+            "",
+            "",
+            std::vector<std::string>{},
             getContext()->getNodeID(),
             timeout_ms,
             /*request_version=*/1,

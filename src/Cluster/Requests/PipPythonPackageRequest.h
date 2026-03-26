@@ -15,12 +15,24 @@ public:
         protocol::PipPythonPackageRequestData::Operation operation_,
         std::vector<std::string> && package_names_,
         std::vector<std::string> && package_versions_,
+        std::string requirements_text_,
+        std::string index_url_,
+        std::vector<std::string> extra_index_urls_,
         NodeID initiator_,
         int64_t timeout_ms,
         uint16_t request_version_,
         std::string && task_id_ = "")
         : Request(request_version_)
-        , request_data(operation_, std::move(package_names_), std::move(package_versions_), initiator_, timeout_ms, std::move(task_id_))
+        , request_data(
+              operation_,
+              std::move(package_names_),
+              std::move(package_versions_),
+              std::move(requirements_text_),
+              std::move(index_url_),
+              std::move(extra_index_urls_),
+              initiator_,
+              timeout_ms,
+              std::move(task_id_))
     {
     }
 

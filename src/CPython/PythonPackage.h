@@ -4,17 +4,24 @@
 
 #include <Common/Logger.h>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace DB::cpython
 {
+struct PipInstallOptions
+{
+    std::string index_url;
+    std::vector<std::string> extra_index_urls;
+};
+
 class PythonPackage
 {
 public:
-    PythonPackage(const std::string & package_with_version_)
-        : package_with_version(package_with_version_), logger(getLogger("PythonPackage"))
-    {
-        validatePackageSpecification(package_with_version_);
-        parsePackageWithVersion();
-    }
+    explicit PythonPackage(const std::string & package_with_version_, PipInstallOptions install_options_ = {});
+
+    static PythonPackage fromRequirementsText(const std::string & requirements_text_, PipInstallOptions install_options_ = {});
 
     static std::vector<PythonPackage> list();
 
@@ -25,6 +32,15 @@ public:
 
     /// Validate package name and specification format (static validation)
     static void validatePackageSpecification(const std::string & package_spec);
+
+    /// Refresh site-packages and import caches after package installation.
+    static void refreshImportState(LoggerPtr logger = {});
+
+    /// Validate pip private index URL format.
+    static void validatePipIndexUrl(const std::string & index_url, const char * option_name);
+
+    /// Validate requirements text content.
+    static std::vector<std::string> parseRequirementsText(const std::string & requirements_text);
 
     /// Pre-install validation: check if package exists and can be installed (using dry-run)
     void validateInstall(LoggerPtr logger) const;
@@ -40,10 +56,20 @@ public:
 
     std::string package_with_version;
     std::string name;
+    std::string lookup_name;
     std::string version_spec;
+    std::string requirements_text;
+    bool install_from_requirements = false;
+    PipInstallOptions install_options;
     LoggerPtr logger;
 
 private:
+    PythonPackage(
+        const std::string & package_with_version_,
+        const std::string & requirements_text_,
+        bool install_from_requirements_,
+        PipInstallOptions install_options_);
+
     void parsePackageWithVersion();
 };
 

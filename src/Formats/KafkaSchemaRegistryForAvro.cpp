@@ -45,7 +45,7 @@ KafkaSchemaRegistryForAvro::KafkaSchemaRegistryForAvro(
     size_t schema_cache_max_size)
     : registry(base_url, credentials, private_key_file, certificate_file, ca_location, skip_cert_check)
     , schema_cache(schema_cache_max_size)
-    , topic_schema_cache(schema_cache_max_size)
+    , subject_schema_cache(schema_cache_max_size)
 {
 }
 
@@ -56,9 +56,9 @@ avro::ValidSchema KafkaSchemaRegistryForAvro::getSchema(UInt32 id)
     return *schema;
 }
 
-std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::getSchemaForTopic(const String & topic_name, const String & subject_name, bool force_refresh)
+std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::getSchemaForSubject(const String & subject_name, bool force_refresh)
 {
-    auto cached_schema_id = topic_schema_cache.get(topic_name);
+    auto cached_schema_id = subject_schema_cache.get(subject_name);
 
     if (!force_refresh && cached_schema_id)
         return {*cached_schema_id, getSchema(*cached_schema_id)};
@@ -66,7 +66,7 @@ std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::getSchemaForTop
     auto schema_and_id = fetchAndCompileSchemaForSubject(subject_name);
     schema_cache.set(schema_and_id.first, std::make_shared<avro::ValidSchema>(std::move(schema_and_id.second)));
     auto schema_id = schema_and_id.first;
-    topic_schema_cache.set(topic_name, std::make_shared<UInt32>(schema_id));
+    subject_schema_cache.set(subject_name, std::make_shared<UInt32>(schema_id));
     return {schema_id, getSchema(schema_id)};
 }
 

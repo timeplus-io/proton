@@ -100,9 +100,8 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id) const
     }
 }
 
-std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const String & subject) const
+std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const String & subject_name) const
 {
-    auto subject_name = subject + "-value";
     auto latest_schema_version = fetchLatestSubjectVersion(subject_name);
     try
     {
@@ -156,7 +155,7 @@ std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const
     }
     catch (Exception & e)
     {
-        e.addMessage(std::format("while fetching latest schema for subject {}", subject));
+        e.addMessage(std::format("while fetching latest schema for subject {}", subject_name));
         throw;
     }
 }

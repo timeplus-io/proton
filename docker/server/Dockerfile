@@ -5,7 +5,7 @@ FROM ubuntu:22.04
 # FIXME, XXX, timeplus deb repo
 # ARG repository="deb https://repo.timeplus/deb/stable/ main/"
 ARG repository=""
-ARG version=3.0.18
+ARG version=3.0.19
 
 # set non-empty deb_location_url url to create a docker image
 # from debs created by CI build, for example:

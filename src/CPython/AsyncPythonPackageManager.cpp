@@ -3,6 +3,7 @@
 
 #include <Interpreters/Context.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/logger_useful.h>
 
 namespace CurrentMetrics
 {
@@ -57,7 +58,11 @@ void AsyncPythonPackageManager::shutdown()
 }
 
 cluster::CallResultV<String> AsyncPythonPackageManager::scheduleInstall(
-    const String & task_id, const String & package_name, const String & package_version, AsyncTaskCallback callback)
+    const String & task_id,
+    const String & package_name,
+    const String & package_version,
+    const PipInstallOptions & install_options,
+    AsyncTaskCallback callback)
 {
     if (shutdown_requested.load())
         return cluster::CallResultV<String>(DB::ErrorCodes::RESOURCE_NOT_INITED, "AsyncPythonPackageManager is shutting down");
@@ -74,6 +79,7 @@ cluster::CallResultV<String> AsyncPythonPackageManager::scheduleInstall(
     }
 
     auto task_result = std::make_shared<AsyncTaskResult>(task_id, package_name, "install", original_spec);
+    task_result->_install_options = install_options;
 
     {
         std::unique_lock lock(results_mutex);
@@ -97,6 +103,42 @@ cluster::CallResultV<String> AsyncPythonPackageManager::scheduleInstall(
     catch (...)
     {
         /// Remove task from tracking if scheduling failed
+        {
+            std::unique_lock lock(results_mutex);
+            task_results.erase(task_id);
+        }
+        return cluster::CallResultV<String>(DB::ErrorCodes::LOGICAL_ERROR, "Failed to schedule task");
+    }
+
+    return cluster::CallResultV<String>(task_id);
+}
+
+cluster::CallResultV<String> AsyncPythonPackageManager::scheduleInstallRequirements(
+    const String & task_id, const String & requirements_text, const PipInstallOptions & install_options, AsyncTaskCallback callback)
+{
+    if (shutdown_requested.load())
+        return cluster::CallResultV<String>(DB::ErrorCodes::RESOURCE_NOT_INITED, "AsyncPythonPackageManager is shutting down");
+
+    auto task_result = std::make_shared<AsyncTaskResult>(task_id, "requirements.txt", "install", "requirements.txt");
+    task_result->_requirements_text = requirements_text;
+    task_result->_install_options = install_options;
+    task_result->_install_from_requirements = true;
+
+    {
+        std::unique_lock lock(results_mutex);
+        if (task_results.find(task_id) != task_results.end())
+            return cluster::CallResultV<String>(DB::ErrorCodes::LOGICAL_ERROR, fmt::format("Task ID {} already exists", task_id));
+
+        task_results[task_id] = task_result;
+    }
+
+    try
+    {
+        thread_pool->scheduleOrThrowOnError([this, task_result, callback]() { install(task_result, callback); });
+        LOG_DEBUG(logger, "Scheduled Python requirements install task: {}", task_id);
+    }
+    catch (...)
+    {
         {
             std::unique_lock lock(results_mutex);
             task_results.erase(task_id);
@@ -151,33 +193,37 @@ void AsyncPythonPackageManager::install(AsyncTaskResultPtr task_result, AsyncTas
 
     try
     {
-        std::string package_with_version = task_result->_original_package_spec;
-
-        auto package = PythonPackage(package_with_version);
+        PythonPackage package = task_result->_install_from_requirements
+            ? PythonPackage::fromRequirementsText(task_result->_requirements_text, task_result->_install_options)
+            : PythonPackage(task_result->_original_package_spec, task_result->_install_options);
         package.install(logger);
 
         /// Extract the actual installed version for metrics tracking
-        try
+        if (!task_result->_install_from_requirements)
         {
-            std::string actual_version = package.getActualInstalledVersion(logger);
-            if (!actual_version.empty())
+            try
             {
-                task_result->installed_version = actual_version;
-                LOG_DEBUG(logger, "Captured installed version '{}' for package '{}'", actual_version, task_result->package_name);
+                std::string actual_version = package.getActualInstalledVersion(logger);
+                if (!actual_version.empty())
+                {
+                    task_result->installed_version = actual_version;
+                    LOG_DEBUG(logger, "Captured installed version '{}' for package '{}'", actual_version, task_result->package_name);
+                }
+                else
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Could not determine actual installed version for package '{}' after successful install",
+                        task_result->package_name);
+                }
             }
-            else
+            catch (...)
             {
                 LOG_DEBUG(
                     logger,
-                    "Could not determine actual installed version for package '{}' after successful install",
+                    "Exception while extracting actual version for package '{}' after successful install",
                     task_result->package_name);
             }
-        }
-        catch (...)
-        {
-            /// Don't fail the entire installation if version extraction fails
-            LOG_DEBUG(
-                logger, "Exception while extracting actual version for package '{}' after successful install", task_result->package_name);
         }
 
         update(task_result, AsyncTaskStatus::Completed, cluster::Error(), callback);

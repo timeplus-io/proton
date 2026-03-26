@@ -15,6 +15,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int QUERY_WAS_CANCELLED;
 extern const int UDF_RUNNING_ERROR;
 }
 
@@ -257,7 +258,22 @@ Chunk PythonStreamingSource::generate()
             return {};
         }
 
-        auto next_item = cpython::iterNext(py_iterator);
+        cpython::PyObjectPtr next_item;
+        try
+        {
+            next_item = cpython::iterNext(py_iterator);
+        }
+        catch (const Exception & e)
+        {
+            if (e.code() == ErrorCodes::QUERY_WAS_CANCELLED && (isCancelled() || cancel_requested.load(std::memory_order_acquire)))
+            {
+                exhausted = true;
+                return {};
+            }
+
+            throw;
+        }
+
         if (!next_item)
         {
             /// Iterator exhausted

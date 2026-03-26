@@ -1,0 +1,132 @@
+name: update_homebrew_tap
+
+on:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Release tag to publish into the Homebrew tap"
+        required: true
+        type: string
+      tap_repo:
+        description: "Homebrew tap repository"
+        required: false
+        default: "timeplus-io/homebrew-timeplus"
+        type: string
+      formula_path:
+        description: "Formula file to update inside the tap repository"
+        required: false
+        default: "Formula/proton.rb"
+        type: string
+    secrets:
+      GH_PERSONAL_ACCESS_TOKEN:
+        required: true
+
+jobs:
+  update_homebrew_tap:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      PROTON_REPO: ${{ github.repository }}
+      TAG_NAME: ${{ inputs.tag_name }}
+      TAP_REPO: ${{ inputs.tap_repo }}
+      FORMULA_PATH: ${{ inputs.formula_path }}
+    steps:
+      - name: Checkout proton repository
+        uses: actions/checkout@v5.0.1
+
+      - name: Resolve Darwin asset digests
+        id: artifacts
+        run: |
+          set -euo pipefail
+
+          assets_dir="$GITHUB_WORKSPACE/tmp/homebrew-tap-assets"
+          mkdir -p "$assets_dir"
+
+          arm_asset="proton-${TAG_NAME}-Darwin-arm64.tar.gz"
+          x86_asset="proton-${TAG_NAME}-Darwin-x86_64.tar.gz"
+
+          resolve_sha256() {
+            local asset_name="$1"
+            local digest
+
+            digest=$(gh release view "$TAG_NAME" \
+              --repo "$PROTON_REPO" \
+              --json assets \
+              --jq ".assets[] | select(.name == \"$asset_name\") | .digest" || true)
+            digest="${digest#sha256:}"
+
+            if [[ "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "$digest"
+              return 0
+            fi
+
+            echo "Falling back to local SHA256 for $asset_name" >&2
+            gh release download "$TAG_NAME" \
+              --repo "$PROTON_REPO" \
+              --pattern "$asset_name" \
+              --dir "$assets_dir" \
+              --clobber
+
+            digest=$(shasum -a 256 "$assets_dir/$asset_name" | awk '{print $1}')
+            if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "Invalid SHA256 for $asset_name: $digest" >&2
+              return 1
+            fi
+
+            echo "$digest"
+          }
+
+          arm_sha256=$(resolve_sha256 "$arm_asset")
+          x86_sha256=$(resolve_sha256 "$x86_asset")
+
+          echo "arm_sha256=$arm_sha256" >> "$GITHUB_OUTPUT"
+          echo "x86_sha256=$x86_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Clone Homebrew tap
+        id: tap
+        run: |
+          set -euo pipefail
+
+          default_branch=$(gh repo view "$TAP_REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')
+          clone_url=$(gh api "repos/$TAP_REPO" --jq '.clone_url')
+          authenticated_clone_url="${clone_url/https:\/\//https:\/\/x-access-token:${GH_TOKEN}@}"
+          tap_dir="$GITHUB_WORKSPACE/tmp/homebrew-timeplus"
+
+          rm -rf "$tap_dir"
+          git clone --branch "$default_branch" --single-branch "$authenticated_clone_url" "$tap_dir"
+
+          echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
+          echo "tap_dir=$tap_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        run: |
+          set -euo pipefail
+
+          version="${TAG_NAME#v}"
+          formula="${{ steps.tap.outputs.tap_dir }}/${FORMULA_PATH}"
+
+          python3 .github/scripts/update_homebrew_formula.py \
+            --formula "$formula" \
+            --version "$version" \
+            --arm-sha256 "${{ steps.artifacts.outputs.arm_sha256 }}" \
+            --x86-sha256 "${{ steps.artifacts.outputs.x86_sha256 }}"
+
+      - name: Commit and push tap update
+        run: |
+          set -euo pipefail
+
+          tap_dir="${{ steps.tap.outputs.tap_dir }}"
+          default_branch="${{ steps.tap.outputs.default_branch }}"
+          version="${TAG_NAME#v}"
+
+          git -C "$tap_dir" config user.name "proton-robot"
+          git -C "$tap_dir" config user.email "proton_robot@timeplus.io"
+          git -C "$tap_dir" add "$FORMULA_PATH"
+
+          if git -C "$tap_dir" diff --cached --quiet; then
+            echo "No Homebrew tap changes detected for Proton $version"
+            exit 0
+          fi
+
+          git -C "$tap_dir" commit -m "Update Proton version to $version and SHA256 checksums"
+          git -C "$tap_dir" push origin "HEAD:$default_branch"

@@ -355,7 +355,7 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 
 ProtobufConfluentSchemaReader::ProtobufConfluentSchemaReader(const FormatSettings & format_settings)
     : registry(getConfluentSchemaRegistry(format_settings))
-    , subject(format_settings.kafka_schema_registry.topic_name)
+    , subject(format_settings.kafka_schema_registry.subject_name)
     , skip_unsupported_fields(format_settings.protobuf.skip_fields_with_unsupported_types_in_schema_inference)
 {
 }

@@ -303,6 +303,25 @@ INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
                              })));
 /// proton: ends
 
+/// proton: starts. `SYSTEM INSTALL/UNINSTALL PYTHON PACKAGE ...` test cases
+INSTANTIATE_TEST_SUITE_P(
+    ParserSystemPythonPackageQuery,
+    ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserSystemQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {"SYSTEM INSTALL PYTHON PACKAGE 'requests'", "SYSTEM INSTALL PYTHON PACKAGE 'requests'"},
+            {"SYSTEM INSTALL PYTHON PACKAGE 'requests' '2.32.3' INDEX_URL 'https://pypi.org/simple' EXTRA_INDEX_URL "
+             "'https://mirror.example/simple' EXTRA_INDEX_URL 'https://backup.example/simple'",
+             "SYSTEM INSTALL PYTHON PACKAGE 'requests' '2.32.3' INDEX_URL 'https://pypi.org/simple' EXTRA_INDEX_URL "
+             "'https://mirror.example/simple' EXTRA_INDEX_URL 'https://backup.example/simple'"},
+            {"SYSTEM INSTALL PYTHON PACKAGE REQUIREMENTS 'python-slugify==8.0.4' INDEX_URL 'https://pypi.org/simple' EXTRA_INDEX_URL "
+             "'https://mirror.example/simple'",
+             "SYSTEM INSTALL PYTHON PACKAGE REQUIREMENTS 'python-slugify==8.0.4' INDEX_URL 'https://pypi.org/simple' EXTRA_INDEX_URL "
+             "'https://mirror.example/simple'"},
+            {"SYSTEM UNINSTALL PYTHON PACKAGE 'requests'", "SYSTEM UNINSTALL PYTHON PACKAGE 'requests'"}})));
+/// proton: ends
+
 /// proton: starts. `SYSTEM PAUSE/RESUME/ABORT/RECOVER MATERIALIZED VIEW <db.mv> [PERMANENT]` test cases
 INSTANTIATE_TEST_SUITE_P(ParserSystemCommandQueryForMV, ParserTest,
                          ::testing::Combine(
@@ -497,4 +516,3 @@ INSTANTIATE_TEST_SUITE_P(
             {"EMIT TIMEOUT 30s", "TIMEOUT 30s"},
             {"EMIT STREAM TIMEOUT 30s", "STREAM TIMEOUT 30s"}})));
 /// proton: end
-
