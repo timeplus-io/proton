@@ -902,6 +902,9 @@ task:
     worker_threads: 0              # Task execution threads. 0 means determined by CPU cores.
     max_scheduled_tasks: 1024      # Maximum number of scheduled tasks. Task may not be scheduled when total number exceeds the limit.
 
+enable_javascript_udf: true        # If false, reject JavaScript UDF creation and execution.
+enable_python_udf: true            # If false, reject Python UDF creation and execution.
+
 settings:
     global:
         query_mode: streaming               # Default query mode. table or streaming

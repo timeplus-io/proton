@@ -50,6 +50,7 @@ namespace ErrorCodes
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 extern const int FUNCTION_ALREADY_EXISTS;
+extern const int FUNCTION_NOT_ALLOWED;
 extern const int CANNOT_CREATE_RECURSIVE_FUNCTION;
 extern const int CANNOT_DROP_FUNCTION;
 extern const int UNKNOWN_FUNCTION;
@@ -115,6 +116,32 @@ ASTPtr normalizeCreateFunctionQuery(const IAST & create_function_query)
     res.or_replace = false;
     FunctionNameNormalizer().visit(res.function_core.get());
     return ptr;
+}
+
+String getUDFSettingName(cluster::protocol::UDFType udf_type)
+{
+    switch (udf_type)
+    {
+        case cluster::protocol::UDFType::Javascript:
+            return "enable_javascript_udf";
+        case cluster::protocol::UDFType::Python:
+            return "enable_python_udf";
+        default:
+            return {};
+    }
+}
+
+void ensureUDFIsEnabled(cluster::protocol::UDFType udf_type, ContextPtr context)
+{
+    if (!context)
+        return;
+
+    auto setting_name = getUDFSettingName(udf_type);
+    if (setting_name.empty() || context->getConfigRef().getBool(setting_name, true))
+        return;
+
+    const char * udf_type_name = udf_type == cluster::protocol::UDFType::Javascript ? "JavaScript" : "Python";
+    throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} UDF creation is disabled by server config `{}`", udf_type_name, setting_name);
 }
 }
 
@@ -401,6 +428,13 @@ bool UserDefinedFunctionFactory::registerFunction(
     assert(config);
 
     assert(config->has("type"));
+    if (config->get("type") == "javascript")
+        ensureUDFCreationIsEnabled(cluster::protocol::UDFType::Javascript, context);
+#if USE_PYTHON_UDF
+    else if (config->get("type") == "python")
+        ensureUDFCreationIsEnabled(cluster::protocol::UDFType::Python, context);
+#endif
+
     if (config->get("type") == "javascript")
         validateJavaScriptFunction(config);
 #if USE_PYTHON_UDF

@@ -182,6 +182,9 @@
     <default />
   </quotas>
 
+  <enable_javascript_udf>true</enable_javascript_udf>
+  <enable_python_udf>true</enable_python_udf>
+
   <settings>
     <global>
       <query_mode>streaming</query_mode>

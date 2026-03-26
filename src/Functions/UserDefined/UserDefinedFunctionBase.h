@@ -95,7 +95,6 @@ public:
         return result_col_ptr;
     }
 
-protected:
     cluster::protocol::UserDefinedFunctionDescriptorPtr udf_desc;
     ContextPtr context;
 

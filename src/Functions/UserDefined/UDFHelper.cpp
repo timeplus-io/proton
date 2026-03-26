@@ -65,7 +65,6 @@ void validateUDFName(const String & func_name)
             ErrorCodes::UDF_INVALID_NAME, "UDF name can not end up with {}, because it is key word suffix", combinator->getName());
 }
 
-
 cluster::CreateUserDefinedFunctionRequestPtr createUserDefinedFunctionRequest(
     ContextPtr context,
     const std::string & name,
