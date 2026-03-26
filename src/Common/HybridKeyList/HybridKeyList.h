@@ -356,8 +356,14 @@ public:
     void clear()
     {
         if (!config.cleanup_on_disk_data)
+        {
             /// If we like to retain the data around, flush them to disk
             flush();
+        }
+        else
+        {
+            destroyPersistentPart();
+        }
 
         oldest_keys.clear();
 

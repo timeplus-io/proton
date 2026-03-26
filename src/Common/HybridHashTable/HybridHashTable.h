@@ -69,8 +69,8 @@ struct HybridHashTableConfig
         /// Please note when value_object_size is zero, std::malloc(0) still returns a valid address,
         /// we actually need this unique address for tracking etc purposes
         value_object_size = 0;
-        value_constructor = ([](void * /*data*/) {});
-        value_destructor = ([](void * /*data*/) {});
+        value_constructor = ([](void * /*data*/) { });
+        value_destructor = ([](void * /*data*/) { });
         value_serializer = ([](const void * /*data*/, WriteBuffer &) { return DB::ErrorCodes::OK; });
         value_deserializer = ([](void * /*data*/, ReadBuffer &) { return DB::ErrorCodes::OK; });
     }
@@ -318,10 +318,15 @@ public:
     void clear()
     {
         if (!config.base_conf.cleanup_on_disk_data)
+        {
             /// If we like to retain the data around, flush them to disk
             bulkSpill(recent_keys.size());
+        }
         else
+        {
             removeNHotKeyValues(recent_keys.size());
+            destroyPersistentPart();
+        }
 
         hot_key_values.clear();
         recent_keys.clear();
