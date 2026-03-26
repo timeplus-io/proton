@@ -42,6 +42,56 @@ JoinTransform::JoinTransform(
     bidirectional_hash_join = join->bidirectionalHashJoin();
 }
 
+/// For enrichment joins (non-bidirectional), the right-side keyed storage may have
+/// historical data that must be fully loaded into the hash table before any left-side
+/// data is processed. This method handles the backfill state machine entirely within
+/// prepare(), keeping work() unchanged.
+///
+/// When a right-side chunk is pulled, we inspect it for backfill markers:
+///   - HISTORICAL_DATA_START → enter Backfilling state
+///   - HISTORICAL_DATA_END   → transition to Done
+///   - Any other chunk while Pending → no backfill, transition to Done
+///   - Right port finished while Pending/Backfilling → transition to Done
+///
+/// While state != Done, the left input (index 0) is held: not requested and not dispatched.
+void JoinTransform::advanceBackfillState(const Chunk & right_chunk)
+{
+    switch (backfill_right_state)
+    {
+        case BackfillState::Pending:
+        {
+            if (right_chunk.isHistoricalDataStart())
+            {
+                backfill_right_state = BackfillState::Backfilling;
+                LOG_INFO(logger, "Right-side backfill started for enrichment join");
+            }
+            else
+            {
+                /// First right-side chunk is not a START marker - no backfill.
+                backfill_right_state = BackfillState::Done;
+                LOG_INFO(logger, "Right-side has no backfill for enrichment join");
+            }
+        }
+        break;
+
+        case BackfillState::Backfilling:
+        {
+            if (right_chunk.isHistoricalDataEnd())
+            {
+                backfill_right_state = BackfillState::Done;
+                LOG_INFO(logger, "Right-side backfill completed for enrichment join");
+            }
+            /// else: normal historical data chunk - let it through to work()/doJoin()
+        }
+        break;
+
+        case BackfillState::Done:
+        {
+            break;
+        }
+    }
+}
+
 IProcessor::Status JoinTransform::prepare()
 {
     auto & output = outputs.front();
@@ -68,9 +118,17 @@ IProcessor::Status JoinTransform::prepare()
     }
 
     Status status = Status::NeedData;
+    const bool can_consume_left = canConsumeLeftStream();
 
     for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
     {
+        /// Hold the left input (index 0) until right-side backfill is resolved.
+        if (!can_consume_left && i == 0)
+        {
+            ++i;
+            continue;
+        }
+
         if (input_port_with_data.input_chunk)
         {
             /// In case, this input port request checkpoint, so we need wait for other inputs
@@ -103,6 +161,11 @@ IProcessor::Status JoinTransform::prepare()
             if (input_port_with_data.input_port->hasData())
             {
                 input_port_with_data.input_chunk = input_port_with_data.input_port->pull(true);
+
+                /// Inspect right-side chunks for backfill markers before dispatching to work().
+                if (!can_consume_left && i == 1)
+                    advanceBackfillState(input_port_with_data.input_chunk);
+
                 status = Status::Ready;
             }
         }

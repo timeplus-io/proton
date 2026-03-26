@@ -47,10 +47,10 @@ private:
     void doJoin(Chunks chunks);
     void joinBidirectionally(Chunks chunks);
     void rangeJoinBidirectionally(Chunks chunks);
+    void advanceBackfillState(const Chunk & right_chunk);
 
     void onCancel() noexcept override;
 
-private:
     struct InputPortWithData
     {
         explicit InputPortWithData(InputPort * input_port_) : input_port(input_port_) { }
@@ -84,6 +84,30 @@ private:
     SERDE int64_t watermark = INVALID_WATERMARK;
 
     NO_SERDE Int64 last_log_ts = 0;
+
+    /// Right-side backfill state machine for enrichment joins.
+    /// For non-bidirectional joins, we must ensure the right-side hash table is fully
+    /// populated before processing any left-side data.
+    ///
+    /// States:
+    ///   Pending     — initial; hold left input, only pull right to determine if backfill exists
+    ///   Backfilling — START marker received; keep holding left until END marker
+    ///   Done        — backfill complete or confirmed absent; both sides run freely
+    ///
+    /// Transitions:
+    ///   Pending → Backfilling  : right input sends HISTORICAL_DATA_START marker
+    ///   Pending → Done         : right input sends data/heartbeat without START marker,
+    ///                            or right input has no data while left has data (no backfill)
+    ///   Backfilling → Done     : right input sends HISTORICAL_DATA_END marker
+    enum class BackfillState : uint8_t
+    {
+        Pending,
+        Backfilling,
+        Done,
+    };
+    NO_SERDE BackfillState backfill_right_state = BackfillState::Pending;
+
+    bool canConsumeLeftStream() const { return bidirectional_hash_join || backfill_right_state == BackfillState::Done; }
 };
 }
 }
