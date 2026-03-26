@@ -429,10 +429,10 @@ bool UserDefinedFunctionFactory::registerFunction(
 
     assert(config->has("type"));
     if (config->get("type") == "javascript")
-        ensureUDFCreationIsEnabled(cluster::protocol::UDFType::Javascript, context);
+        ensureUDFIsEnabled(cluster::protocol::UDFType::Javascript, context);
 #if USE_PYTHON_UDF
     else if (config->get("type") == "python")
-        ensureUDFCreationIsEnabled(cluster::protocol::UDFType::Python, context);
+        ensureUDFIsEnabled(cluster::protocol::UDFType::Python, context);
 #endif
 
     if (config->get("type") == "javascript")
