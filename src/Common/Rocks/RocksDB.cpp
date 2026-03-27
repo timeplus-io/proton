@@ -336,13 +336,19 @@ void RocksDBColumnFamilyHandler::destroy()
         rocks.reset();
     });
 
+    /// Lock the weak_ptr first to ensure the RocksDB is still alive before
+    /// accessing the raw db pointer. When ManyAggregatedData is destroyed,
+    /// the RocksDB shared_ptrs may be released before the variants that hold
+    /// column family handlers, leaving db as a dangling pointer.
+    auto rocks_locked = getRocksDB();
+    if (!rocks_locked || rocks_locked->isShutdown())
+        return;
+
     /// Does not destroy default column family
     if (cf_handle == db->DefaultColumnFamily())
         return;
 
-    auto rocks_locked = getRocksDB();
-    if (rocks_locked)
-        rocks_locked->destroy(cf_handle->GetName());
+    rocks_locked->destroy(cf_handle->GetName());
 }
 
 }
