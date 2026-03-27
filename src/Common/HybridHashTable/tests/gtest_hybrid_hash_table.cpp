@@ -2,6 +2,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Common/HybridHashTable/HybridHashTable.h>
+#include <Common/Rocks/RocksDB.h>
 #include <Common/Stopwatch.h>
 
 #include <gtest/gtest.h>
@@ -952,4 +953,110 @@ TEST(HybridHashTable, Flush)
     table->flush();
     EXPECT_EQ(metrics.spilled, 3); /// spill 2 changed key
     EXPECT_EQ(counts.k_ser_called, 5 + 2);
+}
+
+TEST(HybridHashTable, ClearRemovesSharedPersistentData)
+{
+    CalledCounts counts;
+    auto spill_dir = std::filesystem::absolute("tmp/gtest-hybrid-ht-clear").string();
+    std::filesystem::remove_all(spill_dir);
+    std::filesystem::create_directories(std::filesystem::path(spill_dir).parent_path());
+
+    auto value_ser = [&](const void * p, DB::WriteBuffer & wb) -> int {
+        ++counts.v_ser_called;
+        DB::writeBinary(*reinterpret_cast<const std::string *>(p), wb);
+        return DB::ErrorCodes::OK;
+    };
+
+    auto value_des = [&](void * p, DB::ReadBuffer & rb) -> int {
+        ++counts.v_des_called;
+        DB::readBinary(*reinterpret_cast<std::string *>(p), rb);
+        return DB::ErrorCodes::OK;
+    };
+
+    auto key_serializer = [&](const std::string & key, DB::WriteBuffer & wb) -> int {
+        ++counts.k_ser_called;
+        DB::writeBinary(key, wb);
+        return DB::ErrorCodes::OK;
+    };
+
+    auto key_deserializer = [&](std::string & key, DB::ReadBuffer & rb) -> int {
+        ++counts.k_des_called;
+        DB::readBinary(key, rb);
+        return DB::ErrorCodes::OK;
+    };
+
+    DB::HybridConfig rocks_config;
+    rocks_config.spill_dir_path = spill_dir;
+    rocks_config.cleanup_on_disk_data = true;
+    rocks_config.validate();
+
+    auto shared_rocks = DB::RocksDB::createOrLoadIfExists(
+        rocks_config.getRocksOptions(),
+        rocks_config.spill_dir_path,
+        rocks_config.ttl,
+        rocks_config.cleanup_on_disk_data,
+        getLogger("hybrid_unit"));
+
+    auto make_shared_table = [&]() {
+        DB::HybridHashTableConfig config{
+            .base_conf = {
+                .spill_dir_path = spill_dir,
+                .kv_options = "",
+                .max_hot_key_count = 1,
+                .cleanup_on_disk_data = true,
+                .cf_handle_id = "updates",
+                .rocks_cf_handler_getter = [shared_rocks](const DB::HybridConfig & rocks_sub_config) {
+                    return shared_rocks->getOrCreateColumnFamilyHandler(rocks_sub_config.cf_handle_id, rocks_sub_config.ttl);
+                },
+            },
+            .value_object_size = sizeof(std::string),
+            .align_value_object_size = alignof(std::string),
+            .value_constructor = [&](void * p) {
+                ++counts.v_ctor_called;
+                new (p) std::string;
+            },
+            .value_destructor = [&](void * p) {
+                ++counts.v_dtor_called;
+                reinterpret_cast<std::string *>(p)->~basic_string();
+            },
+            .value_serializer = value_ser,
+            .value_deserializer = value_des,
+        };
+
+        config.validate();
+
+        return DB::HybridHashTable<std::string>(config, key_serializer, key_deserializer, getLogger("hybrid_unit"));
+    };
+
+    {
+        auto table = make_shared_table();
+        auto result_a = table.emplaceKey("a", /*disable_spill=*/false);
+        ASSERT_FALSE(result_a.hasError());
+        *reinterpret_cast<std::string *>(result_a.getMutableMapped()) = "a";
+
+        auto result_b = table.emplaceKey("b", /*disable_spill=*/false);
+        ASSERT_FALSE(result_b.hasError());
+        *reinterpret_cast<std::string *>(result_b.getMutableMapped()) = "b";
+
+        EXPECT_GT(table.getMetrics().spilled, 0);
+        table.clear();
+
+        auto result_c = table.emplaceKey("c", /*disable_spill=*/false);
+        ASSERT_FALSE(result_c.hasError());
+        *reinterpret_cast<std::string *>(result_c.getMutableMapped()) = "c";
+
+        auto result_d = table.emplaceKey("d", /*disable_spill=*/false);
+        ASSERT_FALSE(result_d.hasError());
+        *reinterpret_cast<std::string *>(result_d.getMutableMapped()) = "d";
+
+        EXPECT_GT(table.getMetrics().spilled, 0);
+        EXPECT_FALSE(table.contains("a"));
+        EXPECT_FALSE(table.contains("b"));
+    }
+
+    auto recovered = make_shared_table();
+    EXPECT_FALSE(recovered.contains("a"));
+    EXPECT_FALSE(recovered.contains("b"));
+    EXPECT_EQ(recovered.approximateCount(), 0);
 }

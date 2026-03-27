@@ -1,7 +1,11 @@
+#include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Common/HybridKeyList/HybridKeyList.h>
+#include <Common/Rocks/RocksDB.h>
 
 #include <gtest/gtest.h>
+
+#include <filesystem>
 
 #include <ranges>
 
@@ -252,4 +256,76 @@ TEST(HybridKeyList, Ops)
             forEachPersistent(key_list, std::vector<std::string>{}, std::vector<int64_t>{});
         }
     }
+}
+
+TEST(HybridKeyList, ClearRemovesSharedPersistentData)
+{
+    auto spill_dir = std::filesystem::absolute("tmp/gtest-hybrid-kl-clear").string();
+    std::filesystem::remove_all(spill_dir);
+    std::filesystem::create_directories(std::filesystem::path(spill_dir).parent_path());
+
+    auto key_serializer = [](const std::string & k, DB::WriteBuffer & wb) {
+        DB::writeStringBinary(k, wb);
+        return DB::ErrorCodes::OK;
+    };
+
+    auto key_deserializer = [](std::string & k, DB::ReadBuffer & rb) {
+        DB::readStringBinary(k, rb);
+        return DB::ErrorCodes::OK;
+    };
+
+    DB::HybridConfig rocks_config;
+    rocks_config.spill_dir_path = spill_dir;
+    rocks_config.cleanup_on_disk_data = true;
+    rocks_config.validate();
+
+    auto shared_rocks = DB::RocksDB::createOrLoadIfExists(
+        rocks_config.getRocksOptions(),
+        rocks_config.spill_dir_path,
+        rocks_config.ttl,
+        rocks_config.cleanup_on_disk_data,
+        getLogger("hybrid_unit"));
+
+    auto make_list = [&]() {
+        DB::HybridConfig config;
+        config.spill_dir_path = spill_dir;
+        config.max_hot_key_count = 1;
+        config.cleanup_on_disk_data = true;
+        config.cf_handle_id = "updates";
+        config.rocks_cf_handler_getter = [shared_rocks](const DB::HybridConfig & sub_config) {
+            return shared_rocks->getOrCreateColumnFamilyHandler(sub_config.cf_handle_id, sub_config.ttl);
+        };
+        return DB::HybridKeyList<std::string>(
+            std::move(config), key_serializer, key_deserializer, getLogger("hybrid_unit"));
+    };
+
+    {
+        auto list = make_list();
+        auto [ts_a, err_a] = list.emplaceKey("key_a");
+        ASSERT_EQ(err_a, DB::ErrorCodes::OK);
+        auto [ts_b, err_b] = list.emplaceKey("key_b");
+        ASSERT_EQ(err_b, DB::ErrorCodes::OK);
+
+        /// key_b was spilled (max_hot_key_count=1)
+        ASSERT_GT(list.approximateCount(), 1u);
+        list.clear();
+
+        auto [ts_c, err_c] = list.emplaceKey("key_c");
+        ASSERT_EQ(err_c, DB::ErrorCodes::OK);
+        auto [ts_d, err_d] = list.emplaceKey("key_d");
+        ASSERT_EQ(err_d, DB::ErrorCodes::OK);
+
+        /// Stale key_a / key_b must not appear after clear()
+        std::vector<std::string> seen;
+        list.forEach([&](const std::string & k, int64_t) { seen.push_back(k); });
+        for (const auto & k : seen)
+        {
+            EXPECT_NE(k, "key_a");
+            EXPECT_NE(k, "key_b");
+        }
+    }
+
+    /// A freshly connected list on the same shared rocks must not see any stale data
+    auto recovered = make_list();
+    EXPECT_EQ(recovered.approximateCount(), 0u);
 }
