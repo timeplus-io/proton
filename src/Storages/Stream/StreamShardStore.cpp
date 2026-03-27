@@ -399,35 +399,11 @@ void StreamShardStore::readConcat(
 
     auto historical_plan = std::make_unique<QueryPlan>();
 
-    /// Bound the historical scan with an event-time predicate when seek_to
-    /// is time-based, so MergeTree can prune parts via MinMax index.
-    if (query_info.seek_to_info && query_info.seek_to_info->isTimeBased())
-    {
-        const auto & seek_points = query_info.seek_to_info->getSeekPoints();
-        if (!seek_points.empty())
-        {
-            auto min_it = std::min_element(seek_points.begin(), seek_points.end());
-            Int64 min_ts_ms = *min_it;
-
-            if (min_ts_ms > 0)
-            {
-                auto tp_time_col = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
-                auto ts_literal = std::make_shared<ASTLiteral>(Field(min_ts_ms));
-                auto ts_as_dt64 = makeASTFunction("fromUnixTimestamp64Milli", ts_literal);
-                auto predicate = makeASTFunction("greaterOrEquals", tp_time_col, ts_as_dt64);
-
-                if (query_info.additional_filter_ast)
-                    query_info.additional_filter_ast = makeASTFunction("and", query_info.additional_filter_ast, predicate);
-                else
-                    query_info.additional_filter_ast = predicate;
-
-                LOG_INFO(
-                    &Poco::Logger::get("StreamShardStore"),
-                    "Injected _tp_time >= {} event-time predicate for backfill",
-                    min_ts_ms);
-            }
-        }
-    }
+    /// Note: The event-time predicate for time-based seek_to is already injected
+    /// by InterpreterSelectQuery::handleSeekToSetting() via addEventTimePredicate()
+    /// before the analysis stage. No need to inject it here — additional_filter_ast
+    /// is consumed during analysis (before IStorage::read()), so setting it here
+    /// would be too late.
 
     auto max_sn = readHistorical(
         *historical_plan, column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);

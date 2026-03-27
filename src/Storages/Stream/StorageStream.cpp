@@ -1704,12 +1704,19 @@ std::optional<std::vector<Int64>> StorageStream::tryResolveTimeSeekViaStreamingS
 
             auto resolved_sns = shard->sequencesForTimestamps(seek_copy->getSeekPoints());
 
-            /// Verify resolved SNs are still in NativeLog range
+            /// Verify resolved SNs are still in NativeLog range.
+            /// IMPORTANT: Log::sequenceForTimestamp() returns log_start_sn for any
+            /// timestamp older than what the log holds (i.e., compacted data).
+            /// So resolved_sn == range.first is ambiguous — it could mean the data
+            /// starts exactly there, or it was compacted. We conservatively treat
+            /// resolved_sn <= range.first as "possibly compacted" and fall back to
+            /// the historical scan path (which is now bounded by the event-time
+            /// predicate from handleSeekToSetting()).
             bool all_available = true;
             for (UInt32 i = 0; i < shards && all_available; ++i)
             {
                 auto range = local_shards[i]->sequenceRange();
-                if (range.first < 0 || resolved_sns[i] < range.first)
+                if (range.first < 0 || resolved_sns[i] <= range.first)
                     all_available = false;
             }
 
