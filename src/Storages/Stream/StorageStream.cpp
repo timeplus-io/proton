@@ -1692,47 +1692,56 @@ std::optional<std::vector<Int64>> StorageStream::tryResolveTimeSeekViaStreamingS
     if (local_shards.empty())
         return std::nullopt;
 
+    /// Select first eligible (non-virtual, non-inmemory) shard upfront.
+    /// The loop previously returned on the first eligible shard anyway,
+    /// so iterating offered no additional behavior.
+    decltype(local_shards.front()) primary_shard;
+    for (const auto & shard : local_shards)
+    {
+        if (!shard->isVirtualReplica() && !shard->isInmemory())
+        {
+            primary_shard = shard;
+            break;
+        }
+    }
+    if (!primary_shard)
+        return std::nullopt;
+
     try
     {
-        for (const auto & shard : local_shards)
+        auto seek_copy = std::make_shared<SeekToInfo>(*seek_to_info);
+        seek_copy->replicateForShards(shards);
+
+        auto resolved_sns = primary_shard->sequencesForTimestamps(seek_copy->getSeekPoints());
+
+        /// Verify resolved SNs are still in NativeLog range.
+        /// IMPORTANT: Log::sequenceForTimestamp() returns log_start_sn for any
+        /// timestamp older than what the log holds (i.e., compacted data).
+        /// So resolved_sn == range.first is ambiguous — it could mean the data
+        /// starts exactly there, or it was compacted. We conservatively treat
+        /// resolved_sn <= range.first as "possibly compacted" and fall back to
+        /// the historical scan path (which is now bounded by the event-time
+        /// predicate from handleSeekToSetting()).
+        bool all_available = true;
+        for (UInt32 i = 0; i < shards && all_available; ++i)
         {
-            if (shard->isVirtualReplica() || shard->isInmemory())
-                continue;
-
-            auto seek_copy = std::make_shared<SeekToInfo>(*seek_to_info);
-            seek_copy->replicateForShards(shards);
-
-            auto resolved_sns = shard->sequencesForTimestamps(seek_copy->getSeekPoints());
-
-            /// Verify resolved SNs are still in NativeLog range.
-            /// IMPORTANT: Log::sequenceForTimestamp() returns log_start_sn for any
-            /// timestamp older than what the log holds (i.e., compacted data).
-            /// So resolved_sn == range.first is ambiguous — it could mean the data
-            /// starts exactly there, or it was compacted. We conservatively treat
-            /// resolved_sn <= range.first as "possibly compacted" and fall back to
-            /// the historical scan path (which is now bounded by the event-time
-            /// predicate from handleSeekToSetting()).
-            bool all_available = true;
-            for (UInt32 i = 0; i < shards && all_available; ++i)
-            {
-                auto range = local_shards[i]->sequenceRange();
-                if (range.first < 0 || resolved_sns[i] <= range.first)
-                    all_available = false;
-            }
-
-            if (all_available)
-            {
-                LOG_INFO(log, "Time-based seek resolved via streaming store");
-                return resolved_sns;
-            }
-
-            LOG_DEBUG(log, "Seek data partially compacted, falling back to historical");
-            return std::nullopt;
+            auto range = local_shards[i]->sequenceRange();
+            if (range.first < 0 || resolved_sns[i] <= range.first)
+                all_available = false;
         }
+
+        if (all_available)
+        {
+            LOG_DEBUG(log, "Time-based seek resolved via streaming store for {}", getStorageID().getNameForLogs());
+            return resolved_sns;
+        }
+
+        LOG_DEBUG(log, "Seek data partially compacted for {}, falling back to historical", getStorageID().getNameForLogs());
+        return std::nullopt;
     }
     catch (...)
     {
-        LOG_DEBUG(log, "Failed to resolve seek via streaming store");
+        LOG_DEBUG(log, "Failed to resolve seek via streaming store for {}", getStorageID().getNameForLogs());
     }
 
     return std::nullopt;

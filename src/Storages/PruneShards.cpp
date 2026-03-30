@@ -272,6 +272,13 @@ QueryMode getQueryMode(ConstStoragePtr storage, const SelectQueryInfo & query_in
                     }
                 }
             }
+            /// If we already resolved this seek in a prior call (type was mutated to
+            /// SEQUENCE_NUMBER), short-circuit to Streaming to avoid falling through
+            /// to StreamingConcat on re-entrant calls from getShardsToRead().
+            else if (query_info.seek_to_info->type == SeekToType::SEQUENCE_NUMBER)
+            {
+                return QueryMode::Streaming;
+            }
 
             /// By default, we will seek to earliest for backfill concat
             if (query_info.seek_to_info->getSeekTo().empty())

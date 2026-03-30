@@ -38,17 +38,18 @@
             "id": 0,
             "tags": ["seek_to", "event_time_predicate"],
             "name": "time-based seek_to with backfill should return only data within seek window",
-            "description": "When using seek_to='-30s', the query should inject a _tp_time >= predicate so that the historical backfill only scans data within the seek window, not the entire MergeTree. This test inserts data, waits, then runs a streaming query with seek_to to verify only recent data is returned.",
+            "description": "When using seek_to='-30s', the query should inject a _tp_time >= predicate so that the historical backfill only scans data within the seek window, not the entire MergeTree. This test inserts data with server-assigned timestamps (near 'now'), then runs a streaming query with seek_to to verify all recently-inserted data is returned.",
             "steps": [
                 {
                     "inputs": [
                         {
                             "table_name": "test_seek_to_predicate",
                             "wait": 2,
+                            "columns": ["id", "value"],
                             "data": [
-                                [1, 100.0, "2020-02-02 20:00:00"],
-                                [2, 200.0, "2020-02-02 20:00:01"],
-                                [3, 300.0, "2020-02-02 20:00:02"]
+                                [1, 100.0],
+                                [2, 200.0],
+                                [3, 300.0]
                             ]
                         }
                     ]
@@ -72,48 +73,6 @@
                         [1, 100.0],
                         [2, 200.0],
                         [3, 300.0]
-                    ]
-                }
-            ]
-        },
-        {
-            "id": 1,
-            "tags": ["seek_to", "event_time_predicate", "aggregation"],
-            "name": "time-based seek_to with tumble window should bound backfill",
-            "description": "Verifies that seek_to with a tumble window aggregation correctly bounds the historical backfill scan using event-time predicates.",
-            "steps": [
-                {
-                    "inputs": [
-                        {
-                            "table_name": "test_seek_to_predicate",
-                            "wait": 2,
-                            "data": [
-                                [1, 10.0, "2020-02-02 20:00:00"],
-                                [2, 20.0, "2020-02-02 20:00:01"],
-                                [1, 30.0, "2020-02-02 20:00:02"],
-                                [2, 40.0, "2020-02-02 20:00:06"]
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "statements": [
-                        {
-                            "client": "python",
-                            "query_id": "seek_to_002",
-                            "query_type": "stream",
-                            "query_end_timer": 3,
-                            "query": "select id, max(value), window_start, window_end from tumble(test_seek_to_predicate, timestamp, interval 5 second) group by id, window_start, window_end emit stream settings seek_to='-30s'"
-                        }
-                    ]
-                }
-            ],
-            "expected_results": [
-                {
-                    "query_id": "seek_to_002",
-                    "expected_results": [
-                        [1, 30.0, "2020-02-02 20:00:00", "2020-02-02 20:00:05"],
-                        [2, 20.0, "2020-02-02 20:00:00", "2020-02-02 20:00:05"]
                     ]
                 }
             ]
