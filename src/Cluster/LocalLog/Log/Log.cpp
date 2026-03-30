@@ -778,15 +778,13 @@ std::optional<uint64_t> Log::latestLeaderEpoch() const
     {
         /// Since we commit leader epoch index first and then commit the append,
         /// it is possible a larger epoch / sn in index, which is larger than
-        /// the epoch / sn of the log end. If this is the case, try previous epoch
-        /// which is guaranteed to have the same epoch as the log end
+        /// the epoch / sn of the log end. If this is the case, resolve the
+        /// latest indexed epoch for the last durable log sequence.
         auto next_sn = nextLogSequence();
         if (next_sn > res.result->sn)
             return res.result->epoch;
 
-        /// sn in leader epoch sequence index is greater than log end sn,,
-        /// try prev leader epoch sequence
-        res = epoch_sn_index->previousLeaderEpochSequence();
+        res = epoch_sn_index->leaderEpochSequenceFor(next_sn - 1);
         if (!res.hasError() && res.result)
         {
             chassert(res.result->sn < next_sn);
