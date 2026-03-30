@@ -1,0 +1,67 @@
+---
+name: cpp-coding
+description: Write or review Timeplus/Proton C++20 code covering naming conventions, Proton fences, clang-format, IProcessor patterns, and checkpointing. Make sure to use this skill for any C++ code changes, additions, or reviews in this codebase, including small fixes, new functions, refactoring, or style questions, even if the user doesn't explicitly mention coding conventions.
+---
+
+# C++ Coding
+
+## Language
+
+C++20. Prefer standard library over custom implementations when appropriate.
+
+## Naming conventions
+
+| Element | Style | Example |
+|---------|-------|---------|
+| Functions | `lowerCamelCase` | `processStreamData()`, `handleWindowClose()` |
+| Variables | `lowercase_with_underscores` | `event_count`, `window_start` |
+| Classes | `PascalCase` | `StorageStream`, `AggregatedDataVariants` |
+| Constants | `PascalCase` or `UPPER_CASE` | Per existing codebase convention |
+| Namespaces | `PascalCase` | `DB::Streaming` |
+
+## Proton fences
+
+```cpp
+/// proton: starts
+if (isStreamingQuery()) { handleStreamingPath(); }
+/// proton: ends
+```
+- [ ] Use ONLY in ClickHouse-inherited code (upstream-synced files)
+- [ ] NEVER fence in `src/Storages/Stream/` or `namespace DB::Streaming`
+- [ ] NEVER nest fences
+
+## IProcessor pattern (streaming transforms)
+
+All streaming transforms in `src/Processors/Transforms/Streaming/` follow:
+
+```cpp
+class MyTransform : public IProcessor {
+    Status prepare() override;  // O(1), non-blocking, check readiness
+    void work() override;       // Do actual processing
+};
+```
+
+Stateful processors MUST also implement:
+- [ ] `hasState()` → return true
+- [ ] `checkpoint(CheckpointContextPtr)` → serialize state
+- [ ] `recover(CheckpointContextPtr)` → restore from checkpoint
+
+## Formatting
+
+Only formats changed code blocks (not entire files). Uses `.clang-format` config at repo root.
+The configured brace style is Allman-like: opening braces normally go on a new line.
+
+```bash
+git clang-format              # format unstaged changes in-place
+git clang-format --staged     # format staged changes in-place
+git clang-format --diff       # dry-run: show what would change
+git clang-format <commit>     # format changes since <commit>
+```
+
+## Comments
+
+Use `///`. Explain **why**, not what:
+```cpp
+/// Use 10 seconds to allow late events
+watermark_delay = 10;
+```

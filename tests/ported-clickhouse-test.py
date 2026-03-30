@@ -149,52 +149,6 @@ class Terminated(KeyboardInterrupt):
 def signal_handler(sig, frame):
     raise Terminated(f'Terminated with {sig} signal')
 
-def _list_process_group_member_pids(current_pid):
-    pgid = os.getpgid(current_pid)
-    output = subprocess.check_output(['ps', '-axo', 'pid=,pgid='], text=True)
-
-    pids = []
-    for line in output.splitlines():
-        parts = line.split()
-        if len(parts) != 2:
-            continue
-
-        pid, process_group = map(int, parts)
-        if process_group == pgid and pid != current_pid:
-            pids.append(pid)
-
-    return pids
-
-
-def _terminate_process_group_members():
-    current_pid = os.getpid()
-    if os.getpgrp() != current_pid:
-        return
-
-    try:
-        member_pids = _list_process_group_member_pids(current_pid)
-    except (OSError, subprocess.CalledProcessError, ValueError) as err:
-        if threading.current_thread() is not threading.main_thread():
-            print(f"WARNING: cannot enumerate process-group children from worker thread: {err}")
-            return
-
-        previous_sigterm_handler = signal.getsignal(signal.SIGTERM)
-        try:
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
-            os.killpg(os.getpgid(current_pid), signal.SIGTERM)
-        finally:
-            signal.signal(signal.SIGTERM, previous_sigterm_handler)
-        return
-
-    for pid in member_pids:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            continue
-        except OSError as err:
-            print(f"WARNING: cannot terminate pid {pid}: {err}")
-
-
 def stop_tests():
     global stop_tests_triggered_lock
     global stop_tests_triggered
@@ -213,10 +167,18 @@ def stop_tests():
             # variable.
             restarted_tests = [*restarted_tests]
 
-            # When stop_tests() runs from a ThreadPoolExecutor worker on macOS,
-            # signal.signal() is illegal there. Terminate sibling processes
-            # directly and only fall back to killpg() from the main thread.
-            _terminate_process_group_members()
+            # send signal to all processes in group to avoid hung check triggering
+            # (to avoid terminating clickhouse-test itself, the signal should be ignored)
+            # Only use killpg if we are the process group leader (i.e., new process group was created)
+            try:
+                if os.getpgrp() == os.getpid():
+                    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                    os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
+                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            except (OSError, ValueError):
+                # Ignore errors if process group operations fail or signal
+                # is called from a non-main thread (ThreadPoolExecutor workers)
+                pass
 
 
 def get_db_engine(args, database_name):
@@ -1220,7 +1182,8 @@ def do_run_tests(jobs, test_suite: TestSuite, parallel):
             # fork() under high concurrency hits EAGAIN (errno 35). Use threads instead:
             # workers only spawn subprocesses (IO-bound), so GIL is not a bottleneck.
             with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
-                futures = [executor.submit(run_tests_array, p) for p in parallel_tests_array]
+                for p in parallel_tests_array:
+                    executor.submit(run_tests_array, p)
 
                 for suit in test_suite.parallel_tests:
                     queue.put(suit, timeout=args.timeout * 1.1)
@@ -1229,8 +1192,6 @@ def do_run_tests(jobs, test_suite: TestSuite, parallel):
                     queue.put(None, timeout=args.timeout * 1.1)
 
                 queue.close()
-                for future in futures:
-                    future.result()
             # ThreadPoolExecutor.__exit__ waits for all workers (equivalent to pool.join())
         else:
             with closing(multiprocessing.Pool(processes=jobs)) as pool:

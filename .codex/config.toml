@@ -1,2 +1,3 @@
 # Project-level Codex config.
 # Leaving this file present ensures Codex picks up .codex/skills in this repo.
+# Repo-local custom subagents live under .codex/agents.
