@@ -61,6 +61,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       upjob: build_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
+      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -136,6 +137,7 @@ jobs:
       timeout: 60
       upjob: unit_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
+      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
@@ -180,6 +182,7 @@ jobs:
       timeout: 80 # cover python-udf test
       upjob: smoke_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
+      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         # run smoke test
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
@@ -230,6 +233,7 @@ jobs:
       timeout: 60
       upjob: stateless_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
+      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         mkdir $GITHUB_WORKSPACE/output
@@ -277,6 +281,7 @@ jobs:
       timeout: 40
       upjob: stateful_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
+      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         mkdir $GITHUB_WORKSPACE/output
@@ -339,7 +344,7 @@ jobs:
     steps:
       - name: delete testing image
         run: |
-          echo "try to delete image with tag testing-$SANITIZER-$ARCH-$IMAGE_SHA"
+          echo "try to delete image with tag testing-$SANITIZER-$ARCH-$GITHUB_SHA"
 
           curl -L \
           -X POST \
@@ -347,9 +352,9 @@ jobs:
           -H "Authorization: Bearer $GH_PERSONAL_ACCESS_TOKEN" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_delete_image.yml/dispatches \
-          -d "{\"ref\":\"develop\",\"inputs\":{\"tag\":\"testing-$SANITIZER-$ARCH-$IMAGE_SHA\,\"repo\":\"timeplus/proton_testing\"}}"
+          -d "{\"ref\":\"develop\",\"inputs\":{\"tag\":\"testing-$SANITIZER-$ARCH-$GITHUB_SHA\,\"repo\":\"timeplus/proton_testing\"}}"
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           SANITIZER: "address"
           ARCH: ${{ vars.X64_ARCH }}
-          IMAGE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || github.sha }}
+          GITHUB_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || github.sha }}
