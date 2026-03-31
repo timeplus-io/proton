@@ -77,10 +77,6 @@ on:
         required: false
         type: string
         default: ''
-      head_sha:
-        required: false
-        type: string
-        default: ''
       generate_release_notes:
         required: false
         type: boolean
@@ -206,9 +202,6 @@ jobs:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: ${{ inputs.submodules }}
           ref: ${{ inputs.ref }}
-      - name: Override GITHUB_SHA for trusted fork dispatch
-        if: ${{ inputs.head_sha != '' }}
-        run: echo "GITHUB_SHA=${{ inputs.head_sha }}" >> $GITHUB_ENV
       - name: Checkout quark
         uses: actions/checkout@v5.0.1
         with:

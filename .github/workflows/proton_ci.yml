@@ -61,9 +61,12 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       upjob: build_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
-      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE
+
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          export GITHUB_SHA="${{ inputs.head_sha }}"
+        fi
 
         # git config
         git config user.name "proton-robot"
@@ -137,9 +140,13 @@ jobs:
       timeout: 60
       upjob: unit_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
-      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
+
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          export GITHUB_SHA="${{ inputs.head_sha }}"
+        fi
+
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
         # make virtualenv
@@ -182,8 +189,11 @@ jobs:
       timeout: 80 # cover python-udf test
       upjob: smoke_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
-      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          export GITHUB_SHA="${{ inputs.head_sha }}"
+        fi
+
         # run smoke test
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
         export PROTON_REPO=timeplus/proton_testing
@@ -233,10 +243,13 @@ jobs:
       timeout: 60
       upjob: stateless_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
-      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         mkdir $GITHUB_WORKSPACE/output
+
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          export GITHUB_SHA="${{ inputs.head_sha }}"
+        fi
 
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
@@ -281,10 +294,13 @@ jobs:
       timeout: 40
       upjob: stateful_test_address_x64
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || '' }}
-      head_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         mkdir $GITHUB_WORKSPACE/output
+
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          export GITHUB_SHA="${{ inputs.head_sha }}"
+        fi
 
         # make virtualenv
         ln -s /usr/bin/python3 /usr/bin/python
