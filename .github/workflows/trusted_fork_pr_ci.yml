@@ -70,9 +70,8 @@ jobs:
             --arg ref "$base_ref" \
             --arg pr_ref "$pr_ref" \
             --arg head_sha "$head_sha" \
-            --arg source_pr_number "$PR_NUMBER" \
             --arg pr_labels_csv "$labels_csv" \
-            '{ref: $ref, inputs: {ref: $pr_ref, head_sha: $head_sha, source_pr_number: $source_pr_number, pr_labels_csv: $pr_labels_csv}}' > "$dispatch_file"
+            '{ref: $ref, inputs: {ref: $pr_ref, head_sha: $head_sha, pr_labels_csv: $pr_labels_csv}}' > "$dispatch_file"
 
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/proton_ci.yml/dispatches" --input "$dispatch_file" >/dev/null
 

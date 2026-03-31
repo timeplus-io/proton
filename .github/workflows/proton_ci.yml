@@ -28,11 +28,6 @@ on: # yamllint disable-line rule:truthy
         description: 'Commit SHA used for image tags and cleanup'
         required: true
         type: string
-      source_pr_number:
-        description: 'Original fork pull request number for result comments'
-        required: false
-        default: ''
-        type: string
       pr_labels_csv:
         description: 'Fork PR labels joined by commas'
         required: false
@@ -409,85 +404,3 @@ jobs:
           SANITIZER: "address"
           ARCH: ${{ vars.X64_ARCH }}
           GITHUB_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || github.sha }}
-  CommentTrustedForkResult:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_pr_number != '' && always() }}
-    needs:
-      - build_address_x64
-      - unit_test_address_x64
-      - smoke_test_address_x64
-      - stateless_test_address_x64
-      - stateful_test_address_x64
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update source PR comment with trusted CI result
-        env:
-          GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SOURCE_PR_NUMBER: ${{ inputs.source_pr_number }}
-          EXPECTED_SHA: ${{ inputs.head_sha }}
-          SOURCE_REF: ${{ inputs.ref }}
-          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BUILD_RESULT: ${{ needs.build_address_x64.result }}
-          UNIT_RESULT: ${{ needs.unit_test_address_x64.result }}
-          SMOKE_RESULT: ${{ needs.smoke_test_address_x64.result }}
-          STATELESS_RESULT: ${{ needs.stateless_test_address_x64.result }}
-          STATEFUL_RESULT: ${{ needs.stateful_test_address_x64.result }}
-        run: |
-          state=success
-          description="Trusted fork ProtonCI passed"
-
-          for job_result in \
-            "build_address_x64:$BUILD_RESULT" \
-            "unit_test_address_x64:$UNIT_RESULT" \
-            "smoke_test_address_x64:$SMOKE_RESULT" \
-            "stateless_test_address_x64:$STATELESS_RESULT" \
-            "stateful_test_address_x64:$STATEFUL_RESULT"; do
-            job_name="${job_result%%:*}"
-            result="${job_result#*:}"
-
-            case "$result" in
-              success)
-                ;;
-              failure)
-                state=failure
-                description="Trusted fork ProtonCI failed at ${job_name}"
-                break
-                ;;
-              cancelled)
-                state=error
-                description="Trusted fork ProtonCI was cancelled at ${job_name}"
-                break
-                ;;
-              skipped)
-                state=error
-                description="Trusted fork ProtonCI was incomplete because ${job_name} was skipped"
-                break
-                ;;
-              *)
-                state=error
-                description="Trusted fork ProtonCI ended in ${result} at ${job_name}"
-                break
-                ;;
-            esac
-          done
-
-          comment_marker="<!-- trusted-fork-pr-ci -->"
-          viewer_login="$(gh api user --jq '.login')"
-          comment_body="$(printf '%s\n' \
-            "${comment_marker}" \
-            "" \
-            "Trusted fork CI finished for source PR #${SOURCE_PR_NUMBER}" \
-            "" \
-            "- Result: \`${state}\`" \
-            "- Summary: ${description}" \
-            "- ProtonCI run: ${TARGET_URL}" \
-            "- Checked-out ref: \`${SOURCE_REF}\`" \
-            "- Expected SHA: \`${EXPECTED_SHA}\`")"
-
-          existing_comment_json="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${SOURCE_PR_NUMBER}/comments" --paginate | jq -c --arg marker "$comment_marker" --arg viewer "$viewer_login" 'map(select(.user.login == $viewer and (.body | contains($marker)))) | last')"
-
-          if [[ -n "$existing_comment_json" && "$existing_comment_json" != "null" ]]; then
-            comment_id="$(jq -r '.id' <<<"$existing_comment_json")"
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$comment_body" >/dev/null
-          else
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${SOURCE_PR_NUMBER}/comments" -f body="$comment_body" >/dev/null
-          fi
