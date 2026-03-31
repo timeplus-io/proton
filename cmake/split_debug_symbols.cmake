@@ -40,6 +40,43 @@ macro(proton_split_debug_symbols)
 endmacro()
 
 
+# Same as proton_split_debug_symbols, but does not add install() rules.
+macro(proton_split_debug_symbols_without_install)
+    set(oneValueArgs TARGET DESTINATION_DIR BINARY_PATH)
+
+    cmake_parse_arguments(STRIP "" "${oneValueArgs}" "" ${ARGN})
+
+    if (NOT DEFINED STRIP_TARGET)
+        message(FATAL_ERROR "A target name must be provided for stripping binary")
+    endif()
+
+    if (NOT DEFINED STRIP_BINARY_PATH)
+        message(FATAL_ERROR "A binary path name must be provided for stripping binary")
+    endif()
+
+    if (NOT DEFINED STRIP_DESTINATION_DIR)
+        message(FATAL_ERROR "Destination directory for stripped binary must be provided")
+    endif()
+
+    if(APPLE)
+        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+    else()
+        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note --keep-section=.proton.hash "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+    endif()
+
+    add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
+        COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
+        COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
+        COMMAND cp "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+        COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+        COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+        COMMAND ${STRIP_COMMAND}
+        COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+        COMMENT "Stripping proton binary (no install)" VERBATIM
+    )
+endmacro()
+
+
 macro(proton_make_empty_debug_info_for_nfpm)
     set(oneValueArgs TARGET DESTINATION_DIR)
     cmake_parse_arguments(EMPTY_DEBUG "" "${oneValueArgs}" "" ${ARGN})

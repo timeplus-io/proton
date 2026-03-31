@@ -591,13 +591,18 @@ TEST_F(LogTestFixture, LatestLeaderEpochIgnoresMultiplePendingEpochIndexEntries)
     {
         cluster::nlog::EpochSequenceIndex index(log_dir, 8 * 1024 * 1024, /*preallocate_=*/true, getLogger("leader_epoch"));
 
-        auto index_result
-            = index.maybeIndexEpochStartSequence({cluster::Constants::LogStartEpoch + 1, cluster::Constants::LogStartSN + 1}, true);
+        /// EpochSequence's compatibility ctor folds epoch to 1; assign fields
+        /// directly here to model persisted multi-epoch pending index entries.
+        cluster::EpochSequence pending_epoch_sn{};
+        pending_epoch_sn.epoch = cluster::Constants::LogStartEpoch + 1;
+        pending_epoch_sn.sn = cluster::Constants::LogStartSN + 1;
+
+        auto index_result = index.maybeIndexEpochStartSequence(pending_epoch_sn, true);
         ASSERT_FALSE(index_result.hasError());
         ASSERT_TRUE(index_result.result);
 
-        index_result
-            = index.maybeIndexEpochStartSequence({cluster::Constants::LogStartEpoch + 2, cluster::Constants::LogStartSN + 1}, true);
+        pending_epoch_sn.epoch = cluster::Constants::LogStartEpoch + 2;
+        index_result = index.maybeIndexEpochStartSequence(pending_epoch_sn, true);
         ASSERT_FALSE(index_result.hasError());
         ASSERT_TRUE(index_result.result);
     }

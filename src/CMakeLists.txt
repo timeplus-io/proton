@@ -22,6 +22,7 @@ configure_file (Common/config_version.cpp.in ${CONFIG_INCLUDE_PATH}/config_versi
 
 # proton: starts
 configure_file (Common/testing_config.h.in ${CONFIG_INCLUDE_PATH}/testing_config.h)
+include(${proton_SOURCE_DIR}/cmake/split_debug_symbols.cmake)
 # proton: ends
 
 if (USE_DEBUG_HELPERS)
@@ -565,6 +566,12 @@ if (ENABLE_TESTS)
     endif()
 
     proton_add_executable(unit_tests_dbms ${dbms_gtest_sources})
+
+    # proton : starts
+    if (SPLIT_DEBUG_SYMBOLS)
+        proton_split_debug_symbols_without_install(TARGET unit_tests_dbms DESTINATION_DIR ${CMAKE_CURRENT_BINARY_DIR}/${SPLITTED_DEBUG_SYMBOLS_DIR} BINARY_PATH unit_tests_dbms)
+    endif()
+    # proton : ends
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
