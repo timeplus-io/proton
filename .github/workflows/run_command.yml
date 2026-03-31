@@ -200,14 +200,19 @@ jobs:
         uses: actions/checkout@v5.0.1
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          persist-credentials: false
           submodules: ${{ inputs.submodules }}
           ref: ${{ inputs.ref }}
+      - name: Align GITHUB_SHA with checked-out HEAD
+        if: ${{ inputs.ref != '' }}
+        run: echo "GITHUB_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
       - name: Checkout quark
         uses: actions/checkout@v5.0.1
         with:
           repository: timeplus-io/quark
           path: quark
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          persist-credentials: false
       - name: Prepare directory
         run: mkdir /test_output /artifacts
 

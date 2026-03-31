@@ -1,0 +1,46 @@
+name: trusted_fork_pr_ci
+run-name: trusted_fork_pr_ci [PR #${{ inputs.pr_number }}]
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'External pull request number to mirror into a trusted internal branch'
+        required: true
+        type: string
+
+jobs:
+  mirror_external_pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      PR_NUMBER: ${{ inputs.pr_number }}
+    steps:
+      - name: Validate pull request number
+        run: |
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::pr_number must be numeric"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v5.0.1
+        with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          fetch-depth: 0
+
+      - name: Mirror fork PR into trusted internal branch
+        id: mirror
+        run: .github/scripts/mirror_fork_pr.sh
+
+      - name: Summarize mirror result
+        run: |
+          {
+            echo "## Trusted fork PR CI mirror"
+            echo
+            echo "- Original PR: #$PR_NUMBER"
+            echo "- Mirror branch: \`${{ steps.mirror.outputs.mirror_branch }}\`"
+            echo "- ProtonCI workflow: ${{ steps.mirror.outputs.workflow_url }}"
+            echo "- Mirrored commit: \`${{ steps.mirror.outputs.mirrored_sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
