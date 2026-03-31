@@ -21,23 +21,18 @@ on: # yamllint disable-line rule:truthy
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Trusted mirror branch to test'
+        description: 'Git ref to test'
         required: true
         type: string
-      source_pr_number:
-        description: 'Original external pull request number'
+      head_sha:
+        description: 'Commit SHA used for image tags and cleanup'
         required: true
         type: string
       pr_labels_csv:
-        description: 'Original PR labels joined by commas'
+        description: 'Fork PR labels joined by commas'
         required: false
         default: ''
         type: string
-      update_source_pr_comment:
-        description: 'Update original fork PR comment with trusted CI result'
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
@@ -333,7 +328,7 @@ jobs:
     - name: Skip external fork pull request
       run: |
         echo "Skipping secret-backed ProtonCI jobs for an external fork pull request."
-        echo "Run the trusted_fork_pr_ci workflow after review to mirror this PR into an internal branch and dispatch ProtonCI."
+        echo "Run the trusted_fork_pr_ci workflow after review to dispatch ProtonCI against refs/pull/<pr>/head."
   clean_passed_test_image:
     needs:
       - unit_test_address_x64
@@ -344,7 +339,7 @@ jobs:
     steps:
       - name: delete testing image
         run: |
-          echo "try to delete image with tag testing-$SANITIZER-$ARCH-$GITHUB_SHA"
+          echo "try to delete image with tag testing-$SANITIZER-$ARCH-$IMAGE_SHA"
 
           curl -L \
           -X POST \
@@ -352,92 +347,9 @@ jobs:
           -H "Authorization: Bearer $GH_PERSONAL_ACCESS_TOKEN" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_delete_image.yml/dispatches \
-          -d "{\"ref\":\"develop\",\"inputs\":{\"tag\":\"testing-$SANITIZER-$ARCH-$GITHUB_SHA\,\"repo\":\"timeplus/proton_testing\"}}"
+          -d "{\"ref\":\"develop\",\"inputs\":{\"tag\":\"testing-$SANITIZER-$ARCH-$IMAGE_SHA\,\"repo\":\"timeplus/proton_testing\"}}"
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           SANITIZER: "address"
           ARCH: ${{ vars.X64_ARCH }}
-  CommentTrustedMirrorResult:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_source_pr_comment && inputs.source_pr_number != '' && always() }}
-    needs:
-      - build_address_x64
-      - unit_test_address_x64
-      - smoke_test_address_x64
-      - stateless_test_address_x64
-      - stateful_test_address_x64
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update source PR comment with trusted CI result
-        env:
-          GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-          SOURCE_PR_NUMBER: ${{ inputs.source_pr_number }}
-          MIRROR_REF: ${{ inputs.ref }}
-          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          BUILD_RESULT: ${{ needs.build_address_x64.result }}
-          UNIT_RESULT: ${{ needs.unit_test_address_x64.result }}
-          SMOKE_RESULT: ${{ needs.smoke_test_address_x64.result }}
-          STATELESS_RESULT: ${{ needs.stateless_test_address_x64.result }}
-          STATEFUL_RESULT: ${{ needs.stateful_test_address_x64.result }}
-        run: |
-          state=success
-          description="Trusted mirror ProtonCI passed"
-
-          for job_result in \
-            "build_address_x64:$BUILD_RESULT" \
-            "unit_test_address_x64:$UNIT_RESULT" \
-            "smoke_test_address_x64:$SMOKE_RESULT" \
-            "stateless_test_address_x64:$STATELESS_RESULT" \
-            "stateful_test_address_x64:$STATEFUL_RESULT"; do
-            job_name="${job_result%%:*}"
-            result="${job_result#*:}"
-
-            case "$result" in
-              success)
-                ;;
-              failure)
-                state=failure
-                description="Trusted mirror ProtonCI failed at ${job_name}"
-                break
-                ;;
-              cancelled)
-                state=error
-                description="Trusted mirror ProtonCI was cancelled at ${job_name}"
-                break
-                ;;
-              skipped)
-                state=error
-                description="Trusted mirror ProtonCI was incomplete because ${job_name} was skipped"
-                break
-                ;;
-              *)
-                state=error
-                description="Trusted mirror ProtonCI ended in ${result} at ${job_name}"
-                break
-                ;;
-            esac
-          done
-
-          comment_marker="<!-- trusted-fork-pr-ci -->"
-          viewer_login="$(gh api user --jq '.login')"
-          comment_file="$(mktemp)"
-          trap 'rm -f "$comment_file"' EXIT
-          {
-            echo "${comment_marker}"
-            echo
-            echo "Trusted CI mirror finished for source PR #${SOURCE_PR_NUMBER}"
-            echo
-            echo "- Result: \`${state}\`"
-            echo "- Summary: ${description}"
-            echo "- ProtonCI run: ${TARGET_URL}"
-            echo "- Mirrored branch: \`${MIRROR_REF}\`"
-          } > "$comment_file"
-          comment_body="$(<"$comment_file")"
-
-          existing_comment_json="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${SOURCE_PR_NUMBER}/comments" --paginate | jq -c --arg marker "$comment_marker" --arg viewer "$viewer_login" 'map(select(.user.login == $viewer and (.body | contains($marker)))) | last')"
-
-          if [[ -n "$existing_comment_json" && "$existing_comment_json" != "null" ]]; then
-            comment_id="$(jq -r '.id' <<<"$existing_comment_json")"
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$comment_body" >/dev/null
-          else
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${SOURCE_PR_NUMBER}/comments" -f body="$comment_body" >/dev/null
-          fi
+          IMAGE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || github.sha }}
