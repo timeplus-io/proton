@@ -66,7 +66,7 @@ jq -n \
   --arg mirror_ref "$mirror_branch" \
   --arg source_pr_number "$PR_NUMBER" \
   --arg pr_labels_csv "$labels_csv" \
-  '{ref: $ref, inputs: {ref: $mirror_ref, source_pr_number: $source_pr_number, pr_labels_csv: $pr_labels_csv}}' > "$dispatch_file"
+  '{ref: $ref, inputs: {ref: $mirror_ref, source_pr_number: $source_pr_number, pr_labels_csv: $pr_labels_csv, update_source_pr_comment: true}}' > "$dispatch_file"
 
 gh api -X POST "repos/${repo}/actions/workflows/proton_ci.yml/dispatches" --input "$dispatch_file" >/dev/null
 

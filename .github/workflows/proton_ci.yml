@@ -1,5 +1,4 @@
 name: ProtonCI
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Trusted mirror CI [PR #{0}] [{1}]', inputs.source_pr_number, inputs.ref) || format('Pull request CI [{0}]', github.ref_name) }}
 
 on: # yamllint disable-line rule:truthy
   pull_request:
@@ -34,6 +33,11 @@ on: # yamllint disable-line rule:truthy
         required: false
         default: ''
         type: string
+      update_source_pr_comment:
+        description: 'Update original fork PR comment with trusted CI result'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
@@ -354,7 +358,7 @@ jobs:
           SANITIZER: "address"
           ARCH: ${{ vars.X64_ARCH }}
   CommentTrustedMirrorResult:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_pr_number != '' && always() }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_source_pr_comment && inputs.source_pr_number != '' && always() }}
     needs:
       - build_address_x64
       - unit_test_address_x64
