@@ -18,9 +18,17 @@ on: # yamllint disable-line rule:truthy
       - 'spec/**'
       - 'utils/check-style/aspell-ignore/**'
       - 'examples/**'
+  # Fork PRs: runs in base-repo context (secrets available).
+  # Fires only when a maintainer adds the 'pr-test' label after code review.
+  pull_request_target:
+    types: [labeled]
+    branches:
+      - develop
+      - 2.9
+      - 3.0
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -28,7 +36,11 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: |
       github.event.pull_request.draft == false &&
-      (!startsWith(github.head_ref, 'porting/'))
+      (!startsWith(github.head_ref, 'porting/')) &&
+      (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+        (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && contains(github.event.pull_request.labels.*.name, 'pr-test'))
+      )
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -38,6 +50,7 @@ jobs:
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
       upjob: build_address_x64
+      ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/head', github.event.pull_request.number) || '' }}
       command: |
         cd $GITHUB_WORKSPACE
 
@@ -97,7 +110,9 @@ jobs:
   unit_test_address_x64:
     needs: build_address_x64
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.pull_request.draft == false
+    if: |
+      needs.build_address_x64.result == 'success' &&
+      github.event.pull_request.draft == false
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -107,6 +122,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       timeout: 60
       upjob: unit_test_address_x64
+      ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/head', github.event.pull_request.number) || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
@@ -135,7 +151,9 @@ jobs:
   smoke_test_address_x64:
     needs: build_address_x64
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.pull_request.draft == false
+    if: |
+      needs.build_address_x64.result == 'success' &&
+      github.event.pull_request.draft == false
     with:
       ec2-instance-type: m6a.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -145,6 +163,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       timeout: 80 # cover python-udf test
       upjob: smoke_test_address_x64
+      ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/head', github.event.pull_request.number) || '' }}
       command: |
         # run smoke test
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
@@ -179,7 +198,9 @@ jobs:
   stateless_test_address_x64:
     needs: build_address_x64
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.pull_request.draft == false
+    if: |
+      needs.build_address_x64.result == 'success' &&
+      github.event.pull_request.draft == false
     with:
       ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -189,6 +210,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       timeout: 60
       upjob: stateless_test_address_x64
+      ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/head', github.event.pull_request.number) || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         mkdir $GITHUB_WORKSPACE/output
@@ -220,7 +242,9 @@ jobs:
   stateful_test_address_x64:
     needs: build_address_x64
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
-    if: github.event.pull_request.draft == false
+    if: |
+      needs.build_address_x64.result == 'success' &&
+      github.event.pull_request.draft == false
     with:
       ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{vars.X64_TEST_AMI }}
@@ -230,6 +254,7 @@ jobs:
       arch: ${{ vars.X64_ARCH }}
       timeout: 40
       upjob: stateful_test_address_x64
+      ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/head', github.event.pull_request.number) || '' }}
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         mkdir $GITHUB_WORKSPACE/output
@@ -280,6 +305,9 @@ jobs:
       - stateless_test_address_x64
       - stateful_test_address_x64
     runs-on: ubuntu-latest
+    if: |
+      (github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'pr-test'))
     steps:
       - name: delete testing image
         run: |
