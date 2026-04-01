@@ -1,0 +1,223 @@
+#include <CPython/PythonModuleSession.h>
+
+#include <CPython/GILGuard.h>
+#include <CPython/Utils.h>
+#include <Common/Exception.h>
+
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int UDF_RUNNING_ERROR;
+}
+}
+
+namespace DB::cpython
+{
+namespace
+{
+void cleanupPythonModule(const String & module_name, const String & deinit_function_name, bool run_deinit, bool & deinit_attempted)
+{
+    if (module_name.empty())
+        return;
+
+    std::exception_ptr cleanup_exception;
+
+    if (run_deinit && !deinit_function_name.empty() && !deinit_attempted)
+    {
+        deinit_attempted = true;
+        try
+        {
+            executeFunction(deinit_function_name, module_name);
+        }
+        catch (...)
+        {
+            cleanup_exception = std::current_exception();
+        }
+    }
+
+    if (hasModule(module_name))
+    {
+        try
+        {
+            unloadModule(module_name);
+        }
+        catch (...)
+        {
+            if (!cleanup_exception)
+                cleanup_exception = std::current_exception();
+        }
+    }
+
+    if (cleanup_exception)
+        std::rethrow_exception(cleanup_exception);
+}
+}
+
+PythonModuleSessionPtr PythonModuleSession::create(String module_prefix_, PythonFunction function_)
+{
+    auto session = std::make_shared<PythonModuleSession>(std::move(module_prefix_), std::move(function_));
+    session->init();
+    return session;
+}
+
+PythonModuleSession::PythonModuleSession(String module_prefix_, PythonFunction function_)
+    : module_prefix(std::move(module_prefix_)), function(std::move(function_))
+{
+}
+
+PythonModuleSession::~PythonModuleSession()
+{
+    close(/*ignore_exceptions=*/true);
+}
+
+void PythonModuleSession::closeSession(PythonModuleSessionPtr & session, bool ignore_exceptions, bool acquire_gil)
+{
+    if (!session)
+        return;
+
+    if (Py_IsInitialized() == 0)
+    {
+        session.reset();
+        return;
+    }
+
+    try
+    {
+        session->close(ignore_exceptions, acquire_gil);
+        session.reset();
+    }
+    catch (...)
+    {
+        if (!ignore_exceptions)
+            throw;
+    }
+}
+
+void PythonModuleSession::init()
+{
+    if (Py_IsInitialized() == 0)
+        throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Python Interpreter is not initialized, please check the python_path configuration");
+
+    module_name = module_prefix + randomModuleName();
+
+    GILGuard gil_guard;
+    try
+    {
+        auto byte_code = compile(function.source_code);
+        executeByteCode(byte_code, module_name);
+        module_loaded = true;
+
+        if (!function.init_function_name.empty())
+        {
+            Strings args;
+            if (!function.init_parameters.empty())
+                args.emplace_back(function.init_parameters);
+            auto py_args = createArgumentsTuple(args);
+            executeFunction(function.init_function_name, module_name, py_args);
+        }
+
+        py_function = cpython::getFunction(function.entry_function_name, module_name);
+    }
+    catch (...)
+    {
+        auto original_exception = std::current_exception();
+        try
+        {
+            py_function.reset();
+            closeImpl();
+        }
+        catch (...)
+        {
+        }
+        std::rethrow_exception(original_exception);
+    }
+}
+
+PyObjectPtr PythonModuleSession::execute(const PyObjectPtr & args) const
+{
+    return executeObject(py_function, args);
+}
+
+void PythonModuleSession::close(bool ignore_exceptions, bool acquire_gil)
+{
+    if (closed)
+        return;
+
+    if (Py_IsInitialized() == 0)
+    {
+        closed = true;
+        return;
+    }
+
+    if (ignore_exceptions)
+    {
+        try
+        {
+            if (acquire_gil)
+            {
+                GILGuard gil_guard;
+                closeImpl();
+            }
+            else
+            {
+                closeImpl();
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+    else
+    {
+        if (acquire_gil)
+        {
+            GILGuard gil_guard;
+            closeImpl();
+        }
+        else
+        {
+            closeImpl();
+        }
+    }
+}
+
+void PythonModuleSession::closeImpl()
+{
+    py_function.reset();
+
+    std::exception_ptr cleanup_exception;
+    try
+    {
+        cleanupPythonModule(module_name, function.deinit_function_name, module_loaded, deinit_attempted);
+        module_name.clear();
+        module_loaded = false;
+        closed = true;
+    }
+    catch (...)
+    {
+        cleanup_exception = std::current_exception();
+        bool module_unloaded = false;
+        if (!module_name.empty())
+        {
+            try
+            {
+                module_unloaded = !hasModule(module_name);
+            }
+            catch (...)
+            {
+            }
+        }
+
+        if (module_unloaded)
+        {
+            module_name.clear();
+            module_loaded = false;
+            closed = true;
+        }
+    }
+
+    if (cleanup_exception)
+        std::rethrow_exception(cleanup_exception);
+}
+}

@@ -61,11 +61,8 @@ private:
     /// Output columns description (from the external stream)
     ColumnsDescription output_columns;
 
-    /// Python function name
-    String python_function_name;
-
-    /// Inline Python source code
-    String python_source;
+    /// Python function settings (source code, entry function, lifecycle hooks)
+    cpython::PythonFunction python_function;
 
     /// Execution mode
     PythonTableMode python_mode{PythonTableMode::Auto};

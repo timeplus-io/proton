@@ -4,44 +4,28 @@
 
 #include <CPython/ConvertDatatypes.h>
 #include <CPython/GILGuard.h>
-#include <CPython/Utils.h>
-#include <Common/Exception.h>
+#include <CPython/PythonModuleSession.h>
 
 namespace DB
 {
-namespace ErrorCodes
+PythonSink::PythonSink(const Block & header, cpython::PythonFunction function_)
+    : SinkToStorage(header, ProcessorID::PythonSinkID), session(cpython::PythonModuleSession::create(getName(), std::move(function_)))
 {
-extern const int UDF_RUNNING_ERROR;
-}
-
-PythonSink::PythonSink(const Block & header, String python_source_, String function_name_)
-    : SinkToStorage(header, ProcessorID::PythonSinkID), python_source(std::move(python_source_)), function_name(std::move(function_name_))
-{
-    initPython();
 }
 
 PythonSink::~PythonSink()
 {
-    if (Py_IsInitialized() == 0)
-        return;
-
-    cpython::GILGuard gil_guard;
-    py_function.reset();
-    if (!module_name.empty())
-        cpython::unloadModule(module_name);
+    finishPython(/*ignore_exceptions=*/true);
 }
 
-void PythonSink::initPython()
+void PythonSink::finishPython(bool ignore_exceptions)
 {
-    if (Py_IsInitialized() == 0)
-        throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Python Interpreter is not initialized, please check the python_path configuration");
+    cpython::PythonModuleSession::closeSession(session, ignore_exceptions);
+}
 
-    module_name = getName() + cpython::randomModuleName();
-
-    cpython::GILGuard gil_guard;
-    auto byte_code = cpython::compile(python_source);
-    cpython::executeByteCode(byte_code, module_name);
-    py_function = cpython::getFunction(function_name, module_name);
+void PythonSink::onFinish()
+{
+    finishPython(/*ignore_exceptions=*/false);
 }
 
 void PythonSink::consume(Chunk chunk)
@@ -61,7 +45,7 @@ void PythonSink::consume(Chunk chunk)
         PyTuple_SetItem(py_args.get(), static_cast<Py_ssize_t>(i), py_col.release());
     }
 
-    cpython::executeObject(py_function, py_args);
+    session->execute(py_args);
 }
 }
 

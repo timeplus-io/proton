@@ -45,7 +45,7 @@ void TableFunctionPythonTable::parseArguments(const ASTPtr & ast_function, Conte
     input_column_names.clear();
     source_ast.reset();
     source_storage.reset();
-    python_source.clear();
+    python_function = {};
     python_mode = PythonTableMode::Auto;
     if (auto storage_id_opt = tryGetStorageID(args[0]))
         python_table_id = *storage_id_opt;
@@ -74,11 +74,10 @@ void TableFunctionPythonTable::parseArguments(const ASTPtr & ast_function, Conte
 
     /// Get the Python source code and output schema from the external stream
     output_columns = external_storage->getInMemoryMetadataPtr()->getColumns();
-    python_function_name = python_table->getFunctionName();
-    python_source = python_table->getSourceCode();
+    python_function = python_table->getFunction();
     python_mode = python_table->getMode();
 
-    if (python_source.empty())
+    if (python_function.source_code.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream '{}' has empty source", python_table_id.getNameForLogs());
 
     /// Second argument is the source (subquery or table reference)
@@ -163,8 +162,7 @@ StoragePtr TableFunctionPythonTable::executeImpl(
     auto storage = StoragePythonTableWithInput::create(
         StorageID(getDatabaseName(), table_name),
         output_columns,
-        python_function_name,
-        python_source,
+        python_function,
         source_ast,
         source_storage,
         input_column_names,

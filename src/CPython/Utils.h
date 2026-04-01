@@ -2,7 +2,13 @@
 
 #include <CPython/PyObjectPtr.h>
 
+#include <Poco/Dynamic/Var.h>
+#include <Poco/JSON/Object.h>
+
 #include <Python.h>
+#include <Core/Types_fwd.h>
+
+#include <base/types.h>
 
 #include <string>
 
@@ -47,6 +53,14 @@ PyObjectPtr compile(const std::string & source);
 PyObjectPtr executeByteCode(const PyObjectPtr & byte_code, const std::string & module_name);
 
 PyObjectPtr executeObject(const PyObjectPtr & obj, const PyObjectPtr & args = PyObjectPtr{});
+
+PyObjectPtr createArgumentsTuple(const Strings & arguments);
+PyObjectPtr createArgumentsTuple(const Poco::JSON::Object::Ptr & argument);
+
+PyObjectPtr executeFunction(const std::string & func_name, const std::string & module_name, const Strings & arguments = {});
+PyObjectPtr executeFunction(const std::string & func_name, const std::string & module_name, const PyObjectPtr & args);
+
+PyObjectPtr convertJSONValueToPyObject(const Poco::Dynamic::Var & value);
 
 /// Check if Python object is a generator or iterator
 bool isGenerator(const PyObjectPtr & obj);

@@ -4,6 +4,7 @@
 #include <CPython/GILGuard.h>
 #include <CPython/PyObjectPtr.h>
 #include <CPython/Utils.h>
+#include <Poco/JSON/Array.h>
 #include <Common/Exception.h>
 
 #include <CPython/tests/CPythonTest.h>
@@ -754,6 +755,63 @@ def func(i):
         }
 
         unloadModule(module_name);
+    });
+}
+
+TEST_F(CPythonTest, createArgumentsTupleFromJSONObject)
+{
+    assertNoLeak([]() {
+        Poco::JSON::Object::Ptr config = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
+        config->set("url", "kafka://broker:9092");
+        config->set("enabled", true);
+        config->set("timeout_ms", 30000);
+
+        Poco::JSON::Array::Ptr topics = new Poco::JSON::Array();
+        topics->add("orders");
+        topics->add("payments");
+        config->set("topics", topics);
+
+        Poco::JSON::Object::Ptr auth = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
+        auth->set("mechanism", "plain");
+        config->set("auth", auth);
+
+        auto args = createArgumentsTuple(config);
+        ASSERT_TRUE(args);
+        ASSERT_TRUE(PyTuple_Check(args.get()));
+        ASSERT_EQ(PyTuple_Size(args.get()), 1);
+
+        auto * py_config = PyTuple_GetItem(args.get(), 0);
+        ASSERT_TRUE(py_config);
+        ASSERT_TRUE(PyDict_Check(py_config));
+
+        auto * py_url = PyDict_GetItemString(py_config, "url");
+        ASSERT_TRUE(py_url);
+        ASSERT_TRUE(PyUnicode_Check(py_url));
+        EXPECT_STREQ(PyUnicode_AsUTF8(py_url), "kafka://broker:9092");
+
+        auto * py_enabled = PyDict_GetItemString(py_config, "enabled");
+        ASSERT_TRUE(py_enabled);
+        ASSERT_TRUE(PyBool_Check(py_enabled));
+        EXPECT_EQ(py_enabled, Py_True);
+
+        auto * py_timeout_ms = PyDict_GetItemString(py_config, "timeout_ms");
+        ASSERT_TRUE(py_timeout_ms);
+        ASSERT_TRUE(PyLong_Check(py_timeout_ms));
+        EXPECT_EQ(PyLong_AsLong(py_timeout_ms), 30000);
+
+        auto * py_topics = PyDict_GetItemString(py_config, "topics");
+        ASSERT_TRUE(py_topics);
+        ASSERT_TRUE(PyList_Check(py_topics));
+        ASSERT_EQ(PyList_Size(py_topics), 2);
+        EXPECT_STREQ(PyUnicode_AsUTF8(PyList_GetItem(py_topics, 1)), "payments");
+
+        auto * py_auth = PyDict_GetItemString(py_config, "auth");
+        ASSERT_TRUE(py_auth);
+        ASSERT_TRUE(PyDict_Check(py_auth));
+        auto * py_mechanism = PyDict_GetItemString(py_auth, "mechanism");
+        ASSERT_TRUE(py_mechanism);
+        ASSERT_TRUE(PyUnicode_Check(py_mechanism));
+        EXPECT_STREQ(PyUnicode_AsUTF8(py_mechanism), "plain");
     });
 }
 

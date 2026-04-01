@@ -29,16 +29,14 @@ extern const int BAD_ARGUMENTS;
 StoragePythonTableWithInput::StoragePythonTableWithInput(
     const StorageID & table_id,
     const ColumnsDescription & output_columns,
-    String function_name_,
-    String python_source_,
+    cpython::PythonFunction function_,
     ASTPtr source_ast_,
     StoragePtr source_storage_,
     Names input_column_names_,
     PythonTableMode mode_,
     ContextPtr)
     : IStorage(table_id)
-    , function_name(std::move(function_name_))
-    , python_source(std::move(python_source_))
+    , function(std::move(function_))
     , source_ast(std::move(source_ast_))
     , source_storage(std::move(source_storage_))
     , input_column_names(std::move(input_column_names_))
@@ -52,8 +50,7 @@ StoragePythonTableWithInput::StoragePythonTableWithInput(
 StoragePtr StoragePythonTableWithInput::create(
     const StorageID & table_id,
     const ColumnsDescription & output_columns,
-    String function_name_,
-    String python_source_,
+    cpython::PythonFunction function_,
     ASTPtr source_ast_,
     StoragePtr source_storage_,
     Names input_column_names_,
@@ -63,8 +60,7 @@ StoragePtr StoragePythonTableWithInput::create(
     return std::shared_ptr<StoragePythonTableWithInput>(new StoragePythonTableWithInput(
         table_id,
         output_columns,
-        std::move(function_name_),
-        std::move(python_source_),
+        std::move(function_),
         std::move(source_ast_),
         std::move(source_storage_),
         std::move(input_column_names_),
@@ -87,10 +83,8 @@ void StoragePythonTableWithInput::read(
     if (Py_IsInitialized() == 0)
         throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Python Interpreter is not initialized, please check the python_path configuration");
 
-    if (python_source.empty())
+    if (function.source_code.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream requires non-empty source");
-
-    const String & python_function = function_name;
 
     QueryPlanResourceHolder resources;
     QueryPipelineBuilderPtr pipeline_builder;
@@ -151,22 +145,18 @@ void StoragePythonTableWithInput::read(
 
     Block output_header = storage_snapshot->getSampleBlockForColumns(column_names);
     ColumnsDescription output_columns_local = getInMemoryMetadataPtr()->getColumns();
-    const String python_source_local = python_source;
-    const String python_function_local = python_function;
+    const auto function_local = function;
     Names input_names = input_column_names;
     Names output_names = column_names;
     PythonTableMode mode_value = mode;
 
-    pipeline_builder->addSimpleTransform([python_source_local,
-                                          python_function_local,
-                                          input_names,
-                                          output_columns_local,
-                                          output_header,
-                                          output_names,
-                                          mode_value](const Block & header) {
-        return std::make_shared<PythonTableTransform>(
-            header, output_header, python_source_local, python_function_local, input_names, output_columns_local, output_names, mode_value);
-    });
+    auto session = cpython::PythonModuleSession::create("PythonTableWithInput", function_local);
+
+    pipeline_builder->addSimpleTransform(
+        [session, input_names, output_columns_local, output_header, output_names, mode_value](const Block & header) {
+            return std::make_shared<PythonTableTransform>(
+                header, output_header, input_names, output_columns_local, output_names, mode_value, session);
+        });
 
     auto pipe = QueryPipelineBuilder::getPipe(std::move(*pipeline_builder), resources);
     IStorage::readFromPipe(query_plan, std::move(pipe), column_names, storage_snapshot, query_info, context, getName());

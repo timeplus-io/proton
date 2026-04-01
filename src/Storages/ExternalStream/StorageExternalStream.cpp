@@ -34,11 +34,14 @@
 #include <Storages/StorageFactory.h>
 
 #include <boost/algorithm/string.hpp>
+#include <Poco/Exception.h>
 #include <Poco/Net/AcceptCertificateHandler.h>
 #include <Poco/Net/KeyFileHandler.h>
 #include <Poco/Net/SSLManager.h>
 
 #include <string>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Parser.h>
 #include <Common/re2.h>
 
 namespace DB
@@ -57,6 +60,9 @@ extern const int UNSUPPORTED;
 
 namespace
 {
+#if USE_PYTHON_UDF
+#endif
+
 ExpressionActionsPtr buildShardingKeyExpression(ASTPtr sharding_key, ContextPtr context, const NamesAndTypesList & columns)
 {
     auto syntax_result = TreeRewriter(context).analyze(sharding_key, columns);
@@ -188,8 +194,21 @@ StoragePtr createExternalStream(
         }
 
         String sink_function_name = external_stream_settings->write_function_name.value;
+        String init_parameters;
+        if (external_stream_settings->init_function_parameters.changed)
+            init_parameters = external_stream_settings->init_function_parameters.value;
+        if (!init_parameters.empty() && external_stream_settings->init_function_name.value.empty())
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE, "Setting 'init_function_parameters' requires 'init_function_name' to be configured");
+        cpython::PythonFunction python_function{
+            .init_function_name = external_stream_settings->init_function_name.value,
+            .init_parameters = std::move(init_parameters),
+            .deinit_function_name = external_stream_settings->deinit_function_name.value,
+            .entry_function_name = std::move(function_name),
+            .source_code = *exec_script,
+        };
         return StoragePythonTable::create(
-            storage_id, storage_metadata.getColumns(), std::move(function_name), *exec_script, mode, std::move(sink_function_name));
+            storage_id, storage_metadata.getColumns(), std::move(python_function), mode, std::move(sink_function_name));
     }
 #else
     if (type == ExternalStreamTypes::PYTHON)
@@ -397,7 +416,7 @@ void StorageExternalStream::checkAlterSettingsIsPossible(const AlterCommands & c
         throw Exception(ErrorCodes::UNSUPPORTED, "Alter external stream type is not supported");
 
     if (auto impl = std::dynamic_pointer_cast<StorageExternalStreamImpl>(external_stream))
-        impl->verifySettings(new_settings, /*change_settings*/true, context_);
+        impl->verifySettings(new_settings, /*change_settings=*/true, context_);
 }
 
 void StorageExternalStream::alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder &)
