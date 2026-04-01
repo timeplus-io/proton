@@ -1,7 +1,12 @@
 #include <Cluster/Common/TimeWheel/SystemTimer.h>
+#include <Cluster/Common/TimeWheel/TimerService.h>
 #include <Common/Stopwatch.h>
 
 #include <gtest/gtest.h>
+
+#include <base/sleep.h>
+
+#include <unistd.h>
 
 #include <atomic>
 #include <iostream>
@@ -263,6 +268,22 @@ TEST(TimeWheel, TimerTestWithOverflowWheel)
     GTEST_ASSERT_EQ(counter.load(), 1);
 }
 
+TEST(TimeWheel, TimerTestWithOverflowWheelBoundary)
+{
+    std::atomic_int32_t counter{};
+    {
+        cluster::SystemTimer timer(4, 1, 20);
+        auto timer_task = timer.add(20, [&]() { counter++; });
+        ASSERT_TRUE(timer_task != nullptr);
+
+        /// The equality boundary also falls into the overflow wheel.
+        timer.poll(1024);
+        timer.poll(1024);
+    }
+
+    GTEST_ASSERT_EQ(counter.load(), 1);
+}
+
 TEST(TimeWheel, TimerTestWithOverflowWheelMore)
 {
     std::atomic_int32_t counter{};
@@ -505,4 +526,39 @@ TEST(TimeWheel, CancelAndReinsert)
     timer.poll(20);
     std::this_thread::sleep_for(5ms);
     ASSERT_EQ(counter, 2);
+}
+
+TEST(TimeWheel, TimerServiceShutdownWithActiveRepeatOverflowTimer)
+{
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+
+    ASSERT_EXIT(
+        [] {
+            ::alarm(5);
+
+            cluster::TimerService timer_service(/*worker_pool_size=*/1, /*tick_ms=*/1, /*wheel_size=*/20, /*expired_timers_size=*/1);
+            std::atomic_int32_t callback_count{0};
+
+            auto timer_task = timer_service.add(
+                /*timeout_ms=*/20,
+                [&]() {
+                    ++callback_count;
+                    sleepForMilliseconds(10);
+                },
+                /*repeat=*/true);
+
+            if (!timer_task)
+                _exit(2);
+
+            for (int i = 0; i < 4000 && callback_count.load() < 3; ++i)
+                sleepForMilliseconds(1);
+
+            if (callback_count.load() < 3)
+                _exit(3);
+
+            timer_service.shutdown();
+            _exit(0);
+        }(),
+        ::testing::ExitedWithCode(0),
+        "");
 }

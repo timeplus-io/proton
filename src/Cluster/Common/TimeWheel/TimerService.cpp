@@ -32,8 +32,13 @@ void TimerService::shutdown()
     if (stopped.test_and_set())
         return;
 
-    timer.wait();
+    /// Best-effort shutdown: stop polling first so active repeat timers cannot keep the
+    /// current poll cycle self-feeding and block shutdown indefinitely.
     poller.wait();
+    timer.wait();
+
+    /// TODO: if shutdown ever needs lossless timer draining, introduce an explicit
+    /// producer/rearm quiesce protocol instead of relying on this order alone.
 }
 
 TimerTaskEntryPtr TimerService::add(int64_t timeout_ms, TimerCallback task, bool repeat)

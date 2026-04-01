@@ -2,6 +2,8 @@
 
 #include <Cluster/Common/TimeWheel/DelayQueue.h>
 
+#include <mutex>
+
 namespace cluster
 {
 
@@ -21,7 +23,8 @@ public:
     void advanceClock(int64_t time_ms);
 
 private:
-    void addOverflowWheel();
+    TimeWheel * getOverflowWheel();
+    TimeWheel * getOrCreateOverflowWheel();
 
 private:
     int64_t tick_ms;
@@ -33,7 +36,8 @@ private:
     std::function<void()> decrement_size;
 
     std::vector<TimerTaskListPtr> buckets;
-    std::unique_ptr<TimeWheel> overflow_wheel;
+    std::mutex overflow_wheel_mutex;
+    std::unique_ptr<TimeWheel> overflow_wheel; /// intentionally read without lock in advanceClock (benign race, see comment there)
 };
 
 }

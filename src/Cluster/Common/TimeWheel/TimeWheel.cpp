@@ -62,11 +62,9 @@ bool TimeWheel::add(TimerTaskEntryPtr timer_task_entry)
     else
     {
         /// Out of the interval. Put it into the parent timer
-        if (!overflow_wheel)
-            addOverflowWheel();
-
-        chassert(overflow_wheel);
-        return overflow_wheel->add(std::move(timer_task_entry));
+        auto * overflow = getOrCreateOverflowWheel();
+        chassert(overflow);
+        return overflow->add(std::move(timer_task_entry));
     }
 }
 
@@ -80,15 +78,30 @@ void TimeWheel::advanceClock(int64_t time_ms)
         int64_t new_time = time_ms - (time_ms % tick_ms);
         current_time_ms.store(new_time);
 
-        if (overflow_wheel)
-            overflow_wheel->advanceClock(new_time);
+        /// Benign race: overflow_wheel is monotonic (nullptr → valid, never back).                                                                                           
+        /// A racy nullptr read just skips one tick; the next call catches up.                                                                                                
+        /// We still call getOverflowWheel() (mutex-guarded) to obtain a safe pointer.                                                                                        
+        if (overflow_wheel)                                                                                                                                            
+        {                                                                                                                                                              
+            auto * overflow = getOverflowWheel();                                                                                                                      
+            overflow->advanceClock(new_time);
+        }
     }
 }
 
-void TimeWheel::addOverflowWheel()
+TimeWheel * TimeWheel::getOverflowWheel()
 {
-    chassert(!overflow_wheel);
-    overflow_wheel = std::make_unique<TimeWheel>(interval_ms, wheel_size, current_time_ms, queue, decrement_size);
+    std::lock_guard lock(overflow_wheel_mutex);
+    return overflow_wheel.get();
+}
+
+TimeWheel * TimeWheel::getOrCreateOverflowWheel()
+{
+    std::lock_guard lock(overflow_wheel_mutex);
+    if (!overflow_wheel)
+        overflow_wheel = std::make_unique<TimeWheel>(interval_ms, wheel_size, current_time_ms.load(), queue, decrement_size);
+
+    return overflow_wheel.get();
 }
 
 }
