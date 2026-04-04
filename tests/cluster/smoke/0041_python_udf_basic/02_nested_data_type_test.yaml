@@ -30,7 +30,7 @@ steps:
                   tmp2 = []
                   for k in range(len(value[i][j][0])):
                       tmp2.append(value[i][j][0][k] + 5)
-                  s = value[i][j][1].upper()
+                  s = value[i][j][1].decode('utf-8').upper()
                   t = (tmp2, s)
                   tmp1.append(t)
               res.append(tmp1)

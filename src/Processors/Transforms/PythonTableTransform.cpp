@@ -181,18 +181,19 @@ void PythonTableTransform::transform(Chunk & chunk)
         return;
     }
 
+    const auto & input_header = getInputPort().getHeader();
+    const auto & columns = chunk.getColumns();
+
     cpython::GILGuard gil_guard;
 
     python_thread_id.store(PyThread_get_thread_ident(), std::memory_order_release);
     SCOPE_EXIT({ python_thread_id.store(0, std::memory_order_release); });
 
-    Block input_block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
-
     cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(input_positions.size()))};
     for (size_t i = 0; i < input_positions.size(); ++i)
     {
-        const auto & col_with_type = input_block.getByPosition(input_positions[i]);
-        auto py_col = cpython::convertColumnToPythonList(col_with_type);
+        const auto & col_with_type = input_header.getByPosition(input_positions[i]);
+        auto py_col = cpython::convertColumnToPythonList(*columns[input_positions[i]], col_with_type.type);
         PyTuple_SetItem(py_args.get(), static_cast<Py_ssize_t>(i), py_col.release());
     }
 

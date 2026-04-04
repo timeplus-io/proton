@@ -44,7 +44,7 @@ steps:
               )
               model = active.EntropySampler(model, seed=4)
               for x, y in zip(xs, ys):
-                  x = dict(x)
+                  x = {k.decode('utf-8'): v.decode('utf-8') for k, v in x.items()}
                   if x.get('body','') == '':
                     continue
                   y_pred, ask = model.predict_one(x)

@@ -26,7 +26,7 @@ steps:
           model = linear_model.LogisticRegression()
           metric = metrics.ROCAUC()
           for x, y in zip(xs, ys):
-              x = dict(x)
+              x = {k.decode('utf-8'): v for k, v in x.items()}
               y_pred = model.predict_proba_one(x)
               metric.update(y, y_pred)
               res.append(str(metric))

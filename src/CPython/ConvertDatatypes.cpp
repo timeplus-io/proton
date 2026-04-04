@@ -214,9 +214,9 @@ PyObjectPtr convertToPythonObject(const Field & data, const DataTypePtr & type)
             return convertDateTime64ToPythonObject(data, datetime64_type->getScale(), getDateTimeTimezone(*type));
         }
         case TypeIndex::String:
-            return convertToPythonObject<String>(data, PyUnicode_FromStringAndSize);
+            return convertToPythonObject<String>(data, PyBytes_FromStringAndSize);
         case TypeIndex::FixedString:
-            return convertToPythonObject<String>(data, PyUnicode_FromStringAndSize);
+            return convertToPythonObject<String>(data, PyBytes_FromStringAndSize);
         // case TypeIndex::Enum8:
         //     break;
         // case TypeIndex::Enum16:
@@ -436,12 +436,34 @@ ALWAYS_INLINE std::decay_t<T> loadFromPyFloat(PyObject * object)
     return static_cast<std::decay_t<T>>(PyFloat_AsDouble(object));
 }
 
+ALWAYS_INLINE String loadFromPyBytes(PyObject * object)
+{
+    if (!PyBytes_Check(object))
+        raiseConvertionException("string", object);
+
+    char * buffer = nullptr;
+    Py_ssize_t length = 0;
+    
+    if (PyBytes_AsStringAndSize(object, &buffer, &length) != -1) 
+        return String(buffer, static_cast<size_t>(length));
+
+    raiseConvertionException("string", object);
+}
+
 ALWAYS_INLINE String loadFromPyUnicode(PyObject * object)
 {
     if (!PyUnicode_Check(object))
         raiseConvertionException("string", object);
 
     return String{PyUnicode_AsUTF8(object)};
+}
+
+ALWAYS_INLINE String loadStringFromPyBytesOrUnicode(PyObject * object)
+{
+    if (PyBytes_Check(object))
+        return loadFromPyBytes(object);
+
+    return loadFromPyUnicode(object);
 }
 
 ALWAYS_INLINE UInt16 loadDate16FromPyDate(PyObject * object)
@@ -593,9 +615,9 @@ Field loadFromPythonObject(PyObject * object, const DataTypePtr & type)
             return loadDateTime64FromPyDateTime(object, datetime64_type->getScale());
         }
         case TypeIndex::String:
-            return loadFromPyUnicode(object);
+            return loadStringFromPyBytesOrUnicode(object);
         case TypeIndex::FixedString:
-            return loadFromPyUnicode(object);
+            return loadStringFromPyBytesOrUnicode(object);
         // case TypeIndex::Enum8:
         //     break;
         // case TypeIndex::Enum16:
@@ -772,11 +794,9 @@ void PythonListToColumn(IColumn & column, PyObject * py_list, const DataTypePtr 
 }
 
 
-PyObjectPtr convertColumnToPythonList(const ColumnWithTypeAndName & column_with_type)
+PyObjectPtr convertColumnToPythonList(const IColumn & column, const DataTypePtr & type)
 {
-    const auto & column = column_with_type.column;
-    const auto & type = column_with_type.type;
-    return convertColumnToPythonList(*column, type, 0, column->size());
+    return convertColumnToPythonList(column, type, 0, column.size());
 }
 
 PyObjectPtr convertColumnToPythonList(const IColumn & column, const DataTypePtr & type, UInt64 offset, UInt64 size)

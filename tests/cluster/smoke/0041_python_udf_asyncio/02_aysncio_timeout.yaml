@@ -38,7 +38,7 @@ steps:
           results = []
           for i, v in zip(id, value):
               try:
-                  result = asyncio.run(say_after_wait_for(i,v))
+                  result = asyncio.run(say_after_wait_for(i, v.decode('utf-8')))
                   results.append(result)
               except Exception as e:
                   results.append(e)
@@ -75,7 +75,7 @@ steps:
               async def say_after_task(ids, values):
                   tasks = []
                   for i, v in zip(ids, values):
-                      task = asyncio.create_task(say_after(i, v))
+                      task = asyncio.create_task(say_after(i, v.decode('utf-8')))
                       tasks.append(task)
                   done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                   return [await t for t in done]

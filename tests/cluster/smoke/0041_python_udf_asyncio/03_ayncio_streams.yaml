@@ -58,6 +58,7 @@ steps:
       def test_async_streams_server(value):
           results = []
           for v in value:
+              v = v.decode('utf-8')
               try:
                   asyncio.run(server())
                   results.append(f"server closed...{v}")
@@ -87,7 +88,7 @@ steps:
           results = []
           for v in value:
               try:
-                  result = asyncio.run(tcp_echo_client(v))
+                  result = asyncio.run(tcp_echo_client(v.decode('utf-8')))
                   results.append(result)
               except Exception as e:
                   results.append(e)

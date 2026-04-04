@@ -36,6 +36,7 @@ steps:
               self.join = other.join
 
           def process(self, values):
+              values = [v.decode('utf-8') for v in values]
               if self.join != '':
                   values = [self.join] + values
               self.join = '-'.join(values)

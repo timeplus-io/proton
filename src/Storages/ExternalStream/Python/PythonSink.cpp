@@ -33,15 +33,17 @@ void PythonSink::consume(Chunk chunk)
     if (chunk.rows() == 0)
         return;
 
-    cpython::GILGuard gil_guard;
+    const auto & header = getHeader();
+    const auto & columns = chunk.getColumns();
+    auto columns_size = columns.size();
 
-    Block input_block = getHeader().cloneWithColumns(chunk.detachColumns());
-    size_t columns = input_block.columns();
-    cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(columns))};
-    for (size_t i = 0; i < columns; ++i)
+    cpython::GILGuard gil_guard;
+    cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(columns_size))};
+
+    for (size_t i = 0; i < columns_size; ++i)
     {
-        const auto & col_with_type = input_block.getByPosition(i);
-        auto py_col = cpython::convertColumnToPythonList(col_with_type);
+        const auto & col_with_type = header.getByPosition(i);
+        auto py_col = cpython::convertColumnToPythonList(*columns[i], col_with_type.type);
         PyTuple_SetItem(py_args.get(), static_cast<Py_ssize_t>(i), py_col.release());
     }
 

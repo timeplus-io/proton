@@ -19,7 +19,7 @@ steps:
       CREATE OR REPLACE FUNCTION test_str(value array(string)) RETURNS string LANGUAGE PYTHON AS
       $$
       def test_str(value):
-          res = [str(x) for x in value]
+          res = [str([s.decode('utf-8') for s in x]) for x in value]
           return res
       $$;
 

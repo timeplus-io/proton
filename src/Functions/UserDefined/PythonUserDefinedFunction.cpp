@@ -86,12 +86,12 @@ ColumnPtr PythonUserDefinedFunction::userDefinedExecuteImpl(
 #if USE_NUMPY
         /// if numpy enabled, it depends on the using_numpy flag, if using_numpy, we convert the column to numpy array,else convert to python list
         if (using_numpy)
-            auto py_arg = cpython::convertColumnToNumpyArray(arguments[i]);
+            auto py_arg = cpython::convertColumnToNumpyArray(*arguments[i].column);
         else
-            auto py_arg = cpython::convertColumnToPythonList(arguments[i]);
+            auto py_arg = cpython::convertColumnToPythonList(*arguments[i].column, arguments[i].type);
 #else
         /// if not using numpy, we convert the column to python list
-        auto py_arg = cpython::convertColumnToPythonList(arguments[i]);
+        auto py_arg = cpython::convertColumnToPythonList(*arguments[i].column, arguments[i].type);
 #endif
         PyTuple_SetItem(py_args.get(), i, py_arg.release());
     }

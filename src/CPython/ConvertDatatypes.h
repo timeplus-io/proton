@@ -16,7 +16,7 @@ namespace cpython
 {
 
 /// column -> list
-PyObjectPtr convertColumnToPythonList(const ColumnWithTypeAndName & column_with_type);
+PyObjectPtr convertColumnToPythonList(const IColumn & column, const DataTypePtr & type);
 PyObjectPtr convertColumnToPythonList(const IColumn & column, const DataTypePtr & type, UInt64 offset, UInt64 size);
 
 /// list -> column, reponsible for releasing the memory of the list, hand over the ownership of the list to the function
