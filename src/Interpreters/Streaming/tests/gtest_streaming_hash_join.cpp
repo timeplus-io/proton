@@ -230,6 +230,8 @@ std::shared_ptr<TableJoin> initTableJoin(
 
     table_join->setEmitChangeLog(Streaming::isJoinResultChangelog(left_data_stream_semantic, right_data_stream_semantic));
 
+    table_join->setRangeJoinMaxBuckets(context->getSettingsRef().keep_range_join_max_buckets);
+
     return table_join;
 }
 
@@ -4488,4 +4490,154 @@ TEST(StreamingHashJoin, AppendFullLatestJoinAppend)
              },
          }},
         context);
+}
+
+/// Test that keep_range_join_max_buckets setting limits the number of cached
+/// range buckets, preventing unbounded growth when one stream is idle.
+/// With date_diff_within(2s), bucket_size=2s, so timestamps 0-1s → bucket 0,
+/// 2-3s → bucket 1, 4-5s → bucket 2. Setting max_buckets=2 forces eviction
+/// of bucket 0 when bucket 2 is created. The final step proves eviction:
+/// left 0s can only match right 2s (bucket 1), NOT right 0s/1s (evicted bucket 0).
+TEST(StreamingHashJoin, AppendInnerRangeJoinAppendWithMaxBuckets)
+{
+    auto context = getContext().context;
+    Block left_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+
+    auto local_context = Context::createCopy(context);
+    local_context->setSetting("keep_range_join_max_buckets", UInt64(2));
+
+    commonTest(
+        "inner",
+        "all",
+        /*on_clause*/ "t1.col_1 = t2.col_1 and date_diff_within(2s, t1.col_2, t2.col_2)",
+        left_header,
+        Streaming::StorageSemantic::Append,
+        /*left_primary_key_column_indexes*/ std::nullopt,
+        right_header,
+        Streaming::StorageSemantic::Append,
+        /*right_primary_key_column_indexes*/ std::nullopt,
+        /*to_join_steps*/
+        {
+            /// Step 1: seed right with bucket 0 (0s, 1s)
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00')(1, '2023-1-1 00:00:01')", local_context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            /// Step 2: left (0s, 1s) joins against right bucket 0
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')(1, '2023-1-1 00:00:01')", local_context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00')"
+                              "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01')"
+                              "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:00')"
+                              "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:01')",
+                },
+            },
+            /// Step 3: right adds bucket 1 (2s, 3s) → 2 right buckets, within limit
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:02')(1, '2023-1-1 00:00:03')", local_context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:02')"
+                              "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:02')"
+                              "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:03')",
+                },
+            },
+            /// Step 4: right adds bucket 2 (4s, 5s) → 3 right buckets > max_buckets=2
+            /// → EVICTS right bucket 0 (0s, 1s data gone from right side)
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:04')(1, '2023-1-1 00:00:05')", local_context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            /// Step 5: left 0s joins against right — bucket 0 evicted, so only matches right 2s (|0-2|=2 ≤ 2).
+            /// Without eviction, would also match right 0s and 1s.
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')", local_context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:02')",
+                },
+            },
+        },
+        local_context);
+}
+
+/// Left range join with max_buckets=2: proves eviction AND null-fill for unmatched left rows.
+/// Same bucket layout as inner join test. Step 5 verifies that after right bucket 0 is evicted,
+/// left 0s only matches right 2s; col_1=2 has no match at all → null-filled.
+TEST(StreamingHashJoin, AppendLeftRangeJoinAppendWithMaxBuckets)
+{
+    auto context = getContext().context;
+    Block left_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+
+    auto local_context = Context::createCopy(context);
+    local_context->setSetting("keep_range_join_max_buckets", UInt64(2));
+
+    commonTest(
+        "left",
+        "all",
+        /*on_clause*/ "t1.col_1 = t2.col_1 and date_diff_within(2s, t1.col_2, t2.col_2)",
+        left_header,
+        Streaming::StorageSemantic::Append,
+        /*left_primary_key_column_indexes*/ std::nullopt,
+        right_header,
+        Streaming::StorageSemantic::Append,
+        /*right_primary_key_column_indexes*/ std::nullopt,
+        /*to_join_steps*/
+        {
+            /// Step 1: seed right with bucket 0 (0s, 1s)
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00')(1, '2023-1-1 00:00:01')", local_context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            /// Step 2: left join — col_1=1 matches, col_1=2 gets null-filled
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')(2, '2023-1-1 00:00:00')", local_context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:00')"
+                              "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:01')"
+                              "(2, '2023-1-1 00:00:00', '1970-1-1 00:00:00')",
+                },
+            },
+            /// Step 3: right adds bucket 1 (2s, 3s) → 2 right buckets, within limit
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:02')(1, '2023-1-1 00:00:03')", local_context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:02')",
+                },
+            },
+            /// Step 4: right adds bucket 2 (4s, 5s) → 3 right buckets > max_buckets=2
+            /// → EVICTS right bucket 0 (0s, 1s data gone)
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:04')(1, '2023-1-1 00:00:05')", local_context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            /// Step 5: left 0s — after eviction, col_1=1 only matches right 2s;
+            /// col_1=2 still has no match → null-filled.
+            /// Without eviction, col_1=1 would also match right 0s and 1s.
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')(2, '2023-1-1 00:00:00')", local_context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    .values = "(1, '2023-1-1 00:00:00', '2023-1-1 00:00:02')"
+                              "(2, '2023-1-1 00:00:00', '1970-1-1 00:00:00')",
+                },
+            },
+        },
+        local_context);
 }

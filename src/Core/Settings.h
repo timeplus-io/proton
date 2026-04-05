@@ -1141,6 +1141,7 @@ Possible values: non-negative numbers. Note that if the value is too small or to
     M(UInt64, join_buffered_data_block_size, 0, "For streaming join, when buffered data in memory, the data block size directs to merge small data blocks to form bigger ones to improve memory efficiency. 0 means disable merging small data blocks.", 0) \
     M(Int64, join_quiesce_threshold_ms, 0, "For streaming join, when left or right stream is in quiesce, the maximum time to wait before the join.", 0) \
     M(Int64, max_join_range, 300, "Max join range", 0) \
+    M(UInt64, keep_range_join_max_buckets, 0, "Max number of range buckets to keep per stream in a range join. When the number of buckets exceeds this limit, the oldest buckets are reclaimed even if the watermark has not advanced. 0 means no limit.", 0) \
     M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
     M(UInt64, keep_versions, 3, "Control how many versions for each key kept in memory when joining. Used in versioned_kv join", 0) \
     M(Int64, join_latency_threshold, 0, "Control when to start join left stream with right stream for alignment join scenarios. Zero means system picked threshold", 0) \

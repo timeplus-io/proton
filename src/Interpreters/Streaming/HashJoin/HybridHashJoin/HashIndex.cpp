@@ -132,6 +132,20 @@ size_t HashIndex::removeOldBuckets(std::string_view stream)
                 break;
         }
 
+        /// Enforce max bucket count: when one stream is idle, the watermark-based
+        /// reclamation cannot advance, causing unbounded bucket accumulation.
+        /// Remove the oldest excess buckets to cap memory usage.
+        auto max_buckets = range_asof_join_ctx.max_buckets;
+        if (max_buckets > 0)
+        {
+            while (range_bucket_hash_indexes.size() > max_buckets)
+            {
+                auto oldest = range_bucket_hash_indexes.begin();
+                buckets_to_remove.push_back(oldest->first);
+                range_bucket_hash_indexes.erase(oldest);
+            }
+        }
+
         remaining_bytes = metrics.totalBytes();
     }
 

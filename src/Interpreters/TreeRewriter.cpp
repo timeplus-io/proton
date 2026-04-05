@@ -805,6 +805,7 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
                     "Range join requires specifying a range on join clause, but only lower bound or upper bound of a range is specified");
 
             analyzed_join.validateRangeAsof(context->getSettingsRef().max_join_range);
+            analyzed_join.setRangeJoinMaxBuckets(context->getSettingsRef().keep_range_join_max_buckets);
             analyzed_join.setStrictness(table_join.strictness);
         }
 

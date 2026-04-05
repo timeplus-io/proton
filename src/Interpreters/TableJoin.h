@@ -398,6 +398,7 @@ public:
     void setRangeAsofLowerBound(Int64 lower_bound) noexcept { range_asof_join_ctx.lower_bound = lower_bound; }
     void setRangeAsofUpperBound(Int64 upper_bound) noexcept { range_asof_join_ctx.upper_bound = upper_bound; }
     void setRangeType(Streaming::RangeType range_type_) noexcept { range_asof_join_ctx.type = range_type_; }
+    void setRangeJoinMaxBuckets(UInt64 max_buckets) noexcept { range_asof_join_ctx.max_buckets = max_buckets; }
     const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const noexcept { return range_asof_join_ctx; }
     void validateRangeAsof(Int64 max_range) const;
     bool isRangeJoin() const noexcept { return range_asof_join_ctx.type != Streaming::RangeType::None; }
