@@ -31,6 +31,7 @@
 #include <Interpreters/InternalTextLogsQueue.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/Session.h>
+#include <Access/LocalApiToken.h>
 #include <Server/TCPServer.h>
 #include <Storages/Stream/StorageStream.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
@@ -1138,6 +1139,17 @@ void TCPHandler::receiveHello()
 
     if (user.empty())
         throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet from client (no user in Hello package)");
+
+    /// The local API user may only connect from loopback — reject all other origins
+    /// before authentication so the token is never tested against a remote attempt.
+    if (LocalApiToken::isLocalApiTokenUser(user))
+    {
+        if (!socket().peerAddress().host().isLoopback())
+            throw Exception(
+                ErrorCodes::AUTHENTICATION_FAILED,
+                "User '{}' is restricted to localhost connections",
+                user);
+    }
 
     LOG_DEBUG(log, "Connected {} version {}.{}.{}, revision: {}{}{}.",
         client_name,

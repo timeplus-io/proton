@@ -1139,3 +1139,14 @@ max_concurrent_select_queries: 1000
 # background_message_broker_schedule_pool_size: 16
 
 # bg_reconnect_mysql_dict_interval: 1000
+
+# Ephemeral local API user for Python UDFs and other in-process callers.
+# The user and its token live in memory only - never written to disk,
+# regenerated on every server restart.
+#
+# privileges: comma-separated list of privileges using standard GRANT syntax.
+# Supported names match src/Access/Common/AccessType.h, e.g.:
+#   SELECT, INSERT, ALTER, CREATE, DROP, TRUNCATE, ALL
+local_api_user:
+    enabled: true
+    privileges: SELECT,INSERT,CREATE TEMPORARY TABLE

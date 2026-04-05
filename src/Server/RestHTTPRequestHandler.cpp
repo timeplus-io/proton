@@ -1,5 +1,6 @@
-#include "RestHTTPRequestHandler.h"
-#include "IServer.h"
+#include <Server/RestHTTPRequestHandler.h>
+#include <Server/IServer.h>
+#include <Access/LocalApiToken.h>
 
 #include "RestRouterHandlers/RestRouterFactory.h"
 #include "RestRouterHandlers/RestRouterHandler.h"
@@ -273,6 +274,17 @@ bool RestHTTPRequestHandler::authenticateUser(HTTPServerRequest & request, HTMLF
             response.send();
             return false;
         }
+    }
+
+    /// The local API user may only connect from loopback — reject all other origins
+    /// before authentication so the token is never tested against a remote attempt.
+    if (LocalApiToken::isLocalApiTokenUser(user))
+    {
+        if (!request.clientAddress().host().isLoopback())
+            throw Exception(
+                ErrorCodes::AUTHENTICATION_FAILED,
+                "User '{}' is restricted to localhost connections",
+                user);
     }
 
     /// Set client info. It will be used for quota accounting parameters in 'setUser' method.

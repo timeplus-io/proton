@@ -433,4 +433,8 @@
   <builtin_dictionaries_reload_interval>3600</builtin_dictionaries_reload_interval>
   <max_session_timeout>3600</max_session_timeout>
   <default_session_timeout>60</default_session_timeout>
+  <local_api_user>
+    <enabled>true</enabled>
+    <privileges>SELECT,INSERT,CREATE TEMPORARY TABLE</privileges>
+  </local_api_user>
 </proton>

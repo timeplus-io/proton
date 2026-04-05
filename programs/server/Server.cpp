@@ -100,6 +100,7 @@
 #include <Interpreters/BuiltinSchemasProvisioner.h>
 #include <Interpreters/TelemetryCollector.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
+#include <Access/LocalApiToken.h>
 #include <Task/TaskScheduler.h>
 #if USE_V8
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
@@ -1314,6 +1315,10 @@ try
         tryLogCurrentException(log, "Caught exception while setting up access control.");
         throw;
     }
+
+    /// Create the ephemeral local API user used by Python UDFs and other
+    /// in-process callers to authenticate back to the database engine.
+    LocalApiToken::initialize(global_context);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]()
