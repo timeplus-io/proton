@@ -3,6 +3,8 @@
 #include <CPython/GILGuard.h>
 #include <CPython/Utils.h>
 #include <Common/Exception.h>
+#include <Access/LocalApiToken.h>
+#include <base/types.h>
 
 namespace DB
 {
@@ -129,6 +131,19 @@ void PythonModuleSession::init()
         auto byte_code = compile(function.source_code);
         executeByteCode(byte_code, module_name);
         module_loaded = true;
+
+        /// Inject local API credentials directly into the module's global namespace
+        /// so UDF code can access them as bare names without going through os.environ.
+        /// This keeps the token out of the process environment (no subprocess leakage,
+        /// no /proc/<pid>/environ exposure).
+        if (LocalApiToken::isEnabled())
+        {
+            auto mod = getModule(module_name);
+            PyObjectPtr user_val(PyUnicode_FromString(LocalApiToken::username().c_str()));
+            PyObjectPtr pass_val(PyUnicode_FromString(LocalApiToken::token().c_str()));
+            PyObject_SetAttrString(mod.get(), "__timeplus_local_api_user", user_val.get());
+            PyObject_SetAttrString(mod.get(), "__timeplus_local_api_password", pass_val.get());
+        }
 
         if (!function.init_function_name.empty())
         {
