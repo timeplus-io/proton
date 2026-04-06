@@ -541,6 +541,9 @@
     \
     M(S3CachedCredentialsProvidersReused, "Total number of reused credentials provider from the cache") \
     M(S3CachedCredentialsProvidersAdded, "Total number of newly added credentials providers to the cache") \
+    \
+    M(PythonGILAcquired, "Number of times the Python GIL was acquired") \
+    M(PythonGILWaitMicroseconds, "Total time spent waiting to acquire the Python GIL in microseconds") \
 
 
 namespace ProfileEvents

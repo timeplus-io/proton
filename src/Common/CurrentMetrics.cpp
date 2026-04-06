@@ -181,6 +181,7 @@
     \
     M(S3DiskNoKeyErrors, "The number of `NoSuchKey` errors that occur when reading data from S3 cloud storage through ClickHouse disks.") \
     M(S3CachedCredentialsProviders, "Total number of cached credentials providers") \
+    M(PythonGILWait, "Number of threads currently waiting to acquire the Python GIL") \
 
 
 namespace CurrentMetrics

@@ -1,7 +1,21 @@
 #pragma once
 
 #include <Python.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
+
+namespace ProfileEvents
+{
+extern const Event PythonGILAcquired;
+extern const Event PythonGILWaitMicroseconds;
+}
+
+namespace CurrentMetrics
+{
+extern const Metric PythonGILWait;
+}
 
 namespace DB
 {
@@ -30,7 +44,13 @@ public:
 
         try
         {
-            state = PyGILState_Ensure();
+            Stopwatch watch;
+            {
+                CurrentMetrics::Increment waiting{CurrentMetrics::PythonGILWait};
+                state = PyGILState_Ensure();
+            }
+            ProfileEvents::increment(ProfileEvents::PythonGILAcquired);
+            ProfileEvents::increment(ProfileEvents::PythonGILWaitMicroseconds, watch.elapsedMicroseconds());
             acquired = true;
         }
         catch (...)
