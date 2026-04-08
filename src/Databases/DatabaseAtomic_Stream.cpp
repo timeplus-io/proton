@@ -7,6 +7,7 @@
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/MetadataHelper.h>
+#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/MatView/StorageMaterializedView.h>
@@ -21,6 +22,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int INVALID_SETTING_VALUE;
+extern const int UNKNOWN_STREAM;
 }
 
 void DatabaseAtomic::dropTableFromMetaStore(
@@ -33,7 +35,7 @@ void DatabaseAtomic::dropTableFromMetaStore(
     auto timeout_ms = local_context->getSettingsRef().query_timeout_sec * 1000;
     auto & metastore = Globals::getMetaStore();
     auto request = std::make_shared<cluster::DeleteStreamRequest>(
-        std::move(storage_id.database_name),
+        storage_id.database_name,
         storage_id.table_name,
         storage_id.uuid,
         queryToString(query, true),
@@ -44,6 +46,30 @@ void DatabaseAtomic::dropTableFromMetaStore(
     if (resp->hasError())
     {
         const auto & data = resp->data();
+
+        /// Tolerate UNKNOWN_STREAM when the caller uses IF EXISTS or CASCADE
+        /// semantics.  A prior DROP STREAM IF EXISTS may have timed out at the
+        /// client while the server-side delete eventually succeeded, so a
+        /// subsequent DROP DATABASE CASCADE (or retry) can legitimately arrive
+        /// after the stream is already gone.
+        if (data.err.error_code == ErrorCodes::UNKNOWN_STREAM)
+        {
+            if (const auto * drop_query = query->as<ASTDropQuery>())
+            {
+                if (drop_query->if_exists || drop_query->cascade)
+                {
+                    LOG_WARNING(
+                        log,
+                        "Stream {}.{} (UUID {}) was already deleted; ignored under {} semantics",
+                        storage_id.database_name,
+                        storage_id.table_name,
+                        toString(storage_id.uuid),
+                        drop_query->cascade ? "CASCADE" : "IF EXISTS");
+                    return;
+                }
+            }
+        }
+
         throw Exception::createRuntime(data.err.error_code, data.err.error_message);
     }
 }
