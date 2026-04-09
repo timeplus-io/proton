@@ -2,6 +2,8 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/FilterStep.h>
 #include <Processors/QueryPlan/SourceStepWithFilter.h>
+#include <Processors/QueryPlan/Streaming/ConcatStep.h>
+#include <Processors/QueryPlan/Streaming/DelayStep.h>
 #include <deque>
 
 namespace DB::QueryPlanOptimizations
@@ -24,6 +26,12 @@ void optimizePrimaryKeyCondition(const Stack & stack)
         /// Ideally, chain should look like (Expression -> ...) -> (Filter -> ...) -> ReadFromStorage,
         /// So this is likely not needed.
         else if (typeid_cast<ExpressionStep *>(iter->node->step.get()))
+            continue;
+        /// Streaming backfill inserts transparent routing steps between the outer filter and historical source.
+        /// Skip them so MergeTree sources can still reuse the filter for index pruning.
+        else if (
+            typeid_cast<Streaming::DelayStep *>(iter->node->step.get())
+            || typeid_cast<Streaming::ConcatStep *>(iter->node->step.get()))
             continue;
         else
             break;
