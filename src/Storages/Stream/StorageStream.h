@@ -2,7 +2,6 @@
 
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
-#include <Storages/SeekToInfo.h>
 #include <Storages/QueryShard.h>
 #include <Storages/ShardAppliedSequence.h>
 #include <Storages/ShardCommittedSequence.h>
@@ -269,9 +268,6 @@ public:
     const String & getEngineMode() const { return getSettings()->mode; }
 
     std::vector<int64_t> getLastSNs() const;
-
-    /// Try resolving a time-based seek_to via the streaming store, returns std::nullopt if compacted.
-    std::optional<std::vector<Int64>> tryResolveTimeSeekViaStreamingStore(const SeekToInfoPtr & seek_to_info) const;
 
     bool supportsStreamingQuery() const override { return true; }
 

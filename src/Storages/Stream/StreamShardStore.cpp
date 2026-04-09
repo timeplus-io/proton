@@ -18,9 +18,6 @@
 #include <Processors/QueryPlan/Streaming/ConcatStep.h>
 #include <Processors/QueryPlan/Streaming/DelayStep.h>
 #include <Processors/Sources/MarkSource.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
 #include <Storages/Distributed/DistributedSettings.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
@@ -28,8 +25,6 @@
 #include <Storages/Stream/StreamingStoreSource.h>
 #include <Common/ProtonCommon.h>
 #include <Common/setThreadName.h>
-
-#include <algorithm>
 
 namespace DB
 {
@@ -398,13 +393,6 @@ void StreamShardStore::readConcat(
         column_names.emplace_back(ProtonConsts::RESERVED_EVENT_TIME);
 
     auto historical_plan = std::make_unique<QueryPlan>();
-
-    /// Note: The event-time predicate for time-based seek_to is already injected
-    /// by InterpreterSelectQuery::handleSeekToSetting() via addEventTimePredicate()
-    /// before the analysis stage. No need to inject it here — additional_filter_ast
-    /// is consumed during analysis (before IStorage::read()), so setting it here
-    /// would be too late.
-
     auto max_sn = readHistorical(
         *historical_plan, column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
 

@@ -57,17 +57,24 @@ extern const int UNKNOWN_IDENTIFIER;
 namespace
 {
 
-/// Add where expression: <event_time> >= to_datetime64(utc_ms/1000, 3, 'UTC')
+/// Add where expression: <event_time> >= <precomputed DateTime64 literal>
+/// We emit the seek timestamp as a DecimalField directly instead of building
+/// a nested function chain (to_datetime64(utc_ms/1000, 3, 'UTC')), because
+/// MergeTree's KeyCondition cannot constant-fold nested function expressions
+/// when evaluating MinMax indexes or partition keys during part pruning.
+/// By providing a literal, KeyCondition can evaluate it against the MinMax
+/// index, partition key, and primary key — enabling proper part pruning
+/// during historical backfill (see issue #558).
 void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
 {
+    /// _tp_time is DateTime64(3, 'UTC'), so the literal value is milliseconds.
+    DecimalField<DateTime64> dt64_value(DateTime64(utc_ms), 3);
+    auto literal = std::make_shared<ASTLiteral>(Field(dt64_value));
+
     auto greater = makeASTFunction(
         "greater_or_equals",
         std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME),
-        makeASTFunction(
-            "to_datetime64",
-            makeASTFunction("divide", std::make_shared<ASTLiteral>(utc_ms), std::make_shared<ASTLiteral>(1000)),
-            std::make_shared<ASTLiteral>(UInt64(3)),
-            std::make_shared<ASTLiteral>("UTC")));
+        literal);
 
     if (auto where = select.where())
         select.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", greater, where));
