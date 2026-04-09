@@ -10,7 +10,9 @@
 #include <CPython/tests/CPythonTest.h>
 #include <CPython/validatePython.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
@@ -21,6 +23,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -635,6 +638,98 @@ TEST_F(CPythonTest, ColumnBool)
             ASSERT_TRUE(PyBool_Check(item));
             ASSERT_EQ(Py_IsTrue(item), v);
         });
+    });
+}
+
+TEST_F(CPythonTest, ColumnConstInt32)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("int32");
+        auto inner_col = data_type->createColumn();
+        inner_col->insert(Field(Int32(42)));
+        auto const_col = ColumnConst::create(std::move(inner_col), 3);
+
+        auto py_list = cpython::convertColumnToPythonList(*const_col, data_type, 0, const_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        for (Py_ssize_t i = 0; i < 3; i++)
+        {
+            PyObject * item = PyList_GetItem(py_list.get(), i);
+            ASSERT_TRUE(PyLong_Check(item));
+            ASSERT_EQ(PyLong_AsLong(item), 42);
+        }
+    });
+}
+
+TEST_F(CPythonTest, ColumnConstString)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("string");
+        auto inner_col = data_type->createColumn();
+        inner_col->insert(Field(String("hello")));
+        auto const_col = ColumnConst::create(std::move(inner_col), 2);
+
+        auto py_list = cpython::convertColumnToPythonList(*const_col, data_type, 0, const_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 2);
+
+        for (Py_ssize_t i = 0; i < 2; i++)
+        {
+            PyObject * item = PyList_GetItem(py_list.get(), i);
+            ASSERT_TRUE(PyBytes_Check(item));
+            ASSERT_EQ(pythonBytesAsString(item), "hello");
+        }
+    });
+}
+
+TEST_F(CPythonTest, ColumnLowCardinalityString)
+{
+    assertNoLeak([]() {
+        auto inner_type = makeDataType("string");
+        auto lc_type = std::make_shared<DataTypeLowCardinality>(inner_type);
+        auto lc_col = lc_type->createColumn();
+
+        lc_col->insert(Field(String("alpha")));
+        lc_col->insert(Field(String("beta")));
+        lc_col->insert(Field(String("alpha")));
+
+        auto py_list = cpython::convertColumnToPythonList(*lc_col, lc_type, 0, lc_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        ASSERT_EQ(pythonBytesAsString(PyList_GetItem(py_list.get(), 0)), "alpha");
+        ASSERT_EQ(pythonBytesAsString(PyList_GetItem(py_list.get(), 1)), "beta");
+        ASSERT_EQ(pythonBytesAsString(PyList_GetItem(py_list.get(), 2)), "alpha");
+    });
+}
+
+TEST_F(CPythonTest, ColumnLowCardinalityNullableInt32)
+{
+    assertNoLeak([]() {
+        auto inner_type = makeDataType("nullable(int32)");
+        auto lc_type = std::make_shared<DataTypeLowCardinality>(inner_type);
+        auto lc_col = lc_type->createColumn();
+
+        lc_col->insert(Field(Int32(10)));
+        lc_col->insert(Field{});
+        lc_col->insert(Field(Int32(10)));
+
+        auto py_list = cpython::convertColumnToPythonList(*lc_col, lc_type, 0, lc_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        ASSERT_TRUE(PyLong_Check(PyList_GetItem(py_list.get(), 0)));
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(py_list.get(), 0)), 10);
+
+        ASSERT_TRUE(Py_IsNone(PyList_GetItem(py_list.get(), 1)));
+
+        ASSERT_TRUE(PyLong_Check(PyList_GetItem(py_list.get(), 2)));
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(py_list.get(), 2)), 10);
     });
 }
 
