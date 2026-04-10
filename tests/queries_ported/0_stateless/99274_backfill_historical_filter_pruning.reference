@@ -24,3 +24,16 @@ Granules: 3/3
 Name: _tp_time_index
 Parts: 1/1
 Granules: 3/3
+-- backfill in order
+Condition: (_tp_time in [\'1775790000\', +inf))
+Parts: 1/3
+Granules: 3/5
+Condition: (to_YYYYMM(_tp_time) in [202604, +inf))
+Parts: 1/1
+Granules: 3/3
+Condition: (to_start_of_hour(_tp_time) in [1775790000, +inf))
+Parts: 1/1
+Granules: 3/3
+Name: _tp_time_index
+Parts: 1/1
+Granules: 3/3

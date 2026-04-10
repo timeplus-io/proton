@@ -52,4 +52,20 @@ WHERE explain LIKE '%Condition:%'
    OR explain LIKE '%Parts:%'
    OR explain LIKE '%Granules:%';
 
+SELECT '-- backfill in order';
+SELECT trim(leading ' ' from explain)
+FROM
+(
+    EXPLAIN indexes = 1
+    SELECT id
+    FROM 99274_backfill_historical_filter_pruning
+    WHERE _tp_time >= to_datetime64('2026-04-10 03:00:00', 3, 'UTC')
+    ORDER BY id
+    SETTINGS enable_backfill_from_historical_store = 1, force_backfill_in_order = 1
+)
+WHERE explain LIKE '%Condition:%'
+   OR explain LIKE '%Name:%'
+   OR explain LIKE '%Parts:%'
+   OR explain LIKE '%Granules:%';
+
 DROP STREAM IF EXISTS 99274_backfill_historical_filter_pruning;
