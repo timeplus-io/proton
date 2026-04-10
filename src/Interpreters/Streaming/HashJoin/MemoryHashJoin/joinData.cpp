@@ -264,10 +264,11 @@ std::vector<BufferedStreamData::BucketBlock> BufferedStreamData::assignDataBlock
     {
         LOG_INFO(
             join->logger,
-            "Discard {} late events in range bucket {} of left stream since it is later than latest combined watermark {} with "
-            "bucket_size={}",
+            "Discard {} late events in range bucket {} (range_time_column={}) since it is later than "
+            "latest combined watermark {} with bucket_size={}",
             rows,
             bucket,
+            asof_col_name,
             watermark,
             bucket_size);
     }
