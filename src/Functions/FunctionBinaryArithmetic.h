@@ -48,6 +48,8 @@
 #    include <llvm/IR/IRBuilder.h>
 #endif
 
+#include <absl/container/inlined_vector.h>
+
 #include <cassert>
 
 namespace DB
@@ -342,12 +344,12 @@ private:
         ///       ^^^^^^^^^^^^^^^^
         ///      16 bytes starting from the last offset inside b.
 
-        const size_t b_repeated_size = N + 15;
+	        const size_t b_repeated_size = N + 15;
 
-        UInt8 b_repeated[b_repeated_size];
+	        absl::InlinedVector<UInt8, 64> b_repeated(b_repeated_size);
 
-        for (size_t i = 0; i < b_repeated_size; ++i)
-            b_repeated[i] = b[i % N];
+	        for (size_t i = 0; i < b_repeated_size; ++i)
+	            b_repeated[i] = b[i % N];
 
         size_t b_offset = 0;
         const size_t b_increment = 16 % N;

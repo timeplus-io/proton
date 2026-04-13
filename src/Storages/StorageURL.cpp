@@ -309,7 +309,7 @@ namespace
 
                 {
                     std::lock_guard lock(reader_mutex);
-                    pipeline->reset();
+                    (*pipeline).reset();
                     reader.reset();
                 }
             }

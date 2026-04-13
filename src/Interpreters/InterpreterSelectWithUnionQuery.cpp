@@ -283,9 +283,8 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     }
 
     auto & cache = context_->getSampleBlockCache();
-    auto cache_iter = cache.find(key);
-    if (cache_iter != cache.end())
-        return cache_iter->second;
+    if (cache.contains(key))
+        return cache.at(key);
 
     if (is_create_parameterized_view)
     {

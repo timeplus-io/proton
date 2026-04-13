@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 namespace
 {

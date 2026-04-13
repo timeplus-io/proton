@@ -244,7 +244,7 @@ public:
 
 	C* get()
 	{
-		return _ptr;
+		return _ptr; // NOLINT
 	}
 
 	const C* get() const

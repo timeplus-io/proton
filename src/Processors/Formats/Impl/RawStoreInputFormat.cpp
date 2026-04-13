@@ -341,9 +341,9 @@ void RawStoreInputFormat::extractTimeFromRawByRegex(IColumn & time_col, IColumn 
 
     re2::StringPiece in{raw.data, raw.size};
     int num_captures = time_extraction_regex->NumberOfCapturingGroups() + 1;
-    re2::StringPiece matches[num_captures];
+    std::vector<re2::StringPiece> matches(static_cast<size_t>(num_captures));
 
-    if (!time_extraction_regex->Match(in, 0, in.size(), re2::RE2::Anchor::UNANCHORED, matches, num_captures))
+    if (!time_extraction_regex->Match(in, 0, in.size(), re2::RE2::Anchor::UNANCHORED, matches.data(), num_captures))
         throw Exception(
             ErrorCodes::INCORRECT_DATA,
             "Cannot extract _time from '{}', time_extraction_rule: {}",

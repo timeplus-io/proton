@@ -9,6 +9,7 @@
 #include <Common/setThreadName.h>
 
 #include <charconv>
+#include <vector>
 
 namespace DB
 {
@@ -786,8 +787,8 @@ CallResult<StreamShard> Loglet::streamShardFrom(const std::string & filename)
         pat = &LOG_DIR_PATTERN;
 
     int32_t num_captures = pat->NumberOfCapturingGroups() + 1;
-    re2::StringPiece matches[num_captures];
-    if (pat->Match(filename, 0, filename.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches, num_captures))
+    std::vector<re2::StringPiece> matches(static_cast<size_t>(num_captures));
+    if (pat->Match(filename, 0, filename.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches.data(), num_captures))
     {
         StreamID stream_id = DB::UUIDHelpers::Nil;
         auto id{matches[1]};

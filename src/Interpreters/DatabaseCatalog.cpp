@@ -300,7 +300,7 @@ void DatabaseCatalog::assertDatabaseDoesntExist(const String & database_name) co
 void DatabaseCatalog::assertDatabaseExistsUnlocked(const String & database_name) const
 {
     assert(!database_name.empty());
-    if (databases.end() == databases.find(database_name))
+    if (!databases.contains(database_name))
         throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database {} doesn't exist", backQuoteIfNeed(database_name));
 }
 
@@ -308,7 +308,7 @@ void DatabaseCatalog::assertDatabaseExistsUnlocked(const String & database_name)
 void DatabaseCatalog::assertDatabaseDoesntExistUnlocked(const String & database_name) const
 {
     assert(!database_name.empty());
-    if (databases.end() != databases.find(database_name))
+    if (databases.contains(database_name))
         throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Database {} already exists.", backQuoteIfNeed(database_name));
 }
 
@@ -383,7 +383,7 @@ DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const Stri
 void DatabaseCatalog::updateDatabaseName(const String & old_name, const String & new_name, const Strings & tables_in_database)
 {
     std::lock_guard lock{databases_mutex};
-    assert(databases.find(new_name) == databases.end());
+    assert(!databases.contains(new_name));
     auto it = databases.find(old_name);
     assert(it != databases.end());
     auto db = it->second;
@@ -440,7 +440,7 @@ bool DatabaseCatalog::isDatabaseExist(const String & database_name) const
 {
     assert(!database_name.empty());
     std::lock_guard lock{databases_mutex};
-    return databases.end() != databases.find(database_name);
+    return databases.contains(database_name);
 }
 
 Databases DatabaseCatalog::getDatabases() const

@@ -104,7 +104,7 @@ void fillFixedBatch(size_t keys_size, ColumnRawPtrsSpan key_columns, SizesSpan k
             /// It should be ok as log as we do not reffer to any value from `out` before filling.
             const char * source = static_cast<const ColumnFixedSizeHelper *>(column)->getRawDataBegin<sizeof(T)>();
             T * dest = reinterpret_cast<T *>(reinterpret_cast<char *>(out.data()) + offset);
-            fillFixedBatch<T, sizeof(Key) / sizeof(T)>(num_rows, reinterpret_cast<const T *>(source), dest);
+            fillFixedBatch<T, sizeof(Key) / sizeof(T)>(num_rows, reinterpret_cast<const T *>(source), dest); /// NOLINT(bugprone-sizeof-expression,cert-arr39-c)
             offset += sizeof(T);
         }
     }
@@ -209,7 +209,7 @@ static inline T ALWAYS_INLINE packFixed(
 
     size_t offset = 0;
 
-    static constexpr auto bitmap_size = std::tuple_size<KeysNullMap<T>>::value;
+    static constexpr auto bitmap_size = std::tuple_size_v<KeysNullMap<T>>;
     static constexpr bool has_bitmap = bitmap_size > 0;
 
     if constexpr (has_bitmap)

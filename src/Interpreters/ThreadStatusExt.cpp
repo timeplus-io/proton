@@ -369,7 +369,7 @@ void ThreadStatus::initPerformanceCounters()
             }
         }
         if (taskstats)
-            taskstats->reset();
+            (*taskstats).reset();
     }
 }
 
@@ -429,7 +429,7 @@ void ThreadStatus::resetPerformanceCountersLastUsage()
 {
     *last_rusage = RUsageCounters::current();
     if (taskstats)
-        taskstats->reset();
+        (*taskstats).reset();
 }
 
 void ThreadStatus::initQueryProfiler()

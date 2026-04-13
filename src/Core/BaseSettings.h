@@ -496,7 +496,7 @@ void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat format)
         if ((format >= SettingsWriteFormat::STRINGS_WITH_FLAGS) || is_custom)
         {
             using Flags = BaseSettingsHelpers::Flags;
-            Flags flags{0};
+            Flags flags{};
             if (is_custom)
                 flags = static_cast<Flags>(flags | Flags::CUSTOM);
             else if (is_important)
@@ -520,13 +520,15 @@ void BaseSettings<Traits_>::read(ReadBuffer & in, SettingsWriteFormat format)
     const auto & accessor = Traits::Accessor::instance();
     while (true)
     {
-        String name = BaseSettingsHelpers::readString(in);
-        if (name.empty() /* empty string is a marker of the end of settings */)
+        String read_name = BaseSettingsHelpers::readString(in);
+        if (read_name.empty() /* empty string is a marker of the end of settings */)
             break;
+
+        std::string_view name = Traits::resolveName(read_name);
         size_t index = accessor.find(name);
 
         using Flags = BaseSettingsHelpers::Flags;
-        Flags flags{0};
+        UInt64 flags{};
         if (format >= SettingsWriteFormat::STRINGS_WITH_FLAGS)
             flags = BaseSettingsHelpers::readFlags(in);
         bool is_important = (flags & Flags::IMPORTANT);

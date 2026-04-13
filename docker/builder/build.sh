@@ -4,7 +4,7 @@ set -e
 #ccache -s # uncomment to display CCache statistics
 mkdir -p /server/build_docker
 cd /server/build_docker
-cmake -G Ninja /server "-DCMAKE_C_COMPILER=$(command -v clang-13)" "-DCMAKE_CXX_COMPILER=$(command -v clang++-13)" "-DCMAKE_CXX_FLAGS=-Wno-nonportable-include-path"
+cmake -G Ninja /server "-DCMAKE_C_COMPILER=$(command -v clang-${LLVM_VERSION})" "-DCMAKE_CXX_COMPILER=$(command -v clang++-${LLVM_VERSION})" "-DCMAKE_CXX_FLAGS=-Wno-nonportable-include-path"
 
 # Set the number of build jobs to the half of number of virtual CPU cores (rounded up).
 # By default, ninja use all virtual CPU cores, that leads to very high memory consumption without much improvement in build time.

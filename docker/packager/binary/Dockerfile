@@ -1,13 +1,15 @@
 # rebuild in https://github.com/timeplus-io/proton-enterprise/pull/7825
 # docs: https://github.com/timeplus-io/proton-enterprise/wiki/How-to-generate-proton%E2%80%90binary%E2%80%90builder-image
 # docker build -t timeplus/proton-binary-builder .
-FROM ubuntu:20.04
+# NOTE: `clickhouse/cctools:*` binaries require newer glibc/libstdc++ than Ubuntu 20.04 provides.
+# Ubuntu 22.04+ is needed for Darwin cross-linking.
+FROM ubuntu:22.04
 
 # ARG for quick switch to a given ubuntu mirror
 ARG apt_archive="http://archive.ubuntu.com"
 RUN sed -i "s|http://archive.ubuntu.com|$apt_archive|g" /etc/apt/sources.list
 
-ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=19
+ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=21
 
 RUN apt-get update \
     && apt-get install \

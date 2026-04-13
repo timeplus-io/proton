@@ -31,6 +31,8 @@
 #include <Processors/Formats/IOutputFormat.h>
 #include <Formats/FormatFactory.h>
 
+#include <vector>
+
 #include <base/getFQDNOrHostName.h>
 #include <base/scope_guard.h>
 #include <base/isSharedPtrUnique.h>
@@ -1128,17 +1130,17 @@ void PredefinedQueryHandler::customizeContext(HTTPServerRequest & request, Conte
     /// If in the configuration file, the handler's header is regex and contains named capture group
     /// We will extract regex named capture groups as query parameters
 
-    const auto & set_query_params = [&](const char * begin, const char * end, const CompiledRegexPtr & compiled_regex)
-    {
-        int num_captures = compiled_regex->NumberOfCapturingGroups() + 1;
+	    const auto & set_query_params = [&](const char * begin, const char * end, const CompiledRegexPtr & compiled_regex)
+	    {
+	        int num_captures = compiled_regex->NumberOfCapturingGroups() + 1;
 
-        std::string_view matches[num_captures];
-        std::string_view input(begin, end - begin);
-        if (compiled_regex->Match(input, 0, end - begin, re2::RE2::Anchor::ANCHOR_BOTH, matches, num_captures))
-        {
-            for (const auto & [capturing_name, capturing_index] : compiled_regex->NamedCapturingGroups())
-            {
-                const auto & capturing_value = matches[capturing_index];
+	        std::vector<re2::StringPiece> matches(static_cast<size_t>(num_captures));
+	        re2::StringPiece input(begin, end - begin);
+	        if (compiled_regex->Match(input, 0, input.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches.data(), num_captures))
+	        {
+	            for (const auto & [capturing_name, capturing_index] : compiled_regex->NamedCapturingGroups())
+	            {
+	                const auto & capturing_value = matches[capturing_index];
 
                 if (capturing_value.data())
                     context->setQueryParameter(capturing_name, String(capturing_value.data(), capturing_value.size()));

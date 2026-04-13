@@ -107,10 +107,10 @@ public:
 		return new HandleException(*this);
 	}
 
-	void rethrow() const
-		/// Re-throws the HandleException.
-	{
-		throw *this;
+    void rethrow() const
+    	/// Re-throws the HandleException.
+    {
+        throw *this;
 	}
 
 	const Diagnostics<H, handleType>& diagnostics() const

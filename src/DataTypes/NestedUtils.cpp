@@ -106,7 +106,7 @@ Block flatten(const Block & block)
 
                     res.insert(ColumnWithTypeAndName(
                         is_const
-                            ? ColumnConst::create(std::move(column_array_of_element), block.rows())
+                            ? ColumnConst::create(column_array_of_element, block.rows())
                             : column_array_of_element,
                         std::make_shared<DataTypeArray>(element_types[i]),
                         nested_name));

@@ -43,7 +43,7 @@ jobs:
               enable_python="--disable-python-udf"
             fi
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-19 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-21 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -247,7 +247,7 @@ jobs:
               enable_python="--disable-python-udf"
             fi
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -414,7 +414,7 @@ jobs:
               enable_python="--disable-python-udf"
             fi
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-19 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-21 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -515,7 +515,7 @@ jobs:
 
         ./docker/packager/packager \
           --package-type binary \
-          --docker-image-version clang-19 \
+          --docker-image-version clang-21 \
           --sanitizer "$SANITIZER" \
           --proton-build \
           --enable-proton-local \

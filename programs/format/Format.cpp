@@ -70,7 +70,7 @@ int mainFormat(int argc, char ** argv)
     boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), options);
     po::notify(options);
 
-    if (options.count("help"))
+    if (options.contains("help"))
     {
         std::cout << "Usage: " << argv[0] << " [options] < query" << std::endl;
         std::cout << desc << std::endl;
@@ -79,12 +79,12 @@ int mainFormat(int argc, char ** argv)
 
     try
     {
-        bool hilite = options.count("hilite");
-        bool oneline = options.count("oneline");
-        bool quiet = options.count("quiet");
-        bool multiple = options.count("multiquery");
-        bool obfuscate = options.count("obfuscate");
-        bool backslash = options.count("backslash");
+        bool hilite = options.contains("hilite");
+        bool oneline = options.contains("oneline");
+        bool quiet = options.contains("quiet");
+        bool multiple = options.contains("multiquery");
+        bool obfuscate = options.contains("obfuscate");
+        bool backslash = options.contains("backslash");
 
         if (quiet && (hilite || oneline || obfuscate))
         {
@@ -100,7 +100,7 @@ int mainFormat(int argc, char ** argv)
 
         String query;
 
-        if (options.count("query"))
+        if (options.contains("query"))
         {
             query = options["query"].as<std::string>();
         }
@@ -116,7 +116,7 @@ int mainFormat(int argc, char ** argv)
             WordSet used_nouns;
             SipHash hash_func;
 
-            if (options.count("seed"))
+            if (options.contains("seed"))
             {
                 hash_func.update(options["seed"].as<std::string>());
             }

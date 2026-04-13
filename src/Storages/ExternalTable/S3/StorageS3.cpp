@@ -53,10 +53,10 @@
 
 #include <aws/core/auth/AWSCredentials.h>
 
-#include <re2/re2.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/parseGlobs.h>
 #include <Common/quoteString.h>
+#include <Common/re2.h>
 
 #include <Processors/ISource.h>
 #include <Processors/Sinks/SinkToStorage.h>

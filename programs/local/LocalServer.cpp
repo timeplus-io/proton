@@ -840,27 +840,27 @@ void LocalServer::applyCmdOptions(ContextMutablePtr context)
 
 void LocalServer::processOptions(const OptionsDescription &, const CommandLineOptions & options, const std::vector<Arguments> &, const std::vector<Arguments> &)
 {
-    if (options.count("table"))
+    if (options.contains("table"))
         config().setString("table-name", options["table"].as<std::string>());
-    if (options.count("file"))
+    if (options.contains("file"))
         config().setString("table-file", options["file"].as<std::string>());
-    if (options.count("structure"))
+    if (options.contains("structure"))
         config().setString("table-structure", options["structure"].as<std::string>());
-    if (options.count("no-system-tables"))
+    if (options.contains("no-system-tables"))
         config().setBool("no-system-tables", true);
 
-    if (options.count("input-format"))
+    if (options.contains("input-format"))
         config().setString("table-data-format", options["input-format"].as<std::string>());
-    if (options.count("output-format"))
+    if (options.contains("output-format"))
         config().setString("output-format", options["output-format"].as<std::string>());
 
-    if (options.count("logger.console"))
+    if (options.contains("logger.console"))
         config().setBool("logger.console", options["logger.console"].as<bool>());
-    if (options.count("logger.log"))
+    if (options.contains("logger.log"))
         config().setString("logger.log", options["logger.log"].as<std::string>());
-    if (options.count("logger.level"))
+    if (options.contains("logger.level"))
         config().setString("logger.level", options["logger.level"].as<std::string>());
-    if (options.count("send_logs_level"))
+    if (options.contains("send_logs_level"))
         config().setString("send_logs_level", options["send_logs_level"].as<std::string>());
 }
 

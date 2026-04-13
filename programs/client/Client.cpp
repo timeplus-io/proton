@@ -1145,30 +1145,30 @@ void Client::processOptions(const OptionsDescription & options_description,
         }
     }
 
-    if (options.count("config-file") && options.count("config"))
+    if (options.contains("config-file") && options.contains("config"))
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Two or more configuration files referenced in arguments");
 
-    if (options.count("config"))
+    if (options.contains("config"))
         config().setString("config-file", options["config"].as<std::string>());
-    if (options.count("interleave-queries-file"))
+    if (options.contains("interleave-queries-file"))
         interleave_queries_files = options["interleave-queries-file"].as<std::vector<std::string>>();
-    if (options.count("secure"))
+    if (options.contains("secure"))
         config().setBool("secure", true);
-    if (options.count("user") && !options["user"].defaulted())
+    if (options.contains("user") && !options["user"].defaulted())
         config().setString("user", options["user"].as<std::string>());
-    if (options.count("password"))
+    if (options.contains("password"))
         config().setString("password", options["password"].as<std::string>());
-    if (options.count("ask-password"))
+    if (options.contains("ask-password"))
         config().setBool("ask-password", true);
-    if (options.count("quota_key"))
+    if (options.contains("quota_key"))
         config().setString("quota_key", options["quota_key"].as<std::string>());
-    if (options.count("testmode"))
+    if (options.contains("testmode"))
         config().setBool("testmode", true);
-    if (options.count("max_client_network_bandwidth"))
+    if (options.contains("max_client_network_bandwidth"))
         max_client_network_bandwidth = options["max_client_network_bandwidth"].as<int>();
-    if (options.count("compression"))
+    if (options.contains("compression"))
         config().setBool("compression", options["compression"].as<bool>());
-    if (options.count("no-warnings"))
+    if (options.contains("no-warnings"))
         config().setBool("no-warnings", true);
 
     if ((query_fuzzer_runs = options["query-fuzzer-runs"].as<int>()))
@@ -1180,7 +1180,7 @@ void Client::processOptions(const OptionsDescription & options_description,
         ignore_error = true;
     }
 
-    if (options.count("opentelemetry-traceparent"))
+    if (options.contains("opentelemetry-traceparent"))
     {
         String traceparent = options["opentelemetry-traceparent"].as<std::string>();
         String error;
@@ -1188,7 +1188,7 @@ void Client::processOptions(const OptionsDescription & options_description,
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot parse OpenTelemetry traceparent '{}': {}", traceparent, error);
     }
 
-    if (options.count("opentelemetry-tracestate"))
+    if (options.contains("opentelemetry-tracestate"))
         global_context->getClientInfo().client_trace_context.tracestate = options["opentelemetry-tracestate"].as<std::string>();
 }
 

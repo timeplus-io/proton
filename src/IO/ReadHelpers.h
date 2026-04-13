@@ -903,7 +903,7 @@ inline ReturnType readUUIDTextImpl(UUID & uuid, ReadBuffer & buf)
 {
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
-    char s[36];
+    char s[37];
     size_t size = buf.read(s, 32);
 
     if (size == 32)
@@ -914,7 +914,7 @@ inline ReturnType readUUIDTextImpl(UUID & uuid, ReadBuffer & buf)
 
             if (size != 36)
             {
-                s[size] = 0;
+                s[std::min(size, size_t(36))] = 0;
 
                 if constexpr (throw_exception)
                 {
@@ -935,7 +935,7 @@ inline ReturnType readUUIDTextImpl(UUID & uuid, ReadBuffer & buf)
     }
     else
     {
-        s[size] = 0;
+        s[std::min(size, size_t(36))] = 0;
 
         if constexpr (throw_exception)
         {

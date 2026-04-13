@@ -1812,7 +1812,7 @@ bool ClientBase::processQueryText(const String & text)
 {
     auto trimmed_input = trim(text, [](char c) { return isWhitespaceASCII(c) || c == ';'; });
 
-    if (exit_strings.end() != exit_strings.find(trimmed_input))
+    if (exit_strings.contains(trimmed_input))
         return false;
 
     if (trimmed_input.starts_with("\\i"))
@@ -2296,56 +2296,56 @@ void ClientBase::init(int argc, char ** argv)
     parseAndCheckOptions(options_description, options, common_arguments);
     po::notify(options);
 
-    if (options.count("version") || options.count("V"))
+    if (options.contains("version") || options.contains("V"))
     {
         showClientVersion();
         exit(0);
     }
 
-    if (options.count("version-clean"))
+    if (options.contains("version-clean"))
     {
         std::cout << VERSION_STRING;
         exit(0);
     }
 
     /// Output of help message.
-    if (options.count("help")
-        || (options.count("host") && options["host"].as<std::string>() == "elp")) /// If user writes -help instead of --help.
+    if (options.contains("help")
+        || (options.contains("host") && options["host"].as<std::string>() == "elp")) /// If user writes -help instead of --help.
     {
         printHelpMessage(options_description);
         exit(0);
     }
 
     /// Common options for clickhouse-client and clickhouse-local.
-    if (options.count("time"))
+    if (options.contains("time"))
         print_time_to_stderr = true;
-    if (options.count("query"))
+    if (options.contains("query"))
         config().setString("query", options["query"].as<std::string>());
-    if (options.count("query_id"))
+    if (options.contains("query_id"))
         config().setString("query_id", options["query_id"].as<std::string>());
-    if (options.count("database"))
+    if (options.contains("database"))
         config().setString("database", options["database"].as<std::string>());
-    if (options.count("config-file"))
+    if (options.contains("config-file"))
         config().setString("config-file", options["config-file"].as<std::string>());
-    if (options.count("queries-file"))
+    if (options.contains("queries-file"))
         queries_files = options["queries-file"].as<std::vector<std::string>>();
-    if (options.count("multiline"))
+    if (options.contains("multiline"))
         config().setBool("multiline", true);
-    if (options.count("multiquery"))
+    if (options.contains("multiquery"))
         config().setBool("multiquery", true);
-    if (options.count("ignore-error"))
+    if (options.contains("ignore-error"))
         config().setBool("ignore-error", true);
-    if (options.count("format"))
+    if (options.contains("format"))
         config().setString("format", options["format"].as<std::string>());
-    if (options.count("vertical"))
+    if (options.contains("vertical"))
         config().setBool("vertical", true);
-    if (options.count("stacktrace"))
+    if (options.contains("stacktrace"))
         config().setBool("stacktrace", true);
-    if (options.count("print-profile-events"))
+    if (options.contains("print-profile-events"))
         config().setBool("print-profile-events", true);
-    if (options.count("profile-events-delay-ms"))
+    if (options.contains("profile-events-delay-ms"))
         config().setUInt64("profile-events-delay-ms", options["profile-events-delay-ms"].as<UInt64>());
-    if (options.count("progress"))
+    if (options.contains("progress"))
     {
         switch (options["progress"].as<ProgressOption>())
         {
@@ -2363,30 +2363,30 @@ void ClientBase::init(int argc, char ** argv)
                 break;
         }
     }
-    if (options.count("echo"))
+    if (options.contains("echo"))
         config().setBool("echo", true);
-    if (options.count("disable_suggestion"))
+    if (options.contains("disable_suggestion"))
         config().setBool("disable_suggestion", true);
-    if (options.count("suggestion_limit"))
+    if (options.contains("suggestion_limit"))
         config().setInt("suggestion_limit", options["suggestion_limit"].as<int>());
-    if (options.count("highlight"))
+    if (options.contains("highlight"))
         config().setBool("highlight", options["highlight"].as<bool>());
-    if (options.count("history_file"))
+    if (options.contains("history_file"))
         config().setString("history_file", options["history_file"].as<std::string>());
-    if (options.count("verbose"))
+    if (options.contains("verbose"))
         config().setBool("verbose", true);
-    if (options.count("interactive"))
+    if (options.contains("interactive"))
         config().setBool("interactive", true);
-    if (options.count("pager"))
+    if (options.contains("pager"))
         config().setString("pager", options["pager"].as<std::string>());
 
-    if (options.count("log-level"))
+    if (options.contains("log-level"))
         Poco::Logger::root().setLevel(options["log-level"].as<std::string>());
-    if (options.count("server_logs_file"))
+    if (options.contains("server_logs_file"))
         server_logs_file = options["server_logs_file"].as<std::string>();
 
     query_processing_stage = QueryProcessingStage::fromString(options["stage"].as<std::string>());
-    profile_events.print = options.count("print-profile-events");
+    profile_events.print = options.contains("print-profile-events");
     profile_events.delay_ms = options["profile-events-delay-ms"].as<UInt64>();
 
     processOptions(options_description, options, external_tables_arguments, hosts_and_ports_arguments);

@@ -6,6 +6,8 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <IO/WriteHelpers.h>
 
+#include <absl/container/inlined_vector.h>
+
 
 namespace DB
 {
@@ -111,7 +113,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        const IColumn * nested[num_arguments];
+        absl::InlinedVector<const IColumn *, 5> nested(num_arguments);
 
         for (size_t i = 0; i < num_arguments; ++i)
             nested[i] = &assert_cast<const ColumnArray &>(*columns[i]).getData();
@@ -133,7 +135,7 @@ public:
         }
 
         for (size_t i = begin; i < end; ++i)
-            nested_func->add(place, nested, i, arena);
+            nested_func->add(place, nested.data(), i, arena);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override

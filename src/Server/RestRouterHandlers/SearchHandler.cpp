@@ -6,7 +6,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/executeQuery.h>
 
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 
 namespace DB

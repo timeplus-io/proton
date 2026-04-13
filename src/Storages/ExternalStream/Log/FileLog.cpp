@@ -24,7 +24,7 @@
 #include <Common/logger_useful.h>
 
 #include <boost/algorithm/string.hpp>
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 namespace DB
 {

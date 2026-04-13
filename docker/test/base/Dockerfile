@@ -7,7 +7,7 @@ FROM clickhouse/test-util:$FROM_TAG
 ARG apt_archive="http://archive.ubuntu.com"
 RUN sed -i "s|http://archive.ubuntu.com|$apt_archive|g" /etc/apt/sources.list
 
-ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=15
+ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=21
 
 RUN apt-get update \
     && apt-get install ca-certificates lsb-release wget gnupg apt-transport-https \
@@ -66,7 +66,7 @@ RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=1 history_size=7 memory_lim
   echo "UBSAN_OPTIONS='print_stacktrace=1'" >> /etc/environment; \
   echo "MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'" >> /etc/environment; \
   echo "LSAN_OPTIONS='suppressions=/usr/share/clickhouse-test/config/lsan_suppressions.txt'" >> /etc/environment; \
-  ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-symbolizer /usr/bin/llvm-symbolizer;
+	  ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-symbolizer /usr/bin/llvm-symbolizer;
 # Sanitizer options for current shell (not current, but the one that will be spawned on "docker run")
 # (but w/o verbosity for TSAN, otherwise test.reference will not match)
 ENV TSAN_OPTIONS='halt_on_error=1 history_size=7 memory_limit_mb=46080'

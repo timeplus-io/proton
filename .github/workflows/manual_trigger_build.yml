@@ -117,7 +117,7 @@ jobs:
         fi
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --sanitizer $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --sanitizer $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -127,7 +127,7 @@ jobs:
         if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
           echo "Stripping the binary..."
           ls -lh $GITHUB_WORKSPACE/output/proton
-          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-21 /usr/bin/llvm-strip-21 proton
           ls -lh $GITHUB_WORKSPACE/output/proton
         fi
 
@@ -192,7 +192,7 @@ jobs:
         fi
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type ${{ github.event.inputs.build_type }} --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type ${{ github.event.inputs.build_type }} --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -202,7 +202,7 @@ jobs:
         if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
           echo "Stripping the binary..."
           ls -lh $GITHUB_WORKSPACE/output/proton
-          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+          docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-21 /usr/bin/llvm-strip-21 proton
           ls -lh $GITHUB_WORKSPACE/output/proton
         fi
         

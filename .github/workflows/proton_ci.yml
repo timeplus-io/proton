@@ -85,7 +85,7 @@ jobs:
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         # upload ccache back to S3
         tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .

@@ -77,18 +77,18 @@ public:
 		/// Returns a string consisting of the
 		/// message name and the message text.
 
-	virtual Exception* clone() const;
-		/// Creates an exact copy of the exception.
-		///
-		/// The copy can later be thrown again by
-		/// invoking rethrow() on it.
-		
-	virtual void rethrow() const;
-		/// (Re)Throws the exception.
-		///
-		/// This is useful for temporarily storing a
-		/// copy of an exception (see clone()), then
-		/// throwing it again.
+		virtual Exception* clone() const;
+			/// Creates an exact copy of the exception.
+			///
+			/// The copy can later be thrown again by
+			/// invoking rethrow() on it.
+			
+		[[noreturn]] virtual void rethrow() const;
+			/// (Re)Throws the exception.
+			///
+			/// This is useful for temporarily storing a
+			/// copy of an exception (see clone()), then
+			/// throwing it again.
 
 protected:
 	Exception(int code = 0);
@@ -141,65 +141,65 @@ inline int Exception::code() const
 // are not allowed as template arguments.
 //
 #define POCO_DECLARE_EXCEPTION_CODE(API, CLS, BASE, CODE) \
-	class API CLS: public BASE														\
-	{																				\
-	public:																			\
-		CLS(int code = CODE);														\
-		CLS(const std::string& msg, int code = CODE);								\
-		CLS(const std::string& msg, const std::string& arg, int code = CODE);		\
-		CLS(const std::string& msg, const Poco::Exception& exc, int code = CODE);	\
-		CLS(const CLS& exc);														\
-		~CLS() throw();																\
-		CLS& operator = (const CLS& exc);											\
-		const char* name() const throw();											\
-		const char* className() const throw();										\
-		Poco::Exception* clone() const;												\
-		void rethrow() const;														\
-	};
+    class API CLS : public BASE \
+    { \
+    public: \
+        CLS(int code = CODE); \
+        CLS(const std::string & msg, int code = CODE); \
+        CLS(const std::string & msg, const std::string & arg, int code = CODE); \
+        CLS(const std::string & msg, const Poco::Exception & exc, int code = CODE); \
+        CLS(const CLS & exc); \
+        ~CLS() throw(); \
+        CLS & operator=(const CLS & exc); \
+        const char * name() const throw(); \
+        const char * className() const throw(); \
+        Poco::Exception * clone() const; \
+        void rethrow() const; \
+    };
 
 #define POCO_DECLARE_EXCEPTION(API, CLS, BASE) \
 	POCO_DECLARE_EXCEPTION_CODE(API, CLS, BASE, 0)
 
-#define POCO_IMPLEMENT_EXCEPTION(CLS, BASE, NAME)													\
-	CLS::CLS(int code): BASE(code)																	\
-	{																								\
-	}																								\
-	CLS::CLS(const std::string& msg, int code): BASE(msg, code)										\
-	{																								\
-	}																								\
-	CLS::CLS(const std::string& msg, const std::string& arg, int code): BASE(msg, arg, code)		\
-	{																								\
-	}																								\
-	CLS::CLS(const std::string& msg, const Poco::Exception& exc, int code): BASE(msg, exc, code)	\
-	{																								\
-	}																								\
-	CLS::CLS(const CLS& exc): BASE(exc)																\
-	{																								\
-	}																								\
-	CLS::~CLS() throw()																				\
-	{																								\
-	}																								\
-	CLS& CLS::operator = (const CLS& exc)															\
-	{																								\
-		BASE::operator = (exc);																		\
-		return *this;																				\
-	}																								\
-	const char* CLS::name() const throw()															\
-	{																								\
-		return NAME;																				\
-	}																								\
-	const char* CLS::className() const throw()														\
-	{																								\
-		return typeid(*this).name();																\
-	}																								\
-	Poco::Exception* CLS::clone() const																\
-	{																								\
-		return new CLS(*this);																		\
-	}																								\
-	void CLS::rethrow() const																		\
-	{																								\
-		throw *this;																				\
-	}
+#define POCO_IMPLEMENT_EXCEPTION(CLS, BASE, NAME) \
+    CLS::CLS(int code) : BASE(code) \
+    { \
+    } \
+    CLS::CLS(const std::string & msg, int code) : BASE(msg, code) \
+    { \
+    } \
+    CLS::CLS(const std::string & msg, const std::string & arg, int code) : BASE(msg, arg, code) \
+    { \
+    } \
+    CLS::CLS(const std::string & msg, const Poco::Exception & exc, int code) : BASE(msg, exc, code) \
+    { \
+    } \
+    CLS::CLS(const CLS & exc) : BASE(exc) \
+    { \
+    } \
+    CLS::~CLS() throw() \
+    { \
+    } \
+    CLS & CLS::operator=(const CLS & exc) \
+    { \
+        BASE::operator=(exc); \
+        return *this; \
+    } \
+    const char * CLS::name() const throw() \
+    { \
+        return NAME; \
+    } \
+    const char * CLS::className() const throw() \
+    { \
+        return typeid(*this).name(); \
+    } \
+    Poco::Exception * CLS::clone() const \
+    { \
+        return new CLS(*this); \
+    } \
+    void CLS::rethrow() const \
+    { \
+        throw *this; \
+    }
 
 
 //

@@ -25,6 +25,7 @@
 #include <math.h>
 #include <queue>
 #include <stddef.h>
+#include <vector>
 
 namespace DB
 {
@@ -112,27 +113,27 @@ private:
     /**
      * Repeatedly fuse most close values until max_bins bins left
      */
-    void compress(UInt32 max_bins)
-    {
-        sort();
-        auto new_size = size;
-        if (size <= max_bins)
-            return;
+	    void compress(UInt32 max_bins)
+	    {
+	        sort();
+	        auto new_size = size;
+	        if (size <= max_bins)
+	            return;
 
-        // Maintain doubly-linked list of "active" points
-        // and store neighbour pairs in priority queue by distance
-        UInt32 previous[size + 1];
-        UInt32 next[size + 1];
-        bool active[size + 1];
-        std::fill(active, active + size, true);
-        active[size] = false;
+	        // Maintain doubly-linked list of "active" points
+	        // and store neighbour pairs in priority queue by distance
+	        std::vector<UInt32> previous(size + 1);
+	        std::vector<UInt32> next(size + 1);
+	        std::vector<UInt8> active(size + 1);
+	        std::fill(active.begin(), active.begin() + size, 1);
+	        active[size] = 0;
 
-        auto delete_node = [&](UInt32 i)
-        {
-            previous[next[i]] = previous[i];
-            next[previous[i]] = next[i];
-            active[i] = false;
-        };
+	        auto delete_node = [&](UInt32 i)
+	        {
+	            previous[next[i]] = previous[i];
+	            next[previous[i]] = next[i];
+	            active[i] = 0;
+	        };
 
         for (size_t i = 0; i <= size; ++i)
         {
@@ -143,16 +144,16 @@ private:
         next[size] = 0;
         previous[0] = size;
 
-        using QueueItem = std::pair<Mean, UInt32>;
+	        using QueueItem = std::pair<Mean, UInt32>;
 
-        QueueItem storage[2 * size - max_bins];
+	        std::vector<QueueItem> storage(static_cast<size_t>(2 * size - max_bins));
 
-        std::priority_queue<
-            QueueItem,
-            PriorityQueueStorage<QueueItem>,
-            std::greater<QueueItem>>
-                queue{std::greater<QueueItem>(),
-                        PriorityQueueStorage<QueueItem>(storage)};
+	        std::priority_queue<
+	            QueueItem,
+	            PriorityQueueStorage<QueueItem>,
+	            std::greater<QueueItem>>
+	                queue{std::greater<QueueItem>(),
+	                        PriorityQueueStorage<QueueItem>(storage.data())};
 
         auto quality = [&](UInt32 i) { return points[next[i]].mean - points[i].mean; };
 

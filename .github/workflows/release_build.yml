@@ -100,7 +100,7 @@ jobs:
         rm cache.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type relwithdebinfo --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type relwithdebinfo --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -128,7 +128,7 @@ jobs:
 
         # Extract debug symbols from the final binary
         echo "Extracting debug symbols..."
-        docker run --rm -v $GITHUB_WORKSPACE:/work -w /work timeplus/proton-binary-builder:clang-19 \
+        docker run --rm -v $GITHUB_WORKSPACE:/work -w /work timeplus/proton-binary-builder:clang-21 \
           /usr/bin/objcopy --only-keep-debug $PROTON_BINARY ${PROTON_BINARY}.debug
 
         # Create debug symbols package
@@ -139,8 +139,8 @@ jobs:
 
         # Strip the binary in-place (conservative approach)
         echo "Stripping binary in conservative approach..."
-        docker run --rm -v $GITHUB_WORKSPACE:/work -w /work timeplus/proton-binary-builder:clang-19 \
-          /usr/bin/llvm-strip-19 --strip-debug --remove-section=.comment --remove-section=.note $PROTON_BINARY
+        docker run --rm -v $GITHUB_WORKSPACE:/work -w /work timeplus/proton-binary-builder:clang-21 \
+          /usr/bin/llvm-strip-21 --strip-debug --remove-section=.comment --remove-section=.note $PROTON_BINARY
 
         # Show size comparison
         echo "Final sizes:"
@@ -227,7 +227,7 @@ jobs:
         rm cache-arm.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -236,7 +236,7 @@ jobs:
 
         # strip
         ls -lh $GITHUB_WORKSPACE/output/proton
-        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-21 /usr/bin/llvm-strip-21 proton
         ls -lh $GITHUB_WORKSPACE/output/proton
 
         # get proton tag
@@ -492,7 +492,7 @@ jobs:
         echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-19-darwin-aarch64
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-21-darwin-aarch64
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
           exit 127
@@ -500,7 +500,7 @@ jobs:
 
         # strip
         ls -lh $GITHUB_WORKSPACE/output/proton
-        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-21 /usr/bin/llvm-strip-21 proton
         ls -lh $GITHUB_WORKSPACE/output/proton
 
         # clean ccache and build footprint

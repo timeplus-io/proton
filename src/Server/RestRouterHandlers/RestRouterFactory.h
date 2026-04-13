@@ -27,8 +27,9 @@
 #include <Server/RestRouterHandlers/UDFHandler.h>
 #include <Common/escapeForFileName.h>
 
-#include <re2/re2.h>
+#include <Common/re2.h>
 
+#include <vector>
 
 namespace DB
 {
@@ -300,17 +301,17 @@ public:
             int num_captures = router_handler.regex->NumberOfCapturingGroups() + 1;
 
             /// Match request method
-            if (router_handler.method.find(method) != String::npos)
-            {
-                /// Captures param value
-                re2::StringPiece matches[num_captures];
+	            if (router_handler.method.find(method) != String::npos)
+	            {
+	                /// Captures param value
+	                std::vector<re2::StringPiece> matches(static_cast<size_t>(num_captures));
 
-                /// Match request url
-                if (router_handler.regex->Match(url, 0, url.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches, num_captures))
-                {
-                    auto handler = router_handler.handler(query_context);
+	                /// Match request url
+	                if (router_handler.regex->Match(url, 0, url.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches.data(), num_captures))
+	                {
+	                    auto handler = router_handler.handler(query_context);
 
-                    /// Get param name
+	                    /// Get param name
                     for (const auto & [capturing_name, capturing_index] : router_handler.regex->NamedCapturingGroups())
                     {
                         const auto & capturing_value = matches[capturing_index];

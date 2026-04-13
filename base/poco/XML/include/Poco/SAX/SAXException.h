@@ -112,9 +112,9 @@ public:
 
 	Poco::Exception* clone() const;
 		/// Creates an exact copy of the exception.
-		
-	void rethrow() const;
-		/// (Re)Throws the exception.
+
+    void rethrow() const;
+    /// (Re)Throws the exception.
 
 	const XMLString& getPublicId() const;
 		/// Get the public identifier of the entity where the exception occurred.

@@ -103,9 +103,16 @@ std::optional<const std::string> Conf::get(const std::string & property) const
         return std::nullopt;
 
     /// With the correct size, we can get the value properly.
-    char value[size];
-    rd_kafka_conf_get(conf.get(), property.c_str(), value, &size);
-    return std::string{value, size};
+    std::string value(size, '\0');
+    err = rd_kafka_conf_get(conf.get(), property.c_str(), value.data(), &size);
+    if (err != RD_KAFKA_CONF_OK)
+        return std::nullopt;
+
+    value.resize(size);
+    if (!value.empty() && value.back() == '\0')
+        value.pop_back();
+
+    return value;
 }
 
 RdkConfPtr Conf::getConf() const

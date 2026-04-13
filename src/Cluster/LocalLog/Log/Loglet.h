@@ -12,7 +12,7 @@
 #include <Common/BackgroundSchedulePool.h>
 
 #include <fmt/format.h>
-#include <re2/re2.h>
+#include <Common/re2.h>
 
 namespace cluster::nlog
 {

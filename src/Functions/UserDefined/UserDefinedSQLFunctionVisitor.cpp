@@ -123,7 +123,7 @@ void UserDefinedSQLFunctionVisitor::visit(IAST * ast)
 
 ASTPtr UserDefinedSQLFunctionVisitor::tryToReplaceFunction(const ASTFunction & function, std::unordered_set<std::string> & udf_in_replace_process)
 {
-    if (udf_in_replace_process.find(function.name) != udf_in_replace_process.end())
+    if (udf_in_replace_process.contains(function.name))
         throw Exception(ErrorCodes::UNSUPPORTED_METHOD,
             "Recursive function call detected during function call {}",
             function.name);

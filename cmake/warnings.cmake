@@ -20,6 +20,8 @@ if (COMPILER_CLANG)
     # We want to get everything out of the compiler for code quality.
     add_warning(everything)
     add_warning(pedantic)
+    add_warning(vla-cxx-extension)
+    no_warning(return-type-c-linkage)
     no_warning(zero-length-array)
     no_warning(c++98-compat-pedantic)
     no_warning(c++98-compat)
@@ -40,12 +42,12 @@ if (COMPILER_CLANG)
     no_warning(switch-enum)
     no_warning(undefined-func-template)
     no_warning(unused-template)
-    no_warning(vla)
     no_warning(weak-template-vtables)
     no_warning(weak-vtables)
     no_warning(thread-safety-negative) # experimental flag, too many false positives
-    no_warning(enum-constexpr-conversion) # breaks magic-enum library in clang-16
     no_warning(unsafe-buffer-usage) # too aggressive
     no_warning(switch-default) # conflicts with "defaults in a switch covering all enum values"
+    no_warning(nrvo) # not eliding copy on return - too aggressive
+    no_warning(missing-noreturn) # too aggressive with no clear benefit, see https://github.com/ClickHouse/ClickHouse/pull/86416
     # TODO Enable conversion, sign-conversion, double-promotion warnings.
 endif ()

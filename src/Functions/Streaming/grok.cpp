@@ -11,7 +11,9 @@
 #include <Interpreters/Context.h>
 #include <base/map.h>
 
-#include <re2/re2.h>
+#include <Common/re2.h>
+
+#include <array>
 
 namespace DB
 {
@@ -46,14 +48,14 @@ namespace
 
             /// Captures param value
             int num_captures = num_keys + 1;
-            re2::StringPiece matches[num_captures];
+            std::vector<re2::StringPiece> matches(static_cast<size_t>(num_captures));
             for (size_t i = 0; i < rows; ++i)
             {
                 const auto & data = column.getDataAt(i).toString();
                 auto & row_map = maps[i];
                 row_map.reserve(num_keys);
 
-                if (regex.Match(data, 0, data.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches, num_captures))
+                if (regex.Match(data, 0, data.size(), re2::RE2::Anchor::ANCHOR_BOTH, matches.data(), num_captures))
                 {
                     /// Set keys/values
                     for (const auto & [capturing_index, capturing_name] : regex.CapturingGroupNames())
@@ -82,10 +84,16 @@ namespace
             int num_captures = grok_regex.NumberOfCapturingGroups() + 1;
             assert(num_captures == 3);
 
-            re2::StringPiece grok_matches[num_captures];
+            std::array<re2::StringPiece, 3> grok_matches;
             std::unordered_set<String> capture_names;
             while (
-                grok_regex.Match(replaced_pattern, 0, replaced_pattern.size(), re2::RE2::Anchor::UNANCHORED, grok_matches, num_captures))
+                grok_regex.Match(
+                    replaced_pattern,
+                    0,
+                    replaced_pattern.size(),
+                    re2::RE2::Anchor::UNANCHORED,
+                    grok_matches.data(),
+                    num_captures))
             {
                 String string_to_replace(grok_matches[0]);
                 String pattern_name(grok_matches[1]);

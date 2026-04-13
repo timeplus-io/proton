@@ -78,9 +78,9 @@ public:
 
 	Poco::Exception* clone() const;
 		/// Creates an exact copy of the exception.
-		
-	void rethrow() const;
-		/// (Re)Throws the exception.
+
+    void rethrow() const;
+    /// (Re)Throws the exception.
 
 	unsigned short code() const;
 		/// Returns the DOM exception code.

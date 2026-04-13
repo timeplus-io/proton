@@ -75,10 +75,10 @@ Lemmatizers::LemmPtr Lemmatizers::getLemmatizer(const String & name)
 {
     std::lock_guard guard(mutex);
 
-    if (lemmatizers.find(name) != lemmatizers.end())
+    if (lemmatizers.contains(name))
         return lemmatizers[name];
 
-    if (paths.find(name) != paths.end())
+    if (paths.contains(name))
     {
         if (!std::filesystem::exists(paths[name]))
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Incorrect path to lemmatizer: {}", paths[name]);

@@ -8,7 +8,6 @@
 #include "Regexps.h"
 
 #include "config.h"
-#include <re2/re2.h>
 
 
 namespace DB

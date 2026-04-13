@@ -14,6 +14,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/ReadBufferFromString.h>
 #include <Common/FieldVisitorConvertToNumber.h>
+#include <Common/PODArray.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
@@ -224,23 +225,24 @@ void buildValueGetter(DataTypePtr data_type, size_t col_index, std::vector<Tuple
             ++i;
         }
 
-        getters.emplace_back(
-            [inner_getters = std::move(elem_getters),
-             col_index](const DB::IColumn ** columns, size_t row_num) -> std::pair<std::any, bool> {
-                const auto & tuple_column = assert_cast<const DB::ColumnTuple &>(*columns[col_index]);
-                const IColumn * elem_columns[tuple_column.tupleSize()];
+	        getters.emplace_back(
+	            [inner_getters = std::move(elem_getters),
+	             col_index](const DB::IColumn ** columns, size_t row_num) -> std::pair<std::any, bool> {
+	                const auto & tuple_column = assert_cast<const DB::ColumnTuple &>(*columns[col_index]);
+	                PODArrayWithStackMemory<const IColumn *, 256> elem_columns;
+	                elem_columns.resize(tuple_column.tupleSize());
 
-                std::vector<std::any> values;
-                std::vector<size_t> string_ref_indexs;
-                for (size_t index = 0; index < tuple_column.tupleSize(); ++index)
-                {
-                    elem_columns[index] = tuple_column.getColumnPtr(index).get();
-                    auto [elem_value, is_string_ref] = inner_getters[index](elem_columns, row_num);
-                    if (is_string_ref)
-                        string_ref_indexs.push_back(values.size());
+	                std::vector<std::any> values;
+	                std::vector<size_t> string_ref_indexs;
+	                for (size_t index = 0; index < tuple_column.tupleSize(); ++index)
+	                {
+	                    elem_columns[index] = tuple_column.getColumnPtr(index).get();
+	                    auto [elem_value, is_string_ref] = inner_getters[index](elem_columns.data(), row_num);
+	                    if (is_string_ref)
+	                        string_ref_indexs.push_back(values.size());
 
-                    values.emplace_back(std::move(elem_value));
-                }
+	                    values.emplace_back(std::move(elem_value));
+	                }
                 return {TupleValue(std::move(values), std::move(string_ref_indexs)), false};
             });
     }

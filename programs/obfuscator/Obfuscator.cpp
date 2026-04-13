@@ -1083,11 +1083,11 @@ try
     po::variables_map options;
     po::store(parsed, options);
 
-    if (options.count("help")
-        || !options.count("seed")
-        || !options.count("structure")
-        || !options.count("input-format")
-        || !options.count("output-format"))
+    if (options.contains("help")
+        || !options.contains("seed")
+        || !options.contains("structure")
+        || !options.contains("input-format")
+        || !options.contains("output-format"))
     {
         std::cout << documentation << "\n"
             << "\nUsage: " << argv[0] << " [options] < in > out\n"
@@ -1102,9 +1102,8 @@ try
     std::string structure = options["structure"].as<std::string>();
     std::string input_format = options["input-format"].as<std::string>();
     std::string output_format = options["output-format"].as<std::string>();
-
     UInt64 limit = 0;
-    if (options.count("limit"))
+    if (options.contains("limit"))
         limit = options["limit"].as<UInt64>();
 
     bool silent = options["silent"].as<bool>();
