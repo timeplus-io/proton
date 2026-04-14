@@ -19,7 +19,7 @@ SELECT sleep(1) FORMAT Null;
 -- not one part per row.
 INSERT INTO test_json_batching (id, payload) VALUES (1, '{"name":"alice","score":10}'), (2, '{"name":"bob","score":20}'), (3, '{"name":"carol","score":30}'), (4, '{"name":"dave","score":40}'), (5, '{"name":"eve","score":50}');
 
-SELECT sleep(1) FORMAT Null;
+SELECT sleep(3) FORMAT Null;
 
 -- Historical read via table(stream): all 5 rows must be visible
 SELECT id FROM table(test_json_batching) ORDER BY id;
