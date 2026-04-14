@@ -408,9 +408,9 @@ jobs:
       - name: Create and Configure Build
         run: |
           mkdir -p ${{ env.build_directory }}
-          export CC=$(brew --prefix llvm@19)/bin/clang
-          export CXX=$(brew --prefix llvm@19)/bin/clang++
-          export PATH=$(brew --prefix llvm@19)/bin:$PATH
+          export CC=$(brew --prefix llvm@21)/bin/clang
+          export CXX=$(brew --prefix llvm@21)/bin/clang++
+          export PATH=$(brew --prefix llvm@21)/bin:$PATH
           cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PULSAR=ON
 
       - name: Build with Ninja
@@ -428,7 +428,7 @@ jobs:
 
           if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
             echo "Stripping the binary..."
-            /opt/homebrew/opt/llvm@19/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
+            /opt/homebrew/opt/llvm@21/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
             echo "Stripped binary size:"
             ls -lh $STRIPPED_BINARY
           else

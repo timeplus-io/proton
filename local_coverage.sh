@@ -235,7 +235,7 @@ done
 for tool in "${LLVM_PROFDATA}" "${LLVM_COV}"; do
     if [[ ! -x "${tool}" ]]; then
         echo "ERROR: Required tool not found or not executable: ${tool}" >&2
-        echo "  macOS:  brew install llvm@19" >&2
+        echo "  macOS:  brew install llvm@21" >&2
         echo "  Linux:  apt install llvm" >&2
         echo "  or set: LLVM_BIN, LLVM_PROFDATA, LLVM_COV" >&2
         exit 1
