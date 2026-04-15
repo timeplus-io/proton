@@ -20,6 +20,7 @@ if (ENABLE_BENCHMARKS)
             ch_contrib::v8_torque_generated
             Threads::Threads
             ${CMAKE_DL_LIBS}
+            daemon
             loggers
     )
 
