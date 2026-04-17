@@ -470,7 +470,6 @@ jobs:
       command: |
         ${{ needs.prepare_address_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -536,7 +535,6 @@ jobs:
         rm -rf "$GITHUB_WORKSPACE/build_docker"
         rm -f "$CACHE_TARBALL"
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -563,7 +561,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -590,7 +587,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -617,7 +613,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -644,7 +639,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -672,7 +666,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_performance_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -697,7 +690,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -724,7 +716,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -750,7 +741,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -776,7 +766,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -802,7 +791,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -828,7 +816,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -854,7 +841,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -880,7 +866,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -906,7 +891,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -932,7 +916,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -958,7 +941,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -984,7 +966,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1010,7 +991,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1036,7 +1016,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1062,7 +1041,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1087,7 +1065,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1113,7 +1090,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1139,7 +1115,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1165,7 +1140,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1189,7 +1163,6 @@ jobs:
       source: ${{ matrix.versions }}
       repo: timeplus/proton_testing
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1216,7 +1189,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_performance_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1242,7 +1214,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1268,7 +1239,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1294,7 +1264,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1320,7 +1289,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1346,7 +1314,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1374,7 +1341,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_performance_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1401,7 +1367,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1427,7 +1392,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1453,7 +1417,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1479,7 +1442,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1505,7 +1467,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1532,7 +1493,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1558,7 +1518,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1584,7 +1543,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1610,7 +1568,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1636,7 +1593,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1662,7 +1618,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1688,7 +1643,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_unit_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1714,7 +1668,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1740,7 +1693,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1766,7 +1718,6 @@ jobs:
       command: |
         ${{ needs.prepare_sanitizer_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1791,7 +1742,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_build.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1817,7 +1767,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_smoke_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1843,7 +1792,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_stateless_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1869,7 +1817,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_stateful_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -1897,7 +1844,6 @@ jobs:
       command: |
         ${{ needs.prepare_release_performance_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}

@@ -117,7 +117,6 @@ jobs:
 
         echo 'docker pull timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA'
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -172,7 +171,6 @@ jobs:
         pip install -r requirements.txt
         python unit_tests_check.py
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -232,7 +230,6 @@ jobs:
           bash run.sh
         fi
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -289,7 +286,6 @@ jobs:
         chown -R 101 $GITHUB_WORKSPACE
         python functional_tests_check.py stateless
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -345,7 +341,6 @@ jobs:
         chown -R 101 $GITHUB_WORKSPACE
         python functional_tests_check.py stateful
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}

@@ -61,7 +61,6 @@ jobs:
         echo "Proton tag: $PROTON_TAG"
         echo "tag_name=$PROTON_TAG" >> $GITHUB_OUTPUT
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -190,7 +189,6 @@ jobs:
         tar -zcf $GITHUB_WORKSPACE/python-Linux-x86_64.tar.gz .
 
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -278,7 +276,6 @@ jobs:
         tar -czf ${PROTON_BINARY}.tar.gz $PROTON_BINARY
         ls -lh ${PROTON_BINARY}.tar.gz
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -373,7 +370,6 @@ jobs:
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
           -d "{\"ref\":\"$REF\",\"inputs\":{\"arch\": \"x64\", \"tag\":\"$PROTON_TAG\", \"test_category\":\"smoke\", \"has_feature_enabled\":\"hybrid\", \"nodes\":\"1\"}}\""
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -449,7 +445,6 @@ jobs:
         tar -czf ${PROTON_BINARY}.tar.gz $PROTON_BINARY
         ls -lh ${PROTON_BINARY}.tar.gz
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -518,7 +513,6 @@ jobs:
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -576,7 +570,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ vars.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 

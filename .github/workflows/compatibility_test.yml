@@ -71,8 +71,6 @@ on:
         type: string
         default: "3"
     secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
       AWS_REGION:
@@ -196,7 +194,6 @@ jobs:
       command: |
         ${{ needs.prepare_upload_data.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -222,7 +219,6 @@ jobs:
       command: |
         ${{ needs.prepare_upload_data.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -248,7 +244,6 @@ jobs:
       command: |
         ${{ needs.prepare_compatibility_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -274,7 +269,6 @@ jobs:
       command: |
         ${{ needs.prepare_compatibility_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
@@ -300,7 +294,6 @@ jobs:
       command: |
         ${{ needs.prepare_binary_size_regression_test.outputs.command }}
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET_WEST_2 }}
