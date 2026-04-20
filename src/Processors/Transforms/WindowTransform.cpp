@@ -409,7 +409,7 @@ auto WindowTransform::moveRowNumberNoCheck(const RowNumber & _x, int64_t offset)
 {
     RowNumber x = _x;
 
-    if (offset > 0)
+    if (offset > 0 && x != blocksEnd())
     {
         for (;;)
         {
@@ -2054,6 +2054,76 @@ struct WindowFunctionLagLeadInFrame final : public WindowFunction
 };
 
 
+struct WindowFunctionNthValue final : public WindowFunction
+{
+    WindowFunctionNthValue(const std::string & name_, const DataTypes & argument_types_, const Array & parameters_)
+        : WindowFunction(name_, argument_types_, parameters_, createResultType(name_, argument_types_))
+    {
+        if (!parameters.empty())
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} cannot be parameterized", name_);
+        }
+
+        if (!isInt64OrUInt64FieldType(argument_types[1]->getDefault().getType()))
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Offset must be an integer, '{}' given",
+                argument_types[1]->getName());
+        }
+    }
+
+    static DataTypePtr createResultType(const std::string & name_, const DataTypes & argument_types_)
+    {
+        if (argument_types_.size() != 2)
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} takes exactly two arguments", name_);
+        }
+
+        return argument_types_[0];
+    }
+
+    bool allocatesMemoryInArena() const override { return false; }
+
+    void windowInsertResultInto(const WindowTransform * transform,
+        size_t function_index) override
+    {
+        const auto & current_block = transform->blockAt(transform->current_row);
+        IColumn & to = *current_block.output_columns[function_index];
+        const auto & workspace = transform->workspaces[function_index];
+
+        Int64 offset = (*current_block.input_columns[
+                workspace.argument_column_indices[1]])[
+            transform->current_row.row].get<Int64>();
+
+        /// Either overflow or really negative value, both is not acceptable.
+        if (offset <= 0)
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "The offset for function {} must be in (1, {}], {} given",
+                getName(), INT64_MAX, offset);
+        }
+
+        --offset;
+        const auto [target_row, offset_left] = transform->moveRowNumber(transform->frame_start, offset);
+        if (offset_left != 0
+            || target_row < transform->frame_start
+            || transform->frame_end <= target_row)
+        {
+            // Offset is outside the frame.
+            to.insertDefault();
+        }
+        else
+        {
+            // Offset is inside the frame.
+            to.insertFrom(*transform->blockAt(target_row).input_columns[
+                    workspace.argument_column_indices[0]],
+               target_row.row);
+        }
+    }
+};
+
 void registerWindowFunctions(AggregateFunctionFactory & factory)
 {
     // Why didn't I implement lag/lead yet? Because they are a mess. I imagine
@@ -2117,6 +2187,13 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
             return std::make_shared<WindowFunctionLagLeadInFrame<true>>(
                 name, argument_types, parameters);
         }, properties});
+
+    factory.registerFunction("nth_value", {[](const std::string & name,
+            const DataTypes & argument_types, const Array & parameters, const Settings *)
+        {
+            return std::make_shared<WindowFunctionNthValue>(
+                name, argument_types, parameters);
+        }, properties}, AggregateFunctionFactory::CaseInsensitive);
 
     factory.registerFunction("exponential_time_decayed_sum", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)

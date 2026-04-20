@@ -597,8 +597,7 @@ std::vector<TableNeededColumns> normalizeColumnNamesExtractNeeded(
 
                 size_t count = countTablesWithColumn(tables, short_name);
 
-                /// isValidIdentifierBegin retuired to be consistent with TableJoin::deduplicateAndQualifyColumnNames
-                if (count > 1 || aliases.contains(short_name) || !isValidIdentifierBegin(short_name.at(0)))
+                if (count > 1 || aliases.contains(short_name))
                 {
                     const auto & table = tables[*table_pos];
                     IdentifierSemantic::setColumnLongName(*ident, table.table); /// table.column -> table_alias.column
