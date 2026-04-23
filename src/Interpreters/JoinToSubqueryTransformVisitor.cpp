@@ -556,7 +556,10 @@ std::vector<TableNeededColumns> normalizeColumnNamesExtractNeeded(
     const Aliases & aliases,
     const std::vector<ASTIdentifier *> & identifiers,
     const std::unordered_set<ASTIdentifier *> & public_identifiers,
-    UniqueShortNames & unique_names)
+    UniqueShortNames & unique_names,
+    /// proton: starts. See issue #11990.
+    bool is_subquery)
+    /// proton: ends.
 {
     size_t last_table_pos = tables.size() - 1;
 
@@ -592,12 +595,22 @@ std::vector<TableNeededColumns> normalizeColumnNamesExtractNeeded(
                 }
                 String short_name = ident->shortName();
                 String original_long_name;
-                if (public_identifiers.contains(ident))
-                    original_long_name = ident->name();
 
                 size_t count = countTablesWithColumn(tables, short_name);
+                bool has_clash = count > 1 || aliases.contains(short_name);
 
-                if (count > 1 || aliases.contains(short_name))
+                /// proton: starts. Capture the original long name so restoreName can
+                /// preserve it as the output column alias. Skipped in the no-clash
+                /// branch when this SELECT is a subquery/CTE body: otherwise
+                /// `SELECT a.userid FROM a JOIN b JOIN c` would emit column `a.userid`,
+                /// blocking outer qualified refs like `t4.userid` from resolving.
+                /// In the clash branch the qualification is still required for
+                /// disambiguation. See issue #11990.
+                if (public_identifiers.contains(ident) && (has_clash || !is_subquery))
+                    original_long_name = ident->name();
+                /// proton: ends.
+
+                if (has_clash)
                 {
                     const auto & table = tables[*table_pos];
                     IdentifierSemantic::setColumnLongName(*ident, table.table); /// table.column -> table_alias.column
@@ -773,7 +786,7 @@ void JoinToSubqueryTransformMatcher::visit(ASTSelectQuery & select, ASTPtr & ast
 
     UniqueShortNames unique_names;
     std::vector<TableNeededColumns> needed_columns =
-        normalizeColumnNamesExtractNeeded(data.tables, data.aliases, identifiers, public_identifiers, unique_names);
+        normalizeColumnNamesExtractNeeded(data.tables, data.aliases, identifiers, public_identifiers, unique_names, data.is_subquery);
 
     /// Rewrite JOINs with subselects
 

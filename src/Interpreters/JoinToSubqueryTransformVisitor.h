@@ -22,6 +22,11 @@ public:
         const Aliases & aliases;
         /// proton: starts.
         bool join_result_emit_changelog = false;
+        /// When true, this SELECT is a subquery/CTE body; avoid re-aliasing no-clash
+        /// qualified identifiers (e.g. `a.userid`) back to their qualified form so
+        /// outer qualified refs (e.g. `t4.userid`) can resolve against the short
+        /// column name. See issue #11990.
+        bool is_subquery = false;
         /// proton: ends.
         bool done = false;
     };

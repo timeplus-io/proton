@@ -211,9 +211,14 @@ getEmitAfterSessionCloseParams(const QueryPlan & query_plan, Streaming::EmitPara
     };
 }
 
-/// proton: starts. Add a new parameter `join_result_emit_changelog`
+/// proton: starts. Add new parameters `join_result_emit_changelog` and `is_subquery`.
 void rewriteMultipleJoins(
-    ASTPtr & query, const TablesWithColumns & tables, const String & database, const Settings & settings, bool join_result_emit_changelog)
+    ASTPtr & query,
+    const TablesWithColumns & tables,
+    const String & database,
+    const Settings & settings,
+    bool join_result_emit_changelog,
+    bool is_subquery)
 {
     ASTSelectQuery & select = query->as<ASTSelectQuery &>();
 
@@ -226,7 +231,7 @@ void rewriteMultipleJoins(
     cross_to_inner.cross_to_inner_join_rewrite = static_cast<UInt8>(std::min<UInt64>(settings.cross_to_inner_join_rewrite, 2));
     CrossToInnerJoinVisitor(cross_to_inner).visit(query);
 
-    JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, aliases, join_result_emit_changelog};
+    JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, aliases, join_result_emit_changelog, is_subquery};
     JoinToSubqueryTransformVisitor(join_to_subs_data).visit(query);
 }
 /// proton: ends.
@@ -357,7 +362,8 @@ bool InterpreterSelectQuery::resolveTablesAndRewriteJoin(JoinedTables & joined_t
             joined_tables.tablesWithColumns(),
             context->getCurrentDatabase(),
             context->getSettingsRef(),
-            /*join_result_emit_changelog=*/query_info.force_emit_changelog);
+            /*join_result_emit_changelog=*/query_info.force_emit_changelog,
+            /*is_subquery=*/options.is_subquery);
         /// proton: ends.
 
         joined_tables.reset(getSelectQuery());
