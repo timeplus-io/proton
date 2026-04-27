@@ -3406,21 +3406,25 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
 
     String size_str = formatReadableSizeWithDecimalSuffix(size);
     String max_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_size_to_drop);
+    /// proton: starts.
     throw Exception(ErrorCodes::STREAM_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT,
                     "Stream or Partition in {}.{} was not dropped.\nReason:\n"
                     "1. Size ({}) is greater than max_[stream/partition]_size_to_drop ({})\n"
                     "2. File '{}' intended to force DROP {}\n"
                     "3. Setting 'force_drop_big_stream' is not set\n"
-                    "How to fix this:\n"
-                    "1. Either increase (or set to zero) max_[stream/partition]_size_to_drop in server config\n"
-                    "2. Either create forcing file {} and make sure that proton has write permission for it.\n"
-                    "3. Either add setting 'force_drop_big_stream=true'\n"
-                    "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
+                    "How to fix this, choose one of the following options:\n"
+                    "1. Increase (or set to zero) max_[stream/partition]_size_to_drop in server config\n"
+                    "2. Create force-drop file {} and make sure that proton has write permission for it.\n"
+                    "3. Add the per-statement setting to the query, for example:\n"
+                    "   DROP STREAM IF EXISTS {}.{} SETTINGS force_drop_big_stream = true;\n"
+                    "Force-drop file example:\nsudo touch '{}' && sudo chmod 666 '{}'",
                     backQuoteIfNeed(database), backQuoteIfNeed(table),
                     size_str, max_size_to_drop_str,
                     force_file.string(), force_file_exists ? "exists but not writeable (could not be removed)" : "doesn't exist",
                     force_file.string(),
+                    backQuoteIfNeed(database), backQuoteIfNeed(table),
                     force_file.string(), force_file.string());
+    /// proton: ends.
 }
 
 
