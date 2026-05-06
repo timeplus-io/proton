@@ -39,7 +39,9 @@ const std::unordered_set<std::string_view> keywords
     "PROFILE",      "QUOTA",    "POLICY", "ROW",       "GRANT",    "REVOKE",      "OPTION",   "ADMIN",       "EXCEPT",  "REPLACE",
     "IDENTIFIED",   "HOST",     "NAME",   "READONLY",  "WRITABLE", "PERMISSIVE",  "FOR",      "RESTRICTIVE", "RANDOMIZED",
     "INTERVAL",     "LIMITS",   "ONLY",   "TRACKING",  "IP",       "REGEXP",      "ILIKE",    "DICTIONARY",  "OFFSET",
-    "TRIM", "LTRIM", "RTRIM", "BOTH", "LEADING", "TRAILING"
+    "TRIM", "LTRIM", "RTRIM", "BOTH", "LEADING", "TRAILING",
+    /// Special numeric literals — must not be obfuscated, otherwise the produced query is unparseable.
+    "INF", "NAN"
 };
 
 const std::unordered_set<std::string_view> keep_words
@@ -775,10 +777,18 @@ void obfuscateLiteral(std::string_view src, WriteBuffer & result, SipHash hash_f
                 /// Obfuscate number but keep it within same power of two range.
 
                 uint64_t obfuscated = hash_func_num.get64();
-                uint64_t log2 = bitScanReverse(num);
 
-                obfuscated = (1ULL << log2) + obfuscated % (1ULL << log2);
-                writeIntText(obfuscated, result);
+                if (num == 0)
+                {
+                    /// readIntText may overflow to zero for very large numbers; bitScanReverse(0) trips an assert in debug.
+                    writeIntText(obfuscated, result);
+                }
+                else
+                {
+                    uint64_t log2 = bitScanReverse(num);
+                    obfuscated = (1ULL << log2) + obfuscated % (1ULL << log2);
+                    writeIntText(obfuscated, result);
+                }
             }
         }
         else if (src_pos + 1 < src_end
@@ -876,6 +886,12 @@ void obfuscateQueries(
     KnownIdentifierFunc known_identifier_func)
 {
     Lexer lexer(src.data(), src.data() + src.size());
+
+    /// `INTERVAL '2 years'` is a special syntax where the string literal carries both
+    /// a number and a unit; obfuscating its content turns it into an unparseable value.
+    /// Track INTERVAL and pass the immediately-following string literal through verbatim.
+    bool after_interval = false;
+
     while (true)
     {
         Token token = lexer.nextToken();
@@ -900,6 +916,9 @@ void obfuscateQueries(
                 /// Obfuscate identifiers
                 obfuscateIdentifier(whole_token, result, obfuscate_map, used_nouns, hash_func);
             }
+
+            after_interval = (whole_token_uppercase == "INTERVAL");
+            continue;
         }
         else if (token.type == TokenType::QuotedIdentifier)
         {
@@ -924,9 +943,17 @@ void obfuscateQueries(
         {
             assert(token.size() >= 2);
 
-            result.write(*token.begin);
-            obfuscateLiteral({token.begin + 1, token.size() - 2}, result, hash_func);
-            result.write(token.end[-1]);
+            if (after_interval)
+            {
+                /// Preserve the INTERVAL payload verbatim — it embeds a number and a unit (e.g. '2 years').
+                result.write(token.begin, token.size());
+            }
+            else
+            {
+                result.write(*token.begin);
+                obfuscateLiteral({token.begin + 1, token.size() - 2}, result, hash_func);
+                result.write(token.end[-1]);
+            }
         }
         else if (token.type == TokenType::Comment)
         {
@@ -937,6 +964,11 @@ void obfuscateQueries(
             /// Everything else is kept as is.
             result.write(token.begin, token.size());
         }
+
+        /// `after_interval` only protects the immediately-following string literal,
+        /// and is reset on any other significant token (whitespace stays insignificant in lexer output).
+        if (token.isSignificant())
+            after_interval = false;
     }
 }
 

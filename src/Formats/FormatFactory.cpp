@@ -137,6 +137,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.pretty.max_column_pad_width = settings.output_format_pretty_max_column_pad_width;
     format_settings.pretty.max_rows = settings.output_format_pretty_max_rows;
     format_settings.pretty.max_value_width = settings.output_format_pretty_max_value_width;
+    format_settings.pretty.highlight_digit_groups = settings.output_format_pretty_highlight_digit_groups;
     format_settings.pretty.output_format_pretty_row_numbers = settings.output_format_pretty_row_numbers;
     format_settings.pretty.single_large_number_tip_threshold = settings.output_format_pretty_single_large_number_tip_threshold;
     format_settings.pretty.output_format_pretty_display_footer_column_names = settings.output_format_pretty_display_footer_column_names;

@@ -88,7 +88,7 @@ void PrettySpaceBlockOutputFormat::write(Chunk chunk, PortKind port_kind)
             const auto & type = *header.getByPosition(column).type;
             auto & cur_width = widths[column].empty() ? max_widths[column] : widths[column][row];
             writeValueWithPadding(*columns[column], *serializations[column],
-                row, cur_width, max_widths[column], type.shouldAlignRightInPrettyFormats());
+                row, cur_width, max_widths[column], type.shouldAlignRightInPrettyFormats(), isNumber(type));
         }
 
         writeChar('\n', out);
