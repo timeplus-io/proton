@@ -1,6 +1,7 @@
 #include "DNSResolver.h"
 #include <base/CachedFn.h>
 #include <Common/Exception.h>
+#include <Common/NetException.h>
 #include <Common/ProfileEvents.h>
 #include <Common/logger_useful.h>
 #include <Core/Names.h>
@@ -125,7 +126,7 @@ static DNSResolver::IPAddresses resolveIPAddressImpl(const std::string & host)
     }
 
     if (addresses.empty())
-        throw Exception(ErrorCodes::DNS_ERROR, "Not found address of host: {}", host);
+        throw DB::NetException(ErrorCodes::DNS_ERROR, "Not found address of host: {}", host);
 
     return addresses;
 }
