@@ -30,12 +30,12 @@ namespace
 {
 bool isPathAccessible(const std::filesystem::path & path)
 {
-    if (!std::filesystem::exists(path))
+    std::error_code ec;
+    auto resolved_path = std::filesystem::weakly_canonical(path, ec);
+    if (ec)
         return false;
 
-    auto resolved_path = std::filesystem::is_symlink(path) ? std::filesystem::read_symlink(path) : path;
-
-    return std::filesystem::is_regular_file(resolved_path) && ::access(resolved_path.c_str(), X_OK) == 0;
+    return std::filesystem::is_regular_file(resolved_path, ec) && !ec && ::access(resolved_path.c_str(), X_OK) == 0;
 }
 
 std::optional<std::string> findExternalPythonInterpreter(const std::string & program_base_dir)
