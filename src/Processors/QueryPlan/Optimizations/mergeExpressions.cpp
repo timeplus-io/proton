@@ -48,6 +48,14 @@ size_t tryMergeExpressions(QueryPlan::Node * parent_node, QueryPlan::Nodes &)
         if (child_actions->hasArrayJoin() && parent_actions->hasStatefulFunctions())
             return 0;
 
+        /// proton: starts. FilterTransform runs one ExpressionActions instance with no
+        /// per-SubstreamID cloning, so fusing a substream-aware stateful child (e.g.
+        /// lag() OVER (PARTITION BY ...)) into it would share one stateful function
+        /// across all partition keys. See #12110.
+        if (child_actions->hasStatefulFunctions() && child_expr->getInputStreams().front().with_substream)
+            return 0;
+        /// proton: ends.
+
         auto merged = ActionsDAG::merge(std::move(*child_actions), std::move(*parent_actions));
 
         auto filter = std::make_unique<FilterStep>(child_expr->getInputStreams().front(),
