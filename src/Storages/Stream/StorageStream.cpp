@@ -551,6 +551,7 @@ StorageStream::ShardsToRead StorageStream::getShardsToRead(
     const ContextPtr & local_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const
 {
     if (!query_info.shards_to_query)
+        /// shard pruning already sees query_info.prepared_sets, so bounded IN-subqueries can be materialized early here.
         query_info.shards_to_query = getPrunedShardsWithQueryMode(
             sharding_key_expr,
             sharding_key_is_deterministic,

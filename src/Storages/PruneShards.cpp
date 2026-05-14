@@ -1,16 +1,23 @@
 #include <Storages/PruneShards.h>
 
 #include <Columns/ColumnConst.h>
+#include <Core/Field.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Interpreters/PreparedSets.h>
+#include <Interpreters/Set.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/createBlockSelector.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSubquery.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/SelectQueryInfo.h>
@@ -25,6 +32,7 @@ namespace ErrorCodes
 {
 extern const int TOO_MANY_ROWS;
 extern const int TYPE_MISMATCH;
+extern const int NOT_IMPLEMENTED;
 }
 
 IColumn::Selector createSelector(const ColumnWithTypeAndName & result, const std::vector<UInt64> & slot_to_shards)
@@ -56,6 +64,12 @@ IColumn::Selector createSelector(const ColumnWithTypeAndName & result, const std
 
 namespace
 {
+struct RewriteInSubqueriesResult
+{
+    bool has_empty_subquery = false;
+    bool has_unsafe_logic_for_empty_subquery = false;
+};
+
 class ReplacingConstantExpressionsMatcher
 {
 public:
@@ -92,6 +106,126 @@ void replaceConstantExpressions(
 
     InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(block_with_constants);
     visitor.visit(node);
+}
+
+bool isSubqueryPlaceholder(const ASTPtr & node)
+{
+    return node && (node->as<ASTSubquery>() || node->as<ASTTableIdentifier>());
+}
+
+bool rewriteInSubqueriesForShardPruning(
+    ASTPtr & node,
+    const PreparedSetsPtr & prepared_sets,
+    const ContextPtr & context,
+    size_t limit,
+    RewriteInSubqueriesResult & result)
+{
+    if (!node)
+        return false;
+
+    /// Do not recurse into subquery bodies. Only the outer IN expression matters here.
+    if (node->as<ASTSubquery>() || node->as<ASTTableIdentifier>())
+        return false;
+
+    bool changed = false;
+
+    if (const auto * function = node->as<ASTFunction>())
+    {
+        if (function->name == "or" || function->name == "not")
+            result.has_unsafe_logic_for_empty_subquery = true;
+
+        if (function->name == "not_in" || function->name == "global_not_in")
+        {
+            /// NOT IN must keep the existing no-pruning behavior because an empty subquery flips the result to true.
+            result.has_unsafe_logic_for_empty_subquery = true;
+        }
+    }
+
+    /// Traverse each branch independently so multiple IN-subqueries can be rewritten one by one.
+    for (auto & child : node->children)
+        changed |= rewriteInSubqueriesForShardPruning(child, prepared_sets, context, limit, result);
+
+    auto * function = node->as<ASTFunction>();
+    if (!function || function->name != "in" || !function->arguments || function->arguments->children.size() != 2)
+        return changed;
+
+    ASTPtr & right = function->arguments->children[1];
+    if (!isSubqueryPlaceholder(right))
+        return changed;
+
+    if (!prepared_sets)
+        return changed;
+
+    /// Match the already prepared set for this IN subquery. If it was not prepared yet,
+    /// we keep the original AST and let the normal execution path handle it.
+    FutureSetPtr future_set = prepared_sets->findSubquery(right->getTreeHash());
+    if (!future_set && right->as<ASTTableIdentifier>())
+        future_set = prepared_sets->findStorage(right->getTreeHash());
+
+    if (!future_set)
+        return changed;
+
+    SetPtr set;
+    try
+    {
+        set = future_set->buildOrderedSetInplace(context);
+    }
+    catch (const Exception & e)
+    {
+        if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
+            return changed;
+        throw;
+    }
+
+    if (!set || !set->hasExplicitSetElements())
+        return changed;
+
+    const size_t total_rows = set->getTotalRowCount();
+    if (total_rows == 0)
+    {
+        /// Empty subquery result makes the whole conjunction false, but only if there is no OR/NOT.
+        result.has_empty_subquery = true;
+        return changed;
+    }
+
+    if (total_rows > limit)
+        return changed;
+
+    const auto elements = set->getSetElements();
+    if (elements.size() != 1)
+        return changed;
+
+    const auto & values = elements.front();
+    if (!values || values->size() == 0)
+    {
+        result.has_empty_subquery = true;
+        return changed;
+    }
+
+    Tuple tuple;
+    tuple.reserve(values->size());
+
+    for (size_t row = 0; row < values->size(); ++row)
+    {
+        const Field & value = (*values)[row];
+        if (value.isNull())
+            continue;
+
+        /// NULLs do not narrow the shard set, so they are skipped instead of turning the rewrite off.
+        tuple.push_back(value);
+    }
+
+    if (tuple.empty())
+    {
+        /// All-NULL subquery results are not usable for shard pruning, but they are also not empty,
+        /// so we keep the original subquery to preserve correctness.
+        return changed;
+    }
+
+    /// Replace the subquery with a literal tuple so evaluateExpressionOverConstantCondition()
+    /// sees the concrete key set just like it does for literal IN-lists.
+    right = std::make_shared<ASTLiteral>(std::move(tuple));
+    return true;
 }
 
 /// Returns a pruned shard IDs (fewer shards) if constant folding for `sharding_key_expr` is possible
@@ -132,11 +266,25 @@ std::vector<UInt64> skipUnusedShards(
             condition_ast = select.prewhere() ? select.prewhere()->clone() : select.where()->clone();
     }
 
+    size_t max_shard_key_values = context->getSettingsRef().optimize_skip_unused_shards_limit;
+    if (!max_shard_key_values || max_shard_key_values > LONG_MAX)
+        throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "optimize_skip_unused_shards_limit out of range (0, {}]", LONG_MAX);
+
+    RewriteInSubqueriesResult rewrite_result;
+    if (context->getSettingsRef().optimize_skip_unused_shards_with_subqueries)
+    {
+        rewriteInSubqueriesForShardPruning(condition_ast, query_info.prepared_sets, context, max_shard_key_values, rewrite_result);
+
+        if (rewrite_result.has_empty_subquery && !rewrite_result.has_unsafe_logic_for_empty_subquery)
+        {
+            /// Empty IN-subquery is a contradiction for a pure conjunction, so we can skip every shard.
+            return {};
+        }
+    }
+
     replaceConstantExpressions(condition_ast, context, storage_snapshot->metadata->getColumns().getAll(), storage, storage_snapshot);
 
-    size_t limit = context->getSettingsRef().optimize_skip_unused_shards_limit;
-    if (!limit || limit > LONG_MAX)
-        throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "optimize_skip_unused_shards_limit out of range (0, {}]", LONG_MAX);
+    size_t limit = max_shard_key_values;
 
     /// To interpret limit==0 as limit is reached
     ++limit;

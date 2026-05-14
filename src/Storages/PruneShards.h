@@ -19,6 +19,8 @@ struct SelectQueryInfo;
 IColumn::Selector createSelector(const ColumnWithTypeAndName & result, const std::vector<UInt64> & slot_to_shards);
 
 /// Prune unused shards according to \param sharding_key_expr if prune is possible
+/// If optimize_skip_unused_shards_with_subqueries is enabled, bounded IN-subqueries may be materialized
+/// before this function evaluates the shard-key condition.
 /// \return pruned shard IDs which are used for query if prune happens, otherwise return all shard IDs
 std::vector<UInt64> pruneShards(
     const ExpressionActionsPtr & sharding_key_expr,
