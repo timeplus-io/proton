@@ -209,16 +209,21 @@ bool rewriteInSubqueriesForShardPruning(
     {
         const Field & value = (*values)[row];
         if (value.isNull())
-            continue;
+        {
+            /// Any NULL element forces a conservative fallback: with transform_null_in=1
+            /// or a nullable sharding key, dropping NULLs from the rewrite would prune
+            /// shards that actually hold NULL-keyed rows. Keep the original subquery so
+            /// shard pruning gives up and reads every shard — correct, just unoptimized.
+            return changed;
+        }
 
-        /// NULLs do not narrow the shard set, so they are skipped instead of turning the rewrite off.
         tuple.push_back(value);
     }
 
     if (tuple.empty())
     {
-        /// All-NULL subquery results are not usable for shard pruning, but they are also not empty,
-        /// so we keep the original subquery to preserve correctness.
+        /// All rows were either NULL (handled above) or filtered out by validation —
+        /// keep the original subquery to preserve correctness.
         return changed;
     }
 

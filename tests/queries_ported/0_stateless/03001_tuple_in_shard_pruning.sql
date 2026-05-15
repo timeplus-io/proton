@@ -42,4 +42,9 @@ select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address
 -- to the no-prune path but correctness is preserved.
 select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_88'), (1, 'addr_222')) settings optimize_skip_unused_shards_limit = 1;
 
+-- A non-literal value in a tuple row (here a function call) triggers the safe
+-- fallback in analyzeFunction — shard pruning gives up but the query still
+-- returns the right rows.
+select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, concat('addr_', '42')), (1, 'addr_88'));
+
 drop stream if exists 03001_tuple_in_shard_pruning;

@@ -28,10 +28,12 @@ select count() from table(03000_subquery_in_shard_pruning) where id in (select 1
 -- Empty subquery result.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select 1 where 0);
 
--- NULLs are ignored for shard pruning, but the non-NULL key still gets rewritten.
+-- Any NULL in the subquery result forces a conservative fallback: dropping NULLs
+-- from the rewritten literal IN would mis-prune shards holding NULL-keyed rows
+-- (relevant for nullable sharding keys with transform_null_in=1). Result must
+-- stay correct either way.
 set transform_null_in = 1;
 select count() from table(03000_subquery_in_shard_pruning) where id in (select cast(NULL, 'nullable(int32)') union all select 1);
--- All-NULL results fall back to the no-prune path while keeping correctness.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select cast(NULL, 'nullable(int32)') union all select cast(NULL, 'nullable(int32)'));
 set transform_null_in = 0;
 
