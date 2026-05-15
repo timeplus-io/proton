@@ -16,6 +16,7 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTHelpers.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Processors/QueryPlan/Optimizations/actionsDAGUtils.h>
@@ -290,12 +291,9 @@ namespace
                 {
                     if (const auto * lit = ast->as<ASTLiteral>())
                         return lit;
-                    if (const auto * cast_fn = ast->as<ASTFunction>();
-                        cast_fn && (cast_fn->name == "cast" || cast_fn->name == "_cast" || cast_fn->name == "CAST")
-                        && cast_fn->arguments && !cast_fn->arguments->children.empty())
-                    {
+                    const auto * cast_fn = ast->as<ASTFunction>();
+                    if (isFunctionCast(cast_fn) && cast_fn->arguments && !cast_fn->arguments->children.empty())
                         return cast_fn->arguments->children.front()->as<ASTLiteral>();
-                    }
                     return nullptr;
                 };
 
