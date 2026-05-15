@@ -8,17 +8,20 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/PreparedSets.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/createBlockSelector.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
+#include <Interpreters/interpretSubquery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
+#include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/SelectQueryInfo.h>
@@ -158,11 +161,48 @@ bool rewriteInSubqueriesForShardPruning(
     if (!prepared_sets)
         return changed;
 
-    /// Match the already prepared set for this IN subquery. If it was not prepared yet,
-    /// we keep the original AST and let the normal execution path handle it.
-    FutureSetPtr future_set = prepared_sets->findSubquery(right->getTreeHash());
+    /// Shard pruning runs in `IStorage::getQueryProcessingStage`, which is invoked before
+    /// `ExpressionAnalysisResult` runs `ActionsVisitor` over WHERE/PREWHERE. That means
+    /// `prepared_sets` has not yet seen the IN-subqueries at this point. We first try to
+    /// reuse whatever was already registered (e.g. by an earlier visitor pass), and if
+    /// nothing matches we register and materialize the subquery ourselves -- this is what
+    /// the `optimize_skip_unused_shards_with_subqueries` setting opts into.
+    const auto right_hash = right->getTreeHash();
+    FutureSetPtr future_set = prepared_sets->findSubquery(right_hash);
     if (!future_set && right->as<ASTTableIdentifier>())
-        future_set = prepared_sets->findStorage(right->getTreeHash());
+        future_set = prepared_sets->findStorage(right_hash);
+
+    if (!future_set && right->as<ASTSubquery>() && context->getSettingsRef().use_index_for_in_with_subqueries)
+    {
+        try
+        {
+            auto subquery_plan = std::make_unique<QueryPlan>();
+            {
+                auto interpreter = interpretSubquery(right, context, /*subquery_depth=*/1, {});
+                interpreter->buildQueryPlan(*subquery_plan);
+            }
+
+            /// A streaming subquery cannot be materialized into a fixed set -- the upstream
+            /// `buildOrderedSetInplace()` would throw `NOT_IMPLEMENTED`. Detect that here so
+            /// we never register a future set we'd immediately fail to consume; the original
+            /// AST is left in place and normal execution handles the IN.
+            if (subquery_plan->isStreaming())
+                return changed;
+
+            future_set = prepared_sets->addFromSubquery(
+                right_hash,
+                std::move(subquery_plan),
+                /*external_table=*/nullptr,
+                /*external_table_set=*/nullptr,
+                context->getSettingsRef());
+        }
+        catch (...)
+        {
+            /// Parse/resolve failures, unsupported subquery shapes, etc. -- bail out and let
+            /// the normal execution path handle the IN. The original AST is unchanged.
+            return changed;
+        }
+    }
 
     if (!future_set)
         return changed;
