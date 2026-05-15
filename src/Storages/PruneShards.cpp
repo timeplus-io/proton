@@ -120,6 +120,7 @@ bool rewriteInSubqueriesForShardPruning(
     ASTPtr & node,
     const PreparedSetsPtr & prepared_sets,
     const ContextPtr & context,
+    size_t subquery_depth,
     size_t limit,
     RewriteInSubqueriesForShardPruningResult & result,
     bool in_conjunctive_position)
@@ -149,7 +150,8 @@ bool rewriteInSubqueriesForShardPruning(
 
     /// Traverse each branch independently so multiple IN-subqueries can be rewritten one by one.
     for (auto & child : node->children)
-        changed |= rewriteInSubqueriesForShardPruning(child, prepared_sets, context, limit, result, children_in_conjunctive_position);
+        changed |= rewriteInSubqueriesForShardPruning(
+            child, prepared_sets, context, subquery_depth, limit, result, children_in_conjunctive_position);
 
     if (!function || function->name != "in" || !function->arguments || function->arguments->children.size() != 2)
         return changed;
@@ -178,7 +180,7 @@ bool rewriteInSubqueriesForShardPruning(
         {
             auto subquery_plan = std::make_unique<QueryPlan>();
             {
-                auto interpreter = interpretSubquery(right, context, /*subquery_depth=*/1, {});
+                auto interpreter = interpretSubquery(right, context, subquery_depth, {});
                 interpreter->buildQueryPlan(*subquery_plan);
             }
 
@@ -304,6 +306,9 @@ std::vector<UInt64> skipUnusedShards(
     if (!query_info.syntax_analyzer_result)
         return all_shards;
 
+    /// Streaming queries must never return an empty shard list: that would create
+    /// a finite empty source and terminate a continuous query. Both zero-shard
+    /// exits below preserve that invariant.
     ASTPtr condition_ast;
     /// Remove JOIN from the query since it may contain a condition for other tables.
     /// But only the conditions for the left table should be analyzed for shard skipping.
@@ -330,9 +335,15 @@ std::vector<UInt64> skipUnusedShards(
     if (context->getSettingsRef().optimize_skip_unused_shards_with_subqueries)
     {
         Internal::rewriteInSubqueriesForShardPruning(
-            condition_ast, query_info.prepared_sets, context, max_shard_key_values, rewrite_result, /*in_conjunctive_position=*/true);
+            condition_ast,
+            query_info.prepared_sets,
+            context,
+            query_info.subquery_depth,
+            max_shard_key_values,
+            rewrite_result,
+            /*in_conjunctive_position=*/true);
 
-        if (rewrite_result.has_empty_subquery_in_conjunctive_position)
+        if (rewrite_result.has_empty_subquery_in_conjunctive_position && !query_info.isStreaming())
         {
             /// An empty IN-subquery reached purely through `and(...)` ancestors contradicts the
             /// whole predicate, so no shard can produce a matching row.
@@ -375,6 +386,13 @@ std::vector<UInt64> skipUnusedShards(
 
         shard_ids.insert(selector.begin(), selector.end());
     }
+
+    /// A zero-shard result is a finite empty read. That is correct for historical
+    /// queries, but a streaming query must remain continuous even when its predicate
+    /// is currently/provably unsatisfiable. Fall back to all shards so the normal
+    /// streaming filter path preserves query lifetime.
+    if (shard_ids.empty() && query_info.isStreaming())
+        return all_shards;
 
     return std::vector<UInt64>{shard_ids.begin(), shard_ids.end()};
 }

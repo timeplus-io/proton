@@ -217,6 +217,11 @@ struct SelectQueryInfo
     /// Example: x IN (1, 2, 3)
     PreparedSetsPtr prepared_sets;
 
+    /// Current query nesting depth. Storage-level optimizations that materialize
+    /// subqueries early must preserve the same max_subquery_depth semantics as
+    /// the normal expression analysis path.
+    size_t subquery_depth = 0;
+
     /// Cached value of ExpressionAnalysisResult
     bool has_window = false;
     bool has_order_by = false;

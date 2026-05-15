@@ -28,6 +28,7 @@ bool rewriteInSubqueriesForShardPruning(
     ASTPtr & node,
     const PreparedSetsPtr & prepared_sets,
     const ContextPtr & context,
+    size_t subquery_depth,
     size_t limit,
     RewriteInSubqueriesForShardPruningResult & result,
     bool in_conjunctive_position);

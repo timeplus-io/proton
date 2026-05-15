@@ -378,6 +378,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     query_info.ignore_projections = options.ignore_projections;
     query_info.is_projection_query = options.is_projection_query;
+    query_info.subquery_depth = options.subquery_depth;
 
     /// proton : starts.  Merge some options
     bool current_select_has_join = false;
@@ -2225,6 +2226,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             temp_query_info.query = query_ptr;
             temp_query_info.syntax_analyzer_result = syntax_analyzer_result;
             temp_query_info.prepared_sets = query_analyzer->getPreparedSets();
+            temp_query_info.subquery_depth = options.subquery_depth;
 
             num_rows = storage->totalRowsByPartitionPredicate(temp_query_info, context);
         }

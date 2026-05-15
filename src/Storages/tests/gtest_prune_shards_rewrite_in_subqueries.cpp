@@ -63,6 +63,7 @@ bool runRewrite(ASTPtr & root, const PreparedSetsPtr & prepared_sets)
         root,
         prepared_sets,
         getContext().context,
+        /*subquery_depth=*/0,
         /*limit=*/1024,
         result,
         /*in_conjunctive_position=*/true);
