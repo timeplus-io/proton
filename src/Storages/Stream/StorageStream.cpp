@@ -267,6 +267,12 @@ void StorageStream::doRead(
     auto description = makeFormattedShards(shards_to_read);
     LOG_DEBUG(log, "Read {}", description);
 
+    /// Shard pruning can legitimately yield zero shards (e.g. when `optimize_skip_unused_shards_with_subqueries`
+    /// proves the WHERE predicate is unsatisfiable). Leave `query_plan` uninitialized; the
+    /// caller (`InterpreterSelectQuery`) attaches a `NullSource` via `addEmptySourceToQueryPlan`.
+    if (shards_to_read.shards.empty())
+        return;
+
     /// Streaming read always uses the minimum number of threads unless the user specifies a different value with the setting \min_threads.
     size_t streaming_shard_num_streams = std::max<size_t>(
         1ul, (context_->getSettingsRef().min_threads.value + shards_to_read.shards.size() - 1) / shards_to_read.shards.size());
@@ -1172,6 +1178,13 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     auto shards_to_read = getShardsToRead(context_, storage_snapshot, query_info);
     if (shards_to_read.mode == QueryMode::Historical)
     {
+        /// Shard pruning may have eliminated every shard (e.g. the WHERE predicate is
+        /// provably unsatisfiable via `optimize_skip_unused_shards_with_subqueries`). With
+        /// no shard to delegate to, return `FetchColumns` so the interpreter wires up a
+        /// `NullSource` and runs the rest of the pipeline on top of it.
+        if (shards_to_read.shards.empty())
+            return QueryProcessingStage::Enum::FetchColumns;
+
         /// For now, we assume all shards of a stream will be co-located on the same node
         if (hasAnyVirtualReplica(shards_to_read.shards))
             return getHistoricalQueryProcessingStageRemote(
