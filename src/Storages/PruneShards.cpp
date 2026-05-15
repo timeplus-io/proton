@@ -1,4 +1,5 @@
 #include <Storages/PruneShards.h>
+#include <Storages/PruneShardsInternal.h>
 
 #include <Columns/ColumnConst.h>
 #include <Core/Field.h>
@@ -64,12 +65,6 @@ IColumn::Selector createSelector(const ColumnWithTypeAndName & result, const std
 
 namespace
 {
-struct RewriteInSubqueriesResult
-{
-    bool has_empty_subquery = false;
-    bool has_unsafe_logic_for_empty_subquery = false;
-};
-
 class ReplacingConstantExpressionsMatcher
 {
 public:
@@ -113,12 +108,18 @@ bool isSubqueryPlaceholder(const ASTPtr & node)
     return node && (node->as<ASTSubquery>() || node->as<ASTTableIdentifier>());
 }
 
+}
+
+namespace Internal
+{
+
 bool rewriteInSubqueriesForShardPruning(
     ASTPtr & node,
     const PreparedSetsPtr & prepared_sets,
     const ContextPtr & context,
     size_t limit,
-    RewriteInSubqueriesResult & result)
+    RewriteInSubqueriesForShardPruningResult & result,
+    bool in_conjunctive_position)
 {
     if (!node)
         return false;
@@ -129,23 +130,24 @@ bool rewriteInSubqueriesForShardPruning(
 
     bool changed = false;
 
-    if (const auto * function = node->as<ASTFunction>())
-    {
-        if (function->name == "or" || function->name == "not")
-            result.has_unsafe_logic_for_empty_subquery = true;
+    const auto * function = node->as<ASTFunction>();
 
-        if (function->name == "not_in" || function->name == "global_not_in")
-        {
-            /// NOT IN must keep the existing no-pruning behavior because an empty subquery flips the result to true.
-            result.has_unsafe_logic_for_empty_subquery = true;
-        }
-    }
+    /// Only `and(...)` lets an empty IN's "always false" value reach the root predicate.
+    /// Every other boolean-consuming operator -- `or`, `not`, `not_in`, `if`, `multi_if`,
+    /// `coalesce`, `tuple`, comparisons, arithmetic, arbitrary user functions -- may suppress
+    /// that signal, so descending through them moves us out of conjunctive position. Without
+    /// this guard `WHERE if(flag, id IN (SELECT 1 WHERE 0), 1)` would prune every shard even
+    /// though `flag = 0` rows must still be returned.
+    /// Non-function nodes (notably `ASTExpressionList`, which wraps a function's arguments)
+    /// are transparent: they do not change conjunctive position by themselves.
+    bool children_in_conjunctive_position = in_conjunctive_position;
+    if (function && function->name != "and")
+        children_in_conjunctive_position = false;
 
     /// Traverse each branch independently so multiple IN-subqueries can be rewritten one by one.
     for (auto & child : node->children)
-        changed |= rewriteInSubqueriesForShardPruning(child, prepared_sets, context, limit, result);
+        changed |= rewriteInSubqueriesForShardPruning(child, prepared_sets, context, limit, result, children_in_conjunctive_position);
 
-    auto * function = node->as<ASTFunction>();
     if (!function || function->name != "in" || !function->arguments || function->arguments->children.size() != 2)
         return changed;
 
@@ -183,8 +185,11 @@ bool rewriteInSubqueriesForShardPruning(
     const size_t total_rows = set->getTotalRowCount();
     if (total_rows == 0)
     {
-        /// Empty subquery result makes the whole conjunction false, but only if there is no OR/NOT.
-        result.has_empty_subquery = true;
+        /// An empty IN-subquery is always false. Only flag it for shard short-circuiting when
+        /// it sits in a pure conjunctive position -- otherwise an enclosing operator may still
+        /// evaluate the whole predicate to true for some rows (e.g. `if(flag, id IN (empty), 1)`).
+        if (in_conjunctive_position)
+            result.has_empty_subquery_in_conjunctive_position = true;
         return changed;
     }
 
@@ -198,7 +203,8 @@ bool rewriteInSubqueriesForShardPruning(
     const auto & values = elements.front();
     if (!values || values->size() == 0)
     {
-        result.has_empty_subquery = true;
+        if (in_conjunctive_position)
+            result.has_empty_subquery_in_conjunctive_position = true;
         return changed;
     }
 
@@ -232,6 +238,11 @@ bool rewriteInSubqueriesForShardPruning(
     right = std::make_shared<ASTLiteral>(std::move(tuple));
     return true;
 }
+
+}
+
+namespace
+{
 
 /// Returns a pruned shard IDs (fewer shards) if constant folding for `sharding_key_expr` is possible
 /// using constraints from "PREWHERE" and "WHERE" conditions, otherwise returns all_shards
@@ -275,14 +286,16 @@ std::vector<UInt64> skipUnusedShards(
     if (!max_shard_key_values || max_shard_key_values > LONG_MAX)
         throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "optimize_skip_unused_shards_limit out of range (0, {}]", LONG_MAX);
 
-    RewriteInSubqueriesResult rewrite_result;
+    Internal::RewriteInSubqueriesForShardPruningResult rewrite_result;
     if (context->getSettingsRef().optimize_skip_unused_shards_with_subqueries)
     {
-        rewriteInSubqueriesForShardPruning(condition_ast, query_info.prepared_sets, context, max_shard_key_values, rewrite_result);
+        Internal::rewriteInSubqueriesForShardPruning(
+            condition_ast, query_info.prepared_sets, context, max_shard_key_values, rewrite_result, /*in_conjunctive_position=*/true);
 
-        if (rewrite_result.has_empty_subquery && !rewrite_result.has_unsafe_logic_for_empty_subquery)
+        if (rewrite_result.has_empty_subquery_in_conjunctive_position)
         {
-            /// Empty IN-subquery is a contradiction for a pure conjunction, so we can skip every shard.
+            /// An empty IN-subquery reached purely through `and(...)` ancestors contradicts the
+            /// whole predicate, so no shard can produce a matching row.
             return {};
         }
     }

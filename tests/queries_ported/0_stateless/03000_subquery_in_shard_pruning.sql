@@ -52,4 +52,18 @@ select count() from table(03000_subquery_in_shard_pruning) where id not in (sele
 -- Multiple IN-subqueries are rewritten independently.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select 1) and value in (select 10);
 
+-- Codex correctness guard: an empty IN-subquery in a non-conjunctive position must not
+-- short-circuit shard selection to {}. With the old "no or/not anywhere" check, `if(...)`
+-- and `multi_if(...)` slipped through and returned 0 instead of the correct count.
+select count() from table(03000_subquery_in_shard_pruning) where if(value = 10, 1, id in (select 1 where 0));
+select count() from table(03000_subquery_in_shard_pruning) where multi_if(value = 10, 1, id in (select 1 where 0), 99, 1);
+-- Empty IN inside a `tuple` element must not zero out the shard set either.
+select count() from table(03000_subquery_in_shard_pruning) where tuple_element((1, id in (select 1 where 0)), 1) = 1;
+
+-- Historical IN-subquery against the same stream should match every row and read every shard.
+select count() from table(03000_subquery_in_shard_pruning) where id in (select id from table(03000_subquery_in_shard_pruning));
+
+-- Streaming IN-subquery must fall back to the standard NOT_IMPLEMENTED path, not crash.
+select count() from table(03000_subquery_in_shard_pruning) where id in (select id from 03000_subquery_in_shard_pruning); -- { serverError 48 }
+
 drop stream if exists 03000_subquery_in_shard_pruning;
