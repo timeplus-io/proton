@@ -24,7 +24,12 @@ set optimize_skip_unused_shards = 1;
 -- Correctness across forms: tuple-IN, flat-IN, and the equivalent OR-of-AND
 -- must all produce identical counts.
 select count() from table(03001_tuple_in_shard_pruning) where chain_id = 1 and address in ('addr_42', 'addr_88');
+-- EXPLAIN PIPELINE proves the flat-IN baseline reads only the two shards holding
+-- these two sharding-key values.
+select count() from (explain pipeline select count() from table(03001_tuple_in_shard_pruning) where chain_id = 1 and address in ('addr_42', 'addr_88')) where explain like '%MergeTreeSelect%';
 select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_88'));
+-- Tuple-IN should prune to the same two shards as the flat-IN baseline.
+select count() from (explain pipeline select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_88'))) where explain like '%MergeTreeSelect%';
 select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1::uint16, 'addr_42'), (1::uint16, 'addr_88'));
 select count() from table(03001_tuple_in_shard_pruning) where (chain_id = 1 and address in ('addr_42', 'addr_88'));
 
@@ -41,6 +46,7 @@ select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address
 -- The limit is respected; if the IN-set exceeds it, shard pruning falls back
 -- to the no-prune path but correctness is preserved.
 select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_88'), (1, 'addr_222')) settings optimize_skip_unused_shards_limit = 1;
+select count() from (explain pipeline select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_88'), (1, 'addr_222')) settings optimize_skip_unused_shards_limit = 1) where explain like '%MergeTreeSelect%';
 
 -- A non-literal value in a tuple row (here a function call) triggers the safe
 -- fallback in analyzeFunction — shard pruning gives up but the query still

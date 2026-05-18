@@ -2,7 +2,7 @@
 -- Regression test for optimize_skip_unused_shards_with_subqueries.
 -- For local Stream engine, force_optimize_skip_unused_shards does not raise 507
 -- (that is a Distributed-only enforcement), so this test validates correctness
--- across the new code path. A separate explain-based test could verify pruning.
+-- across the new code path and EXPLAIN PIPELINE verifies the selected shards.
 
 drop stream if exists 03000_subquery_in_shard_pruning;
 
@@ -19,11 +19,17 @@ set optimize_skip_unused_shards_with_subqueries = 0;
 
 -- Gating: with the new setting off we keep the old behavior.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select 1);
+-- With the subquery rewrite disabled, the IN-subquery cannot drive shard pruning
+-- and the pipeline still reads all three Stream shards.
+select count() from (explain pipeline select count() from table(03000_subquery_in_shard_pruning) where id in (select 1)) where explain like '%MergeTreeSelect%';
 
 set optimize_skip_unused_shards_with_subqueries = 1;
 
 -- Basic bounded subquery pruning preserves correctness.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select 1);
+-- The same bounded subquery is materialized early enough for shard pruning:
+-- id=1 maps to one Stream shard, so the pipeline has one MergeTreeSelect.
+select count() from (explain pipeline select count() from table(03000_subquery_in_shard_pruning) where id in (select 1)) where explain like '%MergeTreeSelect%';
 
 -- Empty subquery result.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select 1 where 0);
