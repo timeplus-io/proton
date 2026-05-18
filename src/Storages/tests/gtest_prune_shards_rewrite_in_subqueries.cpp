@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <Columns/IColumn.h>
+#include <Common/tests/gtest_global_context.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -9,14 +10,10 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/IAST.h>
 #include <QueryPipeline/SizeLimits.h>
-#include <Storages/PruneShardsInternal.h>
+#include <Storages/PruneShardsDetail.h>
 
-#include <Common/tests/gtest_global_context.h>
-
-namespace DB::tests
-{
+using namespace DB;
 
 namespace
 {
@@ -58,8 +55,8 @@ public:
 
 bool runRewrite(ASTPtr & root, const PreparedSetsPtr & prepared_sets)
 {
-    Internal::RewriteInSubqueriesForShardPruningResult result;
-    Internal::rewriteInSubqueriesForShardPruning(
+    detail::RewriteInSubqueriesForShardPruningResult result;
+    detail::rewriteInSubqueriesForShardPruning(
         root,
         prepared_sets,
         getContext().context,
@@ -176,6 +173,4 @@ TEST(PruneShardsRewriteInSubqueries, EmptyInsMixedConjunctiveAndNonConjunctiveFl
     ASTPtr inner_if = makeASTFunction("if", ident("flag"), fixture.makeEmptyIn(), literalOne());
     ASTPtr root = andOf(fixture.makeEmptyIn(), inner_if);
     EXPECT_TRUE(runRewrite(root, fixture.prepared_sets));
-}
-
 }

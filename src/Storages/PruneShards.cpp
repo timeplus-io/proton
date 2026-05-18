@@ -1,9 +1,8 @@
 #include <Storages/PruneShards.h>
-#include <Storages/PruneShardsInternal.h>
+#include <Storages/PruneShardsDetail.h>
 
 #include <Columns/ColumnConst.h>
 #include <Core/Field.h>
-#include <Common/Exception.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
@@ -16,8 +15,8 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Interpreters/interpretSubquery.h>
-#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
@@ -26,6 +25,7 @@
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/parseShards.h>
+#include <Common/Exception.h>
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
 
@@ -34,9 +34,10 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int NOT_IMPLEMENTED;
 extern const int TOO_MANY_ROWS;
 extern const int TYPE_MISMATCH;
-extern const int NOT_IMPLEMENTED;
 }
 
 IColumn::Selector createSelector(const ColumnWithTypeAndName & result, const std::vector<UInt64> & slot_to_shards)
@@ -113,7 +114,7 @@ bool isSubqueryPlaceholder(const ASTPtr & node)
 
 }
 
-namespace Internal
+namespace detail
 {
 
 bool rewriteInSubqueriesForShardPruning(
@@ -198,10 +199,11 @@ bool rewriteInSubqueriesForShardPruning(
                 /*external_table_set=*/nullptr,
                 context->getSettingsRef());
         }
-        catch (...)
+        catch (const Exception &)
         {
             /// Parse/resolve failures, unsupported subquery shapes, etc. -- bail out and let
             /// the normal execution path handle the IN. The original AST is unchanged.
+            /// Non-DB exceptions (std::bad_alloc, etc.) propagate unchanged.
             return changed;
         }
     }
@@ -268,13 +270,6 @@ bool rewriteInSubqueriesForShardPruning(
         tuple.push_back(value);
     }
 
-    if (tuple.empty())
-    {
-        /// All rows were either NULL (handled above) or filtered out by validation —
-        /// keep the original subquery to preserve correctness.
-        return changed;
-    }
-
     /// Replace the subquery with a literal tuple so evaluateExpressionOverConstantCondition()
     /// sees the concrete key set just like it does for literal IN-lists.
     right = std::make_shared<ASTLiteral>(std::move(tuple));
@@ -331,10 +326,10 @@ std::vector<UInt64> skipUnusedShards(
     if (!max_shard_key_values || max_shard_key_values > LONG_MAX)
         throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "optimize_skip_unused_shards_limit out of range (0, {}]", LONG_MAX);
 
-    Internal::RewriteInSubqueriesForShardPruningResult rewrite_result;
+    detail::RewriteInSubqueriesForShardPruningResult rewrite_result;
     if (context->getSettingsRef().optimize_skip_unused_shards_with_subqueries)
     {
-        Internal::rewriteInSubqueriesForShardPruning(
+        detail::rewriteInSubqueriesForShardPruning(
             condition_ast,
             query_info.prepared_sets,
             context,

@@ -8,7 +8,7 @@
 #include <Interpreters/PreparedSets.h>
 #include <Parsers/IAST_fwd.h>
 
-namespace DB::Internal
+namespace DB::detail
 {
 
 struct RewriteInSubqueriesForShardPruningResult
