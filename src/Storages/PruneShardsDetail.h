@@ -15,7 +15,7 @@ namespace DB
 
 class QueryPlan;
 
-namespace Internal
+namespace detail
 {
 
 struct RewriteInSubqueriesForShardPruningResult

@@ -1,9 +1,13 @@
 #include <gtest/gtest.h>
 
-#include <Columns/IColumn.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Common/tests/gtest_global_context.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/PreparedSets.h>
 #include <Interpreters/Set.h>
@@ -11,7 +15,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSubquery.h>
-#include <Parsers/IAST.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/QueryPlan/QueryPlan.h>
@@ -19,10 +22,7 @@
 #include <Processors/QueryPlan/ReadNothingStep.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <QueryPipeline/SizeLimits.h>
-#include <Storages/PruneShardsInternal.h>
-
-#include <Common/Exception.h>
-#include <Common/tests/gtest_global_context.h>
+#include <Storages/PruneShardsDetail.h>
 
 namespace DB
 {
@@ -32,8 +32,7 @@ namespace ErrorCodes
 }
 }
 
-namespace DB::tests
-{
+using namespace DB;
 
 namespace
 {
@@ -75,8 +74,8 @@ public:
 
 bool runRewrite(ASTPtr & root, const PreparedSetsPtr & prepared_sets)
 {
-    Internal::RewriteInSubqueriesForShardPruningResult result;
-    Internal::rewriteInSubqueriesForShardPruning(
+    DB::detail::RewriteInSubqueriesForShardPruningResult result;
+    DB::detail::rewriteInSubqueriesForShardPruning(
         root,
         prepared_sets,
         getContext().context,
@@ -103,8 +102,8 @@ bool rewriteForShardPruning(
     size_t subquery_depth,
     size_t limit = 1024)
 {
-    Internal::RewriteInSubqueriesForShardPruningResult result;
-    return Internal::rewriteInSubqueriesForShardPruning(
+    DB::detail::RewriteInSubqueriesForShardPruningResult result;
+    return DB::detail::rewriteInSubqueriesForShardPruning(
         root,
         prepared_sets,
         context,
@@ -148,6 +147,98 @@ ASTPtr inWithSubquery(const String & query)
 ASTPtr & inRhs(ASTPtr & node)
 {
     return node->as<ASTFunction &>().arguments->children[1];
+}
+
+/// Generalized fixture used by the non-empty, NULL-element, and limit-exceeded tests.
+/// The empty-IN tests above use the dedicated EmptyInFixture instead -- keeping that
+/// fixture untouched avoids churn in its assertions.
+struct PreparedFixture
+{
+    PreparedSetsPtr prepared_sets;
+    ASTPtr table_identifier;
+
+    ASTPtr makeIn() const
+    {
+        ASTPtr id = std::make_shared<ASTIdentifier>("id");
+        ASTPtr right = table_identifier->clone();
+        return makeASTFunction("in", id, right);
+    }
+};
+
+PreparedFixture makeIntInFixture(const String & name, std::initializer_list<Int32> values)
+{
+    PreparedFixture f;
+    f.prepared_sets = std::make_shared<PreparedSets>();
+    f.table_identifier = std::make_shared<ASTTableIdentifier>(name);
+
+    SizeLimits no_limits{0, 0, OverflowMode::THROW};
+    auto set = std::make_shared<Set>(no_limits, /*max_elements_to_fill=*/1024, /*transform_null_in=*/false);
+
+    auto type = std::make_shared<DataTypeInt32>();
+    ColumnsWithTypeAndName header{ColumnWithTypeAndName(type, "id")};
+    set->setHeader(header);
+    set->fillSetElements();
+
+    if (values.size() > 0)
+    {
+        auto col = type->createColumn();
+        for (Int32 v : values)
+            col->insert(Field(static_cast<Int64>(v)));
+        ColumnsWithTypeAndName block{ColumnWithTypeAndName(std::move(col), type, "id")};
+        set->insertFromBlock(block);
+    }
+    set->finishInsert();
+
+    f.prepared_sets->addFromStorage(f.table_identifier->getTreeHash(), std::move(set));
+    return f;
+}
+
+/// Build a Set keyed by `Nullable(Int32)` containing the values {NULL, 1}.
+/// Requires `transform_null_in=true` so NULL is stored as a real set member instead
+/// of being filtered at insert time -- otherwise the rewrite path would never see a NULL.
+PreparedFixture makeNullableIntInFixture(const String & name)
+{
+    PreparedFixture f;
+    f.prepared_sets = std::make_shared<PreparedSets>();
+    f.table_identifier = std::make_shared<ASTTableIdentifier>(name);
+
+    SizeLimits no_limits{0, 0, OverflowMode::THROW};
+    auto set = std::make_shared<Set>(no_limits, /*max_elements_to_fill=*/1024, /*transform_null_in=*/true);
+
+    auto nullable_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt32>());
+    ColumnsWithTypeAndName header{ColumnWithTypeAndName(nullable_type, "id")};
+    set->setHeader(header);
+    set->fillSetElements();
+
+    auto col = nullable_type->createColumn();
+    col->insert(Null{});
+    col->insert(Field(static_cast<Int64>(1)));
+    ColumnsWithTypeAndName block{ColumnWithTypeAndName(std::move(col), nullable_type, "id")};
+    set->insertFromBlock(block);
+    set->finishInsert();
+
+    f.prepared_sets->addFromStorage(f.table_identifier->getTreeHash(), std::move(set));
+    return f;
+}
+
+struct RewriteOutcome
+{
+    bool changed;
+    bool empty_in_conjunctive_position;
+};
+
+RewriteOutcome runRewriteFull(ASTPtr & root, const PreparedSetsPtr & prepared_sets, size_t limit = 1024)
+{
+    DB::detail::RewriteInSubqueriesForShardPruningResult result;
+    bool changed = DB::detail::rewriteInSubqueriesForShardPruning(
+        root,
+        prepared_sets,
+        getContext().context,
+        /*subquery_depth=*/0,
+        limit,
+        result,
+        /*in_conjunctive_position=*/true);
+    return {changed, result.has_empty_subquery_in_conjunctive_position};
 }
 
 }
@@ -255,7 +346,7 @@ TEST(PruneShardsRewriteInSubqueries, SubqueryPlanMaterializesExplicitSetForShard
     auto plan = std::make_unique<QueryPlan>();
     plan->addStep(std::make_unique<ReadFromPreparedSource>(Pipe(std::make_shared<SourceFromSingleChunk>(std::move(block)))));
 
-    auto future_set = Internal::addSubqueryPlanForShardPruning(
+    auto future_set = DB::detail::addSubqueryPlanForShardPruning(
         prepared_sets,
         PreparedSets::Hash{42, 7},
         std::move(plan),
@@ -295,7 +386,7 @@ TEST(PruneShardsRewriteInSubqueries, BuildSubqueryPlanForwardsSubqueryDepth)
     /// this too deep; a regression to hardcoded depth=1 would build a plan instead.
     try
     {
-        auto plan = Internal::buildSubqueryPlanForShardPruning(
+        auto plan = DB::detail::buildSubqueryPlanForShardPruning(
             subquery, context, /*subquery_depth=*/50);
         FAIL() << "Expected TOO_DEEP_SUBQUERIES, got plan initialized=" << plan->isInitialized();
     }
@@ -309,11 +400,74 @@ TEST(PruneShardsRewriteInSubqueries, StreamingPlanCannotBeMaterializedForShardPr
 {
     QueryPlan historical_plan;
     historical_plan.addStep(std::make_unique<ReadNothingStep>(Block{}, /*is_streaming=*/false));
-    EXPECT_TRUE(Internal::canMaterializeSubqueryForShardPruning(historical_plan));
+    EXPECT_TRUE(DB::detail::canMaterializeSubqueryForShardPruning(historical_plan));
 
     QueryPlan streaming_plan;
     streaming_plan.addStep(std::make_unique<ReadNothingStep>(Block{}, /*is_streaming=*/true));
-    EXPECT_FALSE(Internal::canMaterializeSubqueryForShardPruning(streaming_plan));
+    EXPECT_FALSE(DB::detail::canMaterializeSubqueryForShardPruning(streaming_plan));
 }
 
+TEST(PruneShardsRewriteInSubqueries, NonEmptyInRewritesToLiteralTuple)
+{
+    /// Bounded non-empty prepared set must be materialized into a literal tuple in place of the
+    /// original ASTTableIdentifier so that shard pruning can evaluate the sharding key over it.
+    auto fixture = makeIntInFixture("fake_int_set", {1, 2});
+    ASTPtr root = fixture.makeIn();
+
+    const auto outcome = runRewriteFull(root, fixture.prepared_sets);
+
+    EXPECT_TRUE(outcome.changed);
+    EXPECT_FALSE(outcome.empty_in_conjunctive_position);
+
+    const auto * in_fn = root->as<ASTFunction>();
+    ASSERT_NE(in_fn, nullptr);
+    ASSERT_EQ(in_fn->name, "in");
+    ASSERT_EQ(in_fn->arguments->children.size(), 2u);
+
+    const auto * lit = in_fn->arguments->children[1]->as<ASTLiteral>();
+    ASSERT_NE(lit, nullptr);
+    ASSERT_EQ(lit->value.getType(), Field::Types::Tuple);
+
+    const auto & tuple = lit->value.get<const Tuple &>();
+    ASSERT_EQ(tuple.size(), 2u);
+    EXPECT_EQ(tuple[0].safeGet<Int64>(), 1);
+    EXPECT_EQ(tuple[1].safeGet<Int64>(), 2);
+}
+
+TEST(PruneShardsRewriteInSubqueries, NullElementLeavesRhsUnchanged)
+{
+    /// With transform_null_in=true on the Set, NULL is a real set element. The rewrite must
+    /// bail out and leave the RHS as the original ASTTableIdentifier so the normal IN evaluation
+    /// (which knows the NULL semantics) handles it.
+    auto fixture = makeNullableIntInFixture("fake_nullable_set");
+    ASTPtr root = fixture.makeIn();
+
+    const auto outcome = runRewriteFull(root, fixture.prepared_sets);
+
+    EXPECT_FALSE(outcome.changed);
+    EXPECT_FALSE(outcome.empty_in_conjunctive_position);
+
+    const auto * in_fn = root->as<ASTFunction>();
+    ASSERT_NE(in_fn, nullptr);
+    EXPECT_TRUE(in_fn->arguments->children[1]->as<ASTTableIdentifier>());
+    EXPECT_FALSE(in_fn->arguments->children[1]->as<ASTLiteral>());
+}
+
+TEST(PruneShardsRewriteInSubqueries, BoundedNonEmptyInExceedingLimitDoesNotRewrite)
+{
+    /// `total_rows > limit` is the safety valve for `optimize_skip_unused_shards_limit`. With
+    /// 3 values and limit=1, the rewrite must give up and leave the RHS untouched so the normal
+    /// execution path keeps full correctness.
+    auto fixture = makeIntInFixture("fake_overflow_set", {1, 2, 3});
+    ASTPtr root = fixture.makeIn();
+
+    const auto outcome = runRewriteFull(root, fixture.prepared_sets, /*limit=*/1);
+
+    EXPECT_FALSE(outcome.changed);
+    EXPECT_FALSE(outcome.empty_in_conjunctive_position);
+
+    const auto * in_fn = root->as<ASTFunction>();
+    ASSERT_NE(in_fn, nullptr);
+    EXPECT_TRUE(in_fn->arguments->children[1]->as<ASTTableIdentifier>());
+    EXPECT_FALSE(in_fn->arguments->children[1]->as<ASTLiteral>());
 }
