@@ -29,6 +29,8 @@
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
 
+#include <limits>
+
 namespace DB
 {
 
@@ -116,6 +118,49 @@ bool isSubqueryPlaceholder(const ASTPtr & node)
 namespace Internal
 {
 
+bool canMaterializeSubqueryForShardPruning(const QueryPlan & subquery_plan)
+{
+    return !subquery_plan.isStreaming();
+}
+
+std::unique_ptr<QueryPlan> buildSubqueryPlanForShardPruning(
+    const ASTPtr & subquery, const ContextPtr & context, size_t subquery_depth)
+{
+    auto subquery_plan = std::make_unique<QueryPlan>();
+    auto interpreter = interpretSubquery(subquery, context, subquery_depth, {});
+    interpreter->buildQueryPlan(*subquery_plan);
+    return subquery_plan;
+}
+
+FutureSetPtr addSubqueryPlanForShardPruning(
+    const PreparedSetsPtr & prepared_sets,
+    const PreparedSets::Hash & set_key,
+    std::unique_ptr<QueryPlan> subquery_plan,
+    const ContextPtr & context,
+    size_t limit)
+{
+    if (!canMaterializeSubqueryForShardPruning(*subquery_plan))
+        return nullptr;
+
+    /// Shard pruning only needs enough explicit values to decide whether
+    /// the set exceeds its own limit. Keep normal set semantics intact,
+    /// but do not collect an unbounded explicit Field list for planning.
+    auto pruning_settings = context->getSettingsRef();
+    const auto pruning_max_values = limit == std::numeric_limits<UInt64>::max()
+        ? std::numeric_limits<UInt64>::max()
+        : static_cast<UInt64>(limit) + 1;
+    if (!pruning_settings.use_index_for_in_with_subqueries_max_values
+        || pruning_settings.use_index_for_in_with_subqueries_max_values > pruning_max_values)
+        pruning_settings.use_index_for_in_with_subqueries_max_values = pruning_max_values;
+
+    return prepared_sets->addFromSubquery(
+        set_key,
+        std::move(subquery_plan),
+        /*external_table=*/nullptr,
+        /*external_table_set=*/nullptr,
+        pruning_settings);
+}
+
 bool rewriteInSubqueriesForShardPruning(
     ASTPtr & node,
     const PreparedSetsPtr & prepared_sets,
@@ -178,30 +223,20 @@ bool rewriteInSubqueriesForShardPruning(
     {
         try
         {
-            auto subquery_plan = std::make_unique<QueryPlan>();
-            {
-                auto interpreter = interpretSubquery(right, context, subquery_depth, {});
-                interpreter->buildQueryPlan(*subquery_plan);
-            }
+            auto subquery_plan = buildSubqueryPlanForShardPruning(right, context, subquery_depth);
 
             /// A streaming subquery cannot be materialized into a fixed set -- the upstream
             /// `buildOrderedSetInplace()` would throw `NOT_IMPLEMENTED`. Detect that here so
             /// we never register a future set we'd immediately fail to consume; the original
             /// AST is left in place and normal execution handles the IN.
-            if (subquery_plan->isStreaming())
+            future_set = addSubqueryPlanForShardPruning(prepared_sets, right_hash, std::move(subquery_plan), context, limit);
+            if (!future_set)
                 return changed;
-
-            future_set = prepared_sets->addFromSubquery(
-                right_hash,
-                std::move(subquery_plan),
-                /*external_table=*/nullptr,
-                /*external_table_set=*/nullptr,
-                context->getSettingsRef());
         }
-        catch (...)
+        catch (const DB::Exception &)
         {
-            /// Parse/resolve failures, unsupported subquery shapes, etc. -- bail out and let
-            /// the normal execution path handle the IN. The original AST is unchanged.
+            /// Analyzer failures and unsupported subquery shapes use DB::Exception.
+            /// Non-DB exceptions are runtime/programmer bugs and should propagate.
             return changed;
         }
     }
@@ -214,7 +249,7 @@ bool rewriteInSubqueriesForShardPruning(
     {
         set = future_set->buildOrderedSetInplace(context);
     }
-    catch (const Exception & e)
+    catch (const DB::Exception & e)
     {
         if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
             return changed;
@@ -255,7 +290,7 @@ bool rewriteInSubqueriesForShardPruning(
 
     for (size_t row = 0; row < values->size(); ++row)
     {
-        const Field & value = (*values)[row];
+        Field value = (*values)[row];
         if (value.isNull())
         {
             /// Any NULL element forces a conservative fallback: with transform_null_in=1
@@ -265,7 +300,7 @@ bool rewriteInSubqueriesForShardPruning(
             return changed;
         }
 
-        tuple.push_back(value);
+        tuple.push_back(std::move(value));
     }
 
     if (tuple.empty())
@@ -338,7 +373,7 @@ std::vector<UInt64> skipUnusedShards(
             condition_ast,
             query_info.prepared_sets,
             context,
-            query_info.subquery_depth,
+            query_info.syntax_analyzer_result->subquery_depth,
             max_shard_key_values,
             rewrite_result,
             /*in_conjunctive_position=*/true);

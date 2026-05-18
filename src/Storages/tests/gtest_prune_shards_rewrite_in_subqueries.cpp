@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <Columns/IColumn.h>
+#include <Columns/ColumnVector.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -9,11 +10,27 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSubquery.h>
 #include <Parsers/IAST.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Processors/QueryPlan/ReadNothingStep.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
 #include <QueryPipeline/SizeLimits.h>
 #include <Storages/PruneShardsInternal.h>
 
+#include <Common/Exception.h>
 #include <Common/tests/gtest_global_context.h>
+
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int TOO_DEEP_SUBQUERIES;
+}
+}
 
 namespace DB::tests
 {
@@ -70,6 +87,38 @@ bool runRewrite(ASTPtr & root, const PreparedSetsPtr & prepared_sets)
     return result.has_empty_subquery_in_conjunctive_position;
 }
 
+ContextMutablePtr makePruningContext()
+{
+    auto context = Context::createCopy(getContext().context);
+    context->makeQueryContext();
+    context->setSetting("use_index_for_in_with_subqueries", Field{true});
+    context->setSetting("query_mode", String{"table"});
+    return context;
+}
+
+bool rewriteForShardPruning(
+    ASTPtr & root,
+    const PreparedSetsPtr & prepared_sets,
+    const ContextPtr & context,
+    size_t subquery_depth,
+    size_t limit = 1024)
+{
+    Internal::RewriteInSubqueriesForShardPruningResult result;
+    return Internal::rewriteInSubqueriesForShardPruning(
+        root,
+        prepared_sets,
+        context,
+        subquery_depth,
+        limit,
+        result,
+        /*in_conjunctive_position=*/true);
+}
+
+bool rewriteForShardPruning(ASTPtr & root, const PreparedSetsPtr & prepared_sets, size_t limit = 1024)
+{
+    return rewriteForShardPruning(root, prepared_sets, makePruningContext(), /*subquery_depth=*/0, limit);
+}
+
 ASTPtr literalOne()
 {
     return std::make_shared<ASTLiteral>(Field(static_cast<UInt64>(1)));
@@ -83,6 +132,22 @@ ASTPtr ident(const String & name)
 ASTPtr andOf(ASTPtr a, ASTPtr b)
 {
     return makeASTFunction("and", a, b);
+}
+
+ASTPtr selectQuery(const String & query)
+{
+    ParserSelectWithUnionQuery parser;
+    return parseQuery(parser, query, /*max_query_size=*/0, /*max_parser_depth=*/0);
+}
+
+ASTPtr inWithSubquery(const String & query)
+{
+    return makeASTFunction("in", ident("id"), std::make_shared<ASTSubquery>(selectQuery(query)));
+}
+
+ASTPtr & inRhs(ASTPtr & node)
+{
+    return node->as<ASTFunction &>().arguments->children[1];
 }
 
 }
@@ -176,6 +241,79 @@ TEST(PruneShardsRewriteInSubqueries, EmptyInsMixedConjunctiveAndNonConjunctiveFl
     ASTPtr inner_if = makeASTFunction("if", ident("flag"), fixture.makeEmptyIn(), literalOne());
     ASTPtr root = andOf(fixture.makeEmptyIn(), inner_if);
     EXPECT_TRUE(runRewrite(root, fixture.prepared_sets));
+}
+
+TEST(PruneShardsRewriteInSubqueries, SubqueryPlanMaterializesExplicitSetForShardPruning)
+{
+    auto context = makePruningContext();
+    auto prepared_sets = std::make_shared<PreparedSets>();
+
+    auto column = ColumnUInt64::create();
+    column->insertValue(42);
+    Block block{{std::move(column), std::make_shared<DataTypeUInt64>(), "id"}};
+
+    auto plan = std::make_unique<QueryPlan>();
+    plan->addStep(std::make_unique<ReadFromPreparedSource>(Pipe(std::make_shared<SourceFromSingleChunk>(std::move(block)))));
+
+    auto future_set = Internal::addSubqueryPlanForShardPruning(
+        prepared_sets,
+        PreparedSets::Hash{42, 7},
+        std::move(plan),
+        context,
+        /*limit=*/1024);
+
+    ASSERT_NE(future_set, nullptr);
+
+    auto set = future_set->buildOrderedSetInplace(context);
+    ASSERT_NE(set, nullptr);
+    ASSERT_TRUE(set->hasExplicitSetElements());
+    ASSERT_EQ(set->getTotalRowCount(), 1);
+
+    const auto elements = set->getSetElements();
+    ASSERT_EQ(elements.size(), 1);
+    ASSERT_EQ(elements.front()->size(), 1);
+    EXPECT_EQ((*elements.front())[0].safeGet<UInt64>(), 42);
+}
+
+TEST(PruneShardsRewriteInSubqueries, AstSubqueryDbExceptionFallsBackWithoutRewrite)
+{
+    auto prepared_sets = std::make_shared<PreparedSets>();
+    ASTPtr root = inWithSubquery("select missing_identifier");
+
+    EXPECT_FALSE(rewriteForShardPruning(root, prepared_sets));
+    EXPECT_NE(inRhs(root)->as<ASTSubquery>(), nullptr);
+}
+
+TEST(PruneShardsRewriteInSubqueries, BuildSubqueryPlanForwardsSubqueryDepth)
+{
+    auto context = makePruningContext();
+    context->setSetting("max_subquery_depth", Field{UInt64{50}});
+
+    ASTPtr subquery = std::make_shared<ASTSubquery>(selectQuery("select 1 as id"));
+
+    /// The incoming depth must reach interpretSubquery(). Correct forwarding makes
+    /// this too deep; a regression to hardcoded depth=1 would build a plan instead.
+    try
+    {
+        auto plan = Internal::buildSubqueryPlanForShardPruning(
+            subquery, context, /*subquery_depth=*/50);
+        FAIL() << "Expected TOO_DEEP_SUBQUERIES, got plan initialized=" << plan->isInitialized();
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_EQ(e.code(), ErrorCodes::TOO_DEEP_SUBQUERIES);
+    }
+}
+
+TEST(PruneShardsRewriteInSubqueries, StreamingPlanCannotBeMaterializedForShardPruning)
+{
+    QueryPlan historical_plan;
+    historical_plan.addStep(std::make_unique<ReadNothingStep>(Block{}, /*is_streaming=*/false));
+    EXPECT_TRUE(Internal::canMaterializeSubqueryForShardPruning(historical_plan));
+
+    QueryPlan streaming_plan;
+    streaming_plan.addStep(std::make_unique<ReadNothingStep>(Block{}, /*is_streaming=*/true));
+    EXPECT_FALSE(Internal::canMaterializeSubqueryForShardPruning(streaming_plan));
 }
 
 }

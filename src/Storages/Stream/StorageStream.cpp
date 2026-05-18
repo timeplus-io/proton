@@ -43,6 +43,7 @@ extern const int UNSUPPORTED;
 extern const int UNSUPPORTED_PARAMETER;
 extern const int RESOURCE_NOT_INITED;
 extern const int RESOURCE_NOT_FOUND;
+extern const int LOGICAL_ERROR;
 }
 
 namespace
@@ -268,10 +269,14 @@ void StorageStream::doRead(
     LOG_DEBUG(log, "Read {}", description);
 
     /// Shard pruning can legitimately yield zero shards (e.g. when `optimize_skip_unused_shards_with_subqueries`
-    /// proves the WHERE predicate is unsatisfiable). Leave `query_plan` uninitialized; the
-    /// caller (`InterpreterSelectQuery`) attaches a `NullSource` via `addEmptySourceToQueryPlan`.
+    /// proves a historical WHERE predicate is unsatisfiable). Leave `query_plan` uninitialized;
+    /// the caller (`InterpreterSelectQuery`) attaches a `NullSource` via `addEmptySourceToQueryPlan`.
     if (shards_to_read.shards.empty())
+    {
+        if (shards_to_read.mode != QueryMode::Historical)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty shard list is only valid for historical Stream reads");
         return;
+    }
 
     /// Streaming read always uses the minimum number of threads unless the user specifies a different value with the setting \min_threads.
     size_t streaming_shard_num_streams = std::max<size_t>(

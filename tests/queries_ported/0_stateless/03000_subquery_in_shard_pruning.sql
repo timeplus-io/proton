@@ -51,6 +51,7 @@ set use_index_for_in_with_subqueries = 1;
 
 -- Limit is respected: a larger IN-subquery keeps the existing no-pruning behavior.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select 1 union all select 2) settings optimize_skip_unused_shards_limit = 1;
+select count() from (explain pipeline select count() from table(03000_subquery_in_shard_pruning) where id in (select 1 union all select 2) settings optimize_skip_unused_shards_limit = 1) where explain like '%MergeTreeSelect%';
 
 -- NOT IN keeps the conservative fallback.
 select count() from table(03000_subquery_in_shard_pruning) where id not in (select 1);
@@ -69,8 +70,8 @@ select count() from table(03000_subquery_in_shard_pruning) where tuple_element((
 -- Historical IN-subquery against the same stream should match every row and read every shard.
 select count() from table(03000_subquery_in_shard_pruning) where id in (select id from table(03000_subquery_in_shard_pruning));
 
--- Early shard-pruning materialization must preserve normal subquery-depth validation.
-select count() from (select * from (select * from table(03000_subquery_in_shard_pruning) where id in (select 1))) settings max_subquery_depth = 2; -- { serverError 162 }
+-- Early shard-pruning materialization must not suppress normal subquery-depth validation.
+select count() from table(03000_subquery_in_shard_pruning) where id in (select id from (select id from (select 1 as id))) settings max_subquery_depth = 2; -- { serverError 162 }
 
 -- This subquery is bounded and materializes to an empty set, but the outer
 -- streaming query must remain continuous instead of finishing on a finite empty source.

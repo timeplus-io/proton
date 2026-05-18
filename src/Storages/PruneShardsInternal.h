@@ -8,7 +8,14 @@
 #include <Interpreters/PreparedSets.h>
 #include <Parsers/IAST_fwd.h>
 
-namespace DB::Internal
+#include <memory>
+
+namespace DB
+{
+
+class QueryPlan;
+
+namespace Internal
 {
 
 struct RewriteInSubqueriesForShardPruningResult
@@ -17,6 +24,24 @@ struct RewriteInSubqueriesForShardPruningResult
     /// so its "always false" value actually propagates to the root predicate.
     bool has_empty_subquery_in_conjunctive_position = false;
 };
+
+/// Shard-pruning-only helper exposed for focused tests; mirrors the streaming-plan
+/// guard before early IN-subquery materialization.
+bool canMaterializeSubqueryForShardPruning(const QueryPlan & subquery_plan);
+
+/// Shard-pruning-only helper exposed for focused tests; builds the early
+/// IN-subquery plan with the outer query's current subquery depth.
+std::unique_ptr<QueryPlan> buildSubqueryPlanForShardPruning(
+    const ASTPtr & subquery, const ContextPtr & context, size_t subquery_depth);
+
+/// Shard-pruning-only helper exposed for focused tests; registers an already-planned
+/// bounded subquery with explicit set collection capped to the pruning limit.
+FutureSetPtr addSubqueryPlanForShardPruning(
+    const PreparedSetsPtr & prepared_sets,
+    const PreparedSets::Hash & set_key,
+    std::unique_ptr<QueryPlan> subquery_plan,
+    const ContextPtr & context,
+    size_t limit);
 
 /// Walks `node` and rewrites every `in(col, subquery)` whose set is already prepared,
 /// replacing the subquery with a literal tuple of values when the set is small enough.
@@ -32,5 +57,7 @@ bool rewriteInSubqueriesForShardPruning(
     size_t limit,
     RewriteInSubqueriesForShardPruningResult & result,
     bool in_conjunctive_position);
+
+}
 
 }
