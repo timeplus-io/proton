@@ -21,6 +21,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Processors/QueryPlan/Optimizations/actionsDAGUtils.h>
 #include <Storages/MergeTree/KeyCondition.h>
+#include <set>
 #include <unordered_map>
 
 
@@ -242,10 +243,21 @@ namespace
                 if (lhs_ids.empty())
                     return {};
 
+                /// Dedup the inner tuples. Two identical RHS rows expand to identical
+                /// Conjunctions, which would consume the `optimize_skip_unused_shards_limit`
+                /// budget twice (potentially tripping the limit and silently falling back to
+                /// scanning every shard) and feed redundant rows into the Block that the
+                /// downstream `evaluateExpressionOverConstantCondition` materializes.
+                std::set<std::vector<Field>> seen_rows;
+
                 auto add_tuple_row = [&](const auto & values_per_column) -> bool
                 {
                     if (values_per_column.size() != lhs_ids.size())
                         return false;
+
+                    std::vector<Field> row_key(values_per_column.begin(), values_per_column.end());
+                    if (!seen_rows.insert(std::move(row_key)).second)
+                        return true;
 
                     Conjunction conjunction;
                     conjunction.reserve(lhs_ids.size());

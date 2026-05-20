@@ -53,4 +53,13 @@ select count() from (explain pipeline select count() from table(03001_tuple_in_s
 -- returns the right rows.
 select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, concat('addr_', '42')), (1, 'addr_88'));
 
+-- Duplicate inner tuples on the RHS must be deduped before they consume the
+-- shard-pruning limit budget. Without dedup, 3 conjunctions exceed `limit=2`
+-- and the optimization silently falls back to scanning every shard.
+select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_42'), (1, 'addr_88')) settings optimize_skip_unused_shards_limit = 2;
+select count() from (explain pipeline select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_42'), (1, 'addr_88')) settings optimize_skip_unused_shards_limit = 2) where explain like '%MergeTreeSelect%';
+
+-- And the row count itself is invariant under duplication on the RHS.
+select count() from table(03001_tuple_in_shard_pruning) where (chain_id, address) in ((1, 'addr_42'), (1, 'addr_42'));
+
 drop stream if exists 03001_tuple_in_shard_pruning;
