@@ -266,6 +266,33 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           tag_name: ${{ steps.execute.outputs.tag_name }}
 
+      - name: Failed-job rerun notice
+        if: ${{ failure() && steps.execute.conclusion == 'failure' && github.run_attempt == 1 }}
+        env:
+          EC2_INSTANCE_ID: ${{ needs.start-runner.outputs.ec2-instance-id }}
+          RUNNER_LABEL: ${{ needs.start-runner.outputs.label }}
+        run: |
+          {
+            echo "## Failed-job rerun notice"
+            echo ""
+            echo "The \`execute\` step failed on attempt 1. The \`stop-runner\` job is configured"
+            echo "to skip termination on first-attempt \`execute\` failures so that"
+            echo "\`gh run rerun --failed\` can land back on the same EC2 instance."
+            echo ""
+            echo "- Runner label: \`${RUNNER_LABEL}\`"
+            echo "- EC2 instance: \`${EC2_INSTANCE_ID}\`"
+            echo ""
+            echo "If you are **not** going to rerun, terminate the EC2 manually to avoid"
+            echo "leaking compute:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "aws ec2 terminate-instances --instance-ids ${EC2_INSTANCE_ID}"
+            echo "\`\`\`"
+            echo ""
+            echo "Subsequent attempts (\`run_attempt > 1\`) always run \`stop-runner\`"
+            echo "regardless of outcome."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Artifact
         if: ${{ always() && inputs.upjob != '' }}
         uses: actions/upload-artifact@v6.0.0
@@ -281,7 +308,13 @@ jobs:
       - start-runner # required to get output from the start-runner job
       - execute-command # required to wait when the main job is done
     runs-on: ubuntu-latest
-    if: ${{ always() }} # required to stop the runner even if the error happened in the previous jobs
+    # Skip termination on first-attempt execute-command failure so that
+    # `gh run rerun --failed` can land back on the same EC2 instance.
+    # Run on success, cancellation, or any subsequent attempt regardless
+    # of outcome (so a second failure does not leak the EC2 either).
+    # Note: terminal failures with no rerun leak the EC2 until an external
+    # sweeper or manual `aws ec2 terminate-instances` cleans it up.
+    if: ${{ success() || cancelled() || github.run_attempt > 1 }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.0.0
