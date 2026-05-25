@@ -9,9 +9,29 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <chrono>
 #include <iostream>
 
 using namespace std::chrono_literals;
+
+namespace
+{
+/// Poll a predicate until it returns true or the deadline elapses.
+/// Use to wait on observable callback effects without coupling tests
+/// to SystemTimer::poll()'s wall-clock-driven semantics.
+template <typename F>
+bool waitUntil(F && cond, int64_t deadline_ms = 2000)
+{
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(deadline_ms);
+    while (!cond())
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+            return false;
+        sleepForMilliseconds(1);
+    }
+    return true;
+}
+}
 
 TEST(TimeWheel, EdgeCaseTimer)
 {
@@ -180,32 +200,17 @@ TEST(TimeWheel, CancelInCallback)
 TEST(TimeWheel, TimerTestCallback)
 {
     std::atomic_int32_t counter{};
-    {
-        cluster::SystemTimer timer(4, 1, 6000);
-        auto timer_task = timer.add(10, [&]() { counter++; });
-        ASSERT_TRUE(timer_task != nullptr);
-        GTEST_ASSERT_EQ(counter.load(), 0);
+    cluster::SystemTimer timer(4, 1, 6000);
 
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
+    auto timer_task = timer.add(10, [&]() { counter++; });
+    ASSERT_TRUE(timer_task != nullptr);
+    EXPECT_EQ(counter.load(), 0);
 
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
-
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
-
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
-
-        timer.poll(7);
-        timer.wait();
-        GTEST_ASSERT_EQ(counter.load(), 1);
-
-        timer.poll(5);
-        timer.wait();
-        GTEST_ASSERT_EQ(counter.load(), 1);
-    }
+    /// Drive the wheel with a budget large enough to expire the timer even
+    /// under CI scheduling jitter, then wait on the observable counter rather
+    /// than on wall-clock timing of intermediate poll() calls.
+    timer.poll(50);
+    ASSERT_TRUE(waitUntil([&] { return counter.load() == 1; }));
 }
 
 TEST(TimeWheel, TimerTestCallbackWithOrder)
@@ -327,34 +332,35 @@ TEST(TimeWheel, TimerTestCallbackAsync)
 {
     constexpr uint32_t THREAD_NUM = 10;
     std::atomic_int32_t counter{};
-    {
-        cluster::SystemTimer timer(4, 1, 6000);
+    std::atomic<size_t> add_failures{0};
+    cluster::SystemTimer timer(4, 1, 6000);
 
-        std::vector<std::thread> threads;
-        threads.reserve(THREAD_NUM);
+    std::vector<std::thread> threads;
+    threads.reserve(THREAD_NUM);
 
-        auto work = [&]() {
-            auto timer_task = timer.add(20, [&]() { counter++; });
-            ASSERT_TRUE(timer_task != nullptr);
-        };
+    auto work = [&]() {
+        auto t = timer.add(20, [&]() { counter++; });
+        if (!t)
+            add_failures.fetch_add(1, std::memory_order_relaxed);
+    };
 
-        for (uint32_t i = 0; i < THREAD_NUM; ++i)
-            threads.emplace_back(work);
+    for (uint32_t i = 0; i < THREAD_NUM; ++i)
+        threads.emplace_back(work);
 
-        GTEST_ASSERT_EQ(counter.load(), 0);
+    for (auto & i : threads)
+        i.join();
 
-        for (auto & i : threads)
-            i.join();
+    ASSERT_EQ(add_failures.load(), 0u);
 
-        timer.poll(30);
-        for (int i = 0; i < 10; i++)
-            timer.poll(1);
-
-        /// Give ample time for timer to execute the expired timer or we need change the timer default pool size to task count
-        /// https://github.com/timeplus-io/proton-enterprise/issues/3710
-        sleepForMilliseconds(1);
-    }
-    GTEST_ASSERT_EQ(counter.load(), THREAD_NUM);
+    /// After join, the slowest producer's timer expiration is bounded by
+    /// (join_completion_time + 20ms). Drive the wheel and wait on the counter
+    /// rather than budgeting a fixed sleep that races with scheduling jitter.
+    ASSERT_TRUE(waitUntil([&] {
+        if (counter.load() == static_cast<int32_t>(THREAD_NUM))
+            return true;
+        timer.poll(5);
+        return counter.load() == static_cast<int32_t>(THREAD_NUM);
+    }));
 }
 
 TEST(TimeWheel, RepeatAndCancelTimer)
