@@ -33,6 +33,9 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
 
+#include <Access/Common/AccessFlags.h>
+#include <Access/ContextAccess.h>
+
 #include <boost/algorithm/string.hpp>
 #include <Poco/Exception.h>
 #include <Poco/Net/AcceptCertificateHandler.h>
@@ -443,6 +446,30 @@ void registerStorageExternalStream(StorageFactory & factory)
         validateEngineArgs(args.getLocalContext(), args.engine_args, args.columns);
 
         if (args.storage_def->settings != nullptr)
+        {
+            /// proton: starts
+            /// Resolve named_collection against the *user's* local context.
+            /// The storage constructor below receives a global context (see
+            /// InterpreterCreateQuery), where Context::getAccess() returns
+            /// full access, so the in-helper check in
+            /// updateSettingsByNamedCollection() is a no-op for these paths.
+            ///
+            /// Load query settings *and* config_file before checking so that
+            /// `SETTINGS config_file='...'` (where the file supplies
+            /// named_collection) cannot bypass the grant.
+            ///
+            /// Don't gate this on !args.attach: internal startup/restore runs
+            /// under a context whose getAccess() returns full access, so the
+            /// check naturally no-ops there, while user-issued
+            /// `ATTACH EXTERNAL STREAM ... UUID '...' SETTINGS named_collection=...`
+            /// (which Atomic databases allow) is correctly enforced.
+            ExternalStreamSettings probe_settings;
+            probe_settings.loadFromQuery(*args.storage_def);
+            if (!probe_settings.config_file.value.empty())
+                probe_settings.loadFromConfigFile(probe_settings.config_file.value);
+            if (!probe_settings.named_collection.value.empty())
+                args.getLocalContext()->checkAccess(AccessType::NAMED_COLLECTION, probe_settings.named_collection.value);
+            /// proton: ends
             return StorageExternalStream::create(
                 args.engine_args,
                 args.table_id,
@@ -453,6 +480,7 @@ void registerStorageExternalStream(StorageFactory & factory)
                 args.storage_def,
                 args.attach,
                 args.query.exec_script);
+        }
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");
     };

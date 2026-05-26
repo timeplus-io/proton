@@ -153,6 +153,17 @@ void updateSettingsByNamedCollection(Settings & settings, ContextPtr context)
     if (collection_name.empty())
         return;
 
+    /// Defense-in-depth NAMED_COLLECTION check.
+    ///
+    /// The ALTER path (StorageExternalStream::checkAlterSettingsIsPossible)
+    /// reaches this helper with the user's query context and is enforced
+    /// here. The CREATE/ATTACH paths (StorageExternalStream creator_fn and
+    /// ExternalTableFactory::getExternalTable) hand the storage constructor a
+    /// global context, so this check no-ops on those paths — they enforce the
+    /// grant explicitly at the entry point against args.getLocalContext()
+    /// after merging both query settings and config_file.
+    context->checkAccess(AccessType::NAMED_COLLECTION, collection_name);
+
     const auto collection = NamedCollectionFactory::instance().get(collection_name);
     chassert(collection);
 

@@ -188,6 +188,18 @@ namespace
         {
             user->access.revoke(AccessFlags::allFlags() - AccessFlags::allGlobalFlags());
             user->access.grantWithGrantOption(AccessFlags::allDictionaryFlags(), IDictionary::NO_DATABASE_TAG);
+            /// proton: starts
+            /// Restore NAMED COLLECTION usage globally so XML/YAML-defined users
+            /// (default, pgadmin, neutron, …) can use named collections they
+            /// already have CREATE/DROP NAMED COLLECTION grants for. The
+            /// per-entity flag is otherwise removed by the revoke above, which
+            /// makes "create nc; use nc;" fail out-of-box for the bundled
+            /// default user after the NAMED_COLLECTION ACL enforcement landed.
+            /// Cross-user exfiltration is still blocked at the entry-point
+            /// checks in StorageExternalStream / ExternalTableFactory — this
+            /// only restores the privilege these users had de-facto before.
+            user->access.grantWithGrantOption(AccessType::NAMED_COLLECTION);
+            /// proton: ends
             for (const String & database : *databases)
                 user->access.grantWithGrantOption(AccessFlags::allFlags(), database);
         }

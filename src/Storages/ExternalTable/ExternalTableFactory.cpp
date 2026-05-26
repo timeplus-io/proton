@@ -1,5 +1,7 @@
 #include <Storages/ExternalTable/ExternalTableFactory.h>
 
+#include <Access/Common/AccessFlags.h>
+#include <Access/ContextAccess.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
@@ -60,7 +62,16 @@ StoragePtr ExternalTableFactory::getExternalTable(const StorageFactory::Argument
         external_table_settings->loadFromConfigFile(external_table_settings->config_file.value);
 
     if (!external_table_settings->named_collection.value.empty())
+    {
+        /// Enforce the NAMED_COLLECTION grant against the user's local context,
+        /// not the global-context copy above (which always reports full access).
+        /// Internal startup/restore runs under a context with full access, so
+        /// the check naturally no-ops there; user-issued
+        /// `ATTACH EXTERNAL TABLE ... UUID '...' SETTINGS named_collection=...`
+        /// is correctly enforced.
+        args.getLocalContext()->checkAccess(AccessType::NAMED_COLLECTION, external_table_settings->named_collection.value);
         updateSettingsByNamedCollection(*external_table_settings, context);
+    }
 
     auto type = external_table_settings->type.value;
     if (!creators.contains(type))
