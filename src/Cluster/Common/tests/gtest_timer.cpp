@@ -76,7 +76,7 @@ TEST(TimeWheel, ThrowException)
 
         /// Because stack trace unwinding takes sometime on X86 especially in debug build
         /// Debug ~5000ms, release ~200ms
-        std::this_thread::sleep_for(5000ms);
+        sleepForMilliseconds(5000);
         timer.poll(30);
         timer.poll(30);
     }
@@ -133,7 +133,7 @@ TEST(TimeWheel, Concurrency_Thread)
             timer.poll(1);
     }
 
-    std::this_thread::sleep_for(10ms);
+    sleepForMilliseconds(10);
     ASSERT_EQ(counter.load(std::memory_order_relaxed), numThreads * timersPerThread);
 }
 
@@ -145,7 +145,7 @@ TEST(TimeWheel, RaceConditionTest)
         auto task_id = timer.add(50, [&callback_executed]() { callback_executed.store(true); });
 
         /// Wait a tiny bit to increase the chances of the cancel operation overlapping with timer advancement.
-        std::this_thread::sleep_for(1ms);
+        sleepForMilliseconds(1);
 
         /// Try to cancel the task.
         task_id->cancel();
@@ -352,7 +352,7 @@ TEST(TimeWheel, TimerTestCallbackAsync)
 
         /// Give ample time for timer to execute the expired timer or we need change the timer default pool size to task count
         /// https://github.com/timeplus-io/proton-enterprise/issues/3710
-        std::this_thread::sleep_for(1ms);
+        sleepForMilliseconds(1);
     }
     GTEST_ASSERT_EQ(counter.load(), THREAD_NUM);
 }
@@ -369,7 +369,7 @@ TEST(TimeWheel, RepeatAndCancelTimer)
     for (int32_t i = 0; i < repeat_count; ++i)
         timer.poll(interval_ms);
 
-    std::this_thread::sleep_for(3ms);
+    sleepForMilliseconds(3);
     task->cancel();
 
     ASSERT_EQ(counter.load(), repeat_count);
@@ -378,13 +378,13 @@ TEST(TimeWheel, RepeatAndCancelTimer)
     auto new_task = timer.add(interval_ms, [&]() { counter++; }, /*repeat*/ true);
 
     timer.poll(interval_ms * 2);
-    std::this_thread::sleep_for(1ms);
+    sleepForMilliseconds(1);
     new_task->cancel();
 
     /// verify after cancel the timer, it will not continue add counter
     int finalCount = counter.load();
     timer.poll(interval_ms * 2);
-    std::this_thread::sleep_for(3ms);
+    sleepForMilliseconds(3);
     ASSERT_EQ(counter.load(), finalCount);
 }
 
@@ -420,14 +420,14 @@ TEST(TimeWheel, RepeatButForgetToCancelTimer)
     for (int32_t i = 0; i < repeat_count; ++i)
         timer.poll(interval_ms);
 
-    std::this_thread::sleep_for(1ms);
+    sleepForMilliseconds(1);
 
     timer_task = timer.add(interval_ms, [&]() { counter++; }, /*repeat*/ true);
     ASSERT_TRUE(timer_task != nullptr);
 
     timer.poll(interval_ms * 2);
 
-    std::this_thread::sleep_for(1ms);
+    sleepForMilliseconds(1);
 
     std::cout << "counter.load = " << counter.load() << '\n';
 }
@@ -520,11 +520,11 @@ TEST(TimeWheel, CancelAndReinsert)
 
     timer.poll(20);
     /// sleep to yield execution to expired_timer
-    std::this_thread::sleep_for(5ms);
+    sleepForMilliseconds(5);
     ASSERT_EQ(counter, 1);
 
     timer.poll(20);
-    std::this_thread::sleep_for(5ms);
+    sleepForMilliseconds(5);
     ASSERT_EQ(counter, 2);
 }
 

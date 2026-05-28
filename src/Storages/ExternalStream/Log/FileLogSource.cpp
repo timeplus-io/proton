@@ -4,6 +4,7 @@
 
 #include <Storages/ExternalStream/BreakLines.h>
 #include <base/ClockUtils.h>
+#include <base/sleep.h>
 #include <Common/logger_useful.h>
 
 #include <cerrno>
@@ -249,7 +250,7 @@ void FileLogSource::checkNewFiles()
 {
     if (MonotonicMilliseconds::now() - last_check <= check_interval_ms)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        sleepForMilliseconds(200);
         return;
     }
 
@@ -259,7 +260,7 @@ void FileLogSource::checkNewFiles()
     if (new_files.empty())
     {
         /// FIXME, notification
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        sleepForMilliseconds(200);
     }
     else
     {
@@ -355,7 +356,7 @@ size_t FileLogSource::calculateFileHash(int fd, std::vector<char> & read_buf, si
         {
             /// EOF
             LOG_INFO(logger, "Wait for more data in file={} to calculate its hash", filename);
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            sleepForMilliseconds(200);
         }
         else
         {

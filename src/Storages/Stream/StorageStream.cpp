@@ -23,6 +23,7 @@
 #include <Storages/DistributedQuery.h>
 #include <Storages/PruneShards.h>
 #include <Storages/StorageMergeTree.h>
+#include <base/sleep.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 #include <Common/randomSeed.h>
@@ -512,7 +513,7 @@ StorageStream::~StorageStream()
     /// Wait for outstanding ingested blocks
     while (outstanding_blocks != 0)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        sleepForMilliseconds(1000);
         LOG_INFO(log, "Waiting for outstanding_blocks={}", outstanding_blocks);
     }
 
@@ -761,7 +762,7 @@ Pipe StorageStream::alterPartition(
                     retries + 1,
                     max_retries);
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                sleepForMilliseconds(100);
                 ++retries;
             }
 
@@ -829,7 +830,7 @@ void StorageStream::truncate(
                 retries + 1,
                 max_retries);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            sleepForMilliseconds(100);
             ++retries;
         }
 

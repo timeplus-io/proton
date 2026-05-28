@@ -7,6 +7,8 @@
 #include <Interpreters/ProcessList.h>
 #include <Common/VersionRevision.h>
 
+#include <base/sleep.h>
+
 namespace DB
 {
 void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_, CheckpointContextPtr ckpt_ctx)

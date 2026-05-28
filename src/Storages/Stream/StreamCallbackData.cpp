@@ -1,6 +1,7 @@
 #include <Storages/Stream/StorageStream.h>
 #include <Storages/Stream/StreamCallbackData.h>
 #include <Storages/Stream/StreamShardStore.h>
+#include <base/sleep.h>
 
 #include <Common/logger_useful.h>
 
@@ -17,7 +18,7 @@ void StreamCallbackData::wait() const
     while (outstanding_commits != 0)
     {
         LOG_INFO(stream_shard_store->logger, "Waiting for outstanding commits={} to finish", outstanding_commits);
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        sleepForMilliseconds(200);
     }
 }
 

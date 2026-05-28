@@ -51,6 +51,7 @@
 #include <Parsers/queryToString.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Stream/StorageStream.h>
+#include <base/sleep.h>
 #include <Common/ProtonCommon.h>
 ///proton: ends
 
@@ -432,7 +433,7 @@ void SystemLog<LogElement>::savingThreadFunction()
                     {
                         LOG_WARNING(log, "Failed to create system table={}, error={}", table_id.getNameForLogs(), e.displayText());
                         /// To avoid busy loop
-                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                        sleepForMilliseconds(500);
                         continue;
                     }
                     LOG_TRACE(log, "Stream created (force)");
@@ -451,7 +452,7 @@ void SystemLog<LogElement>::savingThreadFunction()
         catch (const Exception & e)
         {
             /// To avoid busy loop
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            sleepForMilliseconds(200);
             tryLogCurrentException(log, fmt::format("Failed to flush {} system log: {}", table_id.getNameForLogs(), e.displayText()));
         }
         /// proton: ends.
