@@ -134,7 +134,7 @@ void MetadataUpdater::backgroundPoll()
     while (!meta_store->isReady() && !stopped.test())
     {
         LOG_INFO(logger, "Waiting for MetaStore to be ready...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        sleepForMilliseconds(100);
     }
     
     if (stopped.test())
@@ -195,7 +195,7 @@ void MetadataUpdater::backgroundPoll()
             {
                 LOG_ERROR(logger, "Failed to fetch from LocalMetaQueue at sn={}: {}", next_sn, fetch_result.errorString());
                 /// Sleep a bit on error to avoid tight loop
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                sleepForMilliseconds(100);
             }
         }
         catch (...)
