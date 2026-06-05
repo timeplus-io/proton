@@ -241,17 +241,33 @@ BlocksList MemoryAggregator::mergeAndConvertToBlocks(
             auto merged_retracted_data = mergeGroups(many_data_variants, retract_cparams);
             if (merged_retracted_data)
             {
-                AggregatingConvertParams merged_cparams{AggregatingConvertType::Normal};
-                auto retract_blocks = doConvertToBlocks(*merged_retracted_data, /*final_=*/true, max_threads, merged_cparams);
-                for (auto & retract_block : retract_blocks)
-                {
-                    auto rows = retract_block.rows();
-                    retract_block.insert(
-                        ColumnWithTypeAndName{ColumnInt8::create(rows, static_cast<Int8>(-1)), delta_col_type, "_tp_delta"});
-                    retract_block.setRetract();
-                }
+                chassert(merged_retracted_data->aggregatorType() == AggregatorType::Memory);
+                auto & merged_memory = static_cast<MemoryAggregatedDataVariants &>(*merged_retracted_data);
 
-                blocks.splice(blocks.end(), std::move(retract_blocks));
+                /// without_key special case: mergeRetractGroups bails when no shard has a retract yet
+                /// (e.g. first changelog emit) and leaves first.without_key at the init-empty state.
+                /// Converting that as Normal would emit a phantom (…, 0, -1) row — skip it.
+                const bool empty_without_key
+                    = merged_memory.type == MemoryAggregatedDataVariants::Type::without_key && merged_memory.without_key
+                    && TrackingUpdatesWithRetract::empty(merged_memory.without_key);
+
+                if (!empty_without_key)
+                {
+                    /// Use UpdatesAfterRetract so the keyed conversion filters out merged entries whose
+                    /// prior-state contribution sums to empty — a fresh key inserted in this cycle on
+                    /// one shard with no carry-over from any other shard.
+                    AggregatingConvertParams merged_cparams{AggregatingConvertType::UpdatesAfterRetract};
+                    auto retract_blocks = doConvertToBlocks(merged_memory, /*final_=*/true, max_threads, merged_cparams);
+                    for (auto & retract_block : retract_blocks)
+                    {
+                        auto rows = retract_block.rows();
+                        retract_block.insert(
+                            ColumnWithTypeAndName{ColumnInt8::create(rows, static_cast<Int8>(-1)), delta_col_type, "_tp_delta"});
+                        retract_block.setRetract();
+                    }
+
+                    blocks.splice(blocks.end(), std::move(retract_blocks));
+                }
             }
         }
 
