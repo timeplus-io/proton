@@ -1,5 +1,6 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
+#include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/IJoin.h>
 #include <Interpreters/TableJoin.h>
@@ -20,7 +21,6 @@
 #include <Processors/Transforms/ReadFromMergeTreeDependencyTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <QueryPipeline/narrowPipe.h>
-#include <Common/typeid_cast.h>
 
 /// proton : starts
 #include <Interpreters/Streaming/HashJoin/ConcurrentHashJoin.h>
@@ -38,8 +38,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int LOGICAL_ERROR;
-extern const int NOT_IMPLEMENTED;
+    extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 /// proton: starts.
@@ -193,7 +193,7 @@ void QueryPipelineBuilder::addDelayedStream(ProcessorPtr source)
     checkSource(source, false);
     assertBlocksHaveEqualStructure(getHeader(), source->getOutputs().front().getHeader(), "QueryPipeline");
 
-    IProcessor::PortNumbers delayed_streams = {pipe.numOutputPorts()};
+    IProcessor::PortNumbers delayed_streams = { pipe.numOutputPorts() };
     pipe.addSource(std::move(source));
 
     auto processor = std::make_shared<DelayedPortsProcessor>(getHeader(), pipe.numOutputPorts(), delayed_streams);
@@ -303,7 +303,9 @@ void QueryPipelineBuilder::addExtremesTransform()
 }
 
 QueryPipelineBuilder QueryPipelineBuilder::unitePipelines(
-    std::vector<std::unique_ptr<QueryPipelineBuilder>> pipelines, size_t max_threads_limit, Processors * collected_processors)
+    std::vector<std::unique_ptr<QueryPipelineBuilder>> pipelines,
+    size_t max_threads_limit,
+    Processors * collected_processors)
 {
     if (pipelines.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot unite an empty set of pipelines");
@@ -358,7 +360,10 @@ QueryPipelineBuilder QueryPipelineBuilder::unitePipelines(
 }
 
 QueryPipelineBuilderPtr QueryPipelineBuilder::mergePipelines(
-    QueryPipelineBuilderPtr left, QueryPipelineBuilderPtr right, ProcessorPtr transform, Processors * collected_processors)
+    QueryPipelineBuilderPtr left,
+    QueryPipelineBuilderPtr right,
+    ProcessorPtr transform,
+    Processors * collected_processors)
 {
     if (transform->getOutputs().size() != 1)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Merge transform must have exactly 1 output, got {}", transform->getOutputs().size());
@@ -463,7 +468,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
         }
 
         right->resize(max_streams);
-        auto concurrent_right_filling_transform = [&](OutputPortRawPtrs outports) {
+        auto concurrent_right_filling_transform = [&](OutputPortRawPtrs outports)
+        {
             Processors processors;
             for (auto & outport : outports)
             {
@@ -505,13 +511,10 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
     {
         delayed_root = std::make_shared<DelayedJoinedBlocksTransform>(num_streams, join);
         if (!delayed_root->getInputs().empty() || delayed_root->getOutputs().size() != num_streams)
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "DelayedJoinedBlocksTransform should have no inputs and {} outputs, "
-                "but has {} inputs and {} outputs",
-                num_streams,
-                delayed_root->getInputs().size(),
-                delayed_root->getOutputs().size());
+            throw Exception(ErrorCodes::LOGICAL_ERROR,
+                            "DelayedJoinedBlocksTransform should have no inputs and {} outputs, "
+                            "but has {} inputs and {} outputs",
+                            num_streams, delayed_root->getInputs().size(), delayed_root->getOutputs().size());
 
         if (collected_processors)
             collected_processors->emplace_back(delayed_root);
@@ -527,8 +530,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto joining
-            = std::make_shared<JoiningTransform>(left_header, output_header, join, max_block_size, false, default_totals, finish_counter);
+        auto joining = std::make_shared<JoiningTransform>(
+            left_header, output_header, join, max_block_size, false, default_totals, finish_counter);
 
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());
@@ -623,7 +626,12 @@ void QueryPipelineBuilder::addCreatingSetsTransform(
     resize(1);
 
     auto transform = std::make_shared<CreatingSetsTransform>(
-        getHeader(), res_header, std::move(set_and_key), std::move(external_table), limits, std::move(prepared_sets_cache));
+            getHeader(),
+            res_header,
+            std::move(set_and_key),
+            std::move(external_table),
+            limits,
+            std::move(prepared_sets_cache));
 
     InputPort * totals_port = nullptr;
 
@@ -637,8 +645,8 @@ void QueryPipelineBuilder::addPipelineBefore(QueryPipelineBuilder pipeline)
 {
     checkInitializedAndNotCompleted();
     if (pipeline.getHeader())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR, "Pipeline for CreatingSets should have empty header. Got: {}", pipeline.getHeader().dumpStructure());
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Pipeline for CreatingSets should have empty header. Got: {}",
+                        pipeline.getHeader().dumpStructure());
 
     IProcessor::PortNumbers delayed_streams(pipe.numOutputPorts());
     for (size_t i = 0; i < delayed_streams.size(); ++i)

@@ -321,23 +321,22 @@ void StorageStream::init()
     std::vector<uint32_t> shard_ids;
     for (uint32_t i = 0; i < shards; ++i)
         shard_ids.push_back(i);
-
+    
     for (auto shard_id : shard_ids)
     {
-        stream_shards_init.push_back(
-            std::make_shared<StreamShardStore>(
-                shard_id,
-                table_id,
-                relative_data_path,
-                init_params->metadata,
-                init_params->attach,
-                init_params->context,
-                init_params->date_column_name,
-                init_params->merging_params,
-                std::make_unique<MergeTreeSettings>(*ssettings),
-                init_params->has_force_restore_data_flag,
-                inmemory,
-                *this));
+        stream_shards_init.push_back(std::make_shared<StreamShardStore>(
+            shard_id,
+            table_id,
+            relative_data_path,
+            init_params->metadata,
+            init_params->attach,
+            init_params->context,
+            init_params->date_column_name,
+            init_params->merging_params,
+            std::make_unique<MergeTreeSettings>(*ssettings),
+            init_params->has_force_restore_data_flag,
+            inmemory,
+            *this));
 
         slot_to_shard.push_back(shard_id);
     }
@@ -611,13 +610,12 @@ void StorageStream::doReadChangelog(
         auto output_header
             = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
 
-        query_plan.addStep(
-            std::make_unique<Streaming::ChangelogStep>(
-                query_plan.getCurrentDataStream(),
-                output_header,
-                storage_snapshot->metadata->getPrimaryKeyColumns(),
-                (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column
-                                                                                                          : ""));
+        query_plan.addStep(std::make_unique<Streaming::ChangelogStep>(
+            query_plan.getCurrentDataStream(),
+            output_header,
+            storage_snapshot->metadata->getPrimaryKeyColumns(),
+            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column
+                                                                                                      : ""));
     }
     else if (Streaming::isVersionedKVStorage(dataStreamSemantic()))
     {
@@ -625,18 +623,16 @@ void StorageStream::doReadChangelog(
             = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
 
         const auto & settings_ref = context_->getSettingsRef();
-        query_plan.addStep(
-            std::make_unique<Streaming::ChangelogConvertStep>(
-                query_plan.getCurrentDataStream(),
-                std::move(output_header),
-                storage_snapshot->metadata->getPrimaryKeyColumns(),
-                (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column
-                                                                                                          : "",
-                settings_ref.default_hash_table.value,
-                context_->getSpillDirForCurrentQuery("changelog"),
-                settings_ref.max_hot_keys.value,
-                settings_ref.kv_options.value,
-                /*backfill_key_unique=*/true));
+        query_plan.addStep(std::make_unique<Streaming::ChangelogConvertStep>(
+            query_plan.getCurrentDataStream(),
+            std::move(output_header),
+            storage_snapshot->metadata->getPrimaryKeyColumns(),
+            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
+            settings_ref.default_hash_table.value,
+            context_->getSpillDirForCurrentQuery("changelog"),
+            settings_ref.max_hot_keys.value,
+            settings_ref.kv_options.value,
+            /*backfill_key_unique=*/true));
     }
     else
         throw Exception(
