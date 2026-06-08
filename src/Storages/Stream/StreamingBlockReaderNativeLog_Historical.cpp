@@ -65,6 +65,10 @@ void StreamingBlockReaderNativeLog::buildHistoricalQueryContext(Int64 fetch_rang
         cols_list.append(fmt::format(", {}", ProtonConsts::RESERVED_EVENT_SEQUENCE_ID));
 
     auto fetch_end_sn = fetched_sn + fetch_range;
+    const auto stop_sn_snapshot = getStopSN();
+    if (stop_sn_snapshot)
+        fetch_end_sn = std::min(fetch_end_sn, *stop_sn_snapshot);
+
     auto sql = fmt::format(
         "SELECT {} FROM table({}.{}) WHERE {} > {} AND {} <= {} ORDER BY {} ASC",
         cols_list,
@@ -94,6 +98,13 @@ void StreamingBlockReaderNativeLog::buildHistoricalQueryContext(Int64 fetch_rang
 cluster::SchemaRecordPtrs StreamingBlockReaderNativeLog::readFromHistoricalStore()
 {
     chassert(historical_ctx);
+
+    const auto stop_sn_snapshot = getStopSN();
+    if (stop_sn_snapshot && fetched_sn >= *stop_sn_snapshot)
+    {
+        historical_ctx.reset();
+        return {};
+    }
 
     auto & max_sn = historical_ctx->max_sn;
 
@@ -190,6 +201,17 @@ cluster::SchemaRecordPtrs StreamingBlockReaderNativeLog::readFromHistoricalStore
     /// the reader can continue to fetch new data from the nativelog.
     if (historical_ctx->finished)
     {
+        if (stop_sn_snapshot && fetched_sn >= *stop_sn_snapshot)
+        {
+            LOG_INFO(
+                logger,
+                "Stopped historical store catch-up at bounded stop sn={}, total_rows={}, total_bytes={}",
+                *stop_sn_snapshot,
+                historical_ctx->total_rows,
+                historical_ctx->total_bytes);
+            return records;
+        }
+
         auto next_sn = fetched_sn + 1;
         /// Successfully catched up compacted sns
         if (next_sn >= historical_ctx->log_start_sn)
@@ -210,15 +232,32 @@ cluster::SchemaRecordPtrs StreamingBlockReaderNativeLog::readFromHistoricalStore
         else if (next_sn == historical_ctx->fetch_start_sn)
         {
             /// The current fetched range does not get any sn, it's possible for historical storage of mutable-stream or with TTL
-            /// Try to fetch with a bigger range from historical store until reaching log_committed_sn.
-            if (historical_ctx->fetch_end_sn >= historical_ctx->log_committed_sn)
+            /// Try to fetch with a bigger range from historical store until reaching the bounded terminal SN.
+            const auto effective_end_sn
+                = stop_sn_snapshot ? std::min(historical_ctx->log_committed_sn, *stop_sn_snapshot) : historical_ctx->log_committed_sn;
+            if (historical_ctx->fetch_end_sn >= effective_end_sn)
+            {
+                if (stop_sn_snapshot && historical_ctx->fetch_end_sn >= *stop_sn_snapshot)
+                {
+                    fetched_sn = *stop_sn_snapshot;
+                    LOG_INFO(
+                        logger,
+                        "Completed bounded historical catch-up with no visible rows up to stop sn={}, total_rows={}, total_bytes={}",
+                        *stop_sn_snapshot,
+                        historical_ctx->total_rows,
+                        historical_ctx->total_bytes);
+                    return records;
+                }
+
                 throw Exception(
                     ErrorCodes::SEQUENCE_COMPACTED_AWAY,
                     "Failed to catch up any compacted sns from historical store, fetched_sn={}, log_start_sn={}, "
-                    "log_committed_sn={}",
+                    "log_committed_sn={}, stop_sn={}",
                     fetched_sn,
                     historical_ctx->log_start_sn,
-                    historical_ctx->log_committed_sn);
+                    historical_ctx->log_committed_sn,
+                    stop_sn_snapshot ? *stop_sn_snapshot : -1);
+            }
 
             /// Expand fetch range by 10000, for example:
             /// the previous fetch range is [fetched_sn + 1, fetched_sn + 10000]

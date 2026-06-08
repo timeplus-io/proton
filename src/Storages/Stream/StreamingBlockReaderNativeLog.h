@@ -3,6 +3,9 @@
 #include <Storages/Stream/StreamingBlockReaderBase.h>
 #include <Cluster/Common/FetchHint.h>
 
+#include <mutex>
+#include <optional>
+
 namespace Poco
 {
 class Logger;
@@ -42,6 +45,18 @@ public:
     cluster::SchemaRecordPtrs read() override;
 
     std::pair<Int64, Int64> sequenceRange() const override { return {log_start_sn, log_committed_sn}; }
+    Int64 lastFetchedSN() const override { return fetched_sn; }
+    void setStopSN(Int64 sn) override
+    {
+        std::lock_guard lock(stop_sn_mutex);
+        stop_sn = sn;
+    }
+    void clearStopSN() override
+    {
+        std::lock_guard lock(stop_sn_mutex);
+        stop_sn.reset();
+    }
+    bool supportsStopSN() const override { return true; }
 
     /// Call this function only before read()
     void resetSequenceNumber(Int64 sn) override;
@@ -61,6 +76,11 @@ public:
 private:
     void deserializeRecords(const cluster::EntryPtrs & entries, cluster::SchemaRecordPtrs & results);
     void startFetch(Int64 sn);
+    std::optional<Int64> getStopSN() const
+    {
+        std::lock_guard lock(stop_sn_mutex);
+        return stop_sn;
+    }
 
     void buildHistoricalQueryContext(Int64 fetch_range, Int64 log_start_sn, Int64 log_committed_sn);
     cluster::SchemaRecordPtrs readFromHistoricalStore();
@@ -90,6 +110,8 @@ private:
     Int64 log_start_sn = 0;
     Int64 log_committed_sn = 0;
     Int64 fetched_sn = 0;
+    mutable std::mutex stop_sn_mutex;
+    std::optional<Int64> stop_sn;
 
     static constexpr Int64 default_fetch_range = 10'000;
     bool allow_fallback_to_historical_store = true;

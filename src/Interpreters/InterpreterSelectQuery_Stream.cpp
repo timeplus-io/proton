@@ -3,7 +3,6 @@
 #include <DataTypes/ObjectUtils.h>
 #include <Interpreters/CrossToInnerJoinVisitor.h>
 #include <Interpreters/GetAggregatesVisitor.h>
-#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/JoinToSubqueryTransformVisitor.h>
 #include <Interpreters/JoinedTables.h>
 #include <Interpreters/QueryAliasesVisitor.h>
@@ -256,8 +255,7 @@ void InterpreterSelectQuery::processEmits()
             context->setSetting("default_hash_table", std::string{"hybrid"});
 
         /// After handling, update setting for context.
-        if (getSelectQuery().settings())
-            InterpreterSetQuery(getSelectQuery().settings(), context).executeForCurrentContext();
+        applySelectSettingsWithoutExecMode(getSelectQuery().settings());
     }
 }
 

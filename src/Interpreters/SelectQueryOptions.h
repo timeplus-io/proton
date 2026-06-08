@@ -1,8 +1,11 @@
 #pragma once
 
-#include <Core/QueryProcessingStage.h>
-#include <Core/Joins.h>
 #include <optional>
+/// proton: starts.
+#include <Core/ExecuteMode.h>
+/// proton: ends.
+#include <Core/Joins.h>
+#include <Core/QueryProcessingStage.h>
 
 namespace DB
 {
@@ -52,6 +55,9 @@ struct SelectQueryOptions
     bool settings_limit_offset_done = false;
     bool is_explain = false; /// The value is true if it's explain statement.
     bool is_create_parameterized_view = false;
+    /// proton: starts.
+    std::optional<ExecuteMode> parent_exec_mode;
+    /// proton: ends.
 
     /// These two fields are used to evaluate shardNum() and shardCount() function when
     /// prefer_localhost_replica == 1 and local instance is selected. They are needed because local
@@ -69,6 +75,14 @@ struct SelectQueryOptions
     {}
 
     SelectQueryOptions copy() const { return *this; }
+
+    /// proton: starts.
+    SelectQueryOptions & setParentExecuteMode(ExecuteMode mode)
+    {
+        parent_exec_mode = mode;
+        return *this;
+    }
+    /// proton: ends.
 
     SelectQueryOptions subquery() const
     {

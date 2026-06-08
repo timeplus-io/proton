@@ -1,4 +1,12 @@
+/// proton: starts.
+#include <cmath>
+#include <limits>
+/// proton: ends.
 #include <memory>
+/// proton: starts.
+#include <set>
+#include <Cluster/Common/Constants.h>
+/// proton: ends.
 #include <Core/Block.h>
 
 #include <Parsers/ASTExpressionList.h>
@@ -41,6 +49,9 @@
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageJoin.h>
 #include <Functions/FunctionsExternalDictionaries.h>
+/// proton: starts.
+#include <Storages/Stream/StreamingStoreSourceBase.h>
+/// proton: ends.
 
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -65,8 +76,47 @@
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 
+/// proton: starts.
+#include <Processors/Chunk.h>
+/// proton: ends.
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+/// proton: starts.
+#include <Processors/Executors/PullingPipelineExecutor.h>
+#include <Processors/QueryPlan/AggregatingStep.h>
+#include <Processors/QueryPlan/ArrayJoinStep.h>
+#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <Processors/QueryPlan/CreatingSetsStep.h>
+#include <Processors/QueryPlan/DistinctStep.h>
+#include <Processors/QueryPlan/FillingStep.h>
+#include <Processors/QueryPlan/FilterStep.h>
+#include <Processors/QueryPlan/IntersectOrExceptStep.h>
+#include <Processors/QueryPlan/JoinStep.h>
+#include <Processors/QueryPlan/LimitByStep.h>
+#include <Processors/QueryPlan/LimitStep.h>
+#include <Processors/QueryPlan/MergingAggregatedStep.h>
+#include <Processors/QueryPlan/OffsetStep.h>
+#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Processors/QueryPlan/ReadFromMergeTree.h>
+#include <Processors/QueryPlan/SortingStep.h>
+#include <Processors/QueryPlan/Streaming/AggregatingStep.h>
+#include <Processors/QueryPlan/Streaming/AggregatingStepWithSubstream.h>
+#include <Processors/QueryPlan/Streaming/ChangelogConvertStep.h>
+#include <Processors/QueryPlan/Streaming/ChangelogStep.h>
+#include <Processors/QueryPlan/Streaming/DedupTransformStep.h>
+#include <Processors/QueryPlan/Streaming/JoinStep.h>
+#include <Processors/QueryPlan/Streaming/LimitByStep.h>
+#include <Processors/QueryPlan/Streaming/LimitStep.h>
+#include <Processors/QueryPlan/Streaming/OffsetStep.h>
+#include <Processors/QueryPlan/Streaming/SortingStep.h>
+#include <Processors/QueryPlan/Streaming/VersionsFilterStep.h>
+#include <Processors/QueryPlan/Streaming/WindowAssignmentStep.h>
+#include <Processors/QueryPlan/TotalsHavingStep.h>
+#include <Processors/QueryPlan/WindowStep.h>
+#include <Processors/Streaming/ISource.h>
+#include <QueryPipeline/QueryPipelineBuilder.h>
+#include <Common/ProfileEvents.h>
+/// proton: ends.
 
 #include <Parsers/formatAST.h>
 #include <Parsers/QueryParameterVisitor.h>
@@ -81,6 +131,13 @@
 #include <Common/ProtonCommon.h>
 /// proton: ends
 
+namespace ProfileEvents
+{
+/// proton: starts.
+extern const Event StreamingJoinKeyDomainBuilt;
+/// proton: ends.
+}
+
 namespace DB
 {
 
@@ -89,15 +146,29 @@ using LogAST = DebugASTLog<false>; /// set to true to enable logs
 
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int ILLEGAL_PREWHERE;
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
-    extern const int LOGICAL_ERROR;
-    extern const int NOT_IMPLEMENTED;
-    extern const int UNKNOWN_IDENTIFIER;
-    extern const int UNKNOWN_TYPE_OF_AST_NODE;
-    extern const int UNSUPPORTED;
+extern const int BAD_ARGUMENTS;
+extern const int ILLEGAL_PREWHERE;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
+/// proton: starts.
+extern const int LIMIT_EXCEEDED;
+/// proton: ends.
+extern const int LOGICAL_ERROR;
+/// proton: starts.
+extern const int MEMORY_LIMIT_EXCEEDED;
+/// proton: ends.
+extern const int NOT_IMPLEMENTED;
+/// proton: starts.
+extern const int QUERY_WAS_CANCELLED;
+extern const int SET_SIZE_LIMIT_EXCEEDED;
+extern const int TIMEOUT_EXCEEDED;
+extern const int TOO_MANY_BYTES;
+extern const int TOO_MANY_ROWS;
+extern const int TOO_MANY_ROWS_OR_BYTES;
+/// proton: ends.
+extern const int UNKNOWN_IDENTIFIER;
+extern const int UNKNOWN_TYPE_OF_AST_NODE;
+extern const int UNSUPPORTED;
 }
 
 namespace
@@ -1516,7 +1587,8 @@ static std::shared_ptr<IJoin> chooseJoinAlgorithm(
     /// proton: starts.
     throw Exception(
         ErrorCodes::NOT_IMPLEMENTED,
-        "Can't execute any of specified join algorithms ({}) for this strictness/kind and right storage type. If it is direct join, make sure "
+        "Can't execute any of specified join algorithms ({}) for this strictness/kind and right storage type. If it is direct join, make "
+        "sure "
         "there is an existing primary index or secondary index which can service the direct lookup for the join column.",
         fmt::format("{}", fmt::join(join_algorithms | std::views::transform([](const auto & alg) { return toString(alg); }), ", ")));
     /// proton: ends.
@@ -1527,7 +1599,10 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
     const ASTTablesInSelectQueryElement & join_element,
     TableJoin & analyzed_join,
     SelectQueryOptions query_options,
-    SeekToInfoPtr seek_to_info) /// proton: added seek_to_info
+    /// proton: starts.
+    SeekToInfoPtr seek_to_info,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns = {})
+    /// proton: ends.
 {
     /// Actions which need to be calculated on joined block.
     auto joined_block_actions = analyzed_join.createJoinedBlockActions(context);
@@ -1549,15 +1624,17 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
         context,
         original_right_column_names,
         query_options.copy().setWithAllColumns().ignoreProjections(false).ignoreAlias(false),
-        seek_to_info); /// proton: added seek_to_info
+        /// proton: starts.
+        seek_to_info,
+        std::move(streaming_join_snapshot_high_sns));
+        /// proton: ends.
 
     assert(analyzed_join.getTablesWithColumns().size() == 2);
     /// assert(interpreter->getDataStreamSemantic() == analyzed_join.getTablesWithColumns().back().output_data_stream_semantic);
 
     /// proton: starts.
     if (interpreter->isStreamingQuery() && isChangelogDataStream(interpreter->getDataStreamSemantic()))
-        interpreter->assertNoNonDeterministicFunctions(
-            original_right_column_names, "The joined right subquery with changelog data stream");
+        interpreter->assertNoNonDeterministicFunctions(original_right_column_names, "The joined right subquery with changelog data stream");
     /// proton: ends.
 
     auto joined_plan = std::make_unique<QueryPlan>();
@@ -1586,6 +1663,726 @@ static std::unique_ptr<QueryPlan> buildJoinedPlan(
 
     return joined_plan;
 }
+
+/// proton: starts.
+namespace
+{
+bool canUseStreamingJoinKeyDomainPushdown(const TableJoin & analyzed_join)
+{
+    if (!isInner(analyzed_join.kind()))
+        return false;
+
+    if (!analyzed_join.isLatestJoin())
+        return false;
+
+    if (analyzed_join.requiredJoinAlignment())
+        return false;
+
+    if (analyzed_join.strictness() == JoinStrictness::Asof || analyzed_join.strictness() == JoinStrictness::Anti)
+        return false;
+
+    if (analyzed_join.getClauses().size() != 1)
+        return false;
+
+    const auto & clause = analyzed_join.getOnlyClause();
+    return !clause.key_names_left.empty() && clause.key_names_left.size() == clause.key_names_right.size()
+        && !clause.on_filter_condition_left && !clause.on_filter_condition_right;
+}
+
+bool astContainsFunctionName(const ASTPtr & ast, const String & function_name)
+{
+    if (!ast)
+        return false;
+
+    if (const auto * function = ast->as<ASTFunction>())
+    {
+        if (function->name == function_name)
+            return true;
+    }
+
+    for (const auto & child : ast->children)
+        if (astContainsFunctionName(child, function_name))
+            return true;
+
+    return false;
+}
+
+bool isBackfillSeekTo(const String & seek_to)
+{
+    return !seek_to.empty() && seek_to.find("latest") == String::npos;
+}
+
+bool streamingJoinKeyTypeContainsFloat(const IDataType & type)
+{
+    if (WhichDataType(type).isFloat())
+        return true;
+
+    bool contains_float = false;
+    type.forEachChild([&contains_float](const IDataType & child) {
+        if (!contains_float)
+            contains_float = streamingJoinKeyTypeContainsFloat(child);
+    });
+
+    return contains_float;
+}
+
+bool blockHasFloatBearingStreamingJoinKeys(const Block & block, const Names & key_names)
+{
+    for (const auto & key_name : key_names)
+    {
+        if (!block.has(key_name))
+            return true;
+
+        if (streamingJoinKeyTypeContainsFloat(*block.getByName(key_name).type))
+            return true;
+    }
+
+    return false;
+}
+
+bool planHasNonDeterministicActions(const QueryPlan::Node * node)
+{
+    if (!node)
+        return false;
+
+    if (auto * expression_step = typeid_cast<const ExpressionStep *>(node->step.get()))
+    {
+        if (expression_step->getExpression()->hasNonDeterministic() || expression_step->getExpression()->hasStatefulFunctions())
+            return true;
+    }
+    else if (auto * filter_step = typeid_cast<const FilterStep *>(node->step.get()))
+    {
+        if (filter_step->getExpression()->hasNonDeterministic() || filter_step->getExpression()->hasStatefulFunctions())
+            return true;
+    }
+    else if (auto * read_from_merge_tree = typeid_cast<const ReadFromMergeTree *>(node->step.get()))
+    {
+        if (const auto & prewhere_info = read_from_merge_tree->getPrewhereInfo())
+        {
+            if (prewhere_info->row_level_filter
+                && (prewhere_info->row_level_filter->hasNonDeterministic() || prewhere_info->row_level_filter->hasStatefulFunctions()))
+                return true;
+
+            if (prewhere_info->prewhere_actions
+                && (prewhere_info->prewhere_actions->hasNonDeterministic() || prewhere_info->prewhere_actions->hasStatefulFunctions()))
+                return true;
+        }
+    }
+
+    for (const auto * child : node->children)
+    {
+        if (planHasNonDeterministicActions(child))
+            return true;
+    }
+
+    return false;
+}
+
+bool planOutputsProcessTime(const QueryPlan::Node * node)
+{
+    if (!node)
+        return false;
+
+    if (node->step->hasOutputStream() && node->step->getOutputStream().header.has(ProtonConsts::RESERVED_PROCESS_TIME))
+        return true;
+
+    for (const auto * child : node->children)
+    {
+        if (planOutputsProcessTime(child))
+            return true;
+    }
+
+    return false;
+}
+
+bool planHasOrderSensitiveSteps(const QueryPlan::Node * node)
+{
+    if (!node)
+        return false;
+
+    if (typeid_cast<const LimitStep *>(node->step.get()) || typeid_cast<const OffsetStep *>(node->step.get())
+        || typeid_cast<const LimitByStep *>(node->step.get()) || typeid_cast<const SortingStep *>(node->step.get())
+        || typeid_cast<const FillingStep *>(node->step.get()) || typeid_cast<const Streaming::LimitStep *>(node->step.get())
+        || typeid_cast<const Streaming::OffsetStep *>(node->step.get()) || typeid_cast<const Streaming::LimitByStep *>(node->step.get())
+        || typeid_cast<const Streaming::SortingStep *>(node->step.get()))
+        return true;
+
+    const auto step_name = node->step->getName();
+    if (step_name.find("Limit") != String::npos || step_name.find("Offset") != String::npos || step_name.find("Sort") != String::npos
+        || step_name.find("Filling") != String::npos)
+        return true;
+
+    for (const auto * child : node->children)
+    {
+        if (planHasOrderSensitiveSteps(child))
+            return true;
+    }
+
+    return false;
+}
+
+bool planHasUnsafeStreamingJoinKeyDomainSteps(const QueryPlan::Node * node)
+{
+    if (!node)
+        return false;
+
+    if (typeid_cast<const AggregatingStep *>(node->step.get()) || typeid_cast<const Streaming::AggregatingStep *>(node->step.get())
+        || typeid_cast<const Streaming::AggregatingStepWithSubstream *>(node->step.get())
+        || typeid_cast<const MergingAggregatedStep *>(node->step.get()) || typeid_cast<const TotalsHavingStep *>(node->step.get())
+        || typeid_cast<const WindowStep *>(node->step.get()) || typeid_cast<const Streaming::WindowAssignmentStep *>(node->step.get())
+        || typeid_cast<const CreatingSetsStep *>(node->step.get()) || typeid_cast<const DelayedCreatingSetsStep *>(node->step.get())
+        || typeid_cast<const DistinctStep *>(node->step.get()) || typeid_cast<const ArrayJoinStep *>(node->step.get())
+        || typeid_cast<const JoinStep *>(node->step.get()) || typeid_cast<const FilledJoinStep *>(node->step.get())
+        || typeid_cast<const Streaming::JoinStep *>(node->step.get()) || typeid_cast<const IntersectOrExceptStep *>(node->step.get())
+        || typeid_cast<const Streaming::ChangelogConvertStep *>(node->step.get())
+        || typeid_cast<const Streaming::ChangelogStep *>(node->step.get())
+        || typeid_cast<const Streaming::DedupTransformStep *>(node->step.get())
+        || typeid_cast<const Streaming::VersionsFilterStep *>(node->step.get()))
+        return true;
+
+    const auto step_name = node->step->getName();
+    if (step_name.find("Window") != String::npos || step_name.find("CreatingSets") != String::npos
+        || step_name.find("Aggregating") != String::npos || step_name.find("MergingAggregated") != String::npos
+        || step_name.find("TotalsHaving") != String::npos || step_name.find("Distinct") != String::npos
+        || step_name.find("ArrayJoin") != String::npos || step_name.find("Join") != String::npos
+        || step_name.find("Intersect") != String::npos || step_name.find("Except") != String::npos
+        || step_name.find("Changelog") != String::npos || step_name.find("Dedup") != String::npos
+        || step_name.find("Version") != String::npos)
+        return true;
+
+    for (const auto * child : node->children)
+    {
+        if (planHasUnsafeStreamingJoinKeyDomainSteps(child))
+            return true;
+    }
+
+    return false;
+}
+
+bool shouldRethrowStreamingJoinKeyDomainPushdownException(int code)
+{
+    return code == ErrorCodes::QUERY_WAS_CANCELLED || code == ErrorCodes::TIMEOUT_EXCEEDED || code == ErrorCodes::MEMORY_LIMIT_EXCEEDED;
+}
+
+bool isStreamingJoinKeyDomainPushdownLimitException(int code)
+{
+    return code == ErrorCodes::LIMIT_EXCEEDED || code == ErrorCodes::TOO_MANY_ROWS || code == ErrorCodes::TOO_MANY_BYTES
+        || code == ErrorCodes::TOO_MANY_ROWS_OR_BYTES || code == ErrorCodes::SET_SIZE_LIMIT_EXCEEDED;
+}
+
+UInt64 saturatingIncrement(UInt64 value)
+{
+    if (value == std::numeric_limits<UInt64>::max())
+        return value;
+
+    return value + 1;
+}
+
+UInt64 capByStricterUserLimit(UInt64 feature_cap, UInt64 user_cap)
+{
+    if (!user_cap)
+        return feature_cap;
+
+    return std::min(feature_cap, user_cap);
+}
+
+bool limitExceptionCanFallbackForStreamingJoinKeyDomainPushdown(int code, bool row_cap_is_feature_cap, bool byte_cap_is_feature_cap)
+{
+    if (code == ErrorCodes::TOO_MANY_ROWS)
+        return row_cap_is_feature_cap;
+
+    if (code == ErrorCodes::TOO_MANY_BYTES)
+        return byte_cap_is_feature_cap;
+
+    if (code == ErrorCodes::TOO_MANY_ROWS_OR_BYTES || code == ErrorCodes::LIMIT_EXCEEDED)
+        return row_cap_is_feature_cap && byte_cap_is_feature_cap;
+
+    return code == ErrorCodes::SET_SIZE_LIMIT_EXCEEDED;
+}
+
+bool appendRightBlockToKeyDomain(
+    const Block & block,
+    const Names & left_key_names,
+    const Names & right_key_names,
+    const Settings & settings,
+    std::set<std::vector<Field>> & seen_keys,
+    StreamingJoinKeyDomainPushdown & key_domain)
+{
+    if (!block.rows())
+        return true;
+
+    key_domain.source_rows += block.rows();
+    key_domain.source_bytes += block.bytes();
+    if (key_domain.source_rows > settings.streaming_join_key_domain_pushdown_max_rows)
+        return false;
+
+    if (settings.streaming_join_key_domain_pushdown_max_bytes
+        && key_domain.source_bytes > settings.streaming_join_key_domain_pushdown_max_bytes)
+        return false;
+
+    auto is_unordered_key_value
+        = [](const Field & value) { return value.getType() == Field::Types::Float64 && std::isnan(value.get<Float64>()); };
+
+    MutableColumns key_columns;
+    key_columns.reserve(left_key_names.size());
+    std::vector<DataTypePtr> key_types;
+    key_types.reserve(left_key_names.size());
+    for (const auto & right_key_name : right_key_names)
+    {
+        const auto & column = block.getByName(right_key_name);
+        if (streamingJoinKeyTypeContainsFloat(*column.type))
+            return false;
+
+        key_types.push_back(column.type);
+        key_columns.push_back(column.type->createColumn());
+    }
+
+    for (size_t row = 0; row < block.rows(); ++row)
+    {
+        std::vector<Field> key_values;
+        key_values.reserve(right_key_names.size());
+        for (const auto & right_key_name : right_key_names)
+        {
+            Field value;
+            block.getByName(right_key_name).column->get(row, value);
+            if (is_unordered_key_value(value))
+                return false;
+            key_values.push_back(std::move(value));
+        }
+
+        auto [_, inserted] = seen_keys.insert(key_values);
+        if (!inserted)
+            continue;
+
+        for (size_t i = 0; i < key_values.size(); ++i)
+            key_columns[i]->insert(key_values[i]);
+
+        ++key_domain.key_rows;
+        if (key_domain.key_rows > settings.streaming_join_key_domain_pushdown_max_rows)
+            return false;
+    }
+
+    if (key_domain.key_rows > settings.streaming_join_key_domain_pushdown_max_rows)
+        return false;
+
+    Block left_key_block;
+    for (size_t i = 0; i < left_key_names.size(); ++i)
+        left_key_block.insert({std::move(key_columns[i]), key_types[i], left_key_names[i]});
+
+    if (left_key_block.rows())
+    {
+        key_domain.key_bytes += left_key_block.bytes();
+        if (settings.streaming_join_key_domain_pushdown_max_bytes
+            && key_domain.key_bytes > settings.streaming_join_key_domain_pushdown_max_bytes)
+            return false;
+
+        key_domain.left_key_domain_blocks.push_back(std::move(left_key_block));
+    }
+
+    return true;
+}
+
+bool allStreamingSourcesReachedStopSN(const std::vector<std::shared_ptr<Streaming::ISource>> & sources, const std::vector<Int64> & stop_sns)
+{
+    chassert(sources.size() == stop_sns.size());
+    for (size_t i = 0; i < sources.size(); ++i)
+    {
+        if (stop_sns[i] >= cluster::Constants::LogStartSN && sources[i]->lastProcessedSN() < stop_sns[i])
+            return false;
+    }
+    return true;
+}
+
+String streamingSourceBoundaryId(const Streaming::ISource & source)
+{
+    return fmt::format("{}:{}", source.getName(), source.getDescription());
+}
+
+void addRightConvertActionsToPlan(QueryPlan & plan, const ActionsDAGPtr & right_convert_actions, const String & description)
+{
+    if (!right_convert_actions)
+        return;
+
+    auto converting_step = std::make_unique<ExpressionStep>(plan.getCurrentDataStream(), right_convert_actions);
+    converting_step->setStepDescription(description);
+    plan.addStep(std::move(converting_step));
+}
+
+bool validateStreamingJoinKeyDomainRightBoundaryPlan(
+    ContextPtr context,
+    const ASTTablesInSelectQueryElement & join_element,
+    TableJoin & analyzed_join,
+    const SelectQueryOptions & query_options,
+    const ActionsDAGPtr & right_convert_actions,
+    SeekToInfoPtr right_seek_to_info,
+    const StreamingJoinKeyDomainPushdown & key_domain)
+{
+    if (key_domain.right_snapshot_source_ids.empty()
+        || key_domain.right_snapshot_source_ids.size() != key_domain.right_snapshot_stop_sns.size())
+    {
+        LOG_DEBUG(
+            getLogger(),
+            "Streaming join key-domain pushdown is not applicable: right boundary metadata is incomplete "
+            "(source_ids={}, stop_sns={})",
+            key_domain.right_snapshot_source_ids.size(),
+            key_domain.right_snapshot_stop_sns.size());
+        return false;
+    }
+
+    auto reject = [](const String & reason) {
+        LOG_DEBUG(getLogger(), "Streaming join key-domain pushdown is not applicable: {}", reason);
+        return false;
+    };
+
+    try
+    {
+        auto bounded_plan
+            = buildJoinedPlan(context, join_element, analyzed_join, query_options, right_seek_to_info, key_domain.right_snapshot_high_sns);
+        addRightConvertActionsToPlan(
+            *bounded_plan, right_convert_actions, "Convert joined columns for streaming join key-domain boundary validation");
+
+        if (!bounded_plan->isStreaming())
+            return reject("bounded right-prefix validation plan is not streaming");
+
+        auto builder = bounded_plan->buildQueryPipeline(
+            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
+
+        auto bounded_sources = builder->getStreamingSources();
+        if (bounded_sources.size() != key_domain.right_snapshot_source_ids.size())
+        {
+            return reject(
+                fmt::format(
+                    "bounded right-prefix validation source count mismatch: expected {}, got {}",
+                    key_domain.right_snapshot_source_ids.size(),
+                    bounded_sources.size()));
+        }
+
+        std::set<String> expected_ids(key_domain.right_snapshot_source_ids.begin(), key_domain.right_snapshot_source_ids.end());
+        if (expected_ids.size() != key_domain.right_snapshot_source_ids.size())
+            return reject("right boundary source identities are not unique");
+
+        std::set<String> actual_ids;
+        for (const auto & source : bounded_sources)
+        {
+            if (!source->supportsStopSN())
+                return reject(fmt::format("bounded right-prefix source '{}' does not support stop-SN", source->getName()));
+
+            auto source_id = streamingSourceBoundaryId(*source);
+            if (!actual_ids.insert(source_id).second)
+                return reject(fmt::format("bounded right-prefix source identity '{}' is duplicated", source_id));
+
+            if (!expected_ids.contains(source_id))
+                return reject(fmt::format("bounded right-prefix source identity '{}' is not in the captured snapshot", source_id));
+
+            auto stream_source = std::dynamic_pointer_cast<StreamingStoreSourceBase>(source);
+            if (!stream_source)
+                return reject(fmt::format("bounded right-prefix source '{}' does not expose stream shard identity", source->getName()));
+
+            const auto [_, shard_id] = stream_source->streamShard();
+            if (shard_id < 0)
+                return reject(fmt::format("bounded right-prefix source '{}' exposes invalid shard '{}'", source->getName(), shard_id));
+
+            if (!key_domain.right_snapshot_high_sns.contains(static_cast<UInt64>(shard_id)))
+                return reject(fmt::format("bounded right-prefix source shard '{}' is not in the captured snapshot", shard_id));
+        }
+
+        return true;
+    }
+    catch (...)
+    {
+        if (shouldRethrowStreamingJoinKeyDomainPushdownException(getCurrentExceptionCode()))
+            throw;
+
+        LOG_DEBUG(
+            getLogger(),
+            "Streaming join key-domain pushdown is not applicable: bounded right-prefix validation failed: {}",
+            getCurrentExceptionMessage(false));
+        return false;
+    }
+}
+
+StreamingJoinKeyDomainPushdownPtr tryBuildStreamingJoinKeyDomainPushdown(
+    ContextPtr context,
+    const ASTTablesInSelectQueryElement & join_element,
+    TableJoin & analyzed_join,
+    const SelectQueryOptions & query_options,
+    const ActionsDAGPtr & right_convert_actions,
+    SeekToInfoPtr right_seek_to_info)
+{
+    StreamingJoinKeyDomainPushdownPtr result;
+    const auto & settings = context->getSettingsRef();
+
+    if (!settings.enable_streaming_join_key_domain_pushdown || query_options.only_analyze || query_options.is_explain)
+        return result;
+
+    if ((query_options.parent_exec_mode && *query_options.parent_exec_mode != ExecuteMode::Normal)
+        || settings.exec_mode != ExecuteMode::Normal)
+        return result;
+
+    if (!isBackfillSeekTo(settings.seek_to.value))
+        return result;
+
+    if (right_seek_to_info && !isBackfillSeekTo(right_seek_to_info->getSeekTo()))
+        return result;
+
+    if (!settings.streaming_join_key_domain_pushdown_max_rows || !canUseStreamingJoinKeyDomainPushdown(analyzed_join))
+        return result;
+
+    if (astContainsFunctionName(join_element.table_expression, "dedup"))
+    {
+        LOG_DEBUG(getLogger(), "Streaming join key-domain pushdown is not applicable: right prefix contains dedup table function");
+        return result;
+    }
+
+    const auto & clause = analyzed_join.getOnlyClause();
+    auto key_domain = std::make_shared<StreamingJoinKeyDomainPushdown>();
+    key_domain->left_key_names = clause.key_names_left;
+    bool row_read_cap_is_feature_cap = false;
+    bool byte_read_cap_is_feature_cap = false;
+
+    try
+    {
+        auto snapshot_context = Context::createCopy(context);
+        snapshot_context->setSetting("max_threads", Field{UInt64{1}});
+        snapshot_context->setSetting("backfill_max_threads", Field{UInt64{1}});
+        snapshot_context->setSetting("enable_streaming_join_key_domain_pushdown", Field{false});
+        const auto row_feature_sentinel = saturatingIncrement(settings.streaming_join_key_domain_pushdown_max_rows);
+        const auto row_read_cap = capByStricterUserLimit(row_feature_sentinel, settings.max_rows_to_read);
+        row_read_cap_is_feature_cap = row_read_cap == row_feature_sentinel;
+        snapshot_context->setSetting("max_rows_to_read", Field{row_read_cap});
+        if (settings.streaming_join_key_domain_pushdown_max_bytes)
+        {
+            const auto byte_feature_sentinel = saturatingIncrement(settings.streaming_join_key_domain_pushdown_max_bytes);
+            const auto byte_read_cap = capByStricterUserLimit(byte_feature_sentinel, settings.max_bytes_to_read);
+            byte_read_cap_is_feature_cap = byte_read_cap == byte_feature_sentinel;
+            snapshot_context->setSetting("max_bytes_to_read", Field{byte_read_cap});
+        }
+        else
+        {
+            byte_read_cap_is_feature_cap = !settings.max_bytes_to_read;
+        }
+        snapshot_context->setSetting("max_block_size", Field{std::max<UInt64>(1, std::min<UInt64>(settings.max_block_size, row_read_cap))});
+
+        auto snapshot_plan = buildJoinedPlan(snapshot_context, join_element, analyzed_join, query_options, right_seek_to_info);
+        if (right_convert_actions)
+        {
+            auto converting_step = std::make_unique<ExpressionStep>(snapshot_plan->getCurrentDataStream(), right_convert_actions);
+            converting_step->setStepDescription("Convert joined columns for streaming join key-domain snapshot");
+            snapshot_plan->addStep(std::move(converting_step));
+        }
+
+        if (planOutputsProcessTime(snapshot_plan->getRootNode()))
+        {
+            LOG_DEBUG(
+                getLogger(), "Streaming join key-domain pushdown is not applicable: right prefix plan exposes process-time virtual column");
+            return result;
+        }
+
+        if (blockHasFloatBearingStreamingJoinKeys(snapshot_plan->getCurrentDataStream().header, clause.key_names_right))
+        {
+            LOG_DEBUG(
+                getLogger(),
+                "Streaming join key-domain pushdown is not applicable: right prefix join key type contains floating-point data");
+            return result;
+        }
+
+        if (planHasNonDeterministicActions(snapshot_plan->getRootNode()))
+        {
+            LOG_DEBUG(
+                getLogger(), "Streaming join key-domain pushdown is not applicable: right prefix plan contains non-deterministic actions");
+            return result;
+        }
+
+        if (planHasOrderSensitiveSteps(snapshot_plan->getRootNode()))
+        {
+            LOG_DEBUG(
+                getLogger(),
+                "Streaming join key-domain pushdown is not applicable: right prefix plan contains order-sensitive LIMIT/OFFSET steps");
+            return result;
+        }
+
+        if (planHasUnsafeStreamingJoinKeyDomainSteps(snapshot_plan->getRootNode()))
+        {
+            LOG_DEBUG(
+                getLogger(),
+                "Streaming join key-domain pushdown is not applicable: right prefix plan contains aggregation, window, distinct, or dedup "
+                "steps");
+            return result;
+        }
+
+        if (!snapshot_plan->isStreaming())
+            return result;
+
+        auto builder = snapshot_plan->buildQueryPipeline(
+            QueryPlanOptimizationSettings::fromContext(snapshot_context),
+            BuildQueryPipelineSettings::fromContext(snapshot_context),
+            snapshot_context);
+
+        std::vector<std::shared_ptr<Streaming::ISource>> streaming_sources;
+        std::vector<Int64> stop_sns;
+        streaming_sources = builder->getStreamingSources();
+        if (streaming_sources.empty())
+            return result;
+
+        stop_sns.reserve(streaming_sources.size());
+        key_domain->right_snapshot_source_ids.reserve(streaming_sources.size());
+        key_domain->right_snapshot_high_sns.reserve(streaming_sources.size());
+        std::set<String> source_ids;
+        std::optional<String> stream_id;
+        for (const auto & source : streaming_sources)
+        {
+            auto source_id = streamingSourceBoundaryId(*source);
+            if (!source_ids.insert(source_id).second)
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: duplicate right-prefix source identity '{}'",
+                    source_id);
+                return result;
+            }
+
+            auto sequence_range = source->sequenceRange();
+            if (!source->supportsStopSN())
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: source '{}' does not support bounded stop sequence",
+                    source->getName());
+                return result;
+            }
+
+            if (sequence_range.first < cluster::Constants::LogStartSN)
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: source '{}' does not expose a bounded sequence range",
+                    source->getName());
+                return result;
+            }
+
+            auto stream_source = std::dynamic_pointer_cast<StreamingStoreSourceBase>(source);
+            if (!stream_source)
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: source '{}' does not expose stream shard identity",
+                    source->getName());
+                return result;
+            }
+
+            auto [current_stream_id, shard_id] = stream_source->streamShard();
+            if (shard_id < 0)
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: source '{}' exposes invalid shard '{}'",
+                    source->getName(),
+                    shard_id);
+                return result;
+            }
+
+            if (!stream_id)
+                stream_id = current_stream_id;
+            else if (*stream_id != current_stream_id)
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: right prefix reads multiple streams ('{}', '{}')",
+                    *stream_id,
+                    current_stream_id);
+                return result;
+            }
+
+            auto high_sn = sequence_range.second;
+            if (high_sn < cluster::Constants::LogStartSN - 1)
+            {
+                LOG_DEBUG(
+                    getLogger(),
+                    "Streaming join key-domain pushdown is not applicable: source '{}' exposes invalid snapshot high sequence '{}'",
+                    source->getName(),
+                    high_sn);
+                return result;
+            }
+
+            if (!key_domain->right_snapshot_high_sns.emplace(static_cast<UInt64>(shard_id), high_sn).second)
+            {
+                LOG_DEBUG(getLogger(), "Streaming join key-domain pushdown is not applicable: duplicate right-prefix shard '{}'", shard_id);
+                return result;
+            }
+
+            key_domain->right_snapshot_source_ids.push_back(std::move(source_id));
+            stop_sns.push_back(high_sn);
+            source->setStopSN(high_sn);
+        }
+        key_domain->right_snapshot_stop_sns = stop_sns;
+
+        auto pipeline = QueryPipelineBuilder::getPipeline(std::move(*builder));
+        PullingPipelineExecutor executor(pipeline);
+
+        std::set<std::vector<Field>> seen_keys;
+        auto markExceededKeyDomainLimits = [&] {
+            LOG_DEBUG(
+                getLogger(),
+                "Streaming join key-domain pushdown is not applicable: right prefix exceeded configured limits "
+                "(source_rows={}, source_bytes={}, distinct_keys={}, key_bytes={}); "
+                "using normal streaming backfill without bounded key-domain filtering",
+                key_domain->source_rows,
+                key_domain->source_bytes,
+                key_domain->key_rows,
+                key_domain->key_bytes);
+        };
+
+        Chunk chunk;
+        const auto & header = executor.getHeader();
+        while (executor.pull(chunk))
+        {
+            if (!chunk || !chunk.hasRows())
+                continue;
+
+            auto block = header.cloneWithColumns(chunk.detachColumns());
+            if (!appendRightBlockToKeyDomain(block, clause.key_names_left, clause.key_names_right, settings, seen_keys, *key_domain))
+            {
+                markExceededKeyDomainLimits();
+                executor.cancel();
+                return result;
+            }
+        }
+
+        if (!allStreamingSourcesReachedStopSN(streaming_sources, stop_sns))
+        {
+            LOG_DEBUG(getLogger(), "Streaming join key-domain pushdown is not applicable: right prefix did not reach stop sequence");
+            return {};
+        }
+
+        key_domain->exact = true;
+        ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainBuilt);
+        result = std::move(key_domain);
+    }
+    catch (...)
+    {
+        if (isStreamingJoinKeyDomainPushdownLimitException(getCurrentExceptionCode()))
+        {
+            if (!limitExceptionCanFallbackForStreamingJoinKeyDomainPushdown(
+                    getCurrentExceptionCode(), row_read_cap_is_feature_cap, byte_read_cap_is_feature_cap))
+                throw;
+
+            LOG_DEBUG(
+                getLogger(),
+                "Streaming join key-domain pushdown exceeded right-prefix planning limits; disabling key-domain pushdown: {}",
+                getCurrentExceptionMessage(false));
+            return result;
+        }
+
+        if (shouldRethrowStreamingJoinKeyDomainPushdownException(getCurrentExceptionCode()))
+            throw;
+
+        LOG_DEBUG(getLogger(), "Streaming join key-domain pushdown is not applicable: {}", getCurrentExceptionMessage(false));
+    }
+
+    return result;
+}
+}
+/// proton: ends.
 
 std::shared_ptr<DirectKeyValueJoin> tryKeyValueJoin(std::shared_ptr<TableJoin> analyzed_join, Block right_sample_block)
 {
@@ -1654,69 +2451,70 @@ std::shared_ptr<DirectKeyValueJoin> tryKeyValueJoin(std::shared_ptr<TableJoin> a
         {
             String original_key_name = analyzed_join->getOriginalName(key_name);
 
-        /// issue-7254: to restore the rewritten column alias in multiple direct join.
-        /// For multiple direct join, we will rewrite the join and introduce internal column aliasing.
-        /// The join key column will be the alias instead of the direct column name from the storage.
-        /// If this happens, we like to restore the original column name from the alias and then do
-        /// the check.
-        ///
-        /// The following example is a join rewritten and join on alias `--mysql_products_dict_direct.id`
-        ///
-        /// SELECT
-        ///  `--.s`.country,
-        ///  `--.s`.product_id,
-        ///  `--.s`.oid,
-        ///  `--.s`.`--orders._tp_time`,
-        ///  `--.s`.c,
-        ///  `--.s`.`--country._tp_time`,
-        ///  mysql_products_dict_direct.created_at AS `--mysql_products_dict_direct.created_at`,
-        ///  mysql_products_dict_direct.name AS `--mysql_products_dict_direct.name`,
-        ///  mysql_products_dict_direct.id AS `--mysql_products_dict_direct.id`
-        /// FROM
-        /// (
-        ///  SELECT
-        ///    country,
-        ///    product_id,
-        ///    oid,
-        ///    orders._tp_time AS `--orders._tp_time`,
-        ///    c,
-        ///    country._tp_time AS `--country._tp_time`
-        ///  FROM orders LEFT JOIN country ON orders.country = country.c
-        /// ) AS `--.s`
-        /// ALL LEFT JOIN mysql_products_dict_direct ON orders.product_id = `--mysql_products_dict_direct.id`
-        ///
-        auto restored = analyzed_join->restoreRightColumnNameForAlias(key_name);
-        if (std::ranges::find(first_index_keys, restored) != first_index_keys.end())
-        {
-            /// Keep the restored joined key names around
-            clauses[0].key_names_restored.push_back(restored);
-        }
-        else
-        {
-            /// Try original name again for `restored`
-            /// join key: `--order_customer_statuses.id`
-            /// restored: `order_customer_statuses.id`
-            /// restored2: `id`
-            auto restored2 = analyzed_join->getOriginalName(restored);
-            if (std::ranges::find(first_index_keys, restored2) != first_index_keys.end())
+            /// issue-7254: to restore the rewritten column alias in multiple direct join.
+            /// For multiple direct join, we will rewrite the join and introduce internal column aliasing.
+            /// The join key column will be the alias instead of the direct column name from the storage.
+            /// If this happens, we like to restore the original column name from the alias and then do
+            /// the check.
+            ///
+            /// The following example is a join rewritten and join on alias `--mysql_products_dict_direct.id`
+            ///
+            /// SELECT
+            ///  `--.s`.country,
+            ///  `--.s`.product_id,
+            ///  `--.s`.oid,
+            ///  `--.s`.`--orders._tp_time`,
+            ///  `--.s`.c,
+            ///  `--.s`.`--country._tp_time`,
+            ///  mysql_products_dict_direct.created_at AS `--mysql_products_dict_direct.created_at`,
+            ///  mysql_products_dict_direct.name AS `--mysql_products_dict_direct.name`,
+            ///  mysql_products_dict_direct.id AS `--mysql_products_dict_direct.id`
+            /// FROM
+            /// (
+            ///  SELECT
+            ///    country,
+            ///    product_id,
+            ///    oid,
+            ///    orders._tp_time AS `--orders._tp_time`,
+            ///    c,
+            ///    country._tp_time AS `--country._tp_time`
+            ///  FROM orders LEFT JOIN country ON orders.country = country.c
+            /// ) AS `--.s`
+            /// ALL LEFT JOIN mysql_products_dict_direct ON orders.product_id = `--mysql_products_dict_direct.id`
+            ///
+            auto restored = analyzed_join->restoreRightColumnNameForAlias(key_name);
+            if (std::ranges::find(first_index_keys, restored) != first_index_keys.end())
             {
-                clauses[0].key_names_restored.push_back(restored2);
+                /// Keep the restored joined key names around
+                clauses[0].key_names_restored.push_back(restored);
             }
             else
             {
-                LOG_INFO(
-                    getLogger(),
-                    "Can't use direct join: join key '{}' (original={} restored={} restore2={}) doesn't match to storage primary key ({})",
-                    key_name,
-                    original_key_name,
-                    restored,
-                    restored2,
-                    fmt::join(first_index_keys, ", "));
+                /// Try original name again for `restored`
+                /// join key: `--order_customer_statuses.id`
+                /// restored: `order_customer_statuses.id`
+                /// restored2: `id`
+                auto restored2 = analyzed_join->getOriginalName(restored);
+                if (std::ranges::find(first_index_keys, restored2) != first_index_keys.end())
+                {
+                    clauses[0].key_names_restored.push_back(restored2);
+                }
+                else
+                {
+                    LOG_INFO(
+                        getLogger(),
+                        "Can't use direct join: join key '{}' (original={} restored={} restore2={}) doesn't match to storage primary key "
+                        "({})",
+                        key_name,
+                        original_key_name,
+                        restored,
+                        restored2,
+                        fmt::join(first_index_keys, ", "));
 
-                return nullptr;
+                    return nullptr;
+                }
             }
         }
-    }
     }
 
     return std::make_shared<DirectKeyValueJoin>(analyzed_join, right_sample_block, storage);
@@ -1724,9 +2522,7 @@ std::shared_ptr<DirectKeyValueJoin> tryKeyValueJoin(std::shared_ptr<TableJoin> a
 }
 
 JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
-    const ASTTablesInSelectQueryElement & join_element,
-    const ColumnsWithTypeAndName & left_columns,
-    ActionsDAGPtr & left_convert_actions)
+    const ASTTablesInSelectQueryElement & join_element, const ColumnsWithTypeAndName & left_columns, ActionsDAGPtr & left_convert_actions)
 {
     /// Two JOINs are not supported with the same subquery, but different USINGs.
 
@@ -1760,9 +2556,7 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
     std::tie(left_convert_actions, right_convert_actions) = analyzed_join->createConvertingActions(left_columns, right_columns);
     if (right_convert_actions)
     {
-        auto converting_step = std::make_unique<ExpressionStep>(joined_plan->getCurrentDataStream(), right_convert_actions);
-        converting_step->setStepDescription("Convert joined columns");
-        joined_plan->addStep(std::move(converting_step));
+        addRightConvertActionsToPlan(*joined_plan, right_convert_actions, "Convert joined columns");
     }
 
     /// proton : starts
@@ -1773,13 +2567,42 @@ JoinPtr SelectQueryExpressionAnalyzer::makeJoin(
         throw Exception(ErrorCodes::UNSUPPORTED, "LATEST JOINs are only supported in streaming joins");
 
     JoinPtr join = chooseJoinAlgorithm(analyzed_join, left_columns, joined_plan, syntax->streaming, getContext());
+    if (syntax->streaming && joined_plan && joined_plan->isStreaming())
+    {
+        auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
+        if (hash_join && !hash_join->bidirectionalHashJoin() && !hash_join->rangeBidirectionalHashJoin())
+        {
+            auto pushdown = tryBuildStreamingJoinKeyDomainPushdown(
+                getContext(), join_element, *analyzed_join, query_options, right_convert_actions, seek_to_info_of_joined_table);
+            if (pushdown
+                && validateStreamingJoinKeyDomainRightBoundaryPlan(
+                    getContext(),
+                    join_element,
+                    *analyzed_join,
+                    query_options,
+                    right_convert_actions,
+                    seek_to_info_of_joined_table,
+                    *pushdown))
+            {
+                streaming_join_key_domain_pushdown = std::move(pushdown);
+                joined_plan = buildJoinedPlan(
+                    getContext(),
+                    join_element,
+                    *analyzed_join,
+                    query_options,
+                    seek_to_info_of_joined_table,
+                    streaming_join_key_domain_pushdown->right_snapshot_high_sns);
+                addRightConvertActionsToPlan(*joined_plan, right_convert_actions, "Convert joined columns");
+            }
+        }
+    }
     /// proton : ends
 
     return join;
 }
 
-ActionsDAGPtr SelectQueryExpressionAnalyzer::appendPrewhere(
-    ExpressionActionsChain & chain, bool only_types, const Names & additional_required_columns)
+ActionsDAGPtr
+SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bool only_types, const Names & additional_required_columns)
 {
     const auto * select_query = getSelectQuery();
     if (!select_query->prewhere())

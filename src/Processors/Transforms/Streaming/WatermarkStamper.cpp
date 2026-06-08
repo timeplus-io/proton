@@ -109,9 +109,43 @@ ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermarkPerRow(Int64 event_ts) c
         return event_ts;
 }
 
+bool WatermarkStamper::isHistoricalBoundaryMarker(const Chunk & chunk) const
+{
+    auto chunk_ctx = chunk.getChunkContext();
+    return !chunk.hasRows() && chunk_ctx && (chunk_ctx->isHistoricalDataStart() || chunk_ctx->isHistoricalDataEnd());
+}
+
+void WatermarkStamper::setWatermarkOrDefer(Chunk & chunk, Int64 watermark)
+{
+    if (watermark == INVALID_WATERMARK)
+        return;
+
+    if (isHistoricalBoundaryMarker(chunk))
+    {
+        pending_unmute_watermark_ts = std::max(pending_unmute_watermark_ts, watermark);
+        chunk.clearWatermark();
+        return;
+    }
+
+    chunk.setWatermark(watermark);
+}
+
+void WatermarkStamper::stampPendingWatermark(Chunk & chunk)
+{
+    if (pending_unmute_watermark_ts == INVALID_WATERMARK || isHistoricalBoundaryMarker(chunk))
+        return;
+
+    if (!chunk.hasWatermark() || pending_unmute_watermark_ts > chunk.getWatermark())
+        chunk.setWatermark(pending_unmute_watermark_ts);
+
+    pending_unmute_watermark_ts = INVALID_WATERMARK;
+}
+
 void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
 {
     chassert(!chunk.hasRows());
+
+    Int64 watermark_to_emit = INVALID_WATERMARK;
 
     if (useEventTime() && max_event_ts != INVALID_WATERMARK)
     {
@@ -120,15 +154,18 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
         if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
         {
             watermark_ts = muted_watermark_ts;
-            chunk.setWatermark(watermark_ts);
+            watermark_to_emit = watermark_ts;
         }
     }
 
     /// Always emit a watermark for emit on update
-    if (params.mode == EmitMode::OnUpdate && !chunk.hasWatermark())
-        chunk.setWatermark(useEventTime() ? watermark_ts : MonotonicNanoseconds::now());
+    if (params.mode == EmitMode::OnUpdate && watermark_to_emit == INVALID_WATERMARK)
+        watermark_to_emit = useEventTime() ? watermark_ts : MonotonicNanoseconds::now();
 
-    processPeriodic(chunk);
+    if (!isHistoricalBoundaryMarker(chunk))
+        processPeriodic(chunk);
+
+    setWatermarkOrDefer(chunk, watermark_to_emit);
 }
 
 void WatermarkStamper::processWithMutedWatermark(Chunk & chunk)
@@ -154,14 +191,24 @@ void WatermarkStamper::processWithMutedWatermark(Chunk & chunk)
 
 void WatermarkStamper::process(Chunk & chunk)
 {
+    if (isHistoricalBoundaryMarker(chunk))
+    {
+        chunk.clearWatermark();
+        return;
+    }
+
     processWatermark(chunk);
     processPeriodic(chunk);
     processTimeout(chunk);
+    stampPendingWatermark(chunk);
     logLateEvents();
 }
 
 void WatermarkStamper::processPeriodic(Chunk & chunk)
 {
+    if (isHistoricalBoundaryMarker(chunk))
+        return;
+
     if (next_periodic_emit_ts == 0)
         return;
 
@@ -181,6 +228,9 @@ void WatermarkStamper::processPeriodic(Chunk & chunk)
 
 void WatermarkStamper::processTimeout(Chunk & chunk)
 {
+    if (isHistoricalBoundaryMarker(chunk))
+        return;
+
     if (next_timeout_emit_ts == 0)
         return;
 
@@ -355,13 +405,16 @@ VersionType WatermarkStamper::getVersion() const
 void WatermarkStamper::serialize(WriteBuffer & wb) const
 {
     /// WatermarkStamper has its own version than WatermarkTransform
-    writeIntBinary(getVersion(), wb);
+    auto current_version = getVersion();
+    writeIntBinary(current_version, wb);
 
     writeIntBinary(max_event_ts, wb);
     writeIntBinary(watermark_ts, wb);
     writeIntBinary(late_events, wb);
     writeIntBinary(last_logged_late_events, wb);
     writeIntBinary(last_logged_late_events_ts, wb);
+    if (current_version >= PENDING_UNMUTE_WATERMARK_MIN_VERSION)
+        writeIntBinary(pending_unmute_watermark_ts, wb);
 }
 
 void WatermarkStamper::deserialize(ReadBuffer & rb)
@@ -374,6 +427,9 @@ void WatermarkStamper::deserialize(ReadBuffer & rb)
     readIntBinary(late_events, rb);
     readIntBinary(last_logged_late_events, rb);
     readIntBinary(last_logged_late_events_ts, rb);
+    pending_unmute_watermark_ts = INVALID_WATERMARK;
+    if (*version >= PENDING_UNMUTE_WATERMARK_MIN_VERSION)
+        readIntBinary(pending_unmute_watermark_ts, rb);
 }
 }
 }

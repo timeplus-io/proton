@@ -70,13 +70,21 @@ public:
         const ASTPtr & query_ptr_,
         const ContextPtr & context_,
         const SelectQueryOptions &,
-        const Names & required_result_column_names_ = Names{});
+        const Names & required_result_column_names_ = Names{},
+        /// proton: starts.
+        StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_ = nullptr,
+        StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_ = {});
+        /// proton: ends.
 
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
         const ContextMutablePtr & context_,
         const SelectQueryOptions &,
-        const Names & required_result_column_names_ = Names{});
+        const Names & required_result_column_names_ = Names{},
+        /// proton: starts.
+        StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_ = nullptr,
+        StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_ = {});
+        /// proton: ends.
 
     /// Read data not from the table specified in the query, but from the prepared pipe `input`.
     InterpreterSelectQuery(
@@ -159,7 +167,11 @@ private:
         const SelectQueryOptions &,
         const Names & required_result_column_names = {},
         const StorageMetadataPtr & metadata_snapshot_ = nullptr,
-        PreparedSetsPtr prepared_sets_ = nullptr);
+        PreparedSetsPtr prepared_sets_ = nullptr,
+        /// proton: starts.
+        StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_ = nullptr,
+        StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_ = {});
+        /// proton: ends.
 
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
@@ -169,7 +181,11 @@ private:
         const SelectQueryOptions &,
         const Names & required_result_column_names = {},
         const StorageMetadataPtr & metadata_snapshot_ = nullptr,
-        PreparedSetsPtr prepared_sets_ = nullptr);
+        PreparedSetsPtr prepared_sets_ = nullptr,
+        /// proton: starts.
+        StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_ = nullptr,
+        StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_ = {});
+        /// proton: ends.
 
     ASTSelectQuery & getSelectQuery() { return query_ptr->as<ASTSelectQuery &>(); }
 
@@ -245,10 +261,16 @@ private:
       * But the use of this section is justified if you need to set the settings for one subquery.
       */
     void initSettings();
+    /// proton: starts.
+    void applySelectSettingsWithoutExecMode(const ASTPtr & settings_ast);
+    /// proton: ends.
 
     TreeRewriterResultPtr syntax_analyzer_result;
     std::unique_ptr<SelectQueryExpressionAnalyzer> query_analyzer;
     SelectQueryInfo query_info;
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr current_select_streaming_join_key_domain;
+    /// proton: ends.
 
     /// Is calculated in getSampleBlock. Is used later in readImpl.
     ExpressionAnalysisResult analysis_result;

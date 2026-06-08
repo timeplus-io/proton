@@ -8,6 +8,8 @@
 #include <Storages/StorageSnapshot.h>
 #include <Common/logger_useful.h>
 
+#include <thread>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -18,6 +20,11 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 
 namespace
 {
+void throttleNonTerminalStopPause()
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+}
+
 cluster::SourceColumnsDescription createSourceColumnsDescription(const Names & required_column_names, StorageSnapshotPtr storage_snapshot)
 {
     return cluster::SourceColumnsDescription(
@@ -56,8 +63,15 @@ void StreamingStoreSourceBase::process(cluster::SchemaRecordPtrs & records)
     result_chunks_with_sns.clear();
     result_chunks_with_sns.reserve(records.size());
 
+    Int64 last_processed_append_ts = 0;
     for (const auto & record : records)
     {
+        if (markStopSNReachedBefore(record->getSN()))
+            break;
+
+        if (auto append_ts = record->getAppendTime(); append_ts > 0)
+            last_processed_append_ts = append_ts;
+
         if (record->empty())
             continue;
 
@@ -112,8 +126,8 @@ void StreamingStoreSourceBase::process(cluster::SchemaRecordPtrs & records)
     }
     iter = result_chunks_with_sns.begin();
 
-    if (auto append_ts = records.back()->getAppendTime(); append_ts > 0)
-        setLastProcessedRecordTimestamp(append_ts);
+    if (last_processed_append_ts > 0)
+        setLastProcessedRecordTimestamp(last_processed_append_ts);
 }
 
 Chunk StreamingStoreSourceBase::generate()
@@ -121,12 +135,39 @@ Chunk StreamingStoreSourceBase::generate()
     if (isCancelled())
         return {};
 
+    if (auto stop_decision = stopDecisionAtCurrentSN(); stop_decision.stop)
+    {
+        if (stop_decision.terminal)
+            return {};
+        throttleNonTerminalStopPause();
+        return header_chunk.clone();
+    }
+
     if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
     {
+        if (auto stop_decision = consumeStopSNReachedDecision(); stop_decision.stop)
+        {
+            if (stop_decision.terminal)
+                return {};
+            throttleNonTerminalStopPause();
+            return header_chunk.clone();
+        }
+
         readAndProcess();
 
         if (isCancelled())
             return {};
+
+        if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
+        {
+            if (auto stop_decision = consumeStopSNReachedDecision(); stop_decision.stop)
+            {
+                if (stop_decision.terminal)
+                    return {};
+                throttleNonTerminalStopPause();
+                return header_chunk.clone();
+            }
+        }
 
         /// After processing blocks, check again to see if there are new results
         if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())

@@ -33,6 +33,10 @@ public:
     virtual cluster::SchemaRecordPtrs read() = 0;
     virtual void resetSequenceNumber(Int64 sn) = 0;
     virtual std::pair<Int64, Int64> sequenceRange() const = 0;
+    virtual Int64 lastFetchedSN() const { return -1; }
+    virtual void setStopSN(Int64 /*sn*/) { }
+    virtual void clearStopSN() { }
+    virtual bool supportsStopSN() const { return false; }
 
     std::pair<String, Int32> getStreamShard() const;
     bool isCancelled() const noexcept;

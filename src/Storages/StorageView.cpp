@@ -153,7 +153,15 @@ void StorageView::read(
     /// proton: ends.
 
     auto options = SelectQueryOptions(QueryProcessingStage::Complete, 1, true, query_info.settings_limit_offset_done);
-    InterpreterSelectWithUnionQuery interpreter(current_inner_query, context, options, column_names);
+    /// proton: starts.
+    InterpreterSelectWithUnionQuery interpreter(
+        current_inner_query,
+        context,
+        options,
+        column_names,
+        query_info.left_backfill_join_key_domain,
+        query_info.streaming_join_snapshot_high_sns);
+    /// proton: ends.
     interpreter.addStorageLimits(*query_info.storage_limits);
     interpreter.buildQueryPlan(query_plan);
 

@@ -25,6 +25,8 @@ public:
 
     String getName() const override { return "StreamingStoreSource"; }
 
+    bool supportsStopSN() const override;
+
     std::pair<Int64, Int64> sequenceRange() const override;
 
     std::pair<String, Int32> getStreamShard() const override;
@@ -33,6 +35,8 @@ private:
     void readAndProcess() override;
 
     void doResetStartSN(Int64 sn) override;
+    void onStopSNChanged(Int64 sn) override;
+    void onStopSNCleared() override;
 
 private:
     std::shared_ptr<StreamShardStore> stream_shard_store;

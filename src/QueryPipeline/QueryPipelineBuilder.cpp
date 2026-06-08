@@ -26,10 +26,12 @@
 #include <Interpreters/Streaming/HashJoin/ConcurrentHashJoin.h>
 #include <Interpreters/Streaming/HashJoin/IHashJoin.h>
 #include <Processors/Streaming/ConcatProcessor.h>
+#include <Processors/Transforms/Streaming/JoinRightBoundary.h>
 #include <Processors/Transforms/Streaming/JoinTransform.h>
 #include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
 
 #include <ranges>
+#include <unordered_map>
 /// proton : ends
 
 namespace DB
@@ -39,6 +41,67 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
 }
+
+/// proton: starts.
+namespace
+{
+String streamingSourceBoundaryId(const Streaming::ISource & source)
+{
+    return fmt::format("{}:{}", source.getName(), source.getDescription());
+}
+
+/// Resolve the right-side streaming sources named by `source_ids` to the live pipeline sources so a
+/// streaming-join key-domain right boundary can be installed, validating source identity and stop-SN
+/// support along the way. Any mismatch throws (the caller's key-domain pushdown then bails out).
+/// Returns the matched sources paired with their stop SNs; empty when no boundary was requested.
+std::pair<std::vector<std::shared_ptr<Streaming::ISource>>, std::vector<Int64>>
+matchRightSourcesForStreamingJoinBoundary(
+    const std::vector<String> & source_ids, std::vector<Int64> stop_sns, QueryPipelineBuilder & right)
+{
+    std::vector<std::shared_ptr<Streaming::ISource>> matched_sources;
+    std::vector<Int64> matched_stop_sns;
+    if (stop_sns.empty())
+        return {std::move(matched_sources), std::move(matched_stop_sns)};
+
+    auto fail = [](const String & reason) {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Streaming join key-domain pushdown right boundary cannot be installed safely: {}", reason);
+    };
+
+    if (source_ids.size() != stop_sns.size())
+        fail(fmt::format("right boundary source-id count mismatch: got {} source ids for {} stop SNs", source_ids.size(), stop_sns.size()));
+
+    auto right_sources = right.getStreamingSources();
+    std::unordered_map<String, std::shared_ptr<Streaming::ISource>> sources_by_id;
+    sources_by_id.reserve(right_sources.size());
+    for (auto & source : right_sources)
+    {
+        auto source_id = streamingSourceBoundaryId(*source);
+        if (!sources_by_id.emplace(source_id, source).second)
+            fail(fmt::format("right boundary source identity '{}' is duplicated in join pipeline", source_id));
+    }
+
+    if (sources_by_id.size() != stop_sns.size())
+        fail(fmt::format("right boundary source count mismatch: expected {} sources, got {}", stop_sns.size(), sources_by_id.size()));
+
+    matched_sources.reserve(source_ids.size());
+    matched_stop_sns = std::move(stop_sns);
+    for (const auto & source_id : source_ids)
+    {
+        auto it = sources_by_id.find(source_id);
+        if (it == sources_by_id.end())
+            fail(fmt::format("right boundary source identity '{}' was not found in join pipeline", source_id));
+
+        if (!it->second->supportsStopSN())
+            fail(fmt::format("right boundary source identity '{}' no longer supports stop-SN", source_id));
+
+        matched_sources.emplace_back(std::move(it->second));
+    }
+
+    return {std::move(matched_sources), std::move(matched_stop_sns)};
+}
+}
+/// proton: ends.
 
 void QueryPipelineBuilder::checkInitialized()
 {
@@ -787,6 +850,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     size_t max_block_size,
     size_t max_streams,
     size_t join_max_cached_bytes,
+    std::vector<String> right_stream_source_ids,
+    std::vector<Int64> right_stream_stop_sns,
     Processors * collected_processors)
 {
     left->checkInitializedAndNotCompleted();
@@ -813,6 +878,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
     size_t left_max_parallel_streams = std::max(left->pipe.max_parallel_streams, left->getNumStreams());
     size_t right_max_parallel_streams = std::max(right->pipe.max_parallel_streams, right->getNumStreams());
+    auto [matched_right_sources, matched_right_stop_sns]
+        = matchRightSourcesForStreamingJoinBoundary(right_stream_source_ids, std::move(right_stream_stop_sns), *right);
 
     size_t num_transforms = 0;
 
@@ -874,6 +941,17 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     assert(num_transforms == left->pipe.output_ports.size());
     assert(num_transforms == right->pipe.output_ports.size());
 
+    Streaming::JoinRightBoundaryPtr right_boundary;
+    if (!matched_right_sources.empty())
+    {
+        right_boundary = std::make_shared<Streaming::JoinRightBoundary>(
+            std::move(matched_right_sources), std::move(matched_right_stop_sns), num_transforms);
+    }
+
+    Streaming::JoinLeftBoundaryPtr left_boundary;
+    if (right_boundary)
+        left_boundary = std::make_shared<Streaming::JoinLeftBoundary>(num_transforms);
+
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
 
@@ -881,6 +959,10 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     {
         ProcessorPtr joining;
         auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
+        if (right_boundary && hash_join->getTableJoin().requiredJoinAlignment())
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Streaming join key-domain pushdown does not support alignment-required streaming joins yet");
+
         if (hash_join->getTableJoin().requiredJoinAlignment())
         {
             joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
@@ -889,7 +971,15 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
         else
         {
             joining = std::make_shared<Streaming::JoinTransform>(
-                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), i, max_block_size, join_max_cached_bytes);
+                left->getHeader(),
+                right->getHeader(),
+                out_header,
+                std::move(hash_join),
+                i,
+                max_block_size,
+                join_max_cached_bytes,
+                right_boundary,
+                left_boundary);
         }
 
         connect(**lit, joining->getInputs().front());
@@ -981,7 +1071,14 @@ std::vector<std::shared_ptr<Streaming::ISource>> QueryPipelineBuilder::getStream
     for (const auto & processor : *pipe.processors)
     {
         if (processor->isSource() && processor->isStreaming())
-            streaming_sources.emplace_back(std::static_pointer_cast<Streaming::ISource>(processor));
+        {
+            auto streaming_source = std::dynamic_pointer_cast<Streaming::ISource>(processor);
+            if (!streaming_source)
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "Streaming source '{}' does not implement Streaming::ISource", processor->getName());
+
+            streaming_sources.emplace_back(std::move(streaming_source));
+        }
     }
     return streaming_sources;
 }

@@ -10,6 +10,12 @@ class NotJoinedBlocks;
 
 namespace Streaming
 {
+class JoinRightBoundary;
+using JoinRightBoundaryPtr = std::shared_ptr<JoinRightBoundary>;
+
+class JoinLeftBoundary;
+using JoinLeftBoundaryPtr = std::shared_ptr<JoinLeftBoundary>;
+
 /// Streaming join rows from left stream to right stream
 /// It has 2 inputs, the first one is left stream and the second one is right stream.
 /// These 2 input streams will be pulled concurrently
@@ -28,7 +34,9 @@ public:
         HashJoinPtr join_,
         size_t transform_id_,
         size_t max_block_size_,
-        UInt64 join_max_cached_bytes_);
+        UInt64 join_max_cached_bytes_,
+        JoinRightBoundaryPtr right_boundary_ = nullptr,
+        JoinLeftBoundaryPtr left_boundary_ = nullptr);
 
     String getName() const override;
     Status prepare() override;
@@ -47,6 +55,14 @@ private:
     void doJoin(Chunks chunks);
     void joinBidirectionally(Chunks chunks);
     void rangeJoinBidirectionally(Chunks chunks);
+    void processLeftChunk(Chunk chunk);
+    bool markRightBoundaryReady(const char * reason);
+    bool observeLeftBoundaryReleased(const char * reason);
+    void replayDelayedLeftChunks();
+    void processDelayedRightChunks();
+    bool hasCheckpointUnsafeBoundaryState() const;
+    void abandonBoundaryParticipation(const char * reason) noexcept;
+    void markBoundaryParticipationAbandoned(const char * reason) noexcept;
 
     void onCancel() noexcept override;
 
@@ -82,6 +98,13 @@ private:
     NO_SERDE ChunkList output_chunks;
 
     SERDE int64_t watermark = INVALID_WATERMARK;
+    NO_SERDE JoinRightBoundaryPtr right_boundary;
+    NO_SERDE JoinLeftBoundaryPtr left_boundary;
+    NO_SERDE bool right_boundary_ready = false;
+    NO_SERDE bool right_boundary_local_reached = false;
+    NO_SERDE bool left_boundary_released = false;
+    NO_SERDE ChunkList delayed_left_chunks;
+    NO_SERDE ChunkList delayed_right_chunks;
 
     NO_SERDE Int64 last_log_ts = 0;
 };

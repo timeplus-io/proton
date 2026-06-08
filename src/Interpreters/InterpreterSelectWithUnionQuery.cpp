@@ -40,19 +40,48 @@ namespace ErrorCodes
 }
 
 InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
-    const ASTPtr & query_ptr_, const ContextPtr & context_, const SelectQueryOptions & options_, const Names & required_result_column_names)
-    : InterpreterSelectWithUnionQuery(query_ptr_, Context::createCopy(context_), options_, required_result_column_names)
+    const ASTPtr & query_ptr_,
+    const ContextPtr & context_,
+    const SelectQueryOptions & options_,
+    const Names & required_result_column_names,
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_)
+    /// proton: ends.
+    : InterpreterSelectWithUnionQuery(
+          query_ptr_,
+          Context::createCopy(context_),
+          options_,
+          required_result_column_names,
+          std::move(inherited_left_backfill_join_key_domain_),
+          std::move(streaming_join_snapshot_high_sns_))
 {
 }
 
 InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
-    const ASTPtr & query_ptr_, const ContextMutablePtr & context_, const SelectQueryOptions & options_, const Names & required_result_column_names)
+    const ASTPtr & query_ptr_,
+    const ContextMutablePtr & context_,
+    const SelectQueryOptions & options_,
+    const Names & required_result_column_names,
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_)
+    /// proton: ends.
     : IInterpreterUnionOrSelectQuery(query_ptr_, context_, options_)
+    /// proton: starts.
+    , inherited_left_backfill_join_key_domain(std::move(inherited_left_backfill_join_key_domain_))
+    , streaming_join_snapshot_high_sns(std::move(streaming_join_snapshot_high_sns_))
+    /// proton: ends.
 {
     ASTSelectWithUnionQuery * ast = query_ptr->as<ASTSelectWithUnionQuery>();
     bool require_full_header = ast->hasNonDefaultUnionMode();
 
     const Settings & settings = context->getSettingsRef();
+    /// proton: starts.
+    if (!options.parent_exec_mode)
+        options.setParentExecuteMode(settings.exec_mode);
+    /// proton: ends.
+
     if (options.subquery_depth == 0 && (settings.limit > 0 || settings.offset > 0))
         settings_limit_offset_needed = true;
 
@@ -232,10 +261,30 @@ Block InterpreterSelectWithUnionQuery::getCurrentChildResultHeader(const ASTPtr 
 std::unique_ptr<IInterpreterUnionOrSelectQuery>
 InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast_ptr_, const Names & current_required_result_column_names)
 {
+    /// proton: starts.
+    auto * union_query = query_ptr->as<ASTSelectWithUnionQuery>();
+    const bool can_propagate_inherited_key_domain
+        = union_query && union_query->list_of_selects && union_query->list_of_selects->children.size() == 1;
+    auto child_inherited_key_domain
+        = can_propagate_inherited_key_domain ? inherited_left_backfill_join_key_domain : StreamingJoinKeyDomainPushdownPtr{};
+    /// proton: ends.
+
     if (ast_ptr_->as<ASTSelectWithUnionQuery>())
-        return std::make_unique<InterpreterSelectWithUnionQuery>(ast_ptr_, context, options, current_required_result_column_names);
+        return std::make_unique<InterpreterSelectWithUnionQuery>(
+            ast_ptr_,
+            context,
+            options,
+            current_required_result_column_names,
+            std::move(child_inherited_key_domain),
+            streaming_join_snapshot_high_sns);
     else if (ast_ptr_->as<ASTSelectQuery>())
-        return std::make_unique<InterpreterSelectQuery>(ast_ptr_, context, options, current_required_result_column_names);
+        return std::make_unique<InterpreterSelectQuery>(
+            ast_ptr_,
+            context,
+            options,
+            current_required_result_column_names,
+            std::move(child_inherited_key_domain),
+            streaming_join_snapshot_high_sns);
     else
         return std::make_unique<InterpreterSelectIntersectExceptQuery>(ast_ptr_, context, options);
 }

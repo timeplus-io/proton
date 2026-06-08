@@ -24,6 +24,8 @@ public:
 
     void setIdempotentKeys(InMemoryIdempotentKeysPtr idem_keys) { idempotent_keys.swap(idem_keys); }
 
+    std::pair<String, Int32> streamShard() const { return getStreamShard(); }
+
 protected:
     void process(cluster::SchemaRecordPtrs & records);
 

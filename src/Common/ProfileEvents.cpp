@@ -201,6 +201,15 @@
     M(SelectedMarks, "Number of marks (index granules) selected to read from a MergeTree table.") \
     M(SelectedRows, "Number of rows SELECTed from all tables.") \
     M(SelectedBytes, "Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.") \
+    /* proton: starts. */ \
+    M(StreamingJoinKeyDomainBuilt, "Number of streaming join right-side key domains built for historical backfill pushdown.") \
+    M(StreamingJoinKeyDomainStorageFilterPushed, "Number of streaming join key-domain filters pushed into historical storage reads.") \
+    M(StreamingJoinKeyDomainPostFilterApplied, \
+      "Number of defensive post-read streaming join key-domain filters added to historical backfill plans.") \
+    M(StreamingJoinKeyDomainShardPruned, "Number of streaming join historical backfill reads whose shard set was pruned by a key domain.") \
+    M(StreamingJoinKeyDomainPrimaryKeyPruned, \
+      "Number of streaming join historical backfill reads whose primary-key mark ranges were pruned by a key domain.") \
+    /* proton: ends. */ \
 \
     M(WaitMarksLoadMicroseconds, "Time spent loading marks") \
     M(BackgroundLoadingMarksTasks, "Number of background tasks for loading marks") \

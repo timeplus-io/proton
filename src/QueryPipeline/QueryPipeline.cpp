@@ -598,7 +598,14 @@ std::vector<std::shared_ptr<Streaming::ISource>> QueryPipeline::getStreamingSour
     for (const auto & processor : *processors)
     {
         if (processor->isSource() && processor->isStreaming())
-            streaming_sources.emplace_back(std::static_pointer_cast<Streaming::ISource>(processor));
+        {
+            auto streaming_source = std::dynamic_pointer_cast<Streaming::ISource>(processor);
+            if (!streaming_source)
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "Streaming source '{}' does not implement Streaming::ISource", processor->getName());
+
+            streaming_sources.emplace_back(std::move(streaming_source));
+        }
     }
     return streaming_sources;
 }

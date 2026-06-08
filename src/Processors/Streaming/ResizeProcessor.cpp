@@ -1,6 +1,7 @@
 #include <Processors/Streaming/ResizeProcessor.h>
 
 #include <base/ClockUtils.h>
+#include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
 #include <fmt/format.h>
@@ -100,7 +101,8 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
 
         auto start_ns = MonotonicNanoseconds::now();
         auto data = input_with_data.port->pullData(/*set_not_needed=*/true);
-        if (updateAndAlignWatermark(input_with_data, data.chunk) || updateAndRequestCheckpoint(input_with_data, data.chunk))
+        if (updateAndAlignHistoricalBoundary(input_with_data, data.chunk) || updateAndAlignWatermark(input_with_data, data.chunk)
+            || updateAndRequestCheckpoint(input_with_data, data.chunk))
         {
             /// Do nothing
         }
@@ -129,15 +131,9 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
     return Status::NeedData;
 }
 
-bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_with_data, Chunk & chunk)
+bool ShrinkResizeProcessor::updateAlignedWatermark(InputPortWithStatus & input_with_data, Int64 new_watermark)
 {
-    if (!chunk.hasWatermark())
-        return false;
-
-    assert(!chunk.requestCheckpoint());
-
     bool updated = false;
-    auto new_watermark = chunk.getWatermark();
     if (new_watermark > input_with_data.watermark || (input_with_data.watermark == TIMEOUT_WATERMARK && new_watermark >= aligned_watermark))
     {
         input_with_data.watermark = new_watermark;
@@ -155,6 +151,18 @@ bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_
             LOG_INFO(logger, "Found outdated watermark. aligned watermark={}, but got watermark = {}", aligned_watermark, new_watermark);
     }
 
+    return updated;
+}
+
+bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_with_data, Chunk & chunk)
+{
+    if (!chunk.hasWatermark())
+        return false;
+
+    assert(!chunk.requestCheckpoint());
+
+    bool updated = updateAlignedWatermark(input_with_data, chunk.getWatermark());
+
     input_with_data.status = InputStatus::NeedData;
 
     if (updated)
@@ -162,6 +170,62 @@ bool ShrinkResizeProcessor::updateAndAlignWatermark(InputPortWithStatus & input_
     else
         chunk.clearWatermark();
 
+    return true;
+}
+
+bool ShrinkResizeProcessor::allHistoricalInputsEnded() const
+{
+    return std::ranges::all_of(
+        input_ports, [](const auto & input) { return input.status == InputStatus::Finished || input.historical_ended; });
+}
+
+bool ShrinkResizeProcessor::updateAndAlignHistoricalBoundary(InputPortWithStatus & input_with_data, Chunk & chunk)
+{
+    if (chunk.hasRows())
+        return false;
+
+    auto chunk_ctx = chunk.getChunkContext();
+    if (!chunk_ctx || (!chunk_ctx->isHistoricalDataStart() && !chunk_ctx->isHistoricalDataEnd()))
+        return false;
+
+    const bool is_start = chunk_ctx->isHistoricalDataStart();
+    const bool is_end = chunk_ctx->isHistoricalDataEnd();
+    const bool watermark_updated = chunk.hasWatermark() && updateAlignedWatermark(input_with_data, chunk.getWatermark());
+
+    if (is_end)
+        input_with_data.historical_ended = true;
+
+    const bool emit_start = is_start && !historical_start_emitted;
+    if (emit_start)
+        historical_start_emitted = true;
+
+    const bool emit_end = is_end && !historical_end_emitted && allHistoricalInputsEnded();
+    if (emit_end)
+        historical_end_emitted = true;
+
+    if (emit_start || emit_end)
+    {
+        auto aligned_ctx = ChunkContext::create();
+        if (emit_start)
+            aligned_ctx->setMark(ProtonConsts::HISTORICAL_DATA_START_FLAG);
+        if (emit_end)
+            aligned_ctx->setMark(ProtonConsts::HISTORICAL_DATA_END_FLAG);
+        if (chunk_ctx->hasSN())
+            aligned_ctx->setSN(chunk_ctx->getSN());
+
+        chunk.setChunkContext(std::move(aligned_ctx));
+        chunk.clearWatermark();
+    }
+    else
+    {
+        chunk.clearHistoricalDataStartAndEnd();
+        if (watermark_updated)
+            chunk.setWatermark(aligned_watermark);
+        else
+            chunk.clearWatermark();
+    }
+
+    input_with_data.status = InputStatus::NeedData;
     return true;
 }
 
@@ -256,6 +320,21 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
         {
             if (output.status != OutputStatus::Finished)
             {
+                if (output.propagate_flag & OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST)
+                {
+                    assert(num_checkpoint_requests > 0);
+                    --num_checkpoint_requests;
+                }
+                if (output.propagate_flag & OutputPortWithStatus::PROPAGATE_PRESERVED_CHUNK)
+                {
+                    assert(num_preserved_chunk_requests > 0);
+                    --num_preserved_chunk_requests;
+                    if (num_preserved_chunk_requests == 0)
+                        preserved_chunk.clear();
+                }
+
+                output.propagate_flag = OutputPortWithStatus::NO_PROPAGATE;
+                waiting_outputs.remove(&output);
                 ++num_finished_outputs;
                 output.status = OutputStatus::Finished;
 
@@ -318,32 +397,61 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
             return Status::Finished;
     }
 
+    const bool has_pending_ordered_propagation = std::ranges::any_of(output_ports, [](const auto & output) {
+        return output.propagate_flag
+            & (OutputPortWithStatus::PROPAGATE_PRESERVED_CHUNK | OutputPortWithStatus::PROPAGATE_BOUNDARY_WATERMARK
+               | OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST);
+    });
+
     /// Check input has data
-    /// If has checkpoint request, we must waiting for the request is propagated in all outputs before read new data
-    if (!waiting_outputs.empty() && num_checkpoint_requests == 0)
+    /// If has checkpoint request, preserved marked chunk, or a boundary watermark split from a marker,
+    /// wait until it is propagated to all outputs before reading new data.
+    if (!waiting_outputs.empty() && num_checkpoint_requests == 0 && num_preserved_chunk_requests == 0 && !has_pending_ordered_propagation)
     {
         input.setNeeded();
 
         if (input.hasData() && !exclusive_output.has_value())
         {
             auto data = input.pullData(/*set_not_needed*/ true);
-            if (data.chunk.hasWatermark())
+            auto flag_active_outputs = [this](UInt8 flag) {
+                UInt8 count = 0;
+                for (auto & output : output_ports)
+                {
+                    if (output.status == OutputStatus::Finished || output.port->isFinished())
+                        continue;
+
+                    output.propagate_flag |= flag;
+                    ++count;
+                }
+                return count;
+            };
+
+            if (!data.chunk.hasRows() && data.chunk.getChunkContext()
+                && (data.chunk.getChunkContext()->isHistoricalDataStart() || data.chunk.getChunkContext()->isHistoricalDataEnd()))
             {
-                std::ranges::for_each(
-                    output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_WATERMARK; });
+                UInt8 propagate_flags = OutputPortWithStatus::PROPAGATE_PRESERVED_CHUNK;
+                if (data.chunk.hasWatermark())
+                {
+                    watermark = std::max(watermark, data.chunk.getWatermark());
+                    propagate_flags |= OutputPortWithStatus::PROPAGATE_BOUNDARY_WATERMARK;
+                }
+                data.chunk.clearWatermark();
+                num_preserved_chunk_requests = flag_active_outputs(propagate_flags);
+                preserved_chunk = std::move(data.chunk);
+            }
+            else if (data.chunk.hasWatermark())
+            {
+                flag_active_outputs(OutputPortWithStatus::PROPAGATE_WATERMARK);
                 watermark = std::max(watermark, data.chunk.getWatermark());
             }
             else if (data.chunk.requestCheckpoint())
             {
-                std::ranges::for_each(
-                    output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST; });
+                num_checkpoint_requests = flag_active_outputs(OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST);
                 ckpt_ctx = data.chunk.getCheckpointContext();
-                num_checkpoint_requests = output_ports.size();
             }
             else if (!data.chunk.hasRows())
             {
-                std::ranges::for_each(
-                    output_ports, [](auto & output) { output.propagate_flag |= OutputPortWithStatus::PROPAGATE_HEARTBEAT; });
+                flag_active_outputs(OutputPortWithStatus::PROPAGATE_HEARTBEAT);
             }
 
             if (data.chunk.hasRows())
@@ -375,13 +483,27 @@ IProcessor::Status ExpandResizeProcessor::prepare(const PortNumbers & /*updated_
         auto & waiting_output = **iter;
         if (waiting_output.propagate_flag)
         {
-            auto chunk = header_chunk.clone();
+            const bool push_preserved = waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_PRESERVED_CHUNK;
+            auto chunk = push_preserved ? preserved_chunk.clone() : header_chunk.clone();
 
+            if (push_preserved)
+            {
+                waiting_output.propagate_flag
+                    &= ~(OutputPortWithStatus::PROPAGATE_PRESERVED_CHUNK | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
+                assert(num_preserved_chunk_requests > 0);
+                --num_preserved_chunk_requests;
+                if (num_preserved_chunk_requests == 0)
+                    preserved_chunk.clear();
+            }
             /// Checkpoint barrier is always standalone, it can't coexist with watermark, we must propagate watermark first
-            if (waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_WATERMARK)
+            else if (
+                waiting_output.propagate_flag
+                & (OutputPortWithStatus::PROPAGATE_WATERMARK | OutputPortWithStatus::PROPAGATE_BOUNDARY_WATERMARK))
             {
                 chunk.setWatermark(watermark);
-                waiting_output.propagate_flag &= ~(OutputPortWithStatus::PROPAGATE_WATERMARK | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
+                waiting_output.propagate_flag &= ~(
+                    OutputPortWithStatus::PROPAGATE_WATERMARK | OutputPortWithStatus::PROPAGATE_BOUNDARY_WATERMARK
+                    | OutputPortWithStatus::PROPAGATE_HEARTBEAT);
             }
             else if (waiting_output.propagate_flag & OutputPortWithStatus::PROPAGATE_CHECKPOINT_REQUEST)
             {

@@ -1,15 +1,24 @@
 #pragma once
 
+/// proton: starts.
+#include <Core/Block.h>
+/// proton: ends.
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/PreparedSets.h>
 #include <QueryPipeline/StreamLocalLimits.h>
-#include <Storages/ProjectionsDescription.h>
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
+#include <Storages/ProjectionsDescription.h>
 
+/// proton: starts.
+#include <atomic>
+/// proton: ends.
 #include <memory>
+/// proton: starts.
+#include <unordered_map>
+/// proton: ends.
 
 /// proton: starts.
 #include <Storages/QueryShard.h>
@@ -55,6 +64,43 @@ namespace Streaming
 struct WindowParams;
 using WindowParamsPtr = std::shared_ptr<WindowParams>;
 }
+/// proton: ends.
+
+/// proton: starts.
+struct StreamingJoinKeyDomainPushdown
+{
+    Blocks left_key_domain_blocks;
+    Names left_key_names;
+    std::vector<String> right_snapshot_source_ids;
+    std::vector<Int64> right_snapshot_stop_sns;
+    std::unordered_map<UInt64, Int64> right_snapshot_high_sns;
+    size_t source_rows = 0;
+    size_t source_bytes = 0;
+    size_t key_rows = 0;
+    size_t key_bytes = 0;
+    bool exact = false;
+    std::shared_ptr<std::atomic_bool> left_backfill_boundary_confirmed = std::make_shared<std::atomic_bool>(false);
+
+    bool hasConfirmedLeftBackfillBoundary() const
+    {
+        return left_backfill_boundary_confirmed && left_backfill_boundary_confirmed->load(std::memory_order_acquire);
+    }
+
+    void confirmLeftBackfillBoundary() const
+    {
+        if (left_backfill_boundary_confirmed)
+            left_backfill_boundary_confirmed->store(true, std::memory_order_release);
+    }
+
+    void clearLeftBackfillBoundaryConfirmation() const
+    {
+        if (left_backfill_boundary_confirmed)
+            left_backfill_boundary_confirmed->store(false, std::memory_order_release);
+    }
+};
+
+using StreamingJoinKeyDomainPushdownPtr = std::shared_ptr<const StreamingJoinKeyDomainPushdown>;
+using StreamingJoinSnapshotHighSNs = std::unordered_map<UInt64, Int64>;
 /// proton: ends.
 
 struct PrewhereInfo
@@ -228,6 +274,9 @@ struct SelectQueryInfo
 
     /// proton: starts.
     std::optional<ShardsWithQueryMode> shards_to_query;
+    StreamingJoinKeyDomainPushdownPtr left_backfill_join_key_domain;
+    std::unordered_map<UInt64, Int64> left_backfill_snapshot_high_sns;
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns;
 
     SeekToInfoPtr seek_to_info; /// Rewind info for left streaming store in streaming query
     SeekToInfoPtr seek_to_info_of_right_stream; /// Rewind info for right streaming store in streaming query

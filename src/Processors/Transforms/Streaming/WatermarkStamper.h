@@ -45,6 +45,12 @@ protected:
     VersionType getVersionFromRevision(UInt64 revision) const;
 
 private:
+    static constexpr VersionType PENDING_UNMUTE_WATERMARK_MIN_VERSION = 159;
+
+    bool isHistoricalBoundaryMarker(const Chunk & chunk) const;
+    void setWatermarkOrDefer(Chunk & chunk, Int64 watermark);
+    void stampPendingWatermark(Chunk & chunk);
+
     void processWatermark(Chunk & chunk);
 
     template <typename TimeColumnType, bool apply_watermark_per_row>
@@ -88,6 +94,7 @@ protected:
     /// max watermark projected so far.
     /// Not initialize to INVALID_WATERMARK, we can dirctly emit it periodically if no watermark is applied
     SERDE Int64 watermark_ts = INVALID_WATERMARK + 1;
+    SERDE Int64 pending_unmute_watermark_ts = INVALID_WATERMARK;
 
     /// Event count which is late than current watermark
     static constexpr Int64 LOG_LATE_EVENTS_INTERVAL_SECONDS = 5; /// 5s, TODO: add settings ?
