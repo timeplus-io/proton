@@ -201,7 +201,7 @@ jobs:
     needs: [update_version, create_release]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c6g.8xlarge
+      ec2-instance-type: m7g.8xlarge
       ec2-image-id: ${{ vars.ARM_AMI }}
       submodules: 'true'
       run_mode: 'start' # start ec2 on demand instance

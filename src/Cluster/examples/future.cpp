@@ -2,6 +2,8 @@
 #include <iostream>
 #include <thread>
 
+#include <base/sleep.h>
+
 #include <stlab/concurrency/default_executor.hpp>
 #include <stlab/concurrency/future.hpp>
 
@@ -21,7 +23,7 @@ int main()
     async_func(std::move(p.first));
 
     while (!f.get_try())
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        sleepForMilliseconds(1000);
 
     std::cout << "The answer is " << *f.get_try() << "\n";
 

@@ -4512,10 +4512,10 @@ cluster::TimerService & Context::getTimerService() const
     return *shared->global_system_timer;
 }
 
-Context::DataStreamSemanticCache & Context::getDataStreamSemanticCache() const
+Context::QueryAnalysisCache & Context::getQueryAnalysisCache() const
 {
-    assert(hasQueryContext());
-    return getQueryContext()->data_stream_semantic_cache;
+    chassert(hasQueryContext());
+    return getQueryContext()->query_analysis_cache;
 }
 
 /// proton: ends.

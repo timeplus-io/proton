@@ -50,6 +50,7 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
 #include <DataTypes/DataTypeString.h>
+#include <base/sleep.h>
 
 #include <aws/core/auth/AWSCredentials.h>
 

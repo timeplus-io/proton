@@ -13,6 +13,8 @@
 #include <Common/formatReadable.h>
 #include <Common/setThreadName.h>
 
+#include <base/sleep.h>
+
 namespace CurrentMetrics
 {
 extern const Metric CheckpointCoordinatorThread;
@@ -267,7 +269,7 @@ void CheckpointCoordinator::deregisterQuery(const String & qid)
             if (retries % 100 == 0)
                 LOG_WARNING(logger, "Waiting for executor's reference decreased to 1 for query={} ...", qid);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            sleepForMilliseconds(5);
         }
 
         resetHeavyCheckpointingInProgress(qid);

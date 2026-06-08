@@ -29,6 +29,8 @@
 #include <TableFunctions/TableFunctionPythonCall.h>
 #include <Common/Random.h>
 
+#include <base/sleep.h>
+
 #include <boost/smart_ptr/make_shared.hpp>
 
 namespace DB
@@ -223,7 +225,7 @@ void StorageAlert::run()
                     "Encountered error, wait for {} seconds to restart pipeline, error={}",
                     wait_time,
                     pipeline_exception->message());
-                std::this_thread::sleep_for(std::chrono::seconds(wait_time));
+                sleepForSeconds(wait_time);
 
                 break;
         }
@@ -538,7 +540,7 @@ void StorageAlert::shutdown(bool /*dropping*/)
 
     while (!stopped.test())
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        sleepForMilliseconds(500);
     }
 
     io.store(nullptr);

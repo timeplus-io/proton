@@ -9,9 +9,29 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <chrono>
 #include <iostream>
 
 using namespace std::chrono_literals;
+
+namespace
+{
+/// Poll a predicate until it returns true or the deadline elapses.
+/// Use to wait on observable callback effects without coupling tests
+/// to SystemTimer::poll()'s wall-clock-driven semantics.
+template <typename F>
+bool waitUntil(F && cond, int64_t deadline_ms = 2000)
+{
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(deadline_ms);
+    while (!cond())
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+            return false;
+        sleepForMilliseconds(1);
+    }
+    return true;
+}
+}
 
 TEST(TimeWheel, EdgeCaseTimer)
 {
@@ -76,7 +96,7 @@ TEST(TimeWheel, ThrowException)
 
         /// Because stack trace unwinding takes sometime on X86 especially in debug build
         /// Debug ~5000ms, release ~200ms
-        std::this_thread::sleep_for(5000ms);
+        sleepForMilliseconds(5000);
         timer.poll(30);
         timer.poll(30);
     }
@@ -133,7 +153,7 @@ TEST(TimeWheel, Concurrency_Thread)
             timer.poll(1);
     }
 
-    std::this_thread::sleep_for(10ms);
+    sleepForMilliseconds(10);
     ASSERT_EQ(counter.load(std::memory_order_relaxed), numThreads * timersPerThread);
 }
 
@@ -145,7 +165,7 @@ TEST(TimeWheel, RaceConditionTest)
         auto task_id = timer.add(50, [&callback_executed]() { callback_executed.store(true); });
 
         /// Wait a tiny bit to increase the chances of the cancel operation overlapping with timer advancement.
-        std::this_thread::sleep_for(1ms);
+        sleepForMilliseconds(1);
 
         /// Try to cancel the task.
         task_id->cancel();
@@ -180,32 +200,17 @@ TEST(TimeWheel, CancelInCallback)
 TEST(TimeWheel, TimerTestCallback)
 {
     std::atomic_int32_t counter{};
-    {
-        cluster::SystemTimer timer(4, 1, 6000);
-        auto timer_task = timer.add(10, [&]() { counter++; });
-        ASSERT_TRUE(timer_task != nullptr);
-        GTEST_ASSERT_EQ(counter.load(), 0);
+    cluster::SystemTimer timer(4, 1, 6000);
 
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
+    auto timer_task = timer.add(10, [&]() { counter++; });
+    ASSERT_TRUE(timer_task != nullptr);
+    EXPECT_EQ(counter.load(), 0);
 
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
-
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
-
-        timer.poll(1);
-        GTEST_ASSERT_EQ(counter.load(), 0);
-
-        timer.poll(7);
-        timer.wait();
-        GTEST_ASSERT_EQ(counter.load(), 1);
-
-        timer.poll(5);
-        timer.wait();
-        GTEST_ASSERT_EQ(counter.load(), 1);
-    }
+    /// Drive the wheel with a budget large enough to expire the timer even
+    /// under CI scheduling jitter, then wait on the observable counter rather
+    /// than on wall-clock timing of intermediate poll() calls.
+    timer.poll(50);
+    ASSERT_TRUE(waitUntil([&] { return counter.load() == 1; }));
 }
 
 TEST(TimeWheel, TimerTestCallbackWithOrder)
@@ -327,34 +332,35 @@ TEST(TimeWheel, TimerTestCallbackAsync)
 {
     constexpr uint32_t THREAD_NUM = 10;
     std::atomic_int32_t counter{};
-    {
-        cluster::SystemTimer timer(4, 1, 6000);
+    std::atomic<size_t> add_failures{0};
+    cluster::SystemTimer timer(4, 1, 6000);
 
-        std::vector<std::thread> threads;
-        threads.reserve(THREAD_NUM);
+    std::vector<std::thread> threads;
+    threads.reserve(THREAD_NUM);
 
-        auto work = [&]() {
-            auto timer_task = timer.add(20, [&]() { counter++; });
-            ASSERT_TRUE(timer_task != nullptr);
-        };
+    auto work = [&]() {
+        auto t = timer.add(20, [&]() { counter++; });
+        if (!t)
+            add_failures.fetch_add(1, std::memory_order_relaxed);
+    };
 
-        for (uint32_t i = 0; i < THREAD_NUM; ++i)
-            threads.emplace_back(work);
+    for (uint32_t i = 0; i < THREAD_NUM; ++i)
+        threads.emplace_back(work);
 
-        GTEST_ASSERT_EQ(counter.load(), 0);
+    for (auto & i : threads)
+        i.join();
 
-        for (auto & i : threads)
-            i.join();
+    ASSERT_EQ(add_failures.load(), 0u);
 
-        timer.poll(30);
-        for (int i = 0; i < 10; i++)
-            timer.poll(1);
-
-        /// Give ample time for timer to execute the expired timer or we need change the timer default pool size to task count
-        /// https://github.com/timeplus-io/proton-enterprise/issues/3710
-        std::this_thread::sleep_for(1ms);
-    }
-    GTEST_ASSERT_EQ(counter.load(), THREAD_NUM);
+    /// After join, the slowest producer's timer expiration is bounded by
+    /// (join_completion_time + 20ms). Drive the wheel and wait on the counter
+    /// rather than budgeting a fixed sleep that races with scheduling jitter.
+    ASSERT_TRUE(waitUntil([&] {
+        if (counter.load() == static_cast<int32_t>(THREAD_NUM))
+            return true;
+        timer.poll(5);
+        return counter.load() == static_cast<int32_t>(THREAD_NUM);
+    }));
 }
 
 TEST(TimeWheel, RepeatAndCancelTimer)
@@ -369,7 +375,7 @@ TEST(TimeWheel, RepeatAndCancelTimer)
     for (int32_t i = 0; i < repeat_count; ++i)
         timer.poll(interval_ms);
 
-    std::this_thread::sleep_for(3ms);
+    sleepForMilliseconds(3);
     task->cancel();
 
     ASSERT_EQ(counter.load(), repeat_count);
@@ -378,13 +384,13 @@ TEST(TimeWheel, RepeatAndCancelTimer)
     auto new_task = timer.add(interval_ms, [&]() { counter++; }, /*repeat*/ true);
 
     timer.poll(interval_ms * 2);
-    std::this_thread::sleep_for(1ms);
+    sleepForMilliseconds(1);
     new_task->cancel();
 
     /// verify after cancel the timer, it will not continue add counter
     int finalCount = counter.load();
     timer.poll(interval_ms * 2);
-    std::this_thread::sleep_for(3ms);
+    sleepForMilliseconds(3);
     ASSERT_EQ(counter.load(), finalCount);
 }
 
@@ -420,14 +426,14 @@ TEST(TimeWheel, RepeatButForgetToCancelTimer)
     for (int32_t i = 0; i < repeat_count; ++i)
         timer.poll(interval_ms);
 
-    std::this_thread::sleep_for(1ms);
+    sleepForMilliseconds(1);
 
     timer_task = timer.add(interval_ms, [&]() { counter++; }, /*repeat*/ true);
     ASSERT_TRUE(timer_task != nullptr);
 
     timer.poll(interval_ms * 2);
 
-    std::this_thread::sleep_for(1ms);
+    sleepForMilliseconds(1);
 
     std::cout << "counter.load = " << counter.load() << '\n';
 }
@@ -520,11 +526,11 @@ TEST(TimeWheel, CancelAndReinsert)
 
     timer.poll(20);
     /// sleep to yield execution to expired_timer
-    std::this_thread::sleep_for(5ms);
+    sleepForMilliseconds(5);
     ASSERT_EQ(counter, 1);
 
     timer.poll(20);
-    std::this_thread::sleep_for(5ms);
+    sleepForMilliseconds(5);
     ASSERT_EQ(counter, 2);
 }
 

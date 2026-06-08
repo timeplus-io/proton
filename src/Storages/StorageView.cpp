@@ -330,19 +330,74 @@ bool StorageView::isReady() const
 
 bool StorageView::isStreamingQuery(ContextPtr query_context) const
 {
-    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+    /// proton: starts. Issue #11203 — query-scoped memoization so N-deep view chains don't
+    /// force quadratic analyzer recursion during a single top-level CREATE VIEW / getSampleBlock.
+
+    /// Historical `table(view)` path: InterpreterSelectQuery::isStreamingQuery() force-returns
+    /// false when query_mode == "table" regardless of storage. Short-circuit here so we skip
+    /// both the interpreter rebuild and the cache probe on that path.
+    if (query_context->isHistoricalQueryMode())
+        return false;
+
+    const auto metadata_ptr = getInMemoryMetadataPtr();
+
+    /// Parameterized views: same storage object can analyze to different queries across
+    /// invocations, so do not cache and keep the original behavior.
+    if (is_parameterized_view)
+    {
+        auto local_ctx = Context::createCopy(query_context);
+        local_ctx->setCollectRequiredColumns(false);
+        auto select = metadata_ptr->getSelectQuery().inner_query->clone();
+        return InterpreterSelectWithUnionQuery(
+                   select, local_ctx, SelectQueryOptions().createParameterizedView().noModify().analyze())
+            .isStreamingQuery();
+    }
+
+    const bool have_query_ctx = query_context->hasQueryContext();
+    std::string cache_key;
+    if (have_query_ctx)
+    {
+        const auto storage_id = getStorageID();
+        /// Key = view identity + metadata revision proxy + effective query mode.
+        /// StorageID carries database/table as a fallback when uuid is nil; the metadata
+        /// pointer acts as a cheap revision token (within one query it is stable, and across
+        /// metadata updates a fresh pointer forces a recompute even if we were long-lived —
+        /// though this cache's lifetime is per-query, so that is belt-and-suspenders).
+        cache_key = fmt::format(
+            "{}.{}|{}|{}|{}",
+            storage_id.database_name,
+            storage_id.table_name,
+            toString(storage_id.uuid),
+            fmt::ptr(metadata_ptr.get()),
+            query_context->getSettingsRef().query_mode.value);
+
+        auto & cache = query_context->getQueryAnalysisCache();
+        if (auto it = cache.find(cache_key); it != cache.end() && it->second.is_streaming.has_value())
+            return *it->second.is_streaming;
+    }
+
     auto local_ctx = Context::createCopy(query_context);
     local_ctx->setCollectRequiredColumns(false);
 
-    if (is_parameterized_view)
-        return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().createParameterizedView().noModify().analyze()).isStreamingQuery();
-    else
-        return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().noModify().analyze()).isStreamingQuery();
+    /// Analyzer mutates query_ptr in place, so concurrent analyses on the view's shared
+    /// inner_query race and tear the AST; clone before handing it off.
+    auto select = metadata_ptr->getSelectQuery().inner_query->clone();
+    const bool result = InterpreterSelectWithUnionQuery(
+                            select, local_ctx, SelectQueryOptions().noModify().analyze())
+                            .isStreamingQuery();
+
+    if (have_query_ctx)
+    {
+        auto & cache = query_context->getQueryAnalysisCache();
+        cache[std::move(cache_key)].is_streaming = result;
+    }
+    return result;
+    /// proton: ends.
 }
 
 bool StorageView::hasStreamingGlobalAggregation() const
 {
-    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone();
     auto ctx = Context::createCopy(local_context);
     ctx->setCollectRequiredColumns(false);
 
@@ -354,20 +409,23 @@ bool StorageView::hasStreamingGlobalAggregation() const
 
 Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
 {
+    std::lock_guard lock(data_stream_semantic_mutex);
     if (data_stream_semantic_resolved)
         return data_stream_semantic;
 
-    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+    auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone();
     auto ctx = Context::createCopy(local_context);
     ctx->setCollectRequiredColumns(false);
 
     if (is_parameterized_view)
-        data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().createParameterizedView().noModify().analyze()).getDataStreamSemantic();
+        data_stream_semantic
+            = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().createParameterizedView().noModify().analyze())
+                  .getDataStreamSemantic();
     else
-        data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().noModify().analyze()).getDataStreamSemantic();
+        data_stream_semantic
+            = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().noModify().analyze()).getDataStreamSemantic();
 
     data_stream_semantic_resolved = true;
-
     return data_stream_semantic;
 }
 

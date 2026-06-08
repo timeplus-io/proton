@@ -45,7 +45,7 @@ protected:
     VersionType getVersionFromRevision(UInt64 revision) const;
 
 private:
-    static constexpr VersionType PENDING_UNMUTE_WATERMARK_MIN_VERSION = 157;
+    static constexpr VersionType PENDING_UNMUTE_WATERMARK_MIN_VERSION = 159;
 
     bool isHistoricalBoundaryMarker(const Chunk & chunk) const;
     void setWatermarkOrDefer(Chunk & chunk, Int64 watermark);

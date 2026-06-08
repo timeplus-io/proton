@@ -4,6 +4,7 @@
 #include <Common/DateLUT.h>
 #include <Common/LocalDate.h>
 #include <Parsers/Lexer.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
 
 namespace DB
@@ -163,6 +164,64 @@ void highlight(const String & query, std::vector<replxx::Replxx::Color> & colors
                 colors[pos + code_point_index] = token_to_color.at(token.type);
             else
                 colors[pos + code_point_index] = unknown_token_color;
+        }
+
+        /// Highlight digit groups inside numbers (e.g., underline thousands marker positions).
+        if (token.type == TokenType::Number)
+        {
+            bool is_regular_number = true;
+            bool is_regular_number_finished = false;
+            std::optional<size_t> regular_number_before_decimal_code_point_first;
+            std::optional<size_t> regular_number_before_decimal_code_point_last;
+
+            size_t code_point_pos = 0;
+            const char * char_pos = token.begin;
+            while (char_pos < token.end)
+            {
+                if (*char_pos == '-')
+                {
+                    /// Skip
+                }
+                else if (isNumericASCII(*char_pos))
+                {
+                    if (!is_regular_number_finished)
+                    {
+                        if (!regular_number_before_decimal_code_point_first)
+                            regular_number_before_decimal_code_point_first = code_point_pos;
+                        regular_number_before_decimal_code_point_last = code_point_pos;
+                    }
+                }
+                else if (*char_pos == '.')
+                {
+                    /// Highlight only the integer part.
+                    is_regular_number_finished = true;
+                }
+                else
+                {
+                    /// Pre-formatted (e.g., 1_000), exponential, or hex/bin — don't highlight.
+                    is_regular_number = false;
+                    break;
+                }
+
+                ++code_point_pos;
+                char_pos += UTF8::seqLength(*char_pos);
+            }
+
+            if (is_regular_number
+                && regular_number_before_decimal_code_point_first
+                && regular_number_before_decimal_code_point_last)
+            {
+                size_t number_length
+                    = 1 + *regular_number_before_decimal_code_point_last - *regular_number_before_decimal_code_point_first;
+                if (number_length >= 5)
+                {
+                    for (int64_t offset = static_cast<int64_t>(number_length) - 4; offset >= 0; offset -= 3)
+                    {
+                        size_t number_code_point_pos = *regular_number_before_decimal_code_point_first + offset;
+                        colors[pos + number_code_point_pos] = replxx::color::underline(colors[pos + number_code_point_pos]);
+                    }
+                }
+            }
         }
 
         pos += utf8_len;

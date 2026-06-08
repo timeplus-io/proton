@@ -8,6 +8,7 @@
 
 #include <Common/CurrentMetrics.h>
 
+#include <base/sleep.h>
 
 namespace fs = std::filesystem;
 

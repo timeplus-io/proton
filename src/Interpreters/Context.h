@@ -515,8 +515,17 @@ protected:
     /// proton: starts. Parameters for time predicates of main table
     TimeParam time_param;
 
-    using DataStreamSemanticCache = std::unordered_map<std::string, Streaming::DataStreamSemanticEx>;
-    mutable DataStreamSemanticCache data_stream_semantic_cache;
+    /// Query-scoped cache for repeated analysis results (data-stream semantic, is-streaming, …).
+    /// Avoids O(N^2) analyzer recursion on N-deep view chains (issue #11203) and duplicate
+    /// InterpreterSelectWithUnionQuery builds during getSampleBlock. Per-query lifetime, no
+    /// invalidation needed. Keyed by query-string or storage-identity depending on caller.
+    struct QueryAnalysisCacheEntry
+    {
+        std::optional<bool> is_streaming;
+        std::optional<Streaming::DataStreamSemanticEx> data_stream_semantic;
+    };
+    using QueryAnalysisCache = std::unordered_map<std::string, QueryAnalysisCacheEntry>;
+    mutable QueryAnalysisCache query_analysis_cache;
     /// proton: end.
 
     /// Use copy constructor or createGlobal() instead
@@ -799,8 +808,8 @@ public:
 
     const std::set<RequiredColumnTuple> & requiredColumns() const { return required_columns; }
     void addRequiredColumns(RequiredColumnTuple && column_tuple) { required_columns.insert(std::move(column_tuple)); }
-    /// Get data stream semantic for subquery
-    DataStreamSemanticCache & getDataStreamSemanticCache() const;
+    /// Query-scoped analysis cache (data-stream semantic, is-streaming, …). Issue #11203.
+    QueryAnalysisCache & getQueryAnalysisCache() const;
     StoragePtr getTableFunctionResults(const String & key) const;
     void setTableFunctionResults(const String & key, const StoragePtr & table);
     /// proton: ends
@@ -1134,6 +1143,10 @@ public:
 
     bool isQueryFromMaterializedView() const { return is_query_from_materialized_view; }
     void setQueryFromMaterializedView(bool is_query_from_materialized_view_) { is_query_from_materialized_view = is_query_from_materialized_view_; }
+
+    /// True when `query_mode == "table"` — the query is a bounded/historical read.
+    /// `ProxyStream` pushes this setting when resolving `table(...)` table functions.
+    bool isHistoricalQueryMode() const { return getSettingsRef().query_mode.value == "table"; }
     /// proton: ends.
 
     ActionLocksManagerPtr getActionLocksManager();

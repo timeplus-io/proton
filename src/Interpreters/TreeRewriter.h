@@ -97,6 +97,10 @@ struct TreeRewriterResult
     Scalars scalars;
     Scalars local_scalars;
 
+    /// Current query nesting depth for planner code that has to interpret
+    /// subqueries before the normal expression-analysis path reaches them.
+    size_t subquery_depth = 0;
+
     explicit TreeRewriterResult(
         const NamesAndTypesList & source_columns_,
         ConstStoragePtr storage_ = {},

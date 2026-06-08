@@ -9,20 +9,27 @@ namespace Streaming
 {
 namespace
 {
+enum class JoinChangelogMode
+{
+    None,
+    Try,
+    Force,
+};
+
 DataStreamSemanticEx calculateDataStreamSemanticForJoin(
     DataStreamSemanticEx left_input_data_stream_semantic,
     DataStreamSemanticEx right_input_data_stream_semantic,
     std::pair<JoinKind, JoinStrictness> kind_and_strictness,
     SelectQueryInfo & query_info,
-    bool allow_emit_changelog_join_result)
+    JoinChangelogMode join_changelog_mode)
 {
     assert(left_input_data_stream_semantic.streaming);
 
-    /// Speical handling
+    /// Special handling
     /// 1) for <stream> join <table>, the right inputs don't support changelog semantic
     if (!right_input_data_stream_semantic.streaming)
     {
-        /// Left stream semantic (Keep the original semantic)
+        /// Left stream semantic
         query_info.left_input_tracking_changes = isChangelogDataStream(left_input_data_stream_semantic);
 
         /// Right stream semantic (Append or VersionedKV or ChangelogKV)
@@ -36,14 +43,16 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The filled join data doesn't support changelog processing");
         }
 
-        if (query_info.force_emit_changelog && !isChangelogDataStream(left_input_data_stream_semantic))
+        /// Try/Force emitting changelog
+        if (join_changelog_mode != JoinChangelogMode::None && !isChangelogDataStream(left_input_data_stream_semantic))
         {
             if (canTrackChangesFromInput(left_input_data_stream_semantic))
             {
                 query_info.left_input_tracking_changes = true;
                 return DataStreamSemantic::Changelog;
             }
-            else
+
+            if (join_changelog_mode == JoinChangelogMode::Force)
                 throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for emit changelog from append stream join table result");
         }
 
@@ -72,7 +81,20 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
                 kind_and_strictness.first,
                 kind_and_strictness.second);
 
-        return DataStreamSemantic::Append;
+        /// Try/Force emitting changelog
+        if (join_changelog_mode != JoinChangelogMode::None && !isChangelogDataStream(left_input_data_stream_semantic))
+        {
+            if (canTrackChangesFromInput(left_input_data_stream_semantic))
+            {
+                query_info.left_input_tracking_changes = true;
+                return DataStreamSemantic::Changelog;
+            }
+
+            if (join_changelog_mode == JoinChangelogMode::Force)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for emit changelog from asof/any/cross join results");
+        }
+
+        return left_input_data_stream_semantic;
     }
 
     /// Left stream semantic
@@ -99,19 +121,21 @@ DataStreamSemanticEx calculateDataStreamSemanticForJoin(
         right_input_data_stream_semantic = DataStreamSemantic::Append;
     }
 
-    if (isJoinResultChangelog(left_input_data_stream_semantic, right_input_data_stream_semantic))
+    bool join_result_is_changelog = isJoinResultChangelog(left_input_data_stream_semantic, right_input_data_stream_semantic);
+
+    /// Try/Force emitting changelog
+    if (join_changelog_mode != JoinChangelogMode::None)
     {
-        if (allow_emit_changelog_join_result)
+        if (join_result_is_changelog)
             return DataStreamSemantic::Changelog;
-        else
-            /// NOTE: If the current layer doesn't need joined result emit changelog,
-            /// we shall emit append-only stream with mutable semantic(MutableStream).
-            /// In this way, the outer layer can still track changes if needed.
-            /// For example: select count() from (select * from kv join kv2 on kv.key = kv2.key)
-            return DataStreamSemanticEx{StorageSemantic::NativeKV};
+
+        if (join_changelog_mode == JoinChangelogMode::Force)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for emit changelog from non-changelog join results");
     }
-    else
-        return DataStreamSemantic::Append;
+
+    /// When not emitting changelog, preserve NativeKV semantic so the outer layer can still track changes if needed.
+    /// e.g. select count() from (select * from kv join kv2 on kv.key = kv2.key)
+    return join_result_is_changelog ? DataStreamSemanticEx{StorageSemantic::NativeKV} : DataStreamSemantic::Append;
 }
 }
 
@@ -146,7 +170,12 @@ DataStreamSemanticPair calculateDataStreamSemantic(
     DataStreamSemanticPair semantic_pair;
     /// By default, the joined result stream semantic always is append-only unless the current layer has aggregates
     /// or the query forces to emit changelog
-    bool allow_emit_changelog_join_result = current_select_has_aggregates || query_info.force_emit_changelog;
+    JoinChangelogMode join_changelog_mode = JoinChangelogMode::None;
+    if (current_select_has_aggregates)
+        join_changelog_mode = JoinChangelogMode::Try;
+    else if (query_info.force_emit_changelog)
+        join_changelog_mode = JoinChangelogMode::Force;
+
     /// First, look at what the current layer does
 
     /// When the current layer has join or aggregates, we calculate the output data semantic locally and its inputs data stream semantic.
@@ -161,7 +190,7 @@ DataStreamSemanticPair calculateDataStreamSemantic(
                 *right_input_data_stream_semantic,
                 *kind_and_strictness,
                 query_info,
-                allow_emit_changelog_join_result);
+                join_changelog_mode);
         }
         else
         {
@@ -189,10 +218,7 @@ DataStreamSemanticPair calculateDataStreamSemantic(
             *right_input_data_stream_semantic,
             *kind_and_strictness,
             query_info,
-            allow_emit_changelog_join_result);
-
-        if (query_info.force_emit_changelog && !Streaming::isChangelogDataStream(semantic_pair.effective_input_data_stream_semantic))
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for emit changelog from non-changelog join results");
+            join_changelog_mode);
 
         semantic_pair.output_data_stream_semantic = semantic_pair.effective_input_data_stream_semantic;
     }

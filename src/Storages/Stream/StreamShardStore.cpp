@@ -33,6 +33,7 @@
 #include <Storages/Stream/StorageStream.h>
 #include <Storages/Stream/StreamingStoreSource.h>
 #include <Common/ProfileEvents.h>
+#include <base/sleep.h>
 #include <Common/ProtonCommon.h>
 #include <Common/setThreadName.h>
 
@@ -1079,7 +1080,7 @@ void StreamShardStore::drop()
             catch (...)
             {
                 tryLogCurrentException(logger, fmt::format("Failed to delete stream shard {} from {}", stream_shard.string(), log_type));
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                sleepForMilliseconds(500);
             }
         }
     };
@@ -1228,12 +1229,12 @@ void StreamShardStore::backgroundPollNativeLog()
             {
                 tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->committedSN() + 1));
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            sleepForMilliseconds(2000);
         }
         catch (...)
         {
             tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->committedSN() + 1));
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            sleepForMilliseconds(2000);
         }
     }
 }
@@ -1410,7 +1411,7 @@ void StreamShardStore::doCommit(
                             moved_block.rows(),
                             getCurrentExceptionMessage(true, true));
                         /// FIXME : specific error handling. When we sleep here, it occupied the current thread
-                        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+                        sleepForMilliseconds(2000);
                     }
                 }
 

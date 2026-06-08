@@ -17,6 +17,8 @@
 #include <Common/setThreadName.h>
 #include <Daemon/BaseDaemon.h>
 
+#include <base/sleep.h>
+
 namespace CurrentMetrics
 {
 extern const Metric LocalThread;
@@ -132,7 +134,7 @@ void MetadataUpdater::backgroundPoll()
     while (!meta_store->isReady() && !stopped.test())
     {
         LOG_INFO(logger, "Waiting for MetaStore to be ready...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        sleepForMilliseconds(100);
     }
     
     if (stopped.test())
@@ -193,7 +195,7 @@ void MetadataUpdater::backgroundPoll()
             {
                 LOG_ERROR(logger, "Failed to fetch from LocalMetaQueue at sn={}: {}", next_sn, fetch_result.errorString());
                 /// Sleep a bit on error to avoid tight loop
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                sleepForMilliseconds(100);
             }
         }
         catch (...)
@@ -712,8 +714,6 @@ bool MetadataUpdater::isPermanentError(int error_code)
 /// to commit/ack the failure and quit the rest steps of the request handling.
 int MetadataUpdater::executeWithRetry(std::function<int()> func) const
 {
-    using namespace std::literals;
-    constexpr auto retry_delay = 1s;
     constexpr int force_retry_error_code = -1;
 
     int err_code = force_retry_error_code;
@@ -741,7 +741,7 @@ int MetadataUpdater::executeWithRetry(std::function<int()> func) const
         if (isPermanentError(err_code))
             break;
 
-        std::this_thread::sleep_for(retry_delay);
+        sleepForSeconds(1);
         LOG_WARNING(logger, "Retry metadata updater execution: error={}", err_code);
     }
 

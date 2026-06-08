@@ -16,10 +16,12 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTHelpers.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Processors/QueryPlan/Optimizations/actionsDAGUtils.h>
 #include <Storages/MergeTree/KeyCondition.h>
+#include <set>
 #include <unordered_map>
 
 
@@ -207,7 +209,6 @@ namespace
         {
             const auto * left = fn->arguments->children.front().get();
             const auto * right = fn->arguments->children.back().get();
-            const auto * identifier = left->as<ASTIdentifier>();
 
             Disjunction result;
 
@@ -223,6 +224,120 @@ namespace
                 limit -= dnf.size();
                 return true;
             };
+
+            /// Multi-column tuple-IN: (c1, c2, ...) IN ((v11, v12, ...), (v21, v22, ...), ...).
+            /// Each inner tuple yields a conjunction "c1=v1i AND c2=v2i AND ..." and the rows are ORed.
+            /// Required for sharding/partition pruning of literal tuple-IN over composite keys.
+            if (const auto * left_fn = left->as<ASTFunction>(); left_fn && left_fn->name == "tuple_cast" && left_fn->arguments)
+            {
+                std::vector<const ASTIdentifier *> lhs_ids;
+                lhs_ids.reserve(left_fn->arguments->children.size());
+                for (const auto & lhs_child : left_fn->arguments->children)
+                {
+                    if (const auto * id = lhs_child->as<ASTIdentifier>())
+                        lhs_ids.push_back(id);
+                    else
+                        return {};
+                }
+
+                if (lhs_ids.empty())
+                    return {};
+
+                /// Dedup the inner tuples. Two identical RHS rows expand to identical
+                /// Conjunctions, which would consume the `optimize_skip_unused_shards_limit`
+                /// budget twice (potentially tripping the limit and silently falling back to
+                /// scanning every shard) and feed redundant rows into the Block that the
+                /// downstream `evaluateExpressionOverConstantCondition` materializes.
+                std::set<std::vector<Field>> seen_rows;
+
+                auto add_tuple_row = [&](const auto & values_per_column) -> bool
+                {
+                    if (values_per_column.size() != lhs_ids.size())
+                        return false;
+
+                    std::vector<Field> row_key(values_per_column.begin(), values_per_column.end());
+                    if (!seen_rows.insert(std::move(row_key)).second)
+                        return true;
+
+                    Conjunction conjunction;
+                    conjunction.reserve(lhs_ids.size());
+                    for (size_t i = 0; i < lhs_ids.size(); ++i)
+                    {
+                        auto sub_dnf = analyzeEquals(lhs_ids[i], values_per_column[i], expr);
+                        if (sub_dnf.size() != 1 || sub_dnf.front().size() != 1)
+                            return false;
+                        conjunction.push_back(std::move(sub_dnf.front().front()));
+                    }
+
+                    if (limit == 0)
+                    {
+                        result.clear();
+                        return false;
+                    }
+                    result.emplace_back(std::move(conjunction));
+                    --limit;
+                    return true;
+                };
+
+                /// RHS as a single ASTLiteral containing a Tuple of inner Tuples.
+                if (const auto * tuple_literal = right->as<ASTLiteral>();
+                    tuple_literal && tuple_literal->value.getType() == Field::Types::Tuple)
+                {
+                    const auto & outer = tuple_literal->value.get<const Tuple &>();
+                    for (const auto & row : outer)
+                    {
+                        if (row.getType() != Field::Types::Tuple)
+                            return {};
+
+                        const auto & inner = row.get<const Tuple &>();
+                        std::vector<Field> values(inner.begin(), inner.end());
+                        if (!add_tuple_row(values))
+                            return {};
+                    }
+                    return result;
+                }
+
+                /// RHS as tuple_cast(tuple_cast(v11, v12, ...), tuple_cast(v21, v22, ...), ...).
+                /// Accept either plain literals or cast(literal, type_name); analyzeEquals will retype.
+                auto extract_literal = [](const IAST * ast) -> const ASTLiteral *
+                {
+                    if (const auto * lit = ast->as<ASTLiteral>())
+                        return lit;
+                    const auto * cast_fn = ast->as<ASTFunction>();
+                    if (isFunctionCast(cast_fn) && cast_fn->arguments && !cast_fn->arguments->children.empty())
+                        return cast_fn->arguments->children.front()->as<ASTLiteral>();
+                    return nullptr;
+                };
+
+                if (const auto * right_fn = right->as<ASTFunction>();
+                    right_fn && right_fn->name == "tuple_cast" && right_fn->arguments)
+                {
+                    for (const auto & row_ast : right_fn->arguments->children)
+                    {
+                        const auto * row_fn = row_ast->as<ASTFunction>();
+                        if (!row_fn || row_fn->name != "tuple_cast" || !row_fn->arguments)
+                            return {};
+
+                        std::vector<Field> values;
+                        values.reserve(row_fn->arguments->children.size());
+                        for (const auto & val_ast : row_fn->arguments->children)
+                        {
+                            const auto * lit = extract_literal(val_ast.get());
+                            if (!lit)
+                                return {};
+                            values.push_back(lit->value);
+                        }
+
+                        if (!add_tuple_row(values))
+                            return {};
+                    }
+                    return result;
+                }
+
+                return {};
+            }
+
+            const auto * identifier = left->as<ASTIdentifier>();
 
             if (const auto * tuple_func = right->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple_cast")
             {

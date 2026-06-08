@@ -15,6 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/logger_useful.h>
 
+#include <base/sleep.h>
 
 namespace DB
 {
@@ -31,9 +32,6 @@ extern const int RESOURCE_ALREADY_EXISTS;
 
 namespace
 {
-using namespace std::literals;
-constexpr auto alert_retry_delay = 500ms;
-
 void deleteCheckpoint(const DB::UUID & id, ContextMutablePtr context, LoggerPtr logger)
 {
     auto uuid = toString(id);
@@ -373,14 +371,14 @@ void MetadataUpdater::handleDeleteAlert(
                     request_data.name,
                     retries++,
                     err.string());
-                std::this_thread::sleep_for(alert_retry_delay);
+                sleepForMilliseconds(500);
             }
         }
         catch (...)
         {
             LOG_WARNING(
                 logger, "Failed to commit delete alert, ns={} name={}, retried {} times", request_data.ns, request_data.name, retries++);
-            std::this_thread::sleep_for(alert_retry_delay);
+            sleepForMilliseconds(500);
         }
     }
 
@@ -412,7 +410,7 @@ MetadataUpdater::loadAlertDescriptor(const std::string & ns, const std::string &
                     alert_desc.err.error_message,
                     retries++);
 
-                std::this_thread::sleep_for(alert_retry_delay);
+                sleepForMilliseconds(500);
             }
         }
         catch (const Exception & e)
@@ -426,14 +424,14 @@ MetadataUpdater::loadAlertDescriptor(const std::string & ns, const std::string &
                 LOG_ERROR(
                     logger, "Failed to load descriptor for alert {} in {}, error={} retried {} times", name, ns, e.message(), retries++);
 
-                std::this_thread::sleep_for(alert_retry_delay);
+                sleepForMilliseconds(500);
             }
         }
         catch (...)
         {
             LOG_ERROR(logger, "Failed to load alert description when updating alert {} of type {} retried {} times", name, name, retries++);
 
-            std::this_thread::sleep_for(alert_retry_delay);
+            sleepForMilliseconds(500);
         }
     }
 

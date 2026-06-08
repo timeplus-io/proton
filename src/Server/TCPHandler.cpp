@@ -55,6 +55,8 @@
 
 #include <Common/config_version.h>
 
+#include <base/sleep.h>
+
 /// proton: starts
 #include <Bootstrap/Globals.h>
 /// proton: ends

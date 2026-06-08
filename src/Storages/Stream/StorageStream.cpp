@@ -25,6 +25,7 @@
 #include <Storages/PruneShards.h>
 #include <Storages/StorageMergeTree.h>
 #include <Common/ProfileEvents.h>
+#include <base/sleep.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 #include <Common/randomSeed.h>
@@ -59,6 +60,7 @@ extern const int TOO_MANY_BYTES;
 extern const int TOO_MANY_ROWS;
 extern const int TOO_MANY_ROWS_OR_BYTES;
 extern const int SET_SIZE_LIMIT_EXCEEDED;
+extern const int LOGICAL_ERROR;
 }
 
 namespace
@@ -428,6 +430,16 @@ void StorageStream::doRead(
     auto description = makeFormattedShards(shards_to_read);
     LOG_DEBUG(log, "Read {}", description);
 
+    /// Shard pruning can legitimately yield zero shards (e.g. when `optimize_skip_unused_shards_with_subqueries`
+    /// proves a historical WHERE predicate is unsatisfiable). Leave `query_plan` uninitialized;
+    /// the caller (`InterpreterSelectQuery`) attaches a `NullSource` via `addEmptySourceToQueryPlan`.
+    if (shards_to_read.shards.empty())
+    {
+        if (shards_to_read.mode != QueryMode::Historical)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty shard list is only valid for historical Stream reads");
+        return;
+    }
+
     /// Streaming read always uses the minimum number of threads unless the user specifies a different value with the setting \min_threads.
     size_t streaming_shard_num_streams = std::max<size_t>(
         1ul, (context_->getSettingsRef().min_threads.value + shards_to_read.shards.size() - 1) / shards_to_read.shards.size());
@@ -674,7 +686,7 @@ StorageStream::~StorageStream()
     /// Wait for outstanding ingested blocks
     while (outstanding_blocks != 0)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        sleepForMilliseconds(1000);
         LOG_INFO(log, "Waiting for outstanding_blocks={}", outstanding_blocks);
     }
 
@@ -830,6 +842,7 @@ StorageStream::ShardsToRead StorageStream::getShardsToRead(
     bool include_historical_shard_pruning) const
 {
     if (!query_info.shards_to_query)
+        /// shard pruning already sees query_info.prepared_sets, so bounded IN-subqueries can be materialized early here.
         query_info.shards_to_query = getPrunedShardsWithQueryMode(
             sharding_key_expr,
             sharding_key_is_deterministic,
@@ -1061,7 +1074,7 @@ Pipe StorageStream::alterPartition(
                     retries + 1,
                     max_retries);
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                sleepForMilliseconds(100);
                 ++retries;
             }
 
@@ -1129,7 +1142,7 @@ void StorageStream::truncate(
                 retries + 1,
                 max_retries);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            sleepForMilliseconds(100);
             ++retries;
         }
 
@@ -1483,6 +1496,13 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     auto shards_to_read = getShardsToRead(context_, storage_snapshot, query_info, /*include_historical_shard_pruning=*/false);
     if (shards_to_read.mode == QueryMode::Historical)
     {
+        /// Shard pruning may have eliminated every shard (e.g. the WHERE predicate is
+        /// provably unsatisfiable via `optimize_skip_unused_shards_with_subqueries`). With
+        /// no shard to delegate to, return `FetchColumns` so the interpreter wires up a
+        /// `NullSource` and runs the rest of the pipeline on top of it.
+        if (shards_to_read.shards.empty())
+            return QueryProcessingStage::Enum::FetchColumns;
+
         /// For now, we assume all shards of a stream will be co-located on the same node
         if (hasAnyVirtualReplica(shards_to_read.shards))
             return getHistoricalQueryProcessingStageRemote(

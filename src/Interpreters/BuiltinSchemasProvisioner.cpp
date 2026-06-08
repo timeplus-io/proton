@@ -17,6 +17,8 @@
 #include <Common/logger_useful.h>
 #include <Common/setThreadName.h>
 
+#include <base/sleep.h>
+
 #include <Poco/Util/AbstractConfiguration.h>
 
 #include <filesystem>
@@ -372,7 +374,7 @@ void BuiltinSchemasProvisioner::provisionThreadFunction()
         if (schemas.empty())
             break;
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        sleepForMilliseconds(1000);
     }
 }
 

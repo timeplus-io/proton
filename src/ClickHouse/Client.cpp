@@ -1,6 +1,8 @@
 #include <ClickHouse/Client.h>
 #include <Common/NetException.h>
 
+#include <base/sleep.h>
+
 namespace DB
 {
 
@@ -103,14 +105,14 @@ void Client::executeQuery(const String & query, const String & query_id, bool fa
                     LOG_ERROR(logger, "Connection lost");
                 /// set the connection not connected so that sendQuery will reconnect
                 (*connection)->disconnect();
-                std::this_thread::sleep_for(std::chrono::seconds(2));
+                sleepForSeconds(2);
             }
             /// Retry when the server said "Client should retry" and no rows has been received yet.
             else if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED)
             {
                 if (!suppress_error_log)
                     LOG_ERROR(logger, "Got a transient error from the server, will retry in 1 second");
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                sleepForSeconds(1);
             }
             else
             {

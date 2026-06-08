@@ -1374,6 +1374,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
 
     size_t subquery_depth = select_options.subquery_depth;
     bool remove_duplicates = select_options.remove_duplicates;
+    result.subquery_depth = subquery_depth;
 
     const auto & settings = getContext()->getSettingsRef();
 

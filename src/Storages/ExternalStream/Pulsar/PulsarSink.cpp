@@ -3,6 +3,7 @@
 #if USE_PULSAR
 
 #include <Formats/FormatFactory.h>
+#include <base/sleep.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
@@ -187,7 +188,7 @@ void PulsarSink::waitForAcks() const
         if (timer.elapsedMilliseconds() >= ack_timeout_ms)
             throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timed out waiting for acks, missing_acks={}", state.outstandings - acked);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        sleepForMilliseconds(100);
     } while (true);
 
     if (waiting_logged)

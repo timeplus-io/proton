@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage.h>
@@ -60,6 +62,7 @@ public:
 
 private:
     ContextMutablePtr local_context;
+    mutable std::mutex data_stream_semantic_mutex;
     mutable bool data_stream_semantic_resolved = false;
     std::atomic_flag started;
     /// proton: ends.

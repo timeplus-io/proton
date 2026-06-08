@@ -24,6 +24,8 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/logger_useful.h>
 
+#include <base/sleep.h>
+
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPRequest.h>
 
@@ -716,7 +718,7 @@ void waitUntilDWalReady(const klog::KafkaWALContext & ctx, ContextPtr global_con
         else
         {
             LOG_INFO(log, "Wait for topic={} to be ready...", ctx.topic);
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            sleepForMilliseconds(2000);
         }
     }
 }
@@ -768,7 +770,7 @@ void doCreateDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
 
             retries++;
             LOG_INFO(log, "Failed to create topic={} and will try to create it={} again...", ctx.topic, retries);
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            sleepForMilliseconds(2000);
         }
     }
 
@@ -799,7 +801,7 @@ void doDeleteDWal(const klog::KafkaWALContext & ctx, ContextPtr global_context)
         else
         {
             LOG_INFO(log, "Failed to delete topic={}, will retry ...", ctx.topic);
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            sleepForMilliseconds(2000);
         }
     }
 }

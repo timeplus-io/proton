@@ -323,12 +323,12 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     /// Using query string because query_ptr changes for every internal SELECT
     auto key = queryToString(query_ptr_);
 
-    auto & data_stream_semantic_cache = context_->getDataStreamSemanticCache();
+    auto & analysis_cache = context_->getQueryAnalysisCache();
     if (output_data_stream_semantic)
     {
-        auto semantic_iter = data_stream_semantic_cache.find(key);
-        if (semantic_iter != data_stream_semantic_cache.end())
-            *output_data_stream_semantic = semantic_iter->second;
+        auto it = analysis_cache.find(key);
+        if (it != analysis_cache.end() && it->second.data_stream_semantic.has_value())
+            *output_data_stream_semantic = *it->second.data_stream_semantic;
     }
 
     auto & cache = context_->getSampleBlockCache();
@@ -350,7 +350,7 @@ Block InterpreterSelectWithUnionQuery::getSampleBlock(const ASTPtr & query_ptr_,
     InterpreterSelectWithUnionQuery interpreter(query_ptr_, context_, std::move(select_options));
 
     auto data_stream_semantic = interpreter.getDataStreamSemantic();
-    data_stream_semantic_cache[key] = data_stream_semantic;
+    analysis_cache[key].data_stream_semantic = data_stream_semantic;
     if (output_data_stream_semantic)
         *output_data_stream_semantic = data_stream_semantic;
 

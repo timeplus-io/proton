@@ -2,6 +2,7 @@
 
 #if USE_PULSAR
 #include <base/scope_guard.h>
+#include <base/sleep.h>
 #include <Common/Stopwatch.h>
 #include <Common/logger_useful.h>
 
@@ -56,7 +57,7 @@ pulsar::Result executeWithRetry(std::function<pulsar::Result()> op, std::string_
         /// Retry if the result is retryable
         LOG_INFO(logger, "Failed to execute pulsar operation '{}': {}, retrying ...", op_name, pulsar::strResult(res));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        sleepForMilliseconds(100);
     }
 }
 }

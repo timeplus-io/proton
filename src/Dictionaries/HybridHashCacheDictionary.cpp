@@ -7,6 +7,8 @@
 #include <Common/ProfileEvents.h>
 #include <Common/ProfilingScopedRWLock.h>
 
+#include <base/sleep.h>
+
 #include <thread>
 
 namespace ProfileEvents
@@ -216,7 +218,7 @@ Block HybridHashCacheDictionary::getKeysFromSource(const Columns & key_columns, 
                 throw;
 
             merged_block.clear();
-            std::this_thread::sleep_for(std::chrono::seconds(RETRY_WAIT_SEC));
+            sleepForSeconds(RETRY_WAIT_SEC);
         }
     }
 

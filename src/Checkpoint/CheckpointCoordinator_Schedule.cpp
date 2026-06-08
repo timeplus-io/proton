@@ -7,6 +7,8 @@
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 
+#include <base/sleep.h>
+
 #include <ranges>
 
 namespace DB
@@ -184,7 +186,7 @@ void CheckpointCoordinator::triggerLastCheckpointAndFlush()
 
         /// If there are failed ckpt triggers and there are still time, retry them.
         /// To avoid busy loop to fire the ckpt trigger, wait for some time here
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        sleepForMilliseconds(200);
     }
 
     // Wait for last checkpoint flush completed
@@ -205,7 +207,7 @@ void CheckpointCoordinator::triggerLastCheckpointAndFlush()
         if (triggered_queries.empty() || stopwatch.elapsedSeconds() > config.teardown_flush_timeout_sec)
             break;
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        sleepForMilliseconds(200);
     }
 
     stopwatch.stop();

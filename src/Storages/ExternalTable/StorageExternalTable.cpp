@@ -4,6 +4,7 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/ExternalTableFactory.h>
+#include <base/sleep.h>
 #include <Common/logger_useful.h>
 #include <Common/setThreadName.h>
 
@@ -62,7 +63,7 @@ void StorageExternalTable::updateTableSchema(bool retry_in_background)
             {
                 try
                 {
-                    std::this_thread::sleep_for(std::chrono::seconds(5));
+                    sleepForSeconds(5);
                     updateTableSchema();
                     return;
                 }
