@@ -695,6 +695,32 @@
             "expected_results":[[1, 10], [3, 20], [3, 30]]
         }
       ]
+    },
+    {
+      "id": 24,
+      "tags": ["stream join stream", "latest join", "backfill"],
+      "name": "#1188",
+      "description": "streaming inner latest join with seek_to='earliest' must deterministically emit a left backfill row whose matching right key is already in history (the matching right row is inserted last, behind many filler rows, so the left side would race ahead and drop it without the fix)",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists jr_left_1188"},
+            {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists jr_right_1188"},
+            {"client":"python", "query_type": "table", "exist":"jr_left_1188", "exist_wait":2, "wait":1, "query":"create stream jr_left_1188(id int64, v int)"},
+            {"client":"python", "query_type": "table", "exist":"jr_right_1188", "exist_wait":2, "wait":1, "query":"create stream jr_right_1188(id int64, label string)"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"jr_right_1188", "wait":1, "query":"insert into jr_right_1188(id, label) select number+2, 'filler' from numbers(2000)"},
+            {"client":"python", "query_type": "table", "wait":1, "query":"insert into jr_right_1188(id, label) values (1, 'active')"},
+            {"client":"python", "query_type": "table", "depends_on_stream":"jr_left_1188", "wait":2, "query":"insert into jr_left_1188(id, v) values (1, 15)"},
+            {"client":"python", "query_id":"11880", "depends_on_stream":"jr_right_1188", "query_end_timer":5, "query_type": "stream", "query":"select l.id, l.v, r.label from jr_left_1188 as l inner latest join (select id, label from jr_right_1188) as r on l.id = r.id settings seek_to='earliest', max_threads=1, backfill_max_threads=1"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {
+            "query_id":"11880",
+            "expected_results":[[1, 15, "active"]]
+        }
+      ]
     }
   ]
 }

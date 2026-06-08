@@ -68,6 +68,30 @@ private:
     bool range_bidirectional_hash_join = false;
     bool bidirectional_hash_join = false;
 
+    /// Historical-backfill ordering for the non-bidirectional (data-enrichment, e.g. INNER/LEFT
+    /// LATEST / ASOF) join path. In that path the left side probes the right (build-side) hash table
+    /// and is NOT buffered, so a left historical row that probes before the matching right historical
+    /// row has been inserted is dropped permanently. When both sides backfill from history (e.g.
+    /// `seek_to='earliest'`) whichever side the executor happens to schedule first decides the result,
+    /// which is non-deterministic. To make it deterministic we hold the left side's historical rows
+    /// until the right side's historical backfill has completed. Pure live joins emit no historical
+    /// markers, so `left_in_historical_backfill` is never set there and the gate stays disabled.
+    /// These are one-shot startup flags (the right side does not re-backfill after recovery), so they
+    /// are intentionally not part of the checkpoint state.
+    NO_SERDE bool gate_left_on_right_backfill = false;
+    NO_SERDE bool left_in_historical_backfill = false;
+    NO_SERDE bool right_backfill_started = false;
+    NO_SERDE bool right_historical_backfill_done = false;
+
+    /// True while a left historical-backfill row must wait for the right side's historical backfill.
+    bool leftHistoricalDataGated() const
+    {
+        return gate_left_on_right_backfill && left_in_historical_backfill && !right_historical_backfill_done;
+    }
+
+    /// Update the historical-backfill flags from a chunk observed on input `input_index` (0=left, 1=right).
+    void trackHistoricalBackfill(size_t input_index, const Chunk & chunk);
+
     size_t transform_id;
     [[maybe_unused]] std::shared_ptr<NotJoinedBlocks> non_joined_blocks;
     [[maybe_unused]] size_t max_block_size;

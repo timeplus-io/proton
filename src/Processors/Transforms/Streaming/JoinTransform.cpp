@@ -40,6 +40,10 @@ JoinTransform::JoinTransform(
 
     range_bidirectional_hash_join = join->rangeBidirectionalHashJoin();
     bidirectional_hash_join = join->bidirectionalHashJoin();
+
+    /// Only the non-bidirectional (data-enrichment) path probes an unbuffered left side against the
+    /// right build-side hash table, so only it needs the historical-backfill ordering gate.
+    gate_left_on_right_backfill = !bidirectional_hash_join && !range_bidirectional_hash_join;
 }
 
 IProcessor::Status JoinTransform::prepare()
@@ -71,6 +75,16 @@ IProcessor::Status JoinTransform::prepare()
 
     for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
     {
+        /// Hold the left input (index 0) while its historical-backfill rows must wait for the right
+        /// (build) side to finish its historical backfill. We neither pull nor mark it ready, applying
+        /// backpressure so the rows stay upstream (bounded memory) and are processed in order once the
+        /// right side is ready. The right input keeps flowing so its backfill can complete.
+        if (i == 0 && leftHistoricalDataGated())
+        {
+            ++i;
+            continue;
+        }
+
         if (input_port_with_data.input_chunk)
         {
             /// In case, this input port request checkpoint, so we need wait for other inputs
@@ -134,6 +148,11 @@ void JoinTransform::work()
             auto & input_chunk = input_ports_with_data[i].input_chunk;
             if (input_chunk)
             {
+                /// Track historical-backfill progress so the left side's historical rows can be held
+                /// until the right (build) side has finished backfilling (see leftHistoricalDataGated()).
+                if (gate_left_on_right_backfill)
+                    trackHistoricalBackfill(i, input_chunk);
+
                 /// If any input needs to update data, currently the input is always two consecutive chunks with _tp_delta `-1 and +1`
                 /// So we have to process them together before processing another input
                 /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
@@ -231,6 +250,43 @@ inline bool JoinTransform::setupWatermark(Chunk & chunk, int64_t local_watermark
         return true;
     }
     return false;
+}
+
+void JoinTransform::trackHistoricalBackfill(size_t input_index, const Chunk & chunk)
+{
+    /// The source emits the HISTORICAL_DATA_START / END marks as separate, empty chunks (and they are
+    /// propagated downstream by the transforms on the way to the join), bracketing each side's
+    /// historical backfill data.
+    if (input_index == 0)
+    {
+        /// Left side: remember whether we are currently inside the left input's historical backfill.
+        if (chunk.isHistoricalDataStart())
+            left_in_historical_backfill = true;
+        else if (chunk.isHistoricalDataEnd())
+            left_in_historical_backfill = false;
+
+        return;
+    }
+
+    /// Right (build) side: detect when its historical backfill has completed.
+    if (right_historical_backfill_done)
+        return;
+
+    if (chunk.isHistoricalDataStart())
+        right_backfill_started = true;
+    else if (right_backfill_started)
+    {
+        if (chunk.isHistoricalDataEnd())
+            right_historical_backfill_done = true;
+        /// else: a right historical data chunk, keep building the hash table.
+    }
+    else
+    {
+        /// The first right chunk is not a START marker, so the right side performs no historical
+        /// backfill (pure live source, or no historical data). There is nothing to wait for, so do
+        /// not gate the left side (avoids stalling/deadlocking when no END marker will ever arrive).
+        right_historical_backfill_done = true;
+    }
 }
 
 inline void JoinTransform::doJoin(Chunks chunks)
