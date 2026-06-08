@@ -1,6 +1,9 @@
-#include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
+#include <cmath>
+/// proton: starts.
 #include <optional>
 #include <unordered_set>
+/// proton: ends.
+#include <boost/rational.hpp> /// For calculations related to sampling coefficients.
 
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
@@ -35,12 +38,15 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 
 #include <Core/UUID.h>
-#include <Common/CurrentMetrics.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/IFunction.h>
+#include <Common/CurrentMetrics.h>
+/// proton: starts.
+#include <Common/ProfileEvents.h>
+/// proton: ends.
 
 /// proton: starts.
 #include <Common/ProtonCommon.h>
@@ -50,6 +56,13 @@ namespace CurrentMetrics
 {
     extern const Metric MergeTreeDataSelectExecutorThreads;
     extern const Metric MergeTreeDataSelectExecutorThreadsActive;
+}
+
+namespace ProfileEvents
+{
+/// proton: starts.
+extern const Event StreamingJoinKeyDomainPrimaryKeyPruned;
+/// proton: ends.
 }
 
 namespace DB
@@ -103,6 +116,278 @@ size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
 
     return rows_count;
 }
+
+/// proton: starts.
+using StreamingJoinKeyTuple = std::vector<Field>;
+
+struct StreamingJoinPrimaryKeyPrefixDomain
+{
+    std::vector<StreamingJoinKeyTuple> keys;
+    size_t prefix_size = 0;
+};
+
+static bool streamingJoinKeyTypeContainsFloat(const IDataType & type)
+{
+    if (WhichDataType(type).isFloat())
+        return true;
+
+    bool contains_float = false;
+    type.forEachChild([&contains_float](const IDataType & child) {
+        if (!contains_float)
+            contains_float = streamingJoinKeyTypeContainsFloat(child);
+    });
+
+    return contains_float;
+}
+
+static std::optional<StreamingJoinPrimaryKeyPrefixDomain> tryBuildStreamingJoinPrimaryKeyPrefixDomain(
+    const SelectQueryInfo & query_info, const Settings & settings, const StorageMetadataPtr & metadata_snapshot, LoggerPtr log)
+{
+    if (!settings.enable_streaming_join_key_domain_pushdown || !query_info.left_backfill_join_key_domain
+        || !query_info.left_backfill_join_key_domain->exact
+        || !query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary())
+        return std::nullopt;
+
+    const auto & key_domain = *query_info.left_backfill_join_key_domain;
+    if (!metadata_snapshot->hasPrimaryKey() || !metadata_snapshot->hasSortingKey() || key_domain.left_key_names.empty())
+        return std::nullopt;
+
+    const auto & primary_key = metadata_snapshot->getPrimaryKey();
+    const auto & sorting_key = metadata_snapshot->getSortingKey();
+    if (key_domain.left_key_names.size() > primary_key.column_names.size()
+        || key_domain.left_key_names.size() > sorting_key.column_names.size())
+        return std::nullopt;
+
+    for (size_t i = 0; i < key_domain.left_key_names.size(); ++i)
+    {
+        if (key_domain.left_key_names[i] != primary_key.column_names[i])
+        {
+            LOG_TRACE(
+                log,
+                "Streaming join key-domain cannot use primary-key prefix pruning: pushed key '{}' does not match primary-key prefix '{}'",
+                key_domain.left_key_names[i],
+                primary_key.column_names[i]);
+            return std::nullopt;
+        }
+
+        if (key_domain.left_key_names[i] != sorting_key.column_names[i])
+        {
+            LOG_TRACE(
+                log,
+                "Streaming join key-domain cannot use primary-key prefix pruning: pushed key '{}' does not match sorting-key prefix '{}'",
+                key_domain.left_key_names[i],
+                sorting_key.column_names[i]);
+            return std::nullopt;
+        }
+    }
+
+    const auto & columns = metadata_snapshot->getColumns();
+    std::vector<DataTypePtr> key_types;
+    key_types.reserve(key_domain.left_key_names.size());
+    for (const auto & key_name : key_domain.left_key_names)
+    {
+        auto physical_column = columns.tryGetPhysical(key_name);
+        if (!physical_column)
+        {
+            LOG_TRACE(
+                log,
+                "Streaming join key-domain cannot use primary-key prefix pruning: key column '{}' is not a physical storage column",
+                key_name);
+            return std::nullopt;
+        }
+
+        if (isNullableOrLowCardinalityNullable(physical_column->type))
+        {
+            LOG_TRACE(
+                log,
+                "Streaming join key-domain cannot use primary-key prefix pruning: key column '{}' type '{}' is nullable",
+                key_name,
+                physical_column->type->getName());
+            return std::nullopt;
+        }
+
+        if (streamingJoinKeyTypeContainsFloat(*physical_column->type))
+        {
+            LOG_TRACE(
+                log,
+                "Streaming join key-domain cannot use primary-key prefix pruning: key column '{}' type '{}' contains floating-point data",
+                key_name,
+                physical_column->type->getName());
+            return std::nullopt;
+        }
+
+        key_types.push_back(physical_column->type);
+    }
+
+    std::vector<StreamingJoinKeyTuple> keys;
+    keys.reserve(key_domain.key_rows);
+
+    for (const auto & block : key_domain.left_key_domain_blocks)
+    {
+        if (block.rows() == 0)
+            continue;
+
+        std::vector<const IColumn *> key_columns;
+        key_columns.reserve(key_domain.left_key_names.size());
+
+        for (size_t i = 0; i < key_domain.left_key_names.size(); ++i)
+        {
+            const auto & key_name = key_domain.left_key_names[i];
+            if (!block.has(key_name))
+            {
+                LOG_TRACE(
+                    log,
+                    "Streaming join key-domain cannot use primary-key prefix pruning: key column '{}' is missing from domain block",
+                    key_name);
+                return std::nullopt;
+            }
+
+            const auto & key_column = block.getByName(key_name);
+            if (streamingJoinKeyTypeContainsFloat(*key_column.type))
+            {
+                LOG_TRACE(
+                    log,
+                    "Streaming join key-domain cannot use primary-key prefix pruning: domain key column '{}' type '{}' contains "
+                    "floating-point data",
+                    key_name,
+                    key_column.type->getName());
+                return std::nullopt;
+            }
+
+            if (!key_column.type->equals(*key_types[i]))
+            {
+                LOG_TRACE(
+                    log,
+                    "Streaming join key-domain cannot use primary-key prefix pruning: key column '{}' type '{}' does not match physical "
+                    "column type '{}'",
+                    key_name,
+                    key_column.type->getName(),
+                    key_types[i]->getName());
+                return std::nullopt;
+            }
+
+            key_columns.emplace_back(key_column.column.get());
+        }
+
+        const size_t rows = block.rows();
+        for (size_t row = 0; row < rows; ++row)
+        {
+            StreamingJoinKeyTuple key;
+            key.reserve(key_columns.size());
+
+            for (const auto * column : key_columns)
+            {
+                Field value;
+                column->get(row, value);
+
+                if (value.isNull())
+                {
+                    LOG_TRACE(log, "Streaming join key-domain cannot use primary-key prefix pruning: nullable key value");
+                    return std::nullopt;
+                }
+
+                if (value.getType() == Field::Types::Float64 && std::isnan(value.get<Float64>()))
+                {
+                    LOG_TRACE(log, "Streaming join key-domain cannot use primary-key prefix pruning: NaN key value");
+                    return std::nullopt;
+                }
+
+                key.emplace_back(std::move(value));
+            }
+
+            keys.emplace_back(std::move(key));
+        }
+    }
+
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+
+    LOG_TRACE(
+        log,
+        "Streaming join key-domain primary-key prefix pruning is available for prefix ({}) with {} unique key(s)",
+        fmt::join(key_domain.left_key_names, ", "),
+        keys.size());
+
+    return StreamingJoinPrimaryKeyPrefixDomain{std::move(keys), key_domain.left_key_names.size()};
+}
+
+static StreamingJoinKeyTuple getPrimaryKeyPrefixAtMark(const MergeTreeData::DataPartPtr & part, size_t mark, size_t prefix_size)
+{
+    StreamingJoinKeyTuple key;
+    key.reserve(prefix_size);
+
+    for (size_t i = 0; i < prefix_size; ++i)
+    {
+        Field value;
+        part->index[i]->get(mark, value);
+        key.emplace_back(std::move(value));
+    }
+
+    return key;
+}
+
+static bool tupleLessOrEqual(const StreamingJoinKeyTuple & lhs, const StreamingJoinKeyTuple & rhs)
+{
+    return !(rhs < lhs);
+}
+
+static bool markMayContainStreamingJoinKeyPrefix(
+    const StreamingJoinPrimaryKeyPrefixDomain & domain,
+    const MergeTreeData::DataPartPtr & part,
+    size_t mark,
+    size_t marks_count,
+    bool has_final_mark)
+{
+    if (domain.keys.empty())
+        return false;
+
+    const auto left = getPrimaryKeyPrefixAtMark(part, mark, domain.prefix_size);
+    const auto it = std::lower_bound(domain.keys.begin(), domain.keys.end(), left);
+    if (it == domain.keys.end())
+        return false;
+
+    const bool right_is_unbounded = !has_final_mark && mark + 1 >= marks_count;
+    if (right_is_unbounded)
+        return true;
+
+    const size_t right_mark = mark + 1;
+    if (right_mark >= marks_count)
+        return true;
+
+    const auto right = getPrimaryKeyPrefixAtMark(part, right_mark, domain.prefix_size);
+    return tupleLessOrEqual(*it, right);
+}
+
+static MarkRanges filterMarkRangesByStreamingJoinPrimaryKeyPrefix(
+    const MarkRanges & ranges, const MergeTreeData::DataPartPtr & part, const StreamingJoinPrimaryKeyPrefixDomain & domain)
+{
+    MarkRanges filtered;
+    if (ranges.empty() || domain.keys.empty() || domain.prefix_size == 0)
+        return filtered;
+
+    if (part->index.size() < domain.prefix_size)
+        return ranges;
+
+    const size_t marks_count = part->index_granularity.getMarksCount();
+    const bool has_final_mark = part->index_granularity.hasFinalMark();
+
+    for (const auto & range : ranges)
+    {
+        for (size_t mark = range.begin; mark < range.end; ++mark)
+        {
+            if (!markMayContainStreamingJoinKeyPrefix(domain, part, mark, marks_count, has_final_mark))
+                continue;
+
+            if (!filtered.empty() && filtered.back().end == mark)
+                filtered.back().end = mark + 1;
+            else
+                filtered.emplace_back(mark, mark + 1);
+        }
+    }
+
+    return filtered;
+}
+/// proton: ends.
 
 
 using RelativeSize = boost::rational<ASTSampleRatio::BigNum>;
@@ -915,6 +1200,9 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     MergeTreeData::DataPartsVector && parts,
     std::vector<AlterConversionsPtr> && alter_conversions,
     StorageMetadataPtr metadata_snapshot,
+    /// proton: starts.
+    const SelectQueryInfo & query_info,
+    /// proton: ends.
     const ContextPtr & context,
     const KeyCondition & key_condition,
     const std::optional<KeyCondition> & part_offset_condition,
@@ -976,6 +1264,11 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
     std::atomic<size_t> sum_marks_pk = 0;
     std::atomic<size_t> sum_parts_pk = 0;
+    /// proton: starts.
+    const auto streaming_join_pk_domain = tryBuildStreamingJoinPrimaryKeyPrefixDomain(query_info, settings, metadata_snapshot, log);
+    std::atomic<size_t> sum_marks_before_streaming_join_pk = 0;
+    std::atomic<size_t> sum_marks_after_streaming_join_pk = 0;
+    /// proton: ends.
 
     /// Let's find what range to read from each part.
     {
@@ -996,6 +1289,17 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                 ranges.ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, part_offset_condition, settings, log);
             else if (total_marks_count)
                 ranges.ranges = MarkRanges{{MarkRange{0, total_marks_count}}};
+
+            /// proton: starts.
+            if (streaming_join_pk_domain)
+            {
+                const size_t marks_before = ranges.ranges.getNumberOfMarks();
+                ranges.ranges = filterMarkRangesByStreamingJoinPrimaryKeyPrefix(ranges.ranges, part, *streaming_join_pk_domain);
+                const size_t marks_after = ranges.ranges.getNumberOfMarks();
+                sum_marks_before_streaming_join_pk.fetch_add(marks_before, std::memory_order_relaxed);
+                sum_marks_after_streaming_join_pk.fetch_add(marks_after, std::memory_order_relaxed);
+            }
+            /// proton: ends.
 
             sum_marks_pk.fetch_add(ranges.getMarksCount(), std::memory_order_relaxed);
 
@@ -1109,6 +1413,22 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
         parts_with_ranges.resize(next_part);
     }
+
+    /// proton: starts.
+    const auto marks_before_streaming_join = sum_marks_before_streaming_join_pk.load(std::memory_order_relaxed);
+    const auto marks_after_streaming_join = sum_marks_after_streaming_join_pk.load(std::memory_order_relaxed);
+    if (streaming_join_pk_domain && marks_after_streaming_join < marks_before_streaming_join)
+        ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainPrimaryKeyPruned);
+
+    if (streaming_join_pk_domain)
+    {
+        LOG_TRACE(
+            log,
+            "Streaming join key-domain primary-key prefix pruning selected {} / {} mark(s)",
+            marks_after_streaming_join,
+            marks_before_streaming_join);
+    }
+    /// proton: ends.
 
     if (metadata_snapshot->hasPrimaryKey())
     {

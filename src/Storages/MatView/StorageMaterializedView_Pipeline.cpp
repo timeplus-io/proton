@@ -634,8 +634,11 @@ void StorageMaterializedView::buildBackgroundPipeline()
         auto metadata_snapshot = getInMemoryMetadataPtr();
 
         if (pipeline_state.exec_mode != ExecuteMode::Normal)
+        {
             pipeline_state.query_context->setSetting(
                 "exec_mode", pipeline_state.exec_mode == ExecuteMode::Recover ? String("recover") : String("subscribe"));
+            pipeline_state.query_context->setSetting("enable_streaming_join_key_domain_pushdown", Field{false});
+        }
 
         pipeline_state.query_context->setCurrentQueryId(getInnerQueryId()); /// Use a query_id bound to the uuid of mv
         pipeline_state.query_context->setInternalQuery(false); /// We like to log materialized query like a regular one

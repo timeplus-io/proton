@@ -8,12 +8,14 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/HashJoin/ConcurrentHashJoin.h>
 #include <Interpreters/Streaming/HashJoin/HybridHashJoin/HybridHashJoin.h>
+#include <Processors/Transforms/Streaming/JoinRightBoundary.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern int CREATE_CHECKPOINT_FAILED;
+extern const int LOGICAL_ERROR;
 extern int RECOVER_CHECKPOINT_FAILED;
 }
 
@@ -23,6 +25,12 @@ void JoinTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->settings);
     const auto & settings = ckpt_ctx->request_ctx->settings;
+
+    if ((right_boundary || left_boundary) && hasCheckpointUnsafeBoundaryState())
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Cannot checkpoint streaming join key-domain boundary state before all delayed chunks are replayed");
+    }
 
     CheckpointType ckpt_type = CheckpointType::File;
     if (join->type() == HashJoinType::Hybrid && settings->type != CheckpointType::File)
@@ -115,6 +123,18 @@ void JoinTransform::recover(CheckpointContextPtr ckpt_ctx)
         {
             throw Exception(ErrorCodes::RECOVER_CHECKPOINT_FAILED, "Unknown checkpoint type {}", ckpt->type());
         }
+    }
+
+    if (right_boundary)
+    {
+        right_boundary->release();
+        markRightBoundaryReady("recovery");
+        right_boundary_local_reached = true;
+    }
+    if (left_boundary)
+    {
+        left_boundary->release();
+        observeLeftBoundaryReleased("recovery");
     }
 }
 }

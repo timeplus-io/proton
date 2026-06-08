@@ -6,25 +6,41 @@
 #include <Bootstrap/Globals.h>
 #include <Cluster/Common/CallResult.h>
 #include <Cluster/Common/Constants.h>
-#include <Cluster/Common/Nulls.h> 
+#include <Cluster/Common/Nulls.h>
 #include <Cluster/LocalLog/Log/LogConfigMap.h>
 #include <Cluster/NativeLog/NativeLog.h>
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
+#include <Processors/QueryPlan/FilterStep.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/SortingStep.h>
+#include <Processors/QueryPlan/SourceStepWithFilter.h>
 #include <Processors/QueryPlan/Streaming/ConcatStep.h>
 #include <Processors/QueryPlan/Streaming/DelayStep.h>
+#include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/Sources/MarkSource.h>
+#include <Processors/Sources/NullSource.h>
 #include <Storages/Distributed/DistributedSettings.h>
 #include <Storages/MergeTree/MergeTreeSink.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Stream/StorageStream.h>
 #include <Storages/Stream/StreamingStoreSource.h>
+#include <Common/ProfileEvents.h>
 #include <Common/ProtonCommon.h>
 #include <Common/setThreadName.h>
+
+namespace ProfileEvents
+{
+extern const Event StreamingJoinKeyDomainStorageFilterPushed;
+extern const Event StreamingJoinKeyDomainPostFilterApplied;
+}
 
 namespace DB
 {
@@ -32,9 +48,385 @@ namespace ErrorCodes
 {
 extern const int OK;
 extern const int INVALID_CONFIG_PARAMETER;
+extern const int LIMIT_EXCEEDED;
+extern const int MEMORY_LIMIT_EXCEEDED;
 extern const int UNKNOWN_EXCEPTION;
+extern const int QUERY_WAS_CANCELLED;
 extern const int RESOURCE_NOT_INITED;
 extern const int SEQUENCE_COMPACTED_AWAY;
+extern const int SET_SIZE_LIMIT_EXCEEDED;
+extern const int TIMEOUT_EXCEEDED;
+extern const int TOO_MANY_BYTES;
+extern const int TOO_MANY_ROWS;
+extern const int TOO_MANY_ROWS_OR_BYTES;
+}
+
+namespace
+{
+
+ASTPtr makeTupleCastFunction(ASTs children)
+{
+    auto function = makeASTFunction("tuple_cast");
+    function->arguments->children = std::move(children);
+    return function;
+}
+
+ASTPtr combinePredicates(const String & function_name, ASTs predicates)
+{
+    if (predicates.empty())
+        return {};
+
+    ASTPtr combined = std::move(predicates.front());
+    for (size_t i = 1; i < predicates.size(); ++i)
+        combined = makeASTFunction(function_name, std::move(combined), std::move(predicates[i]));
+
+    return combined;
+}
+
+bool shouldRethrowStreamingJoinKeyDomainFilterException(int code)
+{
+    return code == ErrorCodes::QUERY_WAS_CANCELLED || code == ErrorCodes::TIMEOUT_EXCEEDED || code == ErrorCodes::MEMORY_LIMIT_EXCEEDED
+        || code == ErrorCodes::LIMIT_EXCEEDED || code == ErrorCodes::TOO_MANY_ROWS || code == ErrorCodes::TOO_MANY_BYTES
+        || code == ErrorCodes::TOO_MANY_ROWS_OR_BYTES || code == ErrorCodes::SET_SIZE_LIMIT_EXCEEDED;
+}
+
+ASTPtr makeDisjunctiveStreamingJoinKeyDomainFilter(const StreamingJoinKeyDomainPushdown & key_domain, UInt64 max_disjunctive_rows)
+{
+    if (!max_disjunctive_rows || key_domain.key_rows > max_disjunctive_rows)
+        return {};
+
+    ASTs disjuncts;
+    disjuncts.reserve(key_domain.key_rows);
+
+    for (const auto & block : key_domain.left_key_domain_blocks)
+    {
+        if (!block.rows())
+            continue;
+
+        for (const auto & name : key_domain.left_key_names)
+            if (!block.has(name))
+                return {};
+
+        for (size_t row = 0; row < block.rows(); ++row)
+        {
+            ASTs conjuncts;
+            conjuncts.reserve(key_domain.left_key_names.size());
+
+            for (const auto & name : key_domain.left_key_names)
+            {
+                Field value;
+                block.getByName(name).column->get(row, value);
+                if (value.isNull())
+                    return {};
+
+                conjuncts.emplace_back(
+                    makeASTFunction("equals", std::make_shared<ASTIdentifier>(name), std::make_shared<ASTLiteral>(std::move(value))));
+            }
+
+            if (auto conjunction = combinePredicates("and", std::move(conjuncts)))
+                disjuncts.emplace_back(std::move(conjunction));
+        }
+    }
+
+    return combinePredicates("or", std::move(disjuncts));
+}
+
+ASTPtr makeTupleInStreamingJoinKeyDomainFilter(const StreamingJoinKeyDomainPushdown & key_domain)
+{
+    ASTs left_keys;
+    left_keys.reserve(key_domain.left_key_names.size());
+    for (const auto & name : key_domain.left_key_names)
+        left_keys.emplace_back(std::make_shared<ASTIdentifier>(name));
+
+    ASTPtr left_expr;
+    if (left_keys.size() == 1)
+        left_expr = std::move(left_keys.front());
+    else
+        left_expr = makeTupleCastFunction(std::move(left_keys));
+
+    ASTs values;
+    for (const auto & block : key_domain.left_key_domain_blocks)
+    {
+        if (!block.rows())
+            continue;
+
+        for (const auto & name : key_domain.left_key_names)
+            if (!block.has(name))
+                return {};
+
+        for (size_t row = 0; row < block.rows(); ++row)
+        {
+            ASTs tuple_values;
+            tuple_values.reserve(key_domain.left_key_names.size());
+            for (const auto & name : key_domain.left_key_names)
+            {
+                Field value;
+                block.getByName(name).column->get(row, value);
+                if (value.isNull())
+                    return {};
+
+                tuple_values.emplace_back(std::make_shared<ASTLiteral>(std::move(value)));
+            }
+
+            if (tuple_values.size() == 1)
+                values.emplace_back(std::move(tuple_values.front()));
+            else
+                values.emplace_back(makeTupleCastFunction(std::move(tuple_values)));
+        }
+    }
+
+    if (values.empty())
+        return std::make_shared<ASTLiteral>(UInt64{0});
+
+    return makeASTFunction("in", std::move(left_expr), makeTupleCastFunction(std::move(values)));
+}
+
+ASTPtr makeStreamingJoinKeyDomainFilter(const StreamingJoinKeyDomainPushdown & key_domain, const Settings & settings, LoggerPtr logger)
+{
+    if (!key_domain.exact || key_domain.left_key_names.empty())
+        return {};
+
+    try
+    {
+        if (key_domain.key_rows == 0 || key_domain.left_key_domain_blocks.empty())
+            return std::make_shared<ASTLiteral>(UInt64{0});
+
+        if (auto disjunctive_filter = makeDisjunctiveStreamingJoinKeyDomainFilter(
+                key_domain, settings.streaming_join_key_domain_pushdown_disjunctive_filter_max_rows))
+            return disjunctive_filter;
+
+        if (settings.max_rows_in_set && key_domain.key_rows > settings.max_rows_in_set)
+        {
+            LOG_DEBUG(
+                logger,
+                "Streaming join key-domain historical filter is not applicable because {} distinct keys exceed max_rows_in_set={}",
+                key_domain.key_rows,
+                settings.max_rows_in_set);
+            return {};
+        }
+
+        if (settings.max_bytes_in_set && key_domain.key_bytes > settings.max_bytes_in_set)
+        {
+            LOG_DEBUG(
+                logger,
+                "Streaming join key-domain historical filter is not applicable because {} key bytes exceed max_bytes_in_set={}",
+                key_domain.key_bytes,
+                settings.max_bytes_in_set);
+            return {};
+        }
+
+        return makeTupleInStreamingJoinKeyDomainFilter(key_domain);
+    }
+    catch (...)
+    {
+        if (getCurrentExceptionCode() != ErrorCodes::SET_SIZE_LIMIT_EXCEEDED
+            && shouldRethrowStreamingJoinKeyDomainFilterException(getCurrentExceptionCode()))
+            throw;
+
+        LOG_DEBUG(logger, "Streaming join key-domain historical filter is not applicable: {}", getCurrentExceptionMessage(false));
+        return {};
+    }
+}
+
+ASTPtr makeSequenceUpperBoundFilter(Int64 high_sn)
+{
+    return makeASTFunction(
+        "less_or_equals", std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID), std::make_shared<ASTLiteral>(high_sn));
+}
+
+bool keyDomainMatchesPhysicalColumns(
+    const StreamingJoinKeyDomainPushdown & key_domain, const StorageSnapshotPtr & storage_snapshot, LoggerPtr logger)
+{
+    const auto & columns = storage_snapshot->metadata->getColumns();
+    for (const auto & name : key_domain.left_key_names)
+    {
+        auto physical_column = columns.tryGetPhysical(name);
+        if (!physical_column)
+        {
+            LOG_DEBUG(
+                logger,
+                "Streaming join key-domain historical filter is not applicable because '{}' is not a physical storage column",
+                name);
+            return false;
+        }
+
+        for (const auto & block : key_domain.left_key_domain_blocks)
+        {
+            if (!block.rows())
+                continue;
+
+            if (!block.has(name))
+                return false;
+
+            if (!block.getByName(name).type->equals(*physical_column->type))
+            {
+                LOG_DEBUG(
+                    logger,
+                    "Streaming join key-domain historical filter is not applicable because key '{}' type '{}' does not match physical "
+                    "column type '{}'",
+                    name,
+                    block.getByName(name).type->getName(),
+                    physical_column->type->getName());
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+ASTPtr makeStreamingJoinKeyDomainStorageFilter(
+    const SelectQueryInfo & query_info, const StorageSnapshotPtr & storage_snapshot, const Settings & settings, LoggerPtr logger)
+{
+    if (!query_info.left_backfill_join_key_domain || !query_info.left_backfill_join_key_domain->exact
+        || !query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary())
+        return {};
+
+    const auto & key_domain = *query_info.left_backfill_join_key_domain;
+    if (key_domain.key_rows != 0 && !keyDomainMatchesPhysicalColumns(key_domain, storage_snapshot, logger))
+        return {};
+
+    return makeStreamingJoinKeyDomainFilter(key_domain, settings, logger);
+}
+
+bool isValidStreamingJoinSnapshotBoundary(Int64 snapshot_high_sn)
+{
+    return snapshot_high_sn >= cluster::Constants::LogStartSN - 1;
+}
+
+SelectQueryInfo makeHistoricalBackfillQueryInfo(
+    const SelectQueryInfo & query_info,
+    std::optional<Int64> historical_upper_bound_sn,
+    const StorageSnapshotPtr & storage_snapshot,
+    ContextPtr context,
+    LoggerPtr logger)
+{
+    SelectQueryInfo historical_query_info = query_info;
+    if (historical_upper_bound_sn && isValidStreamingJoinSnapshotBoundary(*historical_upper_bound_sn))
+    {
+        historical_query_info.filter_asts.push_back(makeSequenceUpperBoundFilter(*historical_upper_bound_sn));
+
+        if (auto key_filter_ast = makeStreamingJoinKeyDomainStorageFilter(query_info, storage_snapshot, context->getSettingsRef(), logger))
+        {
+            historical_query_info.filter_asts.push_back(std::move(key_filter_ast));
+            ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainStorageFilterPushed);
+            LOG_DEBUG(
+                logger,
+                "Pushed streaming join key-domain filter to historical storage read from {} distinct keys ({} snapshot rows)",
+                query_info.left_backfill_join_key_domain->key_rows,
+                query_info.left_backfill_join_key_domain->source_rows);
+        }
+    }
+
+    return historical_query_info;
+}
+
+void addHistoricalBackfillFilterStep(QueryPlan & query_plan, ASTPtr filter_ast, ContextPtr context, const String & step_description)
+{
+    const auto & input_stream = query_plan.getCurrentDataStream();
+    auto syntax_result = TreeRewriter(context).analyze(filter_ast, input_stream.header.getNamesAndTypesList());
+    auto dag = ExpressionAnalyzer(filter_ast, syntax_result, context).getActionsDAG(false, false);
+
+    String filter_column_name = filter_ast->getColumnName();
+    const ActionsDAG::Node * filter_node = &dag->findInOutputs(filter_column_name);
+    auto & outputs = dag->getOutputs();
+    outputs.clear();
+    outputs.reserve(dag->getInputs().size() + 1);
+    for (const auto * input : dag->getInputs())
+        outputs.push_back(input);
+    outputs.push_back(filter_node);
+
+    filter_column_name = outputs.back()->result_name;
+    auto filter_step = std::make_unique<FilterStep>(input_stream, std::move(dag), std::move(filter_column_name), true);
+    filter_step->setStepDescription(step_description);
+    query_plan.addStep(std::move(filter_step));
+}
+
+bool addHistoricalBackfillSourceFilter(QueryPlan & query_plan, ASTPtr filter_ast, ContextPtr context, LoggerPtr logger)
+{
+    if (!query_plan.isInitialized())
+        return false;
+
+    auto * source_step = typeid_cast<SourceStepWithFilter *>(query_plan.getRootNode()->step.get());
+    if (!source_step)
+        return false;
+
+    try
+    {
+        auto syntax_result = TreeRewriter(context).analyze(filter_ast, query_plan.getCurrentDataStream().header.getNamesAndTypesList());
+        auto dag = ExpressionAnalyzer(filter_ast, syntax_result, context).getActionsDAG(false, false);
+        source_step->addFilter(std::move(dag), filter_ast->getColumnName());
+        return true;
+    }
+    catch (...)
+    {
+        if (shouldRethrowStreamingJoinKeyDomainFilterException(getCurrentExceptionCode()))
+            throw;
+
+        LOG_DEBUG(logger, "Streaming join historical storage source filter is not applicable: {}", getCurrentExceptionMessage(false));
+        return false;
+    }
+}
+
+void addHistoricalBackfillKeyDomainFilterStep(
+    QueryPlan & query_plan,
+    const SelectQueryInfo & query_info,
+    const StorageSnapshotPtr & storage_snapshot,
+    ContextPtr context,
+    std::optional<Int64> historical_upper_bound_sn,
+    LoggerPtr logger)
+{
+    if (!query_plan.isInitialized())
+        return;
+
+    const auto & settings = context->getSettingsRef();
+    const bool has_snapshot_boundary = historical_upper_bound_sn && isValidStreamingJoinSnapshotBoundary(*historical_upper_bound_sn);
+
+    if (has_snapshot_boundary)
+    {
+        addHistoricalBackfillFilterStep(
+            query_plan,
+            makeSequenceUpperBoundFilter(*historical_upper_bound_sn),
+            context,
+            "Streaming join historical backfill sequence boundary filter");
+    }
+
+    if (!has_snapshot_boundary || !query_info.left_backfill_join_key_domain || !query_info.left_backfill_join_key_domain->exact
+        || !query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary()
+        || !keyDomainMatchesPhysicalColumns(*query_info.left_backfill_join_key_domain, storage_snapshot, logger))
+        return;
+
+    auto key_filter_ast = makeStreamingJoinKeyDomainFilter(*query_info.left_backfill_join_key_domain, settings, logger);
+    if (!key_filter_ast)
+        return;
+
+    try
+    {
+        addHistoricalBackfillFilterStep(
+            query_plan, std::move(key_filter_ast), context, "Streaming join historical backfill key-domain filter");
+        ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainPostFilterApplied);
+        LOG_DEBUG(
+            logger,
+            "Applying streaming join key-domain filter to historical backfill from {} distinct keys ({} snapshot rows)",
+            query_info.left_backfill_join_key_domain->key_rows,
+            query_info.left_backfill_join_key_domain->source_rows);
+    }
+    catch (...)
+    {
+        if (query_info.left_backfill_join_key_domain->key_rows == 0)
+            throw;
+
+        if (getCurrentExceptionCode() != ErrorCodes::SET_SIZE_LIMIT_EXCEEDED
+            && shouldRethrowStreamingJoinKeyDomainFilterException(getCurrentExceptionCode()))
+            throw;
+
+        LOG_DEBUG(
+            logger,
+            "Streaming join key-domain historical filter step is not applicable; keeping sequence boundary without key-domain filter: {}",
+            getCurrentExceptionMessage(false));
+    }
+}
+
 }
 
 StreamShardStore::StreamShardStore(
@@ -200,7 +592,10 @@ void StreamShardStore::readStreaming(
     SelectQueryInfo & query_info,
     ContextPtr context,
     size_t /*max_block_size*/,
-    size_t num_streams)
+    size_t num_streams,
+    std::optional<Int64> start_sn_override,
+    std::optional<Int64> stop_sn_override,
+    bool force_non_streaming)
 {
     chassert(query_info.seek_to_info);
     const auto & settings_ref = context->getSettingsRef();
@@ -208,7 +603,7 @@ void StreamShardStore::readStreaming(
     /// 2) Queries which seek to a specific timestamp shall not be multiplexed
     auto share_resource_group = (settings_ref.query_resource_group.value == "shared")
         && (query_info.seek_to_info->getSeekTo().empty() || query_info.seek_to_info->getSeekTo() == "latest")
-        && (settings_ref.exec_mode == ExecuteMode::Normal);
+        && (settings_ref.exec_mode == ExecuteMode::Normal) && !start_sn_override && !stop_sn_override && !force_non_streaming;
 
     Pipe pipe;
     if (share_resource_group)
@@ -230,10 +625,14 @@ void StreamShardStore::readStreaming(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
-        auto offset = getOffset(query_info.seek_to_info);
+        auto offset = start_sn_override.value_or(getOffset(query_info.seek_to_info));
         bool count_public_query_metrics = !context->isQueryFromMaterializedView();
 
         auto source = std::make_shared<StreamingStoreSource>(shared_from_this(), header, storage_snapshot, context, offset, logger);
+        if (stop_sn_override)
+            source->setStopSN(*stop_sn_override);
+        if (force_non_streaming)
+            source->setStreaming(false);
 
         source->setProgressCallback([&, count_public_query_metrics](const Progress & progress) {
             const auto & value = progress.getValues();
@@ -255,7 +654,7 @@ void StreamShardStore::readStreaming(
             logger,
             "Starting reading shard-{} streams by seeking to '{}' with corresponding offsets='{}' in dedicated resource group",
             shard(),
-            query_info.seek_to_info->getSeekTo(),
+            start_sn_override ? fmt::format("sn:{}", *start_sn_override) : query_info.seek_to_info->getSeekTo(),
             offset);
     }
 
@@ -275,7 +674,9 @@ Int64 StreamShardStore::readHistorical(
     ContextPtr context,
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
-    size_t num_streams)
+    size_t num_streams,
+    bool skip_historical_backfill,
+    std::optional<Int64> historical_upper_bound_sn)
 {
     // no remote historical reads
 
@@ -287,6 +688,15 @@ Int64 StreamShardStore::readHistorical(
     }
 
     const auto & settings_ref = context->getSettingsRef();
+
+    if (skip_historical_backfill)
+    {
+        LOG_DEBUG(logger, "Skipping shard-{} historical backfill rows after streaming join key-domain shard pruning", shard());
+        auto header = storage_snapshot->getSampleBlockForColumns(column_names);
+        InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, query_info, context);
+        return historical_upper_bound_sn && isValidStreamingJoinSnapshotBoundary(*historical_upper_bound_sn) ? *historical_upper_bound_sn
+                                                                                                             : -1;
+    }
 
     size_t max_num_streams = num_streams;
     if (query_info.has_javascript_uda)
@@ -339,26 +749,47 @@ Int64 StreamShardStore::readHistorical(
     }
 
     /// underlying_storage_snapshot->data is reset in read() so called after max_sn calculated.
+    auto historical_query_info = makeHistoricalBackfillQueryInfo(query_info, historical_upper_bound_sn, storage_snapshot, context, logger);
     storage->read(
         query_plan,
         *required_columns_p,
         underlying_storage_snapshot,
-        query_info,
+        historical_query_info,
         context,
         processed_stage,
         max_block_size,
         max_num_streams);
 
+    if (query_plan.isInitialized() && historical_upper_bound_sn && isValidStreamingJoinSnapshotBoundary(*historical_upper_bound_sn))
+    {
+        addHistoricalBackfillSourceFilter(query_plan, makeSequenceUpperBoundFilter(*historical_upper_bound_sn), context, logger);
+
+        if (auto key_filter_ast = makeStreamingJoinKeyDomainStorageFilter(query_info, storage_snapshot, context->getSettingsRef(), logger))
+            addHistoricalBackfillSourceFilter(query_plan, std::move(key_filter_ast), context, logger);
+    }
+
+    if (!query_plan.isInitialized()
+        && (max_sn >= cluster::Constants::LogStartSN
+            || (historical_upper_bound_sn && isValidStreamingJoinSnapshotBoundary(*historical_upper_bound_sn))))
+    {
+        auto header = storage_snapshot->getSampleBlockForColumns(*required_columns_p);
+        InterpreterSelectQuery::addEmptySourceToQueryPlan(query_plan, header, historical_query_info, context);
+    }
+
     /// Tells the max sequence number of historical data for remote read
-    if (settings_ref.remote_fetch.value && max_sn >= 0)
+    if (!skip_historical_backfill && settings_ref.remote_fetch.value && query_plan.isInitialized() && max_sn >= 0)
     {
         auto header = query_plan.getCurrentDataStream().header;
         std::vector<QueryPlanPtr> plans;
         plans.emplace_back(std::make_unique<QueryPlan>(std::move(query_plan)));
         plans.emplace_back(std::make_unique<QueryPlan>());
 
+        Int64 remote_fetch_end_sn = max_sn;
+        if (historical_upper_bound_sn && *historical_upper_bound_sn >= cluster::Constants::LogStartSN)
+            remote_fetch_end_sn = std::min(remote_fetch_end_sn, *historical_upper_bound_sn);
+
         auto chunk_ctx = ChunkContext::create();
-        chunk_ctx->setSN(max_sn);
+        chunk_ctx->setSN(remote_fetch_end_sn);
         auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(Pipe{std::make_shared<MarkSource>(header, std::move(chunk_ctx))});
         read_from_pipe->setStepDescription("Remote fetch End");
         plans.back()->addStep(std::move(read_from_pipe));
@@ -385,32 +816,101 @@ void StreamShardStore::readConcat(
     QueryProcessingStage::Enum processed_stage,
     size_t max_block_size,
     size_t num_streams,
-    size_t streaming_num_streams)
+    size_t streaming_num_streams,
+    bool skip_historical_backfill,
+    std::optional<Int64> snapshot_high_sn)
 {
     /// If required backfill input in order, we will need read `_tp_time`.
     if (query_info.require_in_order_backfill
         && std::ranges::none_of(column_names, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_TIME; }))
         column_names.emplace_back(ProtonConsts::RESERVED_EVENT_TIME);
 
+    const bool use_snapshot_boundary = snapshot_high_sn && isValidStreamingJoinSnapshotBoundary(*snapshot_high_sn);
+    const std::optional<Int64> historical_upper_bound_sn = use_snapshot_boundary ? snapshot_high_sn : std::optional<Int64>{};
+
+    auto historical_column_names = column_names;
+    if (use_snapshot_boundary && std::ranges::none_of(historical_column_names, [](const auto & name) {
+            return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID;
+        }))
+        historical_column_names.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
+
     auto historical_plan = std::make_unique<QueryPlan>();
     auto max_sn = readHistorical(
-        *historical_plan, column_names, storage_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+        *historical_plan,
+        historical_column_names,
+        storage_snapshot,
+        query_info,
+        context,
+        processed_stage,
+        max_block_size,
+        num_streams,
+        skip_historical_backfill,
+        historical_upper_bound_sn);
+    if (!skip_historical_backfill)
+        addHistoricalBackfillKeyDomainFilterStep(
+            *historical_plan, query_info, storage_snapshot, context, historical_upper_bound_sn, logger);
+
+    std::unique_ptr<QueryPlan> bounded_prefix_plan;
+    if (!skip_historical_backfill && use_snapshot_boundary)
+    {
+        Int64 prefix_start_sn = getOffset(query_info.seek_to_info);
+        if (prefix_start_sn < cluster::Constants::LogStartSN)
+            prefix_start_sn = cluster::Constants::LogStartSN;
+        if (max_sn >= cluster::Constants::LogStartSN)
+            prefix_start_sn = std::max(prefix_start_sn, max_sn + 1);
+
+        if (prefix_start_sn <= *snapshot_high_sn)
+        {
+            bounded_prefix_plan = std::make_unique<QueryPlan>();
+            readStreaming(
+                *bounded_prefix_plan,
+                historical_column_names,
+                storage_snapshot,
+                query_info,
+                context,
+                max_block_size,
+                streaming_num_streams,
+                prefix_start_sn,
+                *snapshot_high_sn,
+                /*force_non_streaming=*/true);
+            addHistoricalBackfillKeyDomainFilterStep(
+                *bounded_prefix_plan, query_info, storage_snapshot, context, historical_upper_bound_sn, logger);
+        }
+    }
 
     auto streaming_plan = std::make_unique<QueryPlan>();
-    readStreaming(*streaming_plan, column_names, storage_snapshot, query_info, context, max_block_size, streaming_num_streams);
+    const std::optional<Int64> streaming_start_sn
+        = use_snapshot_boundary ? std::optional<Int64>{*snapshot_high_sn + 1} : std::optional<Int64>{};
+    readStreaming(
+        *streaming_plan,
+        column_names,
+        storage_snapshot,
+        query_info,
+        context,
+        max_block_size,
+        streaming_num_streams,
+        streaming_start_sn,
+        {});
     chassert(streaming_plan->isInitialized());
+    const auto & header = streaming_plan->getCurrentDataStream().header;
+
+    if (!historical_plan->isInitialized() && use_snapshot_boundary)
+    {
+        historical_plan = std::make_unique<QueryPlan>();
+        auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(Pipe{std::make_shared<NullSource>(header)});
+        read_from_pipe->setStepDescription("Empty Historical Data Payload");
+        historical_plan->addStep(std::move(read_from_pipe));
+    }
 
     /// If there is no historical data, we will fallback to seek streaming store
-    if (!historical_plan->isInitialized())
+    if (!historical_plan->isInitialized() && (!bounded_prefix_plan || !bounded_prefix_plan->isInitialized()))
     {
         query_plan = std::move(*streaming_plan);
         return;
     }
 
-    const auto & header = streaming_plan->getCurrentDataStream().header;
-
     std::vector<QueryPlanPtr> plans;
-    plans.reserve(3);
+    plans.reserve(bounded_prefix_plan && bounded_prefix_plan->isInitialized() ? 4 : 3);
     {
         /// 1) Mark Historical Data Start Plan
         auto plan = std::make_unique<QueryPlan>();
@@ -420,47 +920,77 @@ void StreamShardStore::readConcat(
         plan->addStep(std::move(read_from_pipe));
         plans.emplace_back(std::move(plan));
 
-        /// 2) Historical Data Plan (with sorting / converting ?)
-        if (query_info.require_in_order_backfill)
-        {
-            /// TODO: support optimized order for the stream with ordered by `_tp_time`
-            /// Copy basic code from `SortingStep::fullSort`
-            /// Sorting backfilled historical data by ascending event time
-            SortDescription sort_desc;
-            sort_desc.emplace_back(ProtonConsts::RESERVED_EVENT_TIME, /*ascending*/ 1);
+        auto convert_to_streaming_header = [&header](QueryPlan & plan_to_convert) {
+            /// Sometimes, historical source is not compatible with streaming source header
+            /// its layout is always `<real columns> + <virtual columns>`, for example:
+            /// `select _tp_shard, i from t1`, historical header is `i, _tp_shard`, but streaming header is `_tp_shard, i`
+            if (blocksHaveEqualStructure(plan_to_convert.getCurrentDataStream().header, header))
+                return;
 
-            auto addtional_sorting = std::make_unique<DB::SortingStep>(
-                historical_plan->getCurrentDataStream(),
-                std::move(sort_desc),
-                0 /* LIMIT */,
-                DB::SortingStep::Settings(*context),
-                context->getSettingsRef().optimize_sorting_by_input_stream_properties);
-            addtional_sorting->setStepDescription("Sorting for backfill");
-            historical_plan->addStep(std::move(addtional_sorting));
-        }
-
-        /// Sometimes, historical source is not compatible with streaming source header
-        /// its layout is always `<real columns> + <virtual columns>`, for example:
-        /// `select _tp_shard, i from t1`, historical header is `i, _tp_shard`, but streaming header is `_tp_shard, i`
-        if (!blocksHaveEqualStructure(historical_plan->getCurrentDataStream().header, header))
-        {
             auto convert_actions_dag = ActionsDAG::makeConvertingActions(
-                historical_plan->getCurrentDataStream().header.getColumnsWithTypeAndName(),
+                plan_to_convert.getCurrentDataStream().header.getColumnsWithTypeAndName(),
                 header.getColumnsWithTypeAndName(),
                 ActionsDAG::MatchColumnsMode::Name,
                 true);
 
-            auto converting = std::make_unique<DB::ExpressionStep>(historical_plan->getCurrentDataStream(), convert_actions_dag);
-            historical_plan->addStep(std::move(converting));
+            auto converting = std::make_unique<DB::ExpressionStep>(plan_to_convert.getCurrentDataStream(), convert_actions_dag);
+            plan_to_convert.addStep(std::move(converting));
+        };
+
+        auto sort_backfill_by_event_time = [&context](QueryPlan & plan_to_sort) {
+            /// TODO: support optimized order for the stream with ordered by `_tp_time`
+            SortDescription sort_desc;
+            sort_desc.emplace_back(ProtonConsts::RESERVED_EVENT_TIME, /*ascending*/ 1);
+
+            auto additional_sorting = std::make_unique<DB::SortingStep>(
+                plan_to_sort.getCurrentDataStream(),
+                std::move(sort_desc),
+                0 /* LIMIT */,
+                DB::SortingStep::Settings(*context),
+                context->getSettingsRef().optimize_sorting_by_input_stream_properties);
+            additional_sorting->setStepDescription("Sorting for backfill");
+            plan_to_sort.addStep(std::move(additional_sorting));
+        };
+
+        convert_to_streaming_header(*historical_plan);
+        if (bounded_prefix_plan && bounded_prefix_plan->isInitialized())
+            convert_to_streaming_header(*bounded_prefix_plan);
+
+        if (query_info.require_in_order_backfill && bounded_prefix_plan && bounded_prefix_plan->isInitialized())
+        {
+            std::vector<QueryPlanPtr> backfill_plans;
+            backfill_plans.reserve(2);
+            backfill_plans.emplace_back(std::move(historical_plan));
+            backfill_plans.emplace_back(std::move(bounded_prefix_plan));
+
+            DataStreams backfill_input_streams;
+            backfill_input_streams.reserve(backfill_plans.size());
+            for (const auto & backfill_plan : backfill_plans)
+                backfill_input_streams.emplace_back(backfill_plan->getCurrentDataStream());
+
+            historical_plan = std::make_unique<QueryPlan>();
+            historical_plan->unitePlans(std::make_unique<UnionStep>(std::move(backfill_input_streams)), std::move(backfill_plans));
+            sort_backfill_by_event_time(*historical_plan);
+            plans.emplace_back(std::move(historical_plan));
         }
-        plans.emplace_back(std::move(historical_plan));
+        else
+        {
+            if (query_info.require_in_order_backfill)
+                sort_backfill_by_event_time(*historical_plan);
+
+            plans.emplace_back(std::move(historical_plan));
+
+            if (bounded_prefix_plan && bounded_prefix_plan->isInitialized())
+                plans.emplace_back(std::move(bounded_prefix_plan));
+        }
 
         /// 3) Mark Historical Data End Plan
         plan = std::make_unique<QueryPlan>();
         auto chunk_ctx = ChunkContext::create();
         chunk_ctx->setMark(ProtonConsts::HISTORICAL_DATA_END_FLAG);
-        if (max_sn >= 0)
-            chunk_ctx->setSN(max_sn);
+        auto concat_boundary_sn = use_snapshot_boundary ? *snapshot_high_sn : max_sn;
+        if (concat_boundary_sn >= cluster::Constants::LogStartSN)
+            chunk_ctx->setSN(concat_boundary_sn);
 
         read_from_pipe = std::make_unique<ReadFromPreparedSource>(Pipe{std::make_shared<MarkSource>(header, std::move(chunk_ctx))});
         read_from_pipe->setStepDescription("Historical Data End");
@@ -512,7 +1042,8 @@ StreamShardStore::append(cluster::ByteVector && data, int64_t max_event_time, cl
         {
             // In  mode, AppendResult is immediate (no wait needed)
             if (append_result.result->error_code != 0)
-                return cluster::CallResultV<int64_t>{append_result.result->error_code, std::string{DB::ErrorCodes::getName(append_result.result->error_code)}};
+                return cluster::CallResultV<int64_t>{
+                    append_result.result->error_code, std::string{DB::ErrorCodes::getName(append_result.result->error_code)}};
             return cluster::CallResultV<int64_t>{append_result.result->sn};
         }
         else
@@ -965,8 +1496,7 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
                 if (current_has_dynamic != incoming_has_dynamic)
                 {
                     chassert(start_sn >= 0 && end_sn >= start_sn);
-                    doCommit(
-                        std::move(block), std::make_pair(start_sn, end_sn), std::move(keys), missing_sequence_ranges, metadata);
+                    doCommit(std::move(block), std::make_pair(start_sn, end_sn), std::move(keys), missing_sequence_ranges, metadata);
                     block.clear();
                     keys = std::make_shared<IdempotentKeys>();
                     block.swap(rec->getBlock());
@@ -1321,7 +1851,11 @@ std::pair<Int64, Int64> StreamShardStore::sequenceRange() const
     auto maybe_log_committed_sn = Globals::getNativeLog().committedSequence(streamIDShard());
     auto maybe_log_start_sn = Globals::getNativeLog().logStartSequence(streamIDShard());
 
-    return {maybe_log_start_sn.value_or(-1), maybe_log_committed_sn.value_or(-1)};
+    auto high_sn = maybe_log_committed_sn.value_or(-1);
+    if (auto visible_high_sn = committedSequence(); visible_high_sn)
+        high_sn = *visible_high_sn;
+
+    return {maybe_log_start_sn.value_or(-1), high_sn};
 }
 
 }

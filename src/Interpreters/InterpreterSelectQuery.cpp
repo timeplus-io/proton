@@ -1,14 +1,27 @@
+/// proton: starts.
+#include <algorithm>
+/// proton: ends.
 #include <optional>
+/// proton: starts.
+#include <unordered_map>
+#include <unordered_set>
+/// proton: ends.
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeInterval.h>
 
+/// proton: starts.
+#include <Parsers/ASTAsterisk.h>
+/// proton: ends.
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInterpolateElement.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
-#include <Parsers/ASTInterpolateElement.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+/// proton: starts.
+#include <Parsers/ASTSetQuery.h>
+/// proton: ends.
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
@@ -69,6 +82,9 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageValues.h>
 #include <Storages/StorageView.h>
+/// proton: starts.
+#include <Storages/Stream/StorageStream.h>
+/// proton: ends.
 
 #include <Columns/Collator.h>
 #include <Core/ColumnNumbers.h>
@@ -188,8 +204,22 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     const ASTPtr & query_ptr_,
     const ContextPtr & context_,
     const SelectQueryOptions & options_,
-    const Names & required_result_column_names_)
-    : InterpreterSelectQuery(query_ptr_, context_, std::nullopt, nullptr, options_, required_result_column_names_)
+    const Names & required_result_column_names_,
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_)
+    /// proton: ends.
+    : InterpreterSelectQuery(
+          query_ptr_,
+          context_,
+          std::nullopt,
+          nullptr,
+          options_,
+          required_result_column_names_,
+          {},
+          nullptr,
+          std::move(inherited_left_backfill_join_key_domain_),
+          std::move(streaming_join_snapshot_high_sns_))
 {
 }
 
@@ -197,8 +227,22 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     const ASTPtr & query_ptr_,
     const ContextMutablePtr & context_,
     const SelectQueryOptions & options_,
-    const Names & required_result_column_names_)
-    : InterpreterSelectQuery(query_ptr_, context_, std::nullopt, nullptr, options_, required_result_column_names_)
+    const Names & required_result_column_names_,
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_)
+    /// proton: ends.
+    : InterpreterSelectQuery(
+          query_ptr_,
+          context_,
+          std::nullopt,
+          nullptr,
+          options_,
+          required_result_column_names_,
+          {},
+          nullptr,
+          std::move(inherited_left_backfill_join_key_domain_),
+          std::move(streaming_join_snapshot_high_sns_))
 {
 }
 
@@ -331,6 +375,187 @@ bool shouldIgnoreQuotaAndLimits(const StorageID & table_id)
     return false;
 }
 
+/// proton: starts.
+StreamingJoinKeyDomainPushdownPtr remapInheritedStreamingJoinKeyDomainForSelect(
+    const ASTPtr & query_ptr, const StreamingJoinKeyDomainPushdownPtr & key_domain, const ContextPtr & context, LoggerPtr log)
+{
+    if (!key_domain)
+        return {};
+
+    if (context->getSettingsRef().unnest_subqueries)
+    {
+        LOG_DEBUG(log, "Streaming join key-domain pushdown is not propagated when unnest_subqueries is enabled");
+        return {};
+    }
+
+    const auto * select_query = query_ptr->as<ASTSelectQuery>();
+    if (!select_query)
+        return {};
+
+    if (select_query->distinct || select_query->with() || select_query->prewhere() || select_query->where() || select_query->groupBy()
+        || select_query->having() || select_query->arrayJoinExpressionList().first || select_query->orderBy() || select_query->window()
+        || select_query->limitBy() || select_query->limitLength() || select_query->limitOffset() || select_query->settings()
+        || select_query->join())
+    {
+        LOG_DEBUG(log, "Streaming join key-domain pushdown is not propagated through a non-identity nested SELECT");
+        return {};
+    }
+
+    std::unordered_map<String, String> direct_projection;
+    std::unordered_set<String> explicit_output_names;
+    bool has_asterisk = false;
+    if (const auto & select_list = select_query->select())
+    {
+        for (const auto & expr : select_list->children)
+        {
+            if (expr->as<ASTAsterisk>())
+                continue;
+
+            if (!explicit_output_names.emplace(expr->getAliasOrColumnName()).second)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Streaming join key-domain pushdown is not propagated through nested SELECT with duplicate output '{}'",
+                    expr->getAliasOrColumnName());
+                return {};
+            }
+        }
+
+        for (const auto & expr : select_list->children)
+        {
+            if (const auto * asterisk = expr->as<ASTAsterisk>())
+            {
+                if (asterisk->expression || asterisk->transformers)
+                {
+                    LOG_DEBUG(log, "Streaming join key-domain pushdown is not propagated through nested SELECT with asterisk transformers");
+                    return {};
+                }
+
+                has_asterisk = true;
+                continue;
+            }
+
+            const auto * identifier = expr->as<ASTIdentifier>();
+            if (!identifier)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Streaming join key-domain pushdown is not propagated through nested SELECT with non-identity projection '{}'",
+                    expr->getColumnName());
+                return {};
+            }
+
+            if (!identifier->isShort())
+            {
+                LOG_DEBUG(
+                    log,
+                    "Streaming join key-domain pushdown is not propagated through nested SELECT with compound identifier '{}'",
+                    identifier->name());
+                return {};
+            }
+
+            if (identifier->shortName() != expr->getAliasOrColumnName() && explicit_output_names.contains(identifier->shortName()))
+            {
+                LOG_DEBUG(
+                    log,
+                    "Streaming join key-domain pushdown is not propagated through nested SELECT with cross-entry alias reference '{}'",
+                    identifier->shortName());
+                return {};
+            }
+
+            auto [_, inserted] = direct_projection.emplace(expr->getAliasOrColumnName(), identifier->shortName());
+            if (!inserted)
+            {
+                LOG_DEBUG(
+                    log,
+                    "Streaming join key-domain pushdown is not propagated through nested SELECT with duplicate output '{}'",
+                    expr->getAliasOrColumnName());
+                return {};
+            }
+        }
+    }
+
+    if (has_asterisk)
+    {
+        for (const auto & name : key_domain->left_key_names)
+        {
+            if (direct_projection.contains(name))
+            {
+                LOG_DEBUG(
+                    log,
+                    "Streaming join key-domain pushdown is not propagated through nested SELECT with ambiguous asterisk and explicit key "
+                    "output '{}'",
+                    name);
+                return {};
+            }
+        }
+    }
+
+    auto remapped = std::make_shared<StreamingJoinKeyDomainPushdown>(*key_domain);
+    remapped->left_key_names.clear();
+    remapped->left_key_names.reserve(key_domain->left_key_names.size());
+
+    bool changed = false;
+    std::unordered_set<String> remapped_key_names;
+    for (const auto & name : key_domain->left_key_names)
+    {
+        String remapped_name;
+        auto it = direct_projection.find(name);
+        if (it != direct_projection.end())
+        {
+            remapped_name = it->second;
+            changed |= remapped_name != name;
+        }
+        else if (has_asterisk)
+        {
+            remapped_name = name;
+        }
+        else
+        {
+            LOG_DEBUG(
+                log,
+                "Streaming join key-domain pushdown is not propagated through nested SELECT because key '{}' is not a direct projection",
+                name);
+            return {};
+        }
+
+        if (!remapped_key_names.emplace(remapped_name).second)
+        {
+            LOG_DEBUG(
+                log,
+                "Streaming join key-domain pushdown is not propagated through nested SELECT because multiple keys map to '{}'",
+                remapped_name);
+            return {};
+        }
+
+        remapped->left_key_names.emplace_back(std::move(remapped_name));
+    }
+
+    if (!changed)
+        return key_domain;
+
+    remapped->left_key_domain_blocks.clear();
+    remapped->left_key_domain_blocks.reserve(key_domain->left_key_domain_blocks.size());
+    for (const auto & block : key_domain->left_key_domain_blocks)
+    {
+        Block remapped_block;
+        for (size_t i = 0; i < key_domain->left_key_names.size(); ++i)
+        {
+            const auto & original_name = key_domain->left_key_names[i];
+            if (!block.has(original_name))
+                return {};
+
+            auto column = block.getByName(original_name);
+            column.name = remapped->left_key_names[i];
+            remapped_block.insert(std::move(column));
+        }
+
+        remapped->left_key_domain_blocks.emplace_back(std::move(remapped_block));
+    }
+
+    return remapped;
+}
+/// proton: ends.
 }
 
 InterpreterSelectQuery::InterpreterSelectQuery(
@@ -341,7 +566,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     const SelectQueryOptions & options_,
     const Names & required_result_column_names,
     const StorageMetadataPtr & metadata_snapshot_,
-    PreparedSetsPtr prepared_sets_)
+    PreparedSetsPtr prepared_sets_,
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_)
+    /// proton: ends.
     : InterpreterSelectQuery(
           query_ptr_,
           Context::createCopy(context_),
@@ -350,7 +579,9 @@ InterpreterSelectQuery::InterpreterSelectQuery(
           options_,
           required_result_column_names,
           metadata_snapshot_,
-          prepared_sets_)
+          prepared_sets_,
+          std::move(inherited_left_backfill_join_key_domain_),
+          std::move(streaming_join_snapshot_high_sns_))
 {
 }
 
@@ -362,7 +593,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     const SelectQueryOptions & options_,
     const Names & required_result_column_names,
     const StorageMetadataPtr & metadata_snapshot_,
-    PreparedSetsPtr prepared_sets_)
+    PreparedSetsPtr prepared_sets_,
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_,
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_)
+    /// proton: ends.
     /// NOTE: the query almost always should be cloned because it will be modified during analysis.
     : IInterpreterUnionOrSelectQuery(options_.modify_inplace ? query_ptr_ : query_ptr_->clone(), context_, options_)
     , storage(storage_)
@@ -378,6 +613,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     query_info.ignore_projections = options.ignore_projections;
     query_info.is_projection_query = options.is_projection_query;
+    /// proton: starts.
+    query_info.left_backfill_join_key_domain
+        = remapInheritedStreamingJoinKeyDomainForSelect(query_ptr, inherited_left_backfill_join_key_domain_, context, log);
+    query_info.streaming_join_snapshot_high_sns = std::move(streaming_join_snapshot_high_sns_);
+    /// proton: ends.
 
     /// proton : starts.  Merge some options
     bool current_select_has_join = false;
@@ -835,6 +1075,10 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
     if (storage && !options.only_analyze)
     {
         query_info.prepared_sets = query_analyzer->getPreparedSets();
+        /// proton: starts.
+        if (auto stream_storage = std::dynamic_pointer_cast<StorageStream>(storage))
+            stream_storage->captureStreamingJoinLeftBackfillSnapshotHighSNs(context, storage_snapshot, query_info);
+        /// proton: ends.
         from_stage = storage->getQueryProcessingStage(context, options.to_stage, storage_snapshot, query_info);
     }
 
@@ -868,6 +1112,35 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
             .emit_version = emit_version,
             .has_window_watermark = isStreamingQuery() && hasAggregation() && hasStreamingWindowFunc() && !has_user_defined_emit_strategy,
             .data_stream_semantic = getDataStreamSemantic()});
+
+    /// proton: starts.
+    current_select_streaming_join_key_domain = query_analyzer->getStreamingJoinKeyDomainPushdown();
+    if (current_select_streaming_join_key_domain)
+    {
+        query_info.left_backfill_join_key_domain = current_select_streaming_join_key_domain;
+        query_info.left_backfill_snapshot_high_sns.clear();
+    }
+    else if (query_analyzer->hasStreamingJoin())
+    {
+        query_info.left_backfill_join_key_domain.reset();
+        query_info.left_backfill_snapshot_high_sns.clear();
+    }
+
+    if (storage && !options.only_analyze && query_info.left_backfill_join_key_domain)
+    {
+        if (auto stream_storage = std::dynamic_pointer_cast<StorageStream>(storage))
+        {
+            stream_storage->captureStreamingJoinLeftBackfillSnapshotHighSNs(context, storage_snapshot, query_info);
+            if (!query_info.left_backfill_join_key_domain)
+                current_select_streaming_join_key_domain.reset();
+        }
+        else
+        {
+            query_info.left_backfill_join_key_domain.reset();
+            current_select_streaming_join_key_domain.reset();
+        }
+    }
+    /// proton: ends.
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -1588,7 +1861,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                             expressions.join,
                             settings.max_block_size,
                             max_streams,
-                            settings.join_max_buffered_bytes);
+                            settings.join_max_buffered_bytes,
+                            current_select_streaming_join_key_domain);
                     }
                     else
                     {
@@ -2339,8 +2613,15 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         Streaming::rewriteSubquery(subquery->as<ASTSelectWithUnionQuery &>(), query_info);
         /// proton: ends.
 
+        /// proton: starts.
         interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
-            subquery, getSubqueryContext(context), options.copy().subquery().noModify(), required_columns);
+            subquery,
+            getSubqueryContext(context),
+            options.copy().subquery().noModify(),
+            required_columns,
+            query_info.left_backfill_join_key_domain,
+            query_info.streaming_join_snapshot_high_sns);
+        /// proton: ends.
 
         interpreter_subquery->addStorageLimits(storage_limits);
 
@@ -3145,9 +3426,9 @@ void InterpreterSelectQuery::ignoreWithTotals()
 
 void InterpreterSelectQuery::initSettings()
 {
-    auto & query = getSelectQuery();
-    if (query.settings())
-        InterpreterSetQuery(query.settings(), context).executeForCurrentContext();
+    /// proton: starts.
+    applySelectSettingsWithoutExecMode(getSelectQuery().settings());
+    /// proton: ends.
 
     /// auto & client_info = context->getClientInfo();
     /// auto min_major = DBMS_MIN_MAJOR_VERSION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD;
@@ -3162,4 +3443,22 @@ void InterpreterSelectQuery::initSettings()
     /// }
 }
 
+/// proton: starts.
+void InterpreterSelectQuery::applySelectSettingsWithoutExecMode(const ASTPtr & settings_ast)
+{
+    if (!settings_ast)
+        return;
+
+    auto filtered_settings_ast = settings_ast->clone();
+    auto & settings = filtered_settings_ast->as<ASTSetQuery &>();
+    while (settings.changes.removeSetting("exec_mode"))
+    {
+    }
+    settings.default_settings.erase(
+        std::remove(settings.default_settings.begin(), settings.default_settings.end(), "exec_mode"), settings.default_settings.end());
+
+    if (!settings.isEmpty())
+        InterpreterSetQuery(filtered_settings_ast, context).executeForCurrentContext();
+}
+/// proton: ends.
 }

@@ -1543,6 +1543,9 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToReadImpl(
             std::move(parts),
             std::move(alter_conversions),
             metadata_snapshot,
+            /// proton: starts.
+            query_info,
+            /// proton: ends.
             context,
             indexes->key_condition,
             indexes->part_offset_condition,

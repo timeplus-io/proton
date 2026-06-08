@@ -110,10 +110,29 @@ void StreamingStoreSource::readAndProcess()
     }
 
     auto records = reader->read();
+    markStopSNReachedBefore(reader->lastFetchedSN() + 1);
+
     if (records.empty())
         return;
 
     process(records);
+}
+
+void StreamingStoreSource::onStopSNChanged(Int64 sn)
+{
+    if (reader)
+        reader->setStopSN(sn);
+}
+
+void StreamingStoreSource::onStopSNCleared()
+{
+    if (reader)
+        reader->clearStopSN();
+}
+
+bool StreamingStoreSource::supportsStopSN() const
+{
+    return reader && reader->supportsStopSN();
 }
 
 std::pair<String, Int32> StreamingStoreSource::getStreamShard() const

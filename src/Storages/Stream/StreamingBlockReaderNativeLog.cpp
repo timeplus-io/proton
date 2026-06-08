@@ -54,6 +54,10 @@ cluster::SchemaRecordPtrs StreamingBlockReaderNativeLog::read()
     if (historical_ctx)
         return readFromHistoricalStore();
 
+    const auto stop_sn_snapshot = getStopSN();
+    if (stop_sn_snapshot && fetched_sn >= *stop_sn_snapshot)
+        return {};
+
     // directly use NativeLog with proper parameters
     auto & native_log = Globals::getNativeLog();
 
@@ -99,21 +103,74 @@ cluster::SchemaRecordPtrs StreamingBlockReaderNativeLog::read()
     log_start_sn = fetch_result.result.log_start_sn;
     log_committed_sn = fetch_result.result.log_committed_sn;
 
-    size_t total_entries = fetch_result.result.entries.size();
+    const auto & fetched_entries = fetch_result.result.entries;
+    if (fetched_entries.empty() && fetch_ctx.fetch_hint)
+    {
+        LOG_TRACE(logger, "Clearing stale native-log fetch hint while fetching {}", stream_shard.string());
+        fetch_ctx.fetch_hint.reset();
+    }
+
+    if (stop_sn_snapshot && *stop_sn_snapshot > log_committed_sn && fetched_entries.empty())
+    {
+        if (!allow_fallback_to_historical_store)
+            throw Exception(
+                ErrorCodes::SEQUENCE_COMPACTED_AWAY,
+                "Native log is behind bounded stop sn and historical fallback is disabled, fetched_sn={}, log_start_sn={}, "
+                "log_committed_sn={}, stop_sn={}",
+                fetched_sn,
+                log_start_sn,
+                log_committed_sn,
+                *stop_sn_snapshot);
+
+        LOG_INFO(
+            logger,
+            "Native log is behind bounded stop sn, fetched_sn={}, log_start_sn={}, log_committed_sn={}, stop_sn={}. "
+            "Attempting to catch up from the historical store",
+            fetched_sn,
+            log_start_sn,
+            log_committed_sn,
+            *stop_sn_snapshot);
+
+        buildHistoricalQueryContext(default_fetch_range, log_start_sn, *stop_sn_snapshot);
+        return {};
+    }
+
+    cluster::EntryPtrs bounded_entries;
+    const auto * entries_to_deserialize = &fetched_entries;
+    if (stop_sn_snapshot)
+    {
+        bounded_entries.reserve(fetched_entries.size());
+        for (const auto & entry : fetched_entries)
+        {
+            if (entry->sn > *stop_sn_snapshot)
+                break;
+            bounded_entries.push_back(entry);
+        }
+        entries_to_deserialize = &bounded_entries;
+    }
+
+    size_t total_entries = entries_to_deserialize->size();
 
     cluster::SchemaRecordPtrs records;
     if (total_entries != 0)
     {
         records.reserve(total_entries);
 
-        deserializeRecords(fetch_result.result.entries, records);
-        if (!fetch_result.result.entries.empty())
-        {
-            fetched_sn = fetch_result.result.entries.back()->sn;
-            // Update fetch hint for next fetch - critical for SN progression
-            if (fetch_result.result.fetch_hint.hasFilePosition())
-                fetch_ctx.fetch_hint = fetch_result.result.fetch_hint;
-        }
+        deserializeRecords(*entries_to_deserialize, records);
+    }
+
+    if (!fetched_entries.empty())
+    {
+        if (stop_sn_snapshot && fetched_entries.back()->sn > *stop_sn_snapshot)
+            fetched_sn = *stop_sn_snapshot;
+        else
+            fetched_sn = fetched_entries.back()->sn;
+
+        // Update fetch hint for next fetch - critical for SN progression.
+        // When a bounded read fetched past the stop SN, the source will finish
+        // and the post-boundary fetch hint must not be reused.
+        if ((!stop_sn_snapshot || fetched_sn < *stop_sn_snapshot) && fetch_result.result.fetch_hint.hasFilePosition())
+            fetch_ctx.fetch_hint = fetch_result.result.fetch_hint;
     }
 
     /// LOG_INFO(

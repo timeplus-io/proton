@@ -2,6 +2,7 @@
 
 #include <Processors/QueryPlan/IQueryPlanStep.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
+#include <Storages/SelectQueryInfo.h>
 
 namespace DB
 {
@@ -20,7 +21,8 @@ public:
         JoinPtr join_,
         size_t max_block_size_,
         size_t max_streams_,
-        size_t join_max_cached_bytes_);
+        size_t join_max_cached_bytes_,
+        StreamingJoinKeyDomainPushdownPtr key_domain_ = nullptr);
 
     String getName() const override;
 
@@ -35,6 +37,7 @@ private:
     size_t max_block_size;
     size_t max_streams;
     size_t join_max_cached_bytes;
+    StreamingJoinKeyDomainPushdownPtr key_domain;
 };
 }
 }

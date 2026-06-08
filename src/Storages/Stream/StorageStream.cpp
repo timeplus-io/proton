@@ -2,6 +2,7 @@
 #include <Storages/Stream/StreamShardStore.h>
 #include <Storages/Stream/StreamSink.h>
 
+#include <Cluster/Common/Constants.h>
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Cluster/SchemaRecord/SchemaControl.h>
 #include <Core/Defines.h>
@@ -23,12 +24,19 @@
 #include <Storages/DistributedQuery.h>
 #include <Storages/PruneShards.h>
 #include <Storages/StorageMergeTree.h>
+#include <Common/ProfileEvents.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 #include <Common/randomSeed.h>
 
-#include <span>
 #include <ranges>
+#include <set>
+#include <span>
+
+namespace ProfileEvents
+{
+extern const Event StreamingJoinKeyDomainShardPruned;
+}
 
 namespace DB
 {
@@ -43,6 +51,14 @@ extern const int UNSUPPORTED;
 extern const int UNSUPPORTED_PARAMETER;
 extern const int RESOURCE_NOT_INITED;
 extern const int RESOURCE_NOT_FOUND;
+extern const int QUERY_WAS_CANCELLED;
+extern const int TIMEOUT_EXCEEDED;
+extern const int MEMORY_LIMIT_EXCEEDED;
+extern const int LIMIT_EXCEEDED;
+extern const int TOO_MANY_BYTES;
+extern const int TOO_MANY_ROWS;
+extern const int TOO_MANY_ROWS_OR_BYTES;
+extern const int SET_SIZE_LIMIT_EXCEEDED;
 }
 
 namespace
@@ -79,6 +95,150 @@ bool hasAnyVirtualReplica(std::span<const StreamShardStorePtr> shards)
     return false;
 }
 
+bool hasSnapshotBoundaryForAllShards(
+    std::span<const StreamShardStorePtr> shards, const std::unordered_map<UInt64, Int64> & snapshot_high_sns)
+{
+    if (snapshot_high_sns.empty())
+        return false;
+
+    for (const auto & shard : shards)
+    {
+        auto iter = snapshot_high_sns.find(shard->shard());
+        if (iter == snapshot_high_sns.end() || iter->second < cluster::Constants::LogStartSN - 1)
+            return false;
+    }
+
+    return true;
+}
+
+bool shouldRethrowStreamingJoinKeyDomainShardPruningException(int code)
+{
+    return code == ErrorCodes::QUERY_WAS_CANCELLED || code == ErrorCodes::TIMEOUT_EXCEEDED || code == ErrorCodes::MEMORY_LIMIT_EXCEEDED
+        || code == ErrorCodes::LIMIT_EXCEEDED || code == ErrorCodes::TOO_MANY_ROWS || code == ErrorCodes::TOO_MANY_BYTES
+        || code == ErrorCodes::TOO_MANY_ROWS_OR_BYTES || code == ErrorCodes::SET_SIZE_LIMIT_EXCEEDED;
+}
+
+std::optional<std::unordered_set<UInt64>> getHistoricalShardsFromStreamingJoinKeyDomain(
+    const ExpressionActionsPtr & sharding_key_expr,
+    bool sharding_key_is_deterministic,
+    const String & sharding_key_column_name,
+    const std::vector<UInt64> & slot_to_shard,
+    const StorageSnapshotPtr & storage_snapshot,
+    const SelectQueryInfo & query_info,
+    const std::vector<UInt64> & query_shards,
+    const ContextPtr & context,
+    LoggerPtr logger)
+{
+    const auto & settings = context->getSettingsRef();
+    if (!settings.enable_streaming_join_key_domain_pushdown || !settings.enable_streaming_join_key_domain_shard_pruning)
+        return {};
+
+    if (!query_info.left_backfill_join_key_domain)
+        return {};
+
+    const auto & key_domain = *query_info.left_backfill_join_key_domain;
+    if (!key_domain.exact || !key_domain.hasConfirmedLeftBackfillBoundary() || key_domain.left_key_names.empty())
+        return {};
+
+    /// Shard pruning is stricter than the regular optimize_skip_unused_shards path:
+    /// for this join-derived pruning we only trust deterministic sharding keys.
+    if (!sharding_key_is_deterministic)
+    {
+        LOG_DEBUG(logger, "Streaming join key-domain shard pruning is not applicable because the sharding key is nondeterministic");
+        return {};
+    }
+
+    std::unordered_set<UInt64> allowed_query_shards(query_shards.begin(), query_shards.end());
+    std::set<UInt64> historical_shards;
+
+    if (key_domain.key_rows == 0 || key_domain.left_key_domain_blocks.empty())
+        return std::unordered_set<UInt64>{};
+
+    const auto & columns = storage_snapshot->metadata->getColumns();
+    try
+    {
+        for (const auto & block : key_domain.left_key_domain_blocks)
+        {
+            if (!block.rows())
+                continue;
+
+            for (const auto & name : key_domain.left_key_names)
+            {
+                auto physical_column = columns.tryGetPhysical(name);
+                if (!physical_column)
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Streaming join key-domain shard pruning is not applicable because '{}' is not a physical storage column",
+                        name);
+                    return {};
+                }
+
+                if (!block.has(name))
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Streaming join key-domain shard pruning is not applicable because key-domain block does not contain '{}'",
+                        name);
+                    return {};
+                }
+
+                const auto & key_column = block.getByName(name);
+                if (!key_column.type->equals(*physical_column->type))
+                {
+                    LOG_DEBUG(
+                        logger,
+                        "Streaming join key-domain shard pruning is not applicable because key '{}' type '{}' does not match physical "
+                        "column type '{}'",
+                        name,
+                        key_column.type->getName(),
+                        physical_column->type->getName());
+                    return {};
+                }
+
+                for (size_t row = 0; row < block.rows(); ++row)
+                {
+                    Field value;
+                    key_column.column->get(row, value);
+                    if (value.isNull())
+                    {
+                        LOG_DEBUG(logger, "Streaming join key-domain shard pruning is not applicable because key '{}' contains NULL", name);
+                        return {};
+                    }
+                }
+            }
+
+            Block block_with_sharding_key = block;
+            sharding_key_expr->execute(block_with_sharding_key);
+            if (!block_with_sharding_key.has(sharding_key_column_name))
+            {
+                LOG_DEBUG(
+                    logger,
+                    "Streaming join key-domain shard pruning is not applicable because sharding key column '{}' was not produced",
+                    sharding_key_column_name);
+                return {};
+            }
+
+            const auto selector = createSelector(block_with_sharding_key.getByName(sharding_key_column_name), slot_to_shard);
+            for (auto shard : selector)
+            {
+                if (allowed_query_shards.contains(shard))
+                    historical_shards.insert(shard);
+            }
+        }
+    }
+    catch (Exception & e)
+    {
+        if (shouldRethrowStreamingJoinKeyDomainShardPruningException(e.code()))
+            throw;
+
+        LOG_DEBUG(
+            logger, "Streaming join key-domain shard pruning is not applicable because sharding key evaluation failed: {}", e.message());
+        return {};
+    }
+
+    return std::unordered_set<UInt64>{historical_shards.begin(), historical_shards.end()};
+}
 }
 
 StorageStream::StorageStream(
@@ -159,22 +319,23 @@ void StorageStream::init()
     std::vector<uint32_t> shard_ids;
     for (uint32_t i = 0; i < shards; ++i)
         shard_ids.push_back(i);
-    
+
     for (auto shard_id : shard_ids)
     {
-        stream_shards_init.push_back(std::make_shared<StreamShardStore>(
-            shard_id,
-            table_id,
-            relative_data_path,
-            init_params->metadata,
-            init_params->attach,
-            init_params->context,
-            init_params->date_column_name,
-            init_params->merging_params,
-            std::make_unique<MergeTreeSettings>(*ssettings),
-            init_params->has_force_restore_data_flag,
-            inmemory,
-            *this));
+        stream_shards_init.push_back(
+            std::make_shared<StreamShardStore>(
+                shard_id,
+                table_id,
+                relative_data_path,
+                init_params->metadata,
+                init_params->attach,
+                init_params->context,
+                init_params->date_column_name,
+                init_params->merging_params,
+                std::make_unique<MergeTreeSettings>(*ssettings),
+                init_params->has_force_restore_data_flag,
+                inmemory,
+                *this));
 
         slot_to_shard.push_back(shard_id);
     }
@@ -299,6 +460,13 @@ void StorageStream::doRead(
             }
             case QueryMode::StreamingConcat:
             {
+                const bool skip_historical_backfill
+                    = shards_to_read.historical_shards && !shards_to_read.historical_shards->contains(stream_shard->shard());
+                std::optional<Int64> snapshot_high_sn;
+                if (auto iter = shards_to_read.snapshot_high_sns.find(stream_shard->shard());
+                    iter != shards_to_read.snapshot_high_sns.end())
+                    snapshot_high_sn = iter->second;
+
                 stream_shard->readConcat(
                     *plan,
                     column_names,
@@ -308,7 +476,9 @@ void StorageStream::doRead(
                     processed_stage,
                     max_block_size,
                     shard_num_streams,
-                    streaming_shard_num_streams);
+                    streaming_shard_num_streams,
+                    skip_historical_backfill,
+                    snapshot_high_sn);
 
                 max_threads_for_streaming_read
                     += std::max(plan->getMaxThreads() ? plan->getMaxThreads() : shard_num_streams, streaming_shard_num_streams);
@@ -429,12 +599,13 @@ void StorageStream::doReadChangelog(
         auto output_header
             = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
 
-        query_plan.addStep(std::make_unique<Streaming::ChangelogStep>(
-            query_plan.getCurrentDataStream(),
-            output_header,
-            storage_snapshot->metadata->getPrimaryKeyColumns(),
-            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column
-                                                                                                      : ""));
+        query_plan.addStep(
+            std::make_unique<Streaming::ChangelogStep>(
+                query_plan.getCurrentDataStream(),
+                output_header,
+                storage_snapshot->metadata->getPrimaryKeyColumns(),
+                (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column
+                                                                                                          : ""));
     }
     else if (Streaming::isVersionedKVStorage(dataStreamSemantic()))
     {
@@ -442,16 +613,18 @@ void StorageStream::doReadChangelog(
             = storage_snapshot->getSampleBlockForColumns(original_required_columns.empty() ? column_names : original_required_columns);
 
         const auto & settings_ref = context_->getSettingsRef();
-        query_plan.addStep(std::make_unique<Streaming::ChangelogConvertStep>(
-            query_plan.getCurrentDataStream(),
-            std::move(output_header),
-            storage_snapshot->metadata->getPrimaryKeyColumns(),
-            (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
-            settings_ref.default_hash_table.value,
-            context_->getSpillDirForCurrentQuery("changelog"),
-            settings_ref.max_hot_keys.value,
-            settings_ref.kv_options.value,
-            /*backfill_key_unique=*/true));
+        query_plan.addStep(
+            std::make_unique<Streaming::ChangelogConvertStep>(
+                query_plan.getCurrentDataStream(),
+                std::move(output_header),
+                storage_snapshot->metadata->getPrimaryKeyColumns(),
+                (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column
+                                                                                                          : "",
+                settings_ref.default_hash_table.value,
+                context_->getSpillDirForCurrentQuery("changelog"),
+                settings_ref.max_hot_keys.value,
+                settings_ref.kv_options.value,
+                /*backfill_key_unique=*/true));
     }
     else
         throw Exception(
@@ -547,8 +720,114 @@ String StorageStream::getName() const
     return "Stream";
 }
 
-StorageStream::ShardsToRead StorageStream::getShardsToRead(
+void StorageStream::captureStreamingJoinLeftBackfillSnapshotHighSNs(
     const ContextPtr & local_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const
+{
+    auto disable_pushdown = [&] {
+        if (query_info.left_backfill_join_key_domain)
+            query_info.left_backfill_join_key_domain->clearLeftBackfillBoundaryConfirmation();
+        query_info.left_backfill_join_key_domain.reset();
+        query_info.left_backfill_snapshot_high_sns.clear();
+    };
+
+    if (!query_info.left_backfill_join_key_domain)
+    {
+        query_info.left_backfill_snapshot_high_sns.clear();
+        return;
+    }
+
+    if (!local_context->getSettingsRef().enable_streaming_join_key_domain_pushdown || !query_info.left_backfill_join_key_domain->exact)
+    {
+        disable_pushdown();
+        return;
+    }
+
+    const auto left_semantic = dataStreamSemantic();
+    if (query_info.left_input_tracking_changes || Streaming::isChangelogDataStream(left_semantic)
+        || Streaming::isChangelogStorage(left_semantic) || Streaming::isChangelogKVStorage(left_semantic)
+        || Streaming::isVersionedKVStorage(left_semantic))
+    {
+        LOG_DEBUG(log, "Streaming join key-domain pushdown disabled because the left stream tracks changes");
+        disable_pushdown();
+        return;
+    }
+
+    if (!query_info.left_backfill_snapshot_high_sns.empty())
+    {
+        if (query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary())
+            return;
+
+        /// A second analysis pass can install a fresh key-domain while the old
+        /// pass left a snapshot map behind. Do not let that stale map bypass
+        /// confirmation for the current domain.
+        query_info.left_backfill_snapshot_high_sns.clear();
+    }
+
+    if (!query_info.shards_to_query)
+        query_info.shards_to_query = getPrunedShardsWithQueryMode(
+            sharding_key_expr,
+            sharding_key_is_deterministic,
+            sharding_key_column_name,
+            shared_from_this(),
+            storage_snapshot,
+            query_info,
+            slot_to_shard,
+            local_context,
+            log.load());
+
+    if (local_context->getSettingsRef().exec_mode != ExecuteMode::Normal
+        || getQueryMode(shared_from_this(), query_info, local_context) != QueryMode::StreamingConcat)
+    {
+        LOG_DEBUG(log, "Streaming join key-domain pushdown disabled because the left stream read cannot emit historical boundaries");
+        disable_pushdown();
+        return;
+    }
+
+    std::vector<StreamShardStorePtr> snapshot_shards;
+    snapshot_shards.reserve(query_info.shards_to_query->shards.size());
+    auto all_shards = stream_shards;
+    for (auto shard : query_info.shards_to_query->shards)
+    {
+        chassert(shard < all_shards.size());
+        snapshot_shards.push_back(all_shards[shard]);
+    }
+
+    if (hasAnyVirtualReplica(snapshot_shards))
+    {
+        LOG_DEBUG(log, "Streaming join key-domain pushdown disabled because the left stream read contains virtual replicas");
+        disable_pushdown();
+        return;
+    }
+
+    for (const auto & stream_shard : snapshot_shards)
+    {
+        auto high_sn = stream_shard->committedSequence().value_or(-1);
+        query_info.left_backfill_snapshot_high_sns.emplace(stream_shard->shard(), high_sn);
+    }
+
+    if (!hasSnapshotBoundaryForAllShards(snapshot_shards, query_info.left_backfill_snapshot_high_sns))
+    {
+        LOG_DEBUG(log, "Streaming join key-domain pushdown disabled because a left stream shard has no valid snapshot boundary");
+        disable_pushdown();
+        return;
+    }
+
+    query_info.left_backfill_join_key_domain->confirmLeftBackfillBoundary();
+
+    LOG_DEBUG(
+        log,
+        "Captured streaming join left backfill snapshot high SNs: {}",
+        fmt::join(
+            query_info.left_backfill_snapshot_high_sns
+                | std::views::transform([](const auto & entry) { return fmt::format("{}:{}", entry.first, entry.second); }),
+            ", "));
+}
+
+StorageStream::ShardsToRead StorageStream::getShardsToRead(
+    const ContextPtr & local_context,
+    const StorageSnapshotPtr & storage_snapshot,
+    SelectQueryInfo & query_info,
+    bool include_historical_shard_pruning) const
 {
     if (!query_info.shards_to_query)
         query_info.shards_to_query = getPrunedShardsWithQueryMode(
@@ -574,11 +853,44 @@ StorageStream::ShardsToRead StorageStream::getShardsToRead(
     for (auto shard : query_info.shards_to_query->shards)
     {
         chassert(shard < all_shards.size());
-        result.shards.push_back(std::move(all_shards[shard]));
+        result.shards.push_back(all_shards[shard]);
     }
 
     if (all_shards.size() > query_info.shards_to_query->shards.size())
         LOG_INFO(log, "Query shards=[{}] after pruning", fmt::join(query_info.shards_to_query->shards, ", "));
+
+    const bool use_left_backfill_snapshot = query_info.left_backfill_join_key_domain
+        && query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary()
+        && !query_info.left_backfill_snapshot_high_sns.empty();
+
+    result.snapshot_high_sns
+        = use_left_backfill_snapshot ? query_info.left_backfill_snapshot_high_sns : query_info.streaming_join_snapshot_high_sns;
+
+    if (include_historical_shard_pruning && result.mode == QueryMode::StreamingConcat && !hasAnyVirtualReplica(result.shards)
+        && hasSnapshotBoundaryForAllShards(result.shards, result.snapshot_high_sns))
+    {
+        result.historical_shards = getHistoricalShardsFromStreamingJoinKeyDomain(
+            sharding_key_expr,
+            sharding_key_is_deterministic,
+            sharding_key_column_name,
+            slot_to_shard,
+            storage_snapshot,
+            query_info,
+            query_info.shards_to_query->shards,
+            local_context,
+            log.load());
+
+        if (result.historical_shards)
+        {
+            std::set<UInt64> sorted_historical_shards(result.historical_shards->begin(), result.historical_shards->end());
+            if (result.historical_shards->size() < query_info.shards_to_query->shards.size())
+                ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainShardPruned);
+            LOG_DEBUG(
+                log,
+                "Historical backfill shards=[{}] after streaming join key-domain shard pruning",
+                fmt::join(sorted_historical_shards, ", "));
+        }
+    }
 
     return result;
 }
@@ -1168,7 +1480,7 @@ QueryProcessingStage::Enum StorageStream::getQueryProcessingStage(
     const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info) const
 {
-    auto shards_to_read = getShardsToRead(context_, storage_snapshot, query_info);
+    auto shards_to_read = getShardsToRead(context_, storage_snapshot, query_info, /*include_historical_shard_pruning=*/false);
     if (shards_to_read.mode == QueryMode::Historical)
     {
         /// For now, we assume all shards of a stream will be co-located on the same node

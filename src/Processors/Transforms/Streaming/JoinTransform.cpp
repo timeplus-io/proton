@@ -3,13 +3,29 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Interpreters/Streaming/HashJoin/joinKind.h>
 #include <Interpreters/TableJoin.h>
+#include <Processors/Transforms/Streaming/JoinRightBoundary.h>
 #include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
 namespace Streaming
 {
+namespace
+{
+bool isHistoricalBoundaryMarker(const Chunk & chunk)
+{
+    auto chunk_ctx = chunk.getChunkContext();
+    return !chunk.hasRows() && chunk_ctx && (chunk_ctx->isHistoricalDataStart() || chunk_ctx->isHistoricalDataEnd());
+}
+
+}
+
 Block JoinTransform::transformHeader(Block header, const HashJoinPtr & join)
 {
     join->transformHeader(header);
@@ -23,7 +39,9 @@ JoinTransform::JoinTransform(
     HashJoinPtr join_,
     size_t transform_id_,
     size_t max_block_size_,
-    UInt64 join_max_cached_bytes)
+    UInt64 join_max_cached_bytes,
+    JoinRightBoundaryPtr right_boundary_,
+    JoinLeftBoundaryPtr left_boundary_)
     : IProcessor({left_input_header, right_input_header}, {output_header}, ProcessorID::StreamingJoinTransformID)
     , join(std::move(join_))
     , transform_id(transform_id_)
@@ -31,6 +49,11 @@ JoinTransform::JoinTransform(
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , logger(getLogger("StreamingJoinTransform"))
     , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
+    , right_boundary(std::move(right_boundary_))
+    , left_boundary(std::move(left_boundary_))
+    , right_boundary_ready(!right_boundary || right_boundary->isReleased())
+    , right_boundary_local_reached(!right_boundary || right_boundary->isReleased())
+    , left_boundary_released(!left_boundary)
     , last_log_ts(MonotonicSeconds::now())
 {
     assert(join);
@@ -46,9 +69,20 @@ IProcessor::Status JoinTransform::prepare()
 {
     auto & output = outputs.front();
 
+    if (isCancelled())
+    {
+        abandonBoundaryParticipation("cancellation");
+        for (auto & port_ctx : input_ports_with_data)
+            port_ctx.input_port->close();
+
+        output.finish();
+        return Status::Finished;
+    }
+
     /// Check can output.
     if (output.isFinished())
     {
+        abandonBoundaryParticipation("output finish");
         for (auto & port_ctx : input_ports_with_data)
             port_ctx.input_port->close();
 
@@ -67,10 +101,33 @@ IProcessor::Status JoinTransform::prepare()
         return Status::PortFull;
     }
 
+    if (right_boundary && right_boundary_local_reached && !right_boundary_ready
+        && (right_boundary->tryRelease() || right_boundary->isReleased()))
+        return Status::Ready;
+
+    if (left_boundary && !left_boundary_released && left_boundary->isReleased())
+        return Status::Ready;
+
+    auto can_pull_input = [&](size_t input_index) {
+        if (required_update_processing_index.has_value() && *required_update_processing_index == input_index)
+            return true;
+
+        /// Keep boundary queues bounded. Once one chunk is delayed, withhold
+        /// demand from that side until the matching boundary releases.
+        if (input_index == 0 && right_boundary && !right_boundary_ready && !delayed_left_chunks.empty())
+            return false;
+
+        if (input_index == 1 && left_boundary && right_boundary_ready && !left_boundary_released && !delayed_right_chunks.empty())
+            return false;
+
+        return true;
+    };
+
     Status status = Status::NeedData;
 
-    for (size_t i = 0; auto & input_port_with_data : input_ports_with_data)
+    for (size_t i = 0; i < input_ports_with_data.size(); ++i)
     {
+        auto & input_port_with_data = input_ports_with_data[i];
         if (input_port_with_data.input_chunk)
         {
             /// In case, this input port request checkpoint, so we need wait for other inputs
@@ -98,6 +155,9 @@ IProcessor::Status JoinTransform::prepare()
         }
         else
         {
+            if (!can_pull_input(i))
+                continue;
+
             input_port_with_data.input_port->setNeeded();
 
             if (input_port_with_data.input_port->hasData())
@@ -106,7 +166,6 @@ IProcessor::Status JoinTransform::prepare()
                 status = Status::Ready;
             }
         }
-        ++i;
     }
 
     return status;
@@ -114,6 +173,8 @@ IProcessor::Status JoinTransform::prepare()
 
 void JoinTransform::work()
 {
+    chassert(right_boundary || left_boundary || input_ports_with_data[0].input_chunk || input_ports_with_data[1].input_chunk);
+
     auto start_ns = MonotonicNanoseconds::now();
     uint64_t in_rows = 0;
     uint64_t in_bytes = 0;
@@ -121,13 +182,19 @@ void JoinTransform::work()
 
     bool has_watermark = false;
     bool has_data = false;
+    bool right_boundary_became_ready = false;
     UInt8 requested_checkpoint_num = 0;
     CheckpointContextPtr requested_ckpt;
 
     Chunks chunks;
     {
         /// Move out the input chunks
-        assert(input_ports_with_data[0].input_chunk || input_ports_with_data[1].input_chunk);
+        if (right_boundary && right_boundary_local_reached && !right_boundary_ready
+            && (right_boundary->tryRelease() || right_boundary->isReleased()))
+            right_boundary_became_ready = markRightBoundaryReady("shared stop-SN boundary");
+
+        if (left_boundary && !left_boundary_released && left_boundary->isReleased())
+            observeLeftBoundaryReleased("shared historical left boundary");
 
         for (size_t i = 0; i < input_ports_with_data.size(); ++i)
         {
@@ -160,8 +227,22 @@ void JoinTransform::work()
                 {
                     chassert(!required_update_processing_index && "Checkpoint request should not occur when update processing is required");
 
+                    if ((right_boundary || left_boundary) && hasCheckpointUnsafeBoundaryState())
+                    {
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "Checkpoint barrier reached streaming join key-domain boundary state before delayed chunks were replayed");
+                    }
+
                     ++requested_checkpoint_num;
                     continue; /// keep in input_ports_with_data until all inputs checkpoint requested
+                }
+
+                if (i == 1 && right_boundary && input_chunk.getChunkContext() && input_chunk.getChunkContext()->isHistoricalDataEnd())
+                {
+                    right_boundary_local_reached = true;
+                    if (right_boundary->markParticipantReached(transform_id))
+                        right_boundary_became_ready = markRightBoundaryReady("historical-end marker") || right_boundary_became_ready;
                 }
 
                 if (input_chunk.hasRows())
@@ -183,8 +264,47 @@ void JoinTransform::work()
         }
     }
 
+    if (right_boundary && !right_boundary_ready && chunks[0] && (chunks[0].hasRows() || isHistoricalBoundaryMarker(chunks[0])))
+    {
+        LOG_TRACE(
+            logger,
+            "Delaying left chunk until right snapshot boundary: rows={}, historical_start={}, historical_end={}",
+            chunks[0].getNumRows(),
+            chunks[0].getChunkContext() && chunks[0].getChunkContext()->isHistoricalDataStart(),
+            chunks[0].getChunkContext() && chunks[0].getChunkContext()->isHistoricalDataEnd());
+        has_data = has_data && chunks[1].hasRows();
+        delayed_left_chunks.emplace_back(std::move(chunks[0]));
+    }
+    else if (right_boundary && chunks[0] && isHistoricalBoundaryMarker(chunks[0]))
+    {
+        processLeftChunk(std::move(chunks[0]));
+    }
+
+    if (right_boundary && (!right_boundary_ready || !delayed_left_chunks.empty()))
+        has_watermark = false;
+
+    if (right_boundary && right_boundary_ready && left_boundary && !left_boundary->isReleased() && chunks[1].hasRows())
+    {
+        LOG_TRACE(
+            logger,
+            "Delaying right live chunk until left snapshot boundary: rows={}, left_progress={}",
+            chunks[1].getNumRows(),
+            left_boundary->progressString());
+        has_data = has_data && chunks[0].hasRows();
+        delayed_right_chunks.emplace_back(std::move(chunks[1]));
+    }
+
+    if (left_boundary && !left_boundary_released)
+        has_watermark = false;
+
     if (has_data)
         doJoin(std::move(chunks));
+
+    if (right_boundary_ready && (!delayed_left_chunks.empty() || right_boundary_became_ready))
+        replayDelayedLeftChunks();
+
+    if (left_boundary && !left_boundary_released && left_boundary->isReleased())
+        observeLeftBoundaryReleased("shared historical left boundary");
 
     /// If no output was produced, emit a heartbeat chunk.
     /// Skip the heartbeat when the next "consecutive" chunk must be processed,
@@ -197,6 +317,8 @@ void JoinTransform::work()
     if (has_watermark)
     {
         chassert(!output_chunks.empty());
+        if (isHistoricalBoundaryMarker(output_chunks.back()))
+            output_chunks.emplace_back(output_header_chunk.clone());
         setupWatermark(output_chunks.back(), local_watermark);
     }
     else if (requested_ckpt)
@@ -262,6 +384,169 @@ inline void JoinTransform::doJoin(Chunks chunks)
     }
 }
 
+bool JoinTransform::markRightBoundaryReady(const char * reason)
+{
+    if (!right_boundary || right_boundary_ready)
+        return false;
+
+    right_boundary_ready = true;
+    LOG_DEBUG(logger, "Streaming join right snapshot boundary reached by {}; source_progress={}", reason, right_boundary->progressString());
+    return true;
+}
+
+bool JoinTransform::observeLeftBoundaryReleased(const char * reason)
+{
+    if (!left_boundary || left_boundary_released || !left_boundary->isReleased())
+        return false;
+
+    left_boundary_released = true;
+    LOG_DEBUG(
+        logger,
+        "Streaming join left snapshot boundary released by {}; transform_id={}, left_progress={}, delayed_right_chunks={}",
+        reason,
+        transform_id,
+        left_boundary->progressString(),
+        delayed_right_chunks.size());
+    processDelayedRightChunks();
+    return true;
+}
+
+void JoinTransform::replayDelayedLeftChunks()
+{
+    while (!delayed_left_chunks.empty())
+    {
+        auto delayed_chunk = std::move(delayed_left_chunks.front());
+        delayed_left_chunks.pop_front();
+        LOG_TRACE(
+            logger,
+            "Replaying delayed left chunk after right snapshot boundary: rows={}, historical_start={}, historical_end={}",
+            delayed_chunk.getNumRows(),
+            delayed_chunk.getChunkContext() && delayed_chunk.getChunkContext()->isHistoricalDataStart(),
+            delayed_chunk.getChunkContext() && delayed_chunk.getChunkContext()->isHistoricalDataEnd());
+        processLeftChunk(std::move(delayed_chunk));
+    }
+}
+
+void JoinTransform::processLeftChunk(Chunk chunk)
+{
+    if (chunk.hasRows())
+    {
+        Chunks chunks;
+        chunks[0].swap(chunk);
+        doJoin(std::move(chunks));
+    }
+    else if (auto chunk_ctx = chunk.getChunkContext();
+             chunk_ctx && (chunk_ctx->isHistoricalDataStart() || chunk_ctx->isHistoricalDataEnd()))
+    {
+        auto marker = output_header_chunk.clone();
+        marker.setChunkContext(std::move(chunk_ctx));
+        marker.clearWatermark();
+        output_chunks.emplace_back(std::move(marker));
+
+        if (right_boundary && output_chunks.back().getChunkContext()->isHistoricalDataEnd())
+        {
+            if (!left_boundary)
+            {
+                LOG_DEBUG(
+                    logger,
+                    "Streaming join left snapshot boundary reached; releasing delayed right chunks={}",
+                    delayed_right_chunks.size());
+                left_boundary_released = true;
+                processDelayedRightChunks();
+            }
+            else if (left_boundary->markParticipantEnded(transform_id))
+            {
+                observeLeftBoundaryReleased("historical-end marker");
+            }
+            else
+            {
+                LOG_DEBUG(
+                    logger,
+                    "Streaming join left snapshot boundary reached for transform_id={}; waiting for peers left_progress={}, "
+                    "delayed_right_chunks={}",
+                    transform_id,
+                    left_boundary->progressString(),
+                    delayed_right_chunks.size());
+            }
+        }
+    }
+}
+
+void JoinTransform::processDelayedRightChunks()
+{
+    while (!delayed_right_chunks.empty())
+    {
+        auto delayed_chunk = std::move(delayed_right_chunks.front());
+        delayed_right_chunks.pop_front();
+
+        if (!delayed_chunk.hasRows())
+            continue;
+
+        LOG_TRACE(logger, "Replaying delayed right chunk after left snapshot boundary: rows={}", delayed_chunk.getNumRows());
+        Chunks chunks;
+        chunks[1].swap(delayed_chunk);
+        doJoin(std::move(chunks));
+    }
+}
+
+bool JoinTransform::hasCheckpointUnsafeBoundaryState() const
+{
+    return !right_boundary_ready || !left_boundary_released || !delayed_left_chunks.empty() || !delayed_right_chunks.empty();
+}
+
+void JoinTransform::abandonBoundaryParticipation(const char * reason) noexcept
+{
+    try
+    {
+        if (right_boundary && !right_boundary_local_reached)
+        {
+            right_boundary_local_reached = true;
+            if (right_boundary->markParticipantReached(transform_id) || right_boundary->isReleased())
+                markRightBoundaryReady(reason);
+        }
+
+        if (left_boundary && !left_boundary_released)
+        {
+            if (left_boundary->markParticipantEnded(transform_id) || left_boundary->isReleased())
+            {
+                left_boundary_released = true;
+                LOG_DEBUG(
+                    logger,
+                    "Streaming join left snapshot boundary abandoned by {}; transform_id={}, left_progress={}, delayed_right_chunks={}",
+                    reason,
+                    transform_id,
+                    left_boundary->progressString(),
+                    delayed_right_chunks.size());
+            }
+        }
+
+        delayed_left_chunks.clear();
+        delayed_right_chunks.clear();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Error while abandoning streaming join boundary participation.");
+    }
+}
+
+void JoinTransform::markBoundaryParticipationAbandoned(const char * reason) noexcept
+{
+    try
+    {
+        if (right_boundary)
+            right_boundary->markParticipantReached(transform_id);
+
+        if (left_boundary)
+            left_boundary->markParticipantEnded(transform_id);
+
+        LOG_DEBUG(logger, "Streaming join boundary participation marked abandoned by {}; transform_id={}", reason, transform_id);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Error while marking streaming join boundary participation abandoned.");
+    }
+}
+
 inline void JoinTransform::joinBidirectionally(Chunks chunks)
 {
     std::array<decltype(&Streaming::IHashJoin::insertLeftBlockAndJoin), 2> join_funcs
@@ -321,6 +606,7 @@ void JoinTransform::onCancel() noexcept
 {
     try
     {
+        markBoundaryParticipationAbandoned("cancellation");
         join->cancel();
     }
     catch (...)

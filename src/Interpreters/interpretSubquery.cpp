@@ -37,7 +37,10 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     ContextPtr context,
     const Names & required_source_columns,
     const SelectQueryOptions & options,
-    SeekToInfoPtr seek_to_info)
+    SeekToInfoPtr seek_to_info,
+    /// proton: starts.
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns)
+    /// proton: ends.
 {
     if (auto * expr = table_expression->as<ASTTableExpression>())
     {
@@ -49,7 +52,10 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         else if (expr->database_and_table_name)
             table = expr->database_and_table_name;
 
-        return interpretSubquery(table, context, required_source_columns, options, seek_to_info);
+        /// proton: starts.
+        return interpretSubquery(
+            table, context, required_source_columns, options, seek_to_info, std::move(streaming_join_snapshot_high_sns));
+        /// proton: ends.
     }
 
     /// Subquery or table name. The name of the table is similar to the subquery `SELECT * FROM t`.
@@ -128,6 +134,9 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
 
     /// We don't want to execute reading for subqueries in parallel
     subquery_context->setSetting("allow_experimental_parallel_reading_from_replicas", false);
-    return std::make_shared<InterpreterSelectWithUnionQuery>(query, subquery_context, subquery_options, required_source_columns);
+    /// proton: starts.
+    return std::make_shared<InterpreterSelectWithUnionQuery>(
+        query, subquery_context, subquery_options, required_source_columns, nullptr, std::move(streaming_join_snapshot_high_sns));
+    /// proton: ends.
 }
 }

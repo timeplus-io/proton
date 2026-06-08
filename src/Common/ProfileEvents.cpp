@@ -202,6 +202,16 @@
     M(SelectedRows, "Number of rows SELECTed from all tables.") \
     M(SelectedBytes, "Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.") \
 \
+    /* proton: starts. */ \
+    M(StreamingJoinKeyDomainBuilt, "Number of streaming join right-side key domains built for historical backfill pushdown.") \
+    M(StreamingJoinKeyDomainStorageFilterPushed, "Number of streaming join key-domain filters pushed into historical storage reads.") \
+    M(StreamingJoinKeyDomainPostFilterApplied, \
+      "Number of defensive post-read streaming join key-domain filters added to historical backfill plans.") \
+    M(StreamingJoinKeyDomainShardPruned, "Number of streaming join historical backfill reads whose shard set was pruned by a key domain.") \
+    M(StreamingJoinKeyDomainPrimaryKeyPruned, \
+      "Number of streaming join historical backfill reads whose primary-key mark ranges were pruned by a key domain.") \
+    /* proton: ends. */ \
+\
     M(WaitMarksLoadMicroseconds, "Time spent loading marks") \
     M(BackgroundLoadingMarksTasks, "Number of background tasks for loading marks") \
     M(LoadedMarksCount, "Number of marks loaded (total across columns).") \
@@ -358,7 +368,7 @@
       "due to overrun.") \
     M(QueryProfilerRuns, "Number of times QueryProfiler had been run.") \
     M(QueryProfilerErrors, "Invalid memory accesses during asynchronous stack unwinding.") \
-    \
+\
     M(CreatedLogEntryForMerge, "Successfully created log entry to merge parts in ReplicatedMergeTree.") \
     M(NotCreatedLogEntryForMerge, \
       "Log entry to merge parts in ReplicatedMergeTree is not created due to concurrent log update by another replica.") \
@@ -420,10 +430,10 @@
     M(DiskS3CompleteMultipartUpload, "Number of DiskS3 API CompleteMultipartUpload calls.") \
     M(DiskS3PutObject, "Number of DiskS3 API PutObject calls.") \
     M(DiskS3GetObject, "Number of DiskS3 API GetObject calls.") \
-    \
+\
     M(S3Clients, "Number of created S3 clients.") \
     M(TinyS3Clients, "Number of S3 clients copies which reuse an existing auth provider from another client.") \
-    \
+\
     M(ReadBufferFromS3Microseconds, "Time spent on reading from S3.") \
     M(ReadBufferFromS3InitMicroseconds, "Time spent initializing connection to S3.") \
     M(ReadBufferFromS3Bytes, "Bytes read from S3.") \
@@ -537,13 +547,14 @@
     M(IOUringCQEsFailed, "Total number of completed io_uring CQEs with failures") \
 \
     M(ParallelReplicasAvailableCount, "Number of replicas available to execute a query with task-based parallel replicas") \
-    M(ParallelReplicasUnavailableCount, "Number of replicas which was chosen, but found to be unavailable during query execution with task-based parallel replicas") \
-    \
+    M(ParallelReplicasUnavailableCount, \
+      "Number of replicas which was chosen, but found to be unavailable during query execution with task-based parallel replicas") \
+\
     M(S3CachedCredentialsProvidersReused, "Total number of reused credentials provider from the cache") \
     M(S3CachedCredentialsProvidersAdded, "Total number of newly added credentials providers to the cache") \
-    \
+\
     M(PythonGILAcquired, "Number of times the Python GIL was acquired") \
-    M(PythonGILWaitMicroseconds, "Total time spent waiting to acquire the Python GIL in microseconds") \
+    M(PythonGILWaitMicroseconds, "Total time spent waiting to acquire the Python GIL in microseconds")
 
 
 namespace ProfileEvents

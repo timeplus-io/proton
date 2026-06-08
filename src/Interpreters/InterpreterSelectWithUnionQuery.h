@@ -2,6 +2,9 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
+/// proton: starts.
+#include <Storages/SelectQueryInfo.h>
+/// proton: ends.
 
 namespace DB
 {
@@ -20,13 +23,21 @@ public:
         const ASTPtr & query_ptr_,
         const ContextPtr & context_,
         const SelectQueryOptions &,
-        const Names & required_result_column_names = {});
+        const Names & required_result_column_names = {},
+        /// proton: starts.
+        StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_ = nullptr,
+        StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_ = {});
+        /// proton: ends.
 
     InterpreterSelectWithUnionQuery(
         const ASTPtr & query_ptr_,
         const ContextMutablePtr & context_,
         const SelectQueryOptions &,
-        const Names & required_result_column_names = {});
+        const Names & required_result_column_names = {},
+        /// proton: starts.
+        StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain_ = nullptr,
+        StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns_ = {});
+        /// proton: ends.
 
     ~InterpreterSelectWithUnionQuery() override;
 
@@ -65,6 +76,10 @@ public:
 
 private:
     std::vector<std::unique_ptr<IInterpreterUnionOrSelectQuery>> nested_interpreters;
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr inherited_left_backfill_join_key_domain;
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns;
+    /// proton: ends.
 
     static Block getCommonHeaderForUnion(const Blocks & headers);
 

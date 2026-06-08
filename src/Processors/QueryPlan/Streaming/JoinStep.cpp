@@ -20,8 +20,13 @@ JoinStep::JoinStep(
     JoinPtr join_,
     size_t max_block_size_,
     size_t max_streams_,
-    size_t join_max_cached_bytes_)
-    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), join_max_cached_bytes(join_max_cached_bytes_)
+    size_t join_max_cached_bytes_,
+    StreamingJoinKeyDomainPushdownPtr key_domain_)
+    : join(std::move(join_))
+    , max_block_size(max_block_size_)
+    , max_streams(max_streams_)
+    , join_max_cached_bytes(join_max_cached_bytes_)
+    , key_domain(std::move(key_domain_))
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -37,6 +42,7 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
     if (pipelines.size() != 2)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "StreamingJoinStep expect two input steps");
 
+    const bool install_snapshot_boundary = key_domain && key_domain->hasConfirmedLeftBackfillBoundary();
     return QueryPipelineBuilder::joinPipelinesStreaming(
         std::move(pipelines[0]),
         std::move(pipelines[1]),
@@ -45,6 +51,8 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
         max_block_size,
         max_streams,
         join_max_cached_bytes,
+        install_snapshot_boundary ? key_domain->right_snapshot_source_ids : std::vector<String>{},
+        install_snapshot_boundary ? key_domain->right_snapshot_stop_sns : std::vector<Int64>{},
         &processors);
 }
 

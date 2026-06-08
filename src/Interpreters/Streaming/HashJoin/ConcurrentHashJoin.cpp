@@ -187,7 +187,7 @@ void ConcurrentHashJoin::insertRightBlock(Block right_block)
 
 void ConcurrentHashJoin::joinLeftBlock(Block & left_block)
 {
-    auto dispatched_blocks = dispatchBlock(right_key_column_positions, std::move(left_block));
+    auto dispatched_blocks = dispatchBlock(left_key_column_positions, std::move(left_block));
     Blocks joined_blocks;
     joined_blocks.reserve(dispatched_blocks.size());
 

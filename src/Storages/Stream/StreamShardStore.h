@@ -16,6 +16,8 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ThreadPool.h>
 
+#include <optional>
+
 namespace CurrentMetrics
 {
 extern const Metric LocalThread;
@@ -62,7 +64,10 @@ public:
         SelectQueryInfo & query_info,
         ContextPtr context,
         size_t max_block_size,
-        size_t shard_num_streams);
+        size_t shard_num_streams,
+        std::optional<Int64> start_sn_override = {},
+        std::optional<Int64> stop_sn_override = {},
+        bool force_non_streaming = false);
 
     /// \return maximum sequence number of current snapshot data, `< 0` if no data
     Int64 readHistorical(
@@ -73,7 +78,9 @@ public:
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        size_t num_streams);
+        size_t num_streams,
+        bool skip_historical_backfill = false,
+        std::optional<Int64> historical_upper_bound_sn = {});
 
     void readConcat(
         QueryPlan & query_plan,
@@ -84,7 +91,9 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         size_t num_streams,
-        size_t streaming_num_streams);
+        size_t streaming_num_streams,
+        bool skip_historical_backfill = false,
+        std::optional<Int64> snapshot_high_sn = {});
 
     cluster::CallResultV<int64_t> append(cluster::ByteVector && data, int64_t max_event_time, cluster::AckSemantic ack, int64_t timeout_ms);
 

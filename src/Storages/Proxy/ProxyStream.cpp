@@ -204,7 +204,12 @@ void ProxyStream::doRead(
 
         auto sub_context = createProxySubqueryContext(context_, query_info, isStreamingQuery());
         auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
-            current_subquery, sub_context, SelectQueryOptions().subquery().noModify(), column_names);
+            current_subquery,
+            sub_context,
+            SelectQueryOptions().subquery().noModify(),
+            column_names,
+            query_info.left_backfill_join_key_domain,
+            query_info.streaming_join_snapshot_high_sns);
 
         interpreter_subquery->ignoreWithTotals();
         interpreter_subquery->buildQueryPlan(query_plan);

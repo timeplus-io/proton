@@ -1,11 +1,12 @@
 #pragma once
 
+#include <Core/Block.h>
+#include <Interpreters/Context_fwd.h>
 #include <Processors/IProcessor.h>
 #include <QueryPipeline/Pipe.h>
 #include <QueryPipeline/QueryPipeline.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/TableLockHolder.h>
-#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -230,6 +231,8 @@ public:
         size_t max_block_size,
         size_t max_streams,
         size_t join_max_cached_bytes,
+        std::vector<String> right_stream_source_ids = {},
+        std::vector<Int64> right_stream_stop_sns = {},
         Processors * collected_processors = nullptr);
 
     static QueryPipelineBuilderPtr concatPipelines(

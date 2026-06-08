@@ -1,0 +1,2792 @@
+test_suite_name: streaming_join_key_domain_pushdown
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering streaming join key-domain pushdown for historical backfill filtering.
+tests:
+  - id: 0
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown keeps live reads active
+    description: Backfill uses a bounded right-key snapshot with a composite sharding expression, and live reads continue after the historical filter is applied.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_right;
+
+          - client: python
+            query_type: table
+            exist: test35_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_right(scope_id, entity_id, category)
+              values (1, 1, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_left(scope_id, entity_id, value)
+              values (1, 1, 10), (1, 2, 99), (2, 1, 999);
+
+          - client: python
+            query_id: "3500"
+            query_type: stream
+            depends_on_stream: test35_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 1
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_disjunctive_filter_max_rows = 0,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3500"
+            query_id: "3500_filter_path"
+            wait: 2
+            query: |
+              select to_uint8(value > 0)
+              from system.events
+              where event = 'StreamingJoinKeyDomainStorageFilterPushed';
+
+          - client: python
+            query_type: table
+            depends_on: "3500"
+            query_id: "3500_pk_path"
+            wait: 1
+            query: |
+              select to_uint8(value > 0)
+              from system.events
+              where event = 'StreamingJoinKeyDomainPrimaryKeyPruned';
+
+          - client: python
+            query_type: table
+            depends_on: "3500"
+            wait: 1
+            query: |
+              insert into test35_right(scope_id, entity_id, category)
+              values (1, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_left(scope_id, entity_id, value)
+              values (1, 2, 20);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3500' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_right;
+
+    expected_results:
+      - query_id: "3500"
+        expected_results:
+          - [1, 1, 10, "selected"]
+          - [1, 2, 20, "selected"]
+      - query_id: "3500_filter_path"
+        expected_results:
+          - [1]
+      - query_id: "3500_pk_path"
+        expected_results:
+          - [1]
+
+  - id: 1
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown supports aliased right keys
+    description: The right-side snapshot can expose join keys under names that differ from the left stream, while the left stream still uses a composite sharding expression.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_alias_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_alias_right;
+
+          - client: python
+            query_type: table
+            exist: test35_alias_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_alias_left
+              (
+                  group_id uint16,
+                  item_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(group_id, item_id))
+              primary key (group_id, item_id);
+
+          - client: python
+            query_type: table
+            exist: test35_alias_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_alias_right
+              (
+                  source_group uint16,
+                  source_item uint64,
+                  label string
+              )
+              engine = Stream(4, city_hash64(source_group, source_item))
+              primary key (source_group, source_item);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_alias_right(source_group, source_item, label)
+              values (3, 7, 'active');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_alias_left(group_id, item_id, value)
+              values (3, 7, 70), (3, 8, 800);
+
+          - client: python
+            query_id: "3501"
+            query_type: stream
+            depends_on_stream: test35_alias_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.group_id, l.item_id, l.value, r.label
+              from test35_alias_left as l
+              inner latest join
+              (
+                  select source_group, source_item, label
+                  from test35_alias_right
+                  where label = 'active'
+              ) as r
+              on l.group_id = r.source_group and l.item_id = r.source_item
+              where l.group_id = 3
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3501"
+            wait: 1
+            query: |
+              insert into test35_alias_right(source_group, source_item, label)
+              values (3, 9, 'active');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_alias_left(group_id, item_id, value)
+              values (3, 9, 90);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3501' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_alias_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_alias_right;
+
+    expected_results:
+      - query_id: "3501"
+        expected_results:
+          - [3, 7, 70, "active"]
+          - [3, 9, 90, "active"]
+
+  - id: 2
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown keeps live reads for empty snapshots
+    description: An empty right snapshot filters out historical left backfill for an inner latest join, but live left rows still join after matching right keys arrive.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_right;
+
+          - client: python
+            query_type: table
+            exist: test35_empty_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_left
+              (
+                  group_id uint16,
+                  item_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(group_id, item_id))
+              primary key (group_id, item_id);
+
+          - client: python
+            query_type: table
+            exist: test35_empty_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_right
+              (
+                  group_id uint16,
+                  item_id uint64,
+                  label string
+              )
+              engine = Stream(4, city_hash64(group_id, item_id))
+              primary key (group_id, item_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_left(group_id, item_id, value)
+              values (4, 1, 10);
+
+          - client: python
+            query_id: "3502"
+            query_type: stream
+            depends_on_stream: test35_empty_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.group_id, l.item_id, l.value, r.label
+              from test35_empty_left as l
+              inner latest join
+              (
+                  select group_id, item_id, label
+                  from test35_empty_right
+                  where label = 'active'
+              ) as r
+              on l.group_id = r.group_id and l.item_id = r.item_id
+              where l.group_id = 4
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3502"
+            wait: 1
+            query: |
+              insert into test35_empty_right(group_id, item_id, label)
+              values (4, 2, 'active');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_left(group_id, item_id, value)
+              values (4, 2, 20);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3502' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_right;
+
+    expected_results:
+      - query_id: "3502"
+        expected_results:
+          - [4, 2, 20, "active"]
+
+  - id: 3
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown supports a single join key
+    description: A single-key right-side snapshot filters historical backfill and still keeps live reads open for later matches.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_single_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_single_right;
+
+          - client: python
+            query_type: table
+            exist: test35_single_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_single_left
+              (
+                  id uint64,
+                  value int
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_single_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_single_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_single_right(id, label)
+              values (1, 'selected'), (5, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_single_left(id, value)
+              values (1, 10), (2, 20), (5, 50);
+
+          - client: python
+            query_id: "3503"
+            query_type: stream
+            depends_on_stream: test35_single_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.id, l.value, r.label
+              from test35_single_left as l
+              inner latest join
+              (
+                  select id, label
+                  from test35_single_right
+                  where label = 'selected'
+              ) as r
+              on l.id = r.id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3503"
+            wait: 1
+            query: |
+              insert into test35_single_right(id, label)
+              values (9, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_single_left(id, value)
+              values (9, 90);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3503' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_single_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_single_right;
+
+    expected_results:
+      - query_id: "3503"
+        expected_results:
+          - [1, 10, "selected"]
+          - [5, 50, "selected"]
+          - [9, 90, "selected"]
+
+  - id: 4
+    tags:
+      - streaming_join
+      - backfill
+    name: streaming join key-domain pushdown does not apply to outer joins
+    description: Unsupported outer latest joins must keep normal historical left rows when the setting is enabled.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_outer_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_outer_right;
+
+          - client: python
+            query_type: table
+            exist: test35_outer_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_outer_left
+              (
+                  id uint64,
+                  value int
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_outer_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_outer_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_outer_right(id, label)
+              values (1, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_outer_left(id, value)
+              values (1, 10), (2, 20);
+
+          - client: python
+            query_id: "3504"
+            query_type: stream
+            depends_on_stream: test35_outer_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.id, l.value
+              from test35_outer_left as l
+              left latest join
+              (
+                  select id, label
+                  from test35_outer_right
+                  where label = 'selected'
+              ) as r
+              on l.id = r.id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3504' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_outer_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_outer_right;
+
+    expected_results:
+      - query_id: "3504"
+        expected_results:
+          - [1, 10]
+          - [2, 20]
+
+  - id: 5
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown falls back when the key-domain row cap is exceeded
+    description: If the right-side prefix exceeds the configured key-domain row cap, the query keeps the normal backfill path and still joins matching live rows.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cap_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cap_right;
+
+          - client: python
+            query_type: table
+            exist: test35_cap_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_cap_left
+              (
+                  id uint64,
+                  value int
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_cap_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_cap_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_cap_right(id, label)
+              values (1, 'selected'), (2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_cap_left(id, value)
+              values (10, 10), (11, 20);
+
+          - client: python
+            query_id: "3505"
+            query_type: stream
+            depends_on_stream: test35_cap_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.id, l.value, r.label
+              from test35_cap_left as l
+              inner latest join
+              (
+                  select id, label
+                  from test35_cap_right
+                  where label = 'selected'
+              ) as r
+              on l.id = r.id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_max_rows = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3505"
+            wait: 1
+            query: |
+              insert into test35_cap_right(id, label)
+              values (3, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_cap_left(id, value)
+              values (3, 30);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id = '3505' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cap_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cap_right;
+
+    expected_results:
+      - query_id: "3505"
+        expected_results:
+          - [3, 30, "selected"]
+
+  - id: 6
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown supports nondeterministic left sharding
+    description: The key-domain optimization filters historical backfill without relying on deterministic left-side sharding.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_rand_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_rand_right;
+
+          - client: python
+            query_type: table
+            exist: test35_rand_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_rand_left
+              (
+                  id uint64,
+                  value int
+              )
+              engine = Stream(4, rand())
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_rand_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_rand_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_rand_right(id, label)
+              values (1, 'selected'), (2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_rand_left(id, value)
+              values (1, 10), (2, 20);
+
+          - client: python
+            query_id: "3506"
+            query_type: stream
+            depends_on_stream: test35_rand_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.id, l.value, r.label
+              from test35_rand_left as l
+              inner latest join
+              (
+                  select id, label
+                  from test35_rand_right
+                  where label = 'selected'
+              ) as r
+              on l.id = r.id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  allow_nondeterministic_optimize_skip_unused_shards = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3506' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_rand_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_rand_right;
+
+    expected_results:
+      - query_id: "3506"
+        expected_results:
+          - [1, 10, "selected"]
+          - [2, 20, "selected"]
+
+  - id: 7
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown supports a filtered CTE right source
+    description: A filtered right-side CTE still provides a bounded key-domain when parallel hash join is requested.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cte_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cte_right;
+
+          - client: python
+            query_type: table
+            exist: test35_cte_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_cte_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_cte_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_cte_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string,
+                  label string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_cte_right(scope_id, entity_id, category, label)
+              values (9, 1, 'selected', 'first'), (9, 2, 'selected', 'second'), (9, 3, 'ignored', 'ignored');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_cte_left(scope_id, entity_id, value)
+              values (9, 1, 10), (9, 2, 20), (9, 3, 30);
+
+          - client: python
+            query_id: "3507"
+            query_type: stream
+            depends_on_stream: test35_cte_left
+            terminate: manual
+            wait: 1
+            query: |
+              with right_src as
+              (
+                  select scope_id, entity_id, label
+                  from test35_cte_right
+                  where category = 'selected'
+              )
+              select l.scope_id, l.entity_id, l.value
+              from test35_cte_left as l
+              inner latest join right_src as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 9
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  join_algorithm = 'parallel_hash',
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3507' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cte_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_cte_right;
+
+    expected_results:
+      - query_id: "3507"
+        expected_results:
+          - [9, 1, 10]
+          - [9, 2, 20]
+
+  - id: 8
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join shard pruning supports composite keys and live continuation
+    description: Historical-only shard pruning with city_hash64(scope_id, entity_id) keeps live reads active and does not match the wrong scope.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_right;
+
+          - client: python
+            query_type: table
+            exist: test35_prune_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_prune_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(8, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_prune_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_prune_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(8, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_prune_right(scope_id, entity_id, category)
+              values (7, 101, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_prune_left(scope_id, entity_id, value)
+              values (7, 101, 10), (7, 102, 20), (8, 101, 810);
+
+          - client: python
+            query_id: "3508"
+            query_type: stream
+            depends_on_stream: test35_prune_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_prune_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_prune_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 7
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  enable_streaming_join_key_domain_shard_pruning = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3508"
+            query_id: "3508_prune_path"
+            wait: 2
+            query: |
+              select to_uint8(value > 0)
+              from system.events
+              where event = 'StreamingJoinKeyDomainShardPruned';
+
+          - client: python
+            query_type: table
+            depends_on: "3508"
+            wait: 1
+            query: |
+              insert into test35_prune_right(scope_id, entity_id, category)
+              values (7, 102, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_prune_left(scope_id, entity_id, value)
+              values (7, 102, 21);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3508' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_right;
+
+    expected_results:
+      - query_id: "3508"
+        expected_results:
+          - [7, 101, 10, "selected"]
+          - [7, 102, 21, "selected"]
+      - query_id: "3508_prune_path"
+        expected_results:
+          - [1]
+
+  - id: 9
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join shard pruning does not replay old rows after empty right snapshot
+    description: Empty right snapshot can prune all historical shards, but old left rows must not later appear as live rows after right keys are inserted.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_prune_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_prune_right;
+
+          - client: python
+            query_type: table
+            exist: test35_empty_prune_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_prune_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(8, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_empty_prune_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_prune_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(8, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_prune_left(scope_id, entity_id, value)
+              select 21, 2000 + number, to_int32(number)
+              from numbers(128);
+
+          - client: python
+            query_id: "3509"
+            query_type: stream
+            depends_on_stream: test35_empty_prune_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_empty_prune_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_empty_prune_right
+                  where category = 'active'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 21
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  enable_streaming_join_key_domain_shard_pruning = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3509"
+            wait: 1
+            query: |
+              insert into test35_empty_prune_right(scope_id, entity_id, category)
+              select 21, 2000 + number, 'active'
+              from numbers(128);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_prune_right(scope_id, entity_id, category)
+              values (21, 9999, 'active');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_prune_left(scope_id, entity_id, value)
+              values (21, 9999, 999);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3509' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_prune_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_prune_right;
+
+    expected_results:
+      - query_id: "3509"
+        expected_results:
+          - [21, 9999, 999, "active"]
+
+  - id: 10
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join shard pruning falls back when key-domain cap is exceeded
+    description: If the right key-domain exceeds the cap, shard pruning falls back and the query still joins matching live rows.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_cap_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_cap_right;
+
+          - client: python
+            query_type: table
+            exist: test35_prune_cap_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_prune_cap_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(8, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_prune_cap_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_prune_cap_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(8, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_prune_cap_right(scope_id, entity_id, category)
+              values (31, 1, 'selected'), (31, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_prune_cap_left(scope_id, entity_id, value)
+              values (31, 10, 10), (31, 11, 20);
+
+          - client: python
+            query_id: "3510"
+            query_type: stream
+            depends_on_stream: test35_prune_cap_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_prune_cap_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_prune_cap_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  enable_streaming_join_key_domain_shard_pruning = 1,
+                  streaming_join_key_domain_pushdown_max_rows = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3510"
+            wait: 1
+            query: |
+              insert into test35_prune_cap_right(scope_id, entity_id, category)
+              values (31, 3, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_prune_cap_left(scope_id, entity_id, value)
+              values (31, 3, 30);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id = '3510' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_cap_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_prune_cap_right;
+
+    expected_results:
+      - query_id: "3510"
+        expected_results:
+          - [31, 3, 30, "selected"]
+
+  - id: 11
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown supports tuple in filters
+    description: Domains larger than the disjunctive cutoff use tuple IN filtering without changing results.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_in_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_in_right;
+
+          - client: python
+            query_type: table
+            exist: test35_in_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_in_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_in_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_in_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_in_right(scope_id, entity_id, category)
+              values (41, 1, 'selected'), (41, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_in_left(scope_id, entity_id, value)
+              values (41, 1, 10), (41, 2, 20), (41, 3, 30);
+
+          - client: python
+            query_id: "3511"
+            query_type: stream
+            depends_on_stream: test35_in_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_in_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_in_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 41
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_disjunctive_filter_max_rows = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3511' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_in_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_in_right;
+
+    expected_results:
+      - query_id: "3511"
+        expected_results:
+          - [41, 1, 10, "selected"]
+          - [41, 2, 20, "selected"]
+
+  - id: 12
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown falls back when generated in set would exceed limits
+    description: Generated IN filters respect set limits and keep the query valid by falling back instead of failing.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_set_limit_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_set_limit_right;
+
+          - client: python
+            query_type: table
+            exist: test35_set_limit_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_set_limit_left
+              (
+                  id uint64,
+                  value int
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_set_limit_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_set_limit_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(4, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_set_limit_right(id, label)
+              values (1, 'selected'), (2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_set_limit_left(id, value)
+              values (1, 10), (2, 20);
+
+          - client: python
+            query_id: "3512"
+            query_type: stream
+            depends_on_stream: test35_set_limit_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.id, l.value, r.label
+              from test35_set_limit_left as l
+              inner latest join
+              (
+                  select id, label
+                  from test35_set_limit_right
+                  where label = 'selected'
+              ) as r
+              on l.id = r.id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_disjunctive_filter_max_rows = 1,
+                  max_rows_in_set = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id = '3512' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_set_limit_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_set_limit_right;
+
+    expected_results:
+      - query_id: "3512"
+        expected_results:
+          - [1, 10, "selected"]
+          - [2, 20, "selected"]
+
+  - id: 13
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown falls back when the source byte cap is exceeded
+    description: The snapshot byte cap applies to scanned right-side source bytes; when exceeded, the query falls back and still joins matching live rows.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_byte_cap_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_byte_cap_right;
+
+          - client: python
+            query_type: table
+            exist: test35_byte_cap_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_byte_cap_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_byte_cap_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_byte_cap_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_byte_cap_right(scope_id, entity_id, category)
+              values (61, 1, 'selected'), (61, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_byte_cap_left(scope_id, entity_id, value)
+              values (61, 10, 10), (61, 11, 20), (61, 12, 30);
+
+          - client: python
+            query_id: "3513"
+            query_type: stream
+            depends_on_stream: test35_byte_cap_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_byte_cap_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_byte_cap_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 61
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_max_bytes = 32,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3513"
+            wait: 1
+            query: |
+              insert into test35_byte_cap_right(scope_id, entity_id, category)
+              values (61, 4, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_byte_cap_left(scope_id, entity_id, value)
+              values (61, 4, 40);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id = '3513' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_byte_cap_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_byte_cap_right;
+
+    expected_results:
+      - query_id: "3513"
+        expected_results:
+          - [61, 4, 40, "selected"]
+
+  - id: 14
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown reaches nested left stream reads
+    description: A left stream wrapped in a subquery still receives the bounded key-domain so the historical storage read can use primary-key prefix pruning.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_right;
+
+          - client: python
+            query_type: table
+            exist: test35_nested_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_nested_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_nested_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_nested_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_nested_right(scope_id, entity_id, category)
+              values (71, 1, 'selected'), (71, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_nested_left(scope_id, entity_id, value)
+              values (71, 1, 10), (71, 2, 20), (71, 3, 30);
+
+          - client: python
+            query_id: "3514"
+            query_type: stream
+            depends_on_stream: test35_nested_left
+            terminate: manual
+            wait: 1
+            query: |
+              with right_src as
+              (
+                  select scope_id, entity_id, category
+                  from test35_nested_right
+                  where category = 'selected'
+              )
+              select joined.scope_id, joined.entity_id, joined.value
+              from
+              (
+                  select l.scope_id, l.entity_id, l.value, r.category
+                  from
+                  (
+                      select scope_id, entity_id, value
+                      from test35_nested_left
+                  ) as l
+                  inner latest join right_src as r
+                  on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              ) as joined
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_disjunctive_filter_max_rows = 0,
+                  join_algorithm = 'parallel_hash',
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3514"
+            query_id: "3514_filter_path"
+            wait: 2
+            query: |
+              select to_uint8(value > 0)
+              from system.events
+              where event = 'StreamingJoinKeyDomainStorageFilterPushed';
+
+          - client: python
+            query_type: table
+            depends_on: "3514"
+            query_id: "3514_pk_path"
+            wait: 2
+            query: |
+              select to_uint8(value > 0)
+              from system.events
+              where event = 'StreamingJoinKeyDomainPrimaryKeyPruned';
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3514' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_right;
+
+    expected_results:
+      - query_id: "3514"
+        expected_results:
+          - [71, 1, 10]
+          - [71, 2, 20]
+      - query_id: "3514_filter_path"
+        expected_results:
+          - [1]
+      - query_id: "3514_pk_path"
+        expected_results:
+          - [1]
+
+  - id: 15
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown supports parallel hash joins when key positions differ
+    description: Parallel hash join must dispatch left rows by left-side key positions, even when the right-side key columns appear at different ordinals.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_parallel_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_parallel_right;
+
+          - client: python
+            query_type: table
+            exist: test35_parallel_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_parallel_left
+              (
+                  value int,
+                  scope_id uint16,
+                  entity_id uint64
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_parallel_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_parallel_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_parallel_right(scope_id, entity_id, category)
+              values (81, 1, 'selected'), (81, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_parallel_left(value, scope_id, entity_id)
+              values (10, 81, 1), (20, 81, 2), (30, 81, 3);
+
+          - client: python
+            query_id: "3515"
+            query_type: stream
+            depends_on_stream: test35_parallel_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_parallel_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_parallel_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 81
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  enable_streaming_join_key_domain_shard_pruning = 1,
+                  join_algorithm = 'parallel_hash',
+                  backfill_max_threads = 1,
+                  max_threads = 4;
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3515' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_parallel_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_parallel_right;
+
+    expected_results:
+      - query_id: "3515"
+        expected_results:
+          - [81, 1, 10, "selected"]
+          - [81, 2, 20, "selected"]
+
+  - id: 16
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown does not wedge when right snapshot is empty
+    description: Empty right snapshots must release the right boundary immediately, while the left historical phase still emits boundaries so live right and left rows can join.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_right_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_right_right;
+
+          - client: python
+            query_type: table
+            exist: test35_empty_right_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_right_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_empty_right_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_right_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_right_left(scope_id, entity_id, value)
+              values (91, 1, 10);
+
+          - client: python
+            query_id: "3516"
+            query_type: stream
+            depends_on_stream: test35_empty_right_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_empty_right_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_empty_right_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 91
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  join_algorithm = 'parallel_hash',
+                  backfill_max_threads = 1,
+                  max_threads = 4;
+
+          - client: python
+            query_type: table
+            depends_on: "3516"
+            wait: 1
+            query: |
+              insert into test35_empty_right_right(scope_id, entity_id, category)
+              values (91, 2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_right_left(scope_id, entity_id, value)
+              values (91, 2, 20);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3516' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_right_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_right_right;
+
+    expected_results:
+      - query_id: "3516"
+        expected_results:
+          - [91, 2, 20, "selected"]
+
+  - id: 17
+    tags:
+      - streaming_join
+      - window
+      - backfill
+    name: streaming join key-domain pushdown supports window aggregation over join
+    description: Historical boundary markers must survive watermark stamping and 1-to-N resize when a window aggregation consumes a streaming join.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_window_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_window_right;
+
+          - client: python
+            query_type: table
+            exist: test35_window_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_window_left
+              (
+                  id uint64,
+                  value int
+              )
+              engine = Stream(1, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_window_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_window_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(1, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_window_right(id, label)
+              values (1, 'selected'), (2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_window_left(id, value)
+              values (1, 10), (2, 20), (3, 30);
+
+          - client: python
+            query_id: "3517"
+            query_type: stream
+            depends_on_stream: test35_window_left
+            terminate: manual
+            wait: 1
+            query: |
+              with joined as
+              (
+                  select l._tp_time as _tp_time, l.id as id, l.value as value
+                  from test35_window_left as l
+                  inner latest join
+                  (
+                      select id, label
+                      from test35_window_right
+                      where label = 'selected'
+                  ) as r
+                  on l.id = r.id
+              )
+              select count()
+              from tumble(joined, 10s)
+              group by window_start
+              emit periodic 1s
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 4;
+
+          - client: python
+            query_type: table
+            wait: 6
+            query: kill query where query_id = '3517' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_window_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_window_right;
+
+    expected_results:
+      - query_id: "3517"
+        expected_results:
+          - [2]
+
+  - id: 18
+    tags:
+      - streaming_join
+      - window
+      - backfill
+    name: streaming join key-domain pushdown emits idle backfill windows
+    description: An on-update window aggregation over a streaming join must receive the deferred unmute watermark even when no live rows arrive after backfill.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_idle_window_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_idle_window_right;
+
+          - client: python
+            query_type: table
+            exist: test35_idle_window_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_idle_window_left
+              (
+                  id uint64,
+                  value int,
+                  _tp_time datetime64(3, 'UTC')
+              )
+              engine = Stream(1, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            exist: test35_idle_window_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_idle_window_right
+              (
+                  id uint64,
+                  label string
+              )
+              engine = Stream(1, id)
+              primary key (id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_idle_window_right(id, label)
+              values (1, 'selected'), (2, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_idle_window_left(id, value, _tp_time)
+              values
+                  (1, 10, '2024-01-01 00:00:00.000'),
+                  (2, 20, '2024-01-01 00:00:00.000'),
+                  (3, 30, '2024-01-01 00:00:00.000');
+
+          - client: python
+            query_id: "3518"
+            query_type: stream
+            depends_on_stream: test35_idle_window_left
+            terminate: manual
+            wait: 1
+            query: |
+              with joined as
+              (
+                  select l._tp_time as _tp_time, l.id as id, l.value as value
+                  from test35_idle_window_left as l
+                  inner latest join
+                  (
+                      select id, label
+                      from test35_idle_window_right
+                      where label = 'selected'
+                  ) as r
+                  on l.id = r.id
+              )
+              select count()
+              from tumble(joined, 10s)
+              group by window_start
+              emit on update
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 4;
+
+          - client: python
+            query_type: table
+            wait: 6
+            query: kill query where query_id = '3518' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_idle_window_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_idle_window_right;
+
+    expected_results:
+      - query_id: "3518"
+        expected_results:
+          - [2]
+
+  - id: 19
+    tags:
+      - streaming_join
+      - backfill
+      - fallback
+    name: streaming join key-domain pushdown falls back on process-time right predicates
+    description: Right prefixes that depend on process-time virtual columns are not replayable snapshots, so the query must fall back while preserving live results.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_process_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_process_right;
+
+          - client: python
+            query_type: table
+            exist: test35_process_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_process_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_process_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_process_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  label string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_process_right(scope_id, entity_id, label)
+              values (101, 1, 'active'), (101, 2, 'active');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_process_left(scope_id, entity_id, value)
+              values (101, 11, 10), (101, 12, 20), (101, 13, 30);
+
+          - client: python
+            query_id: "3519"
+            query_type: stream
+            depends_on_stream: test35_process_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.label
+              from test35_process_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, label
+                  from test35_process_right
+                  where label = 'active' and _tp_process_time > 0
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 101
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3519"
+            wait: 1
+            query: |
+              insert into test35_process_right(scope_id, entity_id, label)
+              values (101, 4, 'active');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_process_left(scope_id, entity_id, value)
+              values (101, 4, 40);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3519' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_process_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_process_right;
+
+    expected_results:
+      - query_id: "3519"
+        expected_results:
+          - [101, 4, 40, "active"]
+
+  - id: 20
+    tags:
+      - streaming_join
+      - view
+      - backfill
+    name: streaming join key-domain pushdown forwards right snapshot bounds through nested views
+    description: View and nested-subquery right prefixes must preserve captured stop-SN metadata so bounded right snapshots and live continuation stay consistent.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop view if exists test35_nested_view_right_v;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_view_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_view_right;
+
+          - client: python
+            query_type: table
+            exist: test35_nested_view_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_nested_view_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_nested_view_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_nested_view_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(4, city_hash64(scope_id, entity_id))
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create view if not exists test35_nested_view_right_v as
+              select scope_id, entity_id, category
+              from test35_nested_view_right
+              where category = 'selected';
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_nested_view_right(scope_id, entity_id, category)
+              values (102, 1, 'selected'), (102, 2, 'selected'), (102, 3, 'ignored');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_nested_view_left(scope_id, entity_id, value)
+              values (102, 1, 10), (102, 2, 20), (102, 3, 30);
+
+          - client: python
+            query_id: "3520"
+            query_type: stream
+            depends_on_stream: test35_nested_view_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.scope_id, l.entity_id, l.value, r.category
+              from test35_nested_view_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from
+                  (
+                      select scope_id, entity_id, category
+                      from test35_nested_view_right_v
+                  )
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 102
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  streaming_join_key_domain_pushdown_disjunctive_filter_max_rows = 0,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3520"
+            query_id: "3520_filter_path"
+            wait: 2
+            query: |
+              select to_uint8(value > 0)
+              from system.events
+              where event = 'StreamingJoinKeyDomainStorageFilterPushed';
+
+          - client: python
+            query_type: table
+            depends_on: "3520"
+            wait: 1
+            query: |
+              insert into test35_nested_view_right(scope_id, entity_id, category)
+              values (102, 4, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_nested_view_left(scope_id, entity_id, value)
+              values (102, 4, 40);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3520' sync;
+
+          - client: python
+            query_type: table
+            query: drop view if exists test35_nested_view_right_v;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_view_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_nested_view_right;
+
+    expected_results:
+      - query_id: "3520"
+        expected_results:
+          - [102, 1, 10, "selected"]
+          - [102, 2, 20, "selected"]
+          - [102, 4, 40, "selected"]
+      - query_id: "3520_filter_path"
+        expected_results:
+          - [1]
+
+  - id: 21
+    tags:
+      - streaming_join
+      - backfill
+      - fallback
+    name: streaming join key-domain pushdown falls back for floating-point join keys
+    description: Floating-point key domains are rejected before pushdown, while normal streaming join behavior remains correct for live rows.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_float_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_float_right;
+
+          - client: python
+            query_type: table
+            exist: test35_float_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_float_left
+              (
+                  entity_id float64,
+                  value int
+              );
+
+          - client: python
+            query_type: table
+            exist: test35_float_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_float_right
+              (
+                  entity_id float64,
+                  label string
+              );
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_float_right(entity_id, label)
+              values (1.5, 'active');
+
+          - client: python
+            query_id: "3521"
+            query_type: stream
+            depends_on_stream: test35_float_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.entity_id, l.value, r.label
+              from test35_float_left as l
+              inner latest join
+              (
+                  select entity_id, label
+                  from test35_float_right
+              ) as r
+              on l.entity_id = r.entity_id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3521"
+            wait: 1
+            query: |
+              insert into test35_float_left(entity_id, value)
+              values (1.5, 15);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3521' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_float_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_float_right;
+
+    expected_results:
+      - query_id: "3521"
+        expected_results:
+          - [1.5, 15, "active"]
+
+  - id: 22
+    tags:
+      - streaming_join
+      - versioned_kv
+      - backfill
+    name: streaming join key-domain pushdown keeps versioned right updates live after backfill
+    description: Versioned key-value right prefixes can engage pushdown, but updates after the captured snapshot must not rewrite historical backfill and must join subsequent live left rows.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_versioned_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_versioned_right;
+
+          - client: python
+            query_type: table
+            exist: test35_versioned_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_versioned_left
+              (
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(1, entity_id)
+              primary key (entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_versioned_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_versioned_right
+              (
+                  entity_id uint64,
+                  label string
+              )
+              primary key entity_id
+              settings mode='versioned_kv';
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_versioned_right(entity_id, label)
+              values (1, 'old_one'), (2, 'old_two');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_versioned_left(entity_id, value)
+              values (1, 10), (2, 20), (3, 30);
+
+          - client: python
+            query_id: "3522"
+            query_type: stream
+            depends_on_stream: test35_versioned_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.entity_id, l.value, r.label
+              from test35_versioned_left as l
+              inner latest join
+              (
+                  select entity_id, label
+                  from test35_versioned_right
+              ) as r
+              on l.entity_id = r.entity_id
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  backfill_max_threads = 1,
+                  max_threads = 1;
+
+          - client: python
+            query_type: table
+            depends_on: "3522"
+            wait: 1
+            query: |
+              insert into test35_versioned_right(entity_id, label)
+              values (2, 'new_two');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_versioned_left(entity_id, value)
+              values (2, 200);
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: kill query where query_id = '3522' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_versioned_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_versioned_right;
+
+    expected_results:
+      - query_id: "3522"
+        expected_results:
+          - [1, 10, "old_one"]
+          - [2, 20, "old_two"]
+          - [2, 200, "new_two"]
+
+  - id: 23
+    tags:
+      - streaming_join
+      - multishards
+      - backfill
+    name: streaming join key-domain pushdown holds empty right shards during gating
+    description: A right shard that is empty at snapshot time must not leak a later right row into historical left backfill before the shared boundary releases.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_shard_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_shard_right;
+
+          - client: python
+            query_type: table
+            exist: test35_empty_shard_left
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_shard_left
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  value int
+              )
+              engine = Stream(2, entity_id)
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            exist: test35_empty_shard_right
+            exist_wait: 2
+            wait: 1
+            query: |
+              create stream if not exists test35_empty_shard_right
+              (
+                  scope_id uint16,
+                  entity_id uint64,
+                  category string
+              )
+              engine = Stream(2, entity_id)
+              primary key (scope_id, entity_id);
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_shard_right(scope_id, entity_id, category)
+              values (103, 1, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_shard_left(scope_id, entity_id, value)
+              select 103, number + 1000, to_int32(number + 1000)
+              from numbers(50000);
+
+          - client: python
+            query_id: "3523"
+            query_type: stream
+            depends_on_stream: test35_empty_shard_left
+            terminate: manual
+            wait: 1
+            query: |
+              select l.entity_id, l.value, r.category
+              from test35_empty_shard_left as l
+              inner latest join
+              (
+                  select scope_id, entity_id, category
+                  from test35_empty_shard_right
+                  where category = 'selected'
+              ) as r
+              on l.scope_id = r.scope_id and l.entity_id = r.entity_id
+              where l.scope_id = 103
+              settings
+                  seek_to = 'earliest',
+                  enable_streaming_join_key_domain_pushdown = 1,
+                  join_algorithm = 'parallel_hash',
+                  backfill_max_threads = 1,
+                  max_threads = 2;
+
+          - client: python
+            query_type: table
+            depends_on: "3523"
+            wait: 1
+            query: |
+              insert into test35_empty_shard_right(scope_id, entity_id, category)
+              values (103, 50000, 'selected');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              insert into test35_empty_shard_left(scope_id, entity_id, value)
+              values (103, 50000, 500000);
+
+          - client: python
+            query_type: table
+            wait: 4
+            query: kill query where query_id = '3523' sync;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_shard_left;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test35_empty_shard_right;
+
+    expected_results:
+      - query_id: "3523"
+        expected_results:
+          - [50000, 500000, "selected"]

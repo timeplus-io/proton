@@ -215,6 +215,9 @@ public:
         MergeTreeData::DataPartsVector && parts,
         std::vector<AlterConversionsPtr> && alter_conversions,
         StorageMetadataPtr metadata_snapshot,
+        /// proton: starts.
+        const SelectQueryInfo & query_info,
+        /// proton: ends.
         const ContextPtr & context,
         const KeyCondition & key_condition,
         const std::optional<KeyCondition> & part_offset_condition,

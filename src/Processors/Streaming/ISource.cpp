@@ -5,8 +5,18 @@
 #include <base/scope_guard.h>
 #include <Common/logger_useful.h>
 
+#include <thread>
+
 namespace DB::Streaming
 {
+namespace
+{
+void throttleNonTerminalStopPause()
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+}
+}
+
 ISource::ISource(Block header, bool enable_auto_progress, LoggerPtr logger_, ProcessorID pid_)
     : DB::ISource(std::move(header), enable_auto_progress, pid_), logger(logger_), last_log_ts(MonotonicMilliseconds::now())
 {
@@ -61,6 +71,14 @@ std::optional<Chunk> ISource::tryGenerate()
         current_ckpt_ctx->registerFinishCallback(
             [this, ckpt_sn = lastProcessedSN()](CheckpointContextPtr) { setLastCheckpointSN(ckpt_sn); });
         return std::move(chunk);
+    }
+
+    if (auto stop_decision = stopDecisionAtCurrentSN(); stop_decision.stop)
+    {
+        if (stop_decision.terminal)
+            return {};
+        throttleNonTerminalStopPause();
+        return Chunk(output.getHeader().getColumns(), 0);
     }
 
     auto chunk = generate();

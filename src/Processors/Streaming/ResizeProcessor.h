@@ -71,19 +71,26 @@ private:
         InputStatus status;
         Int64 watermark = 0;
         bool requested_checkpoint = false;
+        bool historical_ended = false;
     };
 
     std::vector<InputPortWithStatus> input_ports;
 
+    bool updateAlignedWatermark(InputPortWithStatus & input_with_data, Int64 new_watermark);
     /// @returns true if has watermark handling.
     bool updateAndAlignWatermark(InputPortWithStatus & input_with_data, Chunk & chunk);
     /// @returns true if has request checkpoint handling.
     bool updateAndRequestCheckpoint(InputPortWithStatus & input_with_data, Chunk & chunk);
+    /// @returns true if a historical boundary marker was handled.
+    bool updateAndAlignHistoricalBoundary(InputPortWithStatus & input_with_data, Chunk & chunk);
+    bool allHistoricalInputsEnded() const;
 
     void checkAndLogSlowCheckpointAligning();
 
     /// Used in `updateAndAlignWatermark`
     Int64 aligned_watermark = INVALID_WATERMARK;
+    bool historical_start_emitted = false;
+    bool historical_end_emitted = false;
     /// Used in `updateAndRequestCheckpoint`
     UInt8 num_requested_checkpoint = 0;
     Stopwatch ckpt_aligning_stopwatch;
@@ -122,7 +129,9 @@ private:
         static constexpr UInt8 NO_PROPAGATE = 0x0;
         static constexpr UInt8 PROPAGATE_HEARTBEAT = 0x1;
         static constexpr UInt8 PROPAGATE_WATERMARK = 0x2;
+        static constexpr UInt8 PROPAGATE_PRESERVED_CHUNK = 0x4;
         static constexpr UInt8 PROPAGATE_CHECKPOINT_REQUEST = 0x8;
+        static constexpr UInt8 PROPAGATE_BOUNDARY_WATERMARK = 0x10;
         UInt8 propagate_flag = NO_PROPAGATE;
     };
 
@@ -137,9 +146,11 @@ private:
 
     /// To propagate
     Chunk header_chunk;
+    Chunk preserved_chunk;
     Int64 watermark = INVALID_WATERMARK;
     CheckpointContextPtr ckpt_ctx;
     UInt8 num_checkpoint_requests = 0;
+    UInt8 num_preserved_chunk_requests = 0;
 };
 
 class StrictResizeProcessor final : public IProcessor

@@ -15,6 +15,13 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
 
 std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(const ASTPtr & table_expression, ContextPtr context, const Names & required_source_columns, const SelectQueryOptions & options);
 
-std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(const ASTPtr & table_expression, ContextPtr context, const Names & required_source_columns, const SelectQueryOptions & options,
-                                                                   SeekToInfoPtr seek_to_info);
+std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
+    const ASTPtr & table_expression,
+    ContextPtr context,
+    const Names & required_source_columns,
+    const SelectQueryOptions & options,
+    SeekToInfoPtr seek_to_info,
+    /// proton: starts.
+    StreamingJoinSnapshotHighSNs streaming_join_snapshot_high_sns = {});
+    /// proton: ends.
 }

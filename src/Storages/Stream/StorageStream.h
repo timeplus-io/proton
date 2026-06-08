@@ -12,6 +12,10 @@
 #include <base/shared_ptr_helper.h>
 #include <pcg_random.hpp>
 
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
+
 #include <Cluster/KafkaLog/Results.h>
 #include <Cluster/SchemaRecord/SchemaRecord.h>
 
@@ -141,6 +145,9 @@ public:
     QueryProcessingStage::Enum getQueryProcessingStage(
         ContextPtr, QueryProcessingStage::Enum to_stage, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo &) const override;
 
+    void captureStreamingJoinLeftBackfillSnapshotHighSNs(
+        const ContextPtr & local_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const;
+
     void updateSettingsAndVersionForInnerStorage(const StorageInMemoryMetadata & new_metadata);
 
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
@@ -210,11 +217,21 @@ public:
     {
         QueryMode mode;
         std::vector<StreamShardStorePtr> shards;
+        /// Optional shard IDs used only for StreamingConcat historical backfill.
+        /// Live streaming reads still use `shards`.
+        std::optional<std::unordered_set<UInt64>> historical_shards;
+        /// Optional log high-watermarks captured before streaming join key-domain
+        /// snapshots are built. Historical backfill is bounded to these SNs and
+        /// live streaming starts after them.
+        std::unordered_map<UInt64, Int64> snapshot_high_sns;
     };
 
 private:
-    ShardsToRead
-    getShardsToRead(const ContextPtr & local_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const;
+    ShardsToRead getShardsToRead(
+        const ContextPtr & local_context,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        bool include_historical_shard_pruning = true) const;
 
     void doRead(
         const ShardsToRead & shards_to_read,

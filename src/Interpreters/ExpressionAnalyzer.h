@@ -56,6 +56,9 @@ struct ExpressionAnalyzerData
     PreparedSetsPtr prepared_sets;
 
     std::unique_ptr<QueryPlan> joined_plan;
+    /// proton: starts.
+    StreamingJoinKeyDomainPushdownPtr streaming_join_key_domain_pushdown;
+    /// proton: ends.
 
     /// Columns after ARRAY JOIN. If there is no ARRAY JOIN, it's source_columns.
     NamesAndTypesList columns_after_array_join;
@@ -364,6 +367,7 @@ public:
 
     /// proton: starts.
     bool hasStreamingJoin() const;
+    StreamingJoinKeyDomainPushdownPtr getStreamingJoinKeyDomainPushdown() const { return streaming_join_key_domain_pushdown; }
 
 private:
     SeekToInfoPtr seek_to_info_of_joined_table;

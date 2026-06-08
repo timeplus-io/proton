@@ -5,6 +5,8 @@
 #include <Common/serde.h>
 
 #include <atomic>
+#include <mutex>
+#include <optional>
 
 namespace DB
 {
@@ -56,6 +58,43 @@ public:
     /// \brief Reset the start sequence number of the source, it must be called before the pipeline execution (thread-unsafe)
     void resetStartSN(Int64 sn);
 
+    /// \brief Stop the source after it has processed records up to this sequence number.
+    /// Terminal stops finish bounded prefix reads. Non-terminal stops pause a live source until
+    /// another processor clears the boundary, for example after a streaming join snapshot is ready.
+    void setStopSN(Int64 sn, bool terminal = true)
+    {
+        {
+            std::lock_guard lock(stop_sn_mutex);
+            stop_sn = sn;
+            stop_sn_is_terminal = terminal;
+            stop_sn_reached = false;
+        }
+
+        /// Empty shards report high-watermark 0. A bounded read up to that
+        /// watermark has no records to consume, so mark it complete immediately
+        /// instead of waiting for a future record to cross the bound.
+        if (sn <= 0)
+            setLastProcessedSN(sn);
+
+        onStopSNChanged(sn);
+    }
+
+    void clearStopSN()
+    {
+        {
+            std::lock_guard lock(stop_sn_mutex);
+            stop_sn.reset();
+            stop_sn_reached_sn.reset();
+            stop_sn_reached = false;
+            stop_sn_is_terminal = true;
+            stop_sn_reached_is_terminal = true;
+        }
+
+        onStopSNCleared();
+    }
+
+    virtual bool supportsStopSN() const { return false; }
+
     /// \brief Get/Set the last checkpoint sequence number of the source
     Int64 lastCheckpointSN() const noexcept { return last_ckpt_sn.load(std::memory_order_relaxed); }
     void setLastCheckpointSN(Int64 ckpt_sn) noexcept { last_ckpt_sn.store(ckpt_sn, std::memory_order_relaxed); }
@@ -104,14 +143,78 @@ private:
     }
 
     virtual Strings doFetchData(const SequenceRange &) { return {}; }
+    virtual void onStopSNChanged(Int64 /*sn*/) { }
+    virtual void onStopSNCleared() { }
 
 protected:
+    struct StopDecision
+    {
+        bool stop = false;
+        bool terminal = true;
+    };
+
+    std::optional<Int64> getStopSN() const
+    {
+        std::lock_guard lock(stop_sn_mutex);
+        return stop_sn;
+    }
+
+    StopDecision stopDecisionAtCurrentSN() const
+    {
+        std::lock_guard lock(stop_sn_mutex);
+        return StopDecision{
+            .stop = stop_sn && lastProcessedSN() >= *stop_sn,
+            .terminal = stop_sn_is_terminal,
+        };
+    }
+
+    bool markStopSNReachedBefore(Int64 sn)
+    {
+        std::lock_guard lock(stop_sn_mutex);
+        if (!stop_sn || sn <= *stop_sn)
+            return false;
+
+        stop_sn_reached = true;
+        stop_sn_reached_sn = stop_sn;
+        stop_sn_reached_is_terminal = stop_sn_is_terminal;
+        return true;
+    }
+
+    StopDecision consumeStopSNReachedDecision()
+    {
+        std::optional<Int64> reached_stop_sn;
+        bool terminal = true;
+        {
+            std::lock_guard lock(stop_sn_mutex);
+            if (!stop_sn_reached)
+                return {};
+
+            reached_stop_sn = stop_sn_reached_sn;
+            terminal = stop_sn_reached_is_terminal;
+            stop_sn_reached = false;
+            stop_sn_reached_sn.reset();
+            stop_sn_reached_is_terminal = true;
+        }
+
+        if (!reached_stop_sn)
+            return {};
+
+        setLastProcessedSN(*reached_stop_sn);
+        return StopDecision{.stop = true, .terminal = terminal};
+    }
+
     LoggerPtr logger;
 
 private:
     /// For checkpoint
     CheckpointRequest ckpt_request;
     NO_SERDE std::optional<Int64> reset_start_sn;
+    NO_SERDE mutable std::mutex stop_sn_mutex;
+    NO_SERDE std::optional<Int64> stop_sn;
+    NO_SERDE std::optional<Int64> stop_sn_reached_sn;
+    NO_SERDE bool stop_sn_reached = false;
+    NO_SERDE bool stop_sn_is_terminal = true;
+    NO_SERDE bool stop_sn_reached_is_terminal = true;
     NO_SERDE std::atomic<Int64> last_ckpt_sn = -1;
     NO_SERDE std::atomic<Int64> last_processed_sn_start = -1;
     NO_SERDE std::atomic<Int64> last_processed_record_timestamp = 0;

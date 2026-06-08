@@ -1,6 +1,5 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
-#include <Common/typeid_cast.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/IJoin.h>
 #include <Interpreters/TableJoin.h>
@@ -21,24 +20,37 @@
 #include <Processors/Transforms/ReadFromMergeTreeDependencyTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <QueryPipeline/narrowPipe.h>
+#include <Common/typeid_cast.h>
 
 /// proton : starts
 #include <Interpreters/Streaming/HashJoin/ConcurrentHashJoin.h>
 #include <Interpreters/Streaming/HashJoin/IHashJoin.h>
 #include <Processors/Streaming/ConcatProcessor.h>
+#include <Processors/Transforms/Streaming/JoinRightBoundary.h>
 #include <Processors/Transforms/Streaming/JoinTransform.h>
 #include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
 
 #include <ranges>
+#include <unordered_map>
 /// proton : ends
 
 namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NOT_IMPLEMENTED;
+extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
 }
+
+/// proton: starts.
+namespace
+{
+String streamingSourceBoundaryId(const Streaming::ISource & source)
+{
+    return fmt::format("{}:{}", source.getName(), source.getDescription());
+}
+}
+/// proton: ends.
 
 void QueryPipelineBuilder::checkInitialized()
 {
@@ -181,7 +193,7 @@ void QueryPipelineBuilder::addDelayedStream(ProcessorPtr source)
     checkSource(source, false);
     assertBlocksHaveEqualStructure(getHeader(), source->getOutputs().front().getHeader(), "QueryPipeline");
 
-    IProcessor::PortNumbers delayed_streams = { pipe.numOutputPorts() };
+    IProcessor::PortNumbers delayed_streams = {pipe.numOutputPorts()};
     pipe.addSource(std::move(source));
 
     auto processor = std::make_shared<DelayedPortsProcessor>(getHeader(), pipe.numOutputPorts(), delayed_streams);
@@ -291,9 +303,7 @@ void QueryPipelineBuilder::addExtremesTransform()
 }
 
 QueryPipelineBuilder QueryPipelineBuilder::unitePipelines(
-    std::vector<std::unique_ptr<QueryPipelineBuilder>> pipelines,
-    size_t max_threads_limit,
-    Processors * collected_processors)
+    std::vector<std::unique_ptr<QueryPipelineBuilder>> pipelines, size_t max_threads_limit, Processors * collected_processors)
 {
     if (pipelines.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot unite an empty set of pipelines");
@@ -348,10 +358,7 @@ QueryPipelineBuilder QueryPipelineBuilder::unitePipelines(
 }
 
 QueryPipelineBuilderPtr QueryPipelineBuilder::mergePipelines(
-    QueryPipelineBuilderPtr left,
-    QueryPipelineBuilderPtr right,
-    ProcessorPtr transform,
-    Processors * collected_processors)
+    QueryPipelineBuilderPtr left, QueryPipelineBuilderPtr right, ProcessorPtr transform, Processors * collected_processors)
 {
     if (transform->getOutputs().size() != 1)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Merge transform must have exactly 1 output, got {}", transform->getOutputs().size());
@@ -456,8 +463,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
         }
 
         right->resize(max_streams);
-        auto concurrent_right_filling_transform = [&](OutputPortRawPtrs outports)
-        {
+        auto concurrent_right_filling_transform = [&](OutputPortRawPtrs outports) {
             Processors processors;
             for (auto & outport : outports)
             {
@@ -499,10 +505,13 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
     {
         delayed_root = std::make_shared<DelayedJoinedBlocksTransform>(num_streams, join);
         if (!delayed_root->getInputs().empty() || delayed_root->getOutputs().size() != num_streams)
-            throw Exception(ErrorCodes::LOGICAL_ERROR,
-                            "DelayedJoinedBlocksTransform should have no inputs and {} outputs, "
-                            "but has {} inputs and {} outputs",
-                            num_streams, delayed_root->getInputs().size(), delayed_root->getOutputs().size());
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "DelayedJoinedBlocksTransform should have no inputs and {} outputs, "
+                "but has {} inputs and {} outputs",
+                num_streams,
+                delayed_root->getInputs().size(),
+                delayed_root->getOutputs().size());
 
         if (collected_processors)
             collected_processors->emplace_back(delayed_root);
@@ -518,8 +527,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesRightLe
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto joining = std::make_shared<JoiningTransform>(
-            left_header, output_header, join, max_block_size, false, default_totals, finish_counter);
+        auto joining
+            = std::make_shared<JoiningTransform>(left_header, output_header, join, max_block_size, false, default_totals, finish_counter);
 
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());
@@ -614,12 +623,7 @@ void QueryPipelineBuilder::addCreatingSetsTransform(
     resize(1);
 
     auto transform = std::make_shared<CreatingSetsTransform>(
-            getHeader(),
-            res_header,
-            std::move(set_and_key),
-            std::move(external_table),
-            limits,
-            std::move(prepared_sets_cache));
+        getHeader(), res_header, std::move(set_and_key), std::move(external_table), limits, std::move(prepared_sets_cache));
 
     InputPort * totals_port = nullptr;
 
@@ -633,8 +637,8 @@ void QueryPipelineBuilder::addPipelineBefore(QueryPipelineBuilder pipeline)
 {
     checkInitializedAndNotCompleted();
     if (pipeline.getHeader())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Pipeline for CreatingSets should have empty header. Got: {}",
-                        pipeline.getHeader().dumpStructure());
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Pipeline for CreatingSets should have empty header. Got: {}", pipeline.getHeader().dumpStructure());
 
     IProcessor::PortNumbers delayed_streams(pipe.numOutputPorts());
     for (size_t i = 0; i < delayed_streams.size(); ++i)
@@ -787,6 +791,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     size_t max_block_size,
     size_t max_streams,
     size_t join_max_cached_bytes,
+    std::vector<String> right_stream_source_ids,
+    std::vector<Int64> right_stream_stop_sns,
     Processors * collected_processors)
 {
     left->checkInitializedAndNotCompleted();
@@ -813,6 +819,61 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
     size_t left_max_parallel_streams = std::max(left->pipe.max_parallel_streams, left->getNumStreams());
     size_t right_max_parallel_streams = std::max(right->pipe.max_parallel_streams, right->getNumStreams());
+    std::vector<std::shared_ptr<Streaming::ISource>> matched_right_sources;
+    std::vector<Int64> matched_right_stop_sns;
+    if (!right_stream_stop_sns.empty())
+    {
+        auto fail_right_boundary = [&](const String & reason) {
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR, "Streaming join key-domain pushdown right boundary cannot be installed safely: {}", reason);
+        };
+
+        if (right_stream_source_ids.size() != right_stream_stop_sns.size())
+        {
+            fail_right_boundary(
+                fmt::format(
+                    "right boundary source-id count mismatch: got {} source ids for {} stop SNs",
+                    right_stream_source_ids.size(),
+                    right_stream_stop_sns.size()));
+        }
+
+        auto right_sources = right->getStreamingSources();
+        std::unordered_map<String, std::shared_ptr<Streaming::ISource>> sources_by_id;
+        sources_by_id.reserve(right_sources.size());
+        for (auto & source : right_sources)
+        {
+            auto source_id = streamingSourceBoundaryId(*source);
+            if (!sources_by_id.emplace(source_id, source).second)
+            {
+                fail_right_boundary(fmt::format("right boundary source identity '{}' is duplicated in join pipeline", source_id));
+            }
+        }
+
+        if (sources_by_id.size() != right_stream_stop_sns.size())
+        {
+            fail_right_boundary(
+                fmt::format(
+                    "right boundary source count mismatch: expected {} sources, got {}",
+                    right_stream_stop_sns.size(),
+                    sources_by_id.size()));
+        }
+
+        matched_right_sources.reserve(right_stream_source_ids.size());
+        matched_right_stop_sns = std::move(right_stream_stop_sns);
+        for (const auto & source_id : right_stream_source_ids)
+        {
+            auto it = sources_by_id.find(source_id);
+            if (it == sources_by_id.end())
+            {
+                fail_right_boundary(fmt::format("right boundary source identity '{}' was not found in join pipeline", source_id));
+            }
+
+            if (!it->second->supportsStopSN())
+                fail_right_boundary(fmt::format("right boundary source identity '{}' no longer supports stop-SN", source_id));
+
+            matched_right_sources.emplace_back(std::move(it->second));
+        }
+    }
 
     size_t num_transforms = 0;
 
@@ -874,6 +935,17 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     assert(num_transforms == left->pipe.output_ports.size());
     assert(num_transforms == right->pipe.output_ports.size());
 
+    Streaming::JoinRightBoundaryPtr right_boundary;
+    if (!matched_right_sources.empty())
+    {
+        right_boundary = std::make_shared<Streaming::JoinRightBoundary>(
+            std::move(matched_right_sources), std::move(matched_right_stop_sns), num_transforms);
+    }
+
+    Streaming::JoinLeftBoundaryPtr left_boundary;
+    if (right_boundary)
+        left_boundary = std::make_shared<Streaming::JoinLeftBoundary>(num_transforms);
+
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
 
@@ -881,6 +953,10 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     {
         ProcessorPtr joining;
         auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
+        if (right_boundary && hash_join->getTableJoin().requiredJoinAlignment())
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Streaming join key-domain pushdown does not support alignment-required streaming joins yet");
+
         if (hash_join->getTableJoin().requiredJoinAlignment())
         {
             joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
@@ -889,7 +965,15 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
         else
         {
             joining = std::make_shared<Streaming::JoinTransform>(
-                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), i, max_block_size, join_max_cached_bytes);
+                left->getHeader(),
+                right->getHeader(),
+                out_header,
+                std::move(hash_join),
+                i,
+                max_block_size,
+                join_max_cached_bytes,
+                right_boundary,
+                left_boundary);
         }
 
         connect(**lit, joining->getInputs().front());
@@ -981,7 +1065,14 @@ std::vector<std::shared_ptr<Streaming::ISource>> QueryPipelineBuilder::getStream
     for (const auto & processor : *pipe.processors)
     {
         if (processor->isSource() && processor->isStreaming())
-            streaming_sources.emplace_back(std::static_pointer_cast<Streaming::ISource>(processor));
+        {
+            auto streaming_source = std::dynamic_pointer_cast<Streaming::ISource>(processor);
+            if (!streaming_source)
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "Streaming source '{}' does not implement Streaming::ISource", processor->getName());
+
+            streaming_sources.emplace_back(std::move(streaming_source));
+        }
     }
     return streaming_sources;
 }
