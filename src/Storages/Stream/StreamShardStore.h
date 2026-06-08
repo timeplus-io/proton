@@ -166,6 +166,20 @@ private:
     void initLog();
     void initNativeLog();
 
+    /// Build the bounded "prefix" plan for a streaming-join key-domain snapshot boundary: the slice of
+    /// rows between the historical backfill's high SN and the snapshot stop SN, read non-streaming and
+    /// key-domain-filtered. Returns nullptr when that slice is empty (so readConcat skips it).
+    std::unique_ptr<QueryPlan> buildBoundedPrefixPlanForSnapshotBoundary(
+        const Names & historical_column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        const ContextPtr & context,
+        size_t max_block_size,
+        size_t streaming_num_streams,
+        Int64 max_sn,
+        Int64 snapshot_high_sn,
+        std::optional<Int64> historical_upper_bound_sn);
+
     int64_t snLoaded() const;
 
     void backgroundPollNativeLog();

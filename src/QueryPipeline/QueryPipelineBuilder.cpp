@@ -49,6 +49,57 @@ String streamingSourceBoundaryId(const Streaming::ISource & source)
 {
     return fmt::format("{}:{}", source.getName(), source.getDescription());
 }
+
+/// Resolve the right-side streaming sources named by `source_ids` to the live pipeline sources so a
+/// streaming-join key-domain right boundary can be installed, validating source identity and stop-SN
+/// support along the way. Any mismatch throws (the caller's key-domain pushdown then bails out).
+/// Returns the matched sources paired with their stop SNs; empty when no boundary was requested.
+std::pair<std::vector<std::shared_ptr<Streaming::ISource>>, std::vector<Int64>>
+matchRightSourcesForStreamingJoinBoundary(
+    const std::vector<String> & source_ids, std::vector<Int64> stop_sns, QueryPipelineBuilder & right)
+{
+    std::vector<std::shared_ptr<Streaming::ISource>> matched_sources;
+    std::vector<Int64> matched_stop_sns;
+    if (stop_sns.empty())
+        return {std::move(matched_sources), std::move(matched_stop_sns)};
+
+    auto fail = [](const String & reason) {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Streaming join key-domain pushdown right boundary cannot be installed safely: {}", reason);
+    };
+
+    if (source_ids.size() != stop_sns.size())
+        fail(fmt::format("right boundary source-id count mismatch: got {} source ids for {} stop SNs", source_ids.size(), stop_sns.size()));
+
+    auto right_sources = right.getStreamingSources();
+    std::unordered_map<String, std::shared_ptr<Streaming::ISource>> sources_by_id;
+    sources_by_id.reserve(right_sources.size());
+    for (auto & source : right_sources)
+    {
+        auto source_id = streamingSourceBoundaryId(*source);
+        if (!sources_by_id.emplace(source_id, source).second)
+            fail(fmt::format("right boundary source identity '{}' is duplicated in join pipeline", source_id));
+    }
+
+    if (sources_by_id.size() != stop_sns.size())
+        fail(fmt::format("right boundary source count mismatch: expected {} sources, got {}", stop_sns.size(), sources_by_id.size()));
+
+    matched_sources.reserve(source_ids.size());
+    matched_stop_sns = std::move(stop_sns);
+    for (const auto & source_id : source_ids)
+    {
+        auto it = sources_by_id.find(source_id);
+        if (it == sources_by_id.end())
+            fail(fmt::format("right boundary source identity '{}' was not found in join pipeline", source_id));
+
+        if (!it->second->supportsStopSN())
+            fail(fmt::format("right boundary source identity '{}' no longer supports stop-SN", source_id));
+
+        matched_sources.emplace_back(std::move(it->second));
+    }
+
+    return {std::move(matched_sources), std::move(matched_stop_sns)};
+}
 }
 /// proton: ends.
 
@@ -827,61 +878,8 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
 
     size_t left_max_parallel_streams = std::max(left->pipe.max_parallel_streams, left->getNumStreams());
     size_t right_max_parallel_streams = std::max(right->pipe.max_parallel_streams, right->getNumStreams());
-    std::vector<std::shared_ptr<Streaming::ISource>> matched_right_sources;
-    std::vector<Int64> matched_right_stop_sns;
-    if (!right_stream_stop_sns.empty())
-    {
-        auto fail_right_boundary = [&](const String & reason) {
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR, "Streaming join key-domain pushdown right boundary cannot be installed safely: {}", reason);
-        };
-
-        if (right_stream_source_ids.size() != right_stream_stop_sns.size())
-        {
-            fail_right_boundary(
-                fmt::format(
-                    "right boundary source-id count mismatch: got {} source ids for {} stop SNs",
-                    right_stream_source_ids.size(),
-                    right_stream_stop_sns.size()));
-        }
-
-        auto right_sources = right->getStreamingSources();
-        std::unordered_map<String, std::shared_ptr<Streaming::ISource>> sources_by_id;
-        sources_by_id.reserve(right_sources.size());
-        for (auto & source : right_sources)
-        {
-            auto source_id = streamingSourceBoundaryId(*source);
-            if (!sources_by_id.emplace(source_id, source).second)
-            {
-                fail_right_boundary(fmt::format("right boundary source identity '{}' is duplicated in join pipeline", source_id));
-            }
-        }
-
-        if (sources_by_id.size() != right_stream_stop_sns.size())
-        {
-            fail_right_boundary(
-                fmt::format(
-                    "right boundary source count mismatch: expected {} sources, got {}",
-                    right_stream_stop_sns.size(),
-                    sources_by_id.size()));
-        }
-
-        matched_right_sources.reserve(right_stream_source_ids.size());
-        matched_right_stop_sns = std::move(right_stream_stop_sns);
-        for (const auto & source_id : right_stream_source_ids)
-        {
-            auto it = sources_by_id.find(source_id);
-            if (it == sources_by_id.end())
-            {
-                fail_right_boundary(fmt::format("right boundary source identity '{}' was not found in join pipeline", source_id));
-            }
-
-            if (!it->second->supportsStopSN())
-                fail_right_boundary(fmt::format("right boundary source identity '{}' no longer supports stop-SN", source_id));
-
-            matched_right_sources.emplace_back(std::move(it->second));
-        }
-    }
+    auto [matched_right_sources, matched_right_stop_sns]
+        = matchRightSourcesForStreamingJoinBoundary(right_stream_source_ids, std::move(right_stream_stop_sns), *right);
 
     size_t num_transforms = 0;
 

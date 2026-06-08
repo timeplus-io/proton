@@ -387,6 +387,23 @@ static MarkRanges filterMarkRangesByStreamingJoinPrimaryKeyPrefix(
 
     return filtered;
 }
+
+/// Prune a part's mark ranges by the streaming-join primary-key-prefix domain, accumulating the
+/// before/after mark counts for the prune metric. No-op for an empty domain, so without the
+/// optimization the part's ranges are left unchanged.
+static void applyStreamingJoinPrimaryKeyPrefixFilter(
+    RangesInDataPart & ranges,
+    const MergeTreeData::DataPartPtr & part,
+    const StreamingJoinPrimaryKeyPrefixDomain & domain,
+    std::atomic<size_t> & sum_marks_before,
+    std::atomic<size_t> & sum_marks_after)
+{
+    const size_t marks_before = ranges.ranges.getNumberOfMarks();
+    ranges.ranges = filterMarkRangesByStreamingJoinPrimaryKeyPrefix(ranges.ranges, part, domain);
+    const size_t marks_after = ranges.ranges.getNumberOfMarks();
+    sum_marks_before.fetch_add(marks_before, std::memory_order_relaxed);
+    sum_marks_after.fetch_add(marks_after, std::memory_order_relaxed);
+}
 /// proton: ends.
 
 
@@ -1292,13 +1309,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             /// proton: starts.
             if (streaming_join_pk_domain)
-            {
-                const size_t marks_before = ranges.ranges.getNumberOfMarks();
-                ranges.ranges = filterMarkRangesByStreamingJoinPrimaryKeyPrefix(ranges.ranges, part, *streaming_join_pk_domain);
-                const size_t marks_after = ranges.ranges.getNumberOfMarks();
-                sum_marks_before_streaming_join_pk.fetch_add(marks_before, std::memory_order_relaxed);
-                sum_marks_after_streaming_join_pk.fetch_add(marks_after, std::memory_order_relaxed);
-            }
+                applyStreamingJoinPrimaryKeyPrefixFilter(
+                    ranges, part, *streaming_join_pk_domain, sum_marks_before_streaming_join_pk, sum_marks_after_streaming_join_pk);
             /// proton: ends.
 
             sum_marks_pk.fetch_add(ranges.getMarksCount(), std::memory_order_relaxed);

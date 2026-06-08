@@ -241,6 +241,56 @@ std::optional<std::unordered_set<UInt64>> getHistoricalShardsFromStreamingJoinKe
 
     return std::unordered_set<UInt64>{historical_shards.begin(), historical_shards.end()};
 }
+
+/// Apply streaming-join key-domain pruning to a backfill read plan: select the snapshot-boundary
+/// SNs and, when every shard is covered by that boundary, drop the historical shards that no domain
+/// key hashes to (live reads keep all shards). No-op unless the pushdown confirmed a left-backfill
+/// boundary, so historical_shards stays unset and every shard is read as before.
+void updateShardsWithStreamingJoinKeyDomainPruning(
+    StorageStream::ShardsToRead & result,
+    const ExpressionActionsPtr & sharding_key_expr,
+    bool sharding_key_is_deterministic,
+    const String & sharding_key_column_name,
+    const std::vector<UInt64> & slot_to_shard,
+    const StorageSnapshotPtr & storage_snapshot,
+    const SelectQueryInfo & query_info,
+    const ContextPtr & local_context,
+    bool include_historical_shard_pruning,
+    LoggerPtr logger)
+{
+    const bool use_left_backfill_snapshot = query_info.left_backfill_join_key_domain
+        && query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary()
+        && !query_info.left_backfill_snapshot_high_sns.empty();
+
+    result.snapshot_high_sns
+        = use_left_backfill_snapshot ? query_info.left_backfill_snapshot_high_sns : query_info.streaming_join_snapshot_high_sns;
+
+    if (include_historical_shard_pruning && result.mode == QueryMode::StreamingConcat && !hasAnyVirtualReplica(result.shards)
+        && hasSnapshotBoundaryForAllShards(result.shards, result.snapshot_high_sns))
+    {
+        result.historical_shards = getHistoricalShardsFromStreamingJoinKeyDomain(
+            sharding_key_expr,
+            sharding_key_is_deterministic,
+            sharding_key_column_name,
+            slot_to_shard,
+            storage_snapshot,
+            query_info,
+            query_info.shards_to_query->shards,
+            local_context,
+            logger);
+
+        if (result.historical_shards)
+        {
+            std::set<UInt64> sorted_historical_shards(result.historical_shards->begin(), result.historical_shards->end());
+            if (result.historical_shards->size() < query_info.shards_to_query->shards.size())
+                ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainShardPruned);
+            LOG_DEBUG(
+                logger,
+                "Historical backfill shards=[{}] after streaming join key-domain shard pruning",
+                fmt::join(sorted_historical_shards, ", "));
+        }
+    }
+}
 }
 
 StorageStream::StorageStream(
@@ -868,38 +918,17 @@ StorageStream::ShardsToRead StorageStream::getShardsToRead(
     if (all_shards.size() > query_info.shards_to_query->shards.size())
         LOG_INFO(log, "Query shards=[{}] after pruning", fmt::join(query_info.shards_to_query->shards, ", "));
 
-    const bool use_left_backfill_snapshot = query_info.left_backfill_join_key_domain
-        && query_info.left_backfill_join_key_domain->hasConfirmedLeftBackfillBoundary()
-        && !query_info.left_backfill_snapshot_high_sns.empty();
-
-    result.snapshot_high_sns
-        = use_left_backfill_snapshot ? query_info.left_backfill_snapshot_high_sns : query_info.streaming_join_snapshot_high_sns;
-
-    if (include_historical_shard_pruning && result.mode == QueryMode::StreamingConcat && !hasAnyVirtualReplica(result.shards)
-        && hasSnapshotBoundaryForAllShards(result.shards, result.snapshot_high_sns))
-    {
-        result.historical_shards = getHistoricalShardsFromStreamingJoinKeyDomain(
-            sharding_key_expr,
-            sharding_key_is_deterministic,
-            sharding_key_column_name,
-            slot_to_shard,
-            storage_snapshot,
-            query_info,
-            query_info.shards_to_query->shards,
-            local_context,
-            log.load());
-
-        if (result.historical_shards)
-        {
-            std::set<UInt64> sorted_historical_shards(result.historical_shards->begin(), result.historical_shards->end());
-            if (result.historical_shards->size() < query_info.shards_to_query->shards.size())
-                ProfileEvents::increment(ProfileEvents::StreamingJoinKeyDomainShardPruned);
-            LOG_DEBUG(
-                log,
-                "Historical backfill shards=[{}] after streaming join key-domain shard pruning",
-                fmt::join(sorted_historical_shards, ", "));
-        }
-    }
+    updateShardsWithStreamingJoinKeyDomainPruning(
+        result,
+        sharding_key_expr,
+        sharding_key_is_deterministic,
+        sharding_key_column_name,
+        slot_to_shard,
+        storage_snapshot,
+        query_info,
+        local_context,
+        include_historical_shard_pruning,
+        log.load());
 
     return result;
 }

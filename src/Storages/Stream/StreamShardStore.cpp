@@ -808,6 +808,43 @@ Int64 StreamShardStore::readHistorical(
 }
 
 
+std::unique_ptr<QueryPlan> StreamShardStore::buildBoundedPrefixPlanForSnapshotBoundary(
+    const Names & historical_column_names,
+    const StorageSnapshotPtr & storage_snapshot,
+    SelectQueryInfo & query_info,
+    const ContextPtr & context,
+    size_t max_block_size,
+    size_t streaming_num_streams,
+    Int64 max_sn,
+    Int64 snapshot_high_sn,
+    std::optional<Int64> historical_upper_bound_sn)
+{
+    Int64 prefix_start_sn = getOffset(query_info.seek_to_info);
+    if (prefix_start_sn < cluster::Constants::LogStartSN)
+        prefix_start_sn = cluster::Constants::LogStartSN;
+    if (max_sn >= cluster::Constants::LogStartSN)
+        prefix_start_sn = std::max(prefix_start_sn, max_sn + 1);
+
+    if (prefix_start_sn > snapshot_high_sn)
+        return nullptr;
+
+    auto bounded_prefix_plan = std::make_unique<QueryPlan>();
+    readStreaming(
+        *bounded_prefix_plan,
+        historical_column_names,
+        storage_snapshot,
+        query_info,
+        context,
+        max_block_size,
+        streaming_num_streams,
+        prefix_start_sn,
+        snapshot_high_sn,
+        /*force_non_streaming=*/true);
+    addHistoricalBackfillKeyDomainFilterStep(
+        *bounded_prefix_plan, query_info, storage_snapshot, context, historical_upper_bound_sn, logger);
+    return bounded_prefix_plan;
+}
+
 void StreamShardStore::readConcat(
     QueryPlan & query_plan,
     Names column_names,
@@ -853,31 +890,16 @@ void StreamShardStore::readConcat(
 
     std::unique_ptr<QueryPlan> bounded_prefix_plan;
     if (!skip_historical_backfill && use_snapshot_boundary)
-    {
-        Int64 prefix_start_sn = getOffset(query_info.seek_to_info);
-        if (prefix_start_sn < cluster::Constants::LogStartSN)
-            prefix_start_sn = cluster::Constants::LogStartSN;
-        if (max_sn >= cluster::Constants::LogStartSN)
-            prefix_start_sn = std::max(prefix_start_sn, max_sn + 1);
-
-        if (prefix_start_sn <= *snapshot_high_sn)
-        {
-            bounded_prefix_plan = std::make_unique<QueryPlan>();
-            readStreaming(
-                *bounded_prefix_plan,
-                historical_column_names,
-                storage_snapshot,
-                query_info,
-                context,
-                max_block_size,
-                streaming_num_streams,
-                prefix_start_sn,
-                *snapshot_high_sn,
-                /*force_non_streaming=*/true);
-            addHistoricalBackfillKeyDomainFilterStep(
-                *bounded_prefix_plan, query_info, storage_snapshot, context, historical_upper_bound_sn, logger);
-        }
-    }
+        bounded_prefix_plan = buildBoundedPrefixPlanForSnapshotBoundary(
+            historical_column_names,
+            storage_snapshot,
+            query_info,
+            context,
+            max_block_size,
+            streaming_num_streams,
+            max_sn,
+            *snapshot_high_sn,
+            historical_upper_bound_sn);
 
     auto streaming_plan = std::make_unique<QueryPlan>();
     const std::optional<Int64> streaming_start_sn
