@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <memory>
+#include <new>
 #include <string_view>
 #include <boost/core/noncopyable.hpp>
 
@@ -52,9 +53,13 @@ public:
     explicit ByteVector(size_t reserved) : mem(nullptr, std::free), cap(reserved), siz(reserved)
     {
         if (reserved)
+        {
             /// If `reserved` is 0, it is undefined if std::malloc will return an nullptr or a
             /// one byte memory addr. So only call malloc when `reserved` is not zero.
             mem.reset(static_cast<char *>(std::malloc(reserved)));
+            if (!mem)
+                throw std::bad_alloc();
+        }
     }
 
     explicit ByteVector(std::string_view data) : ByteVector(data.size())

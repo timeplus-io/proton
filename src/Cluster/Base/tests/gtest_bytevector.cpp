@@ -1,6 +1,10 @@
 #include <Cluster/Base/ByteVector.h>
 
+#include <base/defines.h>
+
+#include <cstdint>
 #include <cstring>
+#include <new>
 
 #include <gtest/gtest.h>
 
@@ -69,4 +73,35 @@ TEST(ByteVector, Release)
 
     EXPECT_EQ(cache.data(), nullptr);
     EXPECT_EQ(cache.size(), 0);
+}
+
+namespace
+{
+/// Force a genuine, failing allocation. A release build would otherwise elide the unused malloc/free
+/// pair, assume the allocation succeeded, and drop the null-check (and its throw). The empty asm with
+/// a memory clobber consumes the buffer so the optimizer must keep the real malloc; `reserved` stays
+/// opaque behind the non-inlinable boundary so the call is not constant-folded.
+[[gnu::noinline]] void allocateReserved(size_t reserved)
+{
+    cluster::ByteVector bytes(reserved);
+    char * data = bytes.data();
+    __asm__ __volatile__("" : : "r"(data) : "memory");
+}
+}
+
+TEST(ByteVector, ThrowsBadAllocOnFailedReserve)
+{
+    /// A reservation that the allocator cannot satisfy must surface as std::bad_alloc rather than
+    /// leaving the ByteVector with a null buffer that later NULL-derefs (e.g. on a torn-WAL read of
+    /// a garbage size).
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER) || defined(MEMORY_SANITIZER)
+    /// These sanitizers replace the allocator and abort on the oversized malloc by default
+    /// (allocator_may_return_null=0) instead of returning null, so the failure path is covered by the
+    /// plain and UBSan builds rather than forcing a binary-wide allocator option. The ADDRESS_/
+    /// THREAD_/MEMORY_SANITIZER macros come from <base/defines.h>, which must be included for the
+    /// guard to fire.
+    GTEST_SKIP() << "oversized malloc aborts under the sanitizer allocator; covered in plain builds";
+#else
+    EXPECT_THROW(allocateReserved(SIZE_MAX), std::bad_alloc);
+#endif
 }
