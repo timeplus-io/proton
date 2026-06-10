@@ -75,6 +75,7 @@ def emit_rows():
             .init_function_name = {},
             .init_parameters = {},
             .deinit_function_name = {},
+            .flush_function_name = {},
             .entry_function_name = "emit_rows",
             .source_code = python_source},
         PythonTableMode::Batch);

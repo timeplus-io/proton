@@ -126,6 +126,7 @@ class ASTStorage;
     M(String, init_function_name, "", "Python external stream initialization hook name, called once before read/write processing", 0) \
     M(String, init_function_parameters, "", "Optional Python external stream initialization parameters passed as a string to init()", 0) \
     M(String, deinit_function_name, "", "Python external stream cleanup hook name, called once after read/write processing", 0) \
+    M(String, flush_function_name, "", "Python sink flush hook, called on checkpoints and before cleanup", 0) \
     M(String, mode, "", "Python external stream execution mode: 'auto', 'streaming', or 'batch' (empty defaults to auto)", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
     LOG_FILE_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \

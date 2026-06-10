@@ -47,8 +47,13 @@ StoragePythonTable::StoragePythonTable(
     const ColumnsDescription & columns,
     cpython::PythonFunction function_,
     PythonTableMode mode_,
-    String sink_function_name_)
-    : IStorage(table_id), function(std::move(function_)), mode(mode_), sink_function_name(std::move(sink_function_name_))
+    String sink_function_name_,
+    String flush_function_name_)
+    : IStorage(table_id)
+    , function(std::move(function_))
+    , mode(mode_)
+    , sink_function_name(std::move(sink_function_name_))
+    , flush_function_name(std::move(flush_function_name_))
 {
     StorageInMemoryMetadata metadata;
     metadata.setColumns(columns);
@@ -60,10 +65,11 @@ StoragePtr StoragePythonTable::create(
     const ColumnsDescription & columns,
     cpython::PythonFunction function_,
     PythonTableMode mode_,
-    String sink_function_name_)
+    String sink_function_name_,
+    String flush_function_name_)
 {
-    return std::shared_ptr<StoragePythonTable>(
-        new StoragePythonTable(table_id, columns, std::move(function_), mode_, std::move(sink_function_name_)));
+    return std::shared_ptr<StoragePythonTable>(new StoragePythonTable(
+        table_id, columns, std::move(function_), mode_, std::move(sink_function_name_), std::move(flush_function_name_)));
 }
 
 Block StoragePythonTable::convertPythonResultToBlock(const cpython::PyObjectPtr & py_result) const
@@ -210,6 +216,7 @@ SinkToStoragePtr StoragePythonTable::write(const ASTPtr & /*query*/, const Stora
     auto sink_func = function;
     if (!sink_function_name.empty())
         sink_func.entry_function_name = sink_function_name;
+    sink_func.flush_function_name = flush_function_name;
 
     if (sink_func.entry_function_name.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream sink requires a function name");

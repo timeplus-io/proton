@@ -212,6 +212,7 @@ def py_transform(i):
                 .init_function_name = {},
                 .init_parameters = {},
                 .deinit_function_name = {},
+                .flush_function_name = {},
                 .entry_function_name = "py_transform",
                 .source_code = python_source});
         auto transform = std::make_shared<PythonTableTransform>(
@@ -277,6 +278,7 @@ def py_transform(i):
                 .init_function_name = {},
                 .init_parameters = {},
                 .deinit_function_name = {},
+                .flush_function_name = {},
                 .entry_function_name = "py_transform",
                 .source_code = python_source});
         auto transform = std::make_shared<PythonTableTransform>(
@@ -404,6 +406,7 @@ def py_transform(i):
                     .init_function_name = {},
                     .init_parameters = {},
                     .deinit_function_name = "deinit",
+                    .flush_function_name = {},
                     .entry_function_name = "py_transform",
                     .source_code = python_source}));
 
@@ -474,6 +477,7 @@ def py_transform(i):
                     .init_function_name = {},
                     .init_parameters = {},
                     .deinit_function_name = "deinit",
+                    .flush_function_name = {},
                     .entry_function_name = "py_transform",
                     .source_code = python_source}));
 
@@ -546,6 +550,7 @@ def py_transform(i):
                 .init_function_name = "my_init",
                 .init_parameters = "key1=val1,key2=val2",
                 .deinit_function_name = {},
+                .flush_function_name = {},
                 .entry_function_name = "py_transform",
                 .source_code = python_source});
         auto transform = std::make_shared<PythonTableTransform>(
@@ -613,6 +618,7 @@ def py_transform(i):
                 .init_function_name = "my_init",
                 .init_parameters = json_params,
                 .deinit_function_name = {},
+                .flush_function_name = {},
                 .entry_function_name = "py_transform",
                 .source_code = python_source});
         auto transform = std::make_shared<PythonTableTransform>(
@@ -681,6 +687,7 @@ def py_transform(i):
                 .init_function_name = "my_init",
                 .init_parameters = tricky_params,
                 .deinit_function_name = {},
+                .flush_function_name = {},
                 .entry_function_name = "py_transform",
                 .source_code = python_source});
         auto transform = std::make_shared<PythonTableTransform>(
@@ -746,6 +753,7 @@ def py_transform(i):
                 .init_function_name = "my_init",
                 .init_parameters = {},
                 .deinit_function_name = {},
+                .flush_function_name = {},
                 .entry_function_name = "py_transform",
                 .source_code = python_source});
         auto transform = std::make_shared<PythonTableTransform>(
@@ -826,6 +834,7 @@ def py_transform(i):
                     .init_function_name = "my_init",
                     .init_parameters = "conn=db://host:5432/mydb",
                     .deinit_function_name = "my_deinit",
+                    .flush_function_name = {},
                     .entry_function_name = "py_transform",
                     .source_code = python_source}));
 

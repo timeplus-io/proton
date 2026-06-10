@@ -19,6 +19,8 @@ public:
 
     String getName() const override { return "PythonSink"; }
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+
 protected:
     void consume(Chunk chunk) override;
     void onFinish() override;

@@ -16,14 +16,35 @@ namespace DB::cpython
 {
 namespace
 {
-void cleanupPythonModule(const String & module_name, const String & deinit_function_name, bool run_deinit, bool & deinit_attempted)
+void cleanupPythonModule(
+    const String & module_name,
+    const String & flush_function_name,
+    const String & deinit_function_name,
+    bool run_hooks,
+    bool & flush_attempted,
+    bool & deinit_attempted)
 {
     if (module_name.empty())
         return;
 
     std::exception_ptr cleanup_exception;
 
-    if (run_deinit && !deinit_function_name.empty() && !deinit_attempted)
+    /// Flush any data still buffered by the Python code before running deinit,
+    /// so a graceful close does not lose buffered rows.
+    if (run_hooks && !flush_function_name.empty() && !flush_attempted)
+    {
+        flush_attempted = true;
+        try
+        {
+            executeFunction(flush_function_name, module_name);
+        }
+        catch (...)
+        {
+            cleanup_exception = std::current_exception();
+        }
+    }
+
+    if (run_hooks && !deinit_function_name.empty() && !deinit_attempted)
     {
         deinit_attempted = true;
         try
@@ -32,7 +53,8 @@ void cleanupPythonModule(const String & module_name, const String & deinit_funct
         }
         catch (...)
         {
-            cleanup_exception = std::current_exception();
+            if (!cleanup_exception)
+                cleanup_exception = std::current_exception();
         }
     }
 
@@ -139,6 +161,22 @@ PyObjectPtr PythonModuleSession::execute(const PyObjectPtr & args) const
     return executeObject(py_function, args);
 }
 
+void PythonModuleSession::flush(bool acquire_gil) const
+{
+    if (function.flush_function_name.empty() || closed || module_name.empty())
+        return;
+
+    if (acquire_gil)
+    {
+        GILGuard gil_guard;
+        executeFunction(function.flush_function_name, module_name);
+    }
+    else
+    {
+        executeFunction(function.flush_function_name, module_name);
+    }
+}
+
 void PythonModuleSession::close(bool ignore_exceptions, bool acquire_gil)
 {
     if (closed)
@@ -189,7 +227,8 @@ void PythonModuleSession::closeImpl()
     std::exception_ptr cleanup_exception;
     try
     {
-        cleanupPythonModule(module_name, function.deinit_function_name, module_loaded, deinit_attempted);
+        cleanupPythonModule(
+            module_name, function.flush_function_name, function.deinit_function_name, module_loaded, flush_attempted, deinit_attempted);
         module_name.clear();
         module_loaded = false;
         closed = true;

@@ -13,6 +13,7 @@ struct PythonFunction
     String init_function_name;
     String init_parameters;
     String deinit_function_name;
+    String flush_function_name;
     String entry_function_name;
     String source_code;
 };
@@ -37,6 +38,10 @@ public:
 
     PyObjectPtr execute(const PyObjectPtr & args = PyObjectPtr()) const;
 
+    /// Invoke the flush hook (if configured) to let Python code flush buffered data.
+    /// No-op when no flush function is configured or the session is already closed.
+    void flush(bool acquire_gil = true) const;
+
     void close(bool ignore_exceptions, bool acquire_gil = true);
 
 private:
@@ -50,6 +55,7 @@ private:
     PyObjectPtr py_function;
     bool closed = false;
     bool module_loaded = false;
+    bool flush_attempted = false;
     bool deinit_attempted = false;
 };
 }

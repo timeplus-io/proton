@@ -232,11 +232,16 @@ TEST_F(CPythonTest, RefreshImportStateExtendsNamespacePackagePaths)
 {
     namespace fs = std::filesystem;
 
-    auto pkg_resources_module = PyObjectPtr{PyImport_ImportModule("pkg_resources")};
-    if (!pkg_resources_module)
+    /// Skip if pkg_resources is not available (needed for declare_namespace).
+    /// Must hold the GIL: an earlier test may have released it via PyEval_SaveThread.
     {
-        PyErr_Clear();
-        GTEST_SKIP() << "pkg_resources not available, skipping namespace package test";
+        GILGuard gil_guard(true);
+        auto pkg_resources_module = PyObjectPtr{PyImport_ImportModule("pkg_resources")};
+        if (!pkg_resources_module)
+        {
+            PyErr_Clear();
+            GTEST_SKIP() << "pkg_resources not available, skipping namespace package test";
+        }
     }
 
     const auto unique_suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -323,6 +328,8 @@ TEST_F(CPythonTest, RefreshImportStateExtendsNamespacePackagePaths)
     if (PyErr_Occurred())
         PyErr_Clear();
 
+    auto pkg_resources_module = PyObjectPtr{PyImport_ImportModule("pkg_resources")};
+    ASSERT_TRUE(pkg_resources_module);
     auto ns_packages_dict = PyObjectPtr{PyObject_GetAttrString(pkg_resources_module.get(), "_namespace_packages")};
     if (ns_packages_dict && PyDict_Check(ns_packages_dict.get()))
         PyDict_DelItem(ns_packages_dict.get(), ns_key.get());

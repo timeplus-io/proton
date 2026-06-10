@@ -197,6 +197,7 @@ StoragePtr createExternalStream(
         }
 
         String sink_function_name = external_stream_settings->write_function_name.value;
+        String flush_function_name = external_stream_settings->flush_function_name.value;
         String init_parameters;
         if (external_stream_settings->init_function_parameters.changed)
             init_parameters = external_stream_settings->init_function_parameters.value;
@@ -207,11 +208,18 @@ StoragePtr createExternalStream(
             .init_function_name = external_stream_settings->init_function_name.value,
             .init_parameters = std::move(init_parameters),
             .deinit_function_name = external_stream_settings->deinit_function_name.value,
+            /// flush is sink-only, StoragePythonTable applies it on the write path
+            .flush_function_name = {},
             .entry_function_name = std::move(function_name),
             .source_code = *exec_script,
         };
         return StoragePythonTable::create(
-            storage_id, storage_metadata.getColumns(), std::move(python_function), mode, std::move(sink_function_name));
+            storage_id,
+            storage_metadata.getColumns(),
+            std::move(python_function),
+            mode,
+            std::move(sink_function_name),
+            std::move(flush_function_name));
     }
 #else
     if (type == ExternalStreamTypes::PYTHON)

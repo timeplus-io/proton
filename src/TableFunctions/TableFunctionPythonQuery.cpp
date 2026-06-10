@@ -120,6 +120,7 @@ StoragePtr TableFunctionPythonQuery::executeImpl(const ASTPtr &, ContextPtr cont
             .init_function_name = {},
             .init_parameters = {},
             .deinit_function_name = {},
+            .flush_function_name = {},
             .entry_function_name = udf_desc->name,
             .source_code = python_payload.source});
     storage->startup();
