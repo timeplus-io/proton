@@ -81,7 +81,8 @@ namespace
 /// pair, assume the allocation succeeded, and drop the null-check (and its throw). The empty asm with
 /// a memory clobber consumes the buffer so the optimizer must keep the real malloc; `reserved` stays
 /// opaque behind the non-inlinable boundary so the call is not constant-folded.
-[[gnu::noinline]] void allocateReserved(size_t reserved)
+/// Unused under the sanitizer builds below, where the only caller is compiled out.
+[[maybe_unused]] [[gnu::noinline]] void allocateReserved(size_t reserved)
 {
     cluster::ByteVector bytes(reserved);
     char * data = bytes.data();
