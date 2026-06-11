@@ -16,11 +16,7 @@ private:
     IServer & server;
     LoggerPtr log;
 
-#if USE_SSL
-    bool ssl_enabled = true;
-#else
     bool ssl_enabled = false;
-#endif
 
     std::atomic<Int32> last_connection_id = 0;
     std::vector<std::shared_ptr<PostgreSQLProtocol::PGAuthentication::AuthenticationMethod>> auth_methods;
