@@ -44,7 +44,8 @@ GRANT SELECT, INSERT, CREATE TABLE, DROP TABLE ON ${CLICKHOUSE_DATABASE}.* TO ${
 # Note: ${CLICKHOUSE_CLIENT} bakes in a --user from CLICKHOUSE_USER; using
 # the bare ${CLICKHOUSE_CLIENT_BINARY} avoids "option '--user' cannot be
 # specified more than once".
-${CLICKHOUSE_CLIENT_BINARY} --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
+CLIENT_CONN_OPTS=(${CLICKHOUSE_HOST:+--host="${CLICKHOUSE_HOST}"} ${CLICKHOUSE_PORT_TCP:+--port="${CLICKHOUSE_PORT_TCP}"})
+${CLICKHOUSE_CLIENT_BINARY} "${CLIENT_CONN_OPTS[@]}" --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
 CREATE EXTERNAL STREAM ${CLICKHOUSE_DATABASE}.${stream} (k_id string, k_secret string)
 AS \$\$
 import json
@@ -63,13 +64,13 @@ SETTINGS type='python', mode='batch', read_function_name='go',
 # refuses inline ATTACH-with-definition without UUID or FROM, but accepts it
 # with one, so a low-priv user could otherwise re-attach a stream that
 # references a secret named collection.
-${CLICKHOUSE_CLIENT_BINARY} --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
+${CLICKHOUSE_CLIENT_BINARY} "${CLIENT_CONN_OPTS[@]}" --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
 ATTACH EXTERNAL STREAM ${CLICKHOUSE_DATABASE}.${stream}_attach_es UUID '11111111-1111-1111-1111-111111111111' (k string)
 SETTINGS type='log', named_collection='${nc_name}';
 " 2>&1 | grep -oE 'ACCESS_DENIED' | head -1
 
 # Same vector via ATTACH EXTERNAL TABLE with UUID.
-${CLICKHOUSE_CLIENT_BINARY} --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
+${CLICKHOUSE_CLIENT_BINARY} "${CLIENT_CONN_OPTS[@]}" --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
 ATTACH EXTERNAL TABLE ${CLICKHOUSE_DATABASE}.${stream}_attach_tbl UUID '22222222-2222-2222-2222-222222222222' (k string, v int32)
 SETTINGS type='s3', named_collection='${nc_name}', bucket='b', write_to='x.json';
 " 2>&1 | grep -oE 'ACCESS_DENIED' | head -1
@@ -82,7 +83,7 @@ cat > "${config_file}" <<EOF
 type=log
 named_collection=${nc_name}
 EOF
-${CLICKHOUSE_CLIENT_BINARY} --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
+${CLICKHOUSE_CLIENT_BINARY} "${CLIENT_CONN_OPTS[@]}" --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
 CREATE EXTERNAL STREAM ${CLICKHOUSE_DATABASE}.${stream}_via_file (k string)
 SETTINGS config_file='${config_file}';
 " 2>&1 | grep -oE 'ACCESS_DENIED' | head -1
@@ -94,7 +95,7 @@ rm -f "${config_file}"
 # accepted; only the global form (ON *.*) parses.
 ${CLICKHOUSE_CLIENT} --query "GRANT NAMED COLLECTION ON *.* TO ${user}"
 
-${CLICKHOUSE_CLIENT_BINARY} -mn --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
+${CLICKHOUSE_CLIENT_BINARY} "${CLIENT_CONN_OPTS[@]}" -mn --database="${CLICKHOUSE_DATABASE}" --user="${user}" --password='pw' --query "
 CREATE EXTERNAL STREAM ${CLICKHOUSE_DATABASE}.${stream} (k_id string, k_secret string)
 AS \$\$
 import json
