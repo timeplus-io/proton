@@ -1,4 +1,5 @@
 #include <Cluster/Common/Constants.h>
+#include <Cluster/Common/LogTrack.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -28,8 +29,10 @@
 #include <boost/algorithm/string/trim.hpp>
 
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <ranges>
+#include <string_view>
 
 namespace DB
 {
@@ -655,6 +658,23 @@ void Kafka::onLog(const struct rd_kafka_s * rk, int level, const char * fac, con
         LOG_INFO(cbLogger(), "{}|{} {}", rd_kafka_name(rk), fac, buf);
 }
 
+namespace
+{
+std::pair<bool, uint64_t> shouldLogKafkaError(uint64_t log_key)
+{
+    static std::mutex mu;
+    static cluster::LogTrackContainer tracked_logs;
+
+    std::lock_guard lock{mu};
+    /// Client names like `rdkafka#consumer-N` are never reused within a process, so stale
+    /// keys accumulate; reset the container instead of letting it grow unboundedly.
+    if (tracked_logs.size() > 10000)
+        tracked_logs.clear();
+
+    return cluster::shouldLog(tracked_logs, log_key, /*throttling_sec=*/30);
+}
+}
+
 void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void * /*opaque*/)
 {
     if (err == RD_KAFKA_RESP_ERR__FATAL)
@@ -665,12 +685,17 @@ void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void *
     }
     else
     {
-        LOG_WARNING(
-            cbLogger(),
-            "Error occurred on {}, error={}, reason={}",
-            rd_kafka_name(rk),
-            rd_kafka_err2str(static_cast<rd_kafka_resp_err_t>(err)),
-            reason);
+        /// During a broker outage librdkafka reports transport failures many times per second
+        /// on every client; throttle per (client, error code) to keep the server log readable.
+        auto log_key = std::hash<std::string_view>{}(rd_kafka_name(rk)) ^ static_cast<uint64_t>(err);
+        if (auto [should_log, log_count] = shouldLogKafkaError(log_key); should_log)
+            LOG_WARNING(
+                cbLogger(),
+                "Error occurred on {}, error={}, reason={}, log_recurring={}",
+                rd_kafka_name(rk),
+                rd_kafka_err2str(static_cast<rd_kafka_resp_err_t>(err)),
+                reason,
+                log_count);
     }
 }
 
