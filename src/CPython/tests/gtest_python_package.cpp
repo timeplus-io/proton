@@ -2,6 +2,7 @@
 
 #if USE_PYTHON_UDF
 
+#include <CPython/AsyncPythonPackageManager.h>
 #include <CPython/GILGuard.h>
 #include <CPython/PythonPackage.h>
 #include <CPython/Utils.h>
@@ -65,6 +66,27 @@ TEST(PythonPackageTest, ParsesExtrasAndVersionSpecifiers)
     EXPECT_EQ(package.lookup_name, "confluent-kafka");
     EXPECT_EQ(package.version_spec, ">=2.1.1");
     EXPECT_EQ(package.package_with_version, "confluent-kafka[protobuf, avro]>=2.1.1");
+}
+
+TEST(PythonPackageTest, RemoveCompletedTaskIgnoresUnknownTasks)
+{
+    AsyncPythonPackageManager manager(nullptr);
+    /// Unknown ids are reported as not removed and must not crash or affect tracking.
+    EXPECT_FALSE(manager.removeCompletedTask("no-such-task"));
+    EXPECT_TRUE(manager.getAllTaskResults().empty());
+    manager.shutdown();
+}
+
+TEST(PythonPackageTest, HasEffectiveRequirementLinesMatchesParserSkipRules)
+{
+    EXPECT_FALSE(PythonPackage::hasEffectiveRequirementLines(""));
+    EXPECT_FALSE(PythonPackage::hasEffectiveRequirementLines("\n\n"));
+    EXPECT_FALSE(PythonPackage::hasEffectiveRequirementLines("# comment only\n  \t\n#another\n"));
+    EXPECT_TRUE(PythonPackage::hasEffectiveRequirementLines("requests==2.31.0\n"));
+    EXPECT_TRUE(PythonPackage::hasEffectiveRequirementLines("# header\n  six==1.17.0  \n"));
+    /// Mirror of the parser's contract: content without effective lines makes parse throw, so
+    /// callers must consult this helper first when "nothing to install" is a valid outcome.
+    EXPECT_THROW(PythonPackage::parseRequirementsText("# comment only\n"), DB::Exception);
 }
 
 TEST(PythonPackageTest, ParsesRequirementsTextWithExtras)

@@ -149,6 +149,17 @@ cluster::CallResultV<String> AsyncPythonPackageManager::scheduleInstallRequireme
     return cluster::CallResultV<String>(task_id);
 }
 
+bool AsyncPythonPackageManager::removeCompletedTask(const String & task_id)
+{
+    std::unique_lock lock(results_mutex);
+    auto iter = task_results.find(task_id);
+    if (iter == task_results.end() || !iter->second->isCompleted())
+        return false;
+
+    task_results.erase(iter);
+    return true;
+}
+
 cluster::CallResultV<String>
 AsyncPythonPackageManager::scheduleUninstall(const String & task_id, const String & package_name, AsyncTaskCallback callback)
 {

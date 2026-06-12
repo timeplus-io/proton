@@ -82,6 +82,11 @@ public:
 
     std::vector<AsyncTaskResultPtr> getAllTaskResults() const;
 
+    /// Remove a finished task from tracking; returns false if the task is unknown or still running.
+    /// Periodic schedulers (e.g. the S3 requirements reconciler) use this to keep retried attempts
+    /// from accumulating in the results map for the lifetime of the process.
+    bool removeCompletedTask(const String & task_id);
+
     /// Get task metrics for IntrospectionStateLog collection
     struct PackageMetrics
     {
