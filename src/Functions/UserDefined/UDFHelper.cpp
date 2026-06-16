@@ -4,12 +4,16 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 #if USE_PYTHON_UDF
+#include <CPython/Utils.h>
 #include <Functions/UserDefined/PythonUserDefinedFunction.h>
 #endif
+#include <Access/Common/AccessType.h>
+#include <Access/ContextAccess.h>
 #include <Functions/UserDefined/UserDefinedSQLObjectType.h>
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Common/NamedCollections/NamedCollectionsFactory.h>
 #include <Common/filesystemHelpers.h>
 
 #include <Poco/JSON/Parser.h>
@@ -26,6 +30,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int BAD_ARGUMENTS;
 extern const int BAD_REQUEST_PARAMETER;
 extern const int UDF_INVALID_NAME;
 extern const int FUNCTION_ALREADY_EXISTS;
@@ -64,6 +69,35 @@ void validateUDFName(const String & func_name)
         throw Exception(
             ErrorCodes::UDF_INVALID_NAME, "UDF name can not end up with {}, because it is key word suffix", combinator->getName());
 }
+
+#if USE_PYTHON_UDF
+void runPythonUDFInitHook(
+    const cluster::protocol::PythonUserDefinedFunctionPayload & payload, const String & udf_name, const String & module_name)
+{
+    if (payload.init_function_name.empty())
+        return;
+
+    String init_parameters = payload.init_function_parameters;
+    if (!payload.named_collection.empty())
+    {
+        NamedCollectionFactory::instance().loadIfNot();
+        auto collection = NamedCollectionFactory::instance().tryGet(payload.named_collection);
+        if (!collection)
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS, "Named collection '{}' required by UDF '{}' does not exist", payload.named_collection, udf_name);
+
+        /// Same contract as Python external streams: a collection without the
+        /// key simply means the hook is invoked with no arguments.
+        if (collection->has("init_function_parameters"))
+            init_parameters = collection->get<String>("init_function_parameters");
+    }
+
+    Strings args;
+    if (!init_parameters.empty())
+        args.emplace_back(std::move(init_parameters));
+    cpython::executeFunction(payload.init_function_name, module_name, args);
+}
+#endif
 
 cluster::CreateUserDefinedFunctionRequestPtr createUserDefinedFunctionRequest(
     ContextPtr context,
@@ -216,6 +250,36 @@ cluster::CreateUserDefinedFunctionRequestPtr createUserDefinedFunctionRequest(
             payload->source = std::move(source);
             payload->is_aggregation = config.getBool(key_in_config + ".is_aggregation", false);
             payload->using_numpy = config.getBool(key_in_config + ".numpy_optimize_enable", false);
+            payload->init_function_name = config.getString(key_in_config + ".init_function_name", "");
+            payload->init_function_parameters = config.getString(key_in_config + ".init_function_parameters", "");
+            payload->named_collection = config.getString(key_in_config + ".named_collection", "");
+
+            /// Both SQL CREATE FUNCTION and the REST UDF endpoint funnel through here,
+            /// so the init-hook invariants and the named-collection access check must
+            /// live at this choke point, not (only) in the interpreter.
+            if (payload->init_function_name.empty() && (!payload->init_function_parameters.empty() || !payload->named_collection.empty()))
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "'init_function_parameters' and 'named_collection' require 'init_function_name' to be configured");
+
+            if (!payload->init_function_parameters.empty() && !payload->named_collection.empty())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "'init_function_parameters' and 'named_collection' are mutually exclusive, configure only one parameter source");
+
+            if (!payload->named_collection.empty())
+            {
+                /// Checked once at creation time with the creator's context; at UDF load
+                /// time the collection is read by name with no further access check.
+                /// Access before existence, so unauthorized users cannot probe collection
+                /// names (same order as NamedCollectionsHelpers).
+                context->checkAccess(AccessType::NAMED_COLLECTION, payload->named_collection);
+
+                NamedCollectionFactory::instance().loadIfNot();
+                if (!NamedCollectionFactory::instance().exists(payload->named_collection))
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Named collection '{}' does not exist", payload->named_collection);
+            }
+
             udf_payload = std::move(payload);
             break;
         }

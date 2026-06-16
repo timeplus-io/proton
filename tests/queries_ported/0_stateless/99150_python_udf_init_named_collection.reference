@@ -1,0 +1,33 @@
+=== 1. init via named collection ===
+secret_v1:hello
+=== 2. SHOW CREATE keeps settings, hides secret ===
+1
+1
+0
+=== 3. direct init_function_parameters (visible by design) ===
+direct_v:x
+1
+=== 4. aggregate UDF init hook ===
+secret_v1:3
+=== 5. rejections ===
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+=== 6. hook failure cleanup, retry sees updated collection ===
+1
+ok:a
+=== 7. collection deleted before first load ===
+1
+=== 8. aggregate constructor depends on init hook ===
+secret_v1:2
+=== 9. zero-arg init hook ===
+zero:a
+nokey:a

@@ -110,6 +110,13 @@ Poco::JSON::Object::Ptr fromUserDefinedFunctionDescriptor(const cluster::protoco
             auto payload = std::dynamic_pointer_cast<cluster::protocol::PythonUserDefinedFunctionPayload>(func_desc->payload);
             func->set("source", payload->source);
             func->set("is_aggregation", payload->is_aggregation);
+            func->set("numpy_optimize_enable", payload->using_numpy);
+            if (!payload->init_function_name.empty())
+                func->set("init_function_name", payload->init_function_name);
+            if (!payload->init_function_parameters.empty())
+                func->set("init_function_parameters", payload->init_function_parameters);
+            if (!payload->named_collection.empty())
+                func->set("named_collection", payload->named_collection);
             break;
         }
         case UDFType::SQL:

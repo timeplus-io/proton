@@ -3,6 +3,7 @@
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
+#include <Common/quoteString.h>
 
 #include <boost/algorithm/string.hpp>
 #include <fmt/format.h>
@@ -302,29 +303,62 @@ std::string JavaScriptUserDefinedFunctionPayload::createASTString(
 
 void PythonUserDefinedFunctionPayload::serialize(DB::WriteBuffer & wb, uint16_t /* version_ */) const
 {
-    uint64_t schema_data_version = (static_cast<uint64_t>(schema_version) << 32) + data_version;
+    /// Wire/back-compat: only emit the schema_version-2 layout (the three trailing
+    /// init-hook strings) when an init hook is actually configured. Otherwise fall
+    /// back to the v1 layout, producing bytes a pre-v2 binary reads exactly.
+    ///
+    /// This matters because the payload is serialized inline (no length prefix) and
+    /// is NOT the last field on the wire: CreateUserDefinedFunctionRequestData writes
+    /// exists_op/initiator/timeout_ms right after the descriptor. If we always wrote
+    /// the v2 strings, a pre-v2 reader would stop after `source` and then decode those
+    /// trailing request fields from the wrong offset (corruption). Emitting v1 when the
+    /// fields are empty — every UDF created before this feature, and any that does not
+    /// use it — keeps mixed-version clusters safe; only UDFs that actually use the init
+    /// hook require a fully-upgraded cluster, which is inherent to an additive feature.
+    const bool has_init_hook
+        = !init_function_name.empty() || !init_function_parameters.empty() || !named_collection.empty();
+    const uint32_t effective_schema_version = has_init_hook ? schema_version : 1;
+
+    uint64_t schema_data_version = (static_cast<uint64_t>(effective_schema_version) << 32) + data_version;
     DB::writeVarUInt(schema_data_version, wb);
 
     DB::writeBinary(is_aggregation, wb);
     DB::writeBinary(using_numpy, wb);
     DB::writeStringBinary(source, wb);
+
+    if (effective_schema_version >= 2)
+    {
+        /// Added in schema_version 2
+        DB::writeStringBinary(init_function_name, wb);
+        DB::writeStringBinary(init_function_parameters, wb);
+        DB::writeStringBinary(named_collection, wb);
+    }
 }
 
 void PythonUserDefinedFunctionPayload::deserialize(DB::ReadBuffer & rb, uint16_t /* version_ */)
 {
     uint64_t schema_data_version;
     DB::readVarUInt(schema_data_version, rb);
+    auto source_schema_version = static_cast<uint32_t>(schema_data_version >> 32);
     data_version = static_cast<uint32_t>(schema_data_version & 0xFFFF'FFFF);
 
     DB::readBinary(is_aggregation, rb);
     DB::readBinary(using_numpy, rb);
     DB::readStringBinary(source, rb);
+
+    if (source_schema_version >= 2)
+    {
+        DB::readStringBinary(init_function_name, rb);
+        DB::readStringBinary(init_function_parameters, rb);
+        DB::readStringBinary(named_collection, rb);
+    }
 }
 
 size_t PythonUserDefinedFunctionPayload::approximateSerializedSize() const noexcept
 {
     return sizeof(schema_version) + sizeof(data_version) + sizeof(is_aggregation) + sizeof(using_numpy)
-        + approximateSerializedSizeOf(source);
+        + approximateSerializedSizeOf(source) + approximateSerializedSizeOf(init_function_name)
+        + approximateSerializedSizeOf(init_function_parameters) + approximateSerializedSizeOf(named_collection);
 }
 
 bool PythonUserDefinedFunctionPayload::operator==(const UserDefinedFunctionPayload & rhs) const
@@ -333,18 +367,38 @@ bool PythonUserDefinedFunctionPayload::operator==(const UserDefinedFunctionPaylo
         return false;
 
     auto * other = dynamic_cast<const PythonUserDefinedFunctionPayload *>(&rhs);
-    return data_version == other->data_version && source == other->source && is_aggregation == other->is_aggregation;
+    return data_version == other->data_version && source == other->source && is_aggregation == other->is_aggregation
+        && using_numpy == other->using_numpy && init_function_name == other->init_function_name
+        && init_function_parameters == other->init_function_parameters && named_collection == other->named_collection;
 }
 
 std::string PythonUserDefinedFunctionPayload::string() const
 {
-    return fmt::format("version={}, is_aggregation={}, source=`{}`", data_version, is_aggregation, source);
+    return fmt::format(
+        "version={}, is_aggregation={}, using_numpy={}, init_function_name={}, named_collection={}, source=`{}`",
+        data_version,
+        is_aggregation,
+        using_numpy,
+        init_function_name,
+        named_collection,
+        source);
 }
 
 std::string PythonUserDefinedFunctionPayload::createASTString(
     const std::string & name, const std::string & typed_arguments, const std::string & return_type) const
 {
-    return doCreateASTString(name, typed_arguments, return_type, *this);
+    auto ast = doCreateASTString(name, typed_arguments, return_type, *this);
+    /// parameters/named_collection without init_function_name is rejected at creation
+    /// time for all entry points (see Streaming::createUserDefinedFunctionRequest)
+    if (init_function_name.empty())
+        return ast;
+
+    ast += fmt::format("\nSETTINGS init_function_name = {}", DB::quoteString(init_function_name));
+    if (!named_collection.empty())
+        ast += fmt::format(", named_collection = {}", DB::quoteString(named_collection));
+    if (!init_function_parameters.empty())
+        ast += fmt::format(", init_function_parameters = {}", DB::quoteString(init_function_parameters));
+    return ast;
 }
 
 void SQLUserDefinedFunctionPayload::serialize(DB::WriteBuffer & wb, uint16_t /* version_ */) const

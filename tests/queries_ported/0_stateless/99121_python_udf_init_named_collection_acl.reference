@@ -1,0 +1,6 @@
+=== 1. ungranted user + existing collection -> ACCESS_DENIED, secret never leaks ===
+ACCESS_DENIED
+=== 2. ungranted user + nonexistent collection -> ACCESS_DENIED, not 'does not exist' ===
+ACCESS_DENIED
+=== 3. after GRANT NAMED COLLECTION, creation succeeds and the hook runs ===
+acl_secret_99121:hi
