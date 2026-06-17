@@ -194,7 +194,7 @@ steps:
     sql: |
       create materialized view py_flush_ckpt_mv into py_flush_ckpt_sink
       as select val from py_flush_ckpt_input
-      settings checkpoint_interval=1, preferred_exec_node=1
+      settings checkpoint_interval=1
 
   - type: wait
     time: 3
