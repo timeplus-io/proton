@@ -3,10 +3,8 @@
 #include <Poco/UUIDGenerator.h>
 #include <Common/Exception.h>
 
-#include <code.h>
-#include <frameobject.h>
-
 #include <sstream>
+#include <vector>
 
 namespace DB::ErrorCodes
 {
@@ -61,13 +59,26 @@ std::string convertTracebackToString(const PyTracebackObject * tb)
 
     std::stringstream result;
 
-    int tb_line = tb->tb_lineno;
     std::string filename;
 
-    if (auto * tb_frame = tb->tb_frame; tb_frame && tb_frame->f_code)
+    if (auto * tb_frame = tb->tb_frame; tb_frame)
     {
-        filename = PyUnicode_AsUTF8(tb_frame->f_code->co_filename);
-        result << fmt::format("File \"{}\", line {}, in {}\n", filename, tb_line, PyUnicode_AsUTF8(tb_frame->f_code->co_name));
+        /// PyFrame_GetCode returns a strong reference (available since 3.9).
+        /// PyFrameObject internals are opaque from 3.11+, so direct f_code
+        /// access is not portable.
+        PyCodeObject * code = PyFrame_GetCode(tb_frame);
+        if (code)
+        {
+            /// In CPython 3.12+, tb_lineno may be -1 (lazy).  Resolve via
+            /// PyCode_Addr2Line when that happens.
+            int tb_line = tb->tb_lineno;
+            if (tb_line == -1)
+                tb_line = PyCode_Addr2Line(code, tb->tb_lasti);
+
+            filename = PyUnicode_AsUTF8(code->co_filename);
+            result << fmt::format("File \"{}\", line {}, in {}\n", filename, tb_line, PyUnicode_AsUTF8(code->co_name));
+            Py_DECREF(code);
+        }
     }
 
     result << convertTracebackToString(tb->tb_next);
@@ -90,7 +101,10 @@ std::string getExceptionMessage()
     PyObjectPtr pvalue(rpvalue);
     PyObjectPtr ptraceback(rptraceback);
 
-    if (ptype && ptype->ob_refcnt == 1 && !PyObject_IS_GC(ptype.get()))
+    /// Free-threaded CPython (PEP 703) splits ob_refcnt into ob_ref_local /
+    /// ob_ref_shared, so we go through the Py_REFCNT() accessor which masks
+    /// the biased-refcount layout from callers.
+    if (ptype && Py_REFCNT(ptype.get()) == 1 && !PyObject_IS_GC(ptype.get()))
         ptype.release();
 
     PyErr_Clear();
@@ -123,12 +137,24 @@ PyObjectPtr getAttr(const PyObjectPtr & obj, const std::string & attr)
 
 PyObjectPtr tryGetAttr(const PyObjectPtr & obj, const std::string & attr)
 {
-    if (obj && PyObject_HasAttrString(obj.get(), attr.c_str()))
-        return getAttr(obj, attr);
+    if (!obj)
+        return PyObjectPtr{};
 
-    chassert(!hasException());
+    /// PyObject_GetOptionalAttrString (3.13+) is the proper replacement for
+    /// PyObject_HasAttrString + PyObject_GetAttrString.  It returns 1 if
+    /// found, 0 if not found, -1 on error — without silently swallowing
+    /// exceptions from __getattribute__.
+    PyObject * result = nullptr;
+    int rc = PyObject_GetOptionalAttrString(obj.get(), attr.c_str(), &result);
+    if (rc < 0)
+    {
+        PyErr_Clear();
+        return PyObjectPtr{};
+    }
+    if (rc == 0)
+        return PyObjectPtr{};
 
-    return PyObjectPtr{};
+    return PyObjectPtr{result};
 }
 
 PyObjectPtr importModule(const std::string & module_name)
@@ -166,13 +192,14 @@ PyObjectPtr getOrAddMainModule(const std::string & module_name)
         throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to initialize {}.__annotations__", module_name);
     }
 
-    if (!_PyDict_GetItemStringWithError(d.get(), "__builtins__"))
+    int has_builtins = PyDict_Contains(d.get(), PyObjectPtr{PyUnicode_FromString("__builtins__")}.get());
+    if (has_builtins < 0)
     {
-        if (PyErr_Occurred())
-        {
-            PyErr_Clear();
-            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to test {}.__builtins__", module_name);
-        }
+        PyErr_Clear();
+        throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to test {}.__builtins__", module_name);
+    }
+    if (!has_builtins)
+    {
         PyObjectPtr bimod{PyImport_ImportModule("builtins")};
         if (!bimod)
         {
@@ -187,6 +214,68 @@ PyObjectPtr getOrAddMainModule(const std::string & module_name)
     return res;
 }
 
+namespace
+{
+/// Public-API re-implementation of CPython's internal _PyModule_Clear.
+/// PyDict_Clear removes every key, so any __del__ that fires during the
+/// subsequent decref chain raises NameError on module globals it touches
+/// (including print / len — __builtins__ is gone). _PyModule_Clear keeps
+/// the keys and replaces their values with None, preserving __builtins__
+/// verbatim so destructor code can still use it. Two-pass order matches
+/// CPython: single-underscore privates first (destructor ordering hint),
+/// then everything else except __builtins__.
+///
+/// Semantics are from contrib/cpython/Objects/moduleobject.c:731
+/// (_PyModule_ClearDict). Reproduced via public API only; no pycore_* deps.
+///
+/// Implementation note: CPython's internal version mutates values during
+/// PyDict_Next. That is safe by contract but relies on the dict's internal
+/// version counter behaviour, which differs under PEP 703 free-threaded
+/// iteration — PyDict_Next has been observed to silently drop not-yet-visited
+/// entries after an in-place value replacement on 3.14t. We snapshot the
+/// keys first (borrowed references stay valid as long as the GIL / scope
+/// prevents the dict's own refs from being released) and then do the
+/// substitution, which is deterministic on both builds.
+void clearModuleDictLikeCPython(PyObject * d)
+{
+    if (!d)
+        return;
+
+    std::vector<PyObject *> pass1_keys; /// single-underscore names (_foo)
+    std::vector<PyObject *> pass2_keys; /// everything else except __builtins__
+
+    Py_ssize_t pos = 0;
+    PyObject * key = nullptr;
+    PyObject * value = nullptr;
+
+    while (PyDict_Next(d, &pos, &key, &value))
+    {
+        if (value == Py_None || !PyUnicode_Check(key))
+            continue;
+        if (PyUnicode_CompareWithASCIIString(key, "__builtins__") == 0)
+            continue;
+
+        if (PyUnicode_GetLength(key) >= 2
+            && PyUnicode_READ_CHAR(key, 0) == '_'
+            && PyUnicode_READ_CHAR(key, 1) != '_')
+            pass1_keys.push_back(key);
+        else
+            pass2_keys.push_back(key);
+    }
+
+    for (PyObject * k : pass1_keys)
+    {
+        if (PyDict_SetItem(d, k, Py_None) != 0)
+            PyErr_Clear();
+    }
+    for (PyObject * k : pass2_keys)
+    {
+        if (PyDict_SetItem(d, k, Py_None) != 0)
+            PyErr_Clear();
+    }
+}
+}
+
 void unloadModule(const std::string & module_name)
 {
     /// PyImport_GetModuleDict only get the pointer from interpreter
@@ -195,10 +284,13 @@ void unloadModule(const std::string & module_name)
     PyObjectPtr sys_module{PyImport_GetModuleDict()};
 
     if (auto py_module = getModule(module_name))
-        _PyModule_Clear(py_module.get());
+        clearModuleDictLikeCPython(PyModule_GetDict(py_module.get()));
 
     if (PyDict_DelItemString(sys_module.release(), module_name.c_str()) != 0)
+    {
+        PyErr_Clear();
         throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to unload module: {}", module_name);
+    }
 }
 
 PyObjectPtr getModule(const std::string & module_name)
@@ -482,8 +574,10 @@ bool isIterable(const PyObjectPtr & obj)
     if (!obj)
         return false;
 
-    /// Check if it has __iter__ method
-    int has_iter = PyObject_HasAttrString(obj.get(), "__iter__");
+    /// PyObject_HasAttrStringWithError (3.13+) replaces PyObject_HasAttrString
+    /// which silently swallows exceptions from __getattribute__ and prints
+    /// a noisy deprecation warning in 3.14+.
+    int has_iter = PyObject_HasAttrStringWithError(obj.get(), "__iter__");
     if (has_iter < 0)
     {
         PyErr_Clear();

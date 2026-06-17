@@ -108,7 +108,9 @@ TEST_F(CPythonTest, RefreshImportStateProcessesPthFiles)
     const auto unique_suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto test_root = fs::absolute(fs::path("tmp") / ("gtest_python_package_refresh_" + unique_suffix));
     const auto user_base = test_root / "userbase";
-    const auto site_packages = user_base / "lib/python3.10/site-packages";
+    /// Use the suffix refreshImportState actually scans under PYTHONUSERBASE;
+    /// it varies with the interpreter version and ABI (e.g. lib/python3.14t/site-packages).
+    const auto site_packages = user_base / PythonPackage::getPythonInterpreterInfo().user_site_suffix;
     const auto extra_modules = test_root / "extra_modules";
     const auto module_name = "python_package_refresh_" + unique_suffix;
 
@@ -269,7 +271,9 @@ TEST_F(CPythonTest, RefreshImportStateExtendsNamespacePackagePaths)
     const auto unique_suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const auto test_root = fs::absolute(fs::path("tmp") / ("gtest_python_package_ns_" + unique_suffix));
     const auto user_base = test_root / "userbase";
-    const auto site_packages = user_base / "lib/python3.10/site-packages";
+    /// Use the suffix refreshImportState actually scans under PYTHONUSERBASE;
+    /// it varies with the interpreter version and ABI (e.g. lib/python3.14t/site-packages).
+    const auto site_packages = user_base / PythonPackage::getPythonInterpreterInfo().user_site_suffix;
 
     const auto dir1 = test_root / "dir1";
     const auto dir2 = test_root / "dir2";

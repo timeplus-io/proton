@@ -1,8 +1,8 @@
 
 add_python_extension(array SOURCES arraymodule.c)
-add_python_extension(audioop SOURCES audioop.c LIBRARIES ${M_LIBRARIES})
+# audioop was removed in CPython 3.13
 add_python_extension(_bisect SOURCES _bisectmodule.c)
-add_python_extension(cmath SOURCES _math.c cmathmodule.c LIBRARIES ${M_LIBRARIES})
+add_python_extension(cmath SOURCES cmathmodule.c LIBRARIES ${M_LIBRARIES})
 add_python_extension(_codecs_cn SOURCES cjkcodecs/_codecs_cn.c)
 add_python_extension(_codecs_hk SOURCES cjkcodecs/_codecs_hk.c)
 add_python_extension(_codecs_iso2022 SOURCES cjkcodecs/_codecs_iso2022.c)
@@ -53,7 +53,7 @@ add_python_extension(itertools SOURCES itertoolsmodule.c) # Functions creating i
 add_python_extension(_json SOURCES _json.c)
 add_python_extension(_locale SOURCES _localemodule.c) # access to ISO C locale support
 add_python_extension(_lsprof SOURCES _lsprof.c rotatingtree.c)
-add_python_extension(math SOURCES _math.c mathmodule.c LIBRARIES ${M_LIBRARIES})
+add_python_extension(math SOURCES mathmodule.c LIBRARIES ${M_LIBRARIES})
 add_python_extension(mmap SOURCES mmapmodule.c)
 add_python_extension(_multibytecodec SOURCES cjkcodecs/multibytecodec.c)
 
@@ -63,7 +63,7 @@ add_python_extension(_multibytecodec SOURCES cjkcodecs/multibytecodec.c)
 add_python_extension(_random SOURCES _randommodule.c)
 
 add_python_extension(_struct SOURCES _struct.c)
-add_python_extension(_testcapi SOURCES _testcapimodule.c)
+# _testcapi removed: CPython test-only module, not needed for embedding
 
 set(thread3_NAME _thread)
 set(thread3_SOURCES ${CPYTHON_SOURCE_DIR}/Modules/_threadmodule.c)
@@ -85,7 +85,7 @@ add_python_extension(faulthandler SOURCES faulthandler.c)
 add_python_extension(_opcode SOURCES _opcode.c)
 add_python_extension(_operator SOURCES _operator.c)
 add_python_extension(_pickle SOURCES _pickle.c)
-add_python_extension(_sre SOURCES _sre.c) # Fredrik Lundh's new regular expressions
+add_python_extension(_sre SOURCES _sre/sre.c) # Fredrik Lundh's new regular expressions
 add_python_extension(_stat SOURCES _stat.c) # stat.h interface
 add_python_extension(_symtable SOURCES symtablemodule.c)
 # Python PEP-3118 (buffer protocol) test module
@@ -105,10 +105,15 @@ add_python_extension(_tracemalloc
 add_python_extension(_weakref SOURCES _weakref.c)
 
 math(EXPR _limited_api_version "${PY_VERSION_MAJOR} * 100 + ${PY_VERSION_MINOR}")
-add_python_extension(xxlimited
-    SOURCES xxlimited.c
-    DEFINITIONS Py_LIMITED_API=0x${_limited_api_version}0000
-)
+# Free-threaded builds don't support the Limited API, so skip the xxlimited
+# demo module. CPython itself drops it from the Modules/Setup.stdlib list
+# for --disable-gil builds.
+if(NOT Py_GIL_DISABLED)
+    add_python_extension(xxlimited
+        SOURCES xxlimited.c
+        DEFINITIONS Py_LIMITED_API=0x${_limited_api_version}0000
+    )
+endif()
 
 add_python_extension(xxsubtype SOURCES xxsubtype.c)
 
@@ -122,20 +127,35 @@ endif()
 if(PY_VERSION VERSION_GREATER_EQUAL "3.6")
     # asyncio speedups
     add_python_extension(_asyncio SOURCES _asynciomodule.c)
-    # blake module
-    set(_blake2_SOURCES
-        _blake2/blake2module.c
-        _blake2/blake2b_impl.c
-        _blake2/blake2s_impl.c
+    # HACL* cryptographic library used by hash modules in CPython 3.14+
+    set(_HACL_DIR ${CPYTHON_SOURCE_DIR}/Modules/_hacl)
+    set(_HACL_INCLUDE ${_HACL_DIR}/include)
+    add_library(libpython_hacl STATIC
+        ${_HACL_DIR}/Hacl_Hash_MD5.c
+        ${_HACL_DIR}/Hacl_Hash_SHA1.c
+        ${_HACL_DIR}/Hacl_Hash_SHA2.c
+        ${_HACL_DIR}/Hacl_Hash_SHA3.c
+        ${_HACL_DIR}/Hacl_Hash_Blake2s.c
+        ${_HACL_DIR}/Hacl_Hash_Blake2b.c
+        ${_HACL_DIR}/Lib_Memzero0.c
     )
-    add_python_extension(_blake2 SOURCES ${_blake2_SOURCES})
-    add_python_extension(_sha3 SOURCES _sha3/sha3module.c)
+    target_include_directories(libpython_hacl PUBLIC
+        ${_HACL_DIR}
+        ${_HACL_INCLUDE}
+        ${_HACL_DIR}/internal
+        ${CPYTHON_HEADER_DIR}
+        ${CPYTHON_CMAKE_BINARY_DIR}/include
+    )
+    target_compile_definitions(libpython_hacl PUBLIC Py_NO_ENABLE_SHARED)
+
+    add_python_extension(_blake2 SOURCES blake2module.c INCLUDEDIRS ${_HACL_INCLUDE} ${_HACL_DIR} LIBRARIES libpython_hacl)
+    add_python_extension(_sha3 SOURCES sha3module.c INCLUDEDIRS ${_HACL_INCLUDE} ${_HACL_DIR} LIBRARIES libpython_hacl)
 endif()
 
 # Python 3.7
 if(PY_VERSION VERSION_GREATER_EQUAL "3.7")
     add_python_extension(_abc SOURCES _abc.c)
-    add_python_extension(_contextvars SOURCES _contextvarsmodule.c)
+    # _contextvars was moved into the core interpreter in 3.14 (Python/_contextvars.c)
     add_python_extension(_queue SOURCES _queuemodule.c)
 
     # FIXME: UUID_LIBRARY
@@ -159,6 +179,14 @@ endif()
 # if(PY_VERSION VERSION_GREATER_EQUAL "3.9")
 #     add_python_extension(_peg_parser SOURCES _peg_parser.c)
 # endif()
+
+# Python 3.14 bootstrap modules
+if(PY_VERSION VERSION_GREATER_EQUAL "3.14")
+    add_python_extension(_typing SOURCES _typingmodule.c)
+    add_python_extension(_types SOURCES _typesmodule.c)
+    add_python_extension(_sysconfig SOURCES _sysconfig.c)
+    add_python_extension(_suggestions SOURCES _suggestions.c)
+endif()
 
 # UNIX-only extensions
 add_python_extension(fcntl SOURCES fcntlmodule.c)
@@ -399,6 +427,7 @@ add_python_extension(_ctypes
 add_python_extension(pyexpat
     SOURCES pyexpat.c
     LIBRARIES Poco::XML
+    INCLUDEDIRS ${proton_SOURCE_DIR}/base/poco/XML/src
 )
 add_python_extension(_elementtree
     SOURCES _elementtree.c
@@ -408,10 +437,10 @@ add_python_extension(_elementtree
 # We always compile these even when OpenSSL is available (issue #14693).
 # It's harmless and the object code is tiny (40-50 KB per module,
 # only loaded when actually used).
-add_python_extension(_md5 SOURCES md5module.c)
-add_python_extension(_sha1 SOURCES sha1module.c)
-add_python_extension(_sha256 SOURCES sha256module.c)
-add_python_extension(_sha512 SOURCES sha512module.c)
+add_python_extension(_md5 SOURCES md5module.c INCLUDEDIRS ${_HACL_INCLUDE} ${_HACL_DIR} LIBRARIES libpython_hacl)
+add_python_extension(_sha1 SOURCES sha1module.c INCLUDEDIRS ${_HACL_INCLUDE} ${_HACL_DIR} LIBRARIES libpython_hacl)
+# sha256/sha512 merged into _sha2 in CPython 3.14
+add_python_extension(_sha2 SOURCES sha2module.c INCLUDEDIRS ${_HACL_INCLUDE} ${_HACL_DIR} LIBRARIES libpython_hacl)
 
 # Extensions that depend on other libraries
 add_python_extension(binascii
@@ -514,7 +543,7 @@ add_python_extension(_lzma
 # )
 
 add_python_extension(_sqlite3
-    SOURCES _sqlite/cache.c
+    SOURCES _sqlite/blob.c
             _sqlite/connection.c
             _sqlite/cursor.c
             _sqlite/microprotocols.c

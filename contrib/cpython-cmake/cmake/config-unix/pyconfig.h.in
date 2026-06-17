@@ -526,6 +526,13 @@
 /* Define to 1 if you have the `getpid' function. */
 #cmakedefine HAVE_GETPID 1
 
+/* Define to 1 if you have the POSIX identity functions. */
+#define HAVE_GETUID 1
+#define HAVE_GETGID 1
+#define HAVE_GETEUID 1
+#define HAVE_GETEGID 1
+#define HAVE_GETPPID 1
+
 /* Define to 1 if you have the `getpriority' function. */
 #cmakedefine HAVE_GETPRIORITY 1
 
@@ -821,6 +828,9 @@
 /* Define to 1 if you have the `pause' function. */
 #cmakedefine HAVE_PAUSE 1
 
+/* Define to 1 if you have the `pipe' function. */
+#cmakedefine HAVE_PIPE 1
+
 /* Define to 1 if you have the `pipe2' function. [Python 3] */
 #cmakedefine HAVE_PIPE2 1
 
@@ -1114,6 +1124,31 @@
 #cmakedefine HAVE_SOCKADDR_STORAGE 1
 
 /* Define if you have the 'socketpair' function. */
+/* BSD socket primitives and resolver helpers. Each HAVE_ gates the
+   corresponding Python-level method in _socket.socket / socket module.
+   Missing macros silently drop the method (or, for HAVE_SOCKET specifically,
+   replace socket() with a stub that returns ENOTSUP). */
+#cmakedefine HAVE_ACCEPT 1
+#cmakedefine HAVE_BIND 1
+#cmakedefine HAVE_CONNECT 1
+#cmakedefine HAVE_GETHOSTBYADDR 1
+#cmakedefine HAVE_GETHOSTNAME 1
+#cmakedefine HAVE_GETPROTOBYNAME 1
+#cmakedefine HAVE_GETSERVBYNAME 1
+#cmakedefine HAVE_GETSERVBYPORT 1
+#cmakedefine HAVE_GETSOCKNAME 1
+#cmakedefine HAVE_GETSOCKOPT 1
+#cmakedefine HAVE_INET_NTOA 1
+#cmakedefine HAVE_LISTEN 1
+#cmakedefine HAVE_RECV 1
+#cmakedefine HAVE_RECVFROM 1
+#cmakedefine HAVE_RECVMSG 1
+#cmakedefine HAVE_SEND 1
+#cmakedefine HAVE_SENDTO 1
+#cmakedefine HAVE_SENDMSG 1
+#cmakedefine HAVE_SETSOCKOPT 1
+#cmakedefine HAVE_SHUTDOWN 1
+#cmakedefine HAVE_SOCKET 1
 #cmakedefine HAVE_SOCKETPAIR 1
 
 /* Define to 1 if you have the <spawn.h> header file. */
@@ -1296,6 +1331,15 @@
 /* Define to 1 if you have the <sys/socket.h> header file. */
 #cmakedefine HAVE_SYS_SOCKET_H 1
 
+/* Define to 1 if you have the <netdb.h> header file. */
+#cmakedefine HAVE_NETDB_H 1
+
+/* Define to 1 if you have the <netinet/in.h> header file. */
+#cmakedefine HAVE_NETINET_IN_H 1
+
+/* Define to 1 if you have the <arpa/inet.h> header file. */
+#cmakedefine HAVE_ARPA_INET_H 1
+
 /* Define to 1 if you have the <sys/statvfs.h> header file. */
 #cmakedefine HAVE_SYS_STATVFS_H 1
 
@@ -1456,6 +1500,9 @@
 /* Define to 1 if you have the `wait4' function. */
 #cmakedefine HAVE_WAIT4 1
 
+/* Define to 1 if you have the `wait' function. */
+#cmakedefine HAVE_WAIT 1
+
 /* Define to 1 if you have the `waitid' function. [Python 3] */
 #cmakedefine HAVE_WAITID 1
 
@@ -1571,6 +1618,9 @@
 
 /* Define if you want to build an interpreter with many run-time checks. */
 #cmakedefine Py_DEBUG 1
+
+/* Define if you want to disable the GIL (PEP 703, free-threaded build). */
+#cmakedefine Py_GIL_DISABLED 1
 
 /* Defined if Python is built as a shared library. */
 #cmakedefine Py_ENABLE_SHARED
@@ -1755,6 +1805,10 @@
 
 /* Define if you want to compile in Python-specific mallocs */
 #cmakedefine WITH_PYMALLOC 1
+
+/* Define if you want to compile in the mimalloc memory allocator
+   (required by Py_GIL_DISABLED). */
+#cmakedefine WITH_MIMALLOC 1
 
 // FIXME: remove two definitions
 // /* Define if you want to compile in rudimentary thread support */

@@ -752,8 +752,9 @@ std::pair<T *, npy_intp> getInternalDataAndSize(PyObject * np_array)
 
 TEST_F(CPythonTest, columnAndNumpyConversion)
 {
-    setenv("PYTHONPATH", "/usr/lib/python3.10", 1);
-    setenv("PYTHONHOME", "/usr/lib/python3.10", 1);
+    auto python_lib = interpreter_info_->prefix + "/lib/python" + interpreter_info_->versionString();
+    setenv("PYTHONPATH", python_lib.c_str(), 1);
+    setenv("PYTHONHOME", python_lib.c_str(), 1);
     ASSERT_TRUE(init_numpy());
 #define GENERATE_TEST_1(TYPE, COLUMN_TYPE, DATA_TYPE) \
     { \

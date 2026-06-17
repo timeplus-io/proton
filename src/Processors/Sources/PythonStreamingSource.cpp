@@ -9,6 +9,7 @@
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Common/assert_cast.h>
+#include <Common/logger_useful.h>
 
 #include <base/scope_guard.h>
 
@@ -29,15 +30,18 @@ bool tryCallNoArgMethod(PyObject * obj, const char * method_name)
     if (!obj || !method_name)
         return false;
 
-    if (!PyObject_HasAttrString(obj, method_name))
-        return false;
-
-    DB::cpython::PyObjectPtr method{PyObject_GetAttrString(obj, method_name)};
-    if (!method)
+    PyObject * method_raw = nullptr;
+    int rc = PyObject_GetOptionalAttrString(obj, method_name, &method_raw);
+    if (rc <= 0)
     {
-        PyErr_Clear();
+        if (rc < 0)
+            PyErr_Clear();
         return false;
     }
+
+    DB::cpython::PyObjectPtr method{method_raw};
+    if (!method)
+        return false;
 
     DB::cpython::PyObjectPtr result{PyObject_CallObject(method.get(), nullptr)};
     if (!result)
@@ -52,7 +56,7 @@ bool tryCallNoArgMethod(PyObject * obj, const char * method_name)
 
 PythonStreamingSource::PythonStreamingSource(
     Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, cpython::PythonModuleSessionPtr session_)
-    : ISource(std::move(header), true, ProcessorID::PythonStreamingSourceID)
+    : ISource(std::move(header), true, getLogger("PythonStreamingSource"), ProcessorID::PythonStreamingSourceID)
     , py_iterator(std::move(py_iterator_))
     , tuple_type(std::move(tuple_type_))
     , session(std::move(session_))
@@ -88,57 +92,56 @@ PythonStreamingSource::~PythonStreamingSource()
 
 void PythonStreamingSource::finishPython(bool ignore_exceptions, bool acquire_gil)
 {
-    if (python_finished)
-        return;
+    /// std::call_once guarantees exactly-once execution even when called
+    /// concurrently from generate(), onCancel(), and the destructor.
+    std::call_once(finish_once, [&] {
+        if (Py_IsInitialized() == 0)
+            return;
 
-    if (Py_IsInitialized() == 0)
-    {
-        python_finished = true;
-        return;
-    }
+        auto cleanup = [this] {
+            if (py_iterator)
+            {
+                /// Finalize generators before deinit so hook code observes released iterator state.
+                tryCallNoArgMethod(py_iterator.get(), "close");
+                py_iterator.reset();
+            }
 
-    auto cleanup = [this] {
-        if (py_iterator)
+            cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/false, /*acquire_gil=*/false);
+        };
+
+        auto runWithGil = [&] {
+            if (acquire_gil)
+            {
+                cpython::GILGuard gil_guard;
+                cleanup();
+            }
+            else
+            {
+                cleanup();
+            }
+        };
+
+        if (ignore_exceptions)
         {
-            /// Finalize generators before deinit so hook code observes released iterator state.
-            tryCallNoArgMethod(py_iterator.get(), "close");
-            py_iterator.reset();
-        }
-
-        cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/false, /*acquire_gil=*/false);
-        python_finished = true;
-    };
-
-    auto runWithGil = [&] {
-        if (acquire_gil)
-        {
-            cpython::GILGuard gil_guard;
-            cleanup();
+            try
+            {
+                runWithGil();
+            }
+            catch (...)
+            {
+            }
         }
         else
         {
-            cleanup();
-        }
-    };
-
-    if (ignore_exceptions)
-    {
-        try
-        {
             runWithGil();
         }
-        catch (...)
-        {
-        }
-    }
-    else
-    {
-        runWithGil();
-    }
+    });
 }
 
 void PythonStreamingSource::onCancel() noexcept
 {
+    /// Signal cancellation first so generate() can observe it immediately
+    /// on the next loop iteration — even before we acquire the GIL.
     cancel_requested.store(true, std::memory_order_release);
 
     if (!Py_IsInitialized())
@@ -153,15 +156,24 @@ void PythonStreamingSource::onCancel() noexcept
             bool cancelled = tryCallNoArgMethod(py_iterator.get(), "cancel");
             cancelled = tryCallNoArgMethod(py_iterator.get(), "close") || cancelled;
 
-            /// If the iterator doesn't provide a cancellation hook, try to interrupt the executing thread.
+            /// If the iterator doesn't provide a cancellation hook, try to
+            /// interrupt the executing thread. Use only the CURRENT thread
+            /// ID — if generate() has already exited Python (tid == 0), any
+            /// earlier snapshot may now refer to a recycled thread-pool
+            /// worker carrying an unrelated PyThreadState, and routing an
+            /// async exception there would corrupt a different query. The
+            /// cancel_requested flag set above is observed on the next
+            /// iteration regardless.
             if (!cancelled)
             {
-                const auto thread_id = python_thread_id.load(std::memory_order_acquire);
-                if (thread_id != 0)
+                const auto tid = python_thread_id.load(std::memory_order_acquire);
+                if (tid != 0)
                 {
-                    const int set = PyThreadState_SetAsyncExc(thread_id, PyExc_KeyboardInterrupt);
+                    const int set = PyThreadState_SetAsyncExc(tid, PyExc_KeyboardInterrupt);
+                    /// If set > 1, the thread ID matched multiple states (should never happen).
+                    /// Clear the exception to avoid corrupting unrelated threads.
                     if (set > 1)
-                        PyThreadState_SetAsyncExc(thread_id, nullptr);
+                        PyThreadState_SetAsyncExc(tid, nullptr);
                 }
             }
         }
@@ -283,12 +295,12 @@ Block PythonStreamingSource::convertPythonResultToOutputBlock(const cpython::PyO
 
 Chunk PythonStreamingSource::generate()
 {
-    if (exhausted)
+    if (exhausted.load(std::memory_order_acquire))
         return {};
 
     if (isCancelled() || cancel_requested.load(std::memory_order_acquire))
     {
-        exhausted = true;
+        exhausted.store(true, std::memory_order_release);
         return {};
     }
 
@@ -297,8 +309,15 @@ Chunk PythonStreamingSource::generate()
 
     cpython::GILGuard gil_guard;
 
-    python_thread_id.store(PyThread_get_thread_ident(), std::memory_order_release);
-    SCOPE_EXIT({ python_thread_id.store(0, std::memory_order_release); });
+    auto this_thread_id = PyThread_get_thread_ident();
+    python_thread_id.store(this_thread_id, std::memory_order_release);
+    SCOPE_EXIT({
+        /// Only clear if the stored ID is still ours — avoids clobbering
+        /// a concurrent generate() call's thread ID.
+        python_thread_id.compare_exchange_strong(this_thread_id, 0, std::memory_order_release);
+        /// Assume each generated chunk corresponds to processing one record for checkpointing purposes. Adjust as needed based on actual semantics.
+        setLastProcessedSN(lastProcessedSN() + 1);
+    });
 
     const auto & output_header = getPort().getHeader();
 
@@ -306,7 +325,7 @@ Chunk PythonStreamingSource::generate()
     {
         if (isCancelled() || cancel_requested.load(std::memory_order_acquire))
         {
-            exhausted = true;
+            exhausted.store(true, std::memory_order_release);
             return {};
         }
 
@@ -319,7 +338,7 @@ Chunk PythonStreamingSource::generate()
         {
             if (e.code() == ErrorCodes::QUERY_WAS_CANCELLED && (isCancelled() || cancel_requested.load(std::memory_order_acquire)))
             {
-                exhausted = true;
+                exhausted.store(true, std::memory_order_release);
                 return {};
             }
 
@@ -329,7 +348,7 @@ Chunk PythonStreamingSource::generate()
         if (!next_item)
         {
             /// Iterator exhausted
-            exhausted = true;
+            exhausted.store(true, std::memory_order_release);
             finishPython(/*ignore_exceptions=*/false, /*acquire_gil=*/false);
             return {};
         }

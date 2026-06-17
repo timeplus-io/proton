@@ -92,6 +92,7 @@ ColumnPtr PythonUserDefinedFunction::userDefinedExecuteImpl(
     std::call_once(init_flag, [this]() { this->init(); });
 
     cpython::GILGuard gil_guard;
+    chassert(py_function);
 
     /// step 1: convert the column to python data type
     cpython::PyObjectPtr py_args{PyTuple_New(arg_num)};

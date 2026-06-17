@@ -5,14 +5,30 @@
 #if USE_PYTHON_UDF
 
 #include <CPython/PythonModuleSession.h>
-#include <Processors/ISource.h>
+#include <Common/CurrentMetrics.h>
+#include <Processors/Streaming/ISource.h>
+
+#include <mutex>
+
+namespace CurrentMetrics
+{
+extern const Metric PythonLivePipelines;
+}
 
 
 namespace DB
 {
 /// PythonStreamingSource reads data from a Python generator/iterator
 /// and emits chunks incrementally as they are yielded.
-class PythonStreamingSource final : public ISource
+///
+/// Thread-safety contract (free-threading ready):
+///   - generate() is called by a single pipeline worker thread at a time.
+///   - onCancel() may be called concurrently from a different thread.
+///   - finishPython() may be called from generate(), onCancel(), or the
+///     destructor — guarded by `finish_once` to prevent double execution.
+///   - All Python object access (`py_iterator`, `session`) is protected
+///     by the GIL guard; teardown is serialized by `finish_once`.
+class PythonStreamingSource final : public Streaming::ISource
 {
 public:
     PythonStreamingSource(
@@ -42,11 +58,23 @@ private:
     std::vector<size_t> output_tuple_positions;
     bool needs_projection_pushdown = false;
 
-    bool exhausted = false;
+    /// --- Concurrency state ---------------------------------------------------
+    /// `exhausted` is read/written from generate() and onCancel()/finishPython()
+    /// which may run on different threads.
+    std::atomic_bool exhausted{false};
 
+    /// Thread ID of the thread currently executing Python inside generate().
+    /// Written by generate() (release), read by onCancel() (acquire).
+    /// 0 means no thread is currently inside Python.
     std::atomic<unsigned long> python_thread_id{0};
+
     std::atomic_bool cancel_requested{false};
-    bool python_finished = false;
+
+    /// Guards finishPython() against double execution from concurrent
+    /// generate() + destructor or onCancel() + destructor.
+    std::once_flag finish_once;
+
+    CurrentMetrics::Increment live_pipeline_count{CurrentMetrics::PythonLivePipelines};
 };
 }
 

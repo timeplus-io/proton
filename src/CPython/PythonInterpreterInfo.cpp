@@ -3,6 +3,10 @@
 #include <CPython/PythonInterpreterInfo.h>
 
 #if USE_PYTHON_UDF
+#include <patchlevel.h>
+/// pyconfig.h carries Py_GIL_DISABLED; patchlevel.h alone does not pull it in.
+#include <pyconfig.h>
+
 #include <IO/WriteBufferFromString.h>
 #include <IO/copyData.h>
 #include <Poco/Dynamic/Var.h>
@@ -13,7 +17,11 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <array>
+#include <cstdlib>
 #include <filesystem>
+#include <iterator>
+#include <string_view>
 #include <unistd.h>
 
 namespace DB
@@ -40,18 +48,49 @@ bool isPathAccessible(const std::filesystem::path & path)
 
 std::optional<std::string> findExternalPythonInterpreter(const std::string & program_base_dir)
 {
-    std::vector<std::string> candidate_names = {"python3.10", "python3", "python"};
-
-    std::vector<std::string> candidate_dirs = {
-        "/usr/share/proton/bin",
-        program_base_dir,
+    /// Prefer versioned binaries matching the embedded CPython ABI first.
+    /// The "t" variant is the free-threaded build (CPython 3.13+) and must
+    /// only be selected when the embedded interpreter is itself free-threaded
+    /// (Py_GIL_DISABLED). Picking it for a GIL-enabled embedded build would
+    /// derive PYTHONHOME / site-packages from the wrong ABI and install
+    /// extensions that cannot be loaded.
+#define CPYTHON_STRINGIFY_IMPL(x) #x
+#define CPYTHON_STRINGIFY(x) CPYTHON_STRINGIFY_IMPL(x)
+#define CPYTHON_VER_STR "python" CPYTHON_STRINGIFY(PY_MAJOR_VERSION) "." CPYTHON_STRINGIFY(PY_MINOR_VERSION)
+#ifdef Py_GIL_DISABLED
+    static constexpr std::array<std::string_view, 4> candidate_names = {
+        CPYTHON_VER_STR "t",
+        CPYTHON_VER_STR,
+        "python3",
+        "python",
     };
+#else
+    static constexpr std::array<std::string_view, 3> candidate_names = {
+        CPYTHON_VER_STR,
+        "python3",
+        "python",
+    };
+#endif
+#undef CPYTHON_VER_STR
+#undef CPYTHON_STRINGIFY
+#undef CPYTHON_STRINGIFY_IMPL
 
-    std::string path_env = getenv("PATH");
-    std::vector<std::string> path_dirs;
-    boost::split(path_dirs, path_env, boost::is_any_of(":"));
+    std::vector<std::string> candidate_dirs;
+    candidate_dirs.reserve(8);
+    candidate_dirs.emplace_back("/usr/share/proton/bin");
+    candidate_dirs.emplace_back(program_base_dir);
 
-    candidate_dirs.insert(candidate_dirs.end(), path_dirs.begin(), path_dirs.end());
+    /// getenv may return nullptr when PATH is unset (containers, stripped
+    /// environments). std::string(nullptr) is UB — guard explicitly.
+    if (const char * path_env = std::getenv("PATH"))
+    {
+        std::vector<std::string> path_dirs;
+        boost::split(path_dirs, path_env, boost::is_any_of(":"));
+        candidate_dirs.insert(
+            candidate_dirs.end(),
+            std::make_move_iterator(path_dirs.begin()),
+            std::make_move_iterator(path_dirs.end()));
+    }
 
     for (const auto & dir : candidate_dirs)
     {
@@ -75,20 +114,34 @@ PythonInterpreterInfo PythonInterpreterInfo::collect(const std::string & program
 
     auto command = python_interpreter_path.value() + R"""( <<'EOF'
 import sys
-import sysconfig
 import site
+import os
 import json
 
 try:
-    if sys.version_info.major == 3 and sys.version_info.minor == 10:
-        site_packages = site.getsitepackages()
-        print(json.dumps({
-            "prefix": sys.prefix,
-            "site-packages": site_packages
-        }))
+    info = {
+        "prefix": sys.prefix,
+        "site-packages": site.getsitepackages(),
+        "version_major": sys.version_info.major,
+        "version_minor": sys.version_info.minor,
+    }
+    try:
+        info["free_threaded"] = not sys._is_gil_enabled()
+    except AttributeError:
+        info["free_threaded"] = False
+
+    # Derive the user site-packages suffix relative to user base.
+    # This is correct for both regular and free-threaded builds.
+    user_base = site.getuserbase()
+    user_site = site.getusersitepackages()
+    if user_base and user_site and user_site.startswith(user_base):
+        info["user_site_suffix"] = user_site[len(user_base):].lstrip(os.sep)
     else:
-        sys.stderr.write("Python version is not 3.10")
-except Error as e:
+        info["user_site_suffix"] = "lib/python{}.{}/site-packages".format(
+            sys.version_info.major, sys.version_info.minor)
+
+    print(json.dumps(info))
+except Exception as e:
     sys.stderr.write(str(e))
 EOF
 )""";
@@ -123,6 +176,51 @@ EOF
     res.prefix = object->optValue<std::string>("prefix", "");
     if (res.prefix.empty())
         throw DB::Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Cannot detect system python interpreter: empty prefix");
+
+    res.version_major = object->optValue<int>("version_major", 0);
+    res.version_minor = object->optValue<int>("version_minor", 0);
+    res.is_free_threaded = object->optValue<bool>("free_threaded", false);
+    res.user_site_suffix = object->optValue<std::string>("user_site_suffix", "");
+
+    if (res.version_major != PY_MAJOR_VERSION || res.version_minor != PY_MINOR_VERSION)
+        throw DB::Exception(
+            ErrorCodes::UDF_INTERNAL_ERROR,
+            "System Python interpreter version {}.{} does not match embedded CPython {}.{}. "
+            "Please install python{}.{}",
+            res.version_major,
+            res.version_minor,
+            PY_MAJOR_VERSION,
+            PY_MINOR_VERSION,
+            PY_MAJOR_VERSION,
+            PY_MINOR_VERSION);
+
+    /// C-extension wheels for cp314 and cp314t live in separate site-packages
+    /// layouts and are ABI-incompatible. The external interpreter's ABI must
+    /// match the embedded build so site-packages discovery surfaces the right
+    /// set and pip installs land where Py_Initialize() will find them.
+#ifdef Py_GIL_DISABLED
+    if (!res.is_free_threaded)
+        throw DB::Exception(
+            ErrorCodes::UDF_INTERNAL_ERROR,
+            "Embedded CPython is free-threaded (cp{}{}t) but external interpreter at {} "
+            "has the GIL enabled. Install python{}.{}t and place it on PATH.",
+            PY_MAJOR_VERSION,
+            PY_MINOR_VERSION,
+            res.path,
+            PY_MAJOR_VERSION,
+            PY_MINOR_VERSION);
+#else
+    if (res.is_free_threaded)
+        throw DB::Exception(
+            ErrorCodes::UDF_INTERNAL_ERROR,
+            "Embedded CPython is GIL-enabled (cp{}{}) but external interpreter at {} "
+            "is free-threaded. Install python{}.{} and place it on PATH.",
+            PY_MAJOR_VERSION,
+            PY_MINOR_VERSION,
+            res.path,
+            PY_MAJOR_VERSION,
+            PY_MINOR_VERSION);
+#endif
 
     auto site_packages = object->getArray("site-packages");
     if (!site_packages)
@@ -163,3 +261,11 @@ PythonInterpreterInfo::Result PythonInterpreterInfo::tryCollect(const std::strin
 }
 
 #endif
+
+namespace DB::cpython
+{
+std::string PythonInterpreterInfo::versionString() const
+{
+    return std::to_string(version_major) + "." + std::to_string(version_minor);
+}
+}

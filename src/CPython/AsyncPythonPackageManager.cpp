@@ -3,12 +3,18 @@
 
 #include <Interpreters/Context.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/ProfileEvents.h>
 #include <Common/logger_useful.h>
 
 namespace CurrentMetrics
 {
 extern const Metric LocalThread;
 extern const Metric LocalThreadActive;
+}
+
+namespace ProfileEvents
+{
+extern const Event PythonPackagesInstalled;
 }
 
 namespace DB
@@ -237,6 +243,7 @@ void AsyncPythonPackageManager::install(AsyncTaskResultPtr task_result, AsyncTas
             }
         }
 
+        ProfileEvents::increment(ProfileEvents::PythonPackagesInstalled);
         update(task_result, AsyncTaskStatus::Completed, cluster::Error(), callback);
     }
     catch (const Exception & e)

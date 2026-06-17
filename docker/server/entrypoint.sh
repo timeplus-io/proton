@@ -14,8 +14,33 @@ if ! test -f "$PROTON_CONFIG" -a -r "$PROTON_CONFIG"; then
     exit 1
 fi
 
-# get `proton` directories locations
-PYTHON_SITE_PACKAGE_PATH=/var/lib/proton/python/lib/python3.10/site-packages/
+# Get `proton` Python user-site directory, matching the embedded
+# interpreter's ABI.
+#
+# The Dockerfile stages /usr/share/proton/python_binary as a sentinel
+# whose contents are either "python3.14t" (free-threaded, cp314t) or
+# "python3.14" (GIL, cp314). Free-threaded user site-packages live under
+# `pythonX.Yt/`; GIL under `pythonX.Y/`. Must match
+# PythonInterpreterInfo::user_site_suffix, which derives from the
+# interpreter's own site.getusersitepackages().
+#
+# When the image was built with ENABLE_PYTHON_UDF=0 (mini / no-Python),
+# neither the sentinel nor any python binary exists; leave the variable
+# empty so the loop below no-ops.
+PYTHON_SITE_PACKAGE_PATH=
+if [ -r /usr/share/proton/python_binary ]; then
+    _py_bin="$(cat /usr/share/proton/python_binary)"
+    case "$_py_bin" in
+        python3.14t) PYTHON_SITE_PACKAGE_PATH=/var/lib/proton/python/lib/python3.14t/site-packages/ ;;
+        python3.14)  PYTHON_SITE_PACKAGE_PATH=/var/lib/proton/python/lib/python3.14/site-packages/ ;;
+        *)           echo "Warning: unknown Python binary marker '$_py_bin'; user-site path not configured." >&2 ;;
+    esac
+    unset _py_bin
+elif [ -x /usr/share/proton/bin/python3.14t ]; then
+    PYTHON_SITE_PACKAGE_PATH=/var/lib/proton/python/lib/python3.14t/site-packages/
+elif [ -x /usr/share/proton/bin/python3.14 ]; then
+    PYTHON_SITE_PACKAGE_PATH=/var/lib/proton/python/lib/python3.14/site-packages/
+fi
 
 PROTON_USER="${PROTON_USER:-default}"
 PROTON_PASSWORD="${PROTON_PASSWORD:-}"

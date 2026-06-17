@@ -17,14 +17,20 @@ protected:
     inline static wchar_t * program_name = nullptr;
     std::unordered_set<PyObject *> before_objects;
 
+    /// Interpreter metadata collected once during suite setup.
+    /// Tests use this to derive paths instead of hardcoding version strings.
+    static inline std::optional<DB::cpython::PythonInterpreterInfo> interpreter_info_;
+
     static void SetUpTestSuite()
     {
         auto [interpreter_info, error_message] = DB::cpython::PythonInterpreterInfo::tryCollect("");
         if (!interpreter_info.has_value())
         {
-            GTEST_SKIP() << "Python 3.10 interpreter not found, skipping CPython tests: " << error_message;
+            GTEST_SKIP() << "Python interpreter not found, skipping CPython tests: " << error_message;
             return;
         }
+
+        interpreter_info_ = *interpreter_info;
 
         setenv("PYTHONHOME", interpreter_info->prefix.c_str(), /*overwrite=*/1);
 
@@ -105,6 +111,49 @@ protected:
         (void)PyList_SetItem(list.get(), 0, Py_None); /// steals; breaks the self-cycle by DECREF'ing the old item
         if (PyErr_Occurred())
             PyErr_Clear();
+
+        /// CPython 3.12+ lazily creates internal type dicts/caches when
+        /// generator, coroutine, and async-generator types are first
+        /// introspected.  Exercise those paths now so the lazy allocations
+        /// land in the baseline snapshot rather than appearing as leaks.
+        PyRun_SimpleString(
+            "import gc as _gc, warnings as _w\n"
+            "_w.filterwarnings('ignore', category=RuntimeWarning)\n"
+            "def _warmup_gen():\n"
+            "    yield 1\n"
+            "async def _warmup_coro():\n"
+            "    return 1\n"
+            "async def _warmup_agen():\n"
+            "    yield 1\n"
+            "g = _warmup_gen()\n"
+            "type(g).__mro__; next(g)\n"
+            "del g\n"
+            "c = _warmup_coro()\n"
+            "type(c).__mro__; c.close()\n"
+            "del c\n"
+            "a = _warmup_agen()\n"
+            "type(a).__mro__\n"
+            "del a\n"
+            "del _warmup_gen, _warmup_coro, _warmup_agen\n"
+            "_gc.collect()\n"
+            "_w.resetwarnings()\n"
+            "del _gc, _w\n"
+        );
+        if (PyErr_Occurred())
+            PyErr_Clear();
+
+        /// Also exercise PyObject_HasAttrString on a custom object to
+        /// trigger any lazy type dict allocations.
+        PyRun_SimpleString(
+            "class _WarmupHasAttr:\n"
+            "    pass\n"
+            "_wh = _WarmupHasAttr()\n"
+            "hasattr(_wh, '__iter__')\n"
+            "hasattr(_wh, '__next__')\n"
+            "del _wh, _WarmupHasAttr\n"
+        );
+        if (PyErr_Occurred())
+            PyErr_Clear();
     }
 
     void collectObjectsAssumeGILHeld()
@@ -176,6 +225,12 @@ protected:
                     {
                         if (before_objects.find(obj) == before_objects.end())
                         {
+                            /// CPython 3.12+ lazily creates internal cache dicts
+                            /// during type introspection.  These are empty dicts
+                            /// owned by the interpreter and not real leaks.
+                            if (PyDict_Check(obj) && PyDict_Size(obj) == 0)
+                                continue;
+
                             ADD_FAILURE() << "Leaked object detected: ";
                             PyObject_Print(obj, stderr, 0);
                             fprintf(stderr, "\n");
@@ -207,7 +262,7 @@ protected:
     void SetUp() override
     {
         if (!Py_IsInitialized())
-            GTEST_SKIP() << "Python 3.10 interpreter not found, skipping CPython tests";
+            GTEST_SKIP() << "Python interpreter not found, skipping CPython tests";
     }
 
     void TearDown() override

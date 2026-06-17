@@ -62,7 +62,7 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
 
     subprocess.check_call(cmd, shell=True)
 
-def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build, enable_proton_local, disable_python_udf):
+def parse_env_variables(build_type, compiler, sanitizer, package_type, image_type, cache, clang_tidy, version, author, official, alien_pkgs, with_coverage, with_binaries, proton_build, enable_proton_local, disable_python_udf, mini_build, enable_python_free_threaded):
     DARWIN_SUFFIX = "-darwin"
     DARWIN_ARM_SUFFIX = "-darwin-aarch64"
     ARM_SUFFIX = "-aarch64"
@@ -146,6 +146,14 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
     else:
         cmake_flags.append('-DENABLE_PYTHON_UDF=ON')
         cmake_flags.append('-DENABLE_PROTON_PYTHON=ON')
+        # Free-threaded embedded CPython (PEP 703, cp314t). Opt-in per invocation;
+        # never flipped ON as a global CMake default. The downstream CI/Docker
+        # paths (unit-test image, server image, release artifact extraction) all
+        # assume this is coherent with whether the build actually produces a FT
+        # runtime, so the flag must only be passed when those pieces are ready.
+        if enable_python_free_threaded:
+            cmake_flags.append('-DENABLE_PYTHON_FREE_THREADED=ON')
+            logging.info("Enable free-threaded (PEP 703) embedded CPython")
 
     if is_cross_darwin or is_cross_darwin_arm:
         cmake_flags.append('-DENABLE_LIBURING=OFF')
@@ -293,6 +301,12 @@ if __name__ == "__main__":
     parser.add_argument("--proton-build", action="store_true")
     parser.add_argument('--enable-proton-local', action='store_true', default=False)
     parser.add_argument("--disable-python-udf", action="store_true")
+    parser.add_argument("--mini-build", action="store_true",
+                        help="Edge/device profile: disable V8, Python UDF, and LLVM JIT. Pairs with --build-type minsizerel.")
+    parser.add_argument("--enable-python-free-threaded", action="store_true", default=False,
+                        help="Build embedded CPython as free-threaded (PEP 703, cp314t). "
+                             "Only valid on platforms where python-udf is enabled (Linux amd64). "
+                             "Requires a matching python3.14t external interpreter in downstream images.")
     # proton: ends.
     # 'performance' creates a combined .tgz with server and configs to be used for performance test.
     parser.add_argument("--package-type", choices=['deb', 'binary', 'performance'], required=True)
@@ -362,7 +376,7 @@ if __name__ == "__main__":
         args.build_type, args.compiler, args.sanitizer, args.package_type, image_type,
         args.cache, args.clang_tidy,
         args.version, args.author, args.official, args.alien_pkgs, args.with_coverage, args.with_binaries, args.proton_build,
-        args.enable_proton_local, args.disable_python_udf)
+        args.enable_proton_local, args.disable_python_udf, args.mini_build, args.enable_python_free_threaded)
     # proton: ends.
 
     run_docker_image_with_env(image_name, args.output_dir, env_prepared, ch_root, args.ccache_dir, args.docker_image_version)

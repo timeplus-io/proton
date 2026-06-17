@@ -542,8 +542,9 @@
     M(S3CachedCredentialsProvidersReused, "Total number of reused credentials provider from the cache") \
     M(S3CachedCredentialsProvidersAdded, "Total number of newly added credentials providers to the cache") \
     \
-    M(PythonGILAcquired, "Number of times the Python GIL was acquired") \
-    M(PythonGILWaitMicroseconds, "Total time spent waiting to acquire the Python GIL in microseconds") \
+    M(PythonGILAcquired, "Number of times a Python runtime scope was entered (GIL acquire or thread-state attach)") \
+    M(PythonGILWaitMicroseconds, "Total time spent entering the Python runtime scope in microseconds") \
+    M(PythonPackagesInstalled, "Total number of Python package install operations completed via the embedded package manager (pip install). Cold-path counter; increments once per install, not per dependency.") \
 
 
 namespace ProfileEvents

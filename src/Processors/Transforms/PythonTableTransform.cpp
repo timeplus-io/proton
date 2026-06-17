@@ -47,13 +47,15 @@ PythonTableTransform::PythonTableTransform(
     ColumnsDescription output_columns_,
     Names requested_output_columns_,
     PythonTableMode mode_,
-    cpython::PythonModuleSessionPtr session_)
+    cpython::PythonModuleSessionPtr session_,
+    PythonTableTransformSharedStatePtr shared_state_)
     : ISimpleTransform(input_header, std::move(output_header), true, ProcessorID::PythonTableTransformID)
     , requested_output_columns(std::move(requested_output_columns_))
     , output_columns(std::move(output_columns_))
     , tuple_type(buildTupleType(output_columns))
     , mode(mode_)
     , session(std::move(session_))
+    , shared_state(std::move(shared_state_))
 {
     input_positions.reserve(input_column_names_.size());
     for (const auto & name : input_column_names_)
@@ -62,11 +64,38 @@ PythonTableTransform::PythonTableTransform(
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Column '{}' not found in source for Python external stream", name);
         input_positions.push_back(input_header.getPositionByName(name));
     }
+
+    if (shared_state)
+        shared_state->retain();
 }
 
 PythonTableTransform::~PythonTableTransform()
 {
-    cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/true);
+    if (shared_state)
+    {
+        if (!finalization_completed)
+        {
+            /// work() never ran our finalization branch (abnormal exit).
+            /// Release our share so siblings can correctly identify the
+            /// last live owner; do not run the close here — the session's
+            /// own destructor (fires when the last shared_ptr is released)
+            /// is the safety net for the abort path, with
+            /// ignore_exceptions=true.
+            shared_state->live_count.fetch_sub(1, std::memory_order_acq_rel);
+        }
+        return;
+    }
+
+    /// Single-owner case (no shared state). If work() did not finalize,
+    /// run a best-effort close so deinit still gets a chance.
+    finishSession(/*ignore_exceptions=*/true);
+}
+
+void PythonTableTransform::finishSession(bool ignore_exceptions)
+{
+    std::call_once(finish_once, [&] {
+        cpython::PythonModuleSession::closeSession(session, ignore_exceptions);
+    });
 }
 
 PythonTableTransform::Status PythonTableTransform::prepare()
@@ -83,6 +112,11 @@ PythonTableTransform::Status PythonTableTransform::prepare()
     auto status = ISimpleTransform::prepare();
     if (status == Status::Finished)
     {
+        /// Normal completion: input drained and downstream still has room
+        /// for the close-side effects (this is the only state in which we
+        /// want deinit exceptions to propagate). Otherwise (abort, broken
+        /// pipe, etc.) swallow exceptions to avoid masking the original
+        /// failure.
         finalization_ignore_exceptions = !(input_finished_before && !output_finished_before);
         finalization_pending = true;
         return Status::Ready;
@@ -95,9 +129,16 @@ void PythonTableTransform::work()
 {
     if (finalization_pending)
     {
-        if (session && session.use_count() == 1)
-            session->close(finalization_ignore_exceptions);
-        session.reset();
+        /// In the parallel-pipeline case (shared_state != nullptr), only the
+        /// last live owner runs the explicit close. Earlier finalizers just
+        /// drop their share; the session stays open for siblings still in
+        /// transform(). The single-owner case (shared_state == nullptr,
+        /// e.g. unit tests) is always "last" so close runs unconditionally
+        /// with the finalization_ignore_exceptions semantics derived in
+        /// prepare().
+        const bool we_are_last = !shared_state || shared_state->releaseAndClaimLast();
+        if (we_are_last)
+            finishSession(finalization_ignore_exceptions);
 
         finalization_pending = false;
         finalization_completed = true;
@@ -118,13 +159,18 @@ void PythonTableTransform::onCancel() noexcept
     {
         cpython::GILGuard gil_guard;
 
-        const auto thread_id = python_thread_id.load(std::memory_order_acquire);
-        if (thread_id == 0)
+        /// Use only the CURRENT thread ID — if transform() has already
+        /// exited Python (tid == 0), any earlier snapshot may now refer to
+        /// a recycled thread-pool worker carrying an unrelated PyThreadState,
+        /// and routing an async exception there would corrupt a different
+        /// query. cancel_requested set above is observed on the next entry.
+        const auto tid = python_thread_id.load(std::memory_order_acquire);
+        if (tid == 0)
             return;
 
-        const int set = PyThreadState_SetAsyncExc(thread_id, PyExc_KeyboardInterrupt);
+        const int set = PyThreadState_SetAsyncExc(tid, PyExc_KeyboardInterrupt);
         if (set > 1)
-            PyThreadState_SetAsyncExc(thread_id, nullptr);
+            PyThreadState_SetAsyncExc(tid, nullptr);
     }
     catch (...)
     {
@@ -186,8 +232,11 @@ void PythonTableTransform::transform(Chunk & chunk)
 
     cpython::GILGuard gil_guard;
 
-    python_thread_id.store(PyThread_get_thread_ident(), std::memory_order_release);
-    SCOPE_EXIT({ python_thread_id.store(0, std::memory_order_release); });
+    auto this_thread_id = PyThread_get_thread_ident();
+    python_thread_id.store(this_thread_id, std::memory_order_release);
+    SCOPE_EXIT({
+        python_thread_id.compare_exchange_strong(this_thread_id, 0, std::memory_order_release);
+    });
 
     cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(input_positions.size()))};
     for (size_t i = 0; i < input_positions.size(); ++i)

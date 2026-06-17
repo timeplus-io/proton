@@ -10,16 +10,12 @@
 #include <Python.h>
 #include <fmt/ranges.h>
 
-#include <algorithm>
 #include <array>
-#include <atomic>
-#include <cctype>
-#include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
-#include <unordered_set>
+#include <string_view>
 
 
 namespace DB
@@ -153,9 +149,19 @@ std::vector<std::string> getRefreshSiteDirectories(PyObject * site_module)
     std::vector<std::string> directories;
     std::unordered_set<std::string> seen;
 
-    if (const char * user_base = getenv("PYTHONUSERBASE"); user_base && *user_base)
+    /// Pull the cached interpreter info up front so the user-site derivation
+    /// uses the same suffix the install side (programs/python.cpp) writes
+    /// under. Deriving it inline from Py_GIL_DISABLED + PY_MAJOR/MINOR_VERSION
+    /// works for the default layout but silently diverges for custom layouts
+    /// (e.g. a Python built with `--with-platlibdir=lib64`), leaving
+    /// freshly-installed packages invisible to refreshImportState.
+    auto interpreter_info = getUDFPythonInterpreterInfo();
+
+    if (const char * user_base = std::getenv("PYTHONUSERBASE"); user_base && *user_base
+        && !interpreter_info.user_site_suffix.empty())
     {
-        const auto user_site_packages = fmt::format("{}/lib/python{}.{}/site-packages", user_base, PY_MAJOR_VERSION, PY_MINOR_VERSION);
+        const auto user_site_packages = fmt::format(
+            "{}/{}", user_base, interpreter_info.user_site_suffix);
         addRefreshSiteDirectory(directories, seen, user_site_packages);
     }
 
@@ -176,7 +182,6 @@ std::vector<std::string> getRefreshSiteDirectories(PyObject * site_module)
         addRefreshSiteDirectory(directories, seen, user_site_packages_str);
     }
 
-    auto interpreter_info = getUDFPythonInterpreterInfo();
     for (const auto & site_package : interpreter_info.site_packages)
         addRefreshSiteDirectory(directories, seen, site_package);
 
@@ -313,7 +318,8 @@ void runPipCommand(const std::vector<std::string> & args, bool log_failure_as_er
                 PyObject * ptraceback = nullptr;
                 PyErr_Fetch(&ptype, &pvalue, &ptraceback);
 
-                if (pvalue && PyObject_HasAttrString(pvalue, "stderr"))
+                /// Check if it's a CalledProcessError and extract stderr
+                if (pvalue && PyObject_HasAttrStringWithError(pvalue, "stderr") > 0)
                 {
                     auto stderr_obj = PyObjectPtr{PyObject_GetAttrString(pvalue, "stderr")};
                     if (stderr_obj && PyUnicode_Check(stderr_obj.get()))
@@ -387,6 +393,159 @@ void runPipCommand(const std::vector<std::string> & args, bool log_failure_as_er
         throw Exception(
             ErrorCodes::PYTHON_PIP_ERROR, "pip command failed with unknown exception: {} -m pip{}", interpreter_info.path, args_str);
     }
+}
+
+/// Collect legacy namespace-package names from installed distribution metadata.
+/// Reads `namespace_packages.txt` from each Distribution via
+/// importlib.metadata — the same file setuptools writes when a project uses
+/// `namespace_packages=...` or `declare_namespace()`. Works under
+/// setuptools >= 81 where pkg_resources is gone. Silently skips
+/// distributions whose metadata is absent or malformed; returns an empty set
+/// rather than throwing so package install/uninstall refresh never fails on
+/// metadata hiccups. Results are deduplicated across distributions.
+/// GIL is assumed held by caller.
+std::set<std::string> collectLegacyNamespacesFromDistributions(LoggerPtr logger)
+{
+    std::set<std::string> names;
+
+    auto md_module = PyObjectPtr{PyImport_ImportModule("importlib.metadata")};
+    if (!md_module)
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    auto distributions_func = PyObjectPtr{PyObject_GetAttrString(md_module.get(), "distributions")};
+    if (!distributions_func || !PyCallable_Check(distributions_func.get()))
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    auto distributions = PyObjectPtr{PyObject_CallNoArgs(distributions_func.get())};
+    if (!distributions)
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    auto iterator = PyObjectPtr{PyObject_GetIter(distributions.get())};
+    if (!iterator)
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    auto ns_filename = PyObjectPtr{PyUnicode_FromString("namespace_packages.txt")};
+    if (!ns_filename)
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    size_t malformed_entries = 0;
+    while (auto dist = PyObjectPtr{PyIter_Next(iterator.get())})
+    {
+        auto read_text = PyObjectPtr{PyObject_GetAttrString(dist.get(), "read_text")};
+        if (!read_text || !PyCallable_Check(read_text.get()))
+        {
+            PyErr_Clear();
+            continue;
+        }
+
+        auto text = PyObjectPtr{PyObject_CallFunctionObjArgs(read_text.get(), ns_filename.get(), nullptr)};
+        if (!text)
+        {
+            /// read_text() raises on malformed/encoded metadata — tolerate.
+            PyErr_Clear();
+            ++malformed_entries;
+            continue;
+        }
+
+        if (text.get() == Py_None)
+            continue;
+
+        if (!PyUnicode_Check(text.get()))
+        {
+            ++malformed_entries;
+            continue;
+        }
+
+        Py_ssize_t size = 0;
+        const char * utf8 = PyUnicode_AsUTF8AndSize(text.get(), &size);
+        if (!utf8)
+        {
+            PyErr_Clear();
+            ++malformed_entries;
+            continue;
+        }
+
+        std::istringstream stream(std::string(utf8, static_cast<size_t>(size)));
+        std::string line;
+        while (std::getline(stream, line))
+        {
+            const auto trimmed = trimCopy(line);
+            if (trimmed.empty() || trimmed[0] == '#')
+                continue;
+            names.insert(trimmed);
+        }
+    }
+
+    if (PyErr_Occurred())
+        PyErr_Clear();
+
+    if (malformed_entries > 0 && logger)
+        LOG_WARNING(logger,
+            "Skipped {} distribution(s) with unreadable namespace_packages.txt during import refresh",
+            malformed_entries);
+
+    return names;
+}
+
+/// Legacy fallback: read pkg_resources._namespace_packages. Only used when
+/// the distribution-metadata scan returns nothing, which can happen on older
+/// envs that stamp namespace packages via declare_namespace() without a
+/// corresponding namespace_packages.txt in the .dist-info. Returns an empty
+/// set if pkg_resources is not importable (setuptools >= 81 removed it).
+/// GIL is assumed held by caller.
+std::set<std::string> collectLegacyNamespacesFromPkgResources()
+{
+    std::set<std::string> names;
+
+    auto pkg_resources_module = PyObjectPtr{PyImport_ImportModule("pkg_resources")};
+    if (!pkg_resources_module)
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    auto ns_packages_dict = PyObjectPtr{PyObject_GetAttrString(pkg_resources_module.get(), "_namespace_packages")};
+    if (!ns_packages_dict || !PyDict_Check(ns_packages_dict.get()))
+    {
+        PyErr_Clear();
+        return names;
+    }
+
+    PyObject * key = nullptr;
+    PyObject * value = nullptr;
+    Py_ssize_t pos = 0;
+    while (PyDict_Next(ns_packages_dict.get(), &pos, &key, &value))
+    {
+        if (!key || !PyUnicode_Check(key))
+            continue;
+        const char * utf8 = PyUnicode_AsUTF8(key);
+        if (!utf8)
+        {
+            PyErr_Clear();
+            continue;
+        }
+        names.emplace(utf8);
+    }
+
+    if (PyErr_Occurred())
+        PyErr_Clear();
+
+    return names;
 }
 }
 
@@ -534,48 +693,79 @@ void PythonPackage::refreshImportState(LoggerPtr logger)
     if (!invalidate_result)
         throw Exception(ErrorCodes::PYTHON_IMPORT_ERROR, "Failed to invalidate Python import caches: {}", getExceptionMessage());
 
-    size_t extended_namespaces = 0;
-    auto pkg_resources_module = PyObjectPtr{PyImport_ImportModule("pkg_resources")};
-    if (pkg_resources_module)
+    /// Extend __path__ only on packages explicitly registered as legacy
+    /// namespace packages.  This is the targeted fix for the "google"
+    /// namespace-package problem: google-auth installs google/__init__.py that
+    /// calls declare_namespace('google'), which freezes google.__path__ at
+    /// import time.  A later install of protobuf adds google/protobuf/ under
+    /// a different site-packages dir but it stays invisible until __path__ is
+    /// widened.
+    ///
+    /// Preferred source is distribution metadata (importlib.metadata +
+    /// namespace_packages.txt), which works under setuptools >= 81 where
+    /// pkg_resources is gone.  Fall back to pkg_resources._namespace_packages
+    /// only if the metadata scan yields nothing — covers old envs where
+    /// declare_namespace() was called but no dist-info is present.
+    ///
+    /// We intentionally do NOT extend every loaded package — that would widen
+    /// ordinary packages that never opted into namespace behavior, which is a
+    /// broader import-semantics change than we need here.
+    auto namespace_names = collectLegacyNamespacesFromDistributions(logger);
+    const char * namespace_source = "importlib.metadata";
+    if (namespace_names.empty())
     {
-        auto ns_packages_dict = PyObjectPtr{PyObject_GetAttrString(pkg_resources_module.get(), "_namespace_packages")};
-        if (ns_packages_dict && PyDict_Check(ns_packages_dict.get()))
+        auto fallback = collectLegacyNamespacesFromPkgResources();
+        if (!fallback.empty())
         {
-            auto pkgutil_module = PyObjectPtr{PyImport_ImportModule("pkgutil")};
-            if (pkgutil_module)
+            namespace_names = std::move(fallback);
+            namespace_source = "pkg_resources";
+        }
+        else
+        {
+            namespace_source = "none";
+        }
+    }
+
+    size_t extended_namespaces = 0;
+    if (!namespace_names.empty())
+    {
+        auto pkgutil_module = PyObjectPtr{PyImport_ImportModule("pkgutil")};
+        if (pkgutil_module)
+        {
+            auto extend_path_func = PyObjectPtr{PyObject_GetAttrString(pkgutil_module.get(), "extend_path")};
+            if (extend_path_func && PyCallable_Check(extend_path_func.get()))
             {
-                auto extend_path_func = PyObjectPtr{PyObject_GetAttrString(pkgutil_module.get(), "extend_path")};
-                if (extend_path_func && PyCallable_Check(extend_path_func.get()))
+                PyObject * modules_dict = PyImport_GetModuleDict(); /// borrowed ref
+                for (const auto & name : namespace_names)
                 {
-                    PyObject * modules_dict = PyImport_GetModuleDict();
-                    PyObject * ns_name_obj = nullptr;
-                    PyObject * ns_value_obj = nullptr;
-                    Py_ssize_t pos = 0;
-
-                    while (PyDict_Next(ns_packages_dict.get(), &pos, &ns_name_obj, &ns_value_obj))
+                    auto name_obj = PyObjectPtr{PyUnicode_FromString(name.c_str())};
+                    if (!name_obj)
                     {
-                        PyObject * mod_obj = PyDict_GetItem(modules_dict, ns_name_obj);
-                        if (!mod_obj || mod_obj == Py_None || !PyObject_HasAttrString(mod_obj, "__path__"))
-                            continue;
-
-                        auto mod_path = PyObjectPtr{PyObject_GetAttrString(mod_obj, "__path__")};
-                        if (!mod_path)
-                        {
-                            PyErr_Clear();
-                            continue;
-                        }
-
-                        auto new_path
-                            = PyObjectPtr{PyObject_CallFunctionObjArgs(extend_path_func.get(), mod_path.get(), ns_name_obj, nullptr)};
-                        if (new_path)
-                        {
-                            if (PyObject_SetAttrString(mod_obj, "__path__", new_path.get()) == 0)
-                                ++extended_namespaces;
-                        }
-
-                        if (PyErr_Occurred())
-                            PyErr_Clear();
+                        PyErr_Clear();
+                        continue;
                     }
+
+                    PyObject * mod_obj = PyDict_GetItem(modules_dict, name_obj.get()); /// borrowed ref
+                    if (!mod_obj || mod_obj == Py_None || PyObject_HasAttrStringWithError(mod_obj, "__path__") <= 0)
+                        continue;
+
+                    auto mod_path = PyObjectPtr{PyObject_GetAttrString(mod_obj, "__path__")};
+                    if (!mod_path)
+                    {
+                        PyErr_Clear();
+                        continue;
+                    }
+
+                    auto new_path
+                        = PyObjectPtr{PyObject_CallFunctionObjArgs(extend_path_func.get(), mod_path.get(), name_obj.get(), nullptr)};
+                    if (new_path)
+                    {
+                        if (PyObject_SetAttrString(mod_obj, "__path__", new_path.get()) == 0)
+                            ++extended_namespaces;
+                    }
+
+                    if (PyErr_Occurred())
+                        PyErr_Clear();
                 }
             }
         }
@@ -585,9 +775,10 @@ void PythonPackage::refreshImportState(LoggerPtr logger)
 
     LOG_DEBUG(
         logger,
-        "Refreshed Python import state after package change: refreshed_paths={}, extended_namespaces={}",
+        "Refreshed Python import state after package change: refreshed_paths={}, extended_namespaces={}, source={}",
         refreshed_paths,
-        extended_namespaces);
+        extended_namespaces,
+        namespace_source);
 }
 
 bool PythonPackage::hasEffectiveRequirementLines(const std::string & requirements_text)
@@ -663,7 +854,10 @@ void PythonPackage::validatePackageSpecification(const std::string & package_spe
             package_spec);
     }
 
-    static const std::vector<std::string> blocked_patterns = {"__pycache__", "..", "/", "\\", ":", "*", "?", "\"", "|"};
+    /// Security check: prevent known malicious patterns
+    static constexpr std::array<std::string_view, 9> blocked_patterns = {
+        "__pycache__", "..", "/", "\\", ":", "*", "?", "\"", "|"
+    };
     for (const auto & pattern : blocked_patterns)
     {
         if (package_spec.find(pattern) != std::string::npos)
@@ -677,7 +871,10 @@ void PythonPackage::parsePackageWithVersion()
         throw Exception(ErrorCodes::PYTHON_PIP_ERROR, "Package specification cannot be empty");
 
     size_t version_start = std::string::npos;
-    std::vector<std::string> operators = {"===", "==", ">=", "<=", "!=", "~=", ">", "<"};
+    static constexpr std::array<std::string_view, 8> operators = {
+        "===", "==", ">=", "<=", "!=", "~=", ">", "<"
+    };
+
     for (const auto & op : operators)
     {
         size_t pos = package_with_version.find(op);
@@ -767,17 +964,21 @@ void PythonPackage::validateInstall(LoggerPtr logger) const
                     "Package '{}' version not found. Please check:\n"
                     "1. Package name spelling is correct\n"
                     "2. Version exists (visit https://pypi.org/project/{}/#history)\n"
-                    "3. Version is compatible with Python 3.10\n"
+                    "3. Version is compatible with Python {}.{}\n"
                     "Common versions: use 'latest' or check PyPI for available versions",
                     package_with_version,
-                    name);
+                    name,
+                    PY_MAJOR_VERSION,
+                    PY_MINOR_VERSION);
             }
             else if (enhanced_message.find("Requires-Python") != std::string::npos)
             {
                 enhanced_message = fmt::format(
                     "Package '{}' requires a different Python version. "
-                    "Current Python: 3.10. Please choose a version compatible with Python 3.10 or use an older version of the package.",
-                    package_with_version);
+                    "Current Python: {}.{}. Please choose a compatible version or use an older version of the package.",
+                    package_with_version,
+                    PY_MAJOR_VERSION,
+                    PY_MINOR_VERSION);
             }
             else if (enhanced_message.find("returned non-zero exit status") != std::string::npos)
             {

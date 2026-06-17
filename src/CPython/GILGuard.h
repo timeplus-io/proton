@@ -27,16 +27,53 @@ extern const int RESOURCE_NOT_INITED;
 
 namespace DB::cpython
 {
+
+/// RAII guard for entering/leaving a Python runtime scope.
+///
+/// On GIL-enabled builds (CPython <= 3.12 or GIL-enabled 3.13+):
+///   PyGILState_Ensure() acquires the GIL, serialising all Python execution.
+///
+/// On free-threaded builds (CPython 3.13+ with Py_GIL_DISABLED):
+///   PyGILState_Ensure() attaches a PyThreadState to the calling thread
+///   without global serialisation.  Multiple threads may execute Python
+///   concurrently; callers are responsible for object-level thread safety.
+///
+/// In both modes the guard ensures the calling thread has a valid
+/// PyThreadState for the lifetime of the scope.
 class GILGuard
 {
 public:
-    /// Constructor for UDF contexts where pybind11 compatibility is needed (default behavior)
+    /// Returns true when the embedded interpreter was *built* with free-
+    /// threading support (CPython 3.13+ compiled with Py_GIL_DISABLED).
+    ///
+    /// This is a build-capability check, NOT a runtime-behavior guarantee.
+    /// Even in a free-threaded build the GIL can be re-enabled at runtime
+    /// (PYTHON_GIL=1, -X gil=1, or importing a non-free-thread-safe
+    /// extension).  Code that needs to know the actual runtime GIL state
+    /// should query the interpreter (e.g. PyUnstable_GIL_IsEnabled() on
+    /// 3.13+), not this flag.
+    static constexpr bool buildSupportsFreeThreading() noexcept
+    {
+#ifdef Py_GIL_DISABLED
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    /// Default: UDF / streaming contexts (need_cleanup = false).
     GILGuard() : GILGuard(false) { }
 
-    /// Constructor with explicit cleanup control
-    /// \param use_need_cleanup if true, uses PyGILState_Release for proper cleanup
-    ///                           if false, uses PyEval_SaveThread for pybind11 compatibility
-    explicit GILGuard(bool use_need_cleanup) : acquired(false), need_cleanup(use_need_cleanup)
+    /// \param need_cleanup_ Controls thread-state release on destruction:
+    ///   - true:  PyGILState_Release — proper cleanup, suitable for
+    ///            short-lived scopes (SYSTEM commands, tests).
+    ///   - false: PyEval_SaveThread — detaches the thread state but
+    ///            intentionally keeps the PyThreadState alive in
+    ///            thread-local storage.  This avoids dangling-pointer
+    ///            issues with libraries (e.g. pybind11) that cache
+    ///            per-thread PyThreadState pointers, which matters when
+    ///            Python work runs in a reusable thread pool.
+    explicit GILGuard(bool need_cleanup_) : acquired(false), need_cleanup(need_cleanup_)
     {
         if (!Py_IsInitialized())
             throw DB::Exception(
@@ -55,25 +92,10 @@ public:
         }
         catch (...)
         {
-            /// If PyGILState_Ensure fails, don't set acquired=true to avoid cleanup issues
-            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_INITED, "Failed to acquire Python GIL");
+            throw DB::Exception(DB::ErrorCodes::RESOURCE_NOT_INITED, "Failed to enter Python runtime scope");
         }
     }
 
-    /// https://github.com/timeplus-io/proton-enterprise/issues/7226
-    /// `PyGILState_Release` will release the `PyThreadState` object when its reference
-    /// count drops to zero, while `PyEval_SaveThread` will not release the `PyThreadState`
-    /// object.
-    /// Some Python libraries like pybind11 assume that `PyThreadState` is bound to the thread
-    /// itself, with each thread having a `PyThreadState` and storing a pointer to this
-    /// object internally.
-    /// In our case, Python UDFs are called within a thread pool. If the `PyThreadState`
-    /// object is destructed after a query execution ends, it will cause a dangling pointer
-    /// issue in pybind11.
-    /// For UDF contexts, this leads to a leak of the `PyThreadState` object in the thread
-    /// local storage to avoid dangling pointers.
-    /// For non-UDF contexts (like SYSTEM commands), we use proper cleanup to avoid
-    /// shutdown hangs.
     ~GILGuard()
     {
         if (acquired)
@@ -95,7 +117,6 @@ public:
     GILGuard(const GILGuard &) = delete;
     GILGuard & operator=(const GILGuard &) = delete;
 
-    /// Check if GIL was successfully acquired
     bool isAcquired() const noexcept { return acquired; }
 
 private:

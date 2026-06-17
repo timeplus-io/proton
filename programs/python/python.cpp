@@ -11,10 +11,6 @@
 #include <boost/algorithm/string.hpp>
 #include <fmt/format.h>
 
-#define Py_BUILD_CORE
-#include <pycore_fileutils.h>
-#undef Py_BUILD_CORE
-
 #include <iostream>
 #include <cstdlib>
 #include <filesystem>
@@ -78,9 +74,9 @@ std::string loadPythonDirFromConfig(const DB::ConfigurationPtr & config)
     return fmt::format("{}/python", getDefaultPath(config));
 }
 
-std::string prepareUserSitePackages(const std::string & python_dir)
+std::string prepareUserSitePackages(const std::string & python_dir, const std::string & user_site_suffix)
 {
-    std::string user_site_packages_dir = fmt::format("{}/lib/python3.10/site-packages", python_dir);
+    std::string user_site_packages_dir = fmt::format("{}/{}", python_dir, user_site_suffix);
     if (!std::filesystem::exists(user_site_packages_dir))
     {
         auto status = std::filesystem::create_directories(user_site_packages_dir);
@@ -137,8 +133,7 @@ void checkPythonPathExists(const std::string & python_path)
     {
         throw DB::Exception(
             DB::ErrorCodes::UDF_INTERNAL_ERROR,
-            "Skip Embedded Python interpreter initialization since no system python interpreter found. The embedded Python "
-            "Interpreter requires python3.10 std libs to initialize, please install python3.10");
+            "Skip Embedded Python interpreter initialization: no Python standard library found in PYTHONPATH");
     }
 }
 
@@ -152,10 +147,14 @@ bool preparePythonEnv(const std::string & config_file_path, const std::string & 
         if (python_dir.ends_with('/'))
             python_dir.pop_back();
 
-        auto user_site_packages_dir = prepareUserSitePackages(python_dir);
         auto [interpreter_info, error_message] = DB::cpython::PythonInterpreterInfo::tryCollect(app_dir);
         if (!interpreter_info.has_value())
+        {
+            std::cerr << error_message << std::endl;
             return false;
+        }
+
+        auto user_site_packages_dir = prepareUserSitePackages(python_dir, interpreter_info->user_site_suffix);
 
         auto python_home = interpreter_info->prefix;
         auto python_path = boost::join(interpreter_info->site_packages, ":");
@@ -177,8 +176,9 @@ bool preparePythonEnv(const std::string & config_file_path, const std::string & 
         wchar_t * program = Py_DecodeLocale(interpreter_info->path.c_str(), NULL);
         Py_SetProgramName(program);
     }
-    catch (const std::exception & /*e*/)
+    catch (const std::exception & e)
     {
+        std::cerr << e.what() << std::endl;
         return false;
     }
 

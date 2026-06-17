@@ -14,6 +14,7 @@ tags:
   - python_udf_library
   - qlib
   - bug # {"code":702,"error_msg":"Request failed: Code: 702. DB::Exception: Failed to run 'pip install --user pyqlib': return code is 1. (PYTHON_PIP_ERROR)
+  - skip # pyqlib 0.9.7 ships wheels only up to cp312 (no cp313/cp314/cp314t) as of 2026-06; tracked in #12128
 
 arch:
   - x86_64

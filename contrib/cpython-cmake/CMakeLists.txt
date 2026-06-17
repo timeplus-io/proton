@@ -8,7 +8,7 @@ set(CPYTHON_HEADER_DIR "${CPYTHON_SOURCE_DIR}/Include")
 set(CPYTHON_CMAKE_SOURCE_DIR "${proton_SOURCE_DIR}/contrib/cpython-cmake")
 set(CPYTHON_CMAKE_BINARY_DIR "${proton_BINARY_DIR}/contrib/cpython-cmake")
 
-set(PYTHON_VERSION "3.10.14" CACHE STRING "The version of Python to build.")
+set(PYTHON_VERSION "3.14.6" CACHE STRING "The version of Python to build.")
 string(REPLACE "." ";" VERSION_LIST ${PYTHON_VERSION})
 list(GET VERSION_LIST 0 PY_VERSION_MAJOR)
 list(GET VERSION_LIST 1 PY_VERSION_MINOR)
@@ -28,6 +28,23 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(Py_DEBUG ON)
 endif()
 
+# Free-threaded (no-GIL) build, a.k.a. cp314t / PEP 703. Version gating is
+# done after PY_VERSION is extracted from patchlevel.h further below.
+#
+# Allocator contract (operators, read this):
+#  * proton keeps jemalloc as the process allocator.
+#  * When ENABLE_PYTHON_FREE_THREADED=ON, the embedded CPython runtime pins
+#    mimalloc as its object heap (required by Py_GIL_DISABLED). So one
+#    process ends up running two allocators, with no fallback option.
+#  * `system.jemalloc_*` commands and jeprof dumps see only the jemalloc
+#    arena, not the mimalloc heap. For production memory limits, use cgroup
+#    / process RSS as the source of truth.
+#  * The `NonJemallocMemory` async metric (~= process RSS - jemalloc.resident)
+#    exposes this blind spot; watch it alongside `MemoryResident`.
+option(ENABLE_PYTHON_FREE_THREADED
+    "Build embedded CPython as a free-threaded (PEP 703) interpreter"
+    OFF)
+
 # Extract version string from python source (Copied from FindPythonLibs.cmake)
 file(STRINGS "${CPYTHON_SOURCE_DIR}/Include/patchlevel.h" python_version_str
     REGEX "^#define[ \t]+PY_VERSION[ \t]+\"[^\"]+\"")
@@ -41,6 +58,18 @@ python_extract_version_info(
   )
 message(STATUS "PY_VERSION     : ${PY_VERSION}")
 message(STATUS "PY_VERSION_LONG: ${PY_VERSION_LONG}")
+
+if(ENABLE_PYTHON_FREE_THREADED)
+    if(PY_VERSION VERSION_LESS "3.13")
+        message(FATAL_ERROR
+            "ENABLE_PYTHON_FREE_THREADED requires Python >= 3.13, have ${PY_VERSION}")
+    endif()
+    set(Py_GIL_DISABLED ON)
+    # Free-threaded build pins mimalloc as the object allocator; obmalloc.c
+    # has `#error "Py_GIL_DISABLED requires WITH_MIMALLOC"` without this.
+    set(WITH_MIMALLOC ON)
+    message(STATUS "CPython: free-threaded (PEP 703) build enabled")
+endif()
 
 # Convenience boolean variables to easily test python version
 set(IS_PY3 0)

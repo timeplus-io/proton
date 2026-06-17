@@ -3,8 +3,7 @@
 #include <CPython/PythonInterpreterInfo.h>
 
 #if USE_PYTHON_UDF
-#include <pycore_fileutils.h>
-#include <pycore_interp.h>
+#include <Python.h>
 #endif
 
 #include <boost/algorithm/string.hpp>
@@ -17,14 +16,27 @@ void Server::initPythonInterpreter()
 {
 #if USE_PYTHON_UDF
     /**
-     * Set the location of additional libraries, such as numpy and other self installed modeule, you can check the path through pip, for example `pip show numpy`,
+     * Set the location of additional libraries, such as numpy and other self installed module, you can check the path through pip, for example `pip show numpy`,
      * it can tell you which location the numpy is installed.
      * You can see these two environment variables definition at https://docs.python.org/3/using/cmdline.html#environment-variables
     */
     std::string default_path = getDefaultPath();
     std::string python_dir = config().getString("python_path", fmt::format("{}/python", default_path));
 
-    std::string user_site_packages_dir = fmt::format("{}/lib/python3.10/site-packages", python_dir);
+    if (python_dir.ends_with('/'))
+        python_dir.pop_back();
+
+    auto [interpreter_info, error_message] = cpython::PythonInterpreterInfo::tryCollect(config().getString("application.dir"));
+    if (!interpreter_info.has_value())
+    {
+        LOG_INFO(
+            &logger(),
+            "Skip Embedded Python interpreter initialization: no compatible Python interpreter found. {}",
+            error_message);
+        return;
+    }
+
+    std::string user_site_packages_dir = fmt::format("{}/{}", python_dir, interpreter_info->user_site_suffix);
     if (!std::filesystem::exists(user_site_packages_dir))
     {
         std::error_code error_code;
@@ -39,20 +51,6 @@ void Server::initPythonInterpreter()
                 error_code.value());
             return;
         }
-    }
-
-    if (python_dir.ends_with('/'))
-        python_dir.pop_back();
-
-    auto [interpreter_info, error_message] = cpython::PythonInterpreterInfo::tryCollect(config().getString("application.dir"));
-    if (!interpreter_info.has_value())
-    {
-        LOG_INFO(
-            &logger(),
-            "Skip Embedded Python interpreter initialization since no system python interpreter found. The embedded Python "
-            "Interpreter requires python3.10 std libs to initialize, please install python3.10: {}",
-            error_message);
-        return;
     }
 
     std::string python_path = boost::join(interpreter_info->site_packages, ":");
@@ -80,14 +78,24 @@ void Server::initPythonInterpreter()
     {
         LOG_INFO(
             &logger(),
-            "Skip Embedded Python interpreter initialization since no system python interpreter found. The embedded Python "
-            "Interpreter requires python3.10 std libs to initialize, please install python3.10");
-
+            "Skip Embedded Python interpreter initialization: no Python standard library found in PYTHONPATH");
         return;
     }
 
+#ifdef Py_GIL_DISABLED
+    constexpr bool embedded_free_threaded = true;
+#else
+    constexpr bool embedded_free_threaded = false;
+#endif
     LOG_INFO(
-        &logger(), "Embedded Python interpreter is initializing with python_home={} python_path={}", interpreter_info->prefix, python_path);
+        &logger(),
+        "Embedded Python {} interpreter is initializing: embedded_free_threaded={}, "
+        "external_free_threaded={}, python_home={}, python_path={}",
+        interpreter_info->versionString(),
+        embedded_free_threaded,
+        interpreter_info->is_free_threaded,
+        interpreter_info->prefix,
+        python_path);
 
     /// initialize python interpreter
     Py_Initialize();
@@ -99,9 +107,17 @@ void Server::initPythonInterpreter()
 
     if (Py_IsInitialized())
         LOG_INFO(
-            &logger(), "Embedded Python interpreter initialized successfully with python_home={} python_path={}", python_dir, python_path);
+            &logger(),
+            "Embedded Python {} interpreter initialized successfully with python_home={} python_path={}",
+            interpreter_info->versionString(),
+            python_dir,
+            python_path);
     else
-        LOG_ERROR(&logger(), "Embedded Python interpreter initialized failed with python_home={} python_path={}", python_dir, python_path);
+        LOG_ERROR(
+            &logger(),
+            "Embedded Python interpreter initialization failed with python_home={} python_path={}",
+            python_dir,
+            python_path);
 #endif
 }
 

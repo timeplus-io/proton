@@ -152,10 +152,20 @@ void StoragePythonTableWithInput::read(
 
     auto session = cpython::PythonModuleSession::create("PythonTableWithInput", function_local);
 
+    /// addSimpleTransform fires the factory lambda once per parallel stream
+    /// in the input pipeline, so the same session ends up shared across N
+    /// PythonTableTransforms. Hand them a shared-state object so the LAST
+    /// transform to finalize via work() runs the explicit close+deinit;
+    /// earlier finalizers (and aborting transforms) just release the
+    /// counter. Without this, the first finalizer would tear down the
+    /// Python module while siblings are still executing on the session.
+    auto shared_state = std::make_shared<PythonTableTransformSharedState>();
+    shared_state->session = session;
+
     pipeline_builder->addSimpleTransform(
-        [session, input_names, output_columns_local, output_header, output_names, mode_value](const Block & header) {
+        [session, shared_state, input_names, output_columns_local, output_header, output_names, mode_value](const Block & header) {
             return std::make_shared<PythonTableTransform>(
-                header, output_header, input_names, output_columns_local, output_names, mode_value, session);
+                header, output_header, input_names, output_columns_local, output_names, mode_value, session, shared_state);
         });
 
     auto pipe = QueryPipelineBuilder::getPipe(std::move(*pipeline_builder), resources);

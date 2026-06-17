@@ -5,6 +5,7 @@ tags:
   - python_udf
   - python_udf_library
   - statsmodels
+  - skip # No cp314t wheel upstream as of 2026-05; tracked in #12128
 arch:
   - x86_64
 

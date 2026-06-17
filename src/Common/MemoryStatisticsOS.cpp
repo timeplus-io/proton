@@ -43,6 +43,7 @@ uint64_t extractMemoryValue(ReadBuffer & in)
 }
 
 static constexpr auto filename = "/proc/self/status";
+static constexpr auto rollup_filename = "/proc/self/smaps_rollup";
 
 MemoryStatisticsOS::MemoryStatisticsOS()
 {
@@ -50,6 +51,10 @@ MemoryStatisticsOS::MemoryStatisticsOS()
 
     if (-1 == fd)
         throwFromErrno("Cannot open file " + std::string(filename), errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
+
+    /// smaps_rollup was added in Linux 4.14. Absence is not an error — the
+    /// caller just gets zero-valued decomposition fields.
+    rollup_fd = ::open(rollup_filename, O_RDONLY | O_CLOEXEC);
 }
 
 MemoryStatisticsOS::~MemoryStatisticsOS()
@@ -67,6 +72,9 @@ MemoryStatisticsOS::~MemoryStatisticsOS()
             DB::tryLogCurrentException(__PRETTY_FUNCTION__);
         }
     }
+
+    if (-1 != rollup_fd)
+        ::close(rollup_fd);
 }
 
 MemoryStatisticsOS::Data MemoryStatisticsOS::get() const
@@ -119,6 +127,57 @@ MemoryStatisticsOS::Data MemoryStatisticsOS::get() const
         skipToNextLineOrEOF(in);
     }
     data.data_and_stack = data_size + stack_size;
+
+    if (-1 != rollup_fd)
+    {
+        /// smaps_rollup is small (< 1 KiB in practice) and the kernel
+        /// aggregates it into a single virtual mapping, so one pread is enough.
+        ssize_t rollup_res = 0;
+        do
+        {
+            rollup_res = ::pread(rollup_fd, buf, buf_size, 0);
+            if (-1 == rollup_res)
+            {
+                if (errno == EINTR)
+                    continue;
+                /// Soft-fail: leave decomposition fields at zero. Do not throw
+                /// — smaps_rollup may become unreadable under seccomp / hidepid.
+                rollup_res = 0;
+            }
+            break;
+        } while (true);
+
+        if (rollup_res > 0)
+        {
+            data.smaps_rollup_available = true;
+            ReadBufferFromMemory rollup_in(buf, rollup_res);
+            /// First line is a mapping header like `555...-7ff... ---p ... [rollup]`.
+            /// Skip it; all subsequent lines are `Key:<spaces>N kB`.
+            skipToNextLineOrEOF(rollup_in);
+
+            while (!rollup_in.eof())
+            {
+                String key;
+                /// smaps_rollup separates key from value with spaces (unlike
+                /// /proc/self/status which uses tabs), so stop at the first
+                /// space rather than using readString's `\t|\n` stop chars.
+                readStringUntilWhitespace(key, rollup_in);
+
+                if (key == "Pss:")
+                    data.pss = extractMemoryValue(rollup_in);
+                else if (key == "Private_Dirty:")
+                    data.private_dirty = extractMemoryValue(rollup_in);
+                else if (key == "Anonymous:")
+                    data.anonymous = extractMemoryValue(rollup_in);
+                else if (key == "AnonHugePages:")
+                    data.anon_huge_pages = extractMemoryValue(rollup_in);
+                else if (key == "Swap:")
+                    data.swap = extractMemoryValue(rollup_in);
+
+                skipToNextLineOrEOF(rollup_in);
+            }
+        }
+    }
 
     return data;
 }

@@ -20,12 +20,38 @@ extern const int UDF_RUNNING_ERROR;
 using namespace DB::cpython;
 
 
+namespace
+{
+/// Assert `Py_REFCNT(obj) == expected`, except when the runtime has bypassed
+/// per-operation refcount tracking on this object. Free-threaded CPython
+/// (PEP 703) has two such bypasses:
+///   * immortalization — ob_ref_local pinned to UINT32_MAX, `_Py_IsImmortal`
+///     returns true.
+///   * deferred reference counting — ob_ref_shared += _Py_REF_DEFERRED, which
+///     makes `Py_REFCNT` read as ~(PY_SSIZE_T_MAX/8) ≈ 2^60. Modules, top-level
+///     functions, and code objects routinely take this path.
+/// `_PyObject_HasDeferredRefcount` lives under Py_BUILD_CORE, so we approximate
+/// via the sentinel-magnitude check: any refcount above `_Py_IMMORTAL_MINIMUM_REFCNT`
+/// (2^31 on 64-bit builds) means the runtime is managing liveness itself.
+/// `PyObjectPtr` still correctly drops its own reference either way.
+void expectRefcountOrImmortal(PyObject * op, Py_ssize_t expected, const char * label)
+{
+    if (_Py_IsImmortal(op))
+        return;
+    const Py_ssize_t rc = Py_REFCNT(op);
+    if (rc >= static_cast<Py_ssize_t>(_Py_IMMORTAL_MINIMUM_REFCNT))
+        return;  // deferred or otherwise runtime-managed
+    EXPECT_EQ(rc, expected) << label;
+}
+}
+
+
 TEST_F(CPythonTest, convertPyObjectToString)
 {
     assertNoLeak([]() {
         auto pstr = PyObjectPtr{PyUnicode_FromString("str")};
         EXPECT_EQ(convertPyObjectToString(pstr), "str");
-        EXPECT_EQ(pstr->ob_refcnt, 1);
+        EXPECT_EQ(Py_REFCNT(pstr.get()), 1);
     });
 }
 
@@ -130,17 +156,17 @@ TEST_F(CPythonTest, getAttr)
             PyObject_SetAttrString(pmodule.get(), "value", py_value);
         }
 
-        EXPECT_EQ(py_value->ob_refcnt, 1);
+        EXPECT_EQ(Py_REFCNT(py_value), 1);
 
         {
             auto pattr = getAttr(pmodule, "value");
             EXPECT_EQ(pattr.get(), py_value);
 
             /// One reference is owned by pattr, the other is owned by py_module
-            EXPECT_EQ(pattr->ob_refcnt, 2);
+            EXPECT_EQ(Py_REFCNT(pattr.get()), 2);
         }
 
-        EXPECT_EQ(py_value->ob_refcnt, 1);
+        EXPECT_EQ(Py_REFCNT(py_value), 1);
     });
 }
 
@@ -176,17 +202,17 @@ TEST_F(CPythonTest, tryGetAttr)
             PyObject_SetAttrString(pmodule.get(), "value", py_value);
         }
 
-        EXPECT_EQ(py_value->ob_refcnt, 1);
+        EXPECT_EQ(Py_REFCNT(py_value), 1);
 
         {
             auto pattr = tryGetAttr(pmodule, "value");
             EXPECT_EQ(pattr.get(), py_value);
 
             /// One reference is owned by pattr, the other is owned by py_module
-            EXPECT_EQ(pattr->ob_refcnt, 2);
+            EXPECT_EQ(Py_REFCNT(pattr.get()), 2);
         }
 
-        EXPECT_EQ(py_value->ob_refcnt, 1);
+        EXPECT_EQ(Py_REFCNT(py_value), 1);
     });
 }
 
@@ -203,7 +229,7 @@ TEST_F(CPythonTest, tryGetAttrNotFound)
         /// PyModule_New doesn't import the module,
         /// we can't find it in sys.modules
         EXPECT_FALSE(hasModule("test_module"));
-        EXPECT_EQ(py_module->ob_refcnt, 1);
+        expectRefcountOrImmortal(py_module, 1, "tryGetAttrNotFound: py_module");
     });
 }
 
@@ -262,6 +288,59 @@ TEST_F(CPythonTest, unloadModuleNotImport)
             EXPECT_EQ(e.code(), DB::ErrorCodes::UDF_INTERNAL_ERROR);
             EXPECT_STREQ(e.what(), "Failed to unload module: proton_not_exist");
         }
+    });
+}
+
+/// Regression guard for the swap from _PyModule_Clear (which we used to call
+/// through pycore_*) to the public-API clearModuleDictLikeCPython shim.
+/// The contract to preserve: after unloadModule, the module's dict still has
+/// `__builtins__` bound to its original value (not None, not removed), and
+/// user globals are replaced with None rather than deleted. Losing either
+/// half is how __del__ handlers start raising NameError during teardown.
+///
+/// We exercise this against `__main__` because CPython's initialisation
+/// populates its dict with a real __builtins__ entry. Bare modules built
+/// via PyImport_AddModule don't always seed __builtins__ into the dict on
+/// 3.14 FT (the interpreter resolves the name through a fallback path
+/// during name lookup), so a fresh module is not a reliable substrate
+/// for this specific contract.
+TEST_F(CPythonTest, unloadModulePreservesBuiltinsAndSubstitutesUserGlobals)
+{
+    assertNoLeak([]() {
+        /// Run a tiny script against __main__ so its dict has a user global
+        /// we can check. PyRun_SimpleString compiles + executes in __main__.
+        ASSERT_EQ(PyRun_SimpleString("proton_user_var = 'hello'"), 0);
+
+        auto main_module = getModule("__main__");
+        ASSERT_TRUE(main_module);
+
+        PyObject * mod_dict = PyModule_GetDict(main_module.get()); /// borrowed
+        ASSERT_NE(mod_dict, nullptr);
+
+        PyObject * builtins_before = PyDict_GetItemString(mod_dict, "__builtins__"); /// borrowed
+        ASSERT_NE(builtins_before, nullptr) << "__main__ is expected to have __builtins__ by CPython init";
+
+        /// Capture identity so we can verify it survives the unload unchanged.
+        Py_INCREF(builtins_before);
+        PyObjectPtr builtins_keepalive{builtins_before};
+
+        /// Own a strong reference to the dict so it outlives the sys.modules
+        /// removal inside unloadModule — otherwise the dict may be freed
+        /// before we inspect it.
+        Py_INCREF(mod_dict);
+        PyObjectPtr mod_dict_keepalive{mod_dict};
+
+        unloadModule("__main__");
+        EXPECT_FALSE(hasModule("__main__"));
+
+        PyObject * builtins_after = PyDict_GetItemString(mod_dict_keepalive.get(), "__builtins__");
+        ASSERT_NE(builtins_after, nullptr) << "__builtins__ key was removed — __del__ handlers would NameError";
+        EXPECT_NE(builtins_after, Py_None) << "__builtins__ was substituted with None instead of preserved";
+        EXPECT_EQ(builtins_after, builtins_keepalive.get()) << "__builtins__ identity changed during unload";
+
+        PyObject * user_after = PyDict_GetItemString(mod_dict_keepalive.get(), "proton_user_var");
+        ASSERT_NE(user_after, nullptr) << "user global was removed (PyDict_Clear semantics) instead of substituted";
+        EXPECT_EQ(user_after, Py_None) << "user global should be replaced with None by _PyModule_Clear semantics";
     });
 }
 
@@ -600,10 +679,10 @@ def func(i):
 
         unloadModule(module_name);
 
-        EXPECT_EQ(args->ob_refcnt, 1);
-        EXPECT_EQ(py_func->ob_refcnt, 1);
-        EXPECT_EQ(main_module->ob_refcnt, 1);
-        EXPECT_EQ(byte_code->ob_refcnt, 1);
+        expectRefcountOrImmortal(args.get(), 1, "executeObject: args");
+        expectRefcountOrImmortal(py_func.get(), 1, "executeObject: py_func");
+        expectRefcountOrImmortal(main_module.get(), 1, "executeObject: main_module");
+        expectRefcountOrImmortal(byte_code.get(), 1, "executeObject: byte_code");
     });
 }
 

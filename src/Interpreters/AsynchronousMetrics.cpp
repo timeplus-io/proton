@@ -20,6 +20,10 @@
 
 #include "config.h"
 
+#if USE_PYTHON_UDF
+#include <CPython/MimallocStats.h>
+#endif
+
 #if USE_JEMALLOC
 #    include <jemalloc/jemalloc.h>
 #endif
@@ -790,6 +794,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     MemoryStatisticsOS::Data memory_statistics_data = memory_stat.get();
 #endif
 
+    /// Only read by the NonJemallocMemory block below, which is Linux/FreeBSD-only.
+    [[maybe_unused]] size_t jemalloc_resident = 0;
 #if USE_JEMALLOC
     // 'epoch' is a special mallctl -- it updates the statistics. Without it, all
     // the following calls will return stale values. It increments and returns
@@ -802,7 +808,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     saveJemallocMetric<size_t>(new_values, "active");
     saveJemallocMetric<size_t>(new_values, "metadata");
     saveJemallocMetric<size_t>(new_values, "metadata_thp");
-    saveJemallocMetric<size_t>(new_values, "resident");
+    jemalloc_resident = saveJemallocMetric<size_t>(new_values, "resident");
     saveJemallocMetric<size_t>(new_values, "mapped");
     saveJemallocMetric<size_t>(new_values, "retained");
     saveJemallocMetric<size_t>(new_values, "background_thread.num_threads");
@@ -822,6 +828,45 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
         new_values["MemoryVirtual"] = data.virt;
         new_values["MemoryResident"] = data.resident;
+
+        /// Part of process RSS not tracked by the server's jemalloc arena. On builds
+        /// with embedded free-threaded CPython this covers the mimalloc heap the
+        /// interpreter uses internally (invisible to jemalloc-based profiling).
+        {
+            UInt64 non_jemalloc = (data.resident > jemalloc_resident)
+                                ? (data.resident - jemalloc_resident)
+                                : 0;
+            new_values["NonJemallocMemory"] = non_jemalloc;
+        }
+
+        /// RSS decomposition from /proc/self/smaps_rollup (Linux >= 4.14). Splits
+        /// anonymous (heap, mimalloc, stacks) vs file-backed (.so/.py/mmap) pages.
+        /// All fields read zero when smaps_rollup is unavailable.
+        {
+            new_values["MemoryAnonymous"] = data.anonymous;
+
+            UInt64 file_backed = 0;
+            if (data.smaps_rollup_available && data.resident > data.anonymous)
+                file_backed = data.resident - data.anonymous;
+            new_values["MemoryFileBacked"] = file_backed;
+
+            new_values["MemoryAnonHugePages"] = data.anon_huge_pages;
+            new_values["MemoryPrivateDirty"] = data.private_dirty;
+            new_values["MemoryPss"] = data.pss;
+            new_values["MemorySwap"] = data.swap;
+        }
+
+#if USE_PYTHON_UDF
+        /// mimalloc process-wide stats from the embedded free-threaded CPython runtime.
+        /// Registered only when the build links mimalloc (ENABLE_PYTHON_FREE_THREADED=ON).
+        if (cpython::mimallocEnabled())
+        {
+            auto mi = cpython::getMimallocProcessInfo();
+            new_values["PythonMimallocCommitted"] = mi.current_commit;
+            new_values["PythonMimallocPeakCommitted"] = mi.peak_commit;
+        }
+#endif
+
 #if !defined(OS_FREEBSD)
         new_values["MemoryShared"] = data.shared;
 #endif

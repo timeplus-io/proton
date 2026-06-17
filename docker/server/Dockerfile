@@ -1,4 +1,77 @@
-FROM python:3.10.12 AS python
+# Builder stage: produce a free-threaded (PEP 703) CPython 3.14.4 (cp314t)
+# to copy into the runtime image. Stock python:3.14.4 is GIL-enabled and
+# would be rejected by the embedded interpreter's FT guard, so we use
+# deadsnakes. See memory project_cpython_docker_source.md and the PR
+# #11852 review thread for why deadsnakes (vs python-build-standalone).
+#
+# TODO(#11704 follow-up): restore the pre-installed timeplus-neutrino
+# site-packages tree here once proton-driver ships a cp314-compatible
+# sdist on PyPI. The patched branch
+# timeplus-io/proton-python-driver@yokofly/cp314t-cython-3.2 regenerates
+# the Cython .c outputs with Cython 3.2.4; pair it with Confluent's
+# librdkafka-dev 2.14.0 (deb [signed-by=/usr/share/keyrings/confluent-
+# archive-keyring.gpg] https://packages.confluent.io/clients/deb jammy
+# main) and build confluent-kafka / lz4 / zstandard / timeplus-connect /
+# proton-driver from sdist into --prefix /out. Deferred for this PR
+# because none of the proton_ci.yml jobs (unit / smoke / stateless /
+# stateful) actually exercise neutrino or proton-driver.
+FROM ubuntu:22.04 AS python
+ENV DEBIAN_FRONTEND=noninteractive
+# ENABLE_PYTHON_UDF controls whether this builder stage stages a CPython 3.14
+# runtime at all. Defaults to 1; pass --build-arg ENABLE_PYTHON_UDF=0 for
+# mini / no-python images (the staging dir is still created so the final
+# stage's COPY succeeds, but it is empty and the final RUN no-ops).
+#
+# ENABLE_PYTHON_FREE_THREADED selects which CPython 3.14 ABI gets staged.
+#   1 -> python3.14-nogil  -> binary python3.14t, libpython3.14t.so (FT)
+#   0 -> python3.14        -> binary python3.14,  libpython3.14.so  (GIL)
+# Must match the embedded interpreter's Py_GIL_DISABLED setting; the
+# PythonInterpreterInfo ABI guard now rejects either mismatch direction.
+# Default 0 to match docker/packager/packager, where
+# --enable-python-free-threaded is opt-in. All Linux amd64 CI workflows
+# (proton_ci, nightly_test, manual_trigger_build, release_build) build
+# free-threaded and pass --build-arg ENABLE_PYTHON_FREE_THREADED=1; a
+# workflow that builds a FT binary MUST pass it or the ABI guard rejects.
+ARG ENABLE_PYTHON_UDF=1
+ARG ENABLE_PYTHON_FREE_THREADED=0
+RUN set -eux; \
+    mkdir -p /py-staging/lib /py-staging/bin; \
+    if [ "${ENABLE_PYTHON_UDF}" != "1" ]; then \
+        echo "ENABLE_PYTHON_UDF=${ENABLE_PYTHON_UDF}; skipping CPython staging."; \
+        exit 0; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        software-properties-common gpg-agent ca-certificates dpkg-dev; \
+    add-apt-repository -y ppa:deadsnakes/ppa; \
+    apt-get update; \
+    if [ "${ENABLE_PYTHON_FREE_THREADED}" = "1" ]; then \
+        apt-get install -y --no-install-recommends python3.14-nogil python3.14-venv; \
+        PY_BIN=python3.14t; PY_LIB=libpython3.14t.so; \
+    else \
+        apt-get install -y --no-install-recommends python3.14 python3.14-venv; \
+        PY_BIN=python3.14; PY_LIB=libpython3.14.so; \
+    fi; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+    # Resolve the multiarch lib subdir dynamically: x86_64-linux-gnu on
+    # amd64, aarch64-linux-gnu on arm64. dpkg-architecture is the
+    # canonical source; uname-m fallback covers stripped images.
+    MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo "$(uname -m)-linux-gnu")"; \
+    cp "/usr/lib/${MULTIARCH}/${PY_LIB}.1.0" /py-staging/lib/; \
+    cp "/usr/lib/${MULTIARCH}/${PY_LIB}"     /py-staging/lib/; \
+    cp -r /usr/lib/python3.14 /py-staging/lib/python3.14; \
+    cp "/usr/bin/${PY_BIN}" "/py-staging/bin/${PY_BIN}"; \
+    # FT-only: embedded interpreter built with Py_GIL_DISABLED makes
+    # getpath.c hardcode ABI_THREAD="t" and look for stdlib at
+    # lib/python<VER>t/os.py. Symlink so it resolves to the shared stdlib.
+    if [ "${ENABLE_PYTHON_FREE_THREADED}" = "1" ]; then \
+        ln -s python3.14 /py-staging/lib/python3.14t; \
+    fi; \
+    # Drop a sentinel naming the staged binary so the final stage's
+    # ensurepip step (and the entrypoint's user-site path) can pick the
+    # right ABI without re-deriving it.
+    echo "${PY_BIN}" > /py-staging/python_binary
 
 FROM ubuntu:22.04
 
@@ -58,7 +131,7 @@ RUN groupadd -r timeplus --gid=101 \
         netcat \
         net-tools \
         lsof \
-        python3.10 \
+        python3 \
         python3-pip \
     && mkdir -p /etc/apt/sources.list.d \
     && apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4 \
@@ -102,7 +175,6 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV TZ UTC
-ENV SETUPTOOLS_USE_DISTUTILS=stdlib
 
 RUN mkdir /docker-entrypoint-initdb.d \
  && mkdir -p /usr/share/proton
@@ -118,30 +190,50 @@ RUN chmod +x /entrypoint.sh \
     && mkdir -p /usr/share/proton/bin \
     && mkdir -p /usr/share/proton/lib
 
-# Copy embedded Python as root (default behavior)
-COPY --from=python /usr/local/lib/libpython3.so /usr/share/proton/lib/libpython3.so
-COPY --from=python /usr/local/lib/libpython3.10.so.1.0 /usr/share/proton/lib/libpython3.10.so.1.0
-COPY --from=python /usr/local/lib/libpython3.10.so /usr/share/proton/lib/libpython3.10.so
-COPY --from=python /usr/local/lib/python3.10 /usr/share/proton/lib/python3.10
-COPY --from=python /usr/local/bin/python3.10 /usr/share/proton/bin
+# Copy CPython 3.14 runtime from the builder stage. The builder normalized
+# everything into /py-staging/, abstracting over (a) the multiarch lib
+# subdirectory (x86_64-linux-gnu vs aarch64-linux-gnu) and (b) the FT-vs-GIL
+# ABI selection. This single COPY pair works for amd64 + arm64 and for
+# either ABI; the embedded build's PythonInterpreterInfo will refuse to
+# start if the staged binary's ABI does not match the embedded interpreter.
+#
+# When ENABLE_PYTHON_UDF=0 the python stage staged an empty dir, so the
+# COPY is effectively a no-op directory and the RUN below skips ensurepip.
+#
+# Defaults match docker/packager/packager: ENABLE_PYTHON_UDF=1,
+# ENABLE_PYTHON_FREE_THREADED=0 (FT is opt-in there too). FT builds must
+# pass --build-arg ENABLE_PYTHON_FREE_THREADED=1 to both the builder image
+# and this image so the embedded binary and runtime libs agree.
+ARG ENABLE_PYTHON_UDF=1
+ARG ENABLE_PYTHON_FREE_THREADED=0
+COPY --from=python /py-staging /py-staging-src
+RUN set -eux; \
+    if [ "${ENABLE_PYTHON_UDF}" = "1" ]; then \
+        cp -a /py-staging-src/lib/. /usr/share/proton/lib/; \
+        cp -a /py-staging-src/bin/. /usr/share/proton/bin/; \
+        # Preserve the binary-name marker so entrypoint.sh can pick the
+        # matching user-site path at container start without re-deriving
+        # the ABI. Lives under /usr/share/proton so it travels with
+        # the rest of the runtime and survives volume mounts on /var.
+        install -m 0644 /py-staging-src/python_binary /usr/share/proton/python_binary; \
+        PY_BIN="$(cat /usr/share/proton/python_binary)"; \
+        # Install pip into the embedded interpreter's site-packages so that
+        # SYSTEM INSTALL PYTHON PACKAGE (which shells out to `<PY_BIN> -m pip
+        # install --user`) can find it. deadsnakes ships ensurepip's bundled
+        # pip wheel at lib/python3.14/ensurepip/_bundled/ but never installs
+        # it; running under the embedded-layout binary places pip at
+        # /usr/share/proton/local/lib/<PY_BIN_TAG>/dist-packages/
+        # (Debian's posix_local scheme), which the binary discovers via
+        # sys.path.
+        "/usr/share/proton/bin/${PY_BIN}" -m ensurepip --upgrade --default-pip; \
+        "/usr/share/proton/bin/${PY_BIN}" -m pip --version; \
+    fi; \
+    rm -rf /py-staging-src
 
 # Ensure everything under /usr/share/proton is owned by timeplus
 RUN chown -R timeplus:timeplus /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client /usr/share/proton/
 
-# Run pip as timeplus so installed files are not root-owned
 USER 101:101
-
-# Skip Python package installation on ARM64 since Python UDF is unsupported.
-# Also allow opting out via build-arg ENABLE_PYTHON_UDF=0.
-RUN arch="$(uname -m)" \
-	 && if [ "${ENABLE_PYTHON_UDF}" = "1" ] && ! echo "${arch}" | grep -qiE '^(aarch64|arm64)$'; then \
-	      export PYTHONHOME=/usr/share/proton PYTHONNOUSERSITE=1 \
-	      && /usr/share/proton/bin/python3.10 -m pip install --no-cache-dir --upgrade --prefix /usr/share/proton pip setuptools wheel truststore \
-	      && /usr/share/proton/bin/python3.10 -m pip install --no-cache-dir --timeout 180 --retries 8 --upgrade --prefix /usr/share/proton timeplus-neutrino==0.1.12 \
-	      && /usr/share/proton/bin/python3.10 -c 'import importlib.metadata as md, os, re, shutil, sys, sysconfig; from pathlib import Path; sp=Path(sysconfig.get_paths()["purelib"]); paths=sorted(sp.glob("setuptools-*.dist-info")); ver=lambda p: tuple(int(x) for x in re.findall(r"\d+", p.name.removeprefix("setuptools-").removesuffix(".dist-info"))); (len(paths)>1) and [shutil.rmtree(p) for p in paths if p!=max(paths, key=ver)]; vs=sorted({d.version for d in md.distributions() if (d.metadata.get("Name") or "").lower()=="setuptools"}); (len(vs)!=1) and (sys.stderr.write(f"expected exactly one setuptools distribution, got: {vs}\n"), sys.exit(1)); (os.environ.get("SETUPTOOLS_USE_DISTUTILS")=="stdlib") and __import__("setuptools")' \
-	    else \
-	      echo "Skipping Python package install (ENABLE_PYTHON_UDF=${ENABLE_PYTHON_UDF}, arch=${arch})" ; \
-	    fi
 VOLUME /var/lib/proton
 
 ENV PROTON_CONFIG /etc/proton-server/config.yaml

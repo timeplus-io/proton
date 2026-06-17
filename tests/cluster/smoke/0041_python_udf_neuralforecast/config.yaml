@@ -5,6 +5,7 @@ tags:
   - python_udf
   - python_udf_library
   - neuralforecast
+  - skip # hard deps coreforecast + ray ship no cp314t wheels as of 2026-06; tracked in #12128
 arch:
   - x86_64
 

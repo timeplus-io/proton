@@ -173,12 +173,14 @@ void PythonModuleSession::init()
 
 PyObjectPtr PythonModuleSession::execute(const PyObjectPtr & args) const
 {
+    chassert(PyGILState_Check());
     return executeObject(py_function, args);
 }
 
 void PythonModuleSession::flush(bool acquire_gil) const
 {
-    if (function.flush_function_name.empty() || closed || module_name.empty())
+    /// module_name is cleared by closeImpl(), so this also no-ops after close.
+    if (function.flush_function_name.empty() || module_name.empty())
         return;
 
     if (acquire_gil)
@@ -194,19 +196,13 @@ void PythonModuleSession::flush(bool acquire_gil) const
 
 void PythonModuleSession::close(bool ignore_exceptions, bool acquire_gil)
 {
-    if (closed)
-        return;
+    /// std::call_once guarantees exactly-once execution even when called
+    /// concurrently from an explicit close() and the destructor.
+    std::call_once(close_once, [&] {
+        if (Py_IsInitialized() == 0)
+            return;
 
-    if (Py_IsInitialized() == 0)
-    {
-        closed = true;
-        return;
-    }
-
-    if (ignore_exceptions)
-    {
-        try
-        {
+        auto runClose = [&] {
             if (acquire_gil)
             {
                 GILGuard gil_guard;
@@ -216,27 +212,28 @@ void PythonModuleSession::close(bool ignore_exceptions, bool acquire_gil)
             {
                 closeImpl();
             }
-        }
-        catch (...)
+        };
+
+        if (ignore_exceptions)
         {
-        }
-    }
-    else
-    {
-        if (acquire_gil)
-        {
-            GILGuard gil_guard;
-            closeImpl();
+            try
+            {
+                runClose();
+            }
+            catch (...)
+            {
+            }
         }
         else
         {
-            closeImpl();
+            runClose();
         }
-    }
+    });
 }
 
 void PythonModuleSession::closeImpl()
 {
+    chassert(PyGILState_Check());
     py_function.reset();
 
     std::exception_ptr cleanup_exception;
@@ -246,7 +243,6 @@ void PythonModuleSession::closeImpl()
             module_name, function.flush_function_name, function.deinit_function_name, module_loaded, flush_attempted, deinit_attempted);
         module_name.clear();
         module_loaded = false;
-        closed = true;
     }
     catch (...)
     {
@@ -267,7 +263,6 @@ void PythonModuleSession::closeImpl()
         {
             module_name.clear();
             module_loaded = false;
-            closed = true;
         }
     }
 
