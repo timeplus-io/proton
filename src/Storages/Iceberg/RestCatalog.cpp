@@ -685,11 +685,18 @@ void extractTableMetadata(const std::string & json_str, TableMetadata & result, 
 
     auto metadata_object = object->get("metadata").extract<Poco::JSON::Object::Ptr>();
     if (!metadata_object)
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Cannot parse result");
+        throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Cannot parse table metadata json string");
 
+    if (!metadata_object->has("format-version"))
+        throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Table metadata missing required field: format-version");
     int format_version = metadata_object->getValue<int>("format-version");
     result.setFormatVersion(format_version);
-    result.setSequenceNumber(metadata_object->getValue<uint64_t>("last-sequence-number"));
+
+    /// last-sequence-number is v2+ only; v1 tables omit it
+    result.setSequenceNumber(metadata_object->optValue<uint64_t>("last-sequence-number", 0));
+
+    if (!metadata_object->has("table-uuid"))
+        throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Table metadata missing required field: table-uuid");
     result.setTableUUID(metadata_object->getValue<std::string>("table-uuid"));
 
     int64_t snapshot_id = 0;
@@ -702,20 +709,31 @@ void extractTableMetadata(const std::string & json_str, TableMetadata & result, 
     auto snapshots = metadata_object->get("snapshots");
     if (!snapshots.isEmpty() && snapshots.isArray())
     {
-        auto snapshots_array = snapshots.extract<Poco::JSON::Array::Ptr>();
+        const auto & snapshots_array = snapshots.extract<Poco::JSON::Array::Ptr>();
         for (size_t i = 0; i < snapshots_array->size(); i++)
         {
             auto snapshot_obj = snapshots_array->get(static_cast<uint32_t>(i)).extract<Poco::JSON::Object::Ptr>();
+            if (!snapshot_obj->has("snapshot-id"))
+                throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Snapshot missing required field: snapshot-id");
             if (snapshot_obj->getValue<int64_t>("snapshot-id") == snapshot_id)
             {
                 Snapshot snapshot;
                 snapshot.snapshot_id = snapshot_id;
-                snapshot.sequence_number = snapshot_obj->getValue<uint64_t>("sequence-number");
+                /// sequence-number is v2+ only; v1 snapshots omit it
+                snapshot.sequence_number = snapshot_obj->optValue<uint64_t>("sequence-number", 0);
+                if (!snapshot_obj->has("timestamp-ms"))
+                    throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Snapshot missing required field: timestamp-ms");
                 snapshot.timestamp_ms = snapshot_obj->getValue<int64_t>("timestamp-ms");
+                if (!snapshot_obj->has("manifest-list"))
+                    throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Snapshot missing required field: manifest-list");
                 snapshot.manifest_list = snapshot_obj->getValue<std::string>("manifest-list");
                 snapshot.schema_id = snapshot_obj->optValue<int64_t>("schema-id", 0);
 
                 auto summary_obj = snapshot_obj->get("summary").extract<Poco::JSON::Object::Ptr>();
+                if (!summary_obj)
+                    throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Snapshot missing required field: summary");
+                if (!summary_obj->has("operation"))
+                    throw DB::Exception(DB::ErrorCodes::ICEBERG_CATALOG_ERROR, "Snapshot summary missing required field: operation");
                 snapshot.summary.operation = summary_obj->getValue<std::string>("operation");
                 /// summary optional fields
                 if (summary_obj->has("added-files-size"))
