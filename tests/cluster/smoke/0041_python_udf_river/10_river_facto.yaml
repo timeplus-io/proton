@@ -20,7 +20,7 @@ steps:
       $$
       from river import facto
 
-      def test_facto(value):
+      def test_facto(values):
           dataset = (
               ({'user': 'Alice', 'item': 'Superman'}, True),
               ({'user': 'Alice', 'item': 'Terminator'}, True),
@@ -39,7 +39,7 @@ steps:
           )
           for x, y in dataset:
               model.learn_one(x, y)
-          res = [model.predict_one(dict(v)) for v in value if len(v) > 0]
+          res = [model.predict_one({k.decode('utf-8'): v.decode('utf-8') for k, v in v.items()}) for v in values if len(v) > 0]
           return res
       $$;
 

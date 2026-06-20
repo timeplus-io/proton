@@ -4,6 +4,7 @@
 
 #include <CPython/ConvertDatatypes.h>
 #include <CPython/GILGuard.h>
+#include <CPython/PythonModuleSession.h>
 #include <CPython/Utils.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -49,11 +50,17 @@ bool tryCallNoArgMethod(PyObject * obj, const char * method_name)
 }
 }
 
-PythonStreamingSource::PythonStreamingSource(Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, String module_name_)
+PythonStreamingSource::PythonStreamingSource(
+    Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, cpython::PythonModuleSessionPtr session_)
     : ISource(std::move(header), true, ProcessorID::PythonStreamingSourceID)
     , py_iterator(std::move(py_iterator_))
     , tuple_type(std::move(tuple_type_))
-    , module_name(std::move(module_name_))
+    , session(std::move(session_))
+{
+    init();
+}
+
+void PythonStreamingSource::init()
 {
     const auto * tuple_type_ptr = assert_cast<const DataTypeTuple *>(tuple_type.get());
     const auto & output_header = getPort().getHeader();
@@ -76,12 +83,57 @@ PythonStreamingSource::PythonStreamingSource(Block header, cpython::PyObjectPtr 
 
 PythonStreamingSource::~PythonStreamingSource()
 {
-    if (py_iterator && Py_IsInitialized())
+    finishPython(/*ignore_exceptions=*/true);
+}
+
+void PythonStreamingSource::finishPython(bool ignore_exceptions, bool acquire_gil)
+{
+    if (python_finished)
+        return;
+
+    if (Py_IsInitialized() == 0)
     {
-        cpython::GILGuard gil_guard;
-        py_iterator.reset();
-        if (!module_name.empty())
-            cpython::unloadModule(module_name);
+        python_finished = true;
+        return;
+    }
+
+    auto cleanup = [this] {
+        if (py_iterator)
+        {
+            /// Finalize generators before deinit so hook code observes released iterator state.
+            tryCallNoArgMethod(py_iterator.get(), "close");
+            py_iterator.reset();
+        }
+
+        cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/false, /*acquire_gil=*/false);
+        python_finished = true;
+    };
+
+    auto runWithGil = [&] {
+        if (acquire_gil)
+        {
+            cpython::GILGuard gil_guard;
+            cleanup();
+        }
+        else
+        {
+            cleanup();
+        }
+    };
+
+    if (ignore_exceptions)
+    {
+        try
+        {
+            runWithGil();
+        }
+        catch (...)
+        {
+        }
+    }
+    else
+    {
+        runWithGil();
     }
 }
 
@@ -278,6 +330,7 @@ Chunk PythonStreamingSource::generate()
         {
             /// Iterator exhausted
             exhausted = true;
+            finishPython(/*ignore_exceptions=*/false, /*acquire_gil=*/false);
             return {};
         }
 

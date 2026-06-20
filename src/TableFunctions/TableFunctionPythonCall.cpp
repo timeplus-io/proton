@@ -84,24 +84,26 @@ protected:
         if (chunk.rows() == 0)
             return;
 
-        cpython::GILGuard gil_guard;
+        const auto & header = getHeader();
+        const auto & columns = chunk.getColumns();
 
-        Block blk = getHeader().cloneWithColumns(chunk.detachColumns());
-        const auto & columns = blk.getColumnsWithTypeAndName();
+        cpython::GILGuard gil_guard;
 
         /// step 1: convert the column to python data type
         cpython::PyObjectPtr py_args{PyTuple_New(arg_num)};
         for (size_t i = 0; i < arg_num; i++)
         {
+            const auto & col_with_type = header.getByPosition(i);
+
 #if USE_NUMPY
             /// if numpy enabled, it depends on the using_numpy flag, if using_numpy, we convert the column to numpy array,else convert to python list
             if (using_numpy)
-                auto py_arg = cpython::convertColumnToNumpyArray(columns[i]);
+                auto py_arg = cpython::convertColumnToNumpyArray(*columns[i]);
             else
-                auto py_arg = cpython::convertColumnToPythonList(columns[i]);
+                auto py_arg = cpython::convertColumnToPythonList(*columns[i], col_with_type.type);
 #else
             /// if not using numpy, we convert the column to python list
-            auto py_arg = cpython::convertColumnToPythonList(columns[i]);
+            auto py_arg = cpython::convertColumnToPythonList(*columns[i], col_with_type.type);
 #endif
             PyTuple_SetItem(py_args.get(), i, py_arg.release());
         }

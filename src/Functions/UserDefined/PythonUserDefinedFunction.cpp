@@ -7,6 +7,7 @@
 #include <CPython/Utils.h>
 #include <CPython/validatePython.h>
 #include <Columns/IColumn.h>
+#include <Functions/UserDefined/UDFHelper.h>
 #include <Common/assert_cast.h>
 
 #if USE_NUMPY
@@ -54,7 +55,7 @@ PythonUserDefinedFunction::~PythonUserDefinedFunction()
 
 void PythonUserDefinedFunction::init() const
 {
-    auto python_udf_payload = assert_cast<cluster::protocol::PythonUserDefinedFunctionPayload &>(*udf_desc->payload);
+    const auto & python_udf_payload = assert_cast<const cluster::protocol::PythonUserDefinedFunctionPayload &>(*udf_desc->payload);
 
     cpython::GILGuard gil_guard;
     const auto & udf_name = udf_desc->name;
@@ -63,9 +64,22 @@ void PythonUserDefinedFunction::init() const
     py_function = cpython::tryGetAttr(main_module, udf_name);
     if (!py_function)
     {
-        /// load function
-        auto byte_code = cpython::compile(python_udf_payload.source);
-        cpython::executeByteCode(byte_code, module_name);
+        try
+        {
+            /// load function
+            auto byte_code = cpython::compile(python_udf_payload.source);
+            cpython::executeByteCode(byte_code, module_name);
+            Streaming::runPythonUDFInitHook(python_udf_payload, udf_name, module_name);
+        }
+        catch (...)
+        {
+            /// Unload the half-initialized module so the call_once retry reloads
+            /// it and re-runs the init hook instead of finding it "already loaded".
+            py_function.reset();
+            if (cpython::hasModule(module_name))
+                cpython::unloadModule(module_name);
+            throw;
+        }
     }
 
     /// get the function object by UDF name
@@ -86,12 +100,12 @@ ColumnPtr PythonUserDefinedFunction::userDefinedExecuteImpl(
 #if USE_NUMPY
         /// if numpy enabled, it depends on the using_numpy flag, if using_numpy, we convert the column to numpy array,else convert to python list
         if (using_numpy)
-            auto py_arg = cpython::convertColumnToNumpyArray(arguments[i]);
+            auto py_arg = cpython::convertColumnToNumpyArray(*arguments[i].column);
         else
-            auto py_arg = cpython::convertColumnToPythonList(arguments[i]);
+            auto py_arg = cpython::convertColumnToPythonList(*arguments[i].column, arguments[i].type);
 #else
         /// if not using numpy, we convert the column to python list
-        auto py_arg = cpython::convertColumnToPythonList(arguments[i]);
+        auto py_arg = cpython::convertColumnToPythonList(*arguments[i].column, arguments[i].type);
 #endif
         PyTuple_SetItem(py_args.get(), i, py_arg.release());
     }

@@ -105,6 +105,21 @@ PyObjectPtr getExpectedResult(const std::string & return_type)
 
     return PyObjectPtr{convertColumnToPythonList(*return_column, data_type, 0, return_column->size())};
 }
+
+void checkInitHookExists(const std::string & init_function_name, const std::string & module_name)
+{
+    try
+    {
+        getFunction(init_function_name, module_name);
+    }
+    catch (Exception &)
+    {
+        throw Exception(
+            ErrorCodes::UDF_INTERNAL_ERROR,
+            "The init function '{}' configured via 'init_function_name' is not defined in the UDF source",
+            init_function_name);
+    }
+}
 }
 
 
@@ -118,10 +133,25 @@ void validateAggregationFunctionSource(Poco::JSON::Object::Ptr config, const std
 
     const std::string & function_name = config->getValue<std::string>("name");
     auto py_class = getClass(function_name, module_name);
-    auto py_instance = newInstance(py_class);
 
-    for (const auto & func_name : required_member_funcs)
-        getInstanceMethod(py_instance, func_name);
+    if (config->optValue<std::string>("init_function_name", "").empty())
+    {
+        auto py_instance = newInstance(py_class);
+
+        for (const auto & func_name : required_member_funcs)
+            getInstanceMethod(py_instance, func_name);
+    }
+    else
+    {
+        /// The class constructor may depend on globals the init hook sets up, and the
+        /// hook only runs at execution-time module load (its parameters may come from a
+        /// named collection). Check the required methods on the class without
+        /// instantiating it.
+        for (const auto & func_name : required_member_funcs)
+            getInstanceMethod(py_class, func_name);
+
+        checkInitHookExists(config->getValue<std::string>("init_function_name"), module_name);
+    }
 
     if (hasException())
         throw Exception(
@@ -142,6 +172,9 @@ void validateStatelessFunctionSource(Poco::JSON::Object::Ptr config)
 
     /// checking if the function is defined in the module
     getFunction(name, module_name);
+
+    if (auto init_function_name = config->optValue<std::string>("init_function_name", ""); !init_function_name.empty())
+        checkInitHookExists(init_function_name, module_name);
 
     if (hasException())
         throw Exception(

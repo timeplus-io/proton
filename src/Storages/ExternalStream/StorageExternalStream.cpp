@@ -1,3 +1,4 @@
+#include <memory>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 
 #include <IO/Kafka/Connection.h>
@@ -11,6 +12,7 @@
 #include <Processors/Formats/ISchemaReader.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/HTTP/HTTP.h>
@@ -31,12 +33,18 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
 
+#include <Access/Common/AccessFlags.h>
+#include <Access/ContextAccess.h>
+
 #include <boost/algorithm/string.hpp>
+#include <Poco/Exception.h>
 #include <Poco/Net/AcceptCertificateHandler.h>
 #include <Poco/Net/KeyFileHandler.h>
 #include <Poco/Net/SSLManager.h>
 
 #include <string>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Parser.h>
 #include <Common/re2.h>
 
 namespace DB
@@ -47,12 +55,17 @@ extern const int BAD_ARGUMENTS;
 extern const int INCORRECT_NUMBER_OF_COLUMNS;
 extern const int INCORRECT_QUERY;
 extern const int INVALID_SETTING_VALUE;
+extern const int LICENSE_VIOLATED;
 extern const int NOT_IMPLEMENTED;
 extern const int TYPE_MISMATCH;
+extern const int UNSUPPORTED;
 }
 
 namespace
 {
+#if USE_PYTHON_UDF
+#endif
+
 ExpressionActionsPtr buildShardingKeyExpression(ASTPtr sharding_key, ContextPtr context, const NamesAndTypesList & columns)
 {
     auto syntax_result = TreeRewriter(context).analyze(sharding_key, columns);
@@ -184,8 +197,29 @@ StoragePtr createExternalStream(
         }
 
         String sink_function_name = external_stream_settings->write_function_name.value;
+        String flush_function_name = external_stream_settings->flush_function_name.value;
+        String init_parameters;
+        if (external_stream_settings->init_function_parameters.changed)
+            init_parameters = external_stream_settings->init_function_parameters.value;
+        if (!init_parameters.empty() && external_stream_settings->init_function_name.value.empty())
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE, "Setting 'init_function_parameters' requires 'init_function_name' to be configured");
+        cpython::PythonFunction python_function{
+            .init_function_name = external_stream_settings->init_function_name.value,
+            .init_parameters = std::move(init_parameters),
+            .deinit_function_name = external_stream_settings->deinit_function_name.value,
+            /// flush is sink-only, StoragePythonTable applies it on the write path
+            .flush_function_name = {},
+            .entry_function_name = std::move(function_name),
+            .source_code = *exec_script,
+        };
         return StoragePythonTable::create(
-            storage_id, storage_metadata.getColumns(), std::move(function_name), *exec_script, mode, std::move(sink_function_name));
+            storage_id,
+            storage_metadata.getColumns(),
+            std::move(python_function),
+            mode,
+            std::move(sink_function_name),
+            std::move(flush_function_name));
     }
 #else
     if (type == ExternalStreamTypes::PYTHON)
@@ -320,6 +354,7 @@ StorageExternalStream::StorageExternalStream(
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setVersion(schema_version);
     storage_metadata.setComment(comment);
+    storage_metadata.setSettingsChanges(storage_def->settings->ptr());
     if (storage_def->partition_by != nullptr)
     {
         ASTPtr partition_by_ast{storage_def->partition_by->clone()};
@@ -357,9 +392,57 @@ void StorageExternalStream::read(
     getNested()->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
-void StorageExternalStream::alter(const AlterCommands &, ContextPtr, AlterLockHolder &)
+void StorageExternalStream::checkAlterIsPossible(const AlterCommands & commands, ContextPtr context_) const
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command is not supported for external stream yet");
+    bool alter_settings = false;
+    for (const auto & command : commands)
+    {
+        if (!command.isCommentAlter() && !command.isSettingsAlter())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command '{}' is not supported by external stream");
+
+        if (command.isSettingsAlter())
+            alter_settings = true;
+    }
+    if (alter_settings)
+        checkAlterSettingsIsPossible(commands, context_);
+}
+
+void StorageExternalStream::checkAlterSettingsIsPossible(const AlterCommands & commands, ContextPtr context_) const
+{
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    commands.apply(new_metadata, context_);
+
+    auto new_settings = std::make_unique<ExternalStreamSettings>();
+    const auto & new_changes = new_metadata.settings_changes->as<const ASTSetQuery &>().changes;
+    for (const auto & change : new_changes)
+        new_settings->apply(change, true);
+
+    if (!new_settings->config_file.value.empty())
+        new_settings->loadFromConfigFile(new_settings->config_file.value);
+
+    if (!new_settings->named_collection.value.empty())
+        updateSettingsByNamedCollection(*new_settings, context_);
+
+    if (new_settings->type.value != external_stream_type)
+        throw Exception(ErrorCodes::UNSUPPORTED, "Alter external stream type is not supported");
+
+    if (auto impl = std::dynamic_pointer_cast<StorageExternalStreamImpl>(external_stream))
+        impl->verifySettings(new_settings, /*change_settings=*/true, context_);
+}
+
+void StorageExternalStream::alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder &)
+{
+    if (unlikely(params.empty()))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command can not be empty.");
+
+    auto table_id = getStorageID();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    params.apply(new_metadata, context_);
+
+    /// Propose stream metadata change and alter command. External stream metadata will be updated by Metadata Updater.
+    /// The nested stream (usually ExternalStreamImpl) metadata will not be updated until restart.
+    auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+    db->alterTable(context_, table_id, new_metadata, params.front().typeString(), params.astCommands(table_id));
 }
 
 void registerStorageExternalStream(StorageFactory & factory)
@@ -371,6 +454,30 @@ void registerStorageExternalStream(StorageFactory & factory)
         validateEngineArgs(args.getLocalContext(), args.engine_args, args.columns);
 
         if (args.storage_def->settings != nullptr)
+        {
+            /// proton: starts
+            /// Resolve named_collection against the *user's* local context.
+            /// The storage constructor below receives a global context (see
+            /// InterpreterCreateQuery), where Context::getAccess() returns
+            /// full access, so the in-helper check in
+            /// updateSettingsByNamedCollection() is a no-op for these paths.
+            ///
+            /// Load query settings *and* config_file before checking so that
+            /// `SETTINGS config_file='...'` (where the file supplies
+            /// named_collection) cannot bypass the grant.
+            ///
+            /// Don't gate this on !args.attach: internal startup/restore runs
+            /// under a context whose getAccess() returns full access, so the
+            /// check naturally no-ops there, while user-issued
+            /// `ATTACH EXTERNAL STREAM ... UUID '...' SETTINGS named_collection=...`
+            /// (which Atomic databases allow) is correctly enforced.
+            ExternalStreamSettings probe_settings;
+            probe_settings.loadFromQuery(*args.storage_def);
+            if (!probe_settings.config_file.value.empty())
+                probe_settings.loadFromConfigFile(probe_settings.config_file.value);
+            if (!probe_settings.named_collection.value.empty())
+                args.getLocalContext()->checkAccess(AccessType::NAMED_COLLECTION, probe_settings.named_collection.value);
+            /// proton: ends
             return StorageExternalStream::create(
                 args.engine_args,
                 args.table_id,
@@ -381,6 +488,7 @@ void registerStorageExternalStream(StorageFactory & factory)
                 args.storage_def,
                 args.attach,
                 args.query.exec_script);
+        }
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");
     };

@@ -100,6 +100,7 @@
 #include <Interpreters/BuiltinSchemasProvisioner.h>
 #include <Interpreters/TelemetryCollector.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
+#include <Access/LocalApiToken.h>
 #include <Task/TaskScheduler.h>
 #if USE_V8
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
@@ -118,6 +119,13 @@
 
 bool LOG_PANIC_ABORT = true;
 
+#if USE_PYTHON_UDF
+#include <CPython/AsyncPythonPackageManager.h>
+#endif
+
+#if USE_PYTHON_UDF && USE_AWS_S3
+#include <Interpreters/PythonRequirementsReconciler.h>
+#endif
 /// proton: ends
 
 #if defined(OS_LINUX)
@@ -1315,6 +1323,10 @@ try
         throw;
     }
 
+    /// Create the ephemeral local API user used by Python UDFs and other
+    /// in-process callers to authenticate back to the database engine.
+    LocalApiToken::initialize(global_context);
+
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]()
     {
@@ -1503,6 +1515,27 @@ try
     global_context->setConfigPath(config_path);
 
     initPythonInterpreter();
+
+#if USE_PYTHON_UDF && USE_AWS_S3
+    /// Reconcile locally installed Python UDF packages against the S3-hosted requirements file, if configured.
+    /// Must be declared after the SCOPE_EXIT calling global_context->shutdown() so the reconciler
+    /// thread is stopped while the global context and the Python interpreter are still alive.
+    std::unique_ptr<PythonRequirementsReconciler> python_requirements_reconciler;
+    try
+    {
+        if (auto python_requirements_config = PythonRequirementsReconciler::loadConfig(config()))
+        {
+            python_requirements_reconciler
+                = std::make_unique<PythonRequirementsReconciler>(std::move(*python_requirements_config), global_context);
+            python_requirements_reconciler->start();
+        }
+    }
+    catch (...)
+    {
+        /// Fail-open: a misconfigured reconciler must not prevent the server from starting.
+        tryLogCurrentException(log, "Failed to start Python requirements reconciler");
+    }
+#endif
 
     initV8();
     /// proton: end.

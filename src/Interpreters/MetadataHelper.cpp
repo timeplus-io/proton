@@ -8,6 +8,8 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/ExternalTable/StorageExternalTable.h>
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/Stream/StorageStream.h>
 
@@ -111,11 +113,15 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
             " and doesn't have structure in metadata",
             backQuote(ast_create_query.getTable()));
 
-    if (!has_structure && !ast_create_query.isDictionary() && !ast_create_query.isParameterizedView())
+    /// proton: starts. External stream / table can be defined without column list
+    if (!has_structure && !ast_create_query.isDictionary() && !ast_create_query.isParameterizedView()
+        && !ast_create_query.isExternalStream() && !ast_create_query.isExternalTable())
         throw Exception(
             ErrorCodes::LOGICAL_ERROR, "Cannot alter stream {} metadata doesn't have structure", backQuote(ast_create_query.getTable()));
+    /// proton: ends
 
-    if (!ast_create_query.isDictionary() && !ast_create_query.isParameterizedView())
+    if (!ast_create_query.isDictionary() && !ast_create_query.isParameterizedView() && !ast_create_query.isExternalStream()
+        && !ast_create_query.isExternalTable())  /// proton: updates
     {
         ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata.columns);
         ASTPtr new_indices = InterpreterCreateQuery::formatIndices(metadata.secondary_indices);
@@ -290,6 +296,32 @@ void updateMetadataByCreateQuery(
         else if (TTLTableDescription ttl = new_metadata.getTableTTLs(); ttl.definition_ast)
         {
             new_metadata.setTableTTLs(TTLTableDescription{});
+        }
+    }
+    else if (auto * external_stream = table->as<StorageExternalStream>(); external_stream != nullptr)
+    {
+        assert(create.storage);
+        /// 1) Update settings
+        if (create.storage->settings)
+        {
+            new_metadata.setSettingsChanges(create.storage->settings->ptr());
+        }
+        else
+        {
+            new_metadata.setSettingsChanges(nullptr);
+        }
+    }
+    else if (auto * external_table = table->as<StorageExternalTable>(); external_table != nullptr)
+    {
+        assert(create.storage);
+        /// 1) Update settings
+        if (create.storage->settings)
+        {
+            new_metadata.setSettingsChanges(create.storage->settings->ptr());
+        }
+        else
+        {
+            new_metadata.setSettingsChanges(nullptr);
         }
     }
     else

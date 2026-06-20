@@ -71,10 +71,14 @@ def emit_rows():
     auto storage = StoragePythonTable::create(
         StorageID("default", "gtest_python_ext"),
         columns,
-        "emit_rows",
-        python_source,
-        PythonTableMode::Batch,
-        "" /* sink_function_name */);
+        cpython::PythonFunction{
+            .init_function_name = {},
+            .init_parameters = {},
+            .deinit_function_name = {},
+            .flush_function_name = {},
+            .entry_function_name = "emit_rows",
+            .source_code = python_source},
+        PythonTableMode::Batch);
 
     storage->startup();
     auto snapshot = std::make_shared<StorageSnapshot>(*storage, storage->getInMemoryMetadataPtr());

@@ -4,7 +4,7 @@
 
 #if USE_PYTHON_UDF
 
-#include <CPython/PyObjectPtr.h>
+#include <CPython/PythonModuleSession.h>
 #include <Processors/ISource.h>
 
 
@@ -15,7 +15,8 @@ namespace DB
 class PythonStreamingSource final : public ISource
 {
 public:
-    PythonStreamingSource(Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, String module_name_);
+    PythonStreamingSource(
+        Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, cpython::PythonModuleSessionPtr session_);
 
     ~PythonStreamingSource() override;
 
@@ -31,9 +32,12 @@ private:
 
     Block convertPythonResultToOutputBlock(const cpython::PyObjectPtr & py_result) const;
 
+    void init();
+    void finishPython(bool ignore_exceptions, bool acquire_gil = true);
+
     cpython::PyObjectPtr py_iterator;
     DataTypePtr tuple_type;
-    String module_name;
+    cpython::PythonModuleSessionPtr session;
 
     std::vector<size_t> output_tuple_positions;
     bool needs_projection_pushdown = false;
@@ -42,6 +46,7 @@ private:
 
     std::atomic<unsigned long> python_thread_id{0};
     std::atomic_bool cancel_requested{false};
+    bool python_finished = false;
 };
 }
 

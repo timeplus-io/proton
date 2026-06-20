@@ -905,6 +905,30 @@ task:
 enable_javascript_udf: true        # If false, reject JavaScript UDF creation and execution.
 enable_python_udf: true            # If false, reject Python UDF creation and execution.
 
+# Declarative Python UDF package management. When `url` is set, every node fetches the
+# requirements.txt from S3 on startup — and then every `poll_interval_sec` to pick up updates
+# without a restart — and installs missing packages into the local user site-packages; the
+# file is the durable source of truth. This applies to all node types: it restores packages on
+# ephemeral compute nodes (no persistent volume) after a reschedule, and keeps data nodes with
+# persistent volumes in sync via polling. The reconcile only installs — packages removed from
+# the file must be uninstalled manually. SYSTEM INSTALL/UNINSTALL PYTHON PACKAGE remains usable
+# as a manual escape hatch, but packages installed that way are not recorded in the file and
+# do not survive a reschedule on nodes without persistent volumes.
+# Pin versions (package==x.y.z) so all nodes converge on identical environments.
+# python_requirements:
+#     url: https://my-bucket.s3.us-west-2.amazonaws.com/proton/requirements.txt
+#     # How often (seconds) to re-check the file for changes after a successful reconcile.
+#     # 0 disables polling (reconcile on startup only). Default: 300.
+#     # poll_interval_sec: 300
+#     # Credentials are optional; without them the environment chain (IRSA / instance profile,
+#     # AWS_* env variables) is used.
+#     # access_key_id: ACCESS_KEY_ID
+#     # secret_access_key: SECRET_ACCESS_KEY
+#     # region: us-west-2
+#     # Optional pip index overrides (e.g. an internal mirror).
+#     # index_url: https://pypi.org/simple
+#     # extra_index_url: https://my-mirror.example.com/simple
+
 settings:
     global:
         query_mode: streaming               # Default query mode. table or streaming
@@ -1139,3 +1163,14 @@ max_concurrent_select_queries: 1000
 # background_message_broker_schedule_pool_size: 16
 
 # bg_reconnect_mysql_dict_interval: 1000
+
+# Ephemeral local API user for Python UDFs and other in-process callers.
+# The user and its token live in memory only - never written to disk,
+# regenerated on every server restart.
+#
+# privileges: comma-separated list of privileges using standard GRANT syntax.
+# Supported names match src/Access/Common/AccessType.h, e.g.:
+#   SELECT, INSERT, ALTER, CREATE, DROP, TRUNCATE, ALL
+local_api_user:
+    enabled: true
+    privileges: SELECT,INSERT,CREATE TEMPORARY TABLE

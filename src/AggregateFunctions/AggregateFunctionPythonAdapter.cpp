@@ -9,6 +9,7 @@
 #include <CPython/validatePython.h>
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
+#include <Functions/UserDefined/UDFHelper.h>
 #include <Common/ErrorCodes.h>
 #include <Common/logger_useful.h>
 
@@ -136,22 +137,35 @@ AggregateFunctionPythonAdapter::AggregateFunctionPythonAdapter(
     cpython::GILGuard gil_guard;
 
     module_name = cpython::randomModuleName();
-    auto main_module = cpython::getOrAddModule(module_name);
-    auto py_class = cpython::tryGetAttr(main_module, udf_desc->name);
-
-    if (!py_class)
+    try
     {
-        auto byte_code = cpython::compile(python_payload->source);
-        cpython::executeByteCode(byte_code, module_name);
+        auto main_module = cpython::getOrAddModule(module_name);
+        auto py_class = cpython::tryGetAttr(main_module, udf_desc->name);
+
+        if (!py_class)
+        {
+            auto byte_code = cpython::compile(python_payload->source);
+            cpython::executeByteCode(byte_code, module_name);
+            Streaming::runPythonUDFInitHook(*python_payload, udf_desc->name, module_name);
+        }
+
+        py_class = cpython::getClass(udf_desc->name, module_name);
+        /// create the instance of python class
+        auto py_instance = cpython::executeObject(py_class);
+        auto py_has_customized_emit = cpython::tryGetAttr(py_instance, "has_customized_emit");
+
+        if (py_has_customized_emit)
+            has_user_defined_emit_strategy = PyObject_IsTrue(py_has_customized_emit.get());
     }
-
-    py_class = cpython::getClass(udf_desc->name, module_name);
-    /// create the instance of python class
-    auto py_instance = cpython::executeObject(py_class);
-    auto py_has_customized_emit = cpython::tryGetAttr(py_instance, "has_customized_emit");
-
-    if (py_has_customized_emit)
-        has_user_defined_emit_strategy = PyObject_IsTrue(py_has_customized_emit.get());
+    catch (...)
+    {
+        /// A throwing constructor never runs the destructor, which is what
+        /// normally unloads the module; unload here so no half-initialized
+        /// module survives.
+        if (cpython::hasModule(module_name))
+            cpython::unloadModule(module_name);
+        throw;
+    }
 }
 
 AggregateFunctionPythonAdapter::~AggregateFunctionPythonAdapter()
@@ -160,7 +174,8 @@ AggregateFunctionPythonAdapter::~AggregateFunctionPythonAdapter()
     cpython::unloadModule(module_name);
 }
 
-void AggregateFunctionPythonAdapter::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, [[maybe_unused]] Arena * arena) const
+void AggregateFunctionPythonAdapter::add(
+    AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, [[maybe_unused]] Arena * arena) const
 {
     this->data(place).add(columns, row_num);
 }

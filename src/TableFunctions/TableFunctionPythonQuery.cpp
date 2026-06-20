@@ -113,7 +113,16 @@ StoragePtr TableFunctionPythonQuery::executeImpl(const ASTPtr &, ContextPtr cont
     auto storage_id = StorageID(getDatabaseName(), table_name);
     const auto & python_payload = assert_cast<cluster::protocol::PythonUserDefinedFunctionPayload &>(*udf_desc->payload);
 
-    auto storage = StoragePythonTable::create(storage_id, result_columns, udf_desc->name, python_payload.source);
+    auto storage = StoragePythonTable::create(
+        storage_id,
+        result_columns,
+        cpython::PythonFunction{
+            .init_function_name = {},
+            .init_parameters = {},
+            .deinit_function_name = {},
+            .flush_function_name = {},
+            .entry_function_name = udf_desc->name,
+            .source_code = python_payload.source});
     storage->startup();
     Streaming::DataStreamSemanticEx data_stream_semantic{Streaming::DataStreamSemantic::Append};
     data_stream_semantic.streaming = false;

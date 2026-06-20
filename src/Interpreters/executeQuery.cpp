@@ -499,11 +499,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             if (query_with_output->settings_ast)
                 InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
         }
-        else if (const auto * create_function_query = ast->as<ASTCreateFunctionQuery>())
-        {
-            if (auto new_sttings = create_function_query->settings())
-                InterpreterSetQuery(new_sttings, context).executeForCurrentContext();
-        }
+        /// proton: starts. A CREATE FUNCTION SETTINGS clause carries Python UDF settings
+        /// (init_function_name / init_function_parameters / named_collection), not session
+        /// settings. They are validated and consumed from the AST by InterpreterCreateFunctionQuery,
+        /// so they must NOT be applied to the context here -- doing so throws UNKNOWN_SETTING for
+        /// these UDF-only keys before the interpreter ever runs.
+        /// proton: ends
 
         if (auto * create_query = ast->as<ASTCreateQuery>())
         {

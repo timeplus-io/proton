@@ -34,6 +34,7 @@ steps:
       def add_file(file, value):
           results = []
           for f, v in zip(file, value):
+              f = f.decode('utf-8')
               try:
                   result = f"Test python udf add_file, value: {v}"
                   with open(f, "a") as file:

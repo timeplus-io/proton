@@ -29,8 +29,7 @@ public:
     static StoragePtr create(
         const StorageID & table_id,
         const ColumnsDescription & output_columns,
-        String function_name_,
-        String python_source_,
+        cpython::PythonFunction function_,
         ASTPtr source_ast_,
         StoragePtr source_storage_,
         Names input_column_names_,
@@ -57,19 +56,14 @@ private:
     StoragePythonTableWithInput(
         const StorageID & table_id,
         const ColumnsDescription & output_columns,
-        String function_name_,
-        String python_source_,
+        cpython::PythonFunction function_,
         ASTPtr source_ast_,
         StoragePtr source_storage_,
         Names input_column_names_,
         PythonTableMode mode_,
         ContextPtr context_);
 
-    /// Name of the Python function to call
-    String function_name;
-
-    /// Inline Python source code for the external stream
-    String python_source;
+    cpython::PythonFunction function;
 
     /// Source subquery AST (if source is a subquery)
     ASTPtr source_ast;

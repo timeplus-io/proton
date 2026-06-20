@@ -32,6 +32,7 @@ public:
         = 0;
 
     virtual ~UserDefinedFunctionPayload() = default;
+    UserDefinedFunctionPayload & operator=(const UserDefinedFunctionPayload &) = default;
 };
 using UserDefinedFunctionPayloadPtr = std::shared_ptr<UserDefinedFunctionPayload>;
 
@@ -231,6 +232,7 @@ SERDE class PythonUserDefinedFunctionPayload final : public UserDefinedFunctionP
 public:
     PythonUserDefinedFunctionPayload() = default;
     PythonUserDefinedFunctionPayload(const PythonUserDefinedFunctionPayload &) = default;
+    PythonUserDefinedFunctionPayload & operator=(const PythonUserDefinedFunctionPayload &) = default;
     PythonUserDefinedFunctionPayload(bool is_aggregation_, const std::string & source_, uint32_t data_version_)
         : data_version(data_version_), is_aggregation(is_aggregation_), source(source_)
     {
@@ -249,7 +251,8 @@ public:
 
 public:
     /// `schema_version` is version used in serde. Bump up it when the on-disk schema is changed.
-    constexpr static uint32_t schema_version = 1;
+    /// v2: added init_function_name / init_function_parameters / named_collection.
+    constexpr static uint32_t schema_version = 2;
     /// `data_version` is used guardrail / version check on update.
     /// Whenever we change the data, we bump up the version.
     uint32_t data_version = Nulls::NullVersion;
@@ -259,6 +262,13 @@ public:
     bool using_numpy = false;
 
     std::string source;
+
+    /// Added in schema_version 2: optional init hook configuration.
+    /// `named_collection` stores only the collection NAME; its values are
+    /// resolved at UDF load time so secrets never persist in UDF metadata.
+    std::string init_function_name;
+    std::string init_function_parameters;
+    std::string named_collection;
 };
 using PythonUserDefinedFunctionPayloadPtr = std::shared_ptr<PythonUserDefinedFunctionPayload>;
 

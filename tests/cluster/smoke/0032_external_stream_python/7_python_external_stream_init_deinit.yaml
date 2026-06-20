@@ -1,0 +1,333 @@
+tags:
+  - python_external_stream
+  - external_stream
+  - python_table
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Python external stream init and deinit hooks should run once per read, write, and python_table query.
+
+steps:
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_cookie_counter
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_smoothie_lab
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_empty_init_payload
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists input_stream_lifecycle
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_cookie_counter
+      (
+        previous_cleanup_count int32,
+        secret_flavor string
+      )
+      AS $$
+      import builtins, json
+
+      def open_bakery(config):
+          builtins._tp_cookie_cleanup_before_open = getattr(builtins, "_tp_cookie_cleanup_count", 0)
+          builtins._tp_cookie_secret_flavor = json.loads(config)["flavor"]
+
+      def close_bakery():
+          builtins._tp_cookie_cleanup_count = getattr(builtins, "_tp_cookie_cleanup_count", 0) + 1
+          if hasattr(builtins, "_tp_cookie_secret_flavor"):
+              del builtins._tp_cookie_secret_flavor
+
+      def serve_cookie_report():
+          secret_flavor = getattr(builtins, "_tp_cookie_secret_flavor", "")
+          if secret_flavor != "double-chocolate":
+              raise Exception(f"Unexpected flavor for read: {secret_flavor}")
+          return [(getattr(builtins, "_tp_cookie_cleanup_before_open", -1), secret_flavor)]
+
+      def accept_cookie_order(previous_cleanup_count, secret_flavor):
+          open_flavor = getattr(builtins, "_tp_cookie_secret_flavor", "")
+          if open_flavor != "double-chocolate":
+              raise Exception(f"Unexpected flavor for sink: {open_flavor}")
+          if previous_cleanup_count != [42]:
+              raise Exception(f"Unexpected order count: {previous_cleanup_count}")
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='serve_cookie_report',
+        write_function_name='accept_cookie_order',
+        init_function_name='open_bakery',
+        init_function_parameters='{"flavor":"double-chocolate"}',
+        deinit_function_name='close_bakery';
+
+  - type: stream
+    name: py-lifecycle-read-first
+    node: [p1]
+    query: select * from py_cookie_counter
+    schema:
+      - name: previous_cleanup_count
+        type: int32
+      - name: secret_flavor
+        type: string
+
+  - type: check
+    target_name: py-lifecycle-read-first
+    expected_result:
+      - - 0
+        - double-chocolate
+
+  - type: query
+    node: [p1]
+    sql: insert into py_cookie_counter values (42, 'ignored')
+
+  - type: stream
+    name: py-lifecycle-read-second
+    node: [p1]
+    query: select * from py_cookie_counter
+    schema:
+      - name: previous_cleanup_count
+        type: int32
+      - name: secret_flavor
+        type: string
+
+  - type: check
+    target_name: py-lifecycle-read-second
+    expected_result:
+      - - 2
+        - double-chocolate
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_empty_init_payload
+      (
+        config_items int32
+      )
+      AS $$
+      import builtins, json
+
+      def init(config):
+          builtins._tp_py_empty_payload_items = len(json.loads(config))
+
+      def deinit():
+          pass
+
+      def py_empty_payload_read():
+          return [(getattr(builtins, "_tp_py_empty_payload_items", -1),)]
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='py_empty_payload_read',
+        init_function_name='init',
+        init_function_parameters='{}',
+        deinit_function_name='deinit';
+
+  - type: stream
+    name: py-empty-init-payload
+    node: [p1]
+    query: select * from py_empty_init_payload
+    schema:
+      - name: config_items
+        type: int32
+
+  - type: check
+    target_name: py-empty-init-payload
+    expected_result:
+      - - 0
+
+  - type: query
+    node: [p1]
+    sql: |
+      create stream input_stream_lifecycle
+      (
+        i int32,
+        j int32
+      )
+
+  - type: wait
+    time: 3
+
+  - type: query
+    node: [p1]
+    sql: INSERT INTO input_stream_lifecycle(i, j) VALUES (1, 10), (2, 20);
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_smoothie_lab
+      (
+        smoothie_score int32,
+        previous_cleanup_count int32,
+        blender_boost int32
+      )
+      AS $$
+      import builtins, json
+
+      def warm_up_blender(config):
+          builtins._tp_smoothie_previous_cleanup_count = getattr(builtins, "_tp_smoothie_cleanup_count", 0)
+          builtins._tp_smoothie_blender_boost = int(json.loads(config)["boost"])
+
+      def clean_blender():
+          builtins._tp_smoothie_cleanup_count = getattr(builtins, "_tp_smoothie_cleanup_count", 0) + 1
+          if hasattr(builtins, "_tp_smoothie_blender_boost"):
+              del builtins._tp_smoothie_blender_boost
+
+      def blend_scores(col1, col2):
+          blender_boost = getattr(builtins, "_tp_smoothie_blender_boost", 0)
+          previous_cleanup_count = getattr(builtins, "_tp_smoothie_previous_cleanup_count", -1)
+          return [((c1 + c2) * blender_boost, previous_cleanup_count, blender_boost) for c1, c2 in zip(col1, col2)]
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='blend_scores',
+        init_function_name='warm_up_blender',
+        init_function_parameters='{"boost":2}',
+        deinit_function_name='clean_blender';
+
+  - type: stream
+    name: py-table-lifecycle-first
+    node: [p1]
+    query: select * from python_table(py_smoothie_lab, table(input_stream_lifecycle), i, j) order by smoothie_score
+    schema:
+      - name: smoothie_score
+        type: int32
+      - name: previous_cleanup_count
+        type: int32
+      - name: blender_boost
+        type: int32
+
+  - type: check
+    target_name: py-table-lifecycle-first
+    expected_result:
+      - - 22
+        - 0
+        - 2
+      - - 44
+        - 0
+        - 2
+
+  - type: stream
+    name: py-table-lifecycle-second
+    node: [p1]
+    query: select * from python_table(py_smoothie_lab, table(input_stream_lifecycle), i, j) order by smoothie_score
+    schema:
+      - name: smoothie_score
+        type: int32
+      - name: previous_cleanup_count
+        type: int32
+      - name: blender_boost
+        type: int32
+
+  - type: check
+    target_name: py-table-lifecycle-second
+    expected_result:
+      - - 22
+        - 1
+        - 2
+      - - 44
+        - 1
+        - 2
+
+  ## ── Non-JSON init_function_parameters (key=value format) ──
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_keyval_config
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_keyval_config
+      (
+        received_host string,
+        received_port string
+      )
+      AS $$
+      import builtins
+
+      def init_keyval(config):
+          parsed = dict(kv.split('=', 1) for kv in config.split(','))
+          builtins._tp_keyval_host = parsed.get('host', '')
+          builtins._tp_keyval_port = parsed.get('port', '')
+
+      def deinit_keyval():
+          for attr in ('_tp_keyval_host', '_tp_keyval_port'):
+              if hasattr(builtins, attr):
+                  delattr(builtins, attr)
+
+      def read_keyval_config():
+          return [(
+              getattr(builtins, '_tp_keyval_host', ''),
+              getattr(builtins, '_tp_keyval_port', ''),
+          )]
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='read_keyval_config',
+        init_function_name='init_keyval',
+        init_function_parameters='host=my-broker.local,port=9092',
+        deinit_function_name='deinit_keyval';
+
+  - type: stream
+    name: py-keyval-read
+    node: [p1]
+    query: select * from py_keyval_config
+    schema:
+      - name: received_host
+        type: string
+      - name: received_port
+        type: string
+
+  - type: check
+    target_name: py-keyval-read
+    expected_result:
+      - - my-broker.local
+        - "9092"
+
+  ## ── Plain free-form string init_function_parameters ──
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_freeform_config
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_freeform_config
+      (
+        echoed_config string
+      )
+      AS $$
+      import builtins
+
+      def init_echo(config):
+          builtins._tp_freeform_config = config
+
+      def read_echo():
+          return [(getattr(builtins, '_tp_freeform_config', ''),)]
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='read_echo',
+        init_function_name='init_echo',
+        init_function_parameters='just a plain string with spaces & symbols!';
+
+  - type: stream
+    name: py-freeform-read
+    node: [p1]
+    query: select * from py_freeform_config
+    schema:
+      - name: echoed_config
+        type: string
+
+  - type: check
+    target_name: py-freeform-read
+    expected_result:
+      - - "just a plain string with spaces & symbols!"

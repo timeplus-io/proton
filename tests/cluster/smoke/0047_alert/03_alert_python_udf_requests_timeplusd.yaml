@@ -31,7 +31,7 @@ steps:
       import requests
       def requests_Proton(value):
           for i in range(len(value)):
-              requests.post("http://p1:8123/proton/v1/ingest/streams/action", data=json.dumps({"columns":["id","value"],"data":[[i,value[i]]]}))
+              requests.post("http://p1:8123/proton/v1/ingest/streams/action", data=json.dumps({"columns":["id","value"],"data":[[i,value[i].decode('utf-8')]]}))
           return value
       $$
 
@@ -78,7 +78,7 @@ steps:
       import requests
       def requests_Proton(value):
           for v in value:
-              requests.post("http://p1:8123/proton/v1/ingest/streams/monitor", data=json.dumps({"columns":["value"],"data":[[v]]}))
+              requests.post("http://p1:8123/proton/v1/ingest/streams/monitor", data=json.dumps({"columns":["value"],"data":[[v.decode('utf-8')]]}))
           return value
       $$
 

@@ -48,4 +48,5 @@ steps:
     target_name: '101'
     expected_result:
       - ['admin']
+      - ['local_api_role']
       - ['select_only']

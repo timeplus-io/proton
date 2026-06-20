@@ -27,7 +27,7 @@ steps:
               captured_output = io.StringIO()
               original_stdout = sys.stdout
               sys.stdout = captured_output
-              print(x) 
+              print(x.decode('utf-8')) 
               sys.stdout = original_stdout
               res.append(captured_output.getvalue().strip())
           return res

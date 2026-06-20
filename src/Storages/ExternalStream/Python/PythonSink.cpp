@@ -4,44 +4,37 @@
 
 #include <CPython/ConvertDatatypes.h>
 #include <CPython/GILGuard.h>
-#include <CPython/Utils.h>
-#include <Common/Exception.h>
+#include <CPython/PythonModuleSession.h>
 
 namespace DB
 {
-namespace ErrorCodes
+PythonSink::PythonSink(const Block & header, cpython::PythonFunction function_)
+    : SinkToStorage(header, ProcessorID::PythonSinkID), session(cpython::PythonModuleSession::create(getName(), std::move(function_)))
 {
-extern const int UDF_RUNNING_ERROR;
-}
-
-PythonSink::PythonSink(const Block & header, String python_source_, String function_name_)
-    : SinkToStorage(header, ProcessorID::PythonSinkID), python_source(std::move(python_source_)), function_name(std::move(function_name_))
-{
-    initPython();
 }
 
 PythonSink::~PythonSink()
 {
-    if (Py_IsInitialized() == 0)
-        return;
-
-    cpython::GILGuard gil_guard;
-    py_function.reset();
-    if (!module_name.empty())
-        cpython::unloadModule(module_name);
+    finishPython(/*ignore_exceptions=*/true);
 }
 
-void PythonSink::initPython()
+void PythonSink::finishPython(bool ignore_exceptions)
 {
-    if (Py_IsInitialized() == 0)
-        throw Exception(ErrorCodes::UDF_RUNNING_ERROR, "Python Interpreter is not initialized, please check the python_path configuration");
+    cpython::PythonModuleSession::closeSession(session, ignore_exceptions);
+}
 
-    module_name = getName() + cpython::randomModuleName();
+void PythonSink::onFinish()
+{
+    finishPython(/*ignore_exceptions=*/false);
+}
 
-    cpython::GILGuard gil_guard;
-    auto byte_code = cpython::compile(python_source);
-    cpython::executeByteCode(byte_code, module_name);
-    py_function = cpython::getFunction(function_name, module_name);
+void PythonSink::checkpoint(CheckpointContextPtr ckpt_ctx)
+{
+    /// Periodically give the Python code a chance to flush data it has buffered so far.
+    if (session)
+        session->flush();
+
+    IProcessor::checkpoint(std::move(ckpt_ctx));
 }
 
 void PythonSink::consume(Chunk chunk)
@@ -49,19 +42,21 @@ void PythonSink::consume(Chunk chunk)
     if (chunk.rows() == 0)
         return;
 
-    cpython::GILGuard gil_guard;
+    const auto & header = getHeader();
+    const auto & columns = chunk.getColumns();
+    auto columns_size = columns.size();
 
-    Block input_block = getHeader().cloneWithColumns(chunk.detachColumns());
-    size_t columns = input_block.columns();
-    cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(columns))};
-    for (size_t i = 0; i < columns; ++i)
+    cpython::GILGuard gil_guard;
+    cpython::PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(columns_size))};
+
+    for (size_t i = 0; i < columns_size; ++i)
     {
-        const auto & col_with_type = input_block.getByPosition(i);
-        auto py_col = cpython::convertColumnToPythonList(col_with_type);
+        const auto & col_with_type = header.getByPosition(i);
+        auto py_col = cpython::convertColumnToPythonList(*columns[i], col_with_type.type);
         PyTuple_SetItem(py_args.get(), static_cast<Py_ssize_t>(i), py_col.release());
     }
 
-    cpython::executeObject(py_function, py_args);
+    session->execute(py_args);
 }
 }
 

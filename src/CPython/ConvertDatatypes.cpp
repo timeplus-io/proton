@@ -2,7 +2,10 @@
 #include <CPython/Utils.h>
 #include <CPython/validatePython.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnLowCardinality.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
@@ -11,6 +14,7 @@
 #include <Core/DecimalFunctions.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Common/DateLUT.h>
@@ -90,11 +94,9 @@ PyObject * convertInt32ToDate(Int32 date_value)
     return PyDate_FromDate(local_date.year(), local_date.month(), local_date.day());
 }
 
-PyObjectPtr convertUInt32ToDateTime(const Field & data, const String & time_zone)
+PyObjectPtr convertUInt32ToDateTime(UInt32 date_value, const String & time_zone)
 {
     PyDateTime_IMPORT;
-
-    UInt32 date_value = data.get<UInt32>();
 
     const auto & date_lut = DateLUT::instance(time_zone);
     LocalDateTime local_datetime{date_value, date_lut};
@@ -115,11 +117,9 @@ PyObjectPtr convertUInt32ToDateTime(const Field & data, const String & time_zone
         PyDateTimeAPI->DateTimeType)};
 }
 
-PyObjectPtr convertDateTime64ToPythonObject(const Field & data, UInt32 scale, const String & time_zone)
+PyObjectPtr convertDateTime64ToPythonObject(DateTime64 datetime64, UInt32 scale, const String & time_zone)
 {
     PyDateTime_IMPORT;
-
-    DateTime64 datetime64 = data.get<DateTime64>();
 
     const auto & date_lut = DateLUT::instance(time_zone);
     LocalDateTime64 local_datetime{datetime64, scale, date_lut};
@@ -207,16 +207,16 @@ PyObjectPtr convertToPythonObject(const Field & data, const DataTypePtr & type)
         case TypeIndex::Date32:
             return convertToPythonObject<Int32>(data, convertInt32ToDate);
         case TypeIndex::DateTime:
-            return convertUInt32ToDateTime(data, getDateTimeTimezone(*type));
+            return convertUInt32ToDateTime(data.get<UInt32>(), getDateTimeTimezone(*type));
         case TypeIndex::DateTime64:
         {
             auto datetime64_type = std::dynamic_pointer_cast<const DataTypeDateTime64>(type);
-            return convertDateTime64ToPythonObject(data, datetime64_type->getScale(), getDateTimeTimezone(*type));
+            return convertDateTime64ToPythonObject(data.get<DateTime64>(), datetime64_type->getScale(), getDateTimeTimezone(*type));
         }
         case TypeIndex::String:
-            return convertToPythonObject<String>(data, PyUnicode_FromStringAndSize);
+            return convertToPythonObject<String>(data, PyBytes_FromStringAndSize);
         case TypeIndex::FixedString:
-            return convertToPythonObject<String>(data, PyUnicode_FromStringAndSize);
+            return convertToPythonObject<String>(data, PyBytes_FromStringAndSize);
         // case TypeIndex::Enum8:
         //     break;
         // case TypeIndex::Enum16:
@@ -325,12 +325,176 @@ PyObjectPtr convertToPythonObject(const Field & data, const DataTypePtr & type)
     }
 }
 
+namespace
+{
+/// Convert a single column element to a Python object by accessing the typed
+/// column data directly, avoiding the expensive Field temporary that
+/// IColumn::operator[] creates.
+template <typename T, typename Convertor>
+ALWAYS_INLINE PyObjectPtr convertColumnScalarToPy(const IColumn & col, size_t row, Convertor convertor)
+{
+    auto value = assert_cast<const ColumnVector<T> &>(col).getData()[row];
+    PyObjectPtr item{convertor(value)};
+    if (item)
+        return item;
+    throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to convert column element to Python object");
+}
+} // namespace
+
+PyObjectPtr convertColumnElementToPythonObject(const IColumn & col, size_t row, const DataTypePtr & type)
+{
+    if (isColumnConst(col))
+    {
+        const auto & const_col = assert_cast<const ColumnConst &>(col);
+        return convertColumnElementToPythonObject(const_col.getDataColumn(), 0, type);
+    }
+
+    if (col.lowCardinality())
+    {
+        const auto & lc_col = assert_cast<const ColumnLowCardinality &>(col);
+        size_t dict_row = lc_col.getIndexes().getUInt(row);
+        const auto & dict_col = *lc_col.getDictionary().getNestedColumn();
+        return convertColumnElementToPythonObject(dict_col, dict_row, removeLowCardinality(type));
+    }
+
+    auto type_id = type->getTypeId();
+    switch (type_id)
+    {
+        case TypeIndex::UInt8:
+        {
+            if (type->getName() == "bool")
+                return convertColumnScalarToPy<UInt8>(col, row, PyBool_FromLong);
+            else
+                return convertColumnScalarToPy<UInt8>(col, row, PyLong_FromUnsignedLong);
+        }
+        case TypeIndex::UInt16:
+            return convertColumnScalarToPy<UInt16>(col, row, PyLong_FromUnsignedLong);
+        case TypeIndex::UInt32:
+            return convertColumnScalarToPy<UInt32>(col, row, PyLong_FromUnsignedLong);
+        case TypeIndex::UInt64:
+            return convertColumnScalarToPy<UInt64>(col, row, PyLong_FromUnsignedLongLong);
+        case TypeIndex::Int8:
+            return convertColumnScalarToPy<Int8>(col, row, PyLong_FromLong);
+        case TypeIndex::Int16:
+            return convertColumnScalarToPy<Int16>(col, row, PyLong_FromLong);
+        case TypeIndex::Int32:
+            return convertColumnScalarToPy<Int32>(col, row, PyLong_FromLong);
+        case TypeIndex::Int64:
+            return convertColumnScalarToPy<Int64>(col, row, PyLong_FromLongLong);
+        case TypeIndex::Float32:
+            return convertColumnScalarToPy<Float32>(col, row, PyFloat_FromDouble);
+        case TypeIndex::Float64:
+            return convertColumnScalarToPy<Float64>(col, row, PyFloat_FromDouble);
+        case TypeIndex::Date:
+            return convertColumnScalarToPy<UInt16>(col, row, convertUInt16ToDate);
+        case TypeIndex::Date32:
+            return convertColumnScalarToPy<Int32>(col, row, convertInt32ToDate);
+        case TypeIndex::DateTime:
+        {
+            auto value = assert_cast<const ColumnVector<UInt32> &>(col).getData()[row];
+            return convertUInt32ToDateTime(value, getDateTimeTimezone(*type));
+        }
+        case TypeIndex::DateTime64:
+        {
+            auto datetime64_type = std::dynamic_pointer_cast<const DataTypeDateTime64>(type);
+            auto value = assert_cast<const ColumnDateTime64 &>(col).getData()[row];
+            return convertDateTime64ToPythonObject(value, datetime64_type->getScale(), getDateTimeTimezone(*type));
+        }
+        case TypeIndex::String:
+        case TypeIndex::FixedString:
+        {
+            auto ref = col.getDataAt(row);
+            PyObjectPtr item{PyBytes_FromStringAndSize(ref.data, ref.size)};
+            if (item)
+                return item;
+            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to convert string column element to Python object");
+        }
+        case TypeIndex::Array:
+        {
+            const auto & array_col = assert_cast<const ColumnArray &>(col);
+            const auto & offsets = array_col.getOffsets();
+            size_t start = row > 0 ? offsets[row - 1] : 0;
+            size_t arr_size = offsets[row] - start;
+            auto array_type = std::dynamic_pointer_cast<const DataTypeArray>(type);
+            auto nested_type = array_type->getNestedType();
+            const auto & nested_col = array_col.getData();
+
+            PyObjectPtr py_list{PyList_New(arr_size)};
+            for (size_t i = 0; i < arr_size; i++)
+            {
+                auto item = convertColumnElementToPythonObject(nested_col, start + i, nested_type);
+                PyList_SetItem(py_list.get(), i, item.release());
+            }
+            return py_list;
+        }
+        case TypeIndex::Tuple:
+        {
+            const auto & tuple_col = assert_cast<const ColumnTuple &>(col);
+            auto tuple_type = std::dynamic_pointer_cast<const DataTypeTuple>(type);
+            size_t num_elements = tuple_type->getElements().size();
+
+            PyObjectPtr py_tuple{PyTuple_New(num_elements)};
+            for (size_t i = 0; i < num_elements; i++)
+            {
+                auto item = convertColumnElementToPythonObject(tuple_col.getColumn(i), row, tuple_type->getElement(i));
+                PyTuple_SetItem(py_tuple.get(), i, item.release());
+            }
+            return py_tuple;
+        }
+        case TypeIndex::Nullable:
+        {
+            const auto & nullable_col = assert_cast<const ColumnNullable &>(col);
+            if (nullable_col.isNullAt(row))
+                return PyObjectPtr::borrow(Py_None);
+
+            auto nullable_type = std::dynamic_pointer_cast<const DataTypeNullable>(type);
+            if (!nullable_type)
+                throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Expected Nullable type, but got {}", type->getName());
+
+            return convertColumnElementToPythonObject(nullable_col.getNestedColumn(), row, nullable_type->getNestedType());
+        }
+        case TypeIndex::Map:
+        {
+            const auto & map_col = assert_cast<const ColumnMap &>(col);
+            const auto & nested_array = map_col.getNestedColumn();
+            const auto & offsets = nested_array.getOffsets();
+            size_t start = row > 0 ? offsets[row - 1] : 0;
+            size_t map_size = offsets[row] - start;
+
+            auto map_type = std::dynamic_pointer_cast<const DataTypeMap>(type);
+            auto key_type = map_type->getKeyType();
+            auto value_type = map_type->getValueType();
+
+            const auto & nested_tuple = map_col.getNestedData();
+            const auto & key_col = nested_tuple.getColumn(0);
+            const auto & value_col = nested_tuple.getColumn(1);
+
+            PyObjectPtr py_dict{PyDict_New()};
+            for (size_t i = 0; i < map_size; i++)
+            {
+                auto py_key = convertColumnElementToPythonObject(key_col, start + i, key_type);
+                auto py_value = convertColumnElementToPythonObject(value_col, start + i, value_type);
+                if (PyDict_SetItem(py_dict.get(), py_key.get(), py_value.get()) != 0)
+                    throw Exception(
+                        ErrorCodes::UDF_INTERNAL_ERROR, "Failed to insert map item into Python dict: {}", getExceptionMessage());
+            }
+            return py_dict;
+        }
+        case TypeIndex::Bool:
+            return convertColumnScalarToPy<UInt8>(col, row, PyBool_FromLong);
+        case TypeIndex::IPv4:
+            return convertColumnScalarToPy<IPv4>(col, row, PyLong_FromUnsignedLong);
+        default:
+            return convertToPythonObject(col[row], type);
+    }
+}
+
 PyObjectPtr columnToPythonList(const IColumn & col, const DataTypePtr & type, UInt64 offset, UInt32 size)
 {
     PyObjectPtr py_list{PyList_New(size)};
     for (size_t i = 0; i < size; i++)
     {
-        auto item = convertToPythonObject(col[i + offset], type);
+        auto item = convertColumnElementToPythonObject(col, i + offset, type);
         PyList_SetItem(py_list.get(), i, item.release());
     }
 
@@ -436,12 +600,34 @@ ALWAYS_INLINE std::decay_t<T> loadFromPyFloat(PyObject * object)
     return static_cast<std::decay_t<T>>(PyFloat_AsDouble(object));
 }
 
+ALWAYS_INLINE String loadFromPyBytes(PyObject * object)
+{
+    if (!PyBytes_Check(object))
+        raiseConvertionException("string", object);
+
+    char * buffer = nullptr;
+    Py_ssize_t length = 0;
+    
+    if (PyBytes_AsStringAndSize(object, &buffer, &length) != -1) 
+        return String(buffer, static_cast<size_t>(length));
+
+    raiseConvertionException("string", object);
+}
+
 ALWAYS_INLINE String loadFromPyUnicode(PyObject * object)
 {
     if (!PyUnicode_Check(object))
         raiseConvertionException("string", object);
 
     return String{PyUnicode_AsUTF8(object)};
+}
+
+ALWAYS_INLINE String loadStringFromPyBytesOrUnicode(PyObject * object)
+{
+    if (PyBytes_Check(object))
+        return loadFromPyBytes(object);
+
+    return loadFromPyUnicode(object);
 }
 
 ALWAYS_INLINE UInt16 loadDate16FromPyDate(PyObject * object)
@@ -593,9 +779,9 @@ Field loadFromPythonObject(PyObject * object, const DataTypePtr & type)
             return loadDateTime64FromPyDateTime(object, datetime64_type->getScale());
         }
         case TypeIndex::String:
-            return loadFromPyUnicode(object);
+            return loadStringFromPyBytesOrUnicode(object);
         case TypeIndex::FixedString:
-            return loadFromPyUnicode(object);
+            return loadStringFromPyBytesOrUnicode(object);
         // case TypeIndex::Enum8:
         //     break;
         // case TypeIndex::Enum16:
@@ -772,11 +958,9 @@ void PythonListToColumn(IColumn & column, PyObject * py_list, const DataTypePtr 
 }
 
 
-PyObjectPtr convertColumnToPythonList(const ColumnWithTypeAndName & column_with_type)
+PyObjectPtr convertColumnToPythonList(const IColumn & column, const DataTypePtr & type)
 {
-    const auto & column = column_with_type.column;
-    const auto & type = column_with_type.type;
-    return convertColumnToPythonList(*column, type, 0, column->size());
+    return convertColumnToPythonList(column, type, 0, column.size());
 }
 
 PyObjectPtr convertColumnToPythonList(const IColumn & column, const DataTypePtr & type, UInt64 offset, UInt64 size)

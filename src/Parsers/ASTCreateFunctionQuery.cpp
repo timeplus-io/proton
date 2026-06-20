@@ -1,15 +1,16 @@
-#include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Common/quoteString.h>
 
 /// proton: starts
 #include <optional>
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
-#include <Parsers/formatAST.h>
-#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/ASTSetQuery.h>
+#include <Parsers/formatAST.h>
 
 #include <cassert>
 #include <boost/algorithm/string.hpp>
@@ -33,7 +34,8 @@ ASTPtr ASTCreateFunctionQuery::clone() const
     return res;
 }
 
-void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, IAST::FormatState & state, IAST::FormatStateStacked frame) const
+void ASTCreateFunctionQuery::formatImpl(
+    const IAST::FormatSettings & settings, IAST::FormatState & state, IAST::FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "") << "CREATE ";
 
@@ -55,7 +57,8 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     settings.ostr << (settings.hilite ? hilite_none : "");
 
-    settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName()) << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName())
+                  << (settings.hilite ? hilite_none : "");
 
     /// proton: starts
     bool is_udf = isUDF();
@@ -96,10 +99,19 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     {
         ASTLiteral * udf_src = function_core->as<ASTLiteral>();
         settings.ostr << fmt::format("$$\n{}\n$$", udf_src->value.safeGet<String>());
+
+        if (udf_settings)
+        {
+            if (const auto * set_query = udf_settings->as<ASTSetQuery>(); set_query && !set_query->changes.empty())
+            {
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << " SETTINGS " << (settings.hilite ? hilite_none : "");
+                udf_settings->formatImpl(settings, state, frame);
+            }
+        }
     }
     else
         function_core->formatImpl(settings, state, frame);
-    /// proton: starts
+    /// proton: ends
 }
 
 String ASTCreateFunctionQuery::getFunctionName() const
@@ -202,7 +214,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
         }
         inner_func->set("url", url.value());
         if (auth_method.has_value())
-        {   
+        {
             inner_func->set("auth_method", auth_method.value());
             if (auth_method.value() == "auth_header")
             {

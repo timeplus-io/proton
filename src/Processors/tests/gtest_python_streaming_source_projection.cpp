@@ -142,7 +142,7 @@ TEST_F(CPythonTest, PythonStreamingSourceProjectionRespectsHeader)
             ASSERT_TRUE(iterator);
         }
 
-        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
         auto sink = std::make_shared<CollectBlocksSink>(source->getPort().getHeader());
 
         connect(source->getPort(), sink->getPort());
@@ -196,7 +196,7 @@ TEST_F(CPythonTest, PythonStreamingSourceProjectionSkipsUnselectedConversion)
             ASSERT_TRUE(iterator);
         }
 
-        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
         auto sink = std::make_shared<CollectBlocksSink>(source->getPort().getHeader());
 
         connect(source->getPort(), sink->getPort());
@@ -249,7 +249,7 @@ TEST_F(CPythonTest, PythonStreamingSourceProjectionRejectsWrongArity)
             ASSERT_TRUE(iterator);
         }
 
-        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
         auto sink = std::make_shared<CollectBlocksSink>(source->getPort().getHeader());
 
         connect(source->getPort(), sink->getPort());
@@ -309,7 +309,7 @@ TEST_F(CPythonTest, PythonStreamingSourcePreservesRowCountWhenNoColumnsProjected
             ASSERT_TRUE(iterator);
         }
 
-        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
         auto sink = std::make_shared<RowCountSink>(source->getPort().getHeader());
 
         connect(source->getPort(), sink->getPort());
@@ -356,7 +356,7 @@ TEST_F(CPythonTest, PythonStreamingSourceNoColumnsRejectsWrongArity)
             ASSERT_TRUE(iterator);
         }
 
-        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
         auto sink = std::make_shared<RowCountSink>(source->getPort().getHeader());
 
         connect(source->getPort(), sink->getPort());
@@ -418,7 +418,7 @@ TEST_F(CPythonTest, PythonStreamingSourceSkipsEmptyBatches)
             ASSERT_TRUE(iterator);
         }
 
-        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, "" /* module_name */);
+        auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
         auto sink = std::make_shared<CollectBlocksSink>(source->getPort().getHeader());
 
         connect(source->getPort(), sink->getPort());
@@ -496,7 +496,8 @@ class BlockingIterator:
         String first_type_value;
         bool got_first_block = false;
         {
-            auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, module_name);
+            auto source
+                = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
             auto sink = std::make_shared<NotifyingCollectBlocksSink>(source->getPort().getHeader());
 
             connect(source->getPort(), sink->getPort());
@@ -606,10 +607,12 @@ class BlockingIterator:
             }
         }
 
-        /// Class objects and their MRO tuples can form reference cycles; collect them explicitly
-        /// so assertNoLeak doesn't report a false-positive.
+        /// Unload the manually-created module and collect cycles so assertNoLeak doesn't
+        /// report false-positives from class MRO tuples.
         {
             cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+            if (cpython::hasModule(module_name))
+                cpython::unloadModule(module_name);
             cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
             ASSERT_TRUE(gc_module);
             cpython::PyObjectPtr collect_result{PyObject_CallMethod(gc_module.get(), "collect", nullptr)};
@@ -674,7 +677,8 @@ class BlockingIteratorWithoutCancel:
         }
 
         {
-            auto source = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, module_name);
+            auto source
+                = std::make_shared<PythonStreamingSource>(header, std::move(iterator), tuple_type, cpython::PythonModuleSessionPtr{});
             auto sink = std::make_shared<NotifyingCollectBlocksSink>(source->getPort().getHeader());
 
             connect(source->getPort(), sink->getPort());
@@ -765,6 +769,13 @@ class BlockingIteratorWithoutCancel:
         {
             cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
             iterator_owner.reset();
+            if (cpython::hasModule(module_name))
+                cpython::unloadModule(module_name);
+            cpython::PyObjectPtr gc_module{PyImport_ImportModule("gc")};
+            ASSERT_TRUE(gc_module);
+            cpython::PyObjectPtr collect_result{PyObject_CallMethod(gc_module.get(), "collect", nullptr)};
+            if (!collect_result)
+                PyErr_Clear();
         }
     });
 }

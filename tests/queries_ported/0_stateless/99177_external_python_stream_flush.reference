@@ -1,0 +1,8 @@
+CREATE EXTERNAL STREAM default.py_flush_sink\n(\n  `val` int32,\n  `flush_count` int32\n)\nAS $$\nimport builtins\n\ndef init_99177():\n    builtins._tp_99177_buffer = []\n    builtins._tp_99177_flushed = getattr(builtins, \'_tp_99177_flushed\', [])\n    builtins._tp_99177_flush_count = getattr(builtins, \'_tp_99177_flush_count\', 0)\n\ndef write_99177(val, flush_count):\n    builtins._tp_99177_buffer.extend(val)\n\ndef flush_99177():\n    builtins._tp_99177_flush_count += 1\n    builtins._tp_99177_flushed.extend(builtins._tp_99177_buffer)\n    builtins._tp_99177_buffer = []\n\ndef read_99177():\n    flushed = getattr(builtins, \'_tp_99177_flushed\', [])\n    count = getattr(builtins, \'_tp_99177_flush_count\', 0)\n    return [(v, count) for v in flushed]\n$$\nENGINE = ExternalStream\nSETTINGS type = \'python\', read_function_name = \'read_99177\', write_function_name = \'write_99177\', init_function_name = \'init_99177\', flush_function_name = \'flush_99177\'
+1	1
+2	1
+3	1
+1	2
+2	2
+3	2
+4	2

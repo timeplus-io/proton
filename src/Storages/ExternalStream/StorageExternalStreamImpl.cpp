@@ -1,7 +1,8 @@
+#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
+
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
 

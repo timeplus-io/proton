@@ -27,7 +27,7 @@ steps:
           results = []
           for i, v in zip(id, value):
               try:
-                  result = asyncio.run(say_after(i,v))
+                  result = asyncio.run(say_after(i, v.decode('utf-8')))
                   results.append(result)
               except Exception as e:
                   results.append(e)
@@ -57,7 +57,7 @@ steps:
           results = []
           for i, v in zip(id, value):
               try:
-                  result = asyncio.run(multi_say_after(i,v))
+                  result = asyncio.run(multi_say_after(i, v.decode('utf-8')))
                   results.append(result)
               except Exception as e:
                   results.append(e)
@@ -90,7 +90,7 @@ steps:
           results = []
           for i, v in zip(id, value):
               try:
-                  result = asyncio.run(multi_say_after(i,v))
+                  result = asyncio.run(multi_say_after(i, v.decode('utf-8')))
                   results.append(result)
               except Exception as e:
                   results.append(e)

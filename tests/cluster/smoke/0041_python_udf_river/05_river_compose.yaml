@@ -21,9 +21,9 @@ steps:
       import random
       from river import compose
 
-      def test_compose(value):
+      def test_compose(values):
           x = {'a': 42, 'b': 12, 'c': 13}
-          res = [compose.Discard(v).transform_one(x) for v in value]
+          res = [compose.Discard(v.decode('utf-8')).transform_one(x) for v in values]
           return res
       $$;
 

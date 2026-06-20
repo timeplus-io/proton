@@ -241,33 +241,37 @@ void validateMessageHeadersColumnType(const DataTypePtr & type)
 namespace ExternalStream
 {
 
-void Kafka::validateSettings(bool attach)
+void Kafka::verifySettings(const ExternalStreamSettingsPtr & new_settings, bool /*change_settings*/, ContextPtr /*context_*/) const
 {
-    chassert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
+    chassert(new_settings->type.value == StreamTypes::KAFKA || new_settings->type.value == StreamTypes::REDPANDA);
 
-    if (settings->topic.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
-
-    if (!settings->message_key.value.empty())
+    if (new_settings->topic.value.empty())
     {
-        if (attach)
-            LOG_ERROR(logger, "Setting `message_key` is deprecated, it won't be used");
-        else
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE, "Setting `message_key` is deprecated, define the _tp_message_key column instead");
+        LOG_ERROR(logger, "Setting `topic` is empty");
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
     }
 
-    if (hasSchemaRegistryUrl())
+    if (!new_settings->message_key.value.empty())
     {
-        const auto & format = settings->data_format.value;
+        LOG_ERROR(logger, "Setting `message_key` is deprecated, it won't be used");
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE, "Setting `message_key` is deprecated, define the _tp_message_key column instead");
+    }
+
+    if (!new_settings->kafka_schema_registry_url.value.empty())
+    {
+        const auto & format = new_settings->data_format.value;
         const bool format_supported = format == "ProtobufSingle" || format == "Avro";
         if (!format_supported)
         {
-            LOG_ERROR(logger, "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats: actual='{}'", format);
-            if (!attach)
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE,
-                    "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats");
+            LOG_ERROR(
+                logger,
+                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats: actual='{}'",
+                format);
+
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE,
+                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats");
         }
     }
 
@@ -278,34 +282,27 @@ void Kafka::validateSettings(bool attach)
 
     if (has_event_time)
     {
-        if (attach)
-        {
-            LOG_WARNING(
-                logger,
-                "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and is no longer supported as a physical column. "
-                "It will be ignored in payload parsing and treated as transport metadata.",
-                ProtonConsts::RESERVED_EVENT_TIME);
-        }
-        else
-        {
-            throw Exception(
-                ErrorCodes::ILLEGAL_COLUMN,
-                "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and cannot be defined as a physical column",
-                ProtonConsts::RESERVED_EVENT_TIME);
-        }
+        LOG_WARNING(
+            logger,
+            "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and is no longer supported as a physical column. "
+            "It will be ignored in payload parsing and treated as transport metadata.",
+            ProtonConsts::RESERVED_EVENT_TIME);
+
+        throw Exception(
+            ErrorCodes::ILLEGAL_COLUMN,
+            "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and cannot be defined as a physical column",
+            ProtonConsts::RESERVED_EVENT_TIME);
     }
 
     if (has_event_time || has_message_key || has_message_headers)
     {
-        if (settings->isChanged("one_message_per_row") && !settings->one_message_per_row)
+        if (new_settings->isChanged("one_message_per_row") && !new_settings->one_message_per_row)
             throw Exception(
                 ErrorCodes::INVALID_SETTING_VALUE,
                 "`one_message_per_row` cannot be set to `false` when the `{}` / `{}` / `{}` column is defined",
                 ProtonConsts::RESERVED_EVENT_TIME,
                 ProtonConsts::RESERVED_MESSAGE_KEY,
                 ProtonConsts::RESERVED_MESSAGE_HEADERS);
-
-        settings->set("one_message_per_row", true);
     }
 }
 
@@ -338,11 +335,18 @@ Kafka::Kafka(
 {
     assert(external_stream_counter);
 
-    validateSettings(attach);
+    if (!attach)
+        verifySettings(settings, false, context);
 
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
+    const bool has_event_time = columns.has(ProtonConsts::RESERVED_EVENT_TIME);
+    const bool has_message_key = columns.has(ProtonConsts::RESERVED_MESSAGE_KEY);
+    const bool has_message_headers = columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS);
 
-    if (columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
+    if (has_event_time || has_message_key || has_message_headers)
+        settings->set("one_message_per_row", true);
+
+    if (has_message_key)
     {
         validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
 
@@ -353,7 +357,7 @@ Kafka::Kafka(
                 ProtonConsts::RESERVED_MESSAGE_KEY);
     }
 
-    if (columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
+    if (has_message_headers)
         validateMessageHeadersColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_HEADERS).type);
 
     cacheVirtualColumnNamesAndTypes();

@@ -461,7 +461,10 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         storage_to_format = storage->clone();
 
     if (exec_script)
-        settings.ostr << settings.nl_or_ws << "AS $$\n" << *exec_script << "\n$$";
+        /// Emit the script verbatim between the $$ markers: adding newlines here makes
+        /// the statement grow a blank line inside the body on every parse/format
+        /// round trip (e.g. each ALTER STREAM ... MODIFY rewrites the metadata).
+        settings.ostr << settings.nl_or_ws << "AS $$" << *exec_script << "$$";
 
     if (storage_to_format)
         storage_to_format->formatImpl(settings, state, frame);

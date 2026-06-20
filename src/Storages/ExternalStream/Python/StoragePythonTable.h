@@ -4,7 +4,7 @@
 
 #if USE_PYTHON_UDF
 
-#include <CPython/PyObjectPtr.h>
+#include <CPython/PythonModuleSession.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage.h>
@@ -32,17 +32,22 @@ public:
     static StoragePtr create(
         const StorageID & table_id,
         const ColumnsDescription & columns,
-        String function_name_,
-        String source_code_,
+        cpython::PythonFunction function_,
         PythonTableMode mode_ = PythonTableMode::Auto,
-        String sink_function_name_ = {});
+        String sink_function_name_ = {},
+        String flush_function_name_ = {});
 
     bool isRemote() const override { return false; }
-    bool isLocal() const override { return false; }  /// Needs to be replicated across cluster nodes
+    bool isLocal() const override { return false; } /// Needs to be replicated across cluster nodes
     bool supportsSubcolumns() const override { return true; }
     bool supportsStreamingQuery() const override { return true; }
     bool supportsParallelInsert() const override { return false; }
     bool parallelizeOutputAfterReading(ContextPtr) const override { return false; }
+    /// Like other external stream sinks, deliver each chunk to the sink immediately.
+    /// With squashing, a streaming pipeline (e.g. a materialized view) would buffer
+    /// rows in SquashingChunksTransform until min_insert_block_size_rows and neither
+    /// data nor checkpoint requests would ever reach PythonSink.
+    bool squashInsert() const noexcept override { return false; }
 
     Pipe read(
         const Names & column_names,
@@ -55,34 +60,27 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
-    /// Get the source code for external access
-    const String & getSourceCode() const { return source_code; }
+    const cpython::PythonFunction & getFunction() const { return function; }
 
-    /// Get the function name
-    const String & getFunctionName() const { return function_name; }
-
-    /// Get the execution mode
     PythonTableMode getMode() const { return mode; }
 
 private:
     StoragePythonTable(
         const StorageID & table_id,
         const ColumnsDescription & columns,
-        String function_name_,
-        String source_code_,
+        cpython::PythonFunction function_,
         PythonTableMode mode_,
-        String sink_function_name_);
-
-    /// Execute Python and return the result (either a list or generator)
-    cpython::PyObjectPtr executePythonAndGetResult(ContextPtr context, String & module_name) const;
+        String sink_function_name_,
+        String flush_function_name_);
 
     /// Convert Python result to Block (for batch mode)
     Block convertPythonResultToBlock(const cpython::PyObjectPtr & py_result) const;
 
-    const String function_name;
-    const String source_code;
+    const cpython::PythonFunction function;
     PythonTableMode mode;
     const String sink_function_name;
+    /// Only used by the sink, read sessions never flush
+    const String flush_function_name;
 };
 }
 

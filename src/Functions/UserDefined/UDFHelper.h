@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.h"
+
 #include <Cluster/Requests/CreateUserDefinedFunctionRequest.h>
 #include <Interpreters/Context_fwd.h>
 
@@ -31,5 +33,13 @@ cluster::CreateUserDefinedFunctionRequestPtr createUserDefinedFunctionRequest(
     const Poco::Util::AbstractConfiguration & config,
     cluster::protocol::ExistsOperation exists_op,
     cluster::protocol::UserDefinedFunctionDescriptorPtr original_desc);
+
+#if USE_PYTHON_UDF
+/// Resolve init parameters and run the configured init hook for a freshly
+/// loaded Python UDF module. No-op when the payload has no init function.
+/// `udf_name` is used in error messages. Caller must hold the GIL.
+void runPythonUDFInitHook(
+    const cluster::protocol::PythonUserDefinedFunctionPayload & payload, const String & udf_name, const String & module_name);
+#endif
 }
 }

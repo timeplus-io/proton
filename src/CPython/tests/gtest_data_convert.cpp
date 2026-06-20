@@ -1,46 +1,49 @@
 #include "config.h"
 
 #ifdef HAS_RESERVED_IDENTIFIER
-#    pragma clang diagnostic ignored "-Wreturn-type"
+#pragma clang diagnostic ignored "-Wreturn-type"
 #endif
 
 #if USE_PYTHON_UDF
 
-#    include <CPython/ConvertDatatypes.h>
-#    include <CPython/tests/CPythonTest.h>
-#    include <CPython/validatePython.h>
-#    include <Columns/ColumnArray.h>
-#    include <Columns/ColumnFixedString.h>
-#    include <Columns/ColumnMap.h>
-#    include <Columns/ColumnString.h>
-#    include <Columns/ColumnTuple.h>
-#    include <Columns/ColumnsDateTime.h>
-#    include <Columns/ColumnsNumber.h>
-#    include <Core/ColumnWithTypeAndName.h>
-#    include <Core/Field.h>
-#    include <DataTypes/DataTypeArray.h>
-#    include <DataTypes/DataTypeDateTime.h>
-#    include <DataTypes/DataTypeFixedString.h>
-#    include <DataTypes/DataTypeNullable.h>
-#    include <DataTypes/DataTypeString.h>
-#    include <DataTypes/DataTypeTuple.h>
-#    include <DataTypes/DataTypesNumber.h>
-#    include <IO/ReadBufferFromString.h>
-#    include <IO/ReadHelpers.h>
-#    include <Common/Exception.h>
-#    include <Common/LocalDate.h>
-#    include <Common/LocalDateTime.h>
-#    include <Common/LocalDateTime64.h>
+#include <CPython/ConvertDatatypes.h>
+#include <CPython/tests/CPythonTest.h>
+#include <CPython/validatePython.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnConst.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnLowCardinality.h>
+#include <Columns/ColumnMap.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
+#include <Columns/ColumnsDateTime.h>
+#include <Columns/ColumnsNumber.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Core/Field.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <Common/Exception.h>
+#include <Common/LocalDate.h>
+#include <Common/LocalDateTime.h>
+#include <Common/LocalDateTime64.h>
 
-#    include <datetime.h>
+#include <datetime.h>
 
-#    if USE_NUMPY
-#        define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#        include <numpy/arrayobject.h>
-#    endif
+#if USE_NUMPY
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/arrayobject.h>
+#endif
 
-#    include <memory>
-#    include <vector>
+#include <memory>
+#include <vector>
 using namespace DB;
 
 namespace
@@ -48,6 +51,20 @@ namespace
 DataTypePtr makeDataType(const String & full_name)
 {
     return DataTypeFactory::instance().get(full_name);
+}
+
+std::string pythonBytesAsString(PyObject * py_bytes)
+{
+    if (!py_bytes || !PyBytes_Check(py_bytes))
+        return "";
+
+    char * buffer = nullptr;
+    Py_ssize_t length = 0;
+
+    if (PyBytes_AsStringAndSize(py_bytes, &buffer, &length) < 0)
+        return "";
+
+    return std::string(buffer, length);
 }
 
 template <typename ColumnType, typename T>
@@ -331,18 +348,21 @@ TEST_F(CPythonTest, ColumnDate)
     PyDateTime_IMPORT;
 
     assertNoLeak([]() {
-        testColumnConvertion<ColumnDate>(std::vector<UInt16>{
-            LocalDate(2024, 12, 12).getDayNum().toUnderType(),
-            LocalDate(2024, 12, 13).getDayNum().toUnderType(),
-            LocalDate(2024, 12, 14).getDayNum().toUnderType()}, "date", [](PyObject * item, const UInt16 & v) {
-            ASSERT_TRUE(PyDate_Check(item));
+        testColumnConvertion<ColumnDate>(
+            std::vector<UInt16>{
+                LocalDate(2024, 12, 12).getDayNum().toUnderType(),
+                LocalDate(2024, 12, 13).getDayNum().toUnderType(),
+                LocalDate(2024, 12, 14).getDayNum().toUnderType()},
+            "date",
+            [](PyObject * item, const UInt16 & v) {
+                ASSERT_TRUE(PyDate_Check(item));
 
-            LocalDate local_date{DayNum(v)};
+                LocalDate local_date{DayNum(v)};
 
-            ASSERT_EQ(PyDateTime_GET_YEAR(item), local_date.year());
-            ASSERT_EQ(PyDateTime_GET_MONTH(item), local_date.month());
-            ASSERT_EQ(PyDateTime_GET_DAY(item), local_date.day());
-        });
+                ASSERT_EQ(PyDateTime_GET_YEAR(item), local_date.year());
+                ASSERT_EQ(PyDateTime_GET_MONTH(item), local_date.month());
+                ASSERT_EQ(PyDateTime_GET_DAY(item), local_date.day());
+            });
     });
 }
 
@@ -351,18 +371,21 @@ TEST_F(CPythonTest, ColumnDate32)
     PyDateTime_IMPORT;
 
     assertNoLeak([]() {
-        testColumnConvertion<ColumnDate32>(std::vector<Int32>{
-            LocalDate(2024, 12, 12).getExtenedDayNum().toUnderType(),
-            LocalDate(2024, 12, 13).getExtenedDayNum().toUnderType(),
-            LocalDate(2024, 12, 14).getExtenedDayNum().toUnderType()}, "date32", [](PyObject * item, const Int32 & v) {
-            ASSERT_TRUE(PyDate_Check(item));
+        testColumnConvertion<ColumnDate32>(
+            std::vector<Int32>{
+                LocalDate(2024, 12, 12).getExtenedDayNum().toUnderType(),
+                LocalDate(2024, 12, 13).getExtenedDayNum().toUnderType(),
+                LocalDate(2024, 12, 14).getExtenedDayNum().toUnderType()},
+            "date32",
+            [](PyObject * item, const Int32 & v) {
+                ASSERT_TRUE(PyDate_Check(item));
 
-            LocalDate local_date{ExtendedDayNum(v)};
+                LocalDate local_date{ExtendedDayNum(v)};
 
-            ASSERT_EQ(PyDateTime_GET_YEAR(item), local_date.year());
-            ASSERT_EQ(PyDateTime_GET_MONTH(item), local_date.month());
-            ASSERT_EQ(PyDateTime_GET_DAY(item), local_date.day());
-        });
+                ASSERT_EQ(PyDateTime_GET_YEAR(item), local_date.year());
+                ASSERT_EQ(PyDateTime_GET_MONTH(item), local_date.month());
+                ASSERT_EQ(PyDateTime_GET_DAY(item), local_date.day());
+            });
     });
 }
 
@@ -371,21 +394,24 @@ TEST_F(CPythonTest, ColumnDateTime)
     PyDateTime_IMPORT;
 
     assertNoLeak([]() {
-        testColumnConvertion<ColumnDateTime>(std::vector<UInt32>{
-            static_cast<UInt32>(LocalDateTime(2024, 12, 12, 1, 2, 3).to_time_t()),
-            static_cast<UInt32>(LocalDateTime(2024, 12, 13, 1, 2, 3).to_time_t()),
-            static_cast<UInt32>(LocalDateTime(2024, 12, 14, 1, 2, 3).to_time_t())}, "datetime", [](PyObject * item, const UInt32 & v) {
-            ASSERT_TRUE(PyDateTime_Check(item));
+        testColumnConvertion<ColumnDateTime>(
+            std::vector<UInt32>{
+                static_cast<UInt32>(LocalDateTime(2024, 12, 12, 1, 2, 3).to_time_t()),
+                static_cast<UInt32>(LocalDateTime(2024, 12, 13, 1, 2, 3).to_time_t()),
+                static_cast<UInt32>(LocalDateTime(2024, 12, 14, 1, 2, 3).to_time_t())},
+            "datetime",
+            [](PyObject * item, const UInt32 & v) {
+                ASSERT_TRUE(PyDateTime_Check(item));
 
-            LocalDateTime local_datetime{v};
+                LocalDateTime local_datetime{v};
 
-            ASSERT_EQ(PyDateTime_GET_YEAR(item), local_datetime.year());
-            ASSERT_EQ(PyDateTime_GET_MONTH(item), local_datetime.month());
-            ASSERT_EQ(PyDateTime_GET_DAY(item), local_datetime.day());
-            ASSERT_EQ(PyDateTime_DATE_GET_HOUR(item), local_datetime.hour());
-            ASSERT_EQ(PyDateTime_DATE_GET_MINUTE(item), local_datetime.minute());
-            ASSERT_EQ(PyDateTime_DATE_GET_SECOND(item), local_datetime.second());
-        });
+                ASSERT_EQ(PyDateTime_GET_YEAR(item), local_datetime.year());
+                ASSERT_EQ(PyDateTime_GET_MONTH(item), local_datetime.month());
+                ASSERT_EQ(PyDateTime_GET_DAY(item), local_datetime.day());
+                ASSERT_EQ(PyDateTime_DATE_GET_HOUR(item), local_datetime.hour());
+                ASSERT_EQ(PyDateTime_DATE_GET_MINUTE(item), local_datetime.minute());
+                ASSERT_EQ(PyDateTime_DATE_GET_SECOND(item), local_datetime.second());
+            });
     });
 }
 
@@ -434,9 +460,8 @@ TEST_F(CPythonTest, ColumnString)
 {
     assertNoLeak([]() {
         testColumnConvertion<ColumnString>(std::vector<String>{"hello", "world"}, "string", [](PyObject * item, const String & v) {
-            ASSERT_TRUE(PyUnicode_Check(item));
-            std::string str(PyUnicode_AsUTF8(item));
-            ASSERT_EQ(str, v);
+            ASSERT_TRUE(PyBytes_Check(item));
+            ASSERT_EQ(pythonBytesAsString(item), v);
         });
     });
 }
@@ -446,9 +471,9 @@ TEST_F(CPythonTest, ColumnFixedString)
     assertNoLeak([]() {
         testColumnConvertion<ColumnFixedString, String>(
             std::vector<String>{"hello", "world"}, "fixed_string(16)", [](PyObject * item, const String & v) {
-                ASSERT_TRUE(PyUnicode_Check(item));
-                std::string str(PyUnicode_AsUTF8(item));
-                ASSERT_EQ(str, v);
+                ASSERT_TRUE(PyBytes_Check(item));
+                /// hello -> "hello\0\0\0\0\0\0\0\0\0\0\0" in fixed string with length 16
+                ASSERT_EQ(String{pythonBytesAsString(item).c_str()}, v);
             });
     });
 }
@@ -504,8 +529,8 @@ TEST_F(CPythonTest, ColumnTuple)
                 ASSERT_EQ(PyLong_AsUnsignedLong(first), v[0].get<UInt32>());
 
                 PyObject * second = PyTuple_GetItem(item, 1);
-                ASSERT_TRUE(PyUnicode_Check(second));
-                ASSERT_EQ(PyUnicode_AsUTF8(second), v[1].get<String>());
+                ASSERT_TRUE(PyBytes_Check(second));
+                ASSERT_EQ(pythonBytesAsString(second), v[1].get<String>());
             });
     });
 }
@@ -597,11 +622,10 @@ TEST_F(CPythonTest, ColumnMap)
 
                 ASSERT_TRUE(PyDict_Next(item, &pos, &key, &value));
 
-                ASSERT_TRUE(PyUnicode_Check(key));
-                ASSERT_EQ(PyUnicode_AsUTF8(key), t[0].get<String>());
-
-                ASSERT_TRUE(PyUnicode_Check(value));
-                ASSERT_EQ(PyUnicode_AsUTF8(value), t[1].get<String>());
+                ASSERT_TRUE(PyBytes_Check(key));
+                ASSERT_EQ(pythonBytesAsString(key), t[0].get<String>());
+                ASSERT_TRUE(PyBytes_Check(value));
+                ASSERT_EQ(pythonBytesAsString(value), t[1].get<String>());
             }
         });
     });
@@ -617,7 +641,99 @@ TEST_F(CPythonTest, ColumnBool)
     });
 }
 
-#    if USE_NUMPY
+TEST_F(CPythonTest, ColumnConstInt32)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("int32");
+        auto inner_col = data_type->createColumn();
+        inner_col->insert(Field(Int32(42)));
+        auto const_col = ColumnConst::create(std::move(inner_col), 3);
+
+        auto py_list = cpython::convertColumnToPythonList(*const_col, data_type, 0, const_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        for (Py_ssize_t i = 0; i < 3; i++)
+        {
+            PyObject * item = PyList_GetItem(py_list.get(), i);
+            ASSERT_TRUE(PyLong_Check(item));
+            ASSERT_EQ(PyLong_AsLong(item), 42);
+        }
+    });
+}
+
+TEST_F(CPythonTest, ColumnConstString)
+{
+    assertNoLeak([]() {
+        auto data_type = makeDataType("string");
+        auto inner_col = data_type->createColumn();
+        inner_col->insert(Field(String("hello")));
+        auto const_col = ColumnConst::create(std::move(inner_col), 2);
+
+        auto py_list = cpython::convertColumnToPythonList(*const_col, data_type, 0, const_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 2);
+
+        for (Py_ssize_t i = 0; i < 2; i++)
+        {
+            PyObject * item = PyList_GetItem(py_list.get(), i);
+            ASSERT_TRUE(PyBytes_Check(item));
+            ASSERT_EQ(pythonBytesAsString(item), "hello");
+        }
+    });
+}
+
+TEST_F(CPythonTest, ColumnLowCardinalityString)
+{
+    assertNoLeak([]() {
+        auto inner_type = makeDataType("string");
+        auto lc_type = std::make_shared<DataTypeLowCardinality>(inner_type);
+        auto lc_col = lc_type->createColumn();
+
+        lc_col->insert(Field(String("alpha")));
+        lc_col->insert(Field(String("beta")));
+        lc_col->insert(Field(String("alpha")));
+
+        auto py_list = cpython::convertColumnToPythonList(*lc_col, lc_type, 0, lc_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        ASSERT_EQ(pythonBytesAsString(PyList_GetItem(py_list.get(), 0)), "alpha");
+        ASSERT_EQ(pythonBytesAsString(PyList_GetItem(py_list.get(), 1)), "beta");
+        ASSERT_EQ(pythonBytesAsString(PyList_GetItem(py_list.get(), 2)), "alpha");
+    });
+}
+
+TEST_F(CPythonTest, ColumnLowCardinalityNullableInt32)
+{
+    assertNoLeak([]() {
+        auto inner_type = makeDataType("nullable(int32)");
+        auto lc_type = std::make_shared<DataTypeLowCardinality>(inner_type);
+        auto lc_col = lc_type->createColumn();
+
+        lc_col->insert(Field(Int32(10)));
+        lc_col->insert(Field{});
+        lc_col->insert(Field(Int32(10)));
+
+        auto py_list = cpython::convertColumnToPythonList(*lc_col, lc_type, 0, lc_col->size());
+        ASSERT_TRUE(py_list);
+        ASSERT_TRUE(PyList_Check(py_list.get()));
+        ASSERT_EQ(PyList_Size(py_list.get()), 3);
+
+        ASSERT_TRUE(PyLong_Check(PyList_GetItem(py_list.get(), 0)));
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(py_list.get(), 0)), 10);
+
+        ASSERT_TRUE(Py_IsNone(PyList_GetItem(py_list.get(), 1)));
+
+        ASSERT_TRUE(PyLong_Check(PyList_GetItem(py_list.get(), 2)));
+        ASSERT_EQ(PyLong_AsLong(PyList_GetItem(py_list.get(), 2)), 10);
+    });
+}
+
+#if USE_NUMPY
 bool init_numpy()
 {
     import_array1(false) return true;
@@ -639,25 +755,24 @@ TEST_F(CPythonTest, columnAndNumpyConversion)
     setenv("PYTHONPATH", "/usr/lib/python3.10", 1);
     setenv("PYTHONHOME", "/usr/lib/python3.10", 1);
     ASSERT_TRUE(init_numpy());
-#        define GENERATE_TEST_1(TYPE, COLUMN_TYPE, DATA_TYPE) \
-            { \
-                auto col = COLUMN_TYPE::create(); \
-                col->getData().push_back(1); \
-                col->getData().push_back(2); \
-                col->getData().push_back(3); \
-                auto * address = col->getData().data(); \
-                ColumnWithTypeAndName column_with_type(std::move(col), std::make_shared<DATA_TYPE>(), "column"); \
-                PyObject * np_array = cpython::convertColumnToNumpyArray(column_with_type); \
-                ASSERT_TRUE(np_array != nullptr); \
-                auto [data, size] = getInternalDataAndSize<TYPE>(np_array); \
-                ASSERT_EQ(size, 3); \
-                ASSERT_EQ(data[0], 1); \
-                ASSERT_EQ(data[1], 2); \
-                ASSERT_EQ(data[2], 3); \
-                /* check if the addres is the same(zero copy)*/ \
-                ASSERT_EQ(data, address); \
-                Py_DECREF(np_array); \
-            }
+#define GENERATE_TEST_1(TYPE, COLUMN_TYPE, DATA_TYPE) \
+    { \
+        auto col = COLUMN_TYPE::create(); \
+        col->getData().push_back(1); \
+        col->getData().push_back(2); \
+        col->getData().push_back(3); \
+        auto * address = col->getData().data(); \
+        PyObject * np_array = cpython::convertColumnToNumpyArray(*col); \
+        ASSERT_TRUE(np_array != nullptr); \
+        auto [data, size] = getInternalDataAndSize<TYPE>(np_array); \
+        ASSERT_EQ(size, 3); \
+        ASSERT_EQ(data[0], 1); \
+        ASSERT_EQ(data[1], 2); \
+        ASSERT_EQ(data[2], 3); \
+        /* check if the addres is the same(zero copy)*/ \
+        ASSERT_EQ(data, address); \
+        Py_DECREF(np_array); \
+    }
     {
         GENERATE_TEST_1(UInt8, ColumnUInt8, DataTypeUInt8)
         GENERATE_TEST_1(UInt16, ColumnUInt16, DataTypeUInt16)
@@ -676,8 +791,7 @@ TEST_F(CPythonTest, columnAndNumpyConversion)
         col->getData().push_back(Float32(2.0));
         col->getData().push_back(Float32(3.0));
         auto * address = col->getData().data();
-        ColumnWithTypeAndName column_with_type(std::move(col), std::make_shared<DataTypeFloat32>(), "column");
-        PyObject * np_array = cpython::convertColumnToNumpyArray(column_with_type);
+        PyObject * np_array = cpython::convertColumnToNumpyArray(*col);
         ASSERT_TRUE(np_array != nullptr);
         auto [data, size] = getInternalDataAndSize<Float32>(np_array);
         ASSERT_EQ(size, 3);
@@ -695,8 +809,7 @@ TEST_F(CPythonTest, columnAndNumpyConversion)
         col->getData().push_back(Float64(2.0));
         col->getData().push_back(Float64(3.0));
         auto * address = col->getData().data();
-        ColumnWithTypeAndName column_with_type(std::move(col), std::make_shared<DataTypeFloat64>(), "column");
-        PyObject * np_array = cpython::convertColumnToNumpyArray(column_with_type);
+        PyObject * np_array = cpython::convertColumnToNumpyArray(*col);
         ASSERT_TRUE(np_array != nullptr);
         auto [data, size] = getInternalDataAndSize<Float64>(np_array);
         ASSERT_EQ(size, 3);
@@ -715,8 +828,7 @@ TEST_F(CPythonTest, columnAndNumpyConversion)
         col->insert("world");
         col->insert("from");
         col->insert("numpy");
-        ColumnWithTypeAndName column_with_type(std::move(col), std::make_shared<DataTypeString>(), "column");
-        PyObject * np_array = cpython::convertColumnToNumpyArray(column_with_type);
+        PyObject * np_array = cpython::convertColumnToNumpyArray(*col);
         PyArrayObject * numpy_array = reinterpret_cast<PyArrayObject *>(np_array);
         PyObject ** result_data = static_cast<PyObject **>(PyArray_DATA(numpy_array));
         npy_intp size = PyArray_SIZE(numpy_array);
@@ -737,8 +849,7 @@ TEST_F(CPythonTest, columnAndNumpyConversion)
         col->insert("world");
         col->insert("from");
         col->insert("numpy");
-        ColumnWithTypeAndName column_with_type(std::move(col), std::make_shared<DataTypeFixedString>(16), "column");
-        PyObject * np_array = cpython::convertColumnToNumpyArray(column_with_type);
+        PyObject * np_array = cpython::convertColumnToNumpyArray(*col);
         PyArrayObject * numpy_array = reinterpret_cast<PyArrayObject *>(np_array);
         int type = PyArray_TYPE(numpy_array);
         npy_intp size = PyArray_SIZE(numpy_array);
@@ -761,32 +872,32 @@ TEST_F(CPythonTest, columnAndNumpyConversion)
     }
 
     // convert numpy array to column test
-#        define GENERATE_TEST_2(COLUMN_TYPE, DATA_TYPE) \
-            { \
-                auto col = COLUMN_TYPE::create(); \
-                col->getData().push_back(1); \
-                col->getData().push_back(2); \
-                col->getData().push_back(3); \
-                ColumnWithTypeAndName column_with_type(std::move(col), std::make_shared<DATA_TYPE>(), "column"); \
-                PyObject * np_array = cpython::convertColumnToNumpyArray(column_with_type); \
-                ASSERT_TRUE(np_array != nullptr); \
-                auto result = cpython::covertNumpyArrayToColumn(np_array, column_with_type.type); \
-                ASSERT_TRUE(result != nullptr); \
-                ASSERT_EQ(result->size(), 3); \
-                auto & col_result = assert_cast<const COLUMN_TYPE &>(*result); \
-                ASSERT_EQ(col_result.getData()[0], 1); \
-                ASSERT_EQ(col_result.getData()[1], 2); \
-                ASSERT_EQ(col_result.getData()[2], 3); \
-                Py_DECREF(np_array); \
-            }
+#define GENERATE_TEST_2(COLUMN_TYPE, DATA_TYPE) \
+    { \
+        auto col = COLUMN_TYPE::create(); \
+        col->getData().push_back(1); \
+        col->getData().push_back(2); \
+        col->getData().push_back(3); \
+        ColumnWithTypeAndName column_with_type(col, std::make_shared<DATA_TYPE>(), "column"); \
+        PyObject * np_array = cpython::convertColumnToNumpyArray(*col); \
+        ASSERT_TRUE(np_array != nullptr); \
+        auto result = cpython::covertNumpyArrayToColumn(np_array, column_with_type.type); \
+        ASSERT_TRUE(result != nullptr); \
+        ASSERT_EQ(result->size(), 3); \
+        auto & col_result = assert_cast<const COLUMN_TYPE &>(*result); \
+        ASSERT_EQ(col_result.getData()[0], 1); \
+        ASSERT_EQ(col_result.getData()[1], 2); \
+        ASSERT_EQ(col_result.getData()[2], 3); \
+        Py_DECREF(np_array); \
+    }
     {
         GENERATE_TEST_2(ColumnUInt8, DataTypeUInt8)
-        GENERATE_TEST_2(ColumnUInt16, DataTypeUInt16) GENERATE_TEST_2(ColumnUInt32, DataTypeUInt32)
-            GENERATE_TEST_2(ColumnUInt64, DataTypeUInt64) GENERATE_TEST_2(ColumnInt8, DataTypeInt8)
-                GENERATE_TEST_2(ColumnInt16, DataTypeInt16) GENERATE_TEST_2(ColumnInt32, DataTypeInt32)
-                    GENERATE_TEST_2(ColumnInt64, DataTypeInt64)
+        GENERATE_TEST_2(ColumnUInt16, DataTypeUInt16)
+        GENERATE_TEST_2(ColumnUInt32, DataTypeUInt32) GENERATE_TEST_2(ColumnUInt64, DataTypeUInt64)
+            GENERATE_TEST_2(ColumnInt8, DataTypeInt8) GENERATE_TEST_2(ColumnInt16, DataTypeInt16)
+                GENERATE_TEST_2(ColumnInt32, DataTypeInt32) GENERATE_TEST_2(ColumnInt64, DataTypeInt64)
     }
 }
-#    endif
+#endif
 
 #endif /// USE_PYTHON_UDF

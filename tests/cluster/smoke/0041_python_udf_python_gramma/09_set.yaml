@@ -20,7 +20,7 @@ steps:
       $$
       def test_set(value):
           item = set(['jack', 'sjoerd'])
-          res = [x in item for x in value]
+          res = [x.decode('utf-8') in item for x in value]
           return res
       $$;
 

@@ -590,6 +590,19 @@ void PythonPackage::refreshImportState(LoggerPtr logger)
         extended_namespaces);
 }
 
+bool PythonPackage::hasEffectiveRequirementLines(const std::string & requirements_text)
+{
+    std::istringstream input(requirements_text);
+    std::string line;
+    while (std::getline(input, line))
+    {
+        auto trimmed = trimCopy(line);
+        if (!trimmed.empty() && trimmed[0] != '#')
+            return true;
+    }
+    return false;
+}
+
 std::vector<std::string> PythonPackage::parseRequirementsText(const std::string & requirements_text_value)
 {
     if (trimCopy(requirements_text_value).empty())

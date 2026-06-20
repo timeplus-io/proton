@@ -4,7 +4,7 @@
 
 #include <CPython/ConvertDatatypes.h>
 #include <CPython/GILGuard.h>
-#include <CPython/PyObjectPtr.h>
+#include <CPython/PythonModuleSession.h>
 #include <CPython/Utils.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -19,7 +19,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int UDF_RUNNING_ERROR;
 extern const int BAD_ARGUMENTS;
 extern const int UNSUPPORTED;
 }
@@ -46,15 +45,15 @@ DataTypePtr buildTupleType(const ColumnsDescription & columns)
 StoragePythonTable::StoragePythonTable(
     const StorageID & table_id,
     const ColumnsDescription & columns,
-    String function_name_,
-    String source_code_,
+    cpython::PythonFunction function_,
     PythonTableMode mode_,
-    String sink_function_name_)
+    String sink_function_name_,
+    String flush_function_name_)
     : IStorage(table_id)
-    , function_name(std::move(function_name_))
-    , source_code(std::move(source_code_))
+    , function(std::move(function_))
     , mode(mode_)
     , sink_function_name(std::move(sink_function_name_))
+    , flush_function_name(std::move(flush_function_name_))
 {
     StorageInMemoryMetadata metadata;
     metadata.setColumns(columns);
@@ -64,32 +63,13 @@ StoragePythonTable::StoragePythonTable(
 StoragePtr StoragePythonTable::create(
     const StorageID & table_id,
     const ColumnsDescription & columns,
-    String function_name_,
-    String source_code_,
+    cpython::PythonFunction function_,
     PythonTableMode mode_,
-    String sink_function_name_)
+    String sink_function_name_,
+    String flush_function_name_)
 {
     return std::shared_ptr<StoragePythonTable>(new StoragePythonTable(
-        table_id, columns, std::move(function_name_), std::move(source_code_), mode_, std::move(sink_function_name_)));
-}
-
-cpython::PyObjectPtr StoragePythonTable::executePythonAndGetResult(ContextPtr, String & module_name) const
-{
-    if (Py_IsInitialized() == 0)
-        throw Exception(
-            ErrorCodes::UDF_RUNNING_ERROR,
-            "Python Interpreter is not initialized, please check the python_path configuration, ensure each path is valid");
-
-    module_name = getName() + cpython::randomModuleName();
-
-    cpython::GILGuard gil_guard;
-
-    auto byte_code = cpython::compile(source_code);
-    cpython::executeByteCode(byte_code, module_name);
-    auto py_function = cpython::getFunction(function_name, module_name);
-
-    auto py_args = cpython::PyObjectPtr{PyTuple_New(0)};
-    return cpython::executeObject(py_function, py_args);
+        table_id, columns, std::move(function_), mode_, std::move(sink_function_name_), std::move(flush_function_name_)));
 }
 
 Block StoragePythonTable::convertPythonResultToBlock(const cpython::PyObjectPtr & py_result) const
@@ -118,7 +98,7 @@ Pipe StoragePythonTable::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & /*query_info*/,
-    ContextPtr context,
+    ContextPtr /*context*/,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t /*max_block_size*/,
     size_t /*num_streams*/)
@@ -127,25 +107,33 @@ Pipe StoragePythonTable::read(
         storage_snapshot->check(column_names);
 
     auto tuple_type = buildTupleType(getInMemoryMetadataPtr()->getColumns());
-    String module_name;
+    auto session = cpython::PythonModuleSession::create(getName(), function);
+    cpython::PyObjectPtr py_result;
 
     /// Execute Python and get result
-    auto py_result = executePythonAndGetResult(context, module_name);
+    {
+        cpython::GILGuard gil_guard;
+        auto py_args = cpython::PyObjectPtr{PyTuple_New(0)};
+        py_result = session->execute(py_args);
+    }
 
     /// Determine if we should use streaming mode
     bool use_streaming = false;
     bool result_is_generator = false;
     {
         cpython::GILGuard gil_guard;
+        auto cleanupAndRethrow = [&](std::exception_ptr exception) -> void {
+            py_result.reset();
+            cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/true, /*acquire_gil=*/false);
+            std::rethrow_exception(exception);
+        };
 
         if (cpython::isAsyncGeneratorOrCoroutine(py_result))
         {
-            py_result.reset();
-            cpython::unloadModule(module_name);
-            throw Exception(
+            cleanupAndRethrow(std::make_exception_ptr(Exception(
                 ErrorCodes::UNSUPPORTED,
                 "Python external stream does not support coroutine/async generator results. "
-                "Return a synchronous iterator (implementing __iter__/__next__) or a list.");
+                "Return a synchronous iterator (implementing __iter__/__next__) or a list.")));
         }
 
         result_is_generator = cpython::isGenerator(py_result);
@@ -166,16 +154,14 @@ Pipe StoragePythonTable::read(
 
         if (use_streaming && !result_is_generator)
         {
-            py_result.reset();
-            cpython::unloadModule(module_name);
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream streaming mode requires generator result");
+            cleanupAndRethrow(std::make_exception_ptr(
+                Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream streaming mode requires generator result")));
         }
 
         if (!use_streaming && mode == PythonTableMode::Batch && result_is_generator)
         {
-            py_result.reset();
-            cpython::unloadModule(module_name);
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream batch mode requires list result");
+            cleanupAndRethrow(std::make_exception_ptr(
+                Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream batch mode requires list result")));
         }
     }
 
@@ -191,7 +177,7 @@ Pipe StoragePythonTable::read(
             header.insert(ColumnWithTypeAndName{col_desc.type->createColumn(), col_desc.type, name});
         }
 
-        return Pipe(std::make_shared<PythonStreamingSource>(std::move(header), std::move(py_result), tuple_type, std::move(module_name)));
+        return Pipe(std::make_shared<PythonStreamingSource>(std::move(header), std::move(py_result), tuple_type, std::move(session)));
     }
     else
     {
@@ -199,12 +185,20 @@ Pipe StoragePythonTable::read(
         Block block;
         {
             cpython::GILGuard gil_guard;
-            block = convertPythonResultToBlock(py_result);
-            /// Now we can unload the module
-            cpython::unloadModule(module_name);
-            /// Release the Python object while we still hold the GIL
-            /// to avoid calling Py_XDECREF without GIL at function exit
-            py_result.reset();
+            try
+            {
+                block = convertPythonResultToBlock(py_result);
+                /// Release the Python object while we still hold the GIL
+                /// to avoid calling Py_XDECREF without GIL at function exit
+                py_result.reset();
+                cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/false, /*acquire_gil=*/false);
+            }
+            catch (...)
+            {
+                py_result.reset();
+                cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/true, /*acquire_gil=*/false);
+                std::rethrow_exception(std::current_exception());
+            }
         }
 
         Block filtered_block;
@@ -219,11 +213,15 @@ Pipe StoragePythonTable::read(
 
 SinkToStoragePtr StoragePythonTable::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr /*context*/)
 {
-    String sink_name = sink_function_name.empty() ? function_name : sink_function_name;
-    if (sink_name.empty())
+    auto sink_func = function;
+    if (!sink_function_name.empty())
+        sink_func.entry_function_name = sink_function_name;
+    sink_func.flush_function_name = flush_function_name;
+
+    if (sink_func.entry_function_name.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Python external stream sink requires a function name");
 
-    return std::make_shared<PythonSink>(metadata_snapshot->getSampleBlock(), source_code, std::move(sink_name));
+    return std::make_shared<PythonSink>(metadata_snapshot->getSampleBlock(), std::move(sink_func));
 }
 }
 

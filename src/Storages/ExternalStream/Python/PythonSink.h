@@ -4,7 +4,7 @@
 
 #if USE_PYTHON_UDF
 
-#include <CPython/PyObjectPtr.h>
+#include <CPython/PythonModuleSession.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <base/types.h>
 
@@ -13,22 +13,22 @@ namespace DB
 class PythonSink final : public SinkToStorage
 {
 public:
-    PythonSink(const Block & header, String python_source_, String function_name_);
+    PythonSink(const Block & header, cpython::PythonFunction function_);
 
     ~PythonSink() override;
 
     String getName() const override { return "PythonSink"; }
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+
 protected:
     void consume(Chunk chunk) override;
+    void onFinish() override;
 
 private:
-    void initPython();
+    void finishPython(bool ignore_exceptions);
 
-    String python_source;
-    String function_name;
-    String module_name;
-    cpython::PyObjectPtr py_function;
+    cpython::PythonModuleSessionPtr session;
 };
 }
 

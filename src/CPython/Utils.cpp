@@ -1,4 +1,5 @@
 #include <CPython/Utils.h>
+#include <Poco/JSON/Array.h>
 #include <Poco/UUIDGenerator.h>
 #include <Common/Exception.h>
 
@@ -320,6 +321,136 @@ PyObjectPtr executeObject(const PyObjectPtr & obj, const PyObjectPtr & args)
     }
 
     return exe_result;
+}
+
+PyObjectPtr createArgumentsTuple(const Strings & arguments)
+{
+    PyObjectPtr py_args{PyTuple_New(static_cast<Py_ssize_t>(arguments.size()))};
+    if (!py_args)
+        throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to allocate Python arguments tuple: {}", getExceptionMessage());
+
+    for (size_t i = 0; i < arguments.size(); ++i)
+    {
+        PyObjectPtr py_arg{PyUnicode_FromStringAndSize(arguments[i].data(), static_cast<Py_ssize_t>(arguments[i].size()))};
+        if (!py_arg)
+            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to convert Python argument to string: {}", getExceptionMessage());
+
+        if (PyTuple_SetItem(py_args.get(), static_cast<Py_ssize_t>(i), py_arg.release()) != 0)
+            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to set Python argument tuple item: {}", getExceptionMessage());
+    }
+
+    return py_args;
+}
+
+PyObjectPtr convertJSONValueToPyObject(const Poco::Dynamic::Var & value)
+{
+    if (value.isEmpty())
+        return PyObjectPtr::borrow(Py_None);
+
+    if (value.type() == typeid(Poco::JSON::Object::Ptr))
+    {
+        auto json_object = value.extract<Poco::JSON::Object::Ptr>();
+        PyObjectPtr py_dict{PyDict_New()};
+        if (!py_dict)
+            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to allocate Python dict for JSON object: {}", getExceptionMessage());
+
+        for (const auto & key : json_object->getNames())
+        {
+            PyObjectPtr py_value = convertJSONValueToPyObject(json_object->get(key));
+            if (PyDict_SetItemString(py_dict.get(), key.c_str(), py_value.get()) != 0)
+                throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to set Python dict item '{}': {}", key, getExceptionMessage());
+        }
+
+        return py_dict;
+    }
+
+    if (value.type() == typeid(Poco::JSON::Array::Ptr))
+    {
+        auto json_array = value.extract<Poco::JSON::Array::Ptr>();
+        PyObjectPtr py_list{PyList_New(static_cast<Py_ssize_t>(json_array->size()))};
+        if (!py_list)
+            throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to allocate Python list for JSON array: {}", getExceptionMessage());
+
+        for (size_t i = 0; i < json_array->size(); ++i)
+        {
+            PyObjectPtr py_item = convertJSONValueToPyObject(json_array->get(i));
+            PyList_SET_ITEM(py_list.get(), static_cast<Py_ssize_t>(i), py_item.release());
+        }
+
+        return py_list;
+    }
+
+    if (value.type() == typeid(bool))
+        return PyObjectPtr{PyBool_FromLong(value.extract<bool>() ? 1 : 0)};
+
+    if (value.type() == typeid(Int8))
+        return PyObjectPtr{PyLong_FromLong(value.extract<Int8>())};
+    if (value.type() == typeid(Int16))
+        return PyObjectPtr{PyLong_FromLong(value.extract<Int16>())};
+    if (value.type() == typeid(Int32))
+        return PyObjectPtr{PyLong_FromLong(value.extract<Int32>())};
+    if (value.type() == typeid(Int64))
+        return PyObjectPtr{PyLong_FromLongLong(value.extract<Int64>())};
+    if (value.type() == typeid(UInt8))
+        return PyObjectPtr{PyLong_FromUnsignedLong(value.extract<UInt8>())};
+    if (value.type() == typeid(UInt16))
+        return PyObjectPtr{PyLong_FromUnsignedLong(value.extract<UInt16>())};
+    if (value.type() == typeid(UInt32))
+        return PyObjectPtr{PyLong_FromUnsignedLong(value.extract<UInt32>())};
+    if (value.type() == typeid(UInt64))
+        return PyObjectPtr{PyLong_FromUnsignedLongLong(value.extract<UInt64>())};
+    if (value.type() == typeid(int))
+        return PyObjectPtr{PyLong_FromLong(value.extract<int>())};
+    if (value.type() == typeid(unsigned int))
+        return PyObjectPtr{PyLong_FromUnsignedLong(value.extract<unsigned int>())};
+    if (value.type() == typeid(long))
+        return PyObjectPtr{PyLong_FromLong(value.extract<long>())};
+    if (value.type() == typeid(unsigned long))
+        return PyObjectPtr{PyLong_FromUnsignedLong(value.extract<unsigned long>())};
+
+    if (value.type() == typeid(Float32))
+        return PyObjectPtr{PyFloat_FromDouble(value.extract<Float32>())};
+    if (value.type() == typeid(Float64))
+        return PyObjectPtr{PyFloat_FromDouble(value.extract<Float64>())};
+    if (value.type() == typeid(double))
+        return PyObjectPtr{PyFloat_FromDouble(value.extract<double>())};
+
+    if (value.type() == typeid(String))
+    {
+        const auto & string_value = value.extract<String>();
+        return PyObjectPtr{PyUnicode_FromStringAndSize(string_value.data(), static_cast<Py_ssize_t>(string_value.size()))};
+    }
+
+    throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Unsupported JSON value type for Python init config: {}", value.type().name());
+}
+
+PyObjectPtr createArgumentsTuple(const Poco::JSON::Object::Ptr & argument)
+{
+    if (!argument)
+        return PyObjectPtr{PyTuple_New(0)};
+
+    PyObjectPtr py_args{PyTuple_New(1)};
+    if (!py_args)
+        throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to allocate Python config tuple: {}", getExceptionMessage());
+
+    PyObjectPtr py_arg = convertJSONValueToPyObject(Poco::Dynamic::Var{argument});
+    if (PyTuple_SetItem(py_args.get(), 0, py_arg.release()) != 0)
+        throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to set Python config tuple item: {}", getExceptionMessage());
+
+    return py_args;
+}
+
+PyObjectPtr executeFunction(const std::string & func_name, const std::string & module_name, const Strings & arguments)
+{
+    auto py_func = getFunction(func_name, module_name);
+    auto py_args = createArgumentsTuple(arguments);
+    return executeObject(py_func, py_args);
+}
+
+PyObjectPtr executeFunction(const std::string & func_name, const std::string & module_name, const PyObjectPtr & args)
+{
+    auto py_func = getFunction(func_name, module_name);
+    return executeObject(py_func, args);
 }
 
 bool isGenerator(const PyObjectPtr & obj)

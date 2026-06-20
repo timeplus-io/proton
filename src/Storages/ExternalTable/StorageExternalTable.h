@@ -43,14 +43,11 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
 
+    void alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder & alter_lock_holder) override;
+
     virtual String getType() const = 0;
 
     void updateTableSchema(bool retry_in_background);
-
-    void alter(const AlterCommands &, ContextPtr, AlterLockHolder &) override
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Alter command is not supported for external table yet");
-    }
 
 protected:
     StorageExternalTable(

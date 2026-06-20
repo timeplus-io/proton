@@ -19,7 +19,7 @@ steps:
       CREATE OR REPLACE FUNCTION test_rjust(value string) RETURNS string LANGUAGE PYTHON AS
       $$
       def test_rjust(value):
-          res = [x.rjust(5, '1') for x in value]
+          res = [x.decode('utf-8').rjust(5, '1') for x in value]
           return res
       $$;
 

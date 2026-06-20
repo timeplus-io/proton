@@ -39,6 +39,11 @@ public:
     /// Validate pip private index URL format.
     static void validatePipIndexUrl(const std::string & index_url, const char * option_name);
 
+    /// True when the text contains at least one non-blank, non-comment line. Shares the parser's
+    /// line-skipping rules so "nothing to install" checks cannot drift from parseRequirementsText
+    /// (which throws on such content instead of returning an empty list).
+    static bool hasEffectiveRequirementLines(const std::string & requirements_text);
+
     /// Validate requirements text content.
     static std::vector<std::string> parseRequirementsText(const std::string & requirements_text);
 

@@ -31,6 +31,7 @@ steps:
       file = "/var/lib/proton/user_files/0047_01_python.txt"
       def write_file(value):
           for v in value:
+              v = v.decode('utf-8')
               with open(file, "a") as f:
                   f.write(f"{v}")
           return value

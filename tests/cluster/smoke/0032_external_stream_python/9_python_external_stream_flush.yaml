@@ -1,0 +1,243 @@
+tags:
+  - python_external_stream
+  - external_stream
+
+cluster:
+  - p1k1
+  - p3k1
+
+description: |
+  Python external stream sink flush hook (flush_function_name): buffered data is
+  flushed once on graceful close (before deinit) and periodically on every
+  checkpoint while a long-running materialized view keeps writing into the sink.
+
+steps:
+  ## ── reset interpreter-global state so case retries start clean ──
+  ## (the builtins counters live in the server's python interpreter and
+  ##  survive stream re-creation, which would break checks on retry)
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_flush_reset
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_flush_reset
+      (
+        ok int32
+      )
+      AS $$
+      import builtins
+
+      def reset_flush_smoke():
+          for attr in ('_tp_pyflush_buffer', '_tp_pyflush_flushed', '_tp_pyflush_count',
+                       '_tp_pyckpt_buffer', '_tp_pyckpt_flushed'):
+              if hasattr(builtins, attr):
+                  delattr(builtins, attr)
+          return [(1,)]
+      $$
+      SETTINGS type='python', read_function_name='reset_flush_smoke';
+
+  - type: query
+    node: [p1]
+    sql: select ok from py_flush_reset
+
+  ## ── flush on INSERT finish (graceful close, before deinit) ──
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_flush_sink
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_flush_sink
+      (
+        val int32,
+        flush_count int32
+      )
+      AS $$
+      import builtins
+
+      def init_flush_smoke():
+          builtins._tp_pyflush_buffer = []
+          builtins._tp_pyflush_flushed = getattr(builtins, '_tp_pyflush_flushed', [])
+          builtins._tp_pyflush_count = getattr(builtins, '_tp_pyflush_count', 0)
+
+      def write_flush_smoke(val, flush_count):
+          builtins._tp_pyflush_buffer.extend(val)
+
+      def flush_smoke():
+          builtins._tp_pyflush_count += 1
+          builtins._tp_pyflush_flushed.extend(builtins._tp_pyflush_buffer)
+          builtins._tp_pyflush_buffer = []
+
+      def read_flush_smoke():
+          flushed = getattr(builtins, '_tp_pyflush_flushed', [])
+          count = getattr(builtins, '_tp_pyflush_count', 0)
+          return [(v, count) for v in flushed]
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='read_flush_smoke',
+        write_function_name='write_flush_smoke',
+        init_function_name='init_flush_smoke',
+        flush_function_name='flush_smoke';
+
+  - type: query
+    node: [p1]
+    sql: insert into py_flush_sink(val, flush_count) values (1, 0), (2, 0), (3, 0)
+
+  - type: stream
+    name: py-flush-read-first
+    node: [p1]
+    query: select val, flush_count from py_flush_sink order by val
+    schema:
+      - name: val
+        type: int32
+      - name: flush_count
+        type: int32
+
+  - type: check
+    target_name: py-flush-read-first
+    expected_result:
+      - - 1
+        - 1
+      - - 2
+        - 1
+      - - 3
+        - 1
+
+  - type: query
+    node: [p1]
+    sql: insert into py_flush_sink(val, flush_count) values (4, 0)
+
+  - type: stream
+    name: py-flush-read-second
+    node: [p1]
+    query: select val, flush_count from py_flush_sink order by val
+    schema:
+      - name: val
+        type: int32
+      - name: flush_count
+        type: int32
+
+  - type: check
+    target_name: py-flush-read-second
+    expected_result:
+      - - 1
+        - 2
+      - - 2
+        - 2
+      - - 3
+        - 2
+      - - 4
+        - 2
+
+  ## ── periodic flush on checkpoints while the sink stays open (MV) ──
+
+  - type: query
+    node: [p1]
+    sql: drop view if exists py_flush_ckpt_mv
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_flush_ckpt_sink
+
+  - type: query
+    node: [p1]
+    sql: drop stream if exists py_flush_ckpt_input
+
+  - type: query
+    node: [p1]
+    sql: create stream py_flush_ckpt_input (val int32)
+
+  - type: query
+    node: [p1]
+    sql: |
+      create external stream py_flush_ckpt_sink
+      (
+        val int32
+      )
+      AS $$
+      import builtins
+
+      def init_ckpt_smoke():
+          builtins._tp_pyckpt_buffer = []
+          builtins._tp_pyckpt_flushed = getattr(builtins, '_tp_pyckpt_flushed', [])
+
+      def write_ckpt_smoke(val):
+          builtins._tp_pyckpt_buffer.extend(val)
+
+      def flush_ckpt_smoke():
+          builtins._tp_pyckpt_flushed.extend(builtins._tp_pyckpt_buffer)
+          builtins._tp_pyckpt_buffer = []
+
+      def read_ckpt_smoke():
+          return [(v,) for v in getattr(builtins, '_tp_pyckpt_flushed', [])]
+      $$
+      SETTINGS
+        type='python',
+        read_function_name='read_ckpt_smoke',
+        write_function_name='write_ckpt_smoke',
+        init_function_name='init_ckpt_smoke',
+        flush_function_name='flush_ckpt_smoke';
+
+  - type: wait
+    time: 2
+
+  ## pin the MV to node 1: the python sink's flushed data lives in that node's
+  ## interpreter, and the read step below must run on the same node to see it
+  - type: query
+    node: [p1]
+    sql: |
+      create materialized view py_flush_ckpt_mv into py_flush_ckpt_sink
+      as select val from py_flush_ckpt_input
+      settings checkpoint_interval=1
+
+  - type: wait
+    time: 3
+
+  - type: query
+    node: [p1]
+    sql: insert into py_flush_ckpt_input(val) values (10), (20)
+
+  ## give the MV time to process the rows and pass at least one checkpoint,
+  ## which must flush the buffered rows while the sink session stays open
+  - type: wait
+    time: 6
+
+  - type: stream
+    name: py-flush-ckpt-read
+    node: [p1]
+    query: select val from py_flush_ckpt_sink where val in (10, 20) order by val
+    schema:
+      - name: val
+        type: int32
+
+  - type: check
+    target_name: py-flush-ckpt-read
+    expected_result:
+      - - 10
+      - - 20
+
+  - type: query
+    node: [p1]
+    sql: drop view py_flush_ckpt_mv
+
+  - type: query
+    node: [p1]
+    sql: drop stream py_flush_ckpt_sink
+
+  - type: query
+    node: [p1]
+    sql: drop stream py_flush_ckpt_input
+
+  - type: query
+    node: [p1]
+    sql: drop stream py_flush_sink
+
+  - type: query
+    node: [p1]
+    sql: drop stream py_flush_reset
