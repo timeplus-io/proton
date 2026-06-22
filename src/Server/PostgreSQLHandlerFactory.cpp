@@ -1,7 +1,6 @@
 #include "PostgreSQLHandlerFactory.h"
-#include <memory>
-#include <filesystem>
 #include <Server/PostgreSQLHandler.h>
+#include <Poco/Util/LayeredConfiguration.h>
 
 namespace DB
 {
