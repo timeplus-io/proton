@@ -83,7 +83,7 @@ jobs:
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --sanitizer $SANITIZER --proton-build --enable-python-free-threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         # upload ccache back to S3
         tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
@@ -108,7 +108,7 @@ jobs:
         rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+        docker build . --network host --build-arg ENABLE_PYTHON_FREE_THREADED=1 --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
 
         # push docker image
         docker push timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA

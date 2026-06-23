@@ -3,9 +3,9 @@ ARG FROM_TAG=fae41f7606bb
 # https://github.com/timeplus-io/proton-enterprise/issues/5737
 FROM clickhouse/unit-test:$FROM_TAG
 
-# Install BOTH Python 3.14 ABIs so CPythonTest family actually runs no matter
-# which embedded build this image hosts: proton_ci builds cp314t (free-threaded)
-# while nightly_test / manual_trigger_build build the default cp314 (GIL).
+# Install BOTH Python 3.14 ABIs so the CPythonTest family runs no matter which
+# embedded build this image hosts. The amd64 CI workflows build cp314t
+# (free-threaded), but a GIL cp314 binary may still be dropped in here;
 # PythonInterpreterInfo rejects any ABI-mismatched interpreter, and the base
 # image's default python3 is 3.10/3.12 — without the matching binary the whole
 # CPythonTest family silently GTEST_SKIPs.

@@ -100,7 +100,7 @@ jobs:
         rm cache.tar.gz
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type relwithdebinfo --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type relwithdebinfo --proton-build --enable-python-free-threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -161,7 +161,7 @@ jobs:
         rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image for both Docker Hub and GHCR (using the stripped binary)
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/$PROTON_BINARY \
+        docker build . --network host --build-arg ENABLE_PYTHON_FREE_THREADED=1 --build-arg single_binary_location_url=http://localhost:8080/$PROTON_BINARY \
           -t timeplus/proton:${GITHUB_SHA}_amd64 \
           -t ghcr.io/timeplus-io/proton:${GITHUB_SHA}_amd64
 
@@ -173,20 +173,32 @@ jobs:
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
         aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal2/proton-oss/
 
-        # prepare python package
+        # prepare python package (free-threaded cp314t, to match the FT release binary)
+        # Source: deadsnakes python3.14-nogil, same as docker/server/Dockerfile. Stock
+        # python:3.14 images are GIL (cp314) and the embedded FT interpreter's ABI guard
+        # would reject their libpython3.14.so, so we stage the cp314t ABI instead.
         mkdir python-Linux-x86_64
         cd python-Linux-x86_64
         mkdir lib
         mkdir bin
-        docker pull python:3.10
 
         # warning: do not use double quote here. It will be remove when the run_command workflow rending this command script
-        docker run --name python_packages python:3.10 sh -c 'pip install --upgrade truststore; pip install --force-reinstall --no-cache-dir -t /usr/local/lib/python3.10/site-packages/ timeplus-neutrino==0.1.12;'
-        docker cp python_packages:/usr/local/lib/libpython3.so ./lib/libpython3.so
-        docker cp python_packages:/usr/local/lib/libpython3.10.so.1.0 ./lib/libpython3.10.so.1.0
-        docker cp python_packages:/usr/local/lib/libpython3.10.so ./lib/libpython3.10.so
-        docker cp python_packages:/usr/local/lib/python3.10 ./lib/python3.10
-        docker cp python_packages:/usr/local/bin/python3.10 ./bin/python3.10
+        docker run --name python_packages ubuntu:22.04 sh -c 'set -eux; export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y --no-install-recommends software-properties-common gpg-agent ca-certificates; add-apt-repository -y ppa:deadsnakes/ppa; apt-get update; apt-get install -y --no-install-recommends python3.14-nogil python3.14-venv; python3.14t -m ensurepip --upgrade --default-pip; python3.14t -m pip install --upgrade truststore'
+
+        # cp314t shared lib + interpreter + stdlib (amd64 multiarch path)
+        docker cp python_packages:/usr/lib/x86_64-linux-gnu/libpython3.14t.so.1.0 ./lib/libpython3.14t.so.1.0
+        docker cp python_packages:/usr/lib/x86_64-linux-gnu/libpython3.14t.so ./lib/libpython3.14t.so
+        docker cp python_packages:/usr/lib/python3.14 ./lib/python3.14
+        docker cp python_packages:/usr/bin/python3.14t ./bin/python3.14t
+        docker rm -f python_packages
+
+        # FT interpreter resolves the stdlib landmark via getpath ABI_THREAD=t
+        # (lib/python3.14t/os.py); symlink it onto the shared tree, as the server image does.
+        ln -s python3.14 ./lib/python3.14t
+
+        # record provenance inside the artifact
+        echo ubuntu:22.04 + deadsnakes python3.14-nogil > BASE_IMAGE.txt
+
         tar -zcf $GITHUB_WORKSPACE/python-Linux-x86_64.tar.gz .
 
     secrets:
@@ -557,7 +569,7 @@ jobs:
           export CC=$(brew --prefix llvm@21)/bin/clang
           export CXX=$(brew --prefix llvm@21)/bin/clang++
           export PATH=$(brew --prefix llvm@21)/bin:$PATH
-          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PROTON_LOCAL=OFF -DENABLE_PULSAR=ON -DENABLE_PYTHON_UDF=ON -DENABLE_PROTON_PYTHON=ON
+          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PROTON_LOCAL=OFF -DENABLE_PULSAR=ON -DENABLE_PYTHON_UDF=ON -DENABLE_PROTON_PYTHON=ON -DENABLE_PYTHON_FREE_THREADED=ON
 
       # Compile the project using Ninja
       - name: Build with Ninja
@@ -626,7 +638,12 @@ jobs:
             exit 1
           fi
 
-          # Prepare python3.10
+          # NOTICE / TODO(#11704 follow-up): this is a PRE-BUILT S3 artifact and is
+          # STILL python3.10 (stale). It MUST be regenerated as free-threaded cp314t
+          # macOS arm64 to match the FT binary built above; until then the macOS arm
+          # native release ships an ABI-mismatched python runtime (embedded UDF init
+          # fails the PythonInterpreterInfo guard). This YAML only pulls the artifact —
+          # regenerate it (python.org freethreaded / source build) and reupload to S3.
           aws s3 cp --no-progress ${S3_PATH}python-Darwin-arm64.tar.gz ${{ env.build_directory }}/programs/python-Darwin-arm64.tar.gz
 
       # Print SHA256 Checksum

@@ -112,12 +112,18 @@ jobs:
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
 
         enable_python=""
+        # Free-threaded (cp314t) embedded CPython tracks python-udf: enabled when
+        # python-udf is on, dropped (flag + docker build-arg) when it is off.
+        free_threaded="--enable-python-free-threaded"
+        ft_build_arg="--build-arg ENABLE_PYTHON_FREE_THREADED=1"
         if [ "${{ github.event.inputs.python_udf }}" == "false" ]; then
           enable_python="--disable-python-udf"
+          free_threaded=""
+          ft_build_arg=""
         fi
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --sanitizer $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --sanitizer $SANITIZER --proton-build $enable_python $free_threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -150,7 +156,7 @@ jobs:
         rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
+        docker build . --network host $ft_build_arg --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
 
         # push docker image
         docker push timeplus/proton:$TAG
@@ -187,12 +193,18 @@ jobs:
         rm cache${ARCH:+_}$ARCH.tar.gz
 
         enable_python=""
+        # Free-threaded (cp314t) embedded CPython tracks python-udf: enabled when
+        # python-udf is on, dropped (flag + docker build-arg) when it is off.
+        free_threaded="--enable-python-free-threaded"
+        ft_build_arg="--build-arg ENABLE_PYTHON_FREE_THREADED=1"
         if [ "${{ github.event.inputs.python_udf }}" == "false" ]; then
           enable_python="--disable-python-udf"
+          free_threaded=""
+          ft_build_arg=""
         fi
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type ${{ github.event.inputs.build_type }} --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type ${{ github.event.inputs.build_type }} --proton-build $enable_python $free_threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -220,7 +232,7 @@ jobs:
         rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image
-        docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
+        docker build . --network host $ft_build_arg --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton:$TAG
 
         # push docker image
         docker push timeplus/proton:$TAG

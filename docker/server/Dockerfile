@@ -4,17 +4,10 @@
 # deadsnakes. See memory project_cpython_docker_source.md and the PR
 # #11852 review thread for why deadsnakes (vs python-build-standalone).
 #
-# TODO(#11704 follow-up): restore the pre-installed timeplus-neutrino
-# site-packages tree here once proton-driver ships a cp314-compatible
-# sdist on PyPI. The patched branch
-# timeplus-io/proton-python-driver@yokofly/cp314t-cython-3.2 regenerates
-# the Cython .c outputs with Cython 3.2.4; pair it with Confluent's
-# librdkafka-dev 2.14.0 (deb [signed-by=/usr/share/keyrings/confluent-
-# archive-keyring.gpg] https://packages.confluent.io/clients/deb jammy
-# main) and build confluent-kafka / lz4 / zstandard / timeplus-connect /
-# proton-driver from sdist into --prefix /out. Deferred for this PR
-# because none of the proton_ci.yml jobs (unit / smoke / stateless /
-# stateful) actually exercise neutrino or proton-driver.
+# timeplus-neutrino / proton-driver are intentionally NOT pre-installed in this
+# runtime: the Timeplus client stack is an on-demand install via
+# `SYSTEM INSTALL PYTHON PACKAGE`, and no proton_ci.yml job (unit / smoke /
+# stateless / stateful) needs it baked into the image.
 FROM ubuntu:22.04 AS python
 ENV DEBIAN_FRONTEND=noninteractive
 # ENABLE_PYTHON_UDF controls whether this builder stage stages a CPython 3.14

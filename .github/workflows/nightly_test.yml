@@ -39,11 +39,17 @@ jobs:
 
             # python udf arm nonsupport: https://github.com/timeplus-io/proton-enterprise/issues/6944
             enable_python=""
+            # Free-threaded (cp314t) embedded CPython is amd64-only here; arm
+            # disables python-udf entirely, so it gets no FT runtime either.
+            free_threaded="--enable-python-free-threaded"
+            ft_build_arg="--build-arg ENABLE_PYTHON_FREE_THREADED=1"
             if [ "$ARCH" == "arm" ]; then
               enable_python="--disable-python-udf"
+              free_threaded=""
+              ft_build_arg=""
             fi
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-21 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-21 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python $free_threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -73,7 +79,7 @@ jobs:
             cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
             rm -rf resources/protos/google/protobuf/unittest_*
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker build . --network host $ft_build_arg --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
             docker push timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
     steps:
       - name: display command
@@ -243,11 +249,17 @@ jobs:
 
             # python udf arm nonsupport: https://github.com/timeplus-io/proton-enterprise/issues/6944
             enable_python=""
+            # Free-threaded (cp314t) embedded CPython is amd64-only here; arm
+            # disables python-udf entirely, so it gets no FT runtime either.
+            free_threaded="--enable-python-free-threaded"
+            ft_build_arg="--build-arg ENABLE_PYTHON_FREE_THREADED=1"
             if [ "$ARCH" == "arm" ]; then
               enable_python="--disable-python-udf"
+              free_threaded=""
+              ft_build_arg=""
             fi
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build $enable_python $free_threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -271,7 +283,7 @@ jobs:
             cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
             rm -rf resources/protos/google/protobuf/unittest_*
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$ARCH-$GITHUB_SHA
+            docker build . --network host $ft_build_arg --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$ARCH-$GITHUB_SHA
             docker push timeplus/proton_testing:testing-$ARCH-$GITHUB_SHA
 
             # push release image weekly for testing
@@ -410,11 +422,17 @@ jobs:
 
             # python udf arm nonsupport: https://github.com/timeplus-io/proton-enterprise/issues/6944
             enable_python=""
+            # Free-threaded (cp314t) embedded CPython is amd64-only here; arm
+            # disables python-udf entirely, so it gets no FT runtime either.
+            free_threaded="--enable-python-free-threaded"
+            ft_build_arg="--build-arg ENABLE_PYTHON_FREE_THREADED=1"
             if [ "$ARCH" == "arm" ]; then
               enable_python="--disable-python-udf"
+              free_threaded=""
+              ft_build_arg=""
             fi
 
-            ./docker/packager/packager --package-type binary --docker-image-version clang-21 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
+            ./docker/packager/packager --package-type binary --docker-image-version clang-21 ${SANITIZER:+--sanitizer} $SANITIZER --proton-build $enable_python $free_threaded --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
             if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
               echo "Compiling proton Failed"
@@ -443,7 +461,7 @@ jobs:
             cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
             rm -rf resources/protos/google/protobuf/unittest_*
 
-            docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
+            docker build . --network host $ft_build_arg --build-arg single_binary_location_url=http://localhost:8080/proton -t timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
             docker push timeplus/proton_testing:testing-$SANITIZER-$ARCH-$GITHUB_SHA
   
             # push address sanitizer image daily for testing
@@ -518,6 +536,7 @@ jobs:
           --docker-image-version clang-21 \
           --sanitizer "$SANITIZER" \
           --proton-build \
+          --enable-python-free-threaded \
           --enable-proton-local \
           --cache ccache \
           --ccache_dir "$GITHUB_WORKSPACE/ccache" \
