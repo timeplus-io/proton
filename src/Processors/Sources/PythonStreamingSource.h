@@ -48,11 +48,14 @@ protected:
 
     Chunk generate() override;
 
-    /// Offsets-only checkpoint: a Python generator cannot be seeked, so we
-    /// persist only lastProcessedSN() and never reset the start SN (mirrors
-    /// RemoteSource / enterprise #11753 offsets-only mode).
+    /// Non-replayable source: a Python generator cannot be seeked, so there is
+    /// no resumable position to persist or restore. doCheckpoint emits a barrier
+    /// and notifies the coordinator but saves no recoverable SN; recovery and
+    /// start-SN reset are no-ops (mirrors GenerateRandomSource). This avoids
+    /// advertising a recovered offset the generator cannot honor, which would
+    /// otherwise replay already-emitted rows into recovered downstream state.
     Chunk doCheckpoint(CheckpointContextPtr) override;
-    void doRecover(CheckpointContextPtr) override;
+    void doRecover(CheckpointContextPtr) override { }
     void doResetStartSN(Int64 /*sn*/) override { }
 
 private:

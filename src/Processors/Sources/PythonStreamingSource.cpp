@@ -7,11 +7,8 @@
 #include <CPython/PythonModuleSession.h>
 #include <CPython/Utils.h>
 #include <Checkpoint/CheckpointContext.h>
-#include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
 
@@ -337,9 +334,9 @@ Chunk PythonStreamingSource::generate()
         /// Only clear if the stored ID is still ours — avoids clobbering
         /// a concurrent generate() call's thread ID.
         python_thread_id.compare_exchange_strong(this_thread_id, 0, std::memory_order_release);
-        /// Advance the processed offset consumed by the offsets-only checkpoint:
-        /// doCheckpoint() persists lastProcessedSN(); a Python iterator cannot
-        /// seek, so recovery restores the offset only.
+        /// Advance the processed SN so the checkpoint barrier is taken; the value
+        /// is not persisted/restored — a Python iterator has no resumable
+        /// position (see doCheckpoint / doRecover).
         setLastProcessedSN(lastProcessedSN() + 1);
     });
 
@@ -466,25 +463,16 @@ Chunk PythonStreamingSource::generate()
 
 Chunk PythonStreamingSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
-    /// A Python iterator cannot be seeked, so there is no replayable state.
-    /// Persist only the processed offset (offsets-only checkpoint) and emit a
-    /// barrier chunk, mirroring RemoteSource.
+    /// A Python iterator cannot be seeked, so there is no resumable position to
+    /// persist. Notify the coordinator we have seen this checkpoint epoch (no
+    /// state saved) and emit a barrier chunk, mirroring GenerateRandomSource.
+    /// doRecover()/doResetStartSN() are no-ops, so the source never advertises a
+    /// recovered offset it cannot honor.
+    IProcessor::checkpoint(ckpt_ctx_);
+
     auto result = Chunk{getPort().getHeader().getColumns(), 0};
     result.setCheckpointContext(ckpt_ctx_);
-
-    ckpt_ctx_->coordinator->checkpoint(
-        getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { writeIntBinary(lastProcessedSN(), wb); });
-
     return result;
-}
-
-void PythonStreamingSource::doRecover(CheckpointContextPtr ckpt_ctx_)
-{
-    ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
-        Int64 recovered_sn = 0;
-        readIntBinary(recovered_sn, rb);
-        setLastCheckpointSN(recovered_sn);
-    });
 }
 }
 
