@@ -638,13 +638,18 @@ jobs:
             exit 1
           fi
 
-          # NOTICE / TODO(#11704 follow-up): this is a PRE-BUILT S3 artifact and is
-          # STILL python3.10 (stale). It MUST be regenerated as free-threaded cp314t
-          # macOS arm64 to match the FT binary built above; until then the macOS arm
-          # native release ships an ABI-mismatched python runtime (embedded UDF init
-          # fails the PythonInterpreterInfo guard). This YAML only pulls the artifact —
-          # regenerate it (python.org freethreaded / source build) and reupload to S3.
-          aws s3 cp --no-progress ${S3_PATH}python-Darwin-arm64.tar.gz ${{ env.build_directory }}/programs/python-Darwin-arm64.tar.gz
+          # Prepare the free-threaded CPython 3.14 (cp314t) macOS arm64 runtime.
+          # NOTE: ${S3_PATH} is a fixed prefix shared by ALL release branches.
+          # python-Darwin-arm64.tar.gz (no version infix) is the legacy python 3.10
+          # runtime consumed by the 3.x maintenance branches — never overwrite it.
+          # This branch embeds cp314t, so it reads a SEPARATE, ABI-tagged object.
+          # That object is uploaded ONCE, out of band: a macOS arm64 free-threaded
+          # CPython 3.14 runtime (bin/python3.14t, lib/python3.14t) in the same
+          # layout as the Linux asset. The external interpreter must be free-threaded
+          # or the PythonInterpreterInfo startup guard rejects it. It is renamed to
+          # the legacy basename below so the release asset name (and downstream
+          # install scripts) stay unchanged.
+          aws s3 cp --no-progress ${S3_PATH}python3.14t-Darwin-arm64.tar.gz ${{ env.build_directory }}/programs/python-Darwin-arm64.tar.gz
 
       # Print SHA256 Checksum
       - name: Print SHA256 Checksum
