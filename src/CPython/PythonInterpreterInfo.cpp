@@ -112,13 +112,9 @@ PythonInterpreterInfo PythonInterpreterInfo::collect(const std::string & program
     if (!python_interpreter_path.has_value())
         throw DB::Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Cannot find python interpreter");
 
-    /// TODO(#12128): `free_threaded` below is derived from sys._is_gil_enabled(),
-    /// which is the *runtime* GIL mode, not the build ABI. A cp314t interpreter
-    /// run with PYTHON_GIL=1 reports false here and is then wrongly rejected by
-    /// the Py_GIL_DISABLED ABI guard. Switch to an ABI indicator
-    /// (sysconfig.get_config_var("Py_GIL_DISABLED") / SOABI / sys.abiflags).
     auto command = python_interpreter_path.value() + R"""( <<'EOF'
 import sys
+import sysconfig
 import site
 import os
 import json
@@ -130,10 +126,11 @@ try:
         "version_major": sys.version_info.major,
         "version_minor": sys.version_info.minor,
     }
-    try:
-        info["free_threaded"] = not sys._is_gil_enabled()
-    except AttributeError:
-        info["free_threaded"] = False
+    # Detect the build ABI (free-threaded / cp314t), NOT the runtime GIL mode:
+    # a cp314t interpreter run with PYTHON_GIL=1 still has the free-threaded ABI
+    # and site-packages layout, so the ABI guard must match on the build flag.
+    # Py_GIL_DISABLED is 1 for free-threaded builds, 0/None otherwise.
+    info["free_threaded"] = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
     # Derive the user site-packages suffix relative to user base.
     # This is correct for both regular and free-threaded builds.
