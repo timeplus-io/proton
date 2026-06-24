@@ -112,6 +112,11 @@ PythonInterpreterInfo PythonInterpreterInfo::collect(const std::string & program
     if (!python_interpreter_path.has_value())
         throw DB::Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Cannot find python interpreter");
 
+    /// TODO(#12128): `free_threaded` below is derived from sys._is_gil_enabled(),
+    /// which is the *runtime* GIL mode, not the build ABI. A cp314t interpreter
+    /// run with PYTHON_GIL=1 reports false here and is then wrongly rejected by
+    /// the Py_GIL_DISABLED ABI guard. Switch to an ABI indicator
+    /// (sysconfig.get_config_var("Py_GIL_DISABLED") / SOABI / sys.abiflags).
     auto command = python_interpreter_path.value() + R"""( <<'EOF'
 import sys
 import site

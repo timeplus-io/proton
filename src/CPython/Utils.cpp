@@ -232,17 +232,18 @@ namespace
 /// PyDict_Next. That is safe by contract but relies on the dict's internal
 /// version counter behaviour, which differs under PEP 703 free-threaded
 /// iteration — PyDict_Next has been observed to silently drop not-yet-visited
-/// entries after an in-place value replacement on 3.14t. We snapshot the
-/// keys first (borrowed references stay valid as long as the GIL / scope
-/// prevents the dict's own refs from being released) and then do the
-/// substitution, which is deterministic on both builds.
+/// entries after an in-place value replacement on 3.14t. We snapshot the keys
+/// first, holding an OWNED ref to each (the SetItem(None) pass decrefs old
+/// values, which can run __del__ that mutates/clears this dict and would free
+/// a borrowed key before we visit it), and then do the substitution, which is
+/// deterministic on both builds.
 void clearModuleDictLikeCPython(PyObject * d)
 {
     if (!d)
         return;
 
-    std::vector<PyObject *> pass1_keys; /// single-underscore names (_foo)
-    std::vector<PyObject *> pass2_keys; /// everything else except __builtins__
+    std::vector<PyObjectPtr> pass1_keys; /// single-underscore names (_foo)
+    std::vector<PyObjectPtr> pass2_keys; /// everything else except __builtins__
 
     Py_ssize_t pos = 0;
     PyObject * key = nullptr;
@@ -255,22 +256,24 @@ void clearModuleDictLikeCPython(PyObject * d)
         if (PyUnicode_CompareWithASCIIString(key, "__builtins__") == 0)
             continue;
 
+        /// borrow() increfs: keep an owned ref so a __del__ fired by the
+        /// SetItem(None) pass below cannot free a still-queued key.
         if (PyUnicode_GetLength(key) >= 2
             && PyUnicode_READ_CHAR(key, 0) == '_'
             && PyUnicode_READ_CHAR(key, 1) != '_')
-            pass1_keys.push_back(key);
+            pass1_keys.push_back(PyObjectPtr::borrow(key));
         else
-            pass2_keys.push_back(key);
+            pass2_keys.push_back(PyObjectPtr::borrow(key));
     }
 
-    for (PyObject * k : pass1_keys)
+    for (const auto & k : pass1_keys)
     {
-        if (PyDict_SetItem(d, k, Py_None) != 0)
+        if (PyDict_SetItem(d, k.get(), Py_None) != 0)
             PyErr_Clear();
     }
-    for (PyObject * k : pass2_keys)
+    for (const auto & k : pass2_keys)
     {
-        if (PyDict_SetItem(d, k, Py_None) != 0)
+        if (PyDict_SetItem(d, k.get(), Py_None) != 0)
             PyErr_Clear();
     }
 }

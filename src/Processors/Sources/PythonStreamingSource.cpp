@@ -6,8 +6,12 @@
 #include <CPython/GILGuard.h>
 #include <CPython/PythonModuleSession.h>
 #include <CPython/Utils.h>
+#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
 
@@ -99,11 +103,20 @@ void PythonStreamingSource::finishPython(bool ignore_exceptions, bool acquire_gi
             return;
 
         auto cleanup = [this] {
-            if (py_iterator)
+            /// Detach the iterator under the lock so a concurrent onCancel() /
+            /// generate() never observes a half-reset pointer; the close() call
+            /// below runs without the lock held.
+            cpython::PyObjectPtr iter_to_close;
+            {
+                std::lock_guard<std::mutex> lock(py_obj_mutex);
+                iter_to_close = std::move(py_iterator);
+            }
+
+            if (iter_to_close)
             {
                 /// Finalize generators before deinit so hook code observes released iterator state.
-                tryCallNoArgMethod(py_iterator.get(), "close");
-                py_iterator.reset();
+                tryCallNoArgMethod(iter_to_close.get(), "close");
+                iter_to_close.reset();
             }
 
             cpython::PythonModuleSession::closeSession(session, /*ignore_exceptions=*/false, /*acquire_gil=*/false);
@@ -151,10 +164,19 @@ void PythonStreamingSource::onCancel() noexcept
     {
         cpython::GILGuard gil_guard;
 
-        if (py_iterator)
+        /// Take a strong ref under the lock, then drop the lock before calling
+        /// into Python so cancellation can still interrupt a blocked iterator.
+        cpython::PyObjectPtr iter_local;
         {
-            bool cancelled = tryCallNoArgMethod(py_iterator.get(), "cancel");
-            cancelled = tryCallNoArgMethod(py_iterator.get(), "close") || cancelled;
+            std::lock_guard<std::mutex> lock(py_obj_mutex);
+            if (py_iterator)
+                iter_local = cpython::PyObjectPtr::borrow(py_iterator.get());
+        }
+
+        if (iter_local)
+        {
+            bool cancelled = tryCallNoArgMethod(iter_local.get(), "cancel");
+            cancelled = tryCallNoArgMethod(iter_local.get(), "close") || cancelled;
 
             /// If the iterator doesn't provide a cancellation hook, try to
             /// interrupt the executing thread. Use only the CURRENT thread
@@ -315,9 +337,26 @@ Chunk PythonStreamingSource::generate()
         /// Only clear if the stored ID is still ours — avoids clobbering
         /// a concurrent generate() call's thread ID.
         python_thread_id.compare_exchange_strong(this_thread_id, 0, std::memory_order_release);
-        /// Assume each generated chunk corresponds to processing one record for checkpointing purposes. Adjust as needed based on actual semantics.
+        /// Advance the processed offset consumed by the offsets-only checkpoint:
+        /// doCheckpoint() persists lastProcessedSN(); a Python iterator cannot
+        /// seek, so recovery restores the offset only.
         setLastProcessedSN(lastProcessedSN() + 1);
     });
+
+    /// Take a strong ref to the iterator under the lock so a concurrent
+    /// finishPython() reset cannot free it mid-iteration; release the lock
+    /// before iterNext() so the (possibly blocking) call stays interruptible.
+    cpython::PyObjectPtr iter_local;
+    {
+        std::lock_guard<std::mutex> lock(py_obj_mutex);
+        if (py_iterator)
+            iter_local = cpython::PyObjectPtr::borrow(py_iterator.get());
+    }
+    if (!iter_local)
+    {
+        exhausted.store(true, std::memory_order_release);
+        return {};
+    }
 
     const auto & output_header = getPort().getHeader();
 
@@ -332,7 +371,7 @@ Chunk PythonStreamingSource::generate()
         cpython::PyObjectPtr next_item;
         try
         {
-            next_item = cpython::iterNext(py_iterator);
+            next_item = cpython::iterNext(iter_local);
         }
         catch (const Exception & e)
         {
@@ -423,6 +462,29 @@ Chunk PythonStreamingSource::generate()
 
         return Chunk(std::move(output_columns), block.rows());
     }
+}
+
+Chunk PythonStreamingSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+{
+    /// A Python iterator cannot be seeked, so there is no replayable state.
+    /// Persist only the processed offset (offsets-only checkpoint) and emit a
+    /// barrier chunk, mirroring RemoteSource.
+    auto result = Chunk{getPort().getHeader().getColumns(), 0};
+    result.setCheckpointContext(ckpt_ctx_);
+
+    ckpt_ctx_->coordinator->checkpoint(
+        getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { writeIntBinary(lastProcessedSN(), wb); });
+
+    return result;
+}
+
+void PythonStreamingSource::doRecover(CheckpointContextPtr ckpt_ctx_)
+{
+    ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
+        Int64 recovered_sn = 0;
+        readIntBinary(recovered_sn, rb);
+        setLastCheckpointSN(recovered_sn);
+    });
 }
 }
 

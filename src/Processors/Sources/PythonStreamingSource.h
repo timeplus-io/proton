@@ -26,8 +26,13 @@ namespace DB
 ///   - onCancel() may be called concurrently from a different thread.
 ///   - finishPython() may be called from generate(), onCancel(), or the
 ///     destructor — guarded by `finish_once` to prevent double execution.
-///   - All Python object access (`py_iterator`, `session`) is protected
-///     by the GIL guard; teardown is serialized by `finish_once`.
+///   - Under free-threading the GIL guard no longer serializes Python access,
+///     so `py_obj_mutex` guards the *lifetime* of the `py_iterator` member:
+///     readers (generate()/onCancel()) take a strong ref under the lock and
+///     release it before any Python call, while finishPython() detaches the
+///     member under the lock. The mutex protects the C++ pointer move/reset
+///     lifetime only; Python calls run without holding it, so a blocked
+///     iterator can still be interrupted by onCancel().
 class PythonStreamingSource final : public Streaming::ISource
 {
 public:
@@ -42,6 +47,13 @@ protected:
     void onCancel() noexcept override;
 
     Chunk generate() override;
+
+    /// Offsets-only checkpoint: a Python generator cannot be seeked, so we
+    /// persist only lastProcessedSN() and never reset the start SN (mirrors
+    /// RemoteSource / enterprise #11753 offsets-only mode).
+    Chunk doCheckpoint(CheckpointContextPtr) override;
+    void doRecover(CheckpointContextPtr) override;
+    void doResetStartSN(Int64 /*sn*/) override { }
 
 private:
     Block convertPythonResultToBlock(const cpython::PyObjectPtr & py_result) const;
@@ -69,6 +81,11 @@ private:
     std::atomic<unsigned long> python_thread_id{0};
 
     std::atomic_bool cancel_requested{false};
+
+    /// Guards the lifetime (move/reset) of the `py_iterator` member against
+    /// concurrent access from generate() / onCancel() / finishPython().
+    /// Never held across a Python call — see the class contract above.
+    std::mutex py_obj_mutex;
 
     /// Guards finishPython() against double execution from concurrent
     /// generate() + destructor or onCancel() + destructor.
