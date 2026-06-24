@@ -3,6 +3,8 @@
 #include <CPython/PythonInterpreterInfo.h>
 
 #if USE_PYTHON_UDF
+#include <CPython/GILGuard.h>
+
 #include <Python.h>
 #endif
 
@@ -82,11 +84,7 @@ void Server::initPythonInterpreter()
         return;
     }
 
-#ifdef Py_GIL_DISABLED
-    constexpr bool embedded_free_threaded = true;
-#else
-    constexpr bool embedded_free_threaded = false;
-#endif
+    constexpr bool embedded_free_threaded = cpython::GILGuard::buildSupportsFreeThreading();
     LOG_INFO(
         &logger(),
         "Embedded Python {} interpreter is initializing: embedded_free_threaded={}, "
