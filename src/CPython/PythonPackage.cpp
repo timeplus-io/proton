@@ -649,6 +649,19 @@ void PythonPackage::refreshImportState(LoggerPtr logger)
     if (!logger)
         logger = getLogger("PythonPackage");
 
+    /// Free-threading (cp314t) limitation: this function mutates process-global
+    /// import state (site.addsitedir widens sys.path, the namespace loop below
+    /// does a non-atomic read-modify-write of each package __path__, and
+    /// importlib.invalidate_caches runs). GILGuard(true) only attaches a thread
+    /// state under Py_GIL_DISABLED — it does NOT serialize against UDF worker
+    /// threads importing/executing Python concurrently. It runs on the
+    /// AsyncPythonPackageManager thread, so a `SYSTEM INSTALL PYTHON PACKAGE`
+    /// issued while UDFs are actively importing can observe torn import state
+    /// (sporadic ImportError for the freshly-installed package). Per-object
+    /// C-API atomicity rules out memory corruption. Hot-installing packages
+    /// during active UDF execution is therefore not guaranteed safe on
+    /// free-threaded builds; a proper fix would quiesce UDF execution across
+    /// the install. Tracked as a follow-up.
     GILGuard gil_guard(true);
 
     auto site_module = PyObjectPtr{PyImport_ImportModule("site")};
@@ -746,8 +759,20 @@ void PythonPackage::refreshImportState(LoggerPtr logger)
                     }
 
                     PyObject * mod_obj = PyDict_GetItem(modules_dict, name_obj.get()); /// borrowed ref
-                    if (!mod_obj || mod_obj == Py_None || PyObject_HasAttrStringWithError(mod_obj, "__path__") <= 0)
+                    if (!mod_obj || mod_obj == Py_None)
                         continue;
+
+                    const int has_path = PyObject_HasAttrStringWithError(mod_obj, "__path__");
+                    if (has_path <= 0)
+                    {
+                        /// -1 sets an exception (e.g. a raising __getattribute__);
+                        /// clear it here so it does not leak into the next
+                        /// iteration's C-API calls — the loop-tail PyErr_Clear()
+                        /// is skipped by this continue.
+                        if (has_path < 0)
+                            PyErr_Clear();
+                        continue;
+                    }
 
                     auto mod_path = PyObjectPtr{PyObject_GetAttrString(mod_obj, "__path__")};
                     if (!mod_path)

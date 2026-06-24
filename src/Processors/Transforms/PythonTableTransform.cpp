@@ -152,29 +152,38 @@ void PythonTableTransform::onCancel() noexcept
 {
     cancel_requested.store(true, std::memory_order_release);
 
-    if (!Py_IsInitialized())
-        return;
-
-    try
+    /// Fall back to interrupting the executing thread — but ONLY on a GIL
+    /// build. PyThreadState_SetAsyncExc routes by thread id, which is a valid
+    /// query-ownership token only while the GIL is held: onCancel holds it, so
+    /// the worker is pinned in THIS query and cannot finish, clear its tid, be
+    /// recycled by the pipeline thread pool, and start another query's Python
+    /// before we inject. On a free-threaded (cp314t) build the GIL no longer
+    /// serializes (GILGuard only attaches a thread state), so that recycle can
+    /// race the load()/inject and the KeyboardInterrupt would land on an
+    /// unrelated query sharing the recycled PyThreadState. Compiled out under
+    /// free-threading; cancel_requested (checked on each transform() entry) is
+    /// the cancellation path there.
+    if constexpr (!cpython::GILGuard::buildSupportsFreeThreading())
     {
-        cpython::GILGuard gil_guard;
-
-        /// Use only the CURRENT thread ID — if transform() has already
-        /// exited Python (tid == 0), any earlier snapshot may now refer to
-        /// a recycled thread-pool worker carrying an unrelated PyThreadState,
-        /// and routing an async exception there would corrupt a different
-        /// query. cancel_requested set above is observed on the next entry.
-        const auto tid = python_thread_id.load(std::memory_order_acquire);
-        if (tid == 0)
+        if (!Py_IsInitialized())
             return;
 
-        const int set = PyThreadState_SetAsyncExc(tid, PyExc_KeyboardInterrupt);
-        if (set > 1)
-            PyThreadState_SetAsyncExc(tid, nullptr);
-    }
-    catch (...)
-    {
-        /// no-throw on cancellation path
+        try
+        {
+            cpython::GILGuard gil_guard;
+
+            const auto tid = python_thread_id.load(std::memory_order_acquire);
+            if (tid == 0)
+                return;
+
+            const int set = PyThreadState_SetAsyncExc(tid, PyExc_KeyboardInterrupt);
+            if (set > 1)
+                PyThreadState_SetAsyncExc(tid, nullptr);
+        }
+        catch (...)
+        {
+            /// no-throw on cancellation path
+        }
     }
 }
 

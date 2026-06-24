@@ -192,7 +192,16 @@ PyObjectPtr getOrAddMainModule(const std::string & module_name)
         throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to initialize {}.__annotations__", module_name);
     }
 
-    int has_builtins = PyDict_Contains(d.get(), PyObjectPtr{PyUnicode_FromString("__builtins__")}.get());
+    PyObjectPtr builtins_key{PyUnicode_FromString("__builtins__")};
+    if (!builtins_key)
+    {
+        /// PyDict_Contains hashes the key; a NULL key (allocation failure) would
+        /// dereference NULL in PyObject_Hash rather than return -1.
+        PyErr_Clear();
+        throw Exception(ErrorCodes::UDF_INTERNAL_ERROR, "Failed to allocate {}.__builtins__ key", module_name);
+    }
+
+    int has_builtins = PyDict_Contains(d.get(), builtins_key.get());
     if (has_builtins < 0)
     {
         PyErr_Clear();

@@ -57,7 +57,7 @@ mkdir -p "${OUT}"
 
 # ─── locate server PID ──────────────────────────────────────────────────────
 SRV_PID="$(
-    pgrep -f "[t]imeplusd server.*${PORT}" 2>/dev/null | head -1
+    pgrep -f "[p]roton server.*${PORT}" 2>/dev/null | head -1
 )"
 if [[ -z "${SRV_PID}" ]]; then
     # fall back to pid file written by start-local-proton.sh

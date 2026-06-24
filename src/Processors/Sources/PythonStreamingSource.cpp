@@ -175,24 +175,34 @@ void PythonStreamingSource::onCancel() noexcept
             bool cancelled = tryCallNoArgMethod(iter_local.get(), "cancel");
             cancelled = tryCallNoArgMethod(iter_local.get(), "close") || cancelled;
 
-            /// If the iterator doesn't provide a cancellation hook, try to
-            /// interrupt the executing thread. Use only the CURRENT thread
-            /// ID — if generate() has already exited Python (tid == 0), any
-            /// earlier snapshot may now refer to a recycled thread-pool
-            /// worker carrying an unrelated PyThreadState, and routing an
-            /// async exception there would corrupt a different query. The
-            /// cancel_requested flag set above is observed on the next
-            /// iteration regardless.
+            /// If the iterator provides no cancellation hook, fall back to
+            /// interrupting the executing thread — but ONLY on a GIL build.
+            ///
+            /// PyThreadState_SetAsyncExc routes by thread id, which is not a
+            /// query-ownership token. On a GIL build this is safe: onCancel
+            /// holds the GIL, so the worker is pinned at its last Python point
+            /// inside THIS query and cannot finish, clear its tid, get recycled
+            /// by the pipeline thread pool, and start another query's Python
+            /// before we inject. On a free-threaded (cp314t) build the GIL no
+            /// longer serializes (GILGuard only attaches a thread state), so
+            /// that recycle can race the load()/inject and the KeyboardInterrupt
+            /// would land on an unrelated query sharing the recycled
+            /// PyThreadState. The branch is compiled out under free-threading;
+            /// cancel_requested (checked each generate() iteration) plus the
+            /// cancel()/close() hooks above remain the cancellation path there.
             if (!cancelled)
             {
-                const auto tid = python_thread_id.load(std::memory_order_acquire);
-                if (tid != 0)
+                if constexpr (!cpython::GILGuard::buildSupportsFreeThreading())
                 {
-                    const int set = PyThreadState_SetAsyncExc(tid, PyExc_KeyboardInterrupt);
-                    /// If set > 1, the thread ID matched multiple states (should never happen).
-                    /// Clear the exception to avoid corrupting unrelated threads.
-                    if (set > 1)
-                        PyThreadState_SetAsyncExc(tid, nullptr);
+                    const auto tid = python_thread_id.load(std::memory_order_acquire);
+                    if (tid != 0)
+                    {
+                        const int set = PyThreadState_SetAsyncExc(tid, PyExc_KeyboardInterrupt);
+                        /// If set > 1, the thread ID matched multiple states (should never happen).
+                        /// Clear the exception to avoid corrupting unrelated threads.
+                        if (set > 1)
+                            PyThreadState_SetAsyncExc(tid, nullptr);
+                    }
                 }
             }
         }
