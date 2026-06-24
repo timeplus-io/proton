@@ -1,0 +1,42 @@
+tags:
+  - basic
+  - udf
+
+description: |
+  Free-threading invariant: the embedded CPython 3.14 interpreter must run
+  free-threaded (GIL disabled). Guards against a silent regression to a
+  GIL-enabled build (cp314 instead of cp314t) — every other Python UDF test
+  passes equally on a GIL build, so without this check such a regression would
+  ship green (it already happened once during the cp314t migration). See #11704.
+
+cluster:
+  - p1k1
+
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION ft_is_free_threaded(value int32) RETURNS bool LANGUAGE PYTHON AS $$
+      import sys
+      def ft_is_free_threaded(value):
+          # sys._is_gil_enabled() is the runtime truth (also catches a PYTHON_GIL
+          # override), not merely a compile-time flag.
+          return [not sys._is_gil_enabled()] * len(value)
+      $$;
+
+  - type: wait
+    time: 1
+
+  - name: python_udf-ft-gil-1
+    type: stream
+    query: select ft_is_free_threaded(1) as is_free_threaded;
+    schema:
+      - name: is_free_threaded
+        type: bool
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-ft-gil-1
+    expected_result:
+      - [True]

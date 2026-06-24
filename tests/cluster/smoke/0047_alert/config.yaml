@@ -28,3 +28,22 @@ setup:
 
     - type: wait
       time: 1
+
+    # The alert UDFs `import requests`, which used to be provided by the
+    # timeplus-neutrino bundle (removed in the cp314t migration). Install it
+    # explicitly; requests and its deps are pure-Python / ship cp314t wheels.
+    - type: query
+      sql: SYSTEM INSTALL PYTHON PACKAGE 'requests'
+
+    - type: wait
+      time: 15
+
+    - type: command
+      name: alert-setup-check-requests
+      node: [p1]
+      shell: |
+        curl -X GET http://localhost:8123/proton/v1/python_packages  2>/dev/null | jq -c '.data[] | select(.name == "requests") | length > 0'
+
+    - type: check
+      target_name: alert-setup-check-requests
+      expected_result: ['true']

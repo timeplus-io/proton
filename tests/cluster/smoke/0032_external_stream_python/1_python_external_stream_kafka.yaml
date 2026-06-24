@@ -2,6 +2,7 @@ tags:
   - python_external_stream
   - external_stream
   - kafka
+  - skip # broker delivers zstd-compressed messages; pure-Python kafka-python needs the zstandard codec to decode them, and zstandard/lz4 ship no cp314t wheel (would require a C compiler the smoke runtime lacks). Unskip once zstandard ships cp314t wheels. Tracked in #12128
 cluster:
   - p1k1
   - p3k1

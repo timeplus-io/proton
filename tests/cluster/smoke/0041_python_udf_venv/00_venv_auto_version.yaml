@@ -1,5 +1,6 @@
 tags:
   - udf
+  - skip # embedded cp314t interpreter cannot create a venv: venv.EnvBuilder.create() fails with [Errno 38] Function not implemented while copying the base executable into .venv/bin/python3.14t (also asserts the stale 3.10 version string); tracked in #12128
 
 description: |
   Test covering udf venv version

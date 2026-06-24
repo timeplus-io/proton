@@ -27,7 +27,7 @@ steps:
         -H "Content-Type: text/plain; charset=utf-8" \
         -H "x-timeplus-user: proton" \
         -H "x-timeplus-key: proton@t+" \
-        -d '{"name": "pandas", "VERSION": "2.3.2"}'
+        -d '{"name": "pandas", "VERSION": "3.0.3"}'
 
   - type: wait
     time: 10
@@ -62,7 +62,7 @@ steps:
 
   - type: check
     target_name: python-pkg-01-get-pandas
-    expected_result: ['{"name":"pandas","version":"==2.3.2"}']
+    expected_result: ['{"name":"pandas","version":"==3.0.3"}']
 
   - type: command
     name: python-pkg-01-install-requirements

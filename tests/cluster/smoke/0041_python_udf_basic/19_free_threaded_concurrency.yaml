@@ -1,0 +1,70 @@
+tags:
+  - basic
+  - udf
+
+description: |
+  Free-threading concurrency: under a parallel query (max_threads=8) the engine
+  invokes a Python UDF from multiple query threads at once (see the thread-safety
+  contract in PythonUserDefinedFunction.h). This exercises that path and asserts:
+    1. correctness — the aggregate is right under concurrent UDF execution; a
+       non-thread-safe interpreter would crash or corrupt results, and
+    2. genuine parallelism — the UDF runs on more than one native OS thread, i.e.
+       it is not silently serialized (which is the whole point of cp314t). See #11704.
+
+cluster:
+  - p1k1
+
+steps:
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION ft_double(value uint64) RETURNS uint64 LANGUAGE PYTHON AS $$
+      def ft_double(value):
+          res = []
+          for v in value:
+              # a little real Python work per row to keep the interpreter busy
+              acc = 0
+              for i in range(20):
+                  acc += i
+              res.append(v * 2 + (acc - acc))
+          return res
+      $$;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FUNCTION ft_thread_id(value uint64) RETURNS uint64 LANGUAGE PYTHON AS $$
+      import threading
+      def ft_thread_id(value):
+          return [threading.get_native_id()] * len(value)
+      $$;
+
+  - type: wait
+    time: 1
+
+  # 100000 * 99999 = 9999900000, computed concurrently across 8 query threads
+  - name: python_udf-ft-concurrency-correctness
+    type: stream
+    query: select sum(ft_double(number)) as total from numbers_mt(100000) settings max_threads=8;
+    schema:
+      - name: total
+        type: uint64
+
+  # the UDF must be observed running on more than one native OS thread
+  - name: python_udf-ft-concurrency-threads
+    type: stream
+    query: select uniq(t) > 1 as ran_on_multiple_threads from (select ft_thread_id(number) as t from numbers_mt(1000000) settings max_threads=8);
+    schema:
+      - name: ran_on_multiple_threads
+        type: bool
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: python_udf-ft-concurrency-correctness
+    expected_result:
+      - [9999900000]
+
+  - type: check
+    target_name: python_udf-ft-concurrency-threads
+    expected_result:
+      - [True]
