@@ -745,7 +745,23 @@ class BlockingIteratorWithoutCancel:
                 EXPECT_TRUE(finished_cv.wait_for(lock, std::chrono::seconds(2), [&] { return finished; }));
             }
 
-            EXPECT_TRUE(finished_after_cancel);
+            if constexpr (cpython::GILGuard::buildSupportsFreeThreading())
+            {
+                /// Free-threaded build: PyThreadState_SetAsyncExc is compiled out of
+                /// onCancel (under FT it would race a thread-pool recycle and misroute
+                /// the KeyboardInterrupt onto an unrelated query's recycled tstate). A
+                /// non-cooperative `while: pass` iterator that exposes no cancel()/close()
+                /// hook is therefore NOT force-interruptible by executor.cancel(): the
+                /// stop_for_test() cooperative path above is what unblocked it, so
+                /// cancellation did not complete on its own.
+                EXPECT_FALSE(finished_after_cancel);
+            }
+            else
+            {
+                /// GIL build: onCancel injects KeyboardInterrupt, which interrupts even a
+                /// non-cooperative loop, so cancellation completes without the escape hatch.
+                EXPECT_TRUE(finished_after_cancel);
+            }
 
             if (execution_exception)
             {

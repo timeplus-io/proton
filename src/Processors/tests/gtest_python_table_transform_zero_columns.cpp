@@ -124,6 +124,20 @@ void clearPythonFlag(const char * attr_name)
         PyErr_Clear();
 }
 
+void setPythonFlag(const char * attr_name)
+{
+    cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
+    cpython::PyObjectPtr builtins{PyImport_ImportModule("builtins")};
+    if (!builtins)
+    {
+        PyErr_Clear();
+        return;
+    }
+
+    if (PyObject_SetAttrString(builtins.get(), attr_name, Py_True) < 0)
+        PyErr_Clear();
+}
+
 long getPythonLongFlag(const char * attr_name, long default_value = 0)
 {
     cpython::GILGuard gil_guard(/*use_need_cleanup=*/true);
@@ -240,9 +254,14 @@ TEST_F(CPythonTest, PythonTableTransformCancelDuringGeneratorIterationDoesNotEmi
 {
     assertNoLeak([&]() {
         constexpr auto blocked_flag = "_tp_python_table_transform_blocked";
+        constexpr auto stop_flag = "_tp_python_table_transform_stop";
 
         clearPythonFlag(blocked_flag);
-        SCOPE_EXIT({ clearPythonFlag(blocked_flag); });
+        clearPythonFlag(stop_flag);
+        SCOPE_EXIT({
+            clearPythonFlag(blocked_flag);
+            clearPythonFlag(stop_flag);
+        });
 
         auto int32_type = std::make_shared<DataTypeInt32>();
 
@@ -267,8 +286,14 @@ def py_transform(i):
     def gen():
         yield [(x,) for x in i]
         builtins._tp_python_table_transform_blocked = True
-        while True:
+        # Spin until cancelled. On a GIL build onCancel injects a KeyboardInterrupt
+        # that breaks out of this loop directly. On a free-threaded build async-exc
+        # is compiled out, so the test drives the cooperative stop flag instead; the
+        # explicit raise below then reproduces the same QUERY_WAS_CANCELLED path so
+        # the partial-chunk invariant is still exercised.
+        while not getattr(builtins, "_tp_python_table_transform_stop", False):
             pass
+        raise KeyboardInterrupt
     return gen()
 )PY";
 
@@ -332,6 +357,19 @@ def py_transform(i):
         ASSERT_TRUE(waitForPythonFlag(blocked_flag, std::chrono::seconds(5)));
 
         executor.cancel();
+
+        if constexpr (cpython::GILGuard::buildSupportsFreeThreading())
+        {
+            /// Free-threaded build: PyThreadState_SetAsyncExc is compiled out of
+            /// onCancel (under FT it would race a thread-pool recycle and misroute the
+            /// interrupt onto an unrelated query's recycled tstate), so the generator's
+            /// CPU-bound loop is not force-interruptible. Drive the cooperative stop flag
+            /// so the generator raises; the assertions below still verify the real
+            /// invariant — a cancellation that cuts the generator short must not emit the
+            /// partial chunk. On a GIL build onCancel delivers the interrupt directly and
+            /// this flag is never needed.
+            setPythonFlag(stop_flag);
+        }
 
         {
             std::unique_lock lock(finished_mutex);
