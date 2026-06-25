@@ -745,23 +745,23 @@ class BlockingIteratorWithoutCancel:
                 EXPECT_TRUE(finished_cv.wait_for(lock, std::chrono::seconds(2), [&] { return finished; }));
             }
 
-            if constexpr (cpython::GILGuard::buildSupportsFreeThreading())
-            {
-                /// Free-threaded build: PyThreadState_SetAsyncExc is compiled out of
-                /// onCancel (under FT it would race a thread-pool recycle and misroute
-                /// the KeyboardInterrupt onto an unrelated query's recycled tstate). A
-                /// non-cooperative `while: pass` iterator that exposes no cancel()/close()
-                /// hook is therefore NOT force-interruptible by executor.cancel(): the
-                /// stop_for_test() cooperative path above is what unblocked it, so
-                /// cancellation did not complete on its own.
-                EXPECT_FALSE(finished_after_cancel);
-            }
-            else
+            if constexpr (!cpython::GILGuard::buildSupportsFreeThreading())
             {
                 /// GIL build: onCancel injects KeyboardInterrupt, which interrupts even a
-                /// non-cooperative loop, so cancellation completes without the escape hatch.
+                /// non-cooperative loop, so executor.cancel() alone always completes
+                /// cancellation before the 500ms wait above expires.
                 EXPECT_TRUE(finished_after_cancel);
             }
+            /// Free-threaded build: PyThreadState_SetAsyncExc is compiled out of onCancel
+            /// (under FT it would race a thread-pool recycle and misroute the
+            /// KeyboardInterrupt onto an unrelated query's recycled tstate). With it gone,
+            /// executor.cancel() can only end the iterator when cancel_requested is observed
+            /// at a generate() loop boundary — a timing race against the iterator re-entering
+            /// its blocking `while: pass`. finished_after_cancel is therefore non-deterministic
+            /// under FT (true when cancel wins the race, false otherwise), so it is not
+            /// asserted here. When cancel loses the race, the stop_for_test() cooperative path
+            /// above unblocks the iterator; the clean-shutdown join and the single-block check
+            /// below are the FT invariants.
 
             if (execution_exception)
             {
