@@ -50,5 +50,5 @@ steps:
   - type: check
     target_name: python-udf3-67-1
     expected_result:
-      - ["Index(['a', 'b'], dtype='object')"]
-      - ["Index(['a', 'b'], dtype='object')"]
+      - ["Index(['a', 'b'], dtype='str')"]
+      - ["Index(['a', 'b'], dtype='str')"]

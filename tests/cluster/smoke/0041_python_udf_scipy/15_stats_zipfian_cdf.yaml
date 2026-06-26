@@ -1,5 +1,6 @@
 tags:
   - udf
+  - skip # scipy.stats.zipfian.cdf returns version-dependent values; the expected results were computed with an older scipy and differ on the scipy wheel installed for cp314t (e.g. 0.4472 -> 0.4214). Not a proton bug. Unskip after re-baselining against the pinned scipy. Tracked in #12128
 
 description: Test covering simple python udf test
 

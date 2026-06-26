@@ -11,6 +11,7 @@ description: |
 
 cluster:
   - p1k1
+  - p3k1
 
 steps:
   - type: query

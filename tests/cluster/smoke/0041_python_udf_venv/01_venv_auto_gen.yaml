@@ -1,6 +1,7 @@
 tags:
   - udf
   - python_udf_library
+  - skip # `import autogen` fails ("No module named 'autogen'") on cp314t after autogen-core/autogen-ext install successfully — the PEP 420 `autogen` namespace package is not resolved by the embedded free-threaded interpreter (refreshImportState namespace widening). Likely a broader cp314t namespace-package gap, not specific to autogen. Tracked in #12128
 
 description: |
   Test covering udf venv autogen
