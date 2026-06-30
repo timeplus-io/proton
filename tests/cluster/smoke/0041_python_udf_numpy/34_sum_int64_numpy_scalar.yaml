@@ -23,7 +23,7 @@ steps:
       import numpy as np
       class getSum:
           def __init__(self):
-              self.sum = 0
+              self.sum = np.int64(0)
 
           def serialize(self):
               data = {}
@@ -35,14 +35,14 @@ steps:
               self.sum = data['sum']
 
           def merge(self, other):
-              self.sum = other.sum
+              self.sum += other.sum
 
           def process(self, values):
               temp_sum = np.sum(values)
               self.sum += temp_sum
 
           def finalize(self):
-              return [self.sum]
+              return self.sum
       $$;
 
   - type: wait
@@ -72,4 +72,3 @@ steps:
     expected_result:
       - [15]
       - [21]
-
