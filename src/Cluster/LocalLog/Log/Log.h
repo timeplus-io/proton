@@ -260,7 +260,9 @@ public:
         if (applied_sn_getter)
             return applied_sn_getter();
 
-        return committed_sn;
+        /// No getter yet: don't truncate, rather than fall back to the quorum watermark and risk
+        /// compacting past a consumer whose getter isn't registered yet (e.g. during startup).
+        return 0;
     }
 
     void setAppliedSequenceGetter(std::function<int64_t()> applied_sn_getter_) { applied_sn_getter.swap(applied_sn_getter_); }

@@ -146,18 +146,25 @@ void StreamShardStore::startup()
     /// with this object lifetime since during tearing down, StorageShardStore will be done prior
     /// its log.
     // Kafka not used
-    if (true)
+    if (!only_streaming_store)
     {
-        if (!only_streaming_store)
-        {
-            std::weak_ptr<StorageMergeTree> weak_storage = storage;
-            Globals::getNativeLog().setAppliedSequenceGetter(stream_shard.id_shard, [weak_storage]() -> int64_t {
-                if (auto historical_storage = weak_storage.lock(); historical_storage)
-                    return historical_storage->committedSN();
+        std::weak_ptr<StorageMergeTree> weak_storage = storage;
+        Globals::getNativeLog().setAppliedSequenceGetter(stream_shard.id_shard, [weak_storage]() -> int64_t {
+            if (auto historical_storage = weak_storage.lock(); historical_storage)
+                return historical_storage->committedSN();
 
-                return 0;
+            return 0;
+        });
+    }
+    else
+    {
+        /// No historical consumer to gate on, but appliedSequence() defaults to 0 (no truncation),
+        /// so register the log's committed sequence to keep retention reclaiming by policy.
+        Globals::getNode().setAppliedSequenceGetter(
+            stream_shard.id_shard,
+            [id_shard = stream_shard.id_shard]() -> int64_t {
+                return Globals::getNode().nativeLog().committedSequence(id_shard).value_or(0);
             });
-        }
     }
 
     if (only_streaming_store)
