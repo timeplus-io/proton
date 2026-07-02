@@ -785,8 +785,6 @@ void KafkaSource::getPhysicalHeader()
             virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->offset; };
             virtual_col_types[pos] = column.type;
         }
-            if (avro_key_schema_registry)
-                    return decodeAvroKey(kmessage);
         else
         {
             physical_header.insert(column);

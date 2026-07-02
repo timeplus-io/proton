@@ -6,11 +6,10 @@
 #include <CPython/GILGuard.h>
 #include <CPython/PythonModuleSession.h>
 #include <CPython/Utils.h>
-#include <Checkpoint/CheckpointContext.h>
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Common/assert_cast.h>
-#include <Common/logger_useful.h>
 
 #include <base/scope_guard.h>
 
@@ -57,7 +56,7 @@ bool tryCallNoArgMethod(PyObject * obj, const char * method_name)
 
 PythonStreamingSource::PythonStreamingSource(
     Block header, cpython::PyObjectPtr py_iterator_, DataTypePtr tuple_type_, cpython::PythonModuleSessionPtr session_)
-    : ISource(std::move(header), true, getLogger("PythonStreamingSource"), ProcessorID::PythonStreamingSourceID)
+    : Streaming::ISource(std::move(header), true, getLogger("PythonStreamingSource"), ProcessorID::PythonStreamingSourceID)
     , py_iterator(std::move(py_iterator_))
     , tuple_type(std::move(tuple_type_))
     , session(std::move(session_))
@@ -471,19 +470,17 @@ Chunk PythonStreamingSource::generate()
     }
 }
 
-Chunk PythonStreamingSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+void PythonStreamingSource::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     /// A Python iterator cannot be seeked, so there is no resumable position to
-    /// persist. Notify the coordinator we have seen this checkpoint epoch (no
-    /// state saved) and emit a barrier chunk, mirroring GenerateRandomSource.
-    /// doRecover()/doResetStartSN() are no-ops, so the source never advertises a
-    /// recovered offset it cannot honor.
-    IProcessor::checkpoint(ckpt_ctx_);
-
-    auto result = Chunk{getPort().getHeader().getColumns(), 0};
-    result.setCheckpointContext(ckpt_ctx_);
-    return result;
+    /// persist. Ack the checkpoint barrier (registering participation with the
+    /// coordinator) but save NO sequence number, mirroring GenerateRandomSource.
+    /// doRecover()/doResetStartSN() are no-ops (see the header), so the source
+    /// never advertises a recovered offset it cannot honor — which would
+    /// otherwise replay already-emitted rows into recovered downstream state.
+    ckpt_ctx->coordinator->checkpointed(getVersion(), getLogicID(), ckpt_ctx);
 }
+
 }
 
 #endif

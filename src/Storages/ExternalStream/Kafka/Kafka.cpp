@@ -23,6 +23,7 @@
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 #include "Storages/ExternalStream/StorageExternalStreamImpl.h"
+#include <Formats/FormatSettings.h>
 #include <Formats/KafkaSchemaRegistryForAvro.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -235,13 +236,6 @@ void validateMessageHeadersColumnType(const DataTypePtr & type)
 namespace ExternalStream
 {
 
-        const bool format_supported = format == "ProtobufSingle" || format == "Avro";
-        /// (Avro/ProtobufSingle) or the message key is Avro-encoded via `message_key_schema_name`.
-                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats, "
-                "or `message_key_schema_name` for Avro-encoded keys: actual='{}'",
-                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats, "
-                "or `message_key_schema_name` for Avro-encoded keys");
-
 DB::Kafka::Conf Kafka::createConf(KafkaExternalStreamSettings settings_)
 {
     if (const auto & ca_pem = settings_.ssl_ca_pem.value; !ca_pem.empty())
@@ -278,8 +272,13 @@ Kafka::Kafka(
     if (has_event_time || has_message_key || has_message_headers)
         settings->set("one_message_per_row", true);
 
-            settings->message_key_schema_name.value.empty() ? raw_message_key_types : avro_message_key_types);
-            avro_key_schema_registry = KafkaSchemaRegistryForAvro::getOrCreate(key_format_settings);
+    if (has_message_key && !settings->message_key_schema_name.value.empty())
+    {
+        FormatSettings key_format_settings = getFormatSettings(context);
+        key_format_settings.kafka_schema_registry.subject_name = settings->message_key_schema_name.value;
+        avro_key_schema_registry = KafkaSchemaRegistryForAvro::getOrCreate(key_format_settings);
+    }
+
     cacheVirtualColumnNamesAndTypes();
 
     auto conf = createConf(settings->getKafkaSettings());
@@ -424,17 +423,29 @@ void Kafka::validateSettings(const ExternalStreamSettingsPtr & new_settings, boo
     {
         const auto & format = new_settings->data_format.value;
         const bool format_supported = format == "ProtobufSingle" || format == "Avro";
-        if (!format_supported)
+        const bool key_uses_registry = !new_settings->message_key_schema_name.value.empty();
+        /// The schema registry URL is valid if either the message body format requires it
+        /// (Avro/ProtobufSingle) or the message key is Avro-encoded via `message_key_schema_name`.
+        if (!format_supported && !key_uses_registry)
         {
             LOG_ERROR(
                 logger,
-                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats: actual='{}'",
+                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats, "
+                "or `message_key_schema_name` for Avro-encoded keys: actual='{}'",
                 format);
 
             throw Exception(
                 ErrorCodes::INVALID_SETTING_VALUE,
-                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats");
+                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats, "
+                "or `message_key_schema_name` for Avro-encoded keys");
         }
+    }
+
+    if (!new_settings->message_key_schema_name.value.empty() && new_settings->kafka_schema_registry_url.value.empty())
+    {
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE,
+            "`message_key_schema_name` is only supported when `kafka_schema_registry_url` is set");
     }
 
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
@@ -479,7 +490,9 @@ void Kafka::validateColumns() const
 
     if (has_message_key)
     {
-        validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
+        validateMessageKeyColumnType(
+            columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type,
+            settings->message_key_schema_name.value.empty() ? raw_message_key_types : avro_message_key_types);
 
         if (hasCustomShardingExpr())
             throw Exception(
@@ -658,11 +671,18 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
     if (hasSchemaRegistryUrl() && data_format == "ProtobufSingle")
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Write Protobuf data with schema registry is not supported");
 
-    auto producer = getClient()->getProducer(topicName());
     /// Encoding _tp_message_key as Avro binary (Confluent wire format) on write is not yet implemented.
     /// Currently only decoding Avro-encoded keys on read is supported. When this is implemented,
+    /// the sink will need to: fetch the schema from the registry, serialize the key JSON string
+    /// into a GenericDatum, binary-encode it, and prepend the Confluent wire header (magic byte + schema ID).
     if (avro_key_schema_registry)
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
             "Writing Avro-encoded message keys via schema registry is not yet supported. "
+            "`message_key_schema_name` is currently read-only. "
+            "To write a plain-text message key, omit `message_key_schema_name` and insert a string into `_tp_message_key` directly.");
+
+    auto producer = getClient()->getProducer(topicName());
 
     auto sink = std::make_shared<KafkaSink>(
         *this,
