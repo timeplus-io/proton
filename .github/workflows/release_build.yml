@@ -428,7 +428,7 @@ jobs:
         echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-18 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-18-darwin
+        ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-21-darwin
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
@@ -437,7 +437,7 @@ jobs:
 
         # strip
         ls -lh $GITHUB_WORKSPACE/output/proton
-        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-18 /usr/bin/llvm-strip-18 proton
+        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-21 /usr/bin/llvm-strip-21 proton
         ls -lh $GITHUB_WORKSPACE/output/proton
 
         # clean ccache and build footprint
