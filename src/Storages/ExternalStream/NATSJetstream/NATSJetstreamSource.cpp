@@ -132,7 +132,8 @@ NATSJetstreamSource::NATSJetstreamSource(
     if (auto consume_timeout = context_->getSettingsRef().record_consume_timeout_ms; consume_timeout != 0)
         record_consume_timeout_ms = static_cast<Int32>(consume_timeout.value);
 
-    initInputFormatExecutor(data_format, format_settings);
+    getPhysicalHeader();
+    format_executor = getInputFormatExecutor(data_format, format_settings).first;
 
     header_chunk = Chunk(header.getColumns(), 0);
 
