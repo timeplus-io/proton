@@ -13,13 +13,10 @@ ISource::ISource(Block header, bool enable_auto_progress, LoggerPtr logger_, Pro
     is_streaming = true;
 }
 
-/// It basically initiate a checkpoint
-/// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
-/// We need make sure it is thread safe
-void ISource::checkpoint(CheckpointContextPtr ckpt_ctx_)
+/// Called from CheckpointCoordinator thread; ckpt_request handles cross-thread handoff to tryGenerate.
+void ISource::triggerCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
     chassert(hasState());
-    /// We assume the previous ckpt is already done
     ckpt_request.setCheckpointRequestCtx(std::move(ckpt_ctx_));
 }
 
@@ -56,11 +53,14 @@ std::optional<Chunk> ISource::tryGenerate()
 
     if (auto current_ckpt_ctx = ckpt_request.poll(); current_ckpt_ctx)
     {
-        auto chunk = doCheckpoint(current_ckpt_ctx);
+        doCheckpoint(current_ckpt_ctx);
         /// Update in-memory checkpoint sn after finishing the current ckpt epoch
         current_ckpt_ctx->registerFinishCallback(
             [this, ckpt_sn = lastProcessedSN()](CheckpointContextPtr) { setLastCheckpointSN(ckpt_sn); });
-        return std::move(chunk);
+
+        Chunk barrier(getPort().getHeader().getColumns(), 0);
+        barrier.setCheckpointContext(std::move(current_ckpt_ctx));
+        return barrier;
     }
 
     auto chunk = generate();

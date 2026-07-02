@@ -4,6 +4,7 @@
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/QueryLog.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -12,7 +13,7 @@
 #include <Common/typeid_cast.h>
 
 /// proton : starts
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 /// proton : ends
 
 namespace DB
@@ -136,6 +137,14 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
         /// proton: starts
         if (ast_drop_query.is_external_table && !table->isExternalTable())
             throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not a External Table", table_id.getNameForLogs());
+
+        if (ast_drop_query.is_input)
+        {
+            ASTPtr create_ast = database->tryGetCreateTableQuery(table_id.table_name, context_);
+            const auto * create = create_ast ? create_ast->as<ASTCreateQuery>() : nullptr;
+            if (!create || !create->is_input)
+                throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not an Input", table_id.getNameForLogs());
+        }
         /// proton: ends
 
         /// Now get UUID, so we can wait for table data to be finally dropped

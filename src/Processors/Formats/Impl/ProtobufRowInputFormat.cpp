@@ -1,4 +1,4 @@
-#include "ProtobufRowInputFormat.h"
+#include <Processors/Formats/Impl/ProtobufRowInputFormat.h>
 
 #if USE_PROTOBUF
 #   include <Core/Block.h>
@@ -17,6 +17,8 @@
 #   include <google/protobuf/compiler/parser.h>
 #   include <google/protobuf/descriptor.pb.h>
 #   include <google/protobuf/io/tokenizer.h>
+
+#   include <Common/re2.h>
 /// proton: ends
 
 namespace DB
@@ -60,7 +62,14 @@ void ProtobufRowInputFormat::createReaderAndSerializer()
         *reader);
 }
 
+void ProtobufRowInputFormat::destroyReaderAndSerializer()
+{
+    serializer = nullptr;
+    reader.reset();
+}
+
 bool ProtobufRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & row_read_extension)
+try
 {
     if (!reader)
         createReaderAndSerializer();
@@ -80,6 +89,11 @@ bool ProtobufRowInputFormat::readRow(MutableColumns & columns, RowReadExtension 
         row_read_extension.read_columns[column_idx] = false;
     return true;
 }
+catch (...)
+{
+    destroyReaderAndSerializer();
+    throw;
+}
 
 void ProtobufRowInputFormat::setReadBuffer(ReadBuffer & in_)
 {
@@ -98,11 +112,26 @@ void ProtobufRowInputFormat::syncAfterError()
     reader->endMessage(true);
 }
 
-void ProtobufRowInputFormat::resetParser()
+size_t ProtobufRowInputFormat::countRows(size_t max_block_size)
+try
 {
-    IRowInputFormat::resetParser();
-    serializer.reset();
-    reader.reset();
+    if (!reader)
+        createReaderAndSerializer();
+
+    size_t num_rows = 0;
+    while (!reader->eof() && num_rows < max_block_size)
+    {
+        reader->startMessage(with_length_delimiter);
+        reader->endMessage(false);
+        ++num_rows;
+    }
+
+    return num_rows;
+}
+catch (...)
+{
+    destroyReaderAndSerializer();
+    throw;
 }
 
 void registerInputFormatProtobuf(FormatFactory & factory)
@@ -193,6 +222,61 @@ std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const Format
 }
 }
 
+/// Confluent/descriptor-canonicalized protobuf schemas render `map<K,V>` fields in their
+/// expanded form: a synthetic nested message carrying `option map_entry = true` plus a
+/// `repeated <Entry> field = N;`. The protobuf *source* parser (compiler::Parser) rejects an
+/// explicitly-set map_entry option, so such schemas fail to parse even though they are valid
+/// descriptors. Collapse them back to `map<K,V>` sugar (keyed on the explicit map_entry marker),
+/// which the parser accepts and which builds an identical descriptor.
+///
+/// This is a no-op when the text contains no `map_entry` option, so schemas that already parse
+/// are returned byte-for-byte unchanged.
+String collapseProtobufMapEntries(String schema)
+{
+    if (schema.find("map_entry") == String::npos) /// fast, safe bail-out for the common case
+        return schema;
+
+    /// message <Name> { option map_entry = true; [optional|required] <K> key = 1; [optional|required] <V> value = 2; }
+    static const re2::RE2 entry_re(
+        R"(message\s+(\w+)\s*\{\s*option\s+map_entry\s*=\s*true\s*;\s*)"
+        R"((?:optional\s+|required\s+)?([\w.]+)\s+key\s*=\s*1\s*;\s*)"
+        R"((?:optional\s+|required\s+)?([\w.]+)\s+value\s*=\s*2\s*;\s*\})");
+
+    struct MapEntry
+    {
+        std::string name;
+        std::string key;
+        std::string value;
+    };
+    std::vector<MapEntry> entries;
+    {
+        re2::StringPiece input(schema);
+        std::string name;
+        std::string key;
+        std::string value;
+        while (re2::RE2::FindAndConsume(&input, entry_re, &name, &key, &value))
+            entries.push_back({name, key, value});
+    }
+
+    /// `map_entry` text present but not in the recognized shape: leave it to the strict parser
+    /// (which will report the original error) rather than risk an unsound rewrite.
+    if (entries.empty())
+        return schema;
+
+    re2::RE2::GlobalReplace(&schema, entry_re, ""); /// drop the synthetic entry messages
+
+    for (const auto & entry : entries)
+    {
+        /// repeated [<qualifier>.]<Name> <field> = <n> [opts]; -> map<K, V> <field> = <n>;
+        const re2::RE2 field_re(
+            R"(repeated\s+(?:[\w.]+\.)?)" + re2::RE2::QuoteMeta(entry.name)
+            + R"(\s+(\w+)\s*=\s*(\d+)\s*(?:\[[^\]]*\])?\s*;)");
+        re2::RE2::GlobalReplace(&schema, field_re, "map<" + entry.key + ", " + entry.value + R"(> \1 = \2;)");
+    }
+
+    return schema;
+}
+
 class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache : public google::protobuf::io::ErrorCollector
 {
 public:
@@ -212,35 +296,37 @@ public:
     }
 
     /// Get message type from latest subject schema
-    const google::protobuf::Descriptor * getMessageType(const String & subject)
+    const google::protobuf::Descriptor * getMessageType(const String & subject, bool collapse_map_entry_)
     {
         auto [schema_id, _] = registry.fetchLatestSchemaForSubject(subject);
-        const auto * fd = getSchema(schema_id);
+        const auto * fd = getSchema(schema_id, collapse_map_entry_);
         return fd->message_type(0);
     }
 
-    const google::protobuf::Descriptor * getMessageType(uint32_t schema_id, const std::vector<Int64> & indexes)
+    const google::protobuf::Descriptor * getMessageType(uint32_t schema_id, const std::vector<Int64> & indexes, bool collapse_map_entry_)
     {
-        assert(!indexes.empty());
+        if (indexes.empty())
+            throw Exception(ErrorCodes::INVALID_DATA, "Empty message indexes in confluent protobuf wire format");
 
-        const auto * fd = getSchema(schema_id);
+        const auto * fd = getSchema(schema_id, collapse_map_entry_);
 
         /// Check https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
         /// for how to get the message with the indexes.
         auto mt_count = fd->message_type_count();
-        if (mt_count < indexes[0] + 1)
-            throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={}", indexes[0], mt_count);
+        if (indexes[0] < 0 || indexes[0] >= mt_count)
+            throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} message_type_count={}", indexes[0], mt_count);
 
         const auto * descriptor = fd->message_type(static_cast<int32_t>(indexes[0]));
 
         for (int64_t i : std::span(indexes.begin() + 1, indexes.end()))
         {
-            if (i > descriptor->nested_type_count())
+            auto nested_count = descriptor->nested_type_count();
+            if (i < 0 || i >= nested_count)
                 throw Exception(
                     ErrorCodes::INVALID_DATA,
-                    "Invalid message index={} max_index={} descriptor={}",
+                    "Invalid nested message index={} nested_type_count={} descriptor={}",
                     i,
-                    descriptor->nested_type_count(),
+                    nested_count,
                     descriptor->name());
             descriptor = descriptor->nested_type(static_cast<int32_t>(i));
         }
@@ -249,16 +335,16 @@ public:
     }
 
 private:
-    const google::protobuf::FileDescriptor * getSchema(uint32_t id)
+    const google::protobuf::FileDescriptor * getSchema(uint32_t id, bool collapse_map_entry_)
     {
         const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
         if (loaded_descriptor != nullptr)
             return loaded_descriptor;
 
-        return fetchSchema(id);
+        return fetchSchema(id, collapse_map_entry_);
     }
 
-    const google::protobuf::FileDescriptor * fetchSchema(uint32_t id)
+    const google::protobuf::FileDescriptor * fetchSchema(uint32_t id, bool collapse_map_entry_)
     {
         std::lock_guard lock(mutex);
         /// Just in case we got beaten
@@ -267,6 +353,8 @@ private:
             return loaded_descriptor;
 
         auto schema = registry.fetchSchema(id);
+        if (collapse_map_entry_)
+            schema = collapseProtobufMapEntries(std::move(schema));
         google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
         google::protobuf::io::Tokenizer tokenizer(&input, this);
         google::protobuf::FileDescriptorProto file_descriptor;
@@ -291,6 +379,7 @@ ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
     ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
     , flatten_google_wrappers(format_settings_.protobuf.input_flatten_google_wrappers)
+    , collapse_map_entry(format_settings_.protobuf.collapse_schema_registry_map_entry)
     , registry(getConfluentSchemaRegistry(format_settings_))
 {
 }
@@ -304,6 +393,18 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 
     Int64 indexes_count = 0;
     readVarInt(indexes_count, *in);
+
+    /// Protobuf schemas rarely have deeply nested message types; a reasonable
+    /// upper bound prevents allocating huge vectors when the producer omits
+    /// the message-index array and the raw protobuf payload is misread as VarInts.
+    static constexpr Int64 MAX_INDEXES_COUNT = 128;
+    if (indexes_count < 0 || indexes_count > MAX_INDEXES_COUNT)
+        throw Exception(
+            ErrorCodes::INVALID_DATA,
+            "Confluent protobuf message index count {} is out of valid range [0, {}]. "
+            "The message may be missing the required message-index array in its wire format.",
+            indexes_count,
+            MAX_INDEXES_COUNT);
 
     std::vector<Int64> indexes;
     indexes.reserve(indexes_count < 1 ? 1 : indexes_count);
@@ -325,8 +426,7 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
     const auto & header = getPort().getHeader();
 
     ProtobufReader reader{*in};
-    /// No importer for the descriptor to hold.
-    ProtobufSchemas::DescriptorHolder descriptor{/*importer_=*/nullptr, registry->getMessageType(schema_id, indexes)};
+    ProtobufSchemas::DescriptorHolder descriptor{/*importer_=*/nullptr, registry->getMessageType(schema_id, indexes, collapse_map_entry)};
     auto serializer = ProtobufSerializer::create(
         header.getNames(),
         header.getDataTypes(),
@@ -357,12 +457,13 @@ ProtobufConfluentSchemaReader::ProtobufConfluentSchemaReader(const FormatSetting
     : registry(getConfluentSchemaRegistry(format_settings))
     , subject(format_settings.kafka_schema_registry.subject_name)
     , skip_unsupported_fields(format_settings.protobuf.skip_fields_with_unsupported_types_in_schema_inference)
+    , collapse_map_entry(format_settings.protobuf.collapse_schema_registry_map_entry)
 {
 }
 
 NamesAndTypesList ProtobufConfluentSchemaReader::readSchema()
 {
-    const auto descriptor = registry->getMessageType(subject);
+    const auto * const descriptor = registry->getMessageType(subject, collapse_map_entry);
     return protobufSchemaToCHSchema(descriptor, skip_unsupported_fields);
 }
 
@@ -392,6 +493,7 @@ bool ProtobufSchemaWriter::write(bool replace_if_exist)
 
     WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
     write_buffer.write(schema_body.data(), schema_body.size());
+    write_buffer.finalize();
 
     if (should_clear_cache)
         ProtobufSchemas::instance().clear();

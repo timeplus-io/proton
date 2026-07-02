@@ -1,21 +1,21 @@
 #pragma once
 
-#include "Common/NamePrompter.h"
+#include <Client/QueryFuzzer.h>
+#include <Client/Suggest.h>
+#include <Core/ExternalTable.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Common/ProgressIndication.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/SelectQueryInfo.h>
+#include <Storages/StorageFile.h>
+#include <boost/program_options.hpp>
+#include <Poco/Util/Application.h>
+#include <Common/DNSResolver.h>
 #include <Common/InterruptListener.h>
+#include <Common/NamePrompter.h>
+#include <Common/ProgressIndication.h>
 #include <Common/ShellCommand.h>
 #include <Common/Stopwatch.h>
-#include <Common/DNSResolver.h>
-#include <Core/ExternalTable.h>
-#include <Poco/Util/Application.h>
-#include <Interpreters/Context.h>
-#include <Client/Suggest.h>
-#include <Client/QueryFuzzer.h>
-#include <boost/program_options.hpp>
-#include <Storages/StorageFile.h>
-#include <Storages/SelectQueryInfo.h>
-#include <Storages/MergeTree/MergeTreeSettings.h>
 
 
 namespace po = boost::program_options;
@@ -55,11 +55,19 @@ class WriteBufferFromFileDescriptor;
 
 class ClientBase : public Poco::Util::Application, public IHints<2, ClientBase>
 {
-
 public:
     using Arguments = std::vector<String>;
 
-    ClientBase();
+    explicit ClientBase
+    (
+        int in_fd_ = STDIN_FILENO,
+        int out_fd_ = STDOUT_FILENO,
+        int err_fd_ = STDERR_FILENO,
+        std::istream & input_stream_ = std::cin,
+        std::ostream & output_stream_ = std::cout,
+        std::ostream & error_stream_ = std::cerr
+    );
+
     ~ClientBase() override;
 
     void init(int argc, char ** argv);
@@ -96,7 +104,7 @@ protected:
         String & query_to_execute, ASTPtr & parsed_query, const String & all_queries_text,
         std::unique_ptr<Exception> & current_exception);
 
-    static void clearTerminal();
+    void clearTerminal();
     void showClientVersion();
 
     using ProgramOptionsDescription = boost::program_options::options_description;
@@ -222,9 +230,9 @@ protected:
     ConnectionParameters connection_parameters;
 
     /// Buffer that reads from stdin in batch mode.
-    ReadBufferFromFileDescriptor std_in{STDIN_FILENO};
+    ReadBufferFromFileDescriptor std_in;
     /// Console output.
-    WriteBufferFromFileDescriptor std_out{STDOUT_FILENO};
+    AutoCanceledWriteBuffer<WriteBufferFromFileDescriptor> std_out;
     std::unique_ptr<ShellCommand> pager_cmd;
 
     /// The user can specify to redirect query output to a file.
@@ -300,6 +308,12 @@ protected:
     bool cancelled = false;
 
     bool logging_initialized = false;
+
+    /// Unpacked descriptors and streams for the ease of use.
+    std::istream & input_stream;
+    std::ostream & output_stream;
+    std::ostream & error_stream;
+
 };
 
 }

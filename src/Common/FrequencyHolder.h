@@ -1,28 +1,19 @@
 #pragma once
 
-#include <Common/Arena.h>
-#include <Common/getResource.h>
-#include <Common/HashTable/HashMap.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/ReadHelpers.h>
-#include <IO/readFloatText.h>
-#include <IO/ZstdInflatingReadBuffer.h>
+#include "config.h"
 
-#include <base/StringRef.h>
-#include <Common/logger_useful.h>
+#if USE_NLP
 
+#include <mutex>
 #include <string_view>
 #include <unordered_map>
 
+#include <base/StringRef.h>
+#include <Common/Arena.h>
+#include <Common/HashTable/HashMap.h>
+
 namespace DB
 {
-
-namespace ErrorCodes
-{
-    extern const int FILE_DOESNT_EXIST;
-}
 
 /// FrequencyHolder class is responsible for storing and loading dictionaries
 /// needed for text classification functions:
@@ -31,16 +22,19 @@ namespace ErrorCodes
 /// 2. detectCharset
 /// 3. detectTonality
 /// 4. detectProgrammingLanguage
-
+///
+/// The underlying .zst frequency tables are embedded directly into the binary
+/// via C23 `#embed` in FrequencyHolder.cpp; no runtime file access.
 class FrequencyHolder
 {
-
 public:
+    /// proton: starts.
     struct Language
     {
         String name;
         HashMap<StringRef, Float64> map;
     };
+    /// proton: ends.
 
     struct Encoding
     {
@@ -49,9 +43,10 @@ public:
         HashMap<UInt16, Float64> map;
     };
 
-public:
     using Map = HashMap<StringRef, Float64>;
+    /// proton: starts.
     using Container = std::vector<Language>;
+    /// proton: ends.
     using EncodingMap = HashMap<UInt16, Float64>;
     using EncodingContainer = std::vector<Encoding>;
 
@@ -61,192 +56,50 @@ public:
         return instance;
     }
 
-    void loadEncodingsFrequency()
-    {
-        LoggerPtr log = getLogger("EncodingsFrequency");
-
-        LOG_TRACE(log, "Loading embedded charset frequencies");
-
-        auto resource = getResource("charset.zst");
-            if (resource.empty())
-                throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "There is no embedded charset frequencies");
-
-        String line;
-        UInt16 bigram;
-        Float64 frequency;
-        String charset_name;
-
-        auto buf = std::make_unique<ReadBufferFromMemory>(resource.data(), resource.size());
-        ZstdInflatingReadBuffer in(std::move(buf));
-
-        while (!in.eof())
-        {
-            readString(line, in);
-            in.ignore();
-
-            if (line.empty())
-                continue;
-
-            ReadBufferFromString buf_line(line);
-
-            // Start loading a new charset
-            if (line.starts_with("// "))
-            {
-                // Skip "// "
-                buf_line.ignore(3);
-                readString(charset_name, buf_line);
-
-                /* In our dictionary we have lines with form: <Language>_<Charset>
-                * If we need to find language of data, we return <Language>
-                * If we need to find charset of data, we return <Charset>.
-                */
-                size_t sep = charset_name.find('_');
-
-                Encoding enc;
-                enc.lang = charset_name.substr(0, sep);
-                enc.name = charset_name.substr(sep + 1);
-                encodings_freq.push_back(std::move(enc));
-            }
-            else
-            {
-                readIntText(bigram, buf_line);
-                buf_line.ignore();
-                readFloatText(frequency, buf_line);
-
-                encodings_freq.back().map[bigram] = frequency;
-            }
-        }
-        LOG_TRACE(log, "Charset frequencies was added, charsets count: {}", encodings_freq.size());
-    }
-
-
-    void loadEmotionalDict()
-    {
-        LoggerPtr log = getLogger("EmotionalDict");
-        LOG_TRACE(log, "Loading embedded emotional dictionary");
-
-        auto resource = getResource("tonality_ru.zst");
-            if (resource.empty())
-                throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "There is no embedded emotional dictionary");
-
-        String line;
-        String word;
-        Float64 tonality;
-        size_t count = 0;
-
-        auto buf = std::make_unique<ReadBufferFromMemory>(resource.data(), resource.size());
-        ZstdInflatingReadBuffer in(std::move(buf));
-
-        while (!in.eof())
-        {
-            readString(line, in);
-            in.ignore();
-
-            if (line.empty())
-                continue;
-
-            ReadBufferFromString buf_line(line);
-
-            readStringUntilWhitespace(word, buf_line);
-            buf_line.ignore();
-            readFloatText(tonality, buf_line);
-
-            StringRef ref{string_pool.insert(word.data(), word.size()), word.size()};
-            emotional_dict[ref] = tonality;
-            ++count;
-        }
-        LOG_TRACE(log, "Emotional dictionary was added. Word count: {}", std::to_string(count));
-    }
-
-
-    void loadProgrammingFrequency()
-    {
-        LoggerPtr log = getLogger("ProgrammingFrequency");
-
-        LOG_TRACE(log, "Loading embedded programming languages frequencies loading");
-
-        auto resource = getResource("programming.zst");
-            if (resource.empty())
-                throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "There is no embedded programming languages frequencies");
-
-        String line;
-        String bigram;
-        Float64 frequency;
-        String programming_language;
-
-        auto buf = std::make_unique<ReadBufferFromMemory>(resource.data(), resource.size());
-        ZstdInflatingReadBuffer in(std::move(buf));
-
-        while (!in.eof())
-        {
-            readString(line, in);
-            in.ignore();
-
-            if (line.empty())
-                continue;
-
-            ReadBufferFromString buf_line(line);
-
-            // Start loading a new language
-            if (line.starts_with("// "))
-            {
-                // Skip "// "
-                buf_line.ignore(3);
-                readString(programming_language, buf_line);
-
-                Language lang;
-                lang.name = programming_language;
-                programming_freq.push_back(std::move(lang));
-            }
-            else
-            {
-                readStringUntilWhitespace(bigram, buf_line);
-                buf_line.ignore();
-                readFloatText(frequency, buf_line);
-
-                StringRef ref{string_pool.insert(bigram.data(), bigram.size()), bigram.size()};
-                programming_freq.back().map[ref] = frequency;
-            }
-        }
-        LOG_TRACE(log, "Programming languages frequencies was added");
-    }
-
     const Map & getEmotionalDict()
     {
         std::lock_guard lock(mutex);
         if (emotional_dict.empty())
             loadEmotionalDict();
-
         return emotional_dict;
     }
-
 
     const EncodingContainer & getEncodingsFrequency()
     {
         std::lock_guard lock(mutex);
         if (encodings_freq.empty())
             loadEncodingsFrequency();
-
         return encodings_freq;
     }
 
+    /// proton: starts.
     const Container & getProgrammingFrequency()
     {
         std::lock_guard lock(mutex);
         if (programming_freq.empty())
             loadProgrammingFrequency();
-
         return programming_freq;
     }
-
+    /// proton: ends.
 
 private:
+    void loadEncodingsFrequency();
+    void loadEmotionalDict();
+    /// proton: starts.
+    void loadProgrammingFrequency();
+    /// proton: ends.
+
     Arena string_pool;
 
     Map emotional_dict;
+    /// proton: starts.
     Container programming_freq;
+    /// proton: ends.
     EncodingContainer encodings_freq;
 
     std::mutex mutex;
 };
+
 }
+
+#endif

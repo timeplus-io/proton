@@ -3,6 +3,7 @@
 #include <V8/PkuSupport.h>
 
 #include <Common/Stopwatch.h>
+#include <Common/logger_useful.h>
 
 #include <regex>
 

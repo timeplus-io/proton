@@ -36,6 +36,8 @@ int main(int, char **)
             std::cout << "Writing done (1). Elapsed: " << stopwatch.elapsedSeconds()
                 << ", " << (compressed_buf.count() / stopwatch.elapsedSeconds() / 1000000) << " MB/s"
                 << std::endl;
+
+            compressed_buf.finalize();
         }
 
         {

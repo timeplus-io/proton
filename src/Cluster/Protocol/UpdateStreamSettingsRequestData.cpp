@@ -5,6 +5,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 namespace cluster::protocol
 {

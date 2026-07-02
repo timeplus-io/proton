@@ -1,16 +1,16 @@
 #pragma once
 
 #include <Interpreters/Context_fwd.h>
+#include <Common/CgroupsMemoryUsageObserver.h>
 #include <Common/MemoryStatisticsOS.h>
+#include <Common/MemoryWorker.h>
 #include <Common/ThreadPool.h>
 #include <Common/Stopwatch.h>
 #include <IO/ReadBufferFromFile.h>
 
 #include <condition_variable>
-#include <map>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 #include <optional>
 #include <unordered_map>
@@ -18,17 +18,28 @@
 
 namespace Poco
 {
-class Logger;
+    class Logger;
 }
 
 namespace DB
 {
 
-class ProtocolServerAdapter;
 class ReadBuffer;
 struct Settings;
 
-using AsynchronousMetricValue = double;
+struct AsynchronousMetricValue
+{
+    /// proton: starts
+    double value = 0;
+    const char * documentation = "";
+    /// proton: ends
+
+    template <typename T>
+    AsynchronousMetricValue(T value_, const char * documentation_)
+        : value(static_cast<double>(value_)), documentation(documentation_) {}
+    AsynchronousMetricValue() = default; /// For std::unordered_map::operator[].
+};
+
 using AsynchronousMetricValues = std::unordered_map<std::string, AsynchronousMetricValue>;
 
 struct ProtocolServerMetrics
@@ -43,6 +54,9 @@ struct ProtocolServerMetrics
   *
   * This includes both ClickHouse-related metrics (like memory usage of ClickHouse process)
   *  and common OS-related metrics (like total memory usage on the server).
+  *
+  * All the values are either gauge type (like the total number of tables, the current memory usage).
+  * Or delta-counters representing some accumulation during the interval of time.
   */
 class AsynchronousMetrics : WithContext
 {
@@ -51,7 +65,9 @@ public:
     AsynchronousMetrics(
         ContextPtr global_context_,
         int update_period_seconds,
-        const ProtocolServerMetricsFunc & protocol_server_metrics_func_);
+        const ProtocolServerMetricsFunc & protocol_server_metrics_func_,
+        bool update_jemalloc_epoch_,
+        bool update_rss_);
 
     ~AsynchronousMetrics();
 
@@ -93,6 +109,9 @@ private:
     bool first_run = true;
     std::chrono::system_clock::time_point previous_update_time;
 
+    [[maybe_unused]] const bool update_jemalloc_epoch;
+    [[maybe_unused]] const bool update_rss;
+
 #if defined(OS_LINUX)
     MemoryStatisticsOS memory_stat;
 
@@ -105,11 +124,19 @@ private:
     std::optional<ReadBufferFromFilePRead> uptime;
     std::optional<ReadBufferFromFilePRead> net_dev;
 
+    std::optional<ReadBufferFromFilePRead> cpu_pressure;
+    std::optional<ReadBufferFromFilePRead> memory_pressure;
+    std::optional<ReadBufferFromFilePRead> io_pressure;
+
+    std::unordered_map<String /* PSI stall type */, uint64_t> prev_pressure_vals;
+
     std::optional<ReadBufferFromFilePRead> cgroupmem_limit_in_bytes;
-    std::optional<ReadBufferFromFilePRead> cgroupmem_usage_in_bytes;
+    std::shared_ptr<ICgroupsReader> cgroupmem_reader;
     std::optional<ReadBufferFromFilePRead> cgroupcpu_cfs_period;
     std::optional<ReadBufferFromFilePRead> cgroupcpu_cfs_quota;
     std::optional<ReadBufferFromFilePRead> cgroupcpu_max;
+    std::optional<ReadBufferFromFilePRead> cgroupcpu_stat;
+    std::optional<ReadBufferFromFilePRead> cgroupcpuacct_stat;
 
     std::vector<std::unique_ptr<ReadBufferFromFilePRead>> thermal;
 
@@ -148,9 +175,10 @@ private:
         uint64_t context_switches;
         uint64_t processes_created;
 
-        ProcStatValuesOther operator-(const ProcStatValuesOther & other) const;
+    ProcStatValuesOther operator-(const ProcStatValuesOther & other) const;
     };
 
+    ProcStatValuesCPU cgroup_values_all_cpus{};
     ProcStatValuesCPU proc_stat_values_all_cpus{};
     ProcStatValuesOther proc_stat_values_other{};
     std::vector<ProcStatValuesCPU> proc_stat_values_per_cpu;
@@ -206,6 +234,28 @@ private:
     void openBlockDevices();
     void openSensorsChips();
     void openEDAC();
+
+    std::unique_ptr<ReadBufferFromFilePRead> openFileIfExists(const std::string & filename);
+    void openFileIfExists(const char * filename, std::optional<ReadBufferFromFilePRead> & out);
+    void openCgroupv2MetricFile(const std::string & filename, std::optional<ReadBufferFromFilePRead> & out);
+
+    void applyCgroupCPUMetricsUpdate(AsynchronousMetricValues & new_values, const ProcStatValuesCPU & delta_values, double multiplier);
+
+    void applyCgroupNormalizedCPUMetricsUpdate(
+        AsynchronousMetricValues & new_values,
+        double num_cpus_to_normalize,
+        const ProcStatValuesCPU & delta_values_all_cpus,
+        double multiplier);
+
+    void applyCPUMetricsUpdate(
+        AsynchronousMetricValues & new_values, const std::string & cpu_suffix, const ProcStatValuesCPU & delta_values, double multiplier);
+
+    void applyNormalizedCPUMetricsUpdate(
+        AsynchronousMetricValues & new_values,
+        double num_cpus_to_normalize,
+        const ProcStatValuesCPU & delta_values_all_cpus,
+        double multiplier);
+
 #endif
 
     std::unique_ptr<ThreadFromGlobalPool> thread;

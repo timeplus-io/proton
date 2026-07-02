@@ -1,3 +1,6 @@
+#include <Common/Logger.h>
+#include <Common/logger_useful.h>
+#include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <Common/PODArray.h>
 #include <Common/typeid_cast.h>
@@ -64,6 +67,7 @@
 #include <base/EnumReflection.h>
 #include <base/demangle.h>
 
+#include <atomic>
 #include <random>
 
 /// proton: starts
@@ -76,6 +80,7 @@
 #include <Storages/Stream/StorageStream.h>
 #include <base/scope_guard.h>
 #include <Common/ClickHouseCompatibleFlag.h>
+#include <Common/thread_local_rng.h>
 /// proton: ends
 
 namespace ProfileEvents
@@ -98,10 +103,11 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INTO_OUTFILE_NOT_ALLOWED;
-    extern const int QUERY_WAS_CANCELLED;
     extern const int INVALID_TRANSACTION;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_BY_CLIENT;
     extern const int SYNTAX_ERROR;
 }
 
@@ -197,7 +203,8 @@ static void setExceptionStackTrace(QueryLogElement & elem)
 {
     /// Disable memory tracker for stack trace.
     /// Because if exception is "Memory limit (for query) exceed", then we probably can't allocate another one string.
-    MemoryTrackerBlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
+
+    LockMemoryExceptionInThread lock(VariableContext::Global);
 
     try
     {
@@ -212,7 +219,7 @@ static void setExceptionStackTrace(QueryLogElement & elem)
 
 
 /// Log exception (with query info) into text log (not into system table).
-static void logException(ContextPtr context, QueryLogElement & elem)
+static void logException(ContextPtr context, QueryLogElement & elem, bool log_error = true)
 {
     String comment;
     if (!elem.log_comment.empty())
@@ -223,7 +230,7 @@ static void logException(ContextPtr context, QueryLogElement & elem)
     PreformattedMessage message;
     message.format_string = elem.exception_format_string;
 
-    if (elem.stack_trace.empty())
+    if (elem.stack_trace.empty() || !log_error)
         message.text = fmt::format("{} (from {}){} (in query: {})", elem.exception,
                         context->getClientInfo().current_address->toString(),
                         comment,
@@ -237,7 +244,10 @@ static void logException(ContextPtr context, QueryLogElement & elem)
             toOneLineQuery(elem.query),
             elem.stack_trace);
 
-    LOG_ERROR(getLogger("executeQuery"), message);
+    if (log_error)
+        LOG_ERROR(getLogger("executeQuery"), message);
+    else
+        LOG_INFO(getLogger("executeQuery"), message);
 }
 
 static void onExceptionBeforeStart(
@@ -297,7 +307,9 @@ static void onExceptionBeforeStart(
 
     if (settings.calculate_text_stack_trace)
         setExceptionStackTrace(elem);
-    logException(context, elem);
+
+    bool log_error = elem.exception_code != ErrorCodes::QUERY_WAS_CANCELLED_BY_CLIENT && elem.exception_code !=  ErrorCodes::QUERY_WAS_CANCELLED;
+    logException(context, elem, log_error);
 
     /// Update performance counters before logging to query_log
     CurrentThread::finalizePerformanceCounters();
@@ -363,22 +375,6 @@ static void setQuerySpecificSettings(ASTPtr & ast, ContextMutablePtr context)
         }
     }
     /// proton : ends
-}
-
-static void applySettingsFromSelectWithUnion(const ASTSelectWithUnionQuery & select_with_union, ContextMutablePtr context)
-{
-    const ASTs & children = select_with_union.list_of_selects->children;
-    if (children.empty())
-        return;
-
-    // We might have an arbitrarily complex UNION tree, so just give
-    // up if the last first-order child is not a plain SELECT.
-    // It is flattened later, when we process UNION ALL/DISTINCT.
-    const auto * last_select = children.back()->as<ASTSelectQuery>();
-    if (last_select && last_select->settings())
-    {
-        InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
-    }
 }
 
 static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
@@ -485,41 +481,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
-        if (const auto * select_query = ast->as<ASTSelectQuery>())
-        {
-            if (auto new_settings = select_query->settings())
-                InterpreterSetQuery(new_settings, context).executeForCurrentContext();
-        }
-        else if (const auto * select_with_union_query = ast->as<ASTSelectWithUnionQuery>())
-        {
-            applySettingsFromSelectWithUnion(*select_with_union_query, context);
-        }
-        else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
-        {
-            if (query_with_output->settings_ast)
-                InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
-        }
-        /// proton: starts. A CREATE FUNCTION SETTINGS clause carries Python UDF settings
-        /// (init_function_name / init_function_parameters / named_collection), not session
-        /// settings. They are validated and consumed from the AST by InterpreterCreateFunctionQuery,
-        /// so they must NOT be applied to the context here -- doing so throws UNKNOWN_SETTING for
-        /// these UDF-only keys before the interpreter ever runs.
-        /// proton: ends
+        InterpreterSetQuery::applySettingsFromQuery(ast, context);
 
-        if (auto * create_query = ast->as<ASTCreateQuery>())
-        {
-            if (create_query->select)
-            {
-                applySettingsFromSelectWithUnion(create_query->select->as<ASTSelectWithUnionQuery &>(), context);
-            }
-        }
-
-        auto * insert_query = ast->as<ASTInsertQuery>();
-
-        if (insert_query && insert_query->settings_ast)
-            InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
-
-        if (insert_query)
+        if (auto * insert_query = ast->as<ASTInsertQuery>())
         {
             context->setInsertFormat(insert_query->format);
             if (insert_query->data)
@@ -658,8 +622,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             process_list_entry = context->getProcessList().insert(query_for_logging, ast.get(), context, start_watch.getStart());
             context->setProcessListElement(process_list_entry->getQueryStatus());
             /// proton: starts.
-            CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
-            CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
+            CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds].store(0, std::memory_order_relaxed);
+            CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds].store(0, std::memory_order_relaxed);
             /// proton: ends.
         }
 

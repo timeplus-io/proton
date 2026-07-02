@@ -429,4 +429,7 @@ private:
 /// and their structure must be equal (e.g. compareAt).
 void convertToFullIfSparse(Chunk & chunk);
 
+/// Creates chunks with same columns but makes them const with default value and specified number of rows.
+Chunk cloneConstWithDefault(const Chunk & chunk, size_t num_rows);
+
 }

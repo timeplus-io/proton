@@ -6,14 +6,14 @@ cluster:
   - p3k1
 steps:
   - type: query
-    sql: insert into test14_changelog_kv_stream(i, s) values (1, 'a');
+    sql: insert into test14_changelog_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (1, 'a');
 
   - type: query
-    sql: insert into test14_changelog_kv_stream(i, s) values (2, 'b');
+    sql: insert into test14_changelog_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (2, 'b');
 
   - type: query
     sql: |
-      insert into test14_changelog_kv_stream(i, s, _tp_delta) values (1, 'a', -1),
+      insert into test14_changelog_kv_stream(i, s, _tp_delta) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (1, 'a', -1),
       (2, 'b', -1), (3, 'b', 1), (4, 'c', 1);
   - type: wait
     time: 3
@@ -32,13 +32,18 @@ steps:
     time: 1
 
   - type: query
-    sql: insert into test14_changelog_kv_stream(i, s) values (5, 'd');
+    sql: insert into test14_changelog_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (5, 'd');
 
   - type: query
-    sql: insert into test14_changelog_kv_stream(i, s, _tp_delta) values (4, 'c', -1);
+    sql: insert into test14_changelog_kv_stream(i, s, _tp_delta) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (4, 'c', -1);
+
+  - type: wait
+    time: 2
 
   - type: check
     target_name: "1401"
+    timeout: 30 # address build need more time
+    mode: random
     expected_result:
       - [3, b, 1]
       - [4, c, 1]

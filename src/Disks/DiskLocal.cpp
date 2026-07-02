@@ -1,7 +1,7 @@
-#include "DiskLocal.h"
-#include <Common/Throttler_fwd.h>
+#include <Disks/DiskLocal.h>
+#include <Common/IThrottler.h>
 #include <Common/createHardLink.h>
-#include "DiskFactory.h"
+#include <Disks/DiskFactory.h>
 
 #include <Disks/LocalDirectorySyncGuard.h>
 #include <Interpreters/Context.h>
@@ -23,6 +23,7 @@
 #include <Common/randomSeed.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Common/formatReadable.h>
 #include <Common/logger_useful.h>
 
 
@@ -672,6 +673,7 @@ void DiskLocal::setup()
             {
                 auto buf = writeFile(disk_checker_path, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Rewrite, {});
                 writeIntBinary(magic_number, *buf);
+                buf->finalize();
             }
             disk_checker_magic_number = magic_number;
         }

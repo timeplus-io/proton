@@ -1,5 +1,11 @@
 include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 add_headers_and_sources(clickhouse_functions_array .)
+
+if (NOT ENABLE_VECTOR_DISTANCE_FUNCS)
+    list(FILTER clickhouse_functions_array_sources EXCLUDE REGEX "/arrayDistance\\.cpp$")
+    message(STATUS "Array distance function is disabled")
+endif()
+
 add_library(clickhouse_functions_array OBJECT ${clickhouse_functions_array_sources} ${clickhouse_functions_array_headers})
 target_link_libraries(clickhouse_functions_array PRIVATE dbms clickhouse_functions_gatherutils)
 

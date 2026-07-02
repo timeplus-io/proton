@@ -1,0 +1,100 @@
+tags:
+  - batch parsing
+
+description: |
+  Test Pulsar external stream with batch parsing enabled.
+  Steps:
+    1. Create Pulsar topic
+    2. Create external stream with JSONEachRow format
+    3. Query with parse_messages_in_batch=1
+    4. Produce JSON messages
+    5. Verify all messages received correctly
+
+cluster:
+  - p1k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_batch_17
+
+  - type: pulsar
+    name: create
+    topic: test_batch_17
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_17
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_17(
+        id int32,
+        value string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_17',
+      data_format = 'JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  # Query with batch parsing enabled
+  - type: stream
+    name: pulsar-batch-17-1
+    query: select id, value from ex_pulsar_batch_17 settings seek_to='earliest', parse_messages_in_batch=1;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  # Produce messages via INSERT
+  - type: query
+    sql: insert into ex_pulsar_batch_17(id, value) values (1, 'alpha'), (2, 'beta'), (3, 'gamma');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ex_pulsar_batch_17(id, value) values (4, 'delta'), (5, 'epsilon');
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: pulsar-batch-17-1
+    expected_result:
+      - [1, alpha]
+      - [2, beta]
+      - [3, gamma]
+      - [4, delta]
+      - [5, epsilon]
+
+  # Test with larger batch
+  - type: query
+    sql: insert into ex_pulsar_batch_17(id, value) select number, 'val' || toString(number) from numbers(10);
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-batch-17-2
+    query: select count() as cnt from table(ex_pulsar_batch_17);
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: pulsar-batch-17-2
+    expected_result:
+      - [15]  # 5 from first batch + 10 from second
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_17

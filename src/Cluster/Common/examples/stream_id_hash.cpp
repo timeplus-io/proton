@@ -4,6 +4,7 @@
 #include <iostream>
 #include <ranges>
 #include <unordered_map>
+#include <fmt/ranges.h>
 
 int main(int /*argc*/, const char ** /*argv*/)
 {

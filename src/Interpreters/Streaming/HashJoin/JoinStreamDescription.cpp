@@ -3,6 +3,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Storages/IStorage.h>
 #include <Common/ProtonCommon.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

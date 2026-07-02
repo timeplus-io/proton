@@ -6,6 +6,7 @@
 #include <IO/WriteBufferFromString.h>
 
 /// proton : starts
+#include <Processors/Sinks/SinkToStorage.h>
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <IO/ReadHelpers.h>
@@ -151,11 +152,31 @@ String IProcessor::unmarshal(ReadBuffer & rb)
 
 void IProcessor::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
-    /// By default, we just notify checkpoint coordinator the processor has seen
-    /// seen the checkpoint epic since most processor don't have `state` to checkpoint
+    if (ckpt_ctx->isOffsetsOnly() && !isSource() && !isSink() && !dynamic_cast<SinkToStorage *>(this))
+    {
+        /// Offsets-only: a transform's state is replayable from source offsets, so just ack the
+        /// barrier. Sinks still run doCheckpoint for their flush/wait-for-ack side effects —
+        /// isSink() catches trailing sinks, and the dynamic_cast catches SinkToStorage which is
+        /// topologically a transform (its output port feeds a trailing EmptySink).
+        ckpt_ctx->coordinator->checkpointed(getVersion(), logic_pid, ckpt_ctx);
+        return;
+    }
+
+    doCheckpoint(std::move(ckpt_ctx));
+}
+
+void IProcessor::doCheckpoint(CheckpointContextPtr ckpt_ctx)
+{
     ckpt_ctx->coordinator->checkpointed(getVersion(), logic_pid, ckpt_ctx);
 }
 
+void IProcessor::recover(CheckpointContextPtr ckpt_ctx)
+{
+    if (ckpt_ctx->isOffsetsOnly() && !isSource())
+        return;
+
+    doRecover(std::move(ckpt_ctx));
+}
 
 VersionType IProcessor::getVersionFromRevision(UInt64 revision) const
 {

@@ -12,7 +12,7 @@ extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
 namespace Streaming
 {
 
-auto MemoryAggregator::getZeroOutWindowKeysFunc(Arena * arena) const
+auto MemoryAggregator::getZeroOutWindowKeysFunc(const ArenaPtr & pool) const
 {
     chassert(bucket_key_offset);
 
@@ -23,15 +23,15 @@ auto MemoryAggregator::getZeroOutWindowKeysFunc(Arena * arena) const
     /// For example:
     /// Key :           <window_start> +  <window_end> +  <other_keys...>
     /// New key :                0     +        0      +  <other_keys...>
-    return [window_keys_bytes, offset = bucket_key_offset.value(), arena, is_single_key](const auto & key) {
+    return [window_keys_bytes, offset = bucket_key_offset.value(), &pool, is_single_key](const auto & key) {
         if constexpr (std::is_same_v<std::decay_t<decltype(key)>, StringRef>)
         {
             /// Case-1: Serialized key, the window time keys always are always lower bits
-            auto * data = const_cast<char *>(arena->insert(key.data, key.size));
+            auto * data = const_cast<char *>(pool->insert(key.data, key.size));
             chassert(data != nullptr);
             std::memset(data, 0, window_keys_bytes);
 
-            return SerializedKeyHolder{StringRef(data, key.size), *arena};
+            return SerializedKeyHolder{StringRef(data, key.size), *pool};
         }
         else
         {
@@ -53,14 +53,14 @@ void MemoryAggregator::mergeWithoutKeyDataImpl(ManyMemoryAggregatedDataVariants 
     for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
     {
         MemoryAggregatedDataVariants & current = *non_empty_data[result_num];
-        mergeAggregateStates(res->without_key, current.without_key, res->aggregates_pool);
+        mergeAggregateStates(res->without_key, current.without_key, res->aggregates_pool.get());
     }
 }
 
 template <bool is_two_level, typename Method, typename Table, typename KeyHandler>
 void NO_INLINE MemoryAggregator::mergeUpdatesDataImpl(
     std::vector<Table *> & tables,
-    Arena * arena,
+    const ArenaPtr & pool,
     bool use_compiled_functions,
     bool reset_updated,
     AggregatingConvertParams & cparams,
@@ -71,6 +71,7 @@ void NO_INLINE MemoryAggregator::mergeUpdatesDataImpl(
     /// Always merge updated data into empty first.
     chassert(dst_table.empty());
 
+    Arena * arena = pool.get();
     /// For example:
     ///                 thread-1        thread-2
     ///     group-1     updated       non-updated
@@ -254,16 +255,22 @@ Block MemoryAggregator::spliceAndConvertToBlock(IAggregatedDataVariants & data_v
     auto & variants = static_cast<MemoryAggregatedDataVariants &>(data_variants);
 
     chassert(variants.isTimeBucketTwoLevel());
+    chassert(!gcd_buckets.empty());
 
     bool need_splice = gcd_buckets.size() > 1;
-    Arena * arena = variants.aggregates_pool;
-    MemoryAggregatedDataVariants res{/*id_=*/"result", /*enable_recycle=*/false}; /// This data variants is temporary, disable recycle
+    ArenaPtr arena;
+    MemoryAggregatedDataVariants res{/*id_=*/"result"};
     if (need_splice)
     {
         res.aggregator = this;
         initDataVariants(res);
         arena = res.aggregates_pool;
         chassert(res.type == variants.type);
+    }
+    else
+    {
+        chassert(gcd_buckets.size() == 1);
+        arena = variants.time_bucket_arenas.at(gcd_buckets[0]);
     }
 
     bool use_compiled_functions = false;
@@ -288,11 +295,11 @@ Block MemoryAggregator::spliceAndConvertToBlock(IAggregatedDataVariants & data_v
                     use_compiled_functions, \
                     getZeroOutWindowKeysFunc(arena)); \
 \
-            return convertOneBucketToBlockImpl(res, *res.NAME, arena, /*final_=*/true, /*bucket=*/0, cparams); \
+            return convertOneBucketToBlockImpl(*res.NAME, arena, /*bucket=*/0, cparams); \
         } \
         else \
         { \
-            return convertOneBucketToBlockImpl(variants, *variants.NAME, arena, /*final_=*/true, gcd_buckets[0], cparams); \
+            return convertOneBucketToBlockImpl(*variants.NAME, arena, gcd_buckets[0], cparams); \
         } \
     }
 
@@ -487,7 +494,7 @@ MemoryAggregator::mergeGroups(ManyIAggregatedDataVariants & many_data_variants, 
     }
 
     auto & first = *prepared_data_ptr->at(0);
-    auto * arena = first.aggregates_pool;
+    const auto & arena = first.aggregates_pool;
     switch (first.type)
     {
         case MemoryAggregatedDataVariants::Type::without_key:
@@ -550,6 +557,7 @@ void MemoryAggregator::mergeRetractGroups(ManyMemoryAggregatedDataVariants & non
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in streaming aggregation");
 
     auto & first = *non_empty_data.at(0);
+    auto * arena = first.aggregates_pool.get();
     if (first.type == MemoryAggregatedDataVariants::Type::without_key)
     {
         if (std::ranges::none_of(non_empty_data, [](auto & variants) {
@@ -565,14 +573,14 @@ void MemoryAggregator::mergeRetractGroups(ManyMemoryAggregatedDataVariants & non
             if (TrackingUpdatesWithRetract::hasRetract(current.without_key))
             {
                 auto & retract = TrackingUpdatesWithRetract::getRetract(current.without_key);
-                mergeAggregateStates(first.without_key, retract, first.aggregates_pool);
+                mergeAggregateStates(first.without_key, retract, arena);
                 TrackingUpdatesWithRetract::merge(first.without_key, retract);
                 destroyAggregateStates(retract); /// Retract data is no longer needed after merged
             }
             else
             {
                 /// If retract data not exist, assume it is not changed, we should use original data
-                mergeAggregateStates(first.without_key, current.without_key, first.aggregates_pool);
+                mergeAggregateStates(first.without_key, current.without_key, arena);
                 TrackingUpdatesWithRetract::merge(first.without_key, current.without_key);
             }
 
@@ -583,7 +591,7 @@ void MemoryAggregator::mergeRetractGroups(ManyMemoryAggregatedDataVariants & non
 #define M(NAME, IS_TWO_LEVEL) \
     else if (first.type == MemoryAggregatedDataVariants::Type::NAME) \
     { \
-        mergeRetractGroupsImpl<decltype(first.NAME)::element_type>(non_empty_data, first.aggregates_pool, cparams); \
+        mergeRetractGroupsImpl<decltype(first.NAME)::element_type>(non_empty_data, arena, cparams); \
     }
 
     APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
@@ -602,6 +610,9 @@ Block MemoryAggregator::mergeAndSpliceAndConvertToBlock(
     if (prepared_data_ptr->empty())
         return {};
 
+    if (prepared_data_ptr->size() == 1)
+        return spliceAndConvertToBlock(*prepared_data_ptr->at(0), gcd_buckets);
+
     bool use_compiled_functions = false;
 #if USE_EMBEDDED_COMPILER
     if (compiled_aggregate_functions_holder)
@@ -610,7 +621,7 @@ Block MemoryAggregator::mergeAndSpliceAndConvertToBlock(
 
     auto & first = *prepared_data_ptr->at(0);
     chassert(first.isTimeBucketTwoLevel());
-    Arena * arena = first.aggregates_pool;
+    const auto & arena = first.aggregates_pool;
     AggregatingConvertParams cparams{AggregatingConvertType::Normal};
 
     if (false)
@@ -633,11 +644,11 @@ Block MemoryAggregator::mergeAndSpliceAndConvertToBlock(
                     use_compiled_functions, \
                     getZeroOutWindowKeysFunc(arena)); \
 \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, /*final_=*/true, /*bucket=*/0, cparams); \
+            return convertOneBucketToBlockImpl(*first.NAME, arena, /*bucket=*/0, cparams); \
         } \
         else \
         { \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, /*final_=*/true, gcd_buckets[0], cparams); \
+            return convertOneBucketToBlockImpl(*first.NAME, arena, gcd_buckets[0], cparams); \
         } \
     }
 
@@ -669,8 +680,7 @@ Block MemoryAggregator::spliceAndConvertUpdatesToBlock(
     initDataVariants(res);
     chassert(res.type == variants.type);
 
-    Arena * arena = res.aggregates_pool;
-    constexpr bool final = true;
+    const auto & pool = res.aggregates_pool;
     constexpr bool reset_updated = false; /// Don't reset updated, there may be overlapping gcd buckets
     bool need_splice = gcd_buckets.size() > 1;
     AggregatingConvertParams cparams{AggregatingConvertType::Normal};
@@ -690,14 +700,14 @@ Block MemoryAggregator::spliceAndConvertUpdatesToBlock(
         { \
             tables[0] = &(res.NAME->data.impls[0]); \
             mergeUpdatesDataImpl</*is_two_level=*/false, Method>( \
-                tables, arena, use_compiled_functions, reset_updated, cparams, getZeroOutWindowKeysFunc(arena)); \
-            return convertOneBucketToBlockImpl(res, *res.NAME, arena, final, /*bucket=*/0, cparams); \
+                tables, pool, use_compiled_functions, reset_updated, cparams, getZeroOutWindowKeysFunc(pool)); \
+            return convertOneBucketToBlockImpl(*res.NAME, pool, /*bucket=*/0, cparams); \
         } \
         else \
         { \
             tables[0] = &(res.NAME->data.impls[gcd_buckets[0]]); \
-            mergeUpdatesDataImpl</*is_two_level=*/false, Method>(tables, arena, use_compiled_functions, reset_updated, cparams); \
-            return convertOneBucketToBlockImpl(res, *res.NAME, arena, final, gcd_buckets[0], cparams); \
+            mergeUpdatesDataImpl</*is_two_level=*/false, Method>(tables, pool, use_compiled_functions, reset_updated, cparams); \
+            return convertOneBucketToBlockImpl(*res.NAME, pool, gcd_buckets[0], cparams); \
         } \
     }
 
@@ -727,8 +737,7 @@ Block MemoryAggregator::mergeAndSpliceAndConvertUpdatesToBlock(
     chassert(first.isTimeBucketTwoLevel());
     chassert(needTrackUpdates());
 
-    Arena * arena = first.aggregates_pool;
-    constexpr bool final = true;
+    const auto & pool = first.aggregates_pool;
     constexpr bool reset_updated = false; /// Don't reset updated, there may be overlapping gcd buckets
     bool need_splice = gcd_buckets.size() > 1;
     ManyMemoryAggregatedDataVariants spliced_variants;
@@ -750,14 +759,14 @@ Block MemoryAggregator::mergeAndSpliceAndConvertUpdatesToBlock(
         { \
             tables[0] = &(first.NAME->data.impls[0]); \
             mergeUpdatesDataImpl</*is_two_level=*/false, Method>( \
-                tables, arena, use_compiled_functions, reset_updated, cparams, getZeroOutWindowKeysFunc(arena)); \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*bucket=*/0, cparams); \
+                tables, pool, use_compiled_functions, reset_updated, cparams, getZeroOutWindowKeysFunc(pool)); \
+            return convertOneBucketToBlockImpl(*first.NAME, pool, /*bucket=*/0, cparams); \
         } \
         else \
         { \
             tables[0] = &(first.NAME->data.impls[gcd_buckets[0]]); \
-            mergeUpdatesDataImpl</*is_two_level=*/false, Method>(tables, arena, use_compiled_functions, reset_updated, cparams); \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, gcd_buckets[0], cparams); \
+            mergeUpdatesDataImpl</*is_two_level=*/false, Method>(tables, pool, use_compiled_functions, reset_updated, cparams); \
+            return convertOneBucketToBlockImpl(*first.NAME, pool, gcd_buckets[0], cparams); \
         } \
     }
 

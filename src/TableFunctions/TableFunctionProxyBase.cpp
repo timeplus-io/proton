@@ -10,7 +10,7 @@
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/Proxy/ProxyStream.h>
 #include <Storages/StorageView.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 
 namespace DB
 {
@@ -99,7 +99,7 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
         if (storage->as<StorageView>())
         {
             underlying_storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
-            auto select = underlying_storage_snapshot->getMetadataForQuery()->getSelectQuery().inner_query;
+            auto select = underlying_storage_snapshot->getMetadataForQuery()->getSelectQuery().inner_query->clone();
 
             auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(select, context, SelectQueryOptions{}.subquery().analyze());
             auto source_header = interpreter_subquery->getSampleBlock();

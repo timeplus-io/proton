@@ -17,6 +17,7 @@
 #include <memory>
 #include <unordered_map>
 
+
 namespace DB
 {
 
@@ -65,14 +66,19 @@ class FormatFactory final : private boost::noncopyable
 {
 public:
     /** Fast reading data from buffer and save result to memory.
-      * Reads at least min_chunk_bytes and some more until the end of the chunk, depends on the format.
+      * Reads at least `min_bytes` and some more until the end of the chunk, depends on the format.
+      * If `max_rows` is non-zero the function also stops after reading the `max_rows` number of rows
+      * (even if the `min_bytes` boundary isn't reached yet).
       * Used in ParallelParsingInputFormat.
       */
     using FileSegmentationEngine = std::function<std::pair<bool, size_t>(
         ReadBuffer & buf,
         DB::Memory<Allocator<false>> & memory,
-        size_t min_chunk_bytes)>;
+        size_t min_bytes,
+        size_t max_rows)>;
 
+    using FileSegmentationEngineCreator = std::function<FileSegmentationEngine(
+        const FormatSettings & settings)>;
 private:
     // On the input side, there are two kinds of formats:
     //  * InputCreator - formats parsed sequentially, e.g. CSV. Almost all formats are like this.
@@ -141,7 +147,7 @@ private:
         InputCreator input_creator;
         RandomAccessInputCreator random_access_input_creator;
         OutputCreator output_creator;
-        FileSegmentationEngine file_segmentation_engine;
+        FileSegmentationEngineCreator file_segmentation_engine_creator;
         SchemaReaderCreator schema_reader_creator;
         ExternalSchemaReaderCreator external_schema_reader_creator;
         /// proton: starts
@@ -178,7 +184,8 @@ public:
         bool is_remote_fs = false,
         // allows to do: buf -> parallel read -> decompression,
         // because parallel read after decompression is not possible
-        CompressionMethod compression = CompressionMethod::None) const;
+        CompressionMethod compression = CompressionMethod::None,
+        bool need_only_count = false) const;
 
     /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done.
     OutputFormatPtr getOutputFormatParallelIfPossible(
@@ -220,6 +227,8 @@ public:
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
     void registerFileSegmentationEngine(const String & name, FileSegmentationEngine file_segmentation_engine);
+
+    void registerFileSegmentationEngineCreator(const String & name, FileSegmentationEngineCreator file_segmentation_engine_creator);
 
     void registerNonTrivialPrefixAndSuffixChecker(const String & name, NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker);
 

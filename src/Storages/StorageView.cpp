@@ -139,7 +139,11 @@ void StorageView::read(
         const size_t /*max_block_size*/,
         const size_t /*num_streams*/)
 {
-    ASTPtr current_inner_query = storage_snapshot->metadata->getSelectQuery().inner_query;
+    auto stored_inner_query = storage_snapshot->metadata->getSelectQuery().inner_query;
+    if (!stored_inner_query)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected empty VIEW query for {}", getStorageID().getFullTableName());
+
+    ASTPtr current_inner_query = stored_inner_query->clone();
 
     if (query_info.view_query)
     {

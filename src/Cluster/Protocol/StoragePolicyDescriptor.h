@@ -2,6 +2,8 @@
 
 #include <Cluster/Common/Common.h>
 
+#include <limits>
+
 namespace DB
 {
 class WriteBuffer;
@@ -41,10 +43,23 @@ struct VolumeDescriptor
     /// - LEAST_USED
     VolumeLoadBalancing load_balancing = VolumeLoadBalancing::Unknown;
 
-    /// reserved for future
-    uint16_t volume_priority = 0;
+    /// Ordering of this volume in the policy. Lower value = higher priority. Must be unique
+    /// across the policy and (if any are set) cover 1..N. UINT64_MAX means "no explicit priority".
+    /// Default 0 is also treated as "unset" for backwards compatibility with pre-v2 metastore
+    /// data that was written before this field was wired through.
+    uint64_t volume_priority = std::numeric_limits<uint64_t>::max();
 
     std::vector<std::string> disk_names;
+
+    /// Added in schema v2: when true, the background merger will not select parts on this
+    /// volume as merge candidates (VolumeJBOD::areMergesAvoided returns true). Typical use:
+    /// cold/external tiers where merges cause expensive object-store I/O.
+    bool prefer_not_to_merge = false;
+
+    /// Added in schema v2: refresh interval in milliseconds for the LEAST_USED disk-size cache.
+    /// 0 disables caching (every getDisk/reserve call recomputes ranks). Default 60000 (60s)
+    /// matches upstream.
+    uint64_t least_used_ttl_ms = 60'000;
 
     size_t approximateSerializedSize() const noexcept;
 
@@ -64,7 +79,10 @@ struct StoragePolicyDescriptor
     std::string string() const;
 
     /// `schema_version` is version used in serde. Bump up it when the on-disk schema is changed.
-    constexpr static uint32_t schema_version = 1;
+    /// v2: appended VolumeDescriptor.prefer_not_to_merge and least_used_ttl_ms to the volume
+    ///     serde tail; widened volume_priority from uint16_t to uint64_t (wire-compatible
+    ///     for all values the previous code could write).
+    constexpr static uint32_t schema_version = 2;
 
     /// `data_version` is used guardrail / version check on update.
     /// Whenever we change the data, we bump up the version.

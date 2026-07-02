@@ -65,10 +65,10 @@ avro::GenericRecord getSerializationResult(const String & schema, const Block & 
     ser.flush();
 
     wb.finalize();
-    auto bytes = wb.stringRef();
+    auto bytes = wb.stringView();
 
     auto dec = avro::validatingDecoder(valid_schema, avro::binaryDecoder());
-    auto in = avro::memoryInputStream(reinterpret_cast<const uint8_t *>(bytes.data), bytes.size);
+    auto in = avro::memoryInputStream(reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size());
     dec->init(*in);
 
     avro::GenericDatum datum(valid_schema);

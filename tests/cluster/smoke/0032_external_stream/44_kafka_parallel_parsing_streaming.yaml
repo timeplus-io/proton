@@ -1,0 +1,168 @@
+tags:
+  - parallel parsing
+  - streaming mode
+
+description: |
+  Test kafka external stream with parallel parsing in streaming mode.
+  Verifies that parallel parsing works correctly for continuous streaming
+  queries (SELECT FROM stream, not table(stream)).
+  Steps:
+    1. Create kafka topic
+    2. Create external stream with JSONEachRow format
+    3. Start streaming queries with parallel_parsing enabled
+    4. Produce messages in batches
+    5. Verify continuous data flow with correct ordering
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test_parallel_streaming_44
+
+  - type: kafka
+    name: create
+    topic: test_parallel_streaming_44
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: query
+    sql: drop stream if exists ext_parallel_streaming_44;
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ext_parallel_streaming_44(
+        id int32,
+        value string,
+        _tp_message_key string
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'test_parallel_streaming_44',
+      data_format = 'JSONEachRow',
+      one_message_per_row = 1;
+    node: [p1]
+
+  - type: wait
+    time: 3
+
+  # Streaming query with parallel parsing (no table() wrapper = streaming mode)
+  - type: stream
+    name: parallel-streaming-44-1
+    query: select id, value from ext_parallel_streaming_44 settings parallel_parsing=1, parallel_parsing_threads=2, record_consume_batch_count=3;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    node: [p1]
+
+  # Another streaming query with more threads
+  - type: stream
+    name: parallel-streaming-44-2
+    query: select id, value from ext_parallel_streaming_44 settings parallel_parsing=1, parallel_parsing_threads=4, record_consume_batch_count=3;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+    node: [p1]
+
+  - type: wait
+    time: 1
+
+  # Produce first batch
+  - type: query
+    sql: insert into ext_parallel_streaming_44(id, value) values (1, 'first') (2, 'second') (3, 'third');
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: parallel-streaming-44-1
+    expected_result:
+      - [1, first]
+      - [2, second]
+      - [3, third]
+
+  - type: check
+    target_name: parallel-streaming-44-2
+    expected_result:
+      - [1, first]
+      - [2, second]
+      - [3, third]
+
+  # Produce second batch (streaming should continue receiving)
+  - type: query
+    sql: insert into ext_parallel_streaming_44(id, value) values (4, 'fourth') (5, 'fifth');
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: parallel-streaming-44-1
+    expected_result:
+      - [4, fourth]
+      - [5, fifth]
+
+  - type: check
+    target_name: parallel-streaming-44-2
+    expected_result:
+      - [4, fourth]
+      - [5, fifth]
+
+  # Produce third batch with larger payload
+  - type: query
+    sql: insert into ext_parallel_streaming_44(id, value) values (6, 'sixth'), (7, 'seventh'), (8, 'eighth'), (9, 'ninth'), (10, 'tenth');
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: parallel-streaming-44-1
+    expected_result:
+      - [6, sixth]
+      - [7, seventh]
+      - [8, eighth]
+      - [9, ninth]
+      - [10, tenth]
+
+  - type: check
+    target_name: parallel-streaming-44-2
+    expected_result:
+      - [6, sixth]
+      - [7, seventh]
+      - [8, eighth]
+      - [9, ninth]
+      - [10, tenth]
+
+  # Test streaming with virtual columns
+  - type: stream
+    name: parallel-streaming-44-vcol
+    query: select id, value, _tp_message_key from ext_parallel_streaming_44 settings parallel_parsing=1, parallel_parsing_threads=2, record_consume_batch_count=3;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  # Insert with message key
+  - type: query
+    sql: insert into ext_parallel_streaming_44(id, value, _tp_message_key) values (11, 'eleventh', 'key11')(12, 'twelfth', 'key12');
+
+  - type: wait
+    time: 1
+
+  - type: check
+    target_name: parallel-streaming-44-vcol
+    expected_result:
+      - [11, eleventh, key11]
+      - [12, twelfth, key12]

@@ -8,6 +8,9 @@ set (SRCS
     ExternalGrokPatterns.cpp
 )
 
+# ExternalGrokPatterns.cpp embeds grok-patterns via C23 `#embed`.
+set_source_files_properties(ExternalGrokPatterns.cpp PROPERTIES COMPILE_FLAGS -Wno-c23-extensions)
+
 add_library(clickhouse_common_config ${SRCS})
 target_link_libraries(clickhouse_common_config
     PUBLIC

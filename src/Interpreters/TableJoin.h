@@ -24,6 +24,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/Streaming/HashJoin/JoinStreamDescription.h>
 #include <Interpreters/Streaming/HashJoin/RangeAsofJoinContext.h>
+#include <fmt/ranges.h>
 /// proton : ends
 
 namespace DB

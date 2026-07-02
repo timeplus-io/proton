@@ -81,5 +81,4 @@ void applySettingsQuirks(Settings & settings, LoggerPtr log)
         }
     }
 }
-
 }

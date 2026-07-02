@@ -1,11 +1,14 @@
 #pragma once
 
 #include <Common/VariableContext.h>
+#include <Common/Stopwatch.h>
+#include <Interpreters/Context_fwd.h>
 #include <base/types.h>
 #include <base/strong_typedef.h>
 #include <atomic>
 #include <memory>
-#include <stddef.h>
+#include <cstddef>
+
 
 /** Implements global counters for various events happening in the application
   *  - for high level profiling.
@@ -18,29 +21,64 @@ namespace ProfileEvents
     using Event = StrongTypedef<size_t, struct EventTag>;
     using Count = size_t;
     using Increment = Int64;
-    using Counter = std::atomic<Count>;
+    /// Avoid false sharing when multiple threads increment different counters close to each other.
+    struct alignas(64) Counter : public std::atomic<Count>
+    {
+        using std::atomic<Count>::atomic;
+    };
     class Counters;
 
     /// Counters - how many times each event happened
     extern Counters global_counters;
 
+    class Timer
+    {
+    public:
+        enum class Resolution : UInt32
+        {
+            Nanoseconds = 1,
+            Microseconds = 1000,
+            Milliseconds = 1000000,
+        };
+        Timer(Counters & counters_, Event timer_event_, Resolution resolution_);
+        Timer(Counters & counters_, Event timer_event_, Event counter_event, Resolution resolution_);
+        Timer(Timer && other) noexcept
+            : counters(other.counters), timer_event(std::move(other.timer_event)), watch(std::move(other.watch)), resolution(std::move(other.resolution))
+            {}
+        ~Timer() { end(); }
+        void cancel() { watch.reset(); }
+        void restart() { watch.restart(); }
+        void end();
+        UInt64 get();
+
+    private:
+        Counters & counters;
+        Event timer_event;
+        Stopwatch watch;
+        Resolution resolution;
+    };
+
     class Counters
     {
+    private:
         Counter * counters = nullptr;
         std::unique_ptr<Counter[]> counters_holder;
         /// Used to propagate increments
-        Counters * parent = nullptr;
+        std::atomic<Counters *> parent = {};
+        bool trace_profile_events = false;
 
     public:
 
         VariableContext level = VariableContext::Thread;
 
         /// By default, any instance have to increment global counters
-        Counters(VariableContext level_ = VariableContext::Thread, Counters * parent_ = &global_counters);
+        explicit Counters(VariableContext level_ = VariableContext::Thread, Counters * parent_ = &global_counters);
 
         /// Global level static initializer
-        Counters(Counter * allocated_counters) noexcept
+        explicit Counters(Counter * allocated_counters) noexcept
             : counters(allocated_counters), parent(nullptr), level(VariableContext::Global) {}
+
+        Counters(Counters && src) noexcept;
 
         Counter & operator[] (Event event)
         {
@@ -52,27 +90,20 @@ namespace ProfileEvents
             return counters[event];
         }
 
-        inline void increment(Event event, Count amount = 1)
-        {
-            Counters * current = this;
-            do
-            {
-                current->counters[event].fetch_add(amount, std::memory_order_relaxed);
-                current = current->parent;
-            } while (current != nullptr);
-        }
+        void increment(Event event, Count amount = 1);
+        void incrementNoTrace(Event event, Count amount = 1);
 
         struct Snapshot
         {
             Snapshot();
-            Snapshot(Snapshot &&) noexcept = default;
+            Snapshot(Snapshot &&) = default;
 
             Count operator[] (Event event) const noexcept
             {
                 return counters_holder[event];
             }
 
-            Snapshot & operator=(Snapshot &&) noexcept = default;
+            Snapshot & operator=(Snapshot &&) = default;
         private:
             std::unique_ptr<Count[]> counters_holder;
 
@@ -89,23 +120,50 @@ namespace ProfileEvents
         /// Get parent (thread unsafe)
         Counters * getParent()
         {
-            return parent;
+            return parent.load(std::memory_order_relaxed);
         }
 
         /// Set parent (thread unsafe)
         void setParent(Counters * parent_)
         {
-            parent = parent_;
+            parent.store(parent_, std::memory_order_relaxed);
+        }
+
+        void setTraceProfileEvents(bool value)
+        {
+            trace_profile_events = value;
         }
 
         /// Set all counters to zero
         void resetCounters();
+
+        /// Add elapsed time to `timer_event` when returned object goes out of scope.
+        /// Use the template parameter to control timer resolution, the default
+        /// is `Timer::Resolution::Microseconds`.
+        template <Timer::Resolution resolution = Timer::Resolution::Microseconds>
+        Timer timer(Event timer_event)
+        {
+            return Timer(*this, timer_event, resolution);
+        }
+
+        /// Increment `counter_event` and add elapsed time to `timer_event` when returned object goes out of scope.
+        /// Use the template parameter to control timer resolution, the default
+        /// is `Timer::Resolution::Microseconds`.
+        template <Timer::Resolution resolution = Timer::Resolution::Microseconds>
+        Timer timer(Event timer_event, Event counter_event)
+        {
+            return Timer(*this, timer_event, counter_event, resolution);
+        }
 
         static const Event num_counters;
     };
 
     /// Increment a counter for event. Thread-safe.
     void increment(Event event, Count amount = 1);
+
+    /// The same as above but ignores value of setting 'trace_profile_events'
+    /// and never sends profile event to trace log.
+    void incrementNoTrace(Event event, Count amount = 1);
 
     /// Get name of event by identifier. Returns statically allocated string.
     const char * getName(Event event);
@@ -122,8 +180,8 @@ namespace ProfileEvents
         explicit CountersIncrement(Counters::Snapshot const & snapshot);
         CountersIncrement(Counters::Snapshot const & after, Counters::Snapshot const & before);
 
-        CountersIncrement(CountersIncrement &&) noexcept = default;
-        CountersIncrement & operator=(CountersIncrement &&) noexcept = default;
+        CountersIncrement(CountersIncrement &&) = default;
+        CountersIncrement & operator=(CountersIncrement &&) = default;
 
         Increment operator[](Event event) const noexcept
         {

@@ -312,6 +312,26 @@ void JSONEachRowRowInputFormat::readSuffix()
     assertEOF(*in);
 }
 
+size_t JSONEachRowRowInputFormat::countRows(size_t max_block_size)
+{
+    if (unlikely(!allow_new_rows))
+        return 0;
+
+    size_t num_rows = 0;
+    bool is_first_row = getCurrentUnitNumber() == 0 && getTotalRows() == 0;
+    skipWhitespaceIfAny(*in);
+    while (num_rows < max_block_size && !checkEndOfData(is_first_row))
+    {
+        skipRowStart();
+        JSONUtils::skipRowForJSONEachRow(*in);
+        ++num_rows;
+        is_first_row = false;
+        skipWhitespaceIfAny(*in);
+    }
+
+    return num_rows;
+}
+
 JSONEachRowSchemaReader::JSONEachRowSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_)
     : IRowWithNamesSchemaReader(in_, format_settings_)
 {

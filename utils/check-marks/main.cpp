@@ -50,6 +50,8 @@ static void checkByCompressedReadBuffer(const std::string & mrk_path, const std:
 
         out << ".\n" << DB::flush;
     }
+
+    out.finalize();
 }
 
 

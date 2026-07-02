@@ -10,6 +10,7 @@
 #include <base/defines.h>
 
 #include <Disks/ObjectStorages/MetadataStorageFromDisk.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

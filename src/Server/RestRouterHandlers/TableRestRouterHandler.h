@@ -24,6 +24,7 @@ protected:
         String name;
         UUID uuid = UUIDHelpers::Nil;
         String engine;
+        UInt8 is_input = 0;
         String mode;
         String metadata_path;
         String data_paths;

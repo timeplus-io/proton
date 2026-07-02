@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <cstddef>
 #include <cstdlib>
+#include <type_traits>
 
 #include <Common/CurrentMemoryTracker.h>
 
@@ -15,7 +16,15 @@
 template <typename T>
 struct AllocatorWithMemoryTracking
 {
-    typedef T value_type;
+    using value_type = T;
+    /// Allocator is stateless and thus always equal to another allocator.
+    using is_always_equal = std::true_type;
+    /// When propagate_on_container_move_assignment::value is:
+    /// true: The container will move the allocator from the source to the destination during move assignment
+    /// false (default): The container keeps its original allocator
+    /// For a stateless allocator like this one, this option doesn't make a lot of sense and needed only
+    /// to workaround a compilation error in our version of boost::container::devector.
+    using propagate_on_container_move_assignment = std::true_type;
 
     AllocatorWithMemoryTracking() = default;
 
@@ -30,33 +39,35 @@ struct AllocatorWithMemoryTracking
             throw std::bad_alloc();
 
         size_t bytes = n * sizeof(T);
-        CurrentMemoryTracker::alloc(bytes);
+        auto trace = CurrentMemoryTracker::alloc(bytes);
 
         T * p = static_cast<T *>(malloc(bytes));
         if (!p)
             throw std::bad_alloc();
+
+        trace.onAlloc(p, bytes);
 
         return p;
     }
 
     void deallocate(T * p, size_t n) noexcept
     {
-        free(p);
-
         size_t bytes = n * sizeof(T);
-        CurrentMemoryTracker::free(bytes);
+
+        free(p);
+        auto trace = CurrentMemoryTracker::free(bytes);
+        trace.onFree(p, bytes);
     }
 };
 
 template <typename T, typename U>
-bool operator==(const AllocatorWithMemoryTracking <T> &, const AllocatorWithMemoryTracking <U> &)
+constexpr bool operator==(const AllocatorWithMemoryTracking <T> &, const AllocatorWithMemoryTracking <U> &)
 {
     return true;
 }
 
 template <typename T, typename U>
-bool operator!=(const AllocatorWithMemoryTracking <T> &, const AllocatorWithMemoryTracking <U> &)
+constexpr bool operator!=(const AllocatorWithMemoryTracking <T> &, const AllocatorWithMemoryTracking <U> &)
 {
     return false;
 }
-

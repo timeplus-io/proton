@@ -14,7 +14,7 @@
 #include <Storages/ExternalStream/Python/StoragePythonTableWithInput.h>
 #include <Storages/ExternalStream/StorageExternalStream.h>
 #include <Storages/checkAndGetLiteralArgument.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
 namespace DB

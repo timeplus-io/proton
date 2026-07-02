@@ -32,6 +32,7 @@ namespace ErrorCodes
 extern const int OK;
 extern const int NODE_NOT_EXISTS;
 extern const int CANNOT_READ_ALL_DATA;
+extern const int ATTEMPT_TO_READ_AFTER_EOF;
 
 extern const int UNKNOWN_STREAM;
 extern const int UNKNOWN_FUNCTION;
@@ -185,7 +186,7 @@ void MetadataUpdater::backgroundPoll()
                 auto last_applied = entries.back()->sn;
                 auto new_next_sn = last_applied + 1;
 
-                LOG_INFO(logger, "Applying {} entries, sn range [{}, {}]", entries.size(), next_sn, last_applied);
+                LOG_INFO(logger, "Applying {} entries, sn range [{}, {}]", entries.size(), next_sn.load(), last_applied);
 
                 apply(entries);
 
@@ -193,14 +194,14 @@ void MetadataUpdater::backgroundPoll()
             }
             else if (fetch_result.hasError())
             {
-                LOG_ERROR(logger, "Failed to fetch from LocalMetaQueue at sn={}: {}", next_sn, fetch_result.errorString());
+                LOG_ERROR(logger, "Failed to fetch from LocalMetaQueue at sn={}: {}", next_sn.load(), fetch_result.errorString());
                 /// Sleep a bit on error to avoid tight loop
                 sleepForMilliseconds(100);
             }
         }
         catch (...)
         {
-            DB::tryLogCurrentException(logger, fmt::format("Failed to process metadata at sn={}", next_sn));
+            DB::tryLogCurrentException(logger, fmt::format("Failed to process metadata at sn={}", next_sn.load()));
         }
     }
 }
@@ -495,7 +496,7 @@ void MetadataUpdater::onRecovery()
 
     if (sn.result.sn + 1 != next_sn)
     {
-        LOG_INFO(logger, "Reset fetch next_sn from {} to {}", next_sn, sn.result.sn + 1);
+        LOG_INFO(logger, "Reset fetch next_sn from {} to {}", next_sn.load(), sn.result.sn + 1);
         next_sn = sn.result.sn + 1;
     }
 }

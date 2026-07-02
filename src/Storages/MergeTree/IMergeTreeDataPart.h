@@ -51,6 +51,7 @@ enum class DataPartRemovalState
     NON_UNIQUE_OWNERSHIP,
     NOT_REACHED_REMOVAL_TIME,
     HAS_SKIPPED_MUTATION_PARENT,
+    EMPTY_PART_COVERS_OTHER_PARTS,
     REMOVED,
 };
 
@@ -99,8 +100,6 @@ public:
     virtual bool isStoredOnRemoteDisk() const = 0;
 
     virtual bool isStoredOnRemoteDiskWithZeroCopySupport() const = 0;
-
-    virtual bool supportsVerticalMerge() const { return false; }
 
     /// NOTE: Returns zeros if column files are not found in checksums.
     /// Otherwise return information about column size on disk.

@@ -9,10 +9,9 @@
 
 #include <IO/HTTPCommon.h>
 #include <IO/ParallelReadBuffer.h>
-#include <IO/ReadBuffer.h>
+#include <IO/S3/ReadBufferFromGetObjectResult.h>
 #include <IO/ReadSettings.h>
 #include <IO/ReadBufferFromFileBase.h>
-#include <IO/WithFileName.h>
 
 #include <aws/s3/model/GetObjectResult.h>
 
@@ -41,8 +40,7 @@ private:
     std::atomic<off_t> offset = 0;
     std::atomic<off_t> read_until_position = 0;
 
-    std::optional<Aws::S3::Model::GetObjectResult> read_result;
-    std::unique_ptr<ReadBuffer> impl;
+    std::unique_ptr<S3::ReadBufferFromGetObjectResult> impl;
 
     LoggerPtr log = getLogger("ReadBufferFromS3");
 
@@ -60,7 +58,7 @@ public:
         bool restricted_seek_ = false,
         std::optional<size_t> file_size = std::nullopt);
 
-    ~ReadBufferFromS3() override;
+    ~ReadBufferFromS3() override = default;
 
     bool nextImpl() override;
 
@@ -79,12 +77,12 @@ public:
 
     String getFileName() const override { return bucket + "/" + key; }
 
-    size_t readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback) override;
+    size_t readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback) const override;
 
     bool supportsReadAt() override { return true; }
 
 private:
-    std::unique_ptr<ReadBuffer> initialize(size_t attempt);
+    std::unique_ptr<S3::ReadBufferFromGetObjectResult> initialize(size_t attempt);
 
     /// If true, if we destroy impl now, no work was wasted. Just for metrics.
     bool atEndOfRequestedRangeGuess();
@@ -94,8 +92,6 @@ private:
     bool processException(Poco::Exception & e, size_t read_offset, size_t attempt) const;
 
     Aws::S3::Model::GetObjectResult sendRequest(size_t attempt, size_t range_begin, std::optional<size_t> range_end_incl) const;
-
-    bool readAllRangeSuccessfully() const;
 
     ReadSettings read_settings;
 

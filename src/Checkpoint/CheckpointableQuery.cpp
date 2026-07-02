@@ -5,6 +5,7 @@
 
 #include <Bootstrap/Globals.h>
 #include <Core/ULID.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

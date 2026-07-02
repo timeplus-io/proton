@@ -208,12 +208,12 @@ IColumn::Filter HybridDedupTransform::populateKeySetsAndCalculateResults(const C
     return filter;
 }
 
-void HybridDedupTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void HybridDedupTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { key_set->write(wb); });
 }
 
-void HybridDedupTransform::recover(CheckpointContextPtr ckpt_ctx)
+void HybridDedupTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { key_set->read(rb); });
 }

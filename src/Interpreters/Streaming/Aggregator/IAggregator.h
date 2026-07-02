@@ -23,7 +23,7 @@ public:
     virtual AggregatorType type() const noexcept = 0;
     virtual std::string_view getName() const noexcept = 0;
     IAggregatorParamsPtr getParams() const noexcept { return params; }
-    Block getHeader(bool final_) const { return params->getHeader(input_header, final_); }
+    Block getHeader() const { return params->getHeader(input_header, /*final=*/true); }
     size_t totalSizeOfAggregatedStates() const noexcept { return total_size_of_aggregate_states; }
     size_t alignOfAggregatedStates() const noexcept { return align_aggregate_states; }
 
@@ -144,14 +144,15 @@ protected:
     {
         MutableColumns key_columns;
         std::vector<IColumn *> raw_key_columns;
-        MutableColumns aggregate_columns;
+        // MutableColumns aggregate_columns;
         MutableColumns final_aggregate_columns;
-        AggregateColumnsData aggregate_columns_data;
+        // AggregateColumnsData aggregate_columns_data;
     };
 
-    OutputBlockColumns prepareOutputBlockColumns(const Block & res_header, const Arenas & aggregates_pools, bool final, size_t rows) const;
+    OutputBlockColumns prepareOutputBlockColumns(const Block & res_header, const ArenaPtr & aggregates_pool, size_t rows) const;
+    OutputBlockColumns prepareOutputBlockColumns(const Block & res_header, const Arenas & aggregates_pools, size_t rows) const;
 
-    Block finalizeBlock(const Block & res_header, OutputBlockColumns && out_cols, bool final, size_t rows) const;
+    Block finalizeBlock(const Block & res_header, OutputBlockColumns && out_cols, size_t rows) const;
 
     void insertAggregatesIntoColumns(AggregateDataPtr mapped, const MutableColumns & final_aggregate_columns, Arena * arena) const;
 
@@ -176,7 +177,7 @@ protected:
     /// Copying state for retraction
     void copyAggregateStates(AggregateDataPtr dst, ConstAggregateDataPtr src, Arena * arena) const;
 
-    void doDestroyAggregateStates(AggregateDataPtr place) const;
+    void doDestroyAggregateStates(AggregateDataPtr place, bool skip_state_func = false) const;
 
 private:
     ColumnNumbers calculateKeysPositions();

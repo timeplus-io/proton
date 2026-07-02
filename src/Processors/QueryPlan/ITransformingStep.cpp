@@ -23,8 +23,8 @@ DataStream ITransformingStep::createOutputStream(
     /// proton: starts. Propagate streaming flag to output stream
     output_stream.is_streaming = input_stream.is_streaming;
 
-    if (stream_traits.preserves_substream)
-        output_stream.with_substream = input_stream.with_substream;
+    if (stream_traits.preserves_shuffling)
+        output_stream.shuffle_description = input_stream.shuffle_description;
     /// proton: ends.
 
     if (stream_traits.preserves_distinct_columns)

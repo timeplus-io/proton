@@ -1,16 +1,14 @@
 #pragma once
 
 #include <base/types.h>
-#include <Common/isLocalAddress.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/SharedMutex.h>
 #include <Common/SharedMutexHelper.h>
 #include <Common/ThreadPool_fwd.h>
-#include <Common/Throttler_fwd.h>
+#include <Common/IThrottler.h>
 #include <Core/Block.h>
-#include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
 #include <IO/AsyncReadCounters.h>
@@ -20,21 +18,19 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/MergeTreeTransactionHolder.h>
-#include <IO/IResourceManager.h>
+#include <Common/Scheduler/IResourceManager.h>
 #include <Parsers/IAST_fwd.h>
+#include <Server/HTTP/HTTPContext.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage_fwd.h>
-#include <IO/IResourceManager.h>
 
 #include "config.h"
 
 #include <boost/container/flat_set.hpp>
-#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <thread>
 
 /// proton: starts
 #include <Bootstrap/ServerDescriptor.h>
@@ -156,6 +152,7 @@ struct PartUUIDs;
 using PartUUIDsPtr = std::shared_ptr<PartUUIDs>;
 class Session;
 struct WriteSettings;
+struct ICgroupsReader;
 
 class IInputFormat;
 
@@ -779,6 +776,10 @@ public:
     const String & getConfigPath() const noexcept;
 
     void setMaxDiskUtil(double max_disk_util);
+    /// proton: starts
+    void setMaxQueryMemoryUsageToRamRatio(double ratio);
+    UInt64 getMaxQueryMemoryUsage() const; /// Returns cached max query memory value
+    /// proton: ends
     void checkDiskUtil() const;
     void checkIngest(const String & database_name) const;
 
@@ -1128,6 +1129,10 @@ public:
     /// Get the server uptime in seconds.
     double getUptimeSeconds() const;
 
+    /// proton: starts.
+    Int64 getMetricsCacheTTLSeconds() const;
+    /// proton: ends.
+
     using ConfigReloadCallback = std::function<void()>;
     void setConfigReloadCallback(ConfigReloadCallback && callback);
     void reloadConfig() const;
@@ -1339,6 +1344,8 @@ public:
 
     ThrottlerPtr getBackupsThrottler() const;
 
+    void reloadRemoteThrottlerConfig(size_t read_bandwidth, size_t write_bandwidth) const;
+
 private:
     mutable ThrottlerPtr remote_read_query_throttler;       /// A query-wide throttler for remote IO reads
     mutable ThrottlerPtr remote_write_query_throttler;      /// A query-wide throttler for remote IO writes
@@ -1347,6 +1354,50 @@ private:
     mutable ThrottlerPtr local_write_query_throttler;       /// A query-wide throttler for local IO writes
 
     mutable ThrottlerPtr backups_query_throttler;           /// A query-wide throttler for BACKUPs
+};
+
+struct HTTPContext : public IHTTPContext
+{
+    explicit HTTPContext(ContextPtr context_)
+        : context(Context::createCopy(context_))
+    {}
+
+    uint64_t getMaxHstsAge() const override
+    {
+        return context->getSettingsRef().hsts_max_age;
+    }
+
+    uint64_t getMaxUriSize() const override
+    {
+        return context->getSettingsRef().http_max_uri_size;
+    }
+
+    uint64_t getMaxFields() const override
+    {
+        return context->getSettingsRef().http_max_fields;
+    }
+
+    uint64_t getMaxFieldNameSize() const override
+    {
+        return context->getSettingsRef().http_max_field_name_size;
+    }
+
+    uint64_t getMaxFieldValueSize() const override
+    {
+        return context->getSettingsRef().http_max_field_value_size;
+    }
+
+    Poco::Timespan getReceiveTimeout() const override
+    {
+        return context->getSettingsRef().http_receive_timeout;
+    }
+
+    Poco::Timespan getSendTimeout() const override
+    {
+        return context->getSettingsRef().http_send_timeout;
+    }
+
+    ContextPtr context;
 };
 
 }

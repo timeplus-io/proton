@@ -11,6 +11,7 @@
 
 #include <type_traits>
 
+#include <Common/StackTrace.h>
 #include <Common/formatIPv6.h>
 #include <Common/DateLUT.h>
 #include <Common/LocalDate.h>
@@ -40,6 +41,7 @@
 #include <IO/PeekableReadBuffer.h>
 #include <IO/VarInt.h>
 
+#include <pcg_random.hpp>
 #include <double-conversion/double-conversion.h>
 
 /// proton: starts.
@@ -1289,6 +1291,8 @@ inline void readBinary(std::pair<T1, T2> & x, ReadBuffer & buf)
     readBinary(x.second, buf);
 }
 /// proton: ends
+
+inline void readBinary(StackTrace::FramePointers & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 
 template <std::endian endian, typename T>
 inline void readBinaryEndian(T & x, ReadBuffer & buf)

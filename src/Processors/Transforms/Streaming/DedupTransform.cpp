@@ -233,13 +233,13 @@ void DedupTransform::initKeySet()
     key_set = std::make_unique<KeySet>(limit, limit_sec);
 }
 
-void DedupTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void DedupTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { key_set->serialize(wb); });
 }
 
-void DedupTransform::recover(CheckpointContextPtr ckpt_ctx)
+void DedupTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { key_set->deserialize(rb); });
 }

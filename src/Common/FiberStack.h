@@ -13,6 +13,11 @@
 #include <valgrind/valgrind.h>
 #endif
 
+/// Required for older Darwin builds, that lack definition of MAP_ANONYMOUS
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+
 namespace DB::ErrorCodes
 {
     extern const int CANNOT_ALLOCATE_MEMORY;
@@ -57,7 +62,8 @@ public:
         }
 
         /// Do not count guard page in memory usage.
-        CurrentMemoryTracker::alloc(num_pages * page_size);
+        auto trace = CurrentMemoryTracker::alloc(num_pages * page_size);
+        trace.onAlloc(vp, num_pages * page_size);
 
         boost::context::stack_context sctx;
         sctx.size = num_bytes;
@@ -77,6 +83,7 @@ public:
         ::munmap(vp, sctx.size);
 
         /// Do not count guard page in memory usage.
-        CurrentMemoryTracker::free(sctx.size - page_size);
+        auto trace = CurrentMemoryTracker::free(sctx.size - page_size);
+        trace.onFree(vp, sctx.size - page_size);
     }
 };

@@ -24,6 +24,7 @@
 #include <DataTypes/DataTypeVariant.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <Common/ElapsedTimeProfileEventIncrement.h>
+#include <Common/ProfileEventsScope.h>
 
 
 namespace ProfileEvents
@@ -896,6 +897,10 @@ public:
         }
 
     void onCompleted() override { throw Exception(ErrorCodes::LOGICAL_ERROR, "Not implemented"); }
+    void cancel() noexcept override
+    {
+        /// FIXME: See `executeHere` from MergeTask.h called in executeStep
+    }
     StorageID getStorageID() override { throw Exception(ErrorCodes::LOGICAL_ERROR, "Not implemented"); }
     UInt64 getPriority() override { throw Exception(ErrorCodes::LOGICAL_ERROR, "Not implemented"); }
 
@@ -958,14 +963,12 @@ public:
             if (projection.type == ProjectionDescription::Type::Aggregate)
                 projection_merging_params.mode = MergeTreeData::MergingParams::Aggregating;
 
-            const Settings & settings = ctx->context->getSettingsRef();
-
             LOG_DEBUG(log, "Merged {} parts in level {} to {}", selected_parts.size(), current_level, projection_future_part->name);
             auto tmp_part_merge_task = ctx->mutator->mergePartsToTemporaryPart(
                 projection_future_part,
                 projection.metadata,
                 ctx->mutate_entry,
-                std::make_unique<MergeListElement>((*ctx->mutate_entry)->table_id, projection_future_part, settings),
+                std::make_unique<MergeListElement>((*ctx->mutate_entry)->table_id, projection_future_part, ctx->context),
                 *ctx->holder,
                 ctx->time_of_mutation,
                 ctx->context,
@@ -985,6 +988,7 @@ public:
         /// Need execute again
         return true;
     }
+
 private:
     String name;
     MergeTreeData::MutableDataPartsVector parts;
@@ -1261,6 +1265,14 @@ public:
         return false;
     }
 
+    void cancel() noexcept override
+    {
+        if (ctx->out)
+        {
+            ctx->out->cancel();
+        }
+    }
+
 private:
 
     void prepare()
@@ -1461,6 +1473,7 @@ private:
     std::unique_ptr<PartMergerWriter> part_merger_writer_task;
 };
 
+
 class MutateSomePartColumnsTask : public IExecutableTask
 {
 public:
@@ -1501,6 +1514,14 @@ public:
             }
         }
         return false;
+    }
+
+    void cancel() noexcept override
+    {
+        if (ctx->out)
+        {
+            ctx->out->cancel();
+        }
     }
 
 private:
@@ -1642,6 +1663,8 @@ private:
             ctx->new_data_part->checksums.add(std::move(changed_checksums));
 
             static_pointer_cast<MergedColumnOnlyOutputStream>(ctx->out)->finish(ctx->need_sync);
+
+            ctx->out.reset();
         }
 
         for (const auto & [rename_from, rename_to] : ctx->files_to_rename)
@@ -1660,7 +1683,7 @@ private:
         MutationHelpers::finalizeMutatedPart(ctx->source_part, ctx->new_data_part, ctx->execute_ttl_type, ctx->compression_codec, ctx->context, ctx->metadata_snapshot, ctx->need_sync);
     }
 
-    enum class State
+    enum class State : uint8_t
     {
         NEED_PREPARE,
         NEED_EXECUTE,
@@ -1733,6 +1756,12 @@ bool MutateTask::execute()
         }
     }
     return false;
+}
+
+void MutateTask::cancel() noexcept
+{
+    if (task)
+        task->cancel();
 }
 
 static bool canSkipConversionToNullable(const MergeTreeDataPartPtr & part, const MutationCommand & command)

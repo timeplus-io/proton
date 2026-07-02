@@ -31,8 +31,8 @@ public:
     static Block transformHeader(Block header, const ActionsDAG & expression);
 
     bool hasState() const override { return static_cast<bool>(substream_stateful_functions); }
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-    void recover(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx) override;
 
 protected:
     void transform(Chunk & chunk) override;

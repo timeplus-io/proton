@@ -2,8 +2,8 @@
 
 #include <vector>
 
+#include <IO/AutoFinalizedWriteBuffer.h>
 #include <IO/WriteBuffer.h>
-
 
 namespace DB
 {
@@ -23,11 +23,11 @@ struct AppendModeTag {};
   * The vector should live until this object is destroyed or until the 'finalizeImpl()' method is called.
   */
 template <typename VectorType>
-class WriteBufferFromVector : public WriteBuffer
+class WriteBufferFromVectorImpl : public WriteBuffer
 {
 public:
     using ValueType = typename VectorType::value_type;
-    explicit WriteBufferFromVector(VectorType & vector_)
+    explicit WriteBufferFromVectorImpl(VectorType & vector_)
         : WriteBuffer(reinterpret_cast<Position>(vector_.data()), vector_.size()), vector(vector_)
     {
         if (vector.empty())
@@ -38,7 +38,7 @@ public:
     }
 
     /// Append to vector instead of rewrite.
-    WriteBufferFromVector(VectorType & vector_, AppendModeTag)
+    WriteBufferFromVectorImpl(VectorType & vector_, AppendModeTag)
         : WriteBuffer(nullptr, 0), vector(vector_)
     {
         size_t old_size = vector.size();
@@ -49,8 +49,6 @@ public:
         set(reinterpret_cast<Position>(vector.data() + old_size), (size - old_size) * sizeof(typename VectorType::value_type));
     }
 
-    bool isFinished() const { return finalized; }
-
     void restart(std::optional<size_t> max_capacity = std::nullopt)
     {
         if (max_capacity && vector.capacity() > max_capacity)
@@ -60,12 +58,7 @@ public:
         set(reinterpret_cast<Position>(vector.data()), vector.size());
         finalized = false;
         canceled = false;
-    }
-
-    ~WriteBufferFromVector() override
-    {
-        if (!canceled)
-            finalize();
+        bytes = 0;
     }
 
 protected:
@@ -73,13 +66,12 @@ protected:
     {
         vector.resize(
             ((position() - reinterpret_cast<Position>(vector.data())) /// NOLINT
-                + sizeof(ValueType) - 1)  /// Align up.
+                + sizeof(ValueType) - 1)  /// Align up. /// NOLINT
             / sizeof(ValueType));
 
-        /// Prevent further writes.
-        /// proton: starts.
         bytes += offset();
-        /// proton: ends.
+
+        /// Prevent further writes.
         set(nullptr, 0);
     }
 
@@ -92,7 +84,6 @@ private:
         size_t old_size = vector.size();
         /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
         size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
-        /// If the vector is full, resize it
         if (pos_offset == old_size)
         {
             vector.resize(old_size * size_multiplier);
@@ -106,5 +97,8 @@ private:
     static constexpr size_t initial_size = 32;
     static constexpr size_t size_multiplier = 2;
 };
+
+template<typename VectorType>
+using WriteBufferFromVector = AutoFinalizedWriteBuffer<WriteBufferFromVectorImpl<VectorType>>;
 
 }

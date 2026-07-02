@@ -4,6 +4,8 @@
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Core/Block.h>
+#include <Interpreters/executeQuery.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 
@@ -14,6 +16,39 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int UNSUPPORTED;
+}
+
+namespace
+{
+
+String canonicalizeCreateStatement(const String & sql_def, const StorageID & table_id, ContextPtr query_context)
+{
+    ASTPtr ast;
+    try
+    {
+        ast = DB::parseQuery(sql_def, query_context);
+    }
+    catch (...)
+    {
+        return sql_def;
+    }
+
+    auto * create = ast->as<ASTCreateQuery>();
+    if (!create)
+        return sql_def;
+
+    create->attach = false;
+    create->uuid = UUIDHelpers::Nil;
+    create->to_inner_uuid = UUIDHelpers::Nil;
+    create->setDatabase(table_id.database_name);
+    create->setTable(table_id.table_name);
+
+    if (create->is_input && create->storage)
+        create->storage->engine = nullptr;
+
+    return ast->formatWithPossiblyHidingSensitiveData(/*max_length=*/0, /*one_line=*/false, /*show_secrets=*/false);
+}
+
 }
 
 QueryPipeline InterpreterShowCreateQuery::showMultiVersions(const StorageID & table_id) const
@@ -57,7 +92,8 @@ QueryPipeline InterpreterShowCreateQuery::showMultiVersions(const StorageID & ta
         for (auto riter = req_data.stream_descs.rbegin(); riter != req_data.stream_descs.rend(); ++riter)
         {
             const auto & desc = *riter;
-            columns[0]->insertData(desc->sql_def.c_str(), desc->sql_def.size());
+            const auto statement = canonicalizeCreateStatement(desc->sql_def, table_id, getContext());
+            columns[0]->insertData(statement.data(), statement.size());
             columns[1]->insert(desc->data_version);
             columns[2]->insert(DateTime64(desc->last_modify_timestamp_ms));
             columns[3]->insertData(desc->last_modified_by.c_str(), desc->last_modified_by.size());

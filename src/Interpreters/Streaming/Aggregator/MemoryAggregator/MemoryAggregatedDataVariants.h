@@ -2,6 +2,7 @@
 
 #include <Interpreters/Aggregator.h> /// Historical Aggregator, some definitions are from there, fixme, remove this depedency
 
+#include <Interpreters/Streaming/Aggregator/AggregatingConvertType.h>
 #include <Interpreters/Streaming/Aggregator/IAggregatedDataVariants.h>
 #include <Common/HashTable/TimeBucketHashMap.h>
 
@@ -40,7 +41,7 @@ class MemoryAggregator;
 
 SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
 {
-    MemoryAggregatedDataVariants(std::string id_, bool enable_recycle = true);
+    explicit MemoryAggregatedDataVariants(std::string id_);
     ~MemoryAggregatedDataVariants() override;
 
     std::string_view getID() const noexcept override { return id; }
@@ -76,14 +77,14 @@ SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
     std::optional<size_t> key_offset;
 
     /// Pools for states of aggregate functions. Ownership will be later transferred to ColumnAggregateFunction.
-    Arenas aggregates_pools;
-    Arena * aggregates_pool{}; /// The pool that is currently used for allocation.
-    std::unique_ptr<Arena> retract_pool; /// Use separate pool to manage retract data, which will be cleared after each finalization
-
-    /// Time bucket two level arenas. Used for Two level hashtable. Every hash table will
+    /// 1) Global arena. Used for situations other than two-level time bucket hashtables
+    ArenaPtr aggregates_pool;
+    /// 2) Retract arena. Use separate pool to manage retract data, which will be cleared after each finalization
+    ArenaPtr retract_pool;
+    /// 3) Time bucket two level arenas. Used for Two level hashtable. Every hash table will
     /// use the corresponding arena in this two level arenas. And when garbage collecting
     /// the time bucket, the expired arena and hash table will be removed altogether
-    std::map<Int64, std::unique_ptr<Arena>> time_bucket_arenas;
+    std::map<Int64, ArenaPtr> time_bucket_arenas;
 
     /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
       */
@@ -338,9 +339,6 @@ SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
 #undef M
 
             default:
-                /// Enable arena recycling only for streaming window
-                /// Disable it for global streaming aggregation
-                aggregates_pool->enableRecycle(false);
                 break;
         }
         /// proton: ends;
@@ -348,16 +346,8 @@ SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
 
     /// clean up all in memory states and the corresponding arena pools used to hold these states
     void reset() override;
-
-    void resetAndCreateAggregatesPools()
-    {
-        aggregates_pools = Arenas(1, std::make_shared<Arena>());
-        aggregates_pool = aggregates_pools.back().get();
-        /// Enable GC for arena by default. For cases like global aggregation, we will disable it further in \init
-        aggregates_pool->enableRecycle(true);
-    }
-
-    void resetAndCreateRetractPool() { retract_pool = std::make_unique<Arena>(); }
+    void resetAndCreateAggregatesPool() { aggregates_pool = std::make_shared<Arena>(); }
+    void resetAndCreateRetractPool() { retract_pool = std::make_shared<Arena>(); }
 
     /// Number of rows (different keys).
     size_t size() const
@@ -560,21 +550,19 @@ SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
         }
     }
 
-    ALWAYS_INLINE Arena * getBucketAndArena(ColumnRawPtrs & key_columns, size_t row)
+    ALWAYS_INLINE ArenaPtr getOrCreateTimeBucketArena(Int64 window_bucket)
     {
-        assert(isTimeBucketTwoLevel());
+        chassert(isTimeBucketTwoLevel());
 
-        /// For two level time bucket aggregation, the first key column is the window_start or window_end bucket column
-        Int64 window_bucket = key_columns[0]->getInt(row);
         auto iter = time_bucket_arenas.find(window_bucket);
         if (iter == time_bucket_arenas.end())
         {
-            auto [new_iter, inserted] = time_bucket_arenas.emplace(window_bucket, std::make_unique<Arena>());
+            auto [new_iter, inserted] = time_bucket_arenas.emplace(window_bucket, std::make_shared<Arena>());
             assert(inserted);
             iter = new_iter;
         }
 
-        return iter->second.get();
+        return iter->second;
     }
 
     size_t remainingBucketArenas() const noexcept { return time_bucket_arenas.size(); }
@@ -609,7 +597,13 @@ SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
 #undef M
         }
 
-        for (const auto & arena : aggregates_pools)
+        if (aggregates_pool)
+            metrics.total_bytes_in_arena += aggregates_pool->size();
+
+        if (retract_pool)
+            metrics.total_bytes_in_arena += retract_pool->size();
+
+        for (const auto & [_, arena] : time_bucket_arenas)
             metrics.total_bytes_in_arena += arena->size();
     }
 

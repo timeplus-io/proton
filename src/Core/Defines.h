@@ -59,6 +59,7 @@ static constexpr auto DBMS_DEFAULT_INITIAL_ADAPTIVE_BUFFER_SIZE = 16384ULL;
 
 static constexpr auto DEFAULT_TCP_KEEP_ALIVE_TIMEOUT = 290;
 static constexpr auto DEFAULT_HTTP_KEEP_ALIVE_TIMEOUT = 30;
+static constexpr auto DEFAULT_HTTP_KEEP_ALIVE_MAX_REQUEST = 1000;
 
 /// proton: starts.
 #define DBMS_DEFAULT_PATH "/var/lib/proton/"

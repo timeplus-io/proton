@@ -1220,7 +1220,10 @@ try
         out_executor.finish();
 
         obfuscator.updateSeed();
+        rewind_needed = true;
     }
+
+    file_out.finalize();
 
     return 0;
 }

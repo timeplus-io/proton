@@ -9,6 +9,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 /// proton: ends.
 
 namespace DB
@@ -53,11 +54,11 @@ void ExpressionTransform::transform(Chunk & chunk)
 }
 
 /// proton: starts.
-void ExpressionTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void ExpressionTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(isStreaming());
     if (!hasState())
-        return IProcessor::checkpoint(std::move(ckpt_ctx));
+        return IProcessor::doCheckpoint(std::move(ckpt_ctx));
 
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         writeIntBinary(stateful_functions.size(), wb);
@@ -66,7 +67,7 @@ void ExpressionTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     });
 }
 
-void ExpressionTransform::recover(CheckpointContextPtr ckpt_ctx)
+void ExpressionTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     if (!isStreaming() || !hasState())
         return;

@@ -13,6 +13,7 @@
 /// proton: starts
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
+#include <Common/logger_useful.h>
 /// proton: ends
 
 namespace fs = std::filesystem;

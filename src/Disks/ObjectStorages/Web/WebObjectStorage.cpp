@@ -3,6 +3,8 @@
 #include <Common/logger_useful.h>
 #include <Common/escapeForFileName.h>
 
+#include <Core/ServerSettings.h>
+
 #include <IO/ConnectionTimeouts.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
 #include <IO/SeekAvoidingReadBuffer.h>
@@ -42,18 +44,17 @@ void WebObjectStorage::initialize(const String & uri_path, const std::unique_loc
     {
         Poco::Net::HTTPBasicCredentials credentials{};
 
+        auto timeouts = ConnectionTimeouts::getHTTPTimeouts(
+            getContext()->getSettingsRef(),
+            getContext()->getServerSettings().keep_alive_timeout);
 
-        ReadWriteBufferFromHTTP metadata_buf(
-            Poco::URI(fs::path(uri_path) / ".index"),
-            Poco::Net::HTTPRequest::HTTP_GET,
-            ReadWriteBufferFromHTTP::OutStreamCallback(),
-            ConnectionTimeouts::getHTTPTimeouts(
-                getContext()->getSettingsRef(),
-                {getContext()->getConfigRef().getUInt("keep_alive_timeout", DEFAULT_HTTP_KEEP_ALIVE_TIMEOUT), 0}),
-            credentials,
-            /* max_redirects= */ 0,
-            /* buffer_size_= */ DBMS_DEFAULT_BUFFER_SIZE,
-            getContext()->getReadSettings());
+        auto metadata_buf = BuilderRWBufferFromHTTP(Poco::URI(fs::path(uri_path) / ".index"))
+                                .withConnectionGroup(HTTPConnectionGroupType::DISK)
+                                .withSettings(getContext()->getReadSettings())
+                                .withTimeouts(timeouts)
+                                .withHostFilter(&getContext()->getRemoteHostFilter())
+                                .withSkipNotFound(true)
+                                .create(credentials);
 
         String file_name;
         FileData file_data{};
@@ -61,19 +62,19 @@ void WebObjectStorage::initialize(const String & uri_path, const std::unique_loc
         String dir_name = fs::path(uri_path.substr(url.size())) / "";
         LOG_TRACE(getLogger("DiskWeb"), "Adding directory: {}", dir_name);
 
-        while (!metadata_buf.eof())
+        while (!metadata_buf->eof())
         {
-            readText(file_name, metadata_buf);
-            assertChar('\t', metadata_buf);
+            readText(file_name, *metadata_buf);
+            assertChar('\t', *metadata_buf);
 
             bool is_directory;
-            readBoolText(is_directory, metadata_buf);
+            readBoolText(is_directory, *metadata_buf);
             if (!is_directory)
             {
-                assertChar('\t', metadata_buf);
-                readIntText(file_data.size, metadata_buf);
+                assertChar('\t', *metadata_buf);
+                readIntText(file_data.size, *metadata_buf);
             }
-            assertChar('\n', metadata_buf);
+            assertChar('\n', *metadata_buf);
 
             file_data.type = is_directory ? FileType::Directory : FileType::File;
             String file_path = fs::path(uri_path) / file_name;
@@ -92,10 +93,6 @@ void WebObjectStorage::initialize(const String & uri_path, const std::unique_loc
     }
     catch (HTTPException & e)
     {
-        /// 404 - no files
-        if (e.getHTTPStatus() == Poco::Net::HTTPResponse::HTTP_NOT_FOUND)
-            return;
-
         e.addMessage("while loading disk metadata");
         throw;
     }

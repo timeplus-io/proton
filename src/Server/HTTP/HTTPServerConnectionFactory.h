@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Interpreters/Context.h>
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
+#include <Server/HTTP/HTTPContext.h>
 #include <Server/TCPServerConnectionFactory.h>
 
 #include <Poco/Net/HTTPServerParams.h>
@@ -12,14 +12,16 @@ namespace DB
 class HTTPServerConnectionFactory : public TCPServerConnectionFactory
 {
 public:
-    HTTPServerConnectionFactory(ContextPtr context, Poco::Net::HTTPServerParams::Ptr params, HTTPRequestHandlerFactoryPtr factory);
+    HTTPServerConnectionFactory(HTTPContextPtr context, Poco::Net::HTTPServerParams::Ptr params, HTTPRequestHandlerFactoryPtr factory, const ProfileEvents::Event & read_event_ = ProfileEvents::end(), const ProfileEvents::Event & write_event_ = ProfileEvents::end());
 
     std::shared_ptr<Poco::Net::TCPServerConnection> createConnection(const Poco::Net::StreamSocket & socket, TCPServer & tcp_server) override;
 
 private:
-    ContextPtr context;
+    HTTPContextPtr context;
     Poco::Net::HTTPServerParams::Ptr params;
     HTTPRequestHandlerFactoryPtr factory;
+    ProfileEvents::Event read_event;
+    ProfileEvents::Event write_event;
 };
 
 }

@@ -205,7 +205,7 @@ void StreamSinkBase::consume(Chunk chunk)
 
     if (ingest_state.hasError())
         throw DB::Exception(
-            ingest_state.last_errcode, "Failed to ingest data, error_message='{}'", DB::ErrorCodes::getName(ingest_state.last_errcode));
+            ingest_state.last_errcode.load(), "Failed to ingest data, error_message='{}'", DB::ErrorCodes::getName(ingest_state.last_errcode.load()));
 }
 
 void StreamSinkBase::appendWithRetry(cluster::SchemaRecordPtr & record)
@@ -241,10 +241,10 @@ void StreamSinkBase::onFinish()
 {
     if (ingest_state.hasError())
         throw DB::Exception(
-            ingest_state.last_errcode, "Failed to ingest data, error_message='{}'", DB::ErrorCodes::getName(ingest_state.last_errcode));
+            ingest_state.last_errcode.load(), "Failed to ingest data, error_message='{}'", DB::ErrorCodes::getName(ingest_state.last_errcode.load()));
 }
 
-void StreamSinkBase::checkpoint(CheckpointContextPtr ckpt_ctx)
+void StreamSinkBase::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     UInt64 timeout_ms = append_timeout_ms * 2;
 
@@ -252,10 +252,10 @@ void StreamSinkBase::checkpoint(CheckpointContextPtr ckpt_ctx)
         LOG_INFO(
             logger,
             "Waiting for outstanding blocks to commit, total_blocks={} committed_blocks={} failed_blocks={} last_errcode={}",
-            ingest_state.total_blocks,
-            ingest_state.committed_blocks,
-            ingest_state.failed_blocks,
-            ingest_state.last_errcode);
+            ingest_state.total_blocks.load(),
+            ingest_state.committed_blocks.load(),
+            ingest_state.failed_blocks.load(),
+            ingest_state.last_errcode.load());
 
     Stopwatch stopwatch;
     uint64_t sleep_count = 0;
@@ -272,18 +272,18 @@ void StreamSinkBase::checkpoint(CheckpointContextPtr ckpt_ctx)
                     logger,
                     "Took {}ms to wait for outstanding blocks to commit total_blocks={} committed_blocks={} failed_blocks={}",
                     stopwatch.elapsedMilliseconds(),
-                    ingest_state.total_blocks,
-                    ingest_state.committed_blocks,
-                    ingest_state.failed_blocks);
+                    ingest_state.total_blocks.load(),
+                    ingest_state.committed_blocks.load(),
+                    ingest_state.failed_blocks.load());
             }
             break;
         }
 
         if (ingest_state.hasError())
             throw Exception(
-                ingest_state.last_errcode,
+                ingest_state.last_errcode.load(),
                 "Failed to checkpoint, appended data has error, error_msg={}",
-                DB::ErrorCodes::getName(ingest_state.last_errcode));
+                DB::ErrorCodes::getName(ingest_state.last_errcode.load()));
 
         if (auto waited_ms = stopwatch.elapsedMilliseconds(); waited_ms >= timeout_ms)
             throw Exception(
@@ -291,10 +291,10 @@ void StreamSinkBase::checkpoint(CheckpointContextPtr ckpt_ctx)
                 "Timeout for checkpoint to wait for outstanding blocks to commit, waited_ms={} total_blocks={} "
                 "committed_blocks={} failed_blocks={} last_errcode={}.",
                 waited_ms,
-                ingest_state.total_blocks,
-                ingest_state.committed_blocks,
-                ingest_state.failed_blocks,
-                ingest_state.last_errcode);
+                ingest_state.total_blocks.load(),
+                ingest_state.committed_blocks.load(),
+                ingest_state.failed_blocks.load(),
+                ingest_state.last_errcode.load());
 
         sleepForMilliseconds(20);
 
@@ -304,10 +304,10 @@ void StreamSinkBase::checkpoint(CheckpointContextPtr ckpt_ctx)
                 "Waiting for outstanding blocks to commit, waited_ms={} total_blocks={} committed_blocks={} failed_blocks={} "
                 "last_errcode={}",
                 stopwatch.elapsedMilliseconds(),
-                ingest_state.total_blocks,
-                ingest_state.committed_blocks,
-                ingest_state.failed_blocks,
-                ingest_state.last_errcode);
+                ingest_state.total_blocks.load(),
+                ingest_state.committed_blocks.load(),
+                ingest_state.failed_blocks.load(),
+                ingest_state.last_errcode.load());
     }
 }
 

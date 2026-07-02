@@ -5,6 +5,7 @@
 #include <Common/logger_useful.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {

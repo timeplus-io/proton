@@ -78,6 +78,7 @@ steps:
 - type: check
   target_name: '2100'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - [1, s1]
   - [1, s1]
@@ -86,6 +87,7 @@ steps:
 - type: check
   target_name: '2101'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - [1, s1]
   - [1, s1]
@@ -94,11 +96,13 @@ steps:
 
 - type: check
   target_name: '2102'
+  timeout: 30 # address build need more time
   expected_result:
   - [3]
 
 - type: check
   target_name: '2103'
+  timeout: 30 # address build need more time
   expected_result:
   - [4]
 

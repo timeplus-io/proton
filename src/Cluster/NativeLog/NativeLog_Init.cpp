@@ -3,7 +3,10 @@
 #include <Cluster/NativeLog/NativeLog.h>
 
 #include <Common/CurrentMetrics.h>
+#include <Common/LogstoreRetentionSettings.h>
 #include <Common/logger_useful.h>
+
+#include <limits>
 
 namespace CurrentMetrics
 {
@@ -49,11 +52,19 @@ nlog::LogConfigMap logConfigs(meta::MetaStore & meta_store, const StoreConfig & 
         if (stream_desc->flush_ms > 0)
             new_config->flush_interval_ms = stream_desc->flush_ms;
 
-        if (stream_desc->retention_bytes > 0)
+        if (stream_desc->retention_bytes == DB::kLogstoreRetentionNoLimit)
+            new_config->retention_size = 0;
+        else if (stream_desc->retention_bytes > 0)
             new_config->retention_size = stream_desc->retention_bytes;
 
-        if (stream_desc->retention_ms > 0)
-            new_config->retention_ms = stream_desc->retention_ms;
+        if (stream_desc->retention_ms == DB::kLogstoreRetentionNoLimit)
+            new_config->retention_ms = 0;
+        else if (stream_desc->retention_ms > 0)
+        {
+            constexpr auto int64_max_as_u64 = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+            new_config->retention_ms = (stream_desc->retention_ms > int64_max_as_u64) ? std::numeric_limits<int64_t>::max()
+                                                                                      : static_cast<int64_t>(stream_desc->retention_ms);
+        }
 
         /// FIXME, this override is not necessary good
         new_config->codec = stream_desc->codec;

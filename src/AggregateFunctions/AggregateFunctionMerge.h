@@ -19,7 +19,7 @@ namespace ErrorCodes
 
 /** Not an aggregate function, but an adapter of aggregate functions,
   * Aggregate functions with the `_merge` suffix accept `DataTypeAggregateFunction` as an argument
-  * (state of the aggregate function obtained earlier using the aggregate function with the `State` suffix)
+  * (state of the aggregate function obtained earlier using the aggregate function with the `_state` suffix)
   * and combine them with aggregation.
   */
 

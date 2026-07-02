@@ -58,6 +58,7 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/ProfileEventsExt.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/CompressionMethod.h>
@@ -293,8 +294,26 @@ public:
 };
 
 ClientBase::~ClientBase() = default;
-ClientBase::ClientBase() = default;
-
+ClientBase::ClientBase(
+    int in_fd_,
+    int out_fd_,
+    int err_fd_,
+    std::istream & input_stream_,
+    std::ostream & output_stream_,
+    std::ostream & error_stream_
+)
+    : std_in(in_fd_)
+    , std_out(out_fd_)
+    , progress_indication(output_stream_, in_fd_, err_fd_)
+    , input_stream(input_stream_)
+    , output_stream(output_stream_)
+    , error_stream(error_stream_)
+{
+    stdin_is_a_tty = isatty(in_fd_);
+    stdout_is_a_tty = isatty(out_fd_);
+    stderr_is_a_tty = isatty(err_fd_);
+    terminal_width = getTerminalWidth(in_fd_, err_fd_);
+}
 
 void ClientBase::setupSignalHandler()
 {
@@ -344,7 +363,7 @@ ASTPtr ClientBase::parseQuery(const char *& pos, const char * end, bool allow_mu
 
         if (!res)
         {
-            std::cerr << std::endl << message << std::endl << std::endl;
+            error_stream << std::endl << message << std::endl << std::endl;
             return nullptr;
         }
     }
@@ -362,11 +381,11 @@ ASTPtr ClientBase::parseQuery(const char *& pos, const char * end, bool allow_mu
         }
         /// proton: ends
 
-        std::cout << std::endl;
-        WriteBufferFromOStream res_buf(std::cout, 4096);
+        output_stream << std::endl;
+        WriteBufferFromOStream res_buf(output_stream, 4096);
         formatAST(*res, res_buf);
         res_buf.finalize();
-        std::cout << std::endl << std::endl;
+        output_stream << std::endl << std::endl;
     }
 
     return res;
@@ -440,7 +459,6 @@ void ClientBase::onData(Block & block, ASTPtr parsed_query)
         return;
 
     processed_rows += block.rows();
-
     /// Even if all blocks are empty, we still need to initialize the output stream to write empty resultset.
     initOutputFormat(block, parsed_query);
 
@@ -459,8 +477,17 @@ void ClientBase::onData(Block & block, ASTPtr parsed_query)
         output_format->write(materializeBlock(block));
         written_first_block = true;
     }
+    catch (const NetException &)
+    {
+        throw;
+    }
+    catch (const ErrnoException &)
+    {
+        throw;
+    }
     catch (const Exception &)
     {
+        //this is a bad catch. It catches too much cases unrelated to LocalFormatError
         /// Catch client errors like NO_ROW_DELIMITER
         throw LocalFormatError(getCurrentExceptionMessageAndPattern(print_stack_trace), getCurrentExceptionCode());
     }
@@ -472,7 +499,7 @@ void ClientBase::onData(Block & block, ASTPtr parsed_query)
     if (need_render_progress && tty_buf)
     {
         if (select_into_file)
-            std::cerr << "\r";
+            error_stream << "\r";
         progress_indication.writeProgress(*tty_buf);
     }
 }
@@ -633,7 +660,7 @@ void ClientBase::initLogsOutputStream()
             if (server_logs_file.empty())
             {
                 /// Use stderr by default
-                out_logs_buf = std::make_unique<WriteBufferFromFileDescriptor>(STDERR_FILENO);
+                out_logs_buf = std::make_unique<AutoCanceledWriteBuffer<WriteBufferFromFileDescriptor>>(STDERR_FILENO);
                 wb = out_logs_buf.get();
                 color_logs = stderr_is_a_tty;
             }
@@ -646,7 +673,7 @@ void ClientBase::initLogsOutputStream()
             else
             {
                 out_logs_buf
-                    = std::make_unique<WriteBufferFromFile>(server_logs_file, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT);
+                    = std::make_unique<AutoCanceledWriteBuffer<WriteBufferFromFile>>(server_logs_file, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT);
                 wb = out_logs_buf.get();
             }
         }
@@ -682,7 +709,7 @@ void ClientBase::initTtyBuffer(ProgressOption progress)
         {
             try
             {
-                tty_buf = std::make_unique<WriteBufferFromFile>(tty_file_name, buf_size);
+                tty_buf = std::make_unique<AutoCanceledWriteBuffer<WriteBufferFromFile>>(tty_file_name, buf_size);
 
                 /// It is possible that the terminal file has writeable permissions
                 /// but we cannot write anything there. Check it with invisible character.
@@ -693,8 +720,7 @@ void ClientBase::initTtyBuffer(ProgressOption progress)
             }
             catch (const Exception & e)
             {
-                if (tty_buf)
-                    tty_buf.reset();
+                tty_buf.reset();
 
                 if (e.code() != ErrorCodes::CANNOT_OPEN_FILE)
                     throw;
@@ -707,7 +733,7 @@ void ClientBase::initTtyBuffer(ProgressOption progress)
 
     if (stderr_is_a_tty || progress == ProgressOption::ERR)
     {
-        tty_buf = std::make_unique<WriteBufferFromFileDescriptor>(STDERR_FILENO, buf_size);
+        tty_buf = std::make_unique<AutoCanceledWriteBuffer<WriteBufferFromFileDescriptor>>(STDERR_FILENO, buf_size);
     }
     else
         need_render_progress = false;
@@ -866,7 +892,7 @@ void ClientBase::processOrdinaryQuery(const String & query_to_execute, ASTPtr pa
             /// has been received yet.
             if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED && --retries_left)
             {
-                std::cerr << "Got a transient error from the server, will"
+                error_stream << "Got a transient error from the server, will"
                         << " retry (" << retries_left << " retries left)";
             }
             else
@@ -915,7 +941,7 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
                     double elapsed = receive_watch.elapsedSeconds();
                     if (break_on_timeout && elapsed > receive_timeout.totalSeconds())
                     {
-                        std::cout << "Timeout exceeded while receiving data from server."
+                        output_stream << "Timeout exceeded while receiving data from server."
                                     << " Waited for " << static_cast<size_t>(elapsed) << " seconds,"
                                     << " timeout is " << receive_timeout.totalSeconds() << " seconds." << std::endl;
 
@@ -947,7 +973,7 @@ void ClientBase::receiveResult(ASTPtr parsed_query)
         std::rethrow_exception(local_format_error);
 
     if (cancelled && is_interactive)
-        std::cout << "Query was cancelled." << std::endl;
+        output_stream << "Query was cancelled." << std::endl;
 }
 
 
@@ -1042,7 +1068,7 @@ void ClientBase::onEndOfStream()
     resetOutput();
 
     if (is_interactive && !written_first_block)
-        std::cout << "Ok." << std::endl;
+        output_stream << "Ok." << std::endl;
 }
 
 
@@ -1143,23 +1169,26 @@ void ClientBase::resetOutput()
     logs_out_stream.reset();
 
     if (out_file_buf)
-    {
         out_file_buf->finalize();
-        out_file_buf.reset();
-    }
+    out_file_buf.reset();
+
+    out_logs_buf.reset();
 
     if (pager_cmd)
     {
         pager_cmd->in.close();
-        pager_cmd->wait();
+        /// The process will terminated in destructor anyway (due to terminate_in_destructor_strategy.terminate_in_destructor=true)
+        if (!cancelled)
+            pager_cmd->wait();
+
+        if (SIG_ERR == signal(SIGPIPE, SIG_DFL))
+            throw ErrnoException(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler for SIGPIPE");
+        if (SIG_ERR == signal(SIGQUIT, SIG_DFL))
+            throw ErrnoException(ErrorCodes::CANNOT_SET_SIGNAL_HANDLER, "Cannot set signal handler for SIGQUIT");
+
+        setupSignalHandler();
     }
     pager_cmd = nullptr;
-
-    if (out_logs_buf)
-    {
-        out_logs_buf->finalize();
-        out_logs_buf.reset();
-    }
 
     std_out.next();
 }
@@ -1246,20 +1275,29 @@ void ClientBase::processInsertQuery(const String & query_to_execute, ASTPtr pars
         true,
         [&](const Progress & progress) { onProgress(progress); });
 
-    if (send_external_tables)
-        sendExternalTables(parsed_query);
-
-    /// Receive description of table structure.
-    Block sample;
-    ColumnsDescription columns_description;
-    if (receiveSampleBlock(sample, columns_description, parsed_query))
+    try
     {
-        /// If structure was received (thus, server has not thrown an exception),
-        /// send our data with that structure.
-        setInsertionTable(parsed_insert_query);
+        if (send_external_tables)
+            sendExternalTables(parsed_query);
 
-        sendData(sample, columns_description, parsed_query);
+        /// Receive description of table structure.
+        Block sample;
+        ColumnsDescription columns_description;
+        if (receiveSampleBlock(sample, columns_description, parsed_query))
+        {
+            /// If structure was received (thus, server has not thrown an exception),
+            /// send our data with that structure.
+            setInsertionTable(parsed_insert_query);
+
+            sendData(sample, columns_description, parsed_query);
+            receiveEndOfQuery();
+        }
+    }
+    catch (...)
+    {
+        connection->sendCancel();
         receiveEndOfQuery();
+        throw;
     }
 }
 
@@ -1363,8 +1401,7 @@ void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_des
             sendDataFromPipe(
                 std::move(pipe),
                 parsed_query,
-                have_data_in_stdin
-            );
+                have_data_in_stdin);
         }
         catch (Exception & e)
         {
@@ -1472,7 +1509,6 @@ void ClientBase::sendDataFromPipe(Pipe&& pipe, ASTPtr parsed_query, bool have_mo
         connection->sendData({}, "", false);
 }
 
-
 void ClientBase::sendDataFromStdin(Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query)
 {
     if (need_render_progress)
@@ -1550,7 +1586,7 @@ void ClientBase::cancelQuery()
         progress_indication.clearProgressOutput(*tty_buf);
 
     if (is_interactive)
-        std::cout << "Cancelling query." << std::endl;
+        output_stream << "Cancelling query." << std::endl;
 
     cancelled = true;
 }
@@ -1598,47 +1634,17 @@ void ClientBase::processParsedSingleQuery(const String & full_query, const Strin
 
     {
         /// Temporarily apply query settings to context.
-        std::optional<Settings> old_settings;
+        Settings old_settings = global_context->getSettingsRef();
         SCOPE_EXIT_SAFE({
-            if (old_settings)
-                global_context->setSettings(*old_settings);
+            global_context->setSettings(old_settings);
         });
+        InterpreterSetQuery::applySettingsFromQuery(parsed_query, global_context);
 
-        auto apply_query_settings = [&](const IAST & settings_ast)
-        {
-            if (!old_settings)
-                old_settings.emplace(global_context->getSettingsRef());
-            global_context->applySettingsChanges(settings_ast.as<ASTSetQuery>()->changes);
-            global_context->resetSettingsToDefaultValue(settings_ast.as<ASTSetQuery>()->default_settings);
-        };
-
-        const auto * insert = parsed_query->as<ASTInsertQuery>();
-        if (const auto * select = parsed_query->as<ASTSelectQuery>(); select && select->settings())
-            apply_query_settings(*select->settings());
-        else if (const auto * select_with_union = parsed_query->as<ASTSelectWithUnionQuery>())
-        {
-            const ASTs & children = select_with_union->list_of_selects->children;
-            if (!children.empty())
-            {
-                // On the client it is enough to apply settings only for the
-                // last SELECT, since the only thing that is important to apply
-                // on the client is format settings.
-                const auto * last_select = children.back()->as<ASTSelectQuery>();
-                if (last_select && last_select->settings())
-                {
-                    apply_query_settings(*last_select->settings());
-                }
-            }
-        }
-        else if (const auto * query_with_output = parsed_query->as<ASTQueryWithOutput>(); query_with_output && query_with_output->settings_ast)
-            apply_query_settings(*query_with_output->settings_ast);
-        else if (insert && insert->settings_ast)
-            apply_query_settings(*insert->settings_ast);
-
-        if (!connection->checkConnected())
+        if (!connection->checkConnected(connection_parameters.timeouts))
             connect();
 
         ASTPtr input_function;
+        const auto * insert = parsed_query->as<ASTInsertQuery>();
         if (insert && insert->select)
             insert->tryFindInputFunction(input_function);
 
@@ -1695,15 +1701,15 @@ void ClientBase::processParsedSingleQuery(const String & full_query, const Strin
 
     if (is_interactive)
     {
-        std::cout << std::endl
+        output_stream << std::endl
             << processed_rows << " row" << (processed_rows == 1 ? "" : "s")
             << " in set. Elapsed: " << progress_indication.elapsedSeconds() << " sec. ";
         progress_indication.writeFinalProgress();
-        std::cout << std::endl << std::endl;
+        output_stream << std::endl << std::endl;
     }
     else if (print_time_to_stderr)
     {
-        std::cerr << progress_indication.elapsedSeconds() << "\n";
+        error_stream << progress_indication.elapsedSeconds() << "\n";
     }
 
     if (have_error && report_error)
@@ -1954,9 +1960,9 @@ void ClientBase::runInteractive()
                 history_file = "/tmp/.proton-client-history";
             }
         }
-        else 
+        else
         {
-            std::cout << "Note: Command history (optional) is not available. To save your commands, start the client with '--history_file path/to/writable/location'" << std::endl;
+            output_stream << "Note: Command history (optional) is not available. To save your commands, start the client with '--history_file path/to/writable/location'" << std::endl;
         }
     }
 
@@ -1970,7 +1976,7 @@ void ClientBase::runInteractive()
         catch (...)
         {
             history_file.clear();
-            std::cout << "Note: Command history (optional) is not available. To save your commands, start the client with '--history_file path/to/writable/location'" << std::endl;
+            output_stream << "Note: Command history (optional) is not available. To save your commands, start the client with '--history_file path/to/writable/location'" << std::endl;
         }
     }
     /// proton: ends.
@@ -1979,11 +1985,26 @@ void ClientBase::runInteractive()
     LineReader::Patterns query_delimiters = {";", "\\G"};
 
 #if USE_REPLXX
-    replxx::Replxx::highlighter_callback_t highlight_callback{};
+    replxx::Replxx::highlighter_callback_with_pos_t highlight_callback{};
     if (config().getBool("highlight", true))
-        highlight_callback = highlight;
+    {
+        highlight_callback = [](const String & query, std::vector<replxx::Replxx::Color> & colors, int pos)
+        {
+            highlight(query, colors, pos);
+        };
+    }
 
-    ReplxxLineReader lr(*suggest, history_file, config().has("multiline"), query_extenders, query_delimiters, highlight_callback);
+    auto options = ReplxxLineReader::Options
+    {
+        .suggest = *suggest,
+        .history_file_path = history_file,
+        .multiline = config().has("multiline"),
+        .extenders = query_extenders,
+        .delimiters = query_delimiters,
+        .highlighter = highlight_callback,
+    };
+
+    ReplxxLineReader lr(std::move(options));
 #else
     LineReader lr(history_file, config().has("multiline"), query_extenders, query_delimiters);
 #endif
@@ -2004,7 +2025,7 @@ void ClientBase::runInteractive()
             has_vertical_output_suffix = true;
         }
 
-        for (const auto& [alias, command] : backslash_aliases)
+        for (const auto & [alias, command] : backslash_aliases)
         {
             auto it = std::search(input.begin(), input.end(), alias.begin(), alias.end());
             if (it != input.end() && std::all_of(input.begin(), it, isWhitespaceASCII))
@@ -2030,7 +2051,7 @@ void ClientBase::runInteractive()
         catch (const Exception & e)
         {
             /// We don't need to handle the test hints in the interactive mode.
-            std::cerr << "Exception on client:" << std::endl << getExceptionMessage(e, print_stack_trace, true) << std::endl << std::endl;
+            error_stream << "Exception on client:" << std::endl << getExceptionMessage(e, print_stack_trace, true) << std::endl << std::endl;
             client_exception.reset(e.clone());
         }
 
@@ -2040,19 +2061,20 @@ void ClientBase::runInteractive()
             /// Client-side exception during query execution can result in the loss of
             /// sync in the connection protocol.
             /// So we reconnect and allow to enter the next query.
-            if (!connection->checkConnected())
+            if (!connection->checkConnected(connection_parameters.timeouts))
                 connect();
         }
     }
     while (true);
 
     if (isNewYearMode())
-        std::cout << "Happy new year." << std::endl;
+        output_stream << "Happy new year." << std::endl;
     else if (isChineseNewYearMode(local_tz))
-        std::cout << "Happy Chinese new year. 春节快乐!" << std::endl;
+        output_stream << "Happy Chinese new year. 春节快乐!" << std::endl;
     else
-        std::cout << "Bye." << std::endl;
+        output_stream << "Bye." << std::endl;
 }
+
 
 bool ClientBase::processMultiQueryFromFile(const String & file_name)
 {
@@ -2063,6 +2085,7 @@ bool ClientBase::processMultiQueryFromFile(const String & file_name)
 
     return executeMultiQuery(queries_from_file);
 }
+
 
 void ClientBase::runNonInteractive()
 {
@@ -2107,13 +2130,13 @@ void ClientBase::clearTerminal()
     /// It is needed if garbage is left in terminal.
     /// Show cursor. It can be left hidden by invocation of previous programs.
     /// A test for this feature: perl -e 'print "x"x100000'; echo -ne '\033[0;0H\033[?25l'; clickhouse-client
-    std::cout << "\033[0J" "\033[?25h";
+    output_stream << "\033[0J" "\033[?25h";
 }
 
 
 void ClientBase::showClientVersion()
 {
-    std::cout << VERSION_NAME << " " + getName() + " version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
+    output_stream << VERSION_NAME << " " + getName() + " version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
 }
 
 namespace
@@ -2304,7 +2327,7 @@ void ClientBase::init(int argc, char ** argv)
 
     if (options.contains("version-clean"))
     {
-        std::cout << VERSION_STRING;
+        output_stream << VERSION_STRING;
         exit(0);
     }
 

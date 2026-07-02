@@ -1,6 +1,7 @@
 #include <Interpreters/Cache/QueryLimit.h>
 #include <Interpreters/Cache/Metadata.h>
 #include <IO/ReadSettings.h>
+#include <Common/CurrentThread.h>
 
 namespace DB
 {

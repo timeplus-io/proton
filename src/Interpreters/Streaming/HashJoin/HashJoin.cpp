@@ -78,6 +78,11 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {{StorageSemantic::Append, JoinKind::Full, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::Append, JoinKind::Full, JoinStrictness::Any, StorageSemantic::NativeKV}, true},
 
+    /// Anti JOIN
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::Append}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::NativeKV}, true},
+
     /// Changelog ...
     /* <=> Changelog inner all join Changelog */
     {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
@@ -137,6 +142,11 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {{StorageSemantic::VersionedKV, JoinKind::Full, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Full, JoinStrictness::Any, StorageSemantic::NativeKV}, true},
 
+    /// (VersionedKV as Append) Anti JOIN
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::Append}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::NativeKV}, true},
+
     /// NativeKV ...
     /* <=> Changelog inner all join Changelog */
     {{StorageSemantic::NativeKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
@@ -161,6 +171,11 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {{StorageSemantic::NativeKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::Append}, true},
     {{StorageSemantic::NativeKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::NativeKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::NativeKV}, true},
+
+    /// (NativeKV as Append) Anti JOIN
+    {{StorageSemantic::NativeKV, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::Append}, true},
+    {{StorageSemantic::NativeKV, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::NativeKV, JoinKind::Left, JoinStrictness::Anti, StorageSemantic::NativeKV}, true},
 };
 
 void HashJoin::validate(const JoinCombinationType & join_combination)
@@ -219,7 +234,7 @@ void HashJoin::init()
     auto data_enrichment_join = (left_join_ctx.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
                                  && right_join_ctx.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
         || streaming_strictness == Strictness::Asof || (streaming_strictness == Strictness::Latest && streaming_kind != Kind::Full)
-        || !right_join_ctx.join_stream_desc->data_stream_semantic.streaming;
+        || streaming_strictness == Strictness::Anti || !right_join_ctx.join_stream_desc->data_stream_semantic.streaming;
 
     bidirectional_hash_join = !data_enrichment_join;
 
@@ -434,11 +449,11 @@ void HashJoin::checkJoinSemantic() const
 
 void HashJoin::reviseJoinStrictness()
 {
-    /// Strictness::Any in streaming join means take the latest row to join
-    any_take_last_row = (streaming_strictness == Strictness::Latest);
+    /// Strictness::Any in streaming join means take the latest row to join.
+    any_take_last_row = (streaming_strictness == Strictness::Latest || streaming_strictness == Strictness::Anti);
 
-    /// For explicit asof / latest join, we honor what end users like to have
-    if (streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest)
+    /// For explicit asof / latest / anti join, we honor what end users like to have
+    if (streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest || streaming_strictness == Strictness::Anti)
         return;
 
     if (streaming_strictness == Strictness::Range)

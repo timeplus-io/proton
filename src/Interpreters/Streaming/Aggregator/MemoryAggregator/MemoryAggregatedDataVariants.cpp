@@ -2,6 +2,7 @@
 #include <Interpreters/Streaming/Aggregator/MemoryAggregator/MemoryAggregator.h>
 
 #include <Common/HashMapsTemplate.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -14,10 +15,8 @@ extern const int BAD_VERSION;
 
 namespace Streaming
 {
-MemoryAggregatedDataVariants::MemoryAggregatedDataVariants(std::string id_, bool enable_recycle)
-    : id(std::move(id_)), aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get())
+MemoryAggregatedDataVariants::MemoryAggregatedDataVariants(std::string id_) : id(std::move(id_))
 {
-    aggregates_pool->enableRecycle(enable_recycle);
 }
 
 MemoryAggregatedDataVariants::~MemoryAggregatedDataVariants()
@@ -62,8 +61,9 @@ void MemoryAggregatedDataVariants::reset()
     invalidate();
 
     /// Reset pool
-    resetAndCreateAggregatesPools();
+    aggregates_pool.reset();
     retract_pool.reset();
+    time_bucket_arenas.clear();
 }
 
 void MemoryAggregatedDataVariants::convertToTwoLevel()
@@ -180,7 +180,7 @@ void MemoryAggregatedDataVariants::serialize(WriteBuffer & wb, const IAggregator
     if (type == MemoryAggregatedDataVariants::Type::without_key)
         state_serializer(without_key, wb);
 
-        /// [aggr-func-state-in-hash-map]
+    /// [aggr-func-state-in-hash-map]
 #define M(NAME, IS_TWO_LEVEL) \
     else if (type == MemoryAggregatedDataVariants::Type::NAME) \
     { \
@@ -251,22 +251,22 @@ void MemoryAggregatedDataVariants::deserialize(ReadBuffer & rb, const IAggregato
             magic_enum::enum_name(memory_aggregator.params->tracking_updates_type));
 
     /// [aggregates_size] was added in V4
-    size_t recovered_aggregates_size = memory_aggregator.params->aggregates_size;
+    size_t recovered_aggr_size = memory_aggregator.params->aggregates_size;
     if (recovered_version >= 4)
     {
-        readVarUInt(recovered_aggregates_size, rb);
-        if (recovered_aggregates_size > memory_aggregator.params->aggregates_size)
+        readVarUInt(recovered_aggr_size, rb);
+        if (recovered_aggr_size > memory_aggregator.params->aggregates_size)
             throw Exception(
                 ErrorCodes::RECOVER_CHECKPOINT_FAILED,
                 "Failed to recover aggregation checkpoint. Number of aggregation functions are not compatible, checkpointed={}, current={}",
-                recovered_aggregates_size,
+                recovered_aggr_size,
                 memory_aggregator.params->aggregates_size);
     }
 
-    auto state_deserializer = [this, &memory_aggregator, recovered_version, recovered_aggregates_size](auto & place, auto & rb_, Arena *) {
+    auto state_deserializer = [this, &memory_aggregator, recovered_version, recovered_aggr_size](auto & place, auto & rb_, Arena * pool) {
         place = nullptr; /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
         auto * aggregate_data
-            = aggregates_pool->alignedAlloc(memory_aggregator.totalSizeOfAggregatedStates(), memory_aggregator.alignOfAggregatedStates());
+            = pool->alignedAlloc(memory_aggregator.totalSizeOfAggregatedStates(), memory_aggregator.alignOfAggregatedStates());
         memory_aggregator.createAggregateStates(aggregate_data);
         place = aggregate_data;
 
@@ -293,7 +293,7 @@ void MemoryAggregatedDataVariants::deserialize(ReadBuffer & rb, const IAggregato
                         /// whether add() or negate(), ensure it is not empty
                         TrackingUpdates::data(retract_place).updates = std::numeric_limits<int64_t>::max();
 
-                    memory_aggregator.deserializeAggregateStates(retract_place, rb_, retract_pool.get(), recovered_aggregates_size);
+                    memory_aggregator.deserializeAggregateStates(retract_place, rb_, retract_pool.get(), recovered_aggr_size);
                 }
                 break;
             }
@@ -306,14 +306,14 @@ void MemoryAggregatedDataVariants::deserialize(ReadBuffer & rb, const IAggregato
                 break;
         }
 
-        memory_aggregator.deserializeAggregateStates(place, rb_, aggregates_pool, recovered_aggregates_size);
+        memory_aggregator.deserializeAggregateStates(place, rb_, pool, recovered_aggr_size);
     };
 
     /// [aggr-func-state-without-key]
     if (type == MemoryAggregatedDataVariants::Type::without_key)
-        state_deserializer(without_key, rb, aggregates_pool);
+        state_deserializer(without_key, rb, aggregates_pool.get());
 
-        /// [aggr-func-state-in-hash-map]
+    /// [aggr-func-state-in-hash-map]
 #define M(NAME, IS_TWO_LEVEL) \
     else if (type == MemoryAggregatedDataVariants::Type::NAME) \
     { \
@@ -322,6 +322,7 @@ void MemoryAggregatedDataVariants::deserialize(ReadBuffer & rb, const IAggregato
                 NAME->data, \
                 [&](auto & mapped, Arena & pool, ReadBuffer & rb_) { state_deserializer(mapped, rb_, &pool); }, \
                 *aggregates_pool, \
+                /*two_level_arena_getter=*/[this](Int64 bucket) { return getOrCreateTimeBucketArena(bucket); }, \
                 rb); \
         else \
             DB::deserializeHashMap( \

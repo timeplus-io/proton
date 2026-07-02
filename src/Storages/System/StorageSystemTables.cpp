@@ -9,6 +9,7 @@
 #include <Access/ContextAccess.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/MetadataHelper.h>
+#include <Interpreters/executeQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
@@ -24,19 +25,22 @@
 #include <QueryPipeline/Pipe.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <Functions/IFunction.h>
 
 /// proton: starts
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Cluster/Requests/ListStreamsRequest.h>
+#include <Cluster/Requests/ListStreamsResponse.h>
 #include <Cluster/Protocol/ListStreamsResponseData.h>
 #include <Storages/MatView/StorageMaterializedView.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
 /// proton: ends
 
 
 namespace DB
 {
-
 
 StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
     : IStorage(table_id_)
@@ -48,6 +52,9 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
         {"uuid", std::make_shared<DataTypeUUID>()},
         {"engine", std::make_shared<DataTypeString>()},
         {"is_temporary", std::make_shared<DataTypeUInt8>()},
+        /// proton: starts
+        {"is_input", std::make_shared<DataTypeUInt8>()},
+        /// proton: ends
         {"data_paths", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"metadata_path", std::make_shared<DataTypeString>()},
         {"metadata_modification_time", std::make_shared<DataTypeDateTime>()},
@@ -88,6 +95,115 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
 
 namespace
 {
+
+/// proton: starts
+std::optional<UUID> tryParseUUID(std::string_view uuid_str)
+{
+    UUID uuid;
+    ReadBufferFromString buf(uuid_str);
+    if (!tryReadUUIDText(uuid, buf))
+        return std::nullopt;
+
+    if (!buf.eof())
+        return std::nullopt;
+
+    return uuid;
+}
+
+const ActionsDAG::Node * unwrapNode(const ActionsDAG::Node * node)
+{
+    while (node && (node->type == ActionsDAG::ActionType::ALIAS
+           || (node->type == ActionsDAG::ActionType::FUNCTION && node->function_base && node->function_base->getName() == "materialize")))
+    {
+        if (node->children.empty())
+            break;
+        node = node->children.front();
+    }
+
+    return node;
+}
+
+bool isUUIDInputNode(const ActionsDAG::Node * node)
+{
+    node = unwrapNode(node);
+    return node && node->type == ActionsDAG::ActionType::INPUT && node->result_name == "uuid";
+}
+
+std::optional<UUID> tryGetConstantUUIDFromNode(const ActionsDAG::Node * node)
+{
+    node = unwrapNode(node);
+    if (!node || !node->column)
+        return std::nullopt;
+
+    ColumnPtr full_column = node->column->convertToFullColumnIfConst();
+    if (!full_column || full_column->empty())
+        return std::nullopt;
+
+    const Field field = (*full_column)[0];
+    if (field.getType() == Field::Types::UUID)
+        return field.get<UUID>();
+
+    if (field.getType() == Field::Types::String)
+        return tryParseUUID(field.get<String>());
+
+    return std::nullopt;
+}
+
+std::optional<UUID> tryExtractUUIDFromPredicate(const ActionsDAG::Node * predicate)
+{
+    if (!predicate)
+        return std::nullopt;
+
+    for (const auto * atom : ActionsDAG::extractConjunctionAtoms(predicate))
+    {
+        if (atom->type != ActionsDAG::ActionType::FUNCTION || !atom->function_base)
+            continue;
+
+        if (atom->function_base->getName() != "equals")
+            continue;
+
+        if (atom->children.size() != 2)
+            continue;
+
+        const auto * lhs = atom->children[0];
+        const auto * rhs = atom->children[1];
+
+        if (isUUIDInputNode(lhs))
+        {
+            if (auto uuid = tryGetConstantUUIDFromNode(rhs); uuid && *uuid != UUIDHelpers::Nil)
+                return uuid;
+        }
+        else if (isUUIDInputNode(rhs))
+        {
+            if (auto uuid = tryGetConstantUUIDFromNode(lhs); uuid && *uuid != UUIDHelpers::Nil)
+                return uuid;
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool columnContainsString(const ColumnPtr & column, std::string_view value)
+{
+    if (!column)
+        return false;
+
+    for (size_t i = 0, size = column->size(); i < size; ++i)
+    {
+        if (column->getDataAt(i).toView() == value)
+            return true;
+    }
+
+    return false;
+}
+
+ColumnPtr makeSingleValueColumn(std::string_view value)
+{
+    auto column = ColumnString::create();
+    column->insert(value);
+    return column;
+}
+/// proton: ends
 
 ColumnPtr getFilteredDatabases(const ActionsDAG::Node * predicate, ContextPtr context)
 {
@@ -197,18 +313,45 @@ public:
         for (size_t idx = 0; idx < size; ++idx)
             tables.insert(tables_->getDataAt(idx).toString());
 
-        auto & metastore = Globals::getMetaStore();
-        auto list_stream_resp = metastore.listStreams(std::make_shared<cluster::ListStreamsRequest>(
-            "", "", metastore.nodeID(), /*consistent_read_=*/false, /*timeout_ms=*/10'000, /*request_version=*/2));
-        if (list_stream_resp->hasError())
-        {
-            const auto & err = list_stream_resp->error();
-            throw Exception(err.error_code, "Failed to load all streams error_message={}", err.error_message);
-        }
+        /// proton: starts.
+        const auto & output_header = getPort().getHeader();
+        need_metadata_modification_time = output_header.has("metadata_modification_time");
+        need_data_paths = output_header.has("data_paths");
 
-        stream_descs.reserve(list_stream_resp->data().stream_descs.size());
-        for (const auto & stream_desc : list_stream_resp->data().stream_descs)
-            stream_descs[stream_desc->stream.id] = stream_desc;
+        if (need_metadata_modification_time)
+        {
+            auto & metastore = Globals::getMetaStore();
+            cluster::ListStreamsResponsePtr list_stream_resp;
+
+            /// If we already narrowed down to a single table, avoid listing all streams.
+            if (databases && databases->size() == 1 && tables_->size() == 1)
+            {
+                list_stream_resp = metastore.listStreams(std::make_shared<cluster::ListStreamsRequest>(
+                    /*ns_=*/databases->getDataAt(0).toString(),
+                    /*stream_=*/tables_->getDataAt(0).toString(),
+                    /*initiator_=*/metastore.nodeID(),
+                    /*consistent_read_=*/false,
+                    /*timeout_ms_=*/10'000,
+                    /*request_version=*/2));
+            }
+            else
+            {
+                list_stream_resp = metastore.listStreams(std::make_shared<cluster::ListStreamsRequest>(
+                    "", "", metastore.nodeID(), /*consistent_read_=*/false, /*timeout_ms=*/10'000, /*request_version=*/2));
+            }
+
+            if (list_stream_resp->hasError())
+            {
+                const auto & err = list_stream_resp->error();
+                throw Exception(err.error_code, "Failed to load streams error_message={}", err.error_message);
+            }
+            else
+            {
+                stream_descs.reserve(list_stream_resp->data().stream_descs.size());
+                for (const auto & stream_desc : list_stream_resp->data().stream_descs)
+                    stream_descs[stream_desc->stream.id] = stream_desc;
+            }
+        }
         /// proton: ends.
     }
 
@@ -277,6 +420,12 @@ protected:
                         // is_temporary
                         if (columns_mask[src_index++])
                             res_columns[res_index++]->insert(1u);
+
+                        /// proton: starts
+                        // is_input
+                        if (columns_mask[src_index++])
+                            res_columns[res_index++]->insert(0u);
+                        /// proton: ends
 
                         // data_paths
                         if (columns_mask[src_index++])
@@ -353,8 +502,8 @@ protected:
 
                     /// The only column that requires us to hold a shared lock is data_paths as rename might alter them (on ordinary tables)
                     /// and it's not protected internally by other mutexes
-                    static const size_t DATA_PATHS_INDEX = 5;
-                    if (columns_mask[DATA_PATHS_INDEX])
+
+                    if (need_data_paths)
                     {
                         lock = table->tryLockForShare(context->getCurrentQueryId(),
                                                       context->getSettingsRef().lock_acquire_timeout);
@@ -367,6 +516,45 @@ protected:
 
                 size_t src_index = 0;
                 size_t res_index = 0;
+
+                /// proton: starts
+                std::optional<UInt8> is_input_cache;
+                auto compute_is_input = [&]() -> UInt8 {
+                    if (is_input_cache.has_value())
+                        return *is_input_cache;
+
+                    UInt8 is_input = 0;
+
+                    String create_query_str;
+                    if (auto create_query_snapshot = table->getInMemoryCreateQuery())
+                        create_query_str = create_query_snapshot->getQuery();
+                    else
+                    {
+                        ASTPtr ast = database->tryGetCreateTableQuery(table_name, context);
+                        create_query_str = ast ? ast->formatForLogging() : "";
+                    }
+
+                    if (!create_query_str.empty())
+                    {
+                        try
+                        {
+                            const auto parsed = parseQuery(create_query_str, context);
+                            const auto * create_ast = parsed ? parsed->as<ASTCreateQuery>() : nullptr;
+                            if (create_ast && create_ast->is_input)
+                                is_input = 1;
+                        }
+                        catch (...)
+                        {
+                            /// Best-effort only: never fail `system.tables` just because the stored create query
+                            /// cannot be parsed (e.g. partially corrupted metadata or a syntax drift).
+                            is_input = 0;
+                        }
+                    }
+
+                    is_input_cache = is_input;
+                    return is_input;
+                };
+                /// proton: ends
 
                 if (columns_mask[src_index++])
                     res_columns[res_index++]->insert(database_name);
@@ -383,11 +571,27 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     chassert(table != nullptr);
-                    res_columns[res_index++]->insert(table->getName());
+                    /// proton: starts
+                    auto engine_name = table->getName();
+                    if (engine_name == "ExternalStream" && compute_is_input())
+                        engine_name = "Input";
+                    res_columns[res_index++]->insert(engine_name);
+                    /// proton: ends
                 }
 
                 if (columns_mask[src_index++])
                     res_columns[res_index++]->insert(0u);  // is_temporary
+
+                /// proton: starts
+                /// is_input
+                if (columns_mask[src_index])
+                {
+                    res_columns[res_index++]->insert(compute_is_input());
+                    ++src_index;
+                }
+                else
+                    ++src_index;
+                /// proton: ends
 
                 if (columns_mask[src_index++])
                 {
@@ -590,6 +794,12 @@ protected:
                             if (!mv->getExternalTargetTableID().has_value())
                                 total_rows = mv->getTargetTable()->totalRows(settings);
                         }
+                        else if (const auto storage_name = table->getName(); storage_name == "KafkaExternalStream" || storage_name == "Kafka")
+                        {
+                            /// For Kafka, totalRows() queries watermark offsets (slow + depends on broker availability).
+                            /// In system.tables we prefer a cheap, availability-independent answer.
+                            total_rows = 0;
+                        }
                         else
                         {
                             total_rows = table->totalRows(settings);
@@ -735,6 +945,9 @@ private:
     DatabasePtr database;
     std::string database_name;
     /// proton: starts.
+    bool need_metadata_modification_time = false;
+    bool need_data_paths = false;
+
     /// Stream descriptors loaded from metastore. for external database like MySQL/PostgreSQL/Iceberg the uuid is Null.
     std::unordered_map<UUID, cluster::protocol::StreamDescriptorPtr> stream_descs;
     /// proton: ends
@@ -812,6 +1025,30 @@ void ReadFromSystemTables::initializePipeline(QueryPipelineBuilder & pipeline, c
 
     ColumnPtr filtered_databases_column = getFilteredDatabases(predicate, context);
     ColumnPtr filtered_tables_column = getFilteredTables(predicate, filtered_databases_column, context);
+
+    /// proton: starts
+    /// Optimize common pattern: `WHERE uuid = <constant>` by narrowing the scan to a single (database, table).
+    if (auto uuid = tryExtractUUIDFromPredicate(predicate))
+    {
+        auto db_and_table = DatabaseCatalog::instance().tryGetByUUID(*uuid);
+        if (db_and_table.first && db_and_table.second)
+        {
+            const auto database_name = db_and_table.first->getDatabaseName();
+            const auto table_name = db_and_table.second->getStorageID().getTableName();
+
+            if (columnContainsString(filtered_databases_column, database_name))
+            {
+                filtered_databases_column = makeSingleValueColumn(database_name);
+                filtered_tables_column = makeSingleValueColumn(table_name);
+            }
+            else
+            {
+                filtered_databases_column = ColumnString::create();
+                filtered_tables_column = ColumnString::create();
+            }
+        }
+    }
+    /// proton: ends
 
     Pipe pipe(std::make_shared<TablesBlockSource>(
         std::move(columns_mask), getOutputStream().header, max_block_size, std::move(filtered_databases_column), std::move(filtered_tables_column), context));

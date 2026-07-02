@@ -4,6 +4,7 @@
 #include <optional>
 #include <queue>
 
+#include <Common/Stopwatch.h>
 #include <Disks/IVolume.h>
 
 
@@ -24,7 +25,7 @@ class VolumeJBOD : public IVolume
 {
 public:
     VolumeJBOD(String name_, Disks disks_, UInt64 max_data_part_size_, bool are_merges_avoided_, bool perform_ttl_move_on_insert_, VolumeLoadBalancing load_balancing_)
-        : IVolume(name_, disks_, max_data_part_size_, perform_ttl_move_on_insert_, load_balancing_)
+        : IVolume(std::move(name_), disks_, max_data_part_size_, perform_ttl_move_on_insert_, load_balancing_)
         , are_merges_avoided(are_merges_avoided_)
     {
     }
@@ -90,11 +91,17 @@ private:
         }
     };
 
+    using LeastUsedDisksQueue = std::priority_queue<DiskWithSize>;
+
     mutable std::mutex mutex;
     /// Index of last used disk, for load_balancing=round_robin
     mutable std::atomic<size_t> last_used = 0;
     /// Priority queue of disks sorted by size, for load_balancing=least_used
-    mutable std::priority_queue<DiskWithSize> disks_by_size;
+    mutable LeastUsedDisksQueue disks_by_size;
+    /// Refresh interval in ms for the LEAST_USED queue. 0 disables caching.
+    UInt64 least_used_ttl_ms = 60'000;
+    /// Tracks time since the last LEAST_USED refresh. Bound to the same mutex as disks_by_size.
+    mutable Stopwatch least_used_update_watch;
 
     /// True if parts on this volume participate in merges according to START/STOP MERGES ON VOLUME.
     std::atomic<std::optional<bool>> are_merges_avoided_user_override{std::nullopt};

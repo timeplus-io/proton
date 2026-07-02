@@ -85,7 +85,7 @@ ByteVector Request::serializeWithHeader(const RequestHeader & header) const
     auto approx_size = static_cast<uint64_t>(1.15 * (header.data().approximateSerializedSize()) + data().approximateSerializedSize());
     ByteVector buffer(approx_size);
 
-    DB::WriteBufferFromVector wb(buffer);
+    DB::WriteBufferFromVector<ByteVector> wb(buffer);
     serializeWithHeader(wb, header);
     wb.finalize();
 
@@ -97,7 +97,7 @@ ByteVector Request::serializeWithSizeAndHeader(const RequestHeader & header) con
     auto approx_size = static_cast<uint64_t>(1.15 * (header.data().approximateSerializedSize()) + data().approximateSerializedSize());
     ByteVector buffer(approx_size);
 
-    DB::WriteBufferFromVector wb(buffer);
+    DB::WriteBufferFromVector<ByteVector> wb(buffer);
     /// Write a dummy size first and fix it later
     uint32_t prefix_length = 0;
     DB::writeIntBinary(prefix_length, wb);

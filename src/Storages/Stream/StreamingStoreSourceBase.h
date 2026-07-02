@@ -30,8 +30,9 @@ protected:
 private:
     virtual void readAndProcess() = 0;
     virtual std::pair<String, Int32> getStreamShard() const = 0;
+    virtual Int64 lastFetchedSN() const = 0;
 
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
     void doRecover(CheckpointContextPtr ckpt_ctx_) override;
 
     bool dedupBlock(const cluster::SchemaRecordPtr & record);

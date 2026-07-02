@@ -4,6 +4,8 @@
 #include <Functions/UserDefined/UserDefinedFunctionBase.h>
 #include <Processors/Sources/ShellCommandSource.h>
 
+#include <Common/logger_useful.h>
+
 namespace DB
 {
 

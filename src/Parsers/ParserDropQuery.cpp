@@ -15,6 +15,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_temporary("TEMPORARY");
     /// proton: starts
     ParserKeyword s_stream("STREAM");
+    ParserKeyword s_input("INPUT");
     ParserKeyword s_cascade("CASCADE");
     /// proton: ends
     ParserKeyword s_dictionary("DICTIONARY");
@@ -34,6 +35,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     bool temporary = false;
     bool is_dictionary = false;
     bool is_view = false;
+    bool is_input = false;
     bool no_delay = false;
     bool permanently = false;
     bool cascade = false;
@@ -52,14 +54,17 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
             is_view = true;
         else if (s_dictionary.ignore(pos, expected, false))
             is_dictionary = true;
+        else if (s_input.ignore(pos, expected, false))
+            is_input = true;
         else if (s_temporary.ignore(pos, expected, false))
             temporary = true;
 
         /// for TRUNCATE queries TABLE keyword is assumed as default and can be skipped
         if (!is_view && !is_dictionary
+            && !is_input
             /// proton: starts
             && (!s_stream.ignore(pos, expected) && kind != ASTDropQuery::Kind::Truncate))
-            /// proton: ends
+        /// proton: ends
         {
             return false;
         }
@@ -107,6 +112,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     query->temporary = temporary;
     query->is_dictionary = is_dictionary;
     query->is_view = is_view;
+    query->is_input = is_input;
     query->no_delay = no_delay;
     query->permanently = permanently;
     query->database = database;

@@ -1,4 +1,5 @@
 #include <Processors/QueryPlan/FilterStep.h>
+#include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/Transforms/ExpressionTransform.h>
@@ -27,8 +28,8 @@ static ITransformingStep::Traits getTraits(const ActionsDAGPtr & expression, con
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = preserves_sorting,
-            /// proton: starts.
-            .preserves_substream = true,
+            /// proton: starts. Conditional, in preserveShuffleDescriptionIfValid — a fused DAG may reproject keys.
+            .preserves_shuffling = false,
             /// proton: ends.
         },
         {
@@ -56,6 +57,9 @@ FilterStep::FilterStep(
 {
     /// TODO: it would be easier to remove all expressions from filter step. It should only filter by column name.
     updateDistinctColumns(output_stream->header, output_stream->distinct_columns);
+    /// proton: starts.
+    preserveShuffleDescriptionIfValid(input_stream_);
+    /// proton: ends.
 }
 
 void FilterStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & settings)
@@ -114,7 +118,21 @@ void FilterStep::updateOutputStream()
         input_streams.front(),
         FilterTransform::transformHeader(input_streams.front().header, actions_dag.get(), filter_column_name, remove_filter_column),
         getDataStreamTraits());
+    /// proton: starts.
+    preserveShuffleDescriptionIfValid(input_streams.front());
+    /// proton: ends.
 }
+
+/// proton: starts.
+void FilterStep::preserveShuffleDescriptionIfValid(const DataStream & input_stream)
+{
+    if (!input_stream.shuffle_description)
+        return;
+
+    if (expressionPreservesShuffleKeys(actions_dag, *input_stream.shuffle_description))
+        output_stream->shuffle_description = input_stream.shuffle_description;
+}
+/// proton: ends.
 
 
 void FilterStep::describeActions(JSONBuilder::JSONMap & map) const

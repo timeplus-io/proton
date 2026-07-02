@@ -32,6 +32,31 @@ class class_;
 template <typename T>
 struct is_wrapped_class;
 
+template <typename T>
+struct is_std_basic_string : std::false_type
+{
+};
+
+template <typename Char, typename Traits, typename Allocator>
+struct is_std_basic_string<std::basic_string<Char, Traits, Allocator>> : std::true_type
+{
+};
+
+template <typename T>
+struct is_std_basic_string_view : std::false_type
+{
+};
+
+template <typename Char, typename Traits>
+struct is_std_basic_string_view<std::basic_string_view<Char, Traits>> : std::true_type
+{
+};
+
+template <typename T>
+using is_v8_string_like
+    = std::bool_constant<
+        is_std_basic_string<std::remove_cv_t<T>>::value || is_std_basic_string_view<std::remove_cv_t<T>>::value>;
+
 // Generic convertor
 /*
 template<typename T, typename Enable = void>
@@ -54,7 +79,7 @@ struct invalid_argument : DB::Exception
 
 // converter specializations for string types
 template <typename Str>
-struct convert<Str, typename std::enable_if<fmt::detail::is_string<Str>::value>::type>
+struct convert<Str, typename std::enable_if<is_v8_string_like<Str>::value>::type>
 {
     using Char = typename Str::value_type;
     using Traits = typename Str::traits_type;

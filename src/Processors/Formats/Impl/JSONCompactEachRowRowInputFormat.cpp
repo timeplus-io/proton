@@ -107,6 +107,17 @@ void JSONCompactEachRowFormatReader::skipHeaderRow()
     skipRowEndDelimiter();
 }
 
+bool JSONCompactEachRowFormatReader::checkForSuffix()
+{
+    skipWhitespaceIfAny(*in);
+    return in->eof();
+}
+
+void JSONCompactEachRowFormatReader::skipRow()
+{
+    JSONUtils::skipRowForJSONCompactEachRow(*in);
+}
+
 std::vector<String> JSONCompactEachRowFormatReader::readHeaderRow()
 {
     skipRowStartDelimiter();
@@ -303,9 +314,9 @@ void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory)
         /// the minimum of rows for segmentation engine according to
         /// parameters with_names and with_types.
         size_t min_rows = 1 + int(with_names) + int(with_types);
-        factory.registerFileSegmentationEngine(format_name, [min_rows](ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size)
+        factory.registerFileSegmentationEngine(format_name, [min_rows](ReadBuffer & in, DB::Memory<> & memory, size_t min_bytes, size_t max_rows)
         {
-            return JSONUtils::fileSegmentationEngineJSONCompactEachRow(in, memory, min_chunk_size, min_rows);
+            return JSONUtils::fileSegmentationEngineJSONCompactEachRow(in, memory, min_bytes, min_rows, max_rows);
         });
     };
 

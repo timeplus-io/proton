@@ -2,7 +2,6 @@
 
 #include <Cluster/SchemaRecord/SchemaContext.h>
 #include <Cluster/SchemaRecord/SchemaRecord.h>
-#include <Common/assert_cast.h>
 #include <DataTypes/Serializations/SerializationInfoObject.h>
 #include <IO/ReadHelpers.h>
 
@@ -66,10 +65,9 @@ ALWAYS_INLINE void processPartialDeserializationInfo(
 }
 }
 
-/// \param partial_ does the wire format contains partial columns of the schema ? true means only partial columns are stored
 /// \param schema_ctx_ schema_ctx_.column_positions, does client request only partial of columns in schema
-SchemaNativeReader::SchemaNativeReader(DB::ReadBuffer & istr_, bool partial_, uint16_t schema_version_, const SchemaContext & schema_ctx_)
-    : istr(istr_), partial(partial_), schema_version(schema_version_), schema_ctx(schema_ctx_)
+SchemaNativeReader::SchemaNativeReader(uint16_t on_disk_schema_version_, const SchemaContext & schema_ctx_)
+    : on_disk_schema_version(on_disk_schema_version_), schema_ctx(schema_ctx_)
 {
     initDeserializationContext();
 }
@@ -80,58 +78,58 @@ void SchemaNativeReader::initDeserializationContext()
     /// When there is a mismatch, we will need check if the appended `schema_version` and the query
     /// time `schema_ctx.schema_version_requested` are `compatible`. If they are, we can still
     /// use `schema_ctx.column_positions_requested` to deserialize the data
-    const auto & header = schema_ctx.getSchema(schema_version);
-    const auto & column_positions = schema_ctx.column_positions_requested;
+    on_disk_schema = schema_ctx.getSchema(on_disk_schema_version);
+    const auto & requested_schema = schema_ctx.getRequestedSchema();
+    const auto & column_positions_requested = schema_ctx.column_positions_requested;
 
-    if (!schema_ctx.serializableCompatible(schema_version))
+    if (!schema_ctx.serializableCompatible(on_disk_schema_version))
         throw DB::Exception(
             DB::ErrorCodes::INCOMPATIBLE_SCHEMA,
             "Schema mismatch, requested version({}): {}, got version({}): {}",
             schema_ctx.schema_version_requested,
-            schema_ctx.getRequestedSchema().dumpStructure(),
-            schema_version,
-            header.dumpStructure());
+            requested_schema.dumpStructure(),
+            on_disk_schema_version,
+            on_disk_schema.dumpStructure());
 
-    serde_ctx.infos.resize(header.columns());
-    serde_ctx.target_positions.resize(header.columns());
+    /// There are three scenarios:
+    /// 1) Request version is higher (newer) than on disk version (backfill old data in a streaming query for example)
+    /// 2) Request version is lower (older) than on disk version (during streaming query, schema was mutated)
+    /// 3) Request version is same as on disk version
+    /// If request version is ANY_SCHEMA_VERSION, it shall cover 1) and 3) and is used by streaming store -> historical store tailing
+    auto columns_num = std::max(requested_schema.columns(), on_disk_schema.columns());
+    serde_ctx.infos.resize(columns_num, nullptr);
+    serde_ctx.target_positions.resize(columns_num, SchemaContext::NO_POSITION);
 
-    for (size_t pos = 0; auto & column : header)
+    for (size_t pos = 0; pos < columns_num; ++pos)
     {
-        auto iter = std::find(column_positions.positions.begin(), column_positions.positions.end(), pos);
-        if (iter != column_positions.positions.end())
+        auto iter = std::find(column_positions_requested.positions.begin(), column_positions_requested.positions.end(), pos);
+        if (iter != column_positions_requested.positions.end())
+            serde_ctx.target_positions[pos] = std::distance(column_positions_requested.positions.begin(), iter);
+        else if (column_positions_requested.positions.empty() && pos < on_disk_schema.columns()) /// Only request full on disk columns
+            serde_ctx.target_positions[pos] = pos;
+
+        /// Prepare deserialization info for on disk columns
+        if (pos < on_disk_schema.columns())
         {
-            auto target_pos = std::distance(column_positions.positions.begin(), iter);
+            const auto & column = on_disk_schema.getByPosition(pos);
             auto info = column.type->createSerializationInfo({});
-            auto subcolumns_iter = column_positions.subcolumns.find(target_pos);
-            if (subcolumns_iter != column_positions.subcolumns.end())
+
+            auto subcolumns_iter = column_positions_requested.subcolumns.find(pos);
+            if (subcolumns_iter != column_positions_requested.subcolumns.end())
                 processPartialDeserializationInfo(info, column, subcolumns_iter->second);
 
             serde_ctx.infos[pos] = std::move(info);
-            serde_ctx.target_positions[pos] = target_pos;
         }
-        else if (column_positions.positions.empty())
-        {
-            /// Read all
-            serde_ctx.infos[pos] = column.type->createSerializationInfo({});
-            serde_ctx.target_positions[pos] = pos;
-        }
-        else
-        {
-            serde_ctx.infos[pos] = nullptr; /// No deserialization info, skip it.
-            serde_ctx.target_positions[pos] = SchemaContext::NO_POSITION;
-        }
-
-        ++pos;
     }
 
-    chassert(serde_ctx.infos.size() == serde_ctx.target_positions.size());
-    chassert(serde_ctx.infos.size() == header.columns());
+    for (auto col_pos : column_positions_requested.positions)
+        requested_header.insert(requested_schema.getByPosition(col_pos));
 }
 
 /// read guarantee that the returned block has the same column order as request if `column_positions` is
 /// set in schema context. Then clients don't need sort the block any more. If `column_positions` is not set
 /// the returned block has the same column sequence as the schema
-void SchemaNativeReader::read(DB::Block & res)
+void SchemaNativeReader::read(DB::Block & res, DB::ReadBuffer & istr, bool partial) const
 {
     chassert(!res);
 
@@ -146,53 +144,38 @@ void SchemaNativeReader::read(DB::Block & res)
     DB::readIntBinary(columns, istr);
     DB::readIntBinary(rows, istr);
 
-    const auto & header = schema_ctx.getSchema(schema_version);
-
     chassert(rows > 0);
     chassert(columns > 0);
 
     if (partial)
     {
-        if (schema_ctx.avoid_fill_defaults_for_missing_columns)
-            /// deserialize what has been serialized
-            return readSerialized(columns, rows, header, res);
-
-        if (schema_ctx.column_positions_requested.positions.empty()
-            || schema_ctx.column_positions_requested.positions.size() == header.columns())
-            /// Write partial / request full
-            return readPartialForRequestFull(columns, rows, header, res);
+        if (schema_ctx.column_positions_requested.positions.empty())
+            /// Write partial / request full, return full on disk columns
+            return readPartialForRequestFull(istr, columns, rows, res);
         else
-            /// Write partial / request partial
-            return readPartialForRequestPartial(columns, rows, header, res);
+            /// Write partial / request partial, return requested columns
+            return readPartialForRequestPartial(istr, columns, rows, res);
     }
     else
     {
-        chassert(columns == header.columns());
+        chassert(columns == on_disk_schema.columns());
 
-        if (schema_ctx.column_positions_requested.positions.empty()
-            || schema_ctx.column_positions_requested.positions.size() == header.columns())
-            /// Write full / request full
-            return readFullForRequestFull(rows, header, res);
+        if (schema_ctx.column_positions_requested.positions.empty())
+            /// Write full / request full, return full on disk columns
+            return readFullForRequestFull(istr, rows, res);
         else
-            /// Write full / request partial
-            return readFullForRequestPartial(rows, header, res);
+            /// Write full / request partial, return requested columns
+            return readFullForRequestPartial(istr, rows, res);
     }
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(uint32_t rows, const DB::Block & header, DB::Block & res)
+ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(DB::ReadBuffer & istr, uint32_t rows, DB::Block & res) const
 {
-    chassert(
-        schema_ctx.column_positions_requested.positions.empty()
-        || schema_ctx.column_positions_requested.positions.size() == header.columns());
-    chassert(header.columns() == serde_ctx.infos.size());
-
-    res.reserve(header.columns());
-    /// Clone the header
-    for (const auto & col : header)
-        res.insert(col);
+    chassert(schema_ctx.column_positions_requested.positions.empty());
+    res = on_disk_schema.cloneEmpty(); /// Request full on disk columns
 
     /// We assume the order of the columns serialized has the same column order of the schema
-    /// This requests during ingestion, we order the columns according to the schema. Pushing sorting
+    /// This requests that during ingestion we order the columns according to the schema. Pushing sorting
     /// to ingest stage makes sense since ingestion is more scale and can be more concurrent
     for (size_t pos = 0; auto & column : res)
     {
@@ -214,45 +197,35 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestFull(uint32_t rows, con
 
         ++pos;
     }
-
-    res.reorderColumnsInplace(schema_ctx.column_positions_requested.positions);
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(uint32_t rows, const DB::Block & header, DB::Block & res)
+ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(DB::ReadBuffer & istr, uint32_t rows, DB::Block & res) const
 {
     size_t read_columns = 0;
-    const auto & column_positions = schema_ctx.column_positions_requested.positions;
-    size_t request_column_num = column_positions.size();
-    chassert(!column_positions.empty() && request_column_num < header.columns());
-    chassert(header.columns() == serde_ctx.infos.size());
-    chassert(header.columns() == serde_ctx.target_positions.size());
+    size_t request_column_num = requested_header.columns();
+    res = requested_header.cloneEmpty();
 
-    /// We want to avoid header.cloneEmpty() here since it copies the columns names for unwanted columns which is slow
-    /// We want to avoid complicate sorting or hash table lookup as well
-    /// We need collect the columns in request order
-    std::vector<DB::ColumnPtr> request_columns(request_column_num, nullptr);
-
-    for (size_t pos = 0; const auto & column : header)
+    for (size_t pos = 0; const auto & column : on_disk_schema)
     {
-        bool need_read = (serde_ctx.infos[pos] != nullptr);
-        auto info = need_read ? serde_ctx.infos[pos]->clone() : column.type->createSerializationInfo({});
+        auto info = serde_ctx.infos[pos];
+        chassert(info);
 
         uint8_t has_custom;
         readIntBinary(has_custom, istr);
         if (has_custom)
+        {
+            info = info->clone();
             info->deserializeFromKindsBinary(istr);
+        }
 
         auto serialization = column.type->getSerialization(*info);
 
-        /// We probably don't need build a hash table for position lookup. Short integer vector lookup is super fast
-        if (need_read)
+        if (auto target_pos = serde_ctx.target_positions[pos]; target_pos != SchemaContext::NO_POSITION)
         {
-            auto target_pos = serde_ctx.target_positions[pos];
-
             /// Data
             DB::ColumnPtr read_column = column.type->createColumn(*serialization);
             readData(*serialization, read_column, istr, rows);
-            request_columns[target_pos] = std::move(read_column);
+            res.getByPosition(target_pos).column = std::move(read_column);
             ++read_columns;
         }
         else
@@ -268,38 +241,29 @@ ALWAYS_INLINE void SchemaNativeReader::readFullForRequestPartial(uint32_t rows, 
             break;
     }
 
-    res.reserve(request_column_num);
-
-    for (size_t i = 0; auto & pos : column_positions)
+    /// Fill missing source columns with default values
+    for (auto & column : res)
     {
-        auto column{header.getByPosition(pos)};
-        column.column = std::move(request_columns[i]);
-        res.insert(std::move(column));
-        ++i;
+        if (column.column == nullptr || column.column->empty())
+            column.column = column.type->createColumn()->cloneResized(rows);
     }
 }
 
-ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res)
+ALWAYS_INLINE void
+SchemaNativeReader::readPartialForRequestFull(DB::ReadBuffer & istr, uint16_t columns, uint32_t rows, DB::Block & res) const
 {
     /// In file system, we store partial columns, but clients request all columns
     /// For those we can get the columns from file system, we deserialize them
     /// For those we cannot get the columns from file system, we create these columns with default values
-    chassert(
-        schema_ctx.column_positions_requested.positions.empty()
-        || schema_ctx.column_positions_requested.positions.size() == header.columns());
-    chassert(header.columns() == serde_ctx.infos.size());
-
-    res.reserve(header.columns());
-    /// Clone the header
-    for (const auto & col : header)
-        res.insert(col);
+    chassert(schema_ctx.column_positions_requested.positions.empty());
+    res = on_disk_schema.cloneEmpty(); /// Request full on disk columns
 
     /// Column positions
     std::vector<uint16_t> serialized_column_positions(columns, 0);
     for (uint16_t i = 0; i < columns; ++i)
     {
         DB::readIntBinary(serialized_column_positions[i], istr);
-        chassert(serialized_column_positions[i] < header.columns());
+        chassert(serialized_column_positions[i] < on_disk_schema.columns());
     }
 
     for (uint16_t read_columns = 0; read_columns < columns; ++read_columns)
@@ -325,128 +289,68 @@ ALWAYS_INLINE void SchemaNativeReader::readPartialForRequestFull(uint16_t column
         res.getByPosition(col_pos).column = std::move(read_column);
     }
 
-    for (auto & column : res)
-        if (!column.column || column.column->empty())
-            column.column = column.type->createColumn()->cloneResized(rows);
-
-    res.reorderColumnsInplace(schema_ctx.column_positions_requested.positions);
+    if (!schema_ctx.avoid_fill_defaults_for_missing_columns)
+    {
+        for (auto & column : res)
+        {
+            if (!column.column || column.column->empty())
+                column.column = column.type->createColumn()->cloneResized(rows);
+        }
+    }
 }
 
 ALWAYS_INLINE void
-SchemaNativeReader::readPartialForRequestPartial(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res)
+SchemaNativeReader::readPartialForRequestPartial(DB::ReadBuffer & istr, uint16_t columns, uint32_t rows, DB::Block & res) const
 {
     /// In file system, we store partial columns, and clients also request partial columns
     /// For those we can get the columns from file system, we deserialize them
     /// For those we cannot get the columns from file system, we create these columns with default values
-    const auto & column_positions = schema_ctx.column_positions_requested.positions;
-    auto request_column_size = column_positions.size();
-    chassert(!column_positions.empty() && request_column_size < header.columns());
-    chassert(header.columns() == serde_ctx.infos.size());
-    chassert(header.columns() == serde_ctx.target_positions.size());
 
-    /// We want to avoid header.cloneEmpty() here since it copies the columns names for unwanted columns which is slow
-    /// We want to avoid complicate sorting or hash table lookup as well
-    /// Collect requested columns only and according to the request column order
-    std::vector<DB::ColumnPtr> request_columns(request_column_size, nullptr);
+    res = requested_header.cloneEmpty();
 
     /// Column positions
     std::vector<uint16_t> serialized_column_positions(columns, 0);
     for (uint16_t i = 0; i < columns; ++i)
     {
         DB::readIntBinary(serialized_column_positions[i], istr);
-        chassert(serialized_column_positions[i] < header.columns());
+        chassert(serialized_column_positions[i] < on_disk_schema.columns());
     }
 
-    for (uint16_t read_columns = 0, skipped_columns = 0; read_columns + skipped_columns < columns && read_columns < request_column_size;)
+    for (auto col_pos : serialized_column_positions)
     {
-        auto col_pos = serialized_column_positions[read_columns + skipped_columns];
+        const auto & column = on_disk_schema.getByPosition(col_pos);
 
-        const auto & column = header.getByPosition(col_pos);
-
-        bool need_read = (serde_ctx.infos[col_pos] != nullptr);
-        auto info = need_read ? serde_ctx.infos[col_pos]->clone() : column.type->createSerializationInfo({});
+        auto info = serde_ctx.infos[col_pos];
 
         uint8_t has_custom;
-        DB::readIntBinary(has_custom, istr);
+        readIntBinary(has_custom, istr);
         if (has_custom)
+        {
+            info = info->clone();
             info->deserializeFromKindsBinary(istr);
+        }
 
         auto serialization = column.type->getSerialization(*info);
 
-        if (need_read)
+        if (auto target_pos = serde_ctx.target_positions[col_pos]; target_pos != SchemaContext::NO_POSITION)
         {
             /// Data
             DB::ColumnPtr read_column = column.type->createColumn(*serialization);
-
-            auto target_pos = serde_ctx.target_positions[col_pos];
-
             readData(*serialization, read_column, istr, rows);
-            request_columns[target_pos] = std::move(read_column);
-            ++read_columns;
+            res.getByPosition(target_pos).column = std::move(read_column);
         }
         else
         {
             /// Clients like to read some columns, discard unwanted columns
             readDataDiscard(*serialization, istr, rows);
-            ++skipped_columns;
         }
     }
 
-    res.reserve(request_column_size);
-
-    for (size_t i = 0; auto pos : column_positions)
+    /// Fill missing source columns with default values
+    for (auto & column : res)
     {
-        auto column{header.getByPosition(pos)};
-        if (request_columns[i] != nullptr)
-            column.column = std::move(request_columns[i]);
-        else
+        if (column.column == nullptr || column.column->empty())
             column.column = column.type->createColumn()->cloneResized(rows);
-
-        res.insert(std::move(column));
-        ++i;
-    }
-}
-
-ALWAYS_INLINE void SchemaNativeReader::readSerialized(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res)
-{
-    /// In file system, we store partial columns, read what has been serialized
-    chassert(schema_ctx.avoid_fill_defaults_for_missing_columns);
-    chassert(header.columns() == serde_ctx.infos.size());
-
-    res.reserve(header.columns());
-    /// Clone the header
-    for (const auto & col : header)
-        res.insert(col);
-
-    /// Column positions
-    std::vector<uint16_t> serialized_column_positions(columns, 0);
-    for (uint16_t i = 0; i < columns; ++i)
-    {
-        DB::readIntBinary(serialized_column_positions[i], istr);
-        chassert(serialized_column_positions[i] < header.columns());
-    }
-
-    for (uint16_t read_columns = 0; read_columns < columns; ++read_columns)
-    {
-        uint16_t col_pos = serialized_column_positions[read_columns];
-
-        chassert(col_pos < res.columns());
-
-        auto & column = res.getByPosition(col_pos);
-        chassert(serde_ctx.infos[col_pos]);
-        auto info = serde_ctx.infos[col_pos]->clone();
-
-        uint8_t has_custom;
-        DB::readIntBinary(has_custom, istr);
-        if (has_custom)
-            info->deserializeFromKindsBinary(istr);
-
-        auto serialization = column.type->getSerialization(*info);
-
-        /// Data
-        DB::ColumnPtr read_column = column.type->createColumn(*serialization);
-        readData(*serialization, read_column, istr, rows);
-        res.getByPosition(col_pos).column = std::move(read_column);
     }
 }
 

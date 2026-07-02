@@ -1,11 +1,13 @@
 #pragma once
 
-#include "RestRouterHandler.h"
+#include <Server/RestRouterHandlers/RestRouterHandler.h>
 
-#include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
 
 namespace DB
 {
+
+class WriteBuffer;
+
 class SearchHandler final : public RestRouterHandler
 {
 public:
@@ -21,7 +23,7 @@ private:
 
     String getQuery(const Poco::JSON::Object::Ptr & payload) const;
 
-    std::shared_ptr<WriteBufferFromHTTPServerResponse> getOutputBuffer(HTTPServerResponse & response) const;
+    std::unique_ptr<WriteBuffer> getOutputBuffer(HTTPServerResponse & response) const;
 
     void setQuerySettings() const;
 };

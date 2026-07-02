@@ -19,7 +19,8 @@ namespace DB
 class DNSResolver : private boost::noncopyable
 {
 public:
-    typedef std::vector<Poco::Net::IPAddress> IPAddresses;
+    using IPAddresses = std::vector<Poco::Net::IPAddress>;
+    using IPAddressesPtr = std::shared_ptr<IPAddresses>;
 
     static DNSResolver & instance();
 
@@ -36,6 +37,8 @@ public:
 
     Poco::Net::SocketAddress resolveAddress(const std::string & host, UInt16 port);
 
+     std::vector<Poco::Net::SocketAddress> resolveAddressList(const std::string & host, UInt16 port);
+
     /// Accepts host IP and resolves its host names
     std::unordered_set<String> reverseResolve(const Poco::Net::IPAddress & address);
 
@@ -47,6 +50,9 @@ public:
 
     /// Drops all caches
     void dropCache();
+
+    /// Removes an entry from cache or does nothing
+    void removeHostFromCache(const std::string & host);
 
     /// Updates all known hosts in cache.
     /// Returns true if IP of any host has been changed.

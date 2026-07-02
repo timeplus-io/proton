@@ -1,0 +1,113 @@
+tags:
+  - batch parsing
+  - protobuf
+
+description: |
+  Test Pulsar external stream with batch parsing and ProtobufSingle format.
+  Verifies that Protobuf format works correctly with parse_messages_in_batch=1.
+  For ProtobufSingle, messages are concatenated with varint length delimiters.
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_batch_protobuf_21
+
+  - type: pulsar
+    name: create
+    topic: test_batch_protobuf_21
+    partitions: 1
+
+  - type: query
+    sql: DROP STREAM IF EXISTS ex_pulsar_batch_protobuf_21
+
+  - type: query
+    sql: DROP FORMAT SCHEMA IF EXISTS pulsar_batch_protobuf_21
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE FORMAT SCHEMA pulsar_batch_protobuf_21 AS
+        $$
+        syntax = "proto3";
+        message TestMessage {
+          int32 id = 1;
+          string name = 2;
+          double value = 3;
+        }
+        $$
+        TYPE Protobuf
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_protobuf_21
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_protobuf_21',
+      data_format = 'ProtobufSingle',
+      format_schema = 'pulsar_batch_protobuf_21:TestMessage';
+
+  - type: wait
+    time: 2
+
+  # Test 1: Batch parsing enabled
+  - type: stream
+    name: pulsar-batch-protobuf-21-1
+    query: select id, name, value from ex_pulsar_batch_protobuf_21 settings seek_to='earliest', parse_messages_in_batch=1;
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: string
+      - name: value
+        type: float64
+
+  # Test 2: Non-batch parsing for comparison
+  - type: stream
+    name: pulsar-batch-protobuf-21-2
+    query: select id, name, value from ex_pulsar_batch_protobuf_21 settings seek_to='earliest', parse_messages_in_batch=0;
+    schema:
+      - name: id
+        type: int32
+      - name: name
+        type: string
+      - name: value
+        type: float64
+
+  # Insert protobuf messages
+  - type: query
+    sql: insert into ex_pulsar_batch_protobuf_21(id, name, value) values (1, 'first', 1.5)(2, 'second', 2.5)(3, 'third', 3.5);
+
+  - type: wait
+    time: 1
+
+  # Insert more messages
+  - type: query
+    sql: insert into ex_pulsar_batch_protobuf_21(id, name, value) values (4, 'fourth', 4.5)(5, 'fifth', 5.5);
+
+  - type: wait
+    time: 2
+
+  # Both batch and non-batch should produce same results
+  - type: check
+    target_name: pulsar-batch-protobuf-21-1
+    expected_result:
+      - [1, first, 1.5]
+      - [2, second, 2.5]
+      - [3, third, 3.5]
+      - [4, fourth, 4.5]
+      - [5, fifth, 5.5]
+
+  - type: check
+    target_name: pulsar-batch-protobuf-21-2
+    expected_result:
+      - [1, first, 1.5]
+      - [2, second, 2.5]
+      - [3, third, 3.5]
+      - [4, fourth, 4.5]
+      - [5, fifth, 5.5]

@@ -73,8 +73,9 @@ add_subdirectory (Loggers)
 
 add_headers_and_sources(clickhouse_common_io Common)
 add_headers_and_sources(clickhouse_common_io Common/HashTable)
+add_headers_and_sources(clickhouse_common_io Common/Scheduler)
+add_headers_and_sources(clickhouse_common_io Common/Scheduler/Nodes)
 add_headers_and_sources(clickhouse_common_io IO)
-add_headers_and_sources(clickhouse_common_io IO/Resource)
 add_headers_and_sources(clickhouse_common_io IO/S3)
 add_headers_and_sources(clickhouse_common_io IO/AzureBlobStorage)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
@@ -128,7 +129,8 @@ if (TARGET ch_contrib::jemalloc)
 endif()
 
 if (TARGET ch_contrib::jemalloc)
-    target_link_libraries (clickhouse_common_io PRIVATE ch_contrib::jemalloc)
+    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::jemalloc)
+    target_link_libraries (clickhouse_storages_system PRIVATE ch_contrib::jemalloc)
 endif()
 
 add_subdirectory(Access/Common)
@@ -219,6 +221,10 @@ add_object_library(clickhouse_processors_merges_algorithms Processors/Merges/Alg
 add_object_library(clickhouse_processors_queryplan Processors/QueryPlan)
 add_object_library(clickhouse_processors_queryplan_optimizations Processors/QueryPlan/Optimizations)
 add_object_library(clickhouse_user_defined_functions Functions/UserDefined)
+
+if (USE_PARQUET)
+    add_object_library(clickhouse_processors_formats_impl_parquet Processors/Formats/Impl/Parquet)
+endif()
 
 # proton: starts
 add_object_library(clickhouse_processors_queryplan_streaming Processors/QueryPlan/Streaming)
@@ -425,6 +431,15 @@ endif ()
 set_source_files_properties(Common/CaresPTRResolver.cpp PROPERTIES COMPILE_FLAGS -Wno-reserved-identifier)
 target_link_libraries (clickhouse_common_io PRIVATE ch_contrib::c-ares)
 
+# Sources that use C23 `#embed` to inline resources into `.rodata`.
+# (ConfigProcessor.cpp and ExternalGrokPatterns.cpp get the same flag in Common/Config/CMakeLists.txt;
+#  attachInformationSchemaTables.cpp gets it in Storages/System/CMakeLists.txt.)
+set_source_files_properties(Server/WebUIRequestHandler.cpp PROPERTIES COMPILE_FLAGS -Wno-c23-extensions)
+# proton: starts
+# BuiltinSchemasProvisioner is Proton-specific.
+set_source_files_properties(Interpreters/BuiltinSchemasProvisioner.cpp PROPERTIES COMPILE_FLAGS -Wno-c23-extensions)
+# proton: ends
+
 if (TARGET OpenSSL::Crypto)
     dbms_target_link_libraries (PRIVATE OpenSSL::Crypto)
     target_link_libraries (clickhouse_common_io PRIVATE OpenSSL::Crypto)
@@ -502,7 +517,8 @@ if (ENABLE_NLP)
     dbms_target_link_libraries (PUBLIC ch_contrib::stemmer)
     dbms_target_link_libraries (PUBLIC ch_contrib::wnb)
     dbms_target_link_libraries (PUBLIC ch_contrib::lemmagen)
-    dbms_target_link_libraries (PUBLIC ch_contrib::nlp_data)
+    # FrequencyHolder.cpp embeds the .zst dictionaries via C23 `#embed`.
+    set_source_files_properties(Common/FrequencyHolder.cpp PROPERTIES COMPILE_FLAGS -Wno-c23-extensions)
 endif()
 
 if (TARGET ch_contrib::ulid)

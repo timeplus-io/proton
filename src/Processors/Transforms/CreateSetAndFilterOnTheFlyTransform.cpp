@@ -10,6 +10,7 @@
 #include <Columns/IColumn.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <base/types.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

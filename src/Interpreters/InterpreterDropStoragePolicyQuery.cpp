@@ -6,6 +6,7 @@
 #include <Access/ContextAccess.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTDropStoragePolicyQuery.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

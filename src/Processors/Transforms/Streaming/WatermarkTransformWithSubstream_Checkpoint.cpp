@@ -20,7 +20,7 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 
 namespace Streaming
 {
-void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
+void WatermarkTransformWithSubstream::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
     chassert(output_chunks.empty());
@@ -43,7 +43,7 @@ void WatermarkTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
     ckpt_ctx->coordinator->checkpoint(getLogicID(), std::move(ckpt), ckpt_ctx);
 }
 
-void WatermarkTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
+void WatermarkTransformWithSubstream::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     auto ckpt = ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx);
     switch (ckpt->type())

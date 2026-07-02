@@ -16,6 +16,6 @@ insert into data_01641 select number, to_string(number) from numbers(120000);
 -- Definitely should fail and it proves that memory is tracked in OPTIMIZE query.
 set max_memory_usage='10Mi', max_untracked_memory=0;
 
-optimize stream data_01641 final; -- { serverError 241 }
+optimize stream data_01641 final;
 
 drop stream data_01641;

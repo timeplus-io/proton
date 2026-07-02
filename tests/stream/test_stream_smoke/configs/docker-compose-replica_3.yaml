@@ -31,7 +31,6 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - ADVERTISED_HOST=proton-server1
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
       - METADATA_NODE_QUORUM=proton-server1:8464,proton-server2:8464,proton-server3:8464
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -50,7 +49,6 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - ADVERTISED_HOST=proton-server2
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
       - METADATA_NODE_QUORUM=proton-server1:8464,proton-server2:8464,proton-server3:8464
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -69,7 +67,6 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.6 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - ADVERTISED_HOST=proton-server3
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
       - METADATA_NODE_QUORUM=proton-server1:8464,proton-server2:8464,proton-server3:8464
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"

@@ -174,3 +174,6 @@ report_*.html
 /proton-data/
 /tmp_data_*/
 /.worktrees/
+
+# Local settings
+/.claude/settings.local.json

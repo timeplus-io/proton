@@ -18,58 +18,64 @@
 #define Net_WebSocketImpl_INCLUDED
 
 
-#include "Poco/Net/StreamSocketImpl.h"
 #include "Poco/Buffer.h"
+#include "Poco/Net/StreamSocketImpl.h"
 #include "Poco/Random.h"
 
 
-namespace Poco {
-namespace Net {
+namespace Poco
+{
+namespace Net
+{
 
 
 class HTTPSession;
 
 
-class Net_API WebSocketImpl: public StreamSocketImpl
+class Net_API WebSocketImpl : public StreamSocketImpl
 	/// This class implements a WebSocket, according
 	/// to the WebSocket protocol described in RFC 6455.
 {
 public:
-	WebSocketImpl(StreamSocketImpl* pStreamSocketImpl, HTTPSession& session, bool mustMaskPayload);
+	WebSocketImpl(StreamSocketImpl * pStreamSocketImpl, HTTPSession & session, bool mustMaskPayload);
 		/// Creates a WebSocketImpl.
 
 	// StreamSocketImpl
-	virtual int sendBytes(const void* buffer, int length, int flags);
+	virtual int sendBytes(const void * buffer, int length, int flags);
 		/// Sends a WebSocket protocol frame.
 
-	virtual int receiveBytes(void* buffer, int length, int flags);
+	virtual int receiveBytes(void * buffer, int length, int flags);
 		/// Receives a WebSocket protocol frame.
 
-	virtual int receiveBytes(Poco::Buffer<char>& buffer, int flags);
+	virtual int receiveBytes(Poco::Buffer<char> & buffer, int flags);
 		/// Receives a WebSocket protocol frame.
 
-	virtual SocketImpl* acceptConnection(SocketAddress& clientAddr);
-	virtual void connect(const SocketAddress& address);
-	virtual void connect(const SocketAddress& address, const Poco::Timespan& timeout);
-	virtual void connectNB(const SocketAddress& address);
-	virtual void bind(const SocketAddress& address, bool reuseAddress = false);
-	virtual void bind(const SocketAddress& address, bool reuseAddress, bool reusePort);
-	virtual void bind6(const SocketAddress& address, bool reuseAddress = false, bool ipV6Only = false);
-	virtual void bind6(const SocketAddress& address, bool reuseAddress, bool reusePort, bool ipV6Only);
+	virtual SocketImpl * acceptConnection(SocketAddress & clientAddr);
+	virtual void connect(const SocketAddress & address);
+	virtual void connect(const SocketAddress & address, const Poco::Timespan & timeout);
+	virtual void connectNB(const SocketAddress & address);
+	virtual void bind(const SocketAddress & address, bool reuseAddress = false);
+	virtual void bind(const SocketAddress & address, bool reuseAddress, bool reusePort);
+	virtual void bind6(const SocketAddress & address, bool reuseAddress = false, bool ipV6Only = false);
+	virtual void bind6(const SocketAddress & address, bool reuseAddress, bool reusePort, bool ipV6Only);
 	virtual void listen(int backlog = 64);
 	virtual void close();
 	virtual void shutdownReceive();
 	virtual void shutdownSend();
 	virtual void shutdown();
-	virtual int sendTo(const void* buffer, int length, const SocketAddress& address, int flags = 0);
-	virtual int receiveFrom(void* buffer, int length, SocketAddress& address, int flags = 0);
+	virtual int sendTo(const void * buffer, int length, const SocketAddress & address, int flags = 0);
+	virtual int receiveFrom(void * buffer, int length, SocketAddress & address, int flags = 0);
 	virtual void sendUrgent(unsigned char data);
 	virtual int available();
 	virtual bool secure() const;
-	virtual void setSendTimeout(const Poco::Timespan& timeout);
+	virtual void setSendTimeout(const Poco::Timespan & timeout);
 	virtual Poco::Timespan getSendTimeout();
-	virtual void setReceiveTimeout(const Poco::Timespan& timeout);
+	virtual void setReceiveTimeout(const Poco::Timespan & timeout);
 	virtual Poco::Timespan getReceiveTimeout();
+	virtual void setSendThrottler(const Poco::Net::ThrottlerPtr & throttler);
+        virtual Poco::Net::ThrottlerPtr getSendThrottler() const;
+        virtual void setReceiveThrottler(const Poco::Net::ThrottlerPtr & throttler);
+        virtual Poco::Net::ThrottlerPtr getReceiveThrottler() const;
 
 	// Internal
 	int frameFlags() const;
@@ -95,16 +101,16 @@ protected:
 		MAX_HEADER_LENGTH = 14
 	};
 
-	int receiveHeader(char mask[4], bool& useMask);
-	int receivePayload(char *buffer, int payloadLength, char mask[4], bool useMask);
-	int receiveNBytes(void* buffer, int bytes);
-	int receiveSomeBytes(char* buffer, int bytes);
+	int receiveHeader(char mask[4], bool & useMask);
+	int receivePayload(char * buffer, int payloadLength, char mask[4], bool useMask);
+	int receiveNBytes(void * buffer, int bytes);
+	int receiveSomeBytes(char * buffer, int bytes);
 	virtual ~WebSocketImpl();
 
 private:
 	WebSocketImpl();
 
-	StreamSocketImpl* _pStreamSocketImpl;
+	StreamSocketImpl * _pStreamSocketImpl;
 	int _maxPayloadSize;
 	Poco::Buffer<char> _buffer;
 	int _bufferOffset;
@@ -135,7 +141,8 @@ inline int WebSocketImpl::getMaxPayloadSize() const
 }
 
 
-} } // namespace Poco::Net
+}
+} // namespace Poco::Net
 
 
 #endif // Net_WebSocketImpl_INCLUDED

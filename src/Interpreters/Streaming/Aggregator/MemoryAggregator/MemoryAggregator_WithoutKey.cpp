@@ -7,8 +7,9 @@ namespace DB::Streaming
     size_t row_begin,
     size_t row_end,
     AggregateFunctionInstruction * aggregate_instructions,
-    Arena * arena) const
+    const ArenaPtr & pool) const
 {
+    Arena * arena = pool.get();
     /// Adding values
     bool should_finalize = false;
     for (size_t i = 0, func_size = aggregate_functions.size(); i < func_size; ++i)
@@ -48,7 +49,7 @@ namespace DB::Streaming
 }
 
 Block MemoryAggregator::prepareBlockAndFillWithoutKey(
-    MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const
+    MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const
 {
     chassert(data_variants.aggregatorType() == AggregatorType::Memory);
     auto & variants = static_cast<MemoryAggregatedDataVariants &>(data_variants);
@@ -56,54 +57,47 @@ Block MemoryAggregator::prepareBlockAndFillWithoutKey(
     switch (cparams.type)
     {
         case AggregatingConvertType::Normal:
-            return prepareBlockAndFillWithoutKeyNormal(variants, final_, cparams);
+            return prepareBlockAndFillWithoutKeyNormal(variants, cparams);
         case AggregatingConvertType::Updates:
-            return prepareBlockAndFillWithoutKeyForUpdates<TrackingUpdates>(variants, final_, cparams);
+            return prepareBlockAndFillWithoutKeyForUpdates<TrackingUpdates>(variants, cparams);
         case AggregatingConvertType::Retract:
-            return prepareBlockAndFillWithoutKeyForRetract(variants, final_, cparams);
+            return prepareBlockAndFillWithoutKeyForRetract(variants, cparams);
         case AggregatingConvertType::UpdatesAfterRetract:
-            return prepareBlockAndFillWithoutKeyForUpdates<TrackingUpdatesWithRetract>(variants, final_, cparams);
+            return prepareBlockAndFillWithoutKeyForUpdates<TrackingUpdatesWithRetract>(variants, cparams);
     }
 }
 
 Block MemoryAggregator::prepareBlockAndFillWithoutKeyNormal(
-    MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const
+    MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const
 {
     chassert(cparams.type == AggregatingConvertType::Normal);
 
-    auto res_header = params->getHeader(input_header, /*final_=*/true);
+    auto res_header = getHeader();
     auto data = data_variants.without_key;
     if (!data)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid data variant passed.");
 
+    const auto & pool = data_variants.aggregates_pool;
+
     size_t rows = 1;
-    auto && out_cols = prepareOutputBlockColumns(res_header, data_variants.aggregates_pools, final_, rows);
+    auto && out_cols = prepareOutputBlockColumns(res_header, pool, rows);
 
-    auto && [key_columns, raw_key_columns, aggregate_columns, final_aggregate_columns, aggregate_columns_data] = out_cols;
+    auto && [key_columns, raw_key_columns, final_aggregate_columns] = out_cols;
+    insertAggregatesIntoColumns(data, final_aggregate_columns, data_variants.aggregates_pool.get());
 
-    if (!final_)
-    {
-        for (size_t i = 0; i < params->aggregates_size; ++i)
-            aggregate_columns_data[i]->push_back(data + offsets_of_aggregate_states[i]);
-    }
-    else
-    {
-        insertAggregatesIntoColumns(data, final_aggregate_columns, data_variants.aggregates_pool);
-    }
-
-    return finalizeBlock(res_header, std::move(out_cols), final_, rows);
+    return finalizeBlock(res_header, std::move(out_cols), rows);
 }
 
 template <typename TrackingUpdatesStruct>
 Block MemoryAggregator::prepareBlockAndFillWithoutKeyForUpdates(
-    MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const
+    MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const
 {
     chassert(
         (cparams.type == AggregatingConvertType::Updates && std::is_same_v<TrackingUpdatesStruct, TrackingUpdates>)
         || (cparams.type == AggregatingConvertType::UpdatesAfterRetract
             && std::is_same_v<TrackingUpdatesStruct, TrackingUpdatesWithRetract>));
 
-    auto res_header = params->getHeader(input_header, final_);
+    auto res_header = getHeader();
     auto data = data_variants.without_key;
     if (!data)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid data variant passed.");
@@ -114,30 +108,24 @@ Block MemoryAggregator::prepareBlockAndFillWithoutKeyForUpdates(
 
     TrackingUpdatesStruct::resetUpdated(data);
 
+    const auto & pool = data_variants.aggregates_pool;
+
     size_t rows = 1;
-    auto && out_cols = prepareOutputBlockColumns(res_header, data_variants.aggregates_pools, final_, rows);
-    auto && [key_columns, raw_key_columns, aggregate_columns, final_aggregate_columns, aggregate_columns_data] = out_cols;
+    auto && out_cols = prepareOutputBlockColumns(res_header, pool, rows);
+    auto && [key_columns, raw_key_columns, final_aggregate_columns] = out_cols;
 
-    if (!final_)
-    {
-        for (size_t i = 0; i < params->aggregates_size; ++i)
-            aggregate_columns_data[i]->push_back(data + offsets_of_aggregate_states[i]);
-    }
-    else
-    {
-        /// Always single-thread. It's safe to pass current arena from 'aggregates_pool'.
-        insertAggregatesIntoColumns(data, final_aggregate_columns, data_variants.aggregates_pool);
-    }
+    /// Always single-thread. It's safe to pass current arena from 'aggregates_pool'.
+    insertAggregatesIntoColumns(data, final_aggregate_columns, pool.get());
 
-    return finalizeBlock(res_header, std::move(out_cols), final_, rows);
+    return finalizeBlock(res_header, std::move(out_cols), rows);
 }
 
 Block MemoryAggregator::prepareBlockAndFillWithoutKeyForRetract(
-    MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const
+    MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const
 {
     chassert(cparams.type == AggregatingConvertType::Retract);
 
-    auto res_header = params->getHeader(input_header, final_);
+    auto res_header = getHeader();
     auto without_key_state = data_variants.without_key;
     if (!TrackingUpdatesWithRetract::hasRetract(without_key_state))
         /// No changes / updates, return empty block
@@ -147,23 +135,17 @@ Block MemoryAggregator::prepareBlockAndFillWithoutKeyForRetract(
     if (!data)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid data variant passed.");
 
+    const auto & pool = data_variants.retract_pool;
+
     size_t rows = 1;
-    auto && out_cols = prepareOutputBlockColumns(res_header, data_variants.aggregates_pools, final_, rows);
+    auto && out_cols = prepareOutputBlockColumns(res_header, pool, rows);
 
-    auto && [key_columns, raw_key_columns, aggregate_columns, final_aggregate_columns, aggregate_columns_data] = out_cols;
+    auto && [key_columns, raw_key_columns, final_aggregate_columns] = out_cols;
 
-    if (!final_)
-    {
-        for (size_t i = 0; i < params->aggregates_size; ++i)
-            aggregate_columns_data[i]->push_back(data + offsets_of_aggregate_states[i]);
-    }
-    else
-    {
-        insertAggregatesIntoColumns(data, final_aggregate_columns, data_variants.aggregates_pool);
-        destroyAggregateStates(data); /// Retract data is no longer needed after converted
-    }
+    insertAggregatesIntoColumns(data, final_aggregate_columns, pool.get());
+    destroyAggregateStates(data); /// Retract data is no longer needed after converted
 
-    return finalizeBlock(res_header, std::move(out_cols), final_, rows);
+    return finalizeBlock(res_header, std::move(out_cols), rows);
 }
 
 }

@@ -1,8 +1,10 @@
 #pragma once
 
-#include <IO/S3/Client.h>
-#include <IO/S3/PocoHTTPClient.h>
 #include <IO/HTTPHeaderEntries.h>
+#include <IO/S3/Client.h>
+#include <base/types.h>
+#include <Common/Exception.h>
+#include <IO/S3/PocoHTTPClient.h>
 
 #include <string>
 #include <optional>
@@ -10,10 +12,6 @@
 #include "config.h"
 
 #if USE_AWS_S3
-
-#include <base/types.h>
-#include <Common/Exception.h>
-#include <Common/Throttler_fwd.h>
 
 #include <IO/S3/URI.h>
 #include <IO/S3/Credentials.h>

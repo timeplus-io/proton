@@ -3,6 +3,7 @@
 #include <Dictionaries/IDictionary.h>
 #include <Dictionaries/DictionaryHelpers.h>
 #include <Common/CurrentThread.h>
+#include <Common/logger_useful.h>
 #include <Common/iota.h>
 #include <Common/scope_guard_safe.h>
 #include <Common/ConcurrentBoundedQueue.h>

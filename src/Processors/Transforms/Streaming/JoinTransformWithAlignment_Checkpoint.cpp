@@ -22,7 +22,7 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 
 namespace Streaming
 {
-void JoinTransformWithAlignment::checkpoint(CheckpointContextPtr ckpt_ctx)
+void JoinTransformWithAlignment::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->settings);
     const auto & settings = ckpt_ctx->request_ctx->settings;
@@ -90,7 +90,7 @@ void JoinTransformWithAlignment::checkpoint(CheckpointContextPtr ckpt_ctx)
     ckpt_ctx->coordinator->checkpoint(getLogicID(), std::move(ckpt), ckpt_ctx);
 }
 
-void JoinTransformWithAlignment::recover(CheckpointContextPtr ckpt_ctx)
+void JoinTransformWithAlignment::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     auto ckpt = ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx);
     switch (ckpt->type())

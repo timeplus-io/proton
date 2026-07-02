@@ -65,7 +65,7 @@ Block AggregatingTransformParams::getHeader(const Block & header, const IAggrega
 
 Block AggregatingTransformParams::getHeader() const
 {
-    auto res = aggregator->getHeader(/*final_=*/true);
+    auto res = aggregator->getHeader();
     updateOutputHeader(res, emit_version, emit_changelog);
 
     return res;

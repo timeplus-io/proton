@@ -16,11 +16,13 @@ public:
     /// The constructor is allowed to not set `checksum_`, in that case it will be calculated from the data.
     BackupEntryFromSmallFile(
         const String & file_path_,
+        const ReadSettings & read_settings_,
         const std::optional<UInt128> & checksum_ = {});
 
     BackupEntryFromSmallFile(
         const DiskPtr & disk_,
         const String & file_path_,
+        const ReadSettings & read_settings_,
         const std::optional<UInt128> & checksum_ = {});
 
     String getFilePath() const override { return file_path; }

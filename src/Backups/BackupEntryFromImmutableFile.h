@@ -25,7 +25,7 @@ public:
 
     ~BackupEntryFromImmutableFile() override;
 
-    std::unique_ptr<ReadBuffer> getReadBuffer() const override;
+    std::unique_ptr<ReadBuffer> getReadBuffer(const ReadSettings & read_settings) const override;
     UInt64 getSize() const override;
 
     std::optional<UInt128> getChecksum() const override { return checksum; }

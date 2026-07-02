@@ -275,7 +275,7 @@ void NATSJetstreamSink::onFinish()
     }
 }
 
-void NATSJetstreamSink::checkpoint(CheckpointContextPtr context)
+void NATSJetstreamSink::doCheckpoint(CheckpointContextPtr context)
 {
     /// For synchronous JetStream publish, all messages are acked inline.
     /// But we still verify counts for correctness.
@@ -303,7 +303,7 @@ void NATSJetstreamSink::checkpoint(CheckpointContextPtr context)
 
     state.reset();
 
-    IProcessor::checkpoint(context);
+    IProcessor::doCheckpoint(context);
 }
 
 void NATSJetstreamSink::State::reset()

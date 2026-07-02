@@ -23,6 +23,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
     extern const int LOGICAL_ERROR;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_BY_CLIENT;
 }
 
 static void injectNonConstVirtualColumns(
@@ -152,7 +153,7 @@ ChunkAndProgress MergeTreeSelectProcessor::read()
         }
         catch (const Exception & e)
         {
-            if (e.code() == ErrorCodes::QUERY_WAS_CANCELLED)
+            if (e.code() == ErrorCodes::QUERY_WAS_CANCELLED || e.code() == ErrorCodes::QUERY_WAS_CANCELLED_BY_CLIENT)
                 break;
             throw;
         }

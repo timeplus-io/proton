@@ -13,6 +13,7 @@
 #include <IO/ReadBufferFromS3.h>
 
 #include <IO/S3/Requests.h>
+#include <fmt/ranges.h>
 
 namespace ProfileEvents
 {

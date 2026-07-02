@@ -4,9 +4,13 @@
 #include <Checkpoint/CheckpointSettings.h>
 
 #include <Cluster/Common/TimeWheel/TimerService.h>
+#include <Core/PathSize.h>
 #include <Processors/Executors/PipelineExecutor.h>
 
 #include <absl/container/flat_hash_map.h>
+
+#include <atomic>
+#include <mutex>
 
 namespace DB
 {
@@ -59,9 +63,14 @@ struct CheckpointableQuery
 
     bool is_lightweight = false;
 
-    /// Cached ckpt storage size
-    uint64_t cached_storage_size = 0;
-    int64_t last_cached_ts = 0;
+    mutable std::mutex metrics_cache_mutex;
+    uint64_t cached_storage_size TSA_GUARDED_BY(metrics_cache_mutex) = 0;
+    int64_t last_cached_ts TSA_GUARDED_BY(metrics_cache_mutex) = 0;
+    std::atomic_flag size_refresh_scheduled;
+
+    PathSizes cached_storage_stat TSA_GUARDED_BY(metrics_cache_mutex);
+    int64_t last_stat_cached_ts TSA_GUARDED_BY(metrics_cache_mutex) = 0;
+    std::atomic_flag stat_refresh_scheduled;
 };
-using CheckpointableQueryPtr = std::unique_ptr<CheckpointableQuery>;
+using CheckpointableQueryPtr = std::shared_ptr<CheckpointableQuery>;
 }

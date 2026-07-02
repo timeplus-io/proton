@@ -44,6 +44,8 @@
     M(QueryThread, "Number of query processing threads") \
     M(ReadonlyReplica, "Number of Replicated tables that are currently in readonly state due to re-initialization after ZooKeeper session loss or due to startup without ZooKeeper configured.") \
     M(MemoryTracking, "Total amount of memory (bytes) allocated by the server.") \
+    M(MemoryTrackingUncorrected, "Total amount of memory (bytes) allocated by the server not corrected by RSS.") \
+    M(MergesMutationsMemoryTracking, "Total amount of memory (bytes) allocated by background tasks (merges and mutations).") \
     M(EphemeralNode, "Number of ephemeral nodes hold in ZooKeeper.") \
     M(ZooKeeperSession, "Number of sessions (connections) to ZooKeeper. Should be no more than one, because using more than one connection to ZooKeeper may lead to bugs due to lack of linearizability (stale reads) that ZooKeeper consistency model allows.") \
     M(ZooKeeperWatch, "Number of watches (event subscriptions) in ZooKeeper.") \
@@ -113,6 +115,8 @@
     M(ParallelFormattingOutputFormatThreadsActive, "Number of threads in the ParallelFormattingOutputFormatThreads thread pool running a task.") \
     M(ParallelParsingInputFormatThreads, "Number of threads in the ParallelParsingInputFormat thread pool.") \
     M(ParallelParsingInputFormatThreadsActive, "Number of threads in the ParallelParsingInputFormat thread pool running a task.") \
+    M(ParallelParsingThreads, "Number of threads in the external stream source parallel parsing thread pool.") \
+    M(ParallelParsingThreadsActive, "Number of threads in the external stream source parallel parsing thread pool running a task.") \
     M(MergeTreeBackgroundExecutorThreads, "Number of threads in the MergeTreeBackgroundExecutor thread pool.") \
     M(MergeTreeBackgroundExecutorThreadsActive, "Number of threads in the MergeTreeBackgroundExecutor thread pool running a task.") \
     M(AsynchronousInsertThreads, "Number of threads in the AsynchronousInsert thread pool.") \
@@ -143,8 +147,10 @@
     M(ObjectStorageAzureThreadsActive, "Number of threads in the AzureObjectStorage thread pool running a task.") \
     M(IDiskCopierThreads, "Number of threads for copying data between disks of different types.") \
     M(IDiskCopierThreadsActive, "Number of threads for copying data between disks of different types running a task.") \
-    M(ParquetDecoderThreads, "Number of threads in the ParquetBlockInputFormat thread pool running a task.") \
-    M(ParquetDecoderThreadsActive, "Number of threads in the ParquetBlockInputFormat thread pool.") \
+    M(ParquetDecoderThreads, "Number of threads in the ParquetBlockInputFormat thread pool.") \
+    M(ParquetDecoderThreadsActive, "Number of threads in the ParquetBlockInputFormat thread pool running a task.") \
+    M(ParquetEncoderThreads, "Number of threads in ParquetBlockOutputFormat thread pool.") \
+    M(ParquetEncoderThreadsActive, "Number of threads in ParquetBlockOutputFormat thread pool running a task.") \
     M(DistributedFilesToInsert, "Number of pending files to process for asynchronous insertion into Distributed tables. Number of files for every shard is summed.") \
     M(BrokenDistributedFilesToInsert, "Number of files for asynchronous insertion into Distributed tables that has been marked as broken. This metric will starts from 0 on start. Number of files for every shard is summed.") \
     M(TablesToDropQueueSize, "Number of dropped tables, that are waiting for background data removal.") \
@@ -174,6 +180,11 @@
     M(BackgroundSchedulePoolNativeLogTask, "Number of active threads in the NativeLog schedule pool.") \
     M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
     M(IOUringInFlightEvents, "Number of io_uring SQEs in flight") \
+    M(ReadTaskRequestsSent, "The current number of callback requests in flight from the remote server back to the initiator server to choose the read task (for s3Cluster table function and similar). Measured on the remote server side.") \
+    M(MergeTreeReadTaskRequestsSent, "The current number of callback requests in flight from the remote server back to the initiator server to choose the read task (for MergeTree tables). Measured on the remote server side.") \
+    M(MergeTreeAllRangesAnnouncementsSent, "The current number of announcement being sent in flight from the remote server to the initiator server about the set of data parts (for MergeTree tables). Measured on the remote server side.") \
+    M(CreatedTimersInQueryProfiler, "Number of Created thread local timers in QueryProfiler") \
+    M(ActiveTimersInQueryProfiler, "Number of Active thread local timers in QueryProfiler") \
     M(MemoryAmount, "The size of physical memory (RAM) in bytes") \
     M(NumOfPhysicalCPUCores, "Number of physical CPU cores (vCPU)") \
     M(ByteVectorReallocates, "Number of times ByteVector reallocating memory because insufficient reserve") \
@@ -183,6 +194,21 @@
     M(S3CachedCredentialsProviders, "Total number of cached credentials providers") \
     M(PythonGILWait, "Number of threads currently waiting to enter the Python runtime scope") \
     M(PythonLivePipelines, "Number of active pipeline stages currently holding a reference to the embedded Python runtime (external-stream sources + Python UDF transforms). Grows with concurrent Python-touching queries and should return to zero when idle.") \
+    M(DistrCacheServerConnections, "Number of open connections to ClickHouse server from Distributed Cache") \
+    \
+    M(SchedulerIOReadScheduled, "Number of IO reads are being scheduled currently") \
+    M(SchedulerIOWriteScheduled, "Number of IO writes are being scheduled currently") \
+    \
+    M(StorageConnectionsStored, "Total count of sessions stored in the session pool for storages") \
+    M(StorageConnectionsTotal, "Total count of all sessions: stored in the pool and actively used right now for storages") \
+    \
+    M(DiskConnectionsStored, "Total count of sessions stored in the session pool for disks") \
+    M(DiskConnectionsTotal, "Total count of all sessions: stored in the pool and actively used right now for disks") \
+    \
+    M(HTTPConnectionsStored, "Total count of sessions stored in the session pool for http hosts") \
+    M(HTTPConnectionsTotal, "Total count of all sessions: stored in the pool and actively used right now for http hosts") \
+    \
+    M(AddressesActive, "Total count of addresses which are used for creation connections with connection pools") \
 
 
 namespace CurrentMetrics

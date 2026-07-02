@@ -36,6 +36,8 @@ public:
         return false;
     }
 
+    void cancel() noexcept override { /* no op */ }
+
     StorageID getStorageID() override
     {
         return {"test", name};
@@ -75,8 +77,7 @@ TEST(Executor, RemoveTasks)
     for (size_t i = 0; i < batch; ++i)
         for (size_t j = 0; j < tasks_kinds; ++j)
             ASSERT_TRUE(
-                executor->trySchedule(std::make_shared<FakeExecutableTask>(std::to_string(j)))
-            );
+                executor->trySchedule(std::make_shared<FakeExecutableTask>(std::to_string(j))));
 
     std::vector<std::thread> threads(batch);
 

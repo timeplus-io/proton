@@ -132,25 +132,27 @@
 #    if defined(DEBUG_OR_SANITIZER_BUILD)
         // clang-format off
         #include <base/types.h>
+        #include <stdlib.h>
         namespace DB
         {
-            void abortOnFailedAssertion(const String & description);
+            [[noreturn]] void abortOnFailedAssertion(const String & description);
         }
-        #define chassert(x) static_cast<bool>(x) ? void(0) : ::DB::abortOnFailedAssertion(#x)
-        #ifndef UNREACHABLE
+        #define chassert_1(x, ...) do { static_cast<bool>(x) ? void(0) : ::DB::abortOnFailedAssertion(#x); } while (0)
+        #define chassert_2(x, comment, ...) do { static_cast<bool>(x) ? void(0) : ::DB::abortOnFailedAssertion(comment); } while (0)
         #define UNREACHABLE() abort()
-        #endif
         // clang-format off
     #else
         /// Here sizeof() trick is used to suppress unused warning for result,
         /// since simple "(void)x" will evaluate the expression, while
         /// "sizeof(!(x))" will not.
-        #define NIL_EXPRESSION(x) (void)sizeof(!(x))
-        #define chassert(x) NIL_EXPRESSION(x)
-        #ifndef UNREACHABLE
+        #define chassert_1(x, ...) (void)sizeof(!(x))
+        #define chassert_2(x, comment, ...) (void)sizeof(!(x))
         #define UNREACHABLE() __builtin_unreachable()
-        #endif
     #endif
+        #define CHASSERT_DISPATCH(_1,_2, N,...) N(_1, _2)
+        #define CHASSERT_INVOKE(tuple) CHASSERT_DISPATCH tuple
+        #define chassert(...) CHASSERT_INVOKE((__VA_ARGS__, chassert_2, chassert_1))
+
 #endif
 
 /// Macros for Clang Thread Safety Analysis (TSA). They can be safely ignored by other compilers.

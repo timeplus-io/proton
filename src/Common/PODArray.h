@@ -1,17 +1,16 @@
 #pragma once
 
-#include <base/getPageSize.h>
-#include <boost/noncopyable.hpp>
 #include <Common/Allocator.h>
 #include <Common/BitHelpers.h>
-#include <Common/PODArray_fwd.h>
 #include <Common/memcpySmall.h>
-
-#include <algorithm>
-#include <cassert>
-#include <cstddef>
-#include <cstdlib>
+#include <Common/PODArray_fwd.h>
+#include <base/getPageSize.h>
+#include <boost/noncopyable.hpp>
 #include <cstring>
+#include <cstddef>
+#include <cassert>
+#include <algorithm>
+#include <memory>
 
 #ifndef NDEBUG
 #include <sys/mman.h>
@@ -82,7 +81,6 @@ size_t minimum_memory_for_elements(size_t num_elements, size_t element_size, siz
 /** Base class that depend only on size of element, not on element itself.
   * You can static_cast to this class if you want to insert some data regardless to the actual type T.
   */
-
 template <size_t ELEMENT_SIZE, size_t initial_bytes, typename TAllocator, size_t pad_right_, size_t pad_left_>
 class PODArrayBase : private boost::noncopyable, private TAllocator    /// empty base optimization
 {
@@ -289,7 +287,7 @@ public:
     }
 
     template <typename It1, typename It2>
-    inline void assertNotIntersects(It1 from_begin [[maybe_unused]], It2 from_end [[maybe_unused]])
+    void assertNotIntersects(It1 from_begin [[maybe_unused]], It2 from_end [[maybe_unused]])
     {
 #if !defined(NDEBUG)
         const char * ptr_begin = reinterpret_cast<const char *>(&*from_begin);

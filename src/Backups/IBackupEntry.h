@@ -25,7 +25,7 @@ public:
     virtual std::optional<UInt128> getChecksum() const { return {}; }
 
     /// Returns a read buffer for reading the data.
-    virtual std::unique_ptr<ReadBuffer> getReadBuffer() const = 0;
+    virtual std::unique_ptr<ReadBuffer> getReadBuffer(const ReadSettings & read_settings) const = 0;
 
     virtual String getFilePath() const = 0;
 

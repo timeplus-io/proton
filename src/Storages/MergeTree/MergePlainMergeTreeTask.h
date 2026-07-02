@@ -6,6 +6,7 @@
 #include <Storages/MergeTree/MergeMutateSelectedEntry.h>
 #include <Interpreters/MergeTreeTransactionHolder.h>
 
+
 namespace DB
 {
 
@@ -14,7 +15,6 @@ class StorageMergeTree;
 class MergePlainMergeTreeTask : public IExecutableTask
 {
 public:
-    template <class Callback>
     MergePlainMergeTreeTask(
         StorageMergeTree & storage_,
         StorageMetadataPtr metadata_snapshot_,
@@ -22,14 +22,14 @@ public:
         Names deduplicate_by_columns_,
         MergeMutateSelectedEntryPtr merge_mutate_entry_,
         TableLockHolder table_lock_holder_,
-        Callback && task_result_callback_)
+        IExecutableTask::TaskResultCallback & task_result_callback_)
         : storage(storage_)
         , metadata_snapshot(std::move(metadata_snapshot_))
         , deduplicate(deduplicate_)
         , deduplicate_by_columns(std::move(deduplicate_by_columns_))
         , merge_mutate_entry(std::move(merge_mutate_entry_))
         , table_lock_holder(std::move(table_lock_holder_))
-        , task_result_callback(std::forward<Callback>(task_result_callback_))
+        , task_result_callback(task_result_callback_)
     {
         for (auto & item : merge_mutate_entry->future_part->parts)
             priority += item->getBytesOnDisk();
@@ -46,8 +46,9 @@ public:
         txn = std::move(txn_);
     }
 
-private:
+    void cancel() noexcept override;
 
+private:
     void prepare();
     void finish();
 
@@ -57,7 +58,7 @@ private:
         NEED_EXECUTE,
         NEED_FINISH,
 
-        SUCCESS
+        SUCCESS,
     };
 
     State state{State::NEED_PREPARE};
@@ -79,11 +80,18 @@ private:
     UInt64 priority{0};
 
     std::function<void(const ExecutionStatus &)> write_part_log;
+    std::function<void()> transfer_profile_counters_to_initial_query;
     IExecutableTask::TaskResultCallback task_result_callback;
     MergeTaskPtr merge_task{nullptr};
 
     MergeTreeTransactionHolder txn_holder;
     MergeTreeTransactionPtr txn;
+
+    ProfileEvents::Counters profile_counters;
+
+    ContextMutablePtr task_context;
+
+    ContextMutablePtr createTaskContext() const;
 };
 
 

@@ -93,6 +93,10 @@ SourceColumnsDescription::SourceColumnsDescription(
         {
             add_virtual_col(column, [](const SchemaRecordPtr & record) { return record->getSN(); });
         }
+        else if (column.name == DB::ProtonConsts::RESERVED_SCHEMA_VERSION)
+        {
+            add_virtual_col(column, [](const SchemaRecordPtr & record) { return record->schemaVersion(); });
+        }
         else
         {
             /// FIXME, schema version. For non virtual

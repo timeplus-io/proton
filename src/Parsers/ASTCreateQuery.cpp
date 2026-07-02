@@ -46,7 +46,7 @@ bool ASTStorage::isLocal() const noexcept
     return false;
 }
 
-const char * mapCreateType(ASTCreateQuery::Type type)
+const char * mapCreateType(ASTCreateQuery::Type type, bool is_input)
 {
     switch (type)
     {
@@ -65,7 +65,7 @@ const char * mapCreateType(ASTCreateQuery::Type type)
         case ASTCreateQuery::Type::NullStream:
             return "NULL STREAM";
         case ASTCreateQuery::Type::ExternalStream:
-            return "EXTERNAL STREAM";
+            return is_input ? "INPUT" : "EXTERNAL STREAM";
         case ASTCreateQuery::Type::ExternalTable:
             return "EXTERNAL TABLE";
         case ASTCreateQuery::Type::Dictionary:
@@ -348,7 +348,7 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         /// proton : ends
 
         /// proton: starts.
-        const auto * what = mapCreateType(type);
+        const auto * what = mapCreateType(type, is_input);
 
         settings.ostr
             << (settings.hilite ? hilite_keyword : "")

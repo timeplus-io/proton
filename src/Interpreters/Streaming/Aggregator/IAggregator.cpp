@@ -6,6 +6,7 @@
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/JIT/compileFunction.h>
+#include <Common/logger_useful.h>
 #include <Common/SipHash.h>
 
 namespace DB::Streaming
@@ -126,13 +127,11 @@ Columns IAggregator::materializeKeyColumns(const Columns & columns, ColumnRawPtr
 }
 
 IAggregator::OutputBlockColumns
-IAggregator::prepareOutputBlockColumns(const Block & res_header, const Arenas & aggregates_pools, bool final, size_t rows) const
+IAggregator::prepareOutputBlockColumns(const Block & res_header, const Arenas & aggregates_pools, size_t rows) const
 {
     auto aggregates_size = params->aggregates.size();
     MutableColumns key_columns(params->keys_size);
-    MutableColumns aggregate_columns(aggregates_size);
     MutableColumns final_aggregate_columns(aggregates_size);
-    AggregateColumnsData aggregate_columns_data(aggregates_size);
 
     for (size_t i = 0; i < params->keys_size; ++i)
     {
@@ -142,42 +141,22 @@ IAggregator::prepareOutputBlockColumns(const Block & res_header, const Arenas & 
 
     for (size_t i = 0; i < aggregates_size; ++i)
     {
-        if (!final)
+        final_aggregate_columns[i] = aggregate_functions[i]->getResultType()->createColumn();
+        final_aggregate_columns[i]->reserve(rows);
+
+        if (!aggregates_pools.empty() && aggregate_functions[i]->isState())
         {
-            const auto & aggregate_column_name = params->aggregates[i].column_name;
-            aggregate_columns[i] = res_header.getByName(aggregate_column_name).type->createColumn();
+            auto callback = [&](IColumn & column) {
+                /// The ColumnAggregateFunction column captures the shared ownership of the arena with aggregate function states.
+                if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(&column))
+                {
+                    for (auto & aggregates_pool : aggregates_pools)
+                        column_aggregate_func->addArena(aggregates_pool);
+                }
+            };
 
-            /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
-            ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
-
-            /// Streaming aggregating always keep aggregated state.
-            column_aggregate_func.setKeepState(true);
-
-            /// Add arenas to ColumnAggregateFunction, which can result in moving ownership to it if reference count
-            /// get dropped in other places
-            for (const auto & pool : aggregates_pools)
-                column_aggregate_func.addArena(pool);
-
-            aggregate_columns_data[i] = &column_aggregate_func.getData();
-            aggregate_columns_data[i]->reserve(rows);
-        }
-        else
-        {
-            final_aggregate_columns[i] = aggregate_functions[i]->getResultType()->createColumn();
-            final_aggregate_columns[i]->reserve(rows);
-
-            if (aggregate_functions[i]->isState())
-            {
-                auto callback = [&](IColumn & column) {
-                    /// The ColumnAggregateFunction column captures the shared ownership of the arena with aggregate function states.
-                    if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(&column))
-                        for (const auto & pool : aggregates_pools)
-                            column_aggregate_func->addArena(pool);
-                };
-
-                callback(*final_aggregate_columns[i]);
-                final_aggregate_columns[i]->forEachMutableSubcolumnRecursively(callback);
-            }
+            callback(*final_aggregate_columns[i]);
+            final_aggregate_columns[i]->forEachMutableSubcolumnRecursively(callback);
         }
     }
 
@@ -189,15 +168,19 @@ IAggregator::prepareOutputBlockColumns(const Block & res_header, const Arenas & 
     return {
         .key_columns = std::move(key_columns),
         .raw_key_columns = std::move(raw_key_columns),
-        .aggregate_columns = std::move(aggregate_columns),
         .final_aggregate_columns = std::move(final_aggregate_columns),
-        .aggregate_columns_data = std::move(aggregate_columns_data),
     };
 }
 
-Block IAggregator::finalizeBlock(const Block & res_header, OutputBlockColumns && out_cols, bool final, size_t rows) const
+IAggregator::OutputBlockColumns
+IAggregator::prepareOutputBlockColumns(const Block & res_header, const ArenaPtr & aggregates_pool, size_t rows) const
 {
-    auto && [key_columns, raw_key_columns, aggregate_columns, final_aggregate_columns, aggregate_columns_data] = out_cols;
+    return prepareOutputBlockColumns(res_header, aggregates_pool ? Arenas{aggregates_pool} : Arenas{}, rows);
+}
+
+Block IAggregator::finalizeBlock(const Block & res_header, OutputBlockColumns && out_cols, size_t rows) const
+{
+    auto && [key_columns, raw_key_columns, final_aggregate_columns] = out_cols;
 
     Block res = res_header.cloneEmpty();
 
@@ -208,10 +191,7 @@ Block IAggregator::finalizeBlock(const Block & res_header, OutputBlockColumns &&
     for (size_t i = 0; i < aggregates_size; ++i)
     {
         const auto & aggregate_column_name = params->aggregates[i].column_name;
-        if (final)
-            res.getByName(aggregate_column_name).column = std::move(final_aggregate_columns[i]);
-        else
-            res.getByName(aggregate_column_name).column = std::move(aggregate_columns[i]);
+        res.getByName(aggregate_column_name).column = std::move(final_aggregate_columns[i]);
     }
 
     /// Change the size of the columns-constants in the block.
@@ -249,12 +229,17 @@ ALWAYS_INLINE void IAggregator::copyAggregateStates(AggregateDataPtr dst, ConstA
         aggregate_functions[i]->copy(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
 }
 
-ALWAYS_INLINE void IAggregator::doDestroyAggregateStates(AggregateDataPtr place) const
+ALWAYS_INLINE void IAggregator::doDestroyAggregateStates(AggregateDataPtr place, bool skip_state_func) const
 {
     if (!all_aggregates_has_trivial_destructor && place)
     {
         for (size_t j = 0; j < params->aggregates_size; ++j)
+        {
+            if (skip_state_func && aggregate_functions[j]->isState())
+                continue;
+
             aggregate_functions[j]->destroy(place + offsets_of_aggregate_states[j]);
+        }
     }
 }
 

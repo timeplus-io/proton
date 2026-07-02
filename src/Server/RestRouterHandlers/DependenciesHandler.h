@@ -48,7 +48,7 @@ private:
     void loadTasks(const String & ns, const String & name) const;
     void fillStreamsType() const;
 
-    String buildResponse() const;
+    String buildResponse(const String & filter_database, const String & filter_stream) const;
 
     /// Store and pass data in loading dependencies. Mark 'mutable' for executeGet() is const
     mutable DependenciesPtr dependencies;

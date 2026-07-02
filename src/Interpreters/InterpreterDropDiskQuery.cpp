@@ -5,6 +5,7 @@
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Parsers/ASTDropDiskQuery.h>
+#include <fmt/ranges.h>
 
 
 namespace DB
@@ -13,6 +14,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_DELETE_DISK;
+extern const int UNKNOWN_DISK;
 }
 
 BlockIO InterpreterDropDiskQuery::execute()
@@ -32,6 +34,23 @@ BlockIO InterpreterDropDiskQuery::execute()
     /// Check if the storage policy is still in use
     if (drop_disk_query.name == "default")
         throw Exception(ErrorCodes::CANNOT_DELETE_DISK, "Cannot drop 'default' disk");
+
+    /// Check if the disk exists
+    try
+    {
+        (void)current_context->getDisk(drop_disk_query.name);
+    }
+    catch (const Exception & e)
+    {
+        if (e.code() == ErrorCodes::UNKNOWN_DISK)
+        {
+            if (!drop_disk_query.if_exists)
+                throw Exception(ErrorCodes::UNKNOWN_DISK, "Cannot drop `{}` disk, it does not exist", drop_disk_query.name);
+
+            return {};
+        }
+        throw;
+    }
 
     const auto used_by = DatabaseCatalog::instance().getStoragesByDisk(drop_disk_query.name);
     if (used_by.size() > 0)

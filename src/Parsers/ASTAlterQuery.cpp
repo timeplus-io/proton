@@ -588,6 +588,8 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
         {
             if (is_view)
                 settings.ostr << "ALTER VIEW ";
+            else if (is_input)
+                settings.ostr << "ALTER INPUT ";
             else
                 settings.ostr << "ALTER STREAM ";
             break;

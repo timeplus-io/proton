@@ -140,14 +140,10 @@ void ReplxxLineReader::setLastIsDelimiter(bool flag)
     replxx_last_is_delimiter = flag;
 }
 
-ReplxxLineReader::ReplxxLineReader(
-    Suggest & suggest,
-    const String & history_file_path_,
-    bool multiline_,
-    Patterns extenders_,
-    Patterns delimiters_,
-    replxx::Replxx::highlighter_callback_t highlighter_)
-    : LineReader(history_file_path_, multiline_, std::move(extenders_), std::move(delimiters_)), highlighter(std::move(highlighter_))
+ReplxxLineReader::ReplxxLineReader(ReplxxLineReader::Options && options)
+    : LineReader(options.history_file_path, options.multiline, std::move(options.extenders), std::move(options.delimiters))
+    , rx(options.input_stream, options.output_stream, options.in_fd, options.out_fd, options.err_fd)
+    , highlighter(std::move(options.highlighter))
     , editor(getEditor())
 {
     using namespace std::placeholders;
@@ -185,7 +181,7 @@ ReplxxLineReader::ReplxxLineReader(
 
     rx.install_window_change_handler();
 
-    auto callback = [&suggest] (const String & context, size_t context_size)
+    auto callback = [&suggest = options.suggest] (const String & context, size_t context_size)
     {
         return suggest.getCompletions(context, context_size);
     };

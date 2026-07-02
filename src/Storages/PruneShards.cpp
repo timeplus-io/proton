@@ -398,7 +398,7 @@ std::vector<UInt64> skipUnusedShards(
             logger,
             "Number of values for sharding key exceeds optimize_skip_unused_shards_limit={}, "
             "try to increase it, but note that this may increase query processing time.",
-            context->getSettingsRef().optimize_skip_unused_shards_limit);
+            context->getSettingsRef().optimize_skip_unused_shards_limit.value);
 
         return all_shards;
     }

@@ -9,6 +9,7 @@
 #include <Storages/StorageFactory.h>
 #include <Formats/FormatFactory.h>
 #include <filesystem>
+#include <fmt/ranges.h>
 
 
 namespace DB

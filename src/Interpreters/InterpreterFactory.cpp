@@ -106,6 +106,7 @@
 #include <Interpreters/InterpreterDropDiskQuery.h>
 #include <Interpreters/InterpreterDropFormatSchemaQuery.h>
 #include <Interpreters/InterpreterDropStoragePolicyQuery.h>
+#include <Interpreters/InterpreterShowCreateDiskQuery.h>
 #include <Interpreters/InterpreterDropTaskQuery.h>
 #include <Interpreters/InterpreterShowAlertsQuery.h>
 #include <Interpreters/InterpreterShowCreateAlertQuery.h>
@@ -127,6 +128,7 @@
 #include <Parsers/ASTDropDiskQuery.h>
 #include <Parsers/ASTDropFormatSchemaQuery.h>
 #include <Parsers/ASTDropStoragePolicyQuery.h>
+#include <Parsers/ASTShowCreateDiskQuery.h>
 #include <Parsers/ASTDropTaskQuery.h>
 #include <Parsers/ASTShowAlertsQuery.h>
 #include <Parsers/ASTShowCreateAlertQuery.h>
@@ -400,6 +402,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTShowDisksQuery>())
     {
         return std::make_unique<InterpreterShowDisksQuery>(query, context);
+    }
+    else if (query->as<ASTShowCreateDiskQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateDiskQuery>(query, context);
     }
     else if (query->as<ASTCreateStoragePolicyQuery>())
     {

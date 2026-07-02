@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config.h"
+#include <Poco/Net/StreamSocket.h>
 
 #include <Client/IServerConnection.h>
 #include <Compression/ICompressionCodec.h>
@@ -12,9 +12,9 @@
 #include <Common/callOnce.h>
 #include <Common/logger_useful.h>
 
-#include <Poco/Net/StreamSocket.h>
-
 #include <optional>
+
+#include "config.h"
 
 namespace DB
 {
@@ -34,7 +34,6 @@ using Connections = std::vector<ConnectionPtr>;
 class NativeReader;
 class NativeWriter;
 
-
 /** Connection with database server, to use by client.
   * How to use - see Core/Protocol.h
   * (Implementation of server end - see Server/TCPHandler.h)
@@ -45,12 +44,9 @@ class NativeWriter;
 class Connection : public IServerConnection
 {
 public:
-    Connection(
-        const String & host_,
-        UInt16 port_,
+    Connection(const String & host_, UInt16 port_,
         const String & default_database_,
-        const String & user_,
-        const String & password_,
+        const String & user_, const String & password_,
         const String & quota_key_,
         const String & cluster_,
         const String & cluster_secret_,
@@ -70,18 +66,20 @@ public:
     static ServerConnectionPtr createConnection(const ConnectionParameters & parameters, ContextPtr context);
 
     /// Set throttler of network traffic. One throttler could be used for multiple connections to limit total traffic.
-    void setThrottler(const ThrottlerPtr & throttler_) override { throttler = throttler_; }
+    void setThrottler(const ThrottlerPtr & throttler_) override
+    {
+        throttler = throttler_;
+    }
 
     /// Change default database. Changes will take effect on next reconnect.
     void setDefaultDatabase(const String & database) override;
 
-    void getServerVersion(
-        const ConnectionTimeouts & timeouts,
-        String & name,
-        UInt64 & version_major,
-        UInt64 & version_minor,
-        UInt64 & version_patch,
-        UInt64 & revision) override;
+    void getServerVersion(const ConnectionTimeouts & timeouts,
+                          String & name,
+                          UInt64 & version_major,
+                          UInt64 & version_minor,
+                          UInt64 & version_patch,
+                          UInt64 & revision) override;
 
     UInt64 getServerRevision(const ConnectionTimeouts & timeouts) override;
 
@@ -100,16 +98,16 @@ public:
         const ConnectionTimeouts & timeouts,
         const String & query,
         const NameToNameMap & query_parameters,
-        const String & query_id_ /* = "" */,
-        UInt64 stage /* = QueryProcessingStage::Complete */,
-        const Settings * settings /* = nullptr */,
-        const ClientInfo * client_info /* = nullptr */,
-        bool with_pending_data /* = false */,
-        std::function<void(const Progress &)> process_progress_callback /* = {} */) override;
+        const String & query_id_/* = "" */,
+        UInt64 stage/* = QueryProcessingStage::Complete */,
+        const Settings * settings/* = nullptr */,
+        const ClientInfo * client_info/* = nullptr */,
+        bool with_pending_data/* = false */,
+        std::function<void(const Progress &)> process_progress_callback) override;
 
     void sendCancel() override;
 
-    void sendData(const Block & block, const String & name /* = "" */, bool scalar /* = false */) override;
+    void sendData(const Block & block, const String & name/* = "" */, bool scalar/* = false */) override;
 
     /// This overloaded sendData allows the caller to provide a type name mapping to get the proper ClicHouse type names for proton types.
     void sendData(
@@ -119,11 +117,11 @@ public:
 
     void sendExternalTablesData(ExternalTablesData & data) override;
 
-    bool poll(size_t timeout_microseconds /* = 0 */) override;
+    bool poll(size_t timeout_microseconds/* = 0 */) override;
 
     bool hasReadPendingData() const override;
 
-    std::optional<UInt64> checkPacket(size_t timeout_microseconds /* = 0*/) override;
+    std::optional<UInt64> checkPacket(size_t timeout_microseconds/* = 0*/) override;
 
     Packet receivePacket() override;
 
@@ -131,10 +129,9 @@ public:
 
     bool isConnected() const override { return connected; }
 
-    bool checkConnected() override { return connected && ping(); }
+    bool checkConnected(const ConnectionTimeouts & timeouts) override { return isConnected() && ping(timeouts); }
 
     void disconnect() override;
-
 
     /// Send prepared block of data (serialized and, if need, compressed), that will be read from 'input'.
     /// You could pass size of serialized/compressed block.
@@ -146,7 +143,8 @@ public:
     /// Send parts' uuids to excluded them from query processing
     void sendIgnoredPartUUIDs(const std::vector<UUID> & uuids);
 
-    TablesStatusResponse getTablesStatus(const ConnectionTimeouts & timeouts, const TablesStatusRequest & request);
+    TablesStatusResponse getTablesStatus(const ConnectionTimeouts & timeouts,
+                                         const TablesStatusRequest & request);
 
     size_t outBytesCount() const { return out ? out->count() : 0; }
     size_t inBytesCount() const { return in ? in->count() : 0; }
@@ -235,11 +233,16 @@ private:
     class LoggerWrapper
     {
     public:
-        explicit LoggerWrapper(Connection & parent_) : log(nullptr), parent(parent_) { }
+        explicit LoggerWrapper(Connection & parent_)
+            : log(nullptr), parent(parent_)
+        {
+        }
 
         LoggerPtr get()
         {
-            callOnce(log_initialized, [&] { log = getLogger("Connection (" + parent.getDescription() + ")"); });
+            callOnce(log_initialized, [&] {
+                log = getLogger("Connection (" + parent.getDescription() + ")");
+            });
 
             return log;
         }
@@ -256,13 +259,17 @@ private:
 
     void connect(const ConnectionTimeouts & timeouts);
     void sendHello();
+
+    void cancel() noexcept;
+    void reset() noexcept;
+
     void sendAddendum();
     void receiveHello();
 
 #if USE_SSL
     void sendClusterNameAndSalt();
 #endif
-    bool ping();
+    bool ping(const ConnectionTimeouts & timeouts);
 
     Block receiveData();
     Block receiveLogData();
@@ -281,7 +288,7 @@ private:
     void initBlockLogsInput();
     void initBlockProfileEventsInput();
 
-    [[noreturn]] void throwUnexpectedPacket(UInt64 packet_type, const char * expected) const;
+    [[noreturn]] void throwUnexpectedPacket(UInt64 packet_type, const char * expected);
 };
 
 class AsyncCallbackSetter
@@ -292,8 +299,10 @@ public:
         connection->setAsyncCallback(std::move(async_callback));
     }
 
-    ~AsyncCallbackSetter() { connection->setAsyncCallback({}); }
-
+    ~AsyncCallbackSetter()
+    {
+        connection->setAsyncCallback({});
+    }
 private:
     Connection * connection;
 };

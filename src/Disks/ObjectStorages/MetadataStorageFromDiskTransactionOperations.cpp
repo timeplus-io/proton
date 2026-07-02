@@ -62,7 +62,7 @@ UnlinkFileOperation::UnlinkFileOperation(const std::string & path_, IDisk & disk
 
 void UnlinkFileOperation::execute(std::unique_lock<SharedMutex> &)
 {
-    auto buf = disk.readFile(path);
+    auto buf = disk.readFile(path, ReadSettings{});
     readStringUntilEOF(prev_data, *buf);
     disk.removeFile(path);
 }
@@ -266,7 +266,7 @@ void WriteFileOperation::execute(std::unique_lock<SharedMutex> &)
     if (disk.exists(path))
     {
         existed = true;
-        auto buf = disk.readFile(path);
+        auto buf = disk.readFile(path, ReadSettings{});
         readStringUntilEOF(prev_data, *buf);
     }
     auto buf = disk.writeFile(path);

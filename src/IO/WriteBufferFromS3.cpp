@@ -11,7 +11,6 @@
 #include <Common/Throttler.h>
 #include <Interpreters/Cache/FileCache.h>
 
-#include <IO/ResourceGuard.h>
 #include <IO/WriteHelpers.h>
 #include <IO/S3Common.h>
 #include <IO/S3/Requests.h>
@@ -19,6 +18,7 @@
 #include <IO/S3/BlobStorageLogWriter.h>
 
 #include <utility>
+#include <fmt/ranges.h>
 
 
 namespace ProfileEvents
@@ -39,9 +39,6 @@ namespace ProfileEvents
     extern const Event DiskS3AbortMultipartUpload;
     extern const Event DiskS3UploadPart;
     extern const Event DiskS3PutObject;
-
-    extern const Event RemoteWriteThrottlerBytes;
-    extern const Event RemoteWriteThrottlerSleepMicroseconds;
 }
 
 namespace DB
@@ -109,10 +106,10 @@ WriteBufferFromS3::WriteBufferFromS3(
           std::make_unique<TaskTracker>(
               std::move(schedule_),
               upload_settings.max_inflight_parts_for_one_file,
-              limitedLog))
+              limited_log))
     , blob_log(std::move(blob_log_))
 {
-    LOG_TRACE(limitedLog, "Create WriteBufferFromS3, {}", getShortLogDetails());
+    LOG_TRACE(limited_log, "Create WriteBufferFromS3, {}", getShortLogDetails());
 
     allocateBuffer();
 }
@@ -150,7 +147,7 @@ void WriteBufferFromS3::preFinalize()
     if (is_prefinalized)
         return;
 
-    LOG_TEST(limitedLog, "preFinalize WriteBufferFromS3. {}", getShortLogDetails());
+    LOG_TEST(limited_log, "preFinalize WriteBufferFromS3. {}", getShortLogDetails());
 
     /// This function should not be run again if an exception has occurred
     is_prefinalized = true;
@@ -189,7 +186,9 @@ void WriteBufferFromS3::preFinalize()
 
 void WriteBufferFromS3::finalizeImpl()
 {
-    LOG_TRACE(limitedLog, "finalizeImpl WriteBufferFromS3. {}.", getShortLogDetails());
+    LOG_TRACE(limited_log, "finalizeImpl WriteBufferFromS3. {}.", getShortLogDetails());
+
+    WriteBufferFromFileBase::finalizeImpl();
 
     if (!is_prefinalized)
         preFinalize();
@@ -220,6 +219,7 @@ void WriteBufferFromS3::finalizeImpl()
 
 void WriteBufferFromS3::cancelImpl() noexcept
 {
+    WriteBufferFromFileBase::cancelImpl();
     tryToAbortMultipartUpload();
 }
 
@@ -254,14 +254,14 @@ void WriteBufferFromS3::tryToAbortMultipartUpload() noexcept
     }
     catch (...)
     {
-        LOG_ERROR(log, "Multipart upload hasn't aborted. {}", getVerboseLogDetails());
+        LOG_ERROR(log, "Multipart upload hasn't been aborted. {}", getVerboseLogDetails());
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
 }
 
 WriteBufferFromS3::~WriteBufferFromS3()
 {
-    LOG_TRACE(limitedLog, "Close WriteBufferFromS3. {}.", getShortLogDetails());
+    LOG_TRACE(limited_log, "Close WriteBufferFromS3. {}.", getShortLogDetails());
 
     if (canceled)
     {
@@ -295,9 +295,6 @@ WriteBufferFromS3::~WriteBufferFromS3()
 
 void WriteBufferFromS3::hidePartialData()
 {
-    if (write_settings.remote_throttler)
-        write_settings.remote_throttler->add(offset(), ProfileEvents::RemoteWriteThrottlerBytes, ProfileEvents::RemoteWriteThrottlerSleepMicroseconds);
-
     chassert(memory.size() >= hidden_size + offset());
 
     hidden_size += offset();
@@ -385,7 +382,7 @@ void WriteBufferFromS3::writeMultipartUpload()
 
 void WriteBufferFromS3::createMultipartUpload()
 {
-    LOG_TEST(limitedLog, "Create multipart upload. {}", getShortLogDetails());
+    LOG_TEST(limited_log, "Create multipart upload. {}", getShortLogDetails());
 
     DB::S3::CreateMultipartUploadRequest req;
 
@@ -427,18 +424,18 @@ void WriteBufferFromS3::createMultipartUpload()
         throw Exception(ErrorCodes::S3_ERROR, "Invalid CreateMultipartUpload result: missing UploadId.");
     }
 
-    LOG_TRACE(limitedLog, "Multipart upload was created. {}", getShortLogDetails());
+    LOG_TRACE(limited_log, "Multipart upload was created. {}", getShortLogDetails());
 }
 
 void WriteBufferFromS3::abortMultipartUpload()
 {
     if (multipart_upload_id.empty())
     {
-        LOG_WARNING(log, "Nothing to abort. {}", getVerboseLogDetails());
+        LOG_INFO(log, "Nothing to abort. {}", getVerboseLogDetails());
         return;
     }
 
-    LOG_WARNING(log, "Abort multipart upload. {}", getVerboseLogDetails());
+    LOG_INFO(log, "Abort multipart upload. {}", getVerboseLogDetails());
 
     S3::AbortMultipartUploadRequest req;
     req.SetBucket(bucket);
@@ -465,7 +462,7 @@ void WriteBufferFromS3::abortMultipartUpload()
         throw S3Exception(outcome.GetError().GetMessage(), outcome.GetError().GetErrorType());
     }
 
-    LOG_WARNING(log, "Multipart upload has aborted successfully. {}", getVerboseLogDetails());
+    LOG_INFO(log, "Multipart upload has been aborted successfully. {}", getVerboseLogDetails());
 }
 
 S3::UploadPartRequest WriteBufferFromS3::getUploadRequest(size_t part_number, PartData & data)
@@ -499,13 +496,13 @@ void WriteBufferFromS3::writePart(WriteBufferFromS3::PartData && data)
 {
     if (data.data_size == 0)
     {
-        LOG_TEST(limitedLog, "Skipping writing part as empty {}", getShortLogDetails());
+        LOG_TEST(limited_log, "Skipping writing part as empty {}", getShortLogDetails());
         return;
     }
 
     multipart_tags.push_back({});
     size_t part_number = multipart_tags.size();
-    LOG_TEST(limitedLog, "writePart {}, part size {}, part number {}", getShortLogDetails(), data.data_size, part_number);
+    LOG_TEST(limited_log, "writePart {}, part size {}, part number {}", getShortLogDetails(), data.data_size, part_number);
 
     if (multipart_upload_id.empty())
         throw Exception(
@@ -543,7 +540,7 @@ void WriteBufferFromS3::writePart(WriteBufferFromS3::PartData && data)
     {
         auto & data_size = std::get<1>(*worker_data).data_size;
 
-        LOG_TEST(limitedLog, "Write part started {}, part size {}, part number {}",
+        LOG_TEST(limited_log, "Write part started {}, part size {}, part number {}",
                  getShortLogDetails(), data_size, part_number);
 
         ProfileEvents::increment(ProfileEvents::S3UploadPart);
@@ -552,12 +549,12 @@ void WriteBufferFromS3::writePart(WriteBufferFromS3::PartData && data)
 
         auto & request = std::get<0>(*worker_data);
 
-        ResourceCost cost = request.GetContentLength();
-        ResourceGuard rlock(write_settings.resource_link, cost);
+        CurrentThread::IOSchedulingScope io_scope(write_settings.io_scheduling);
+        CurrentThread::WriteThrottlingScope write_throttling_scope(write_settings.remote_throttler);
+
         Stopwatch watch;
         auto outcome = client_ptr->UploadPart(request);
         watch.stop();
-        rlock.unlock(); // Avoid acquiring other locks under resource lock
 
         ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Microseconds, watch.elapsedMicroseconds());
 
@@ -571,13 +568,12 @@ void WriteBufferFromS3::writePart(WriteBufferFromS3::PartData && data)
         if (!outcome.IsSuccess())
         {
             ProfileEvents::increment(ProfileEvents::WriteBufferFromS3RequestsErrors, 1);
-            write_settings.resource_link.accumulate(cost); // We assume no resource was used in case of failure
             throw S3Exception(outcome.GetError().GetMessage(), outcome.GetError().GetErrorType());
         }
 
         multipart_tags[part_number-1] = outcome.GetResult().GetETag();
 
-        LOG_TEST(limitedLog, "Write part succeeded {}, part size {}, part number {}, etag {}",
+        LOG_TEST(limited_log, "Write part succeeded {}, part size {}, part number {}, etag {}",
                  getShortLogDetails(), data_size, part_number, multipart_tags[part_number-1]);
     };
 
@@ -586,7 +582,7 @@ void WriteBufferFromS3::writePart(WriteBufferFromS3::PartData && data)
 
 void WriteBufferFromS3::completeMultipartUpload()
 {
-    LOG_TEST(limitedLog, "Completing multipart upload. {}, Parts: {}", getShortLogDetails(), multipart_tags.size());
+    LOG_TEST(limited_log, "Completing multipart upload. {}, Parts: {}", getShortLogDetails(), multipart_tags.size());
 
     if (multipart_tags.empty())
         throw Exception(
@@ -638,7 +634,7 @@ void WriteBufferFromS3::completeMultipartUpload()
 
         if (outcome.IsSuccess())
         {
-            LOG_TRACE(limitedLog, "Multipart upload has completed. {}, Parts: {}", getShortLogDetails(), multipart_tags.size());
+            LOG_TRACE(limited_log, "Multipart upload has completed. {}, Parts: {}", getShortLogDetails(), multipart_tags.size());
             return;
         }
 
@@ -690,14 +686,14 @@ S3::PutObjectRequest WriteBufferFromS3::getPutRequest(PartData & data)
 
 void WriteBufferFromS3::makeSinglepartUpload(WriteBufferFromS3::PartData && data)
 {
-    LOG_TEST(limitedLog, "Making single part upload. {}, size {}", getShortLogDetails(), data.data_size);
+    LOG_TEST(limited_log, "Making single part upload. {}, size {}", getShortLogDetails(), data.data_size);
 
     auto req = getPutRequest(data);
     auto worker_data = std::make_shared<std::tuple<S3::PutObjectRequest, WriteBufferFromS3::PartData>>(std::move(req), std::move(data));
 
     auto upload_worker = [&, worker_data] ()
     {
-        LOG_TEST(limitedLog, "writing single part upload started. {}", getShortLogDetails());
+        LOG_TEST(limited_log, "writing single part upload started. {}", getShortLogDetails());
 
         auto & request = std::get<0>(*worker_data);
         size_t content_length = request.GetContentLength();
@@ -709,12 +705,12 @@ void WriteBufferFromS3::makeSinglepartUpload(WriteBufferFromS3::PartData && data
             if (client_ptr->isClientForDisk())
                 ProfileEvents::increment(ProfileEvents::DiskS3PutObject);
 
-            ResourceCost cost = request.GetContentLength();
-            ResourceGuard rlock(write_settings.resource_link, cost);
+            CurrentThread::IOSchedulingScope io_scope(write_settings.io_scheduling);
+            CurrentThread::WriteThrottlingScope write_throttling_scope(write_settings.remote_throttler);
+
             Stopwatch watch;
             auto outcome = client_ptr->PutObject(request);
             watch.stop();
-            rlock.unlock();
 
             ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Microseconds, watch.elapsedMicroseconds());
             if (blob_log)
@@ -723,12 +719,11 @@ void WriteBufferFromS3::makeSinglepartUpload(WriteBufferFromS3::PartData && data
 
             if (outcome.IsSuccess())
             {
-                LOG_TRACE(limitedLog, "Single part upload has completed. {}, size {}", getShortLogDetails(), content_length);
+                LOG_TRACE(limited_log, "Single part upload has completed. {}, size {}", getShortLogDetails(), content_length);
                 return;
             }
 
             ProfileEvents::increment(ProfileEvents::WriteBufferFromS3RequestsErrors, 1);
-            write_settings.resource_link.accumulate(cost); // We assume no resource was used in case of failure
 
             if (outcome.GetError().GetErrorType() == Aws::S3::S3Errors::NO_SUCH_KEY)
             {

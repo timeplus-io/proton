@@ -3,6 +3,7 @@
 #include <Bootstrap/Globals.h>
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Cluster/NativeLog/NativeLog.h>
+#include <Core/SettingsFields.h>
 #include <Databases/DDLDependencyVisitor.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -15,6 +16,10 @@
 #include <Storages/StorageNull.h>
 #include <Storages/StorageView.h>
 #include <Storages/Stream/StorageStream.h>
+#include <Common/FieldVisitorToString.h>
+#include <Common/LogstoreRetentionSettings.h>
+
+#include <limits>
 
 namespace DB
 {
@@ -89,7 +94,11 @@ bool DatabaseAtomic::renameTableInMemory(
 }
 
 void DatabaseAtomic::renameTableInMetaStore(
-    const ContextPtr & local_context, StoragePtr table, [[maybe_unused]] const String & table_name, const String & to_table_name, [[maybe_unused]] bool /*dictionary*/)
+    const ContextPtr & local_context,
+    StoragePtr table,
+    [[maybe_unused]] const String & table_name,
+    const String & to_table_name,
+    [[maybe_unused]] bool /*dictionary*/)
 {
     chassert(!table->isLocal());
 
@@ -328,8 +337,8 @@ void DatabaseAtomic::createTableInMetaStore(
     UInt32 flush_interval_ms = static_cast<UInt32>(log_config->flush_interval_ms);
 
     auto apply_settings = [&retention_ms, &retention_bytes, &flush_interval_entries, &flush_interval_ms](auto settings) {
-        retention_ms = settings->logstore_retention_ms.value;
-        retention_bytes = settings->logstore_retention_bytes.value;
+        retention_ms = encodeLogstoreRetentionForMetastore(settings->logstore_retention_ms.value);
+        retention_bytes = encodeLogstoreRetentionForMetastore(settings->logstore_retention_bytes.value);
         flush_interval_entries = static_cast<UInt32>(settings->logstore_flush_messages);
         flush_interval_ms = static_cast<UInt32>(settings->logstore_flush_ms);
     };
@@ -355,10 +364,80 @@ void DatabaseAtomic::createTableInMetaStore(
                     flush_interval_entries = static_cast<UInt32>(field->get<UInt32>());
 
                 if (const auto * field = create.storage_settings->changes.tryGet("logstore_retention_ms"))
-                    retention_ms = field->get<UInt64>();
+                {
+                    try
+                    {
+                        /// `0` means "inherit defaults", negative values (e.g. -1) mean "no retention limit" and are stored as `UINT64_MAX`.
+                        constexpr auto int64_max_as_u64 = static_cast<UInt64>(std::numeric_limits<Int64>::max());
+
+                        if (field->getType() == Field::Types::UInt64)
+                        {
+                            const auto value = field->safeGet<UInt64>();
+                            if (value == 0)
+                                retention_ms = 0;
+                            else if (value == kLogstoreRetentionNoLimit)
+                                throw Exception(
+                                    ErrorCodes::INVALID_SETTING_VALUE,
+                                    "Invalid value for setting 'logstore_retention_ms': {}. Reserved value",
+                                    applyVisitor(FieldVisitorToString(), *field));
+                            else if (value > int64_max_as_u64)
+                                throw Exception(
+                                    ErrorCodes::INVALID_SETTING_VALUE,
+                                    "Invalid value for setting 'logstore_retention_ms': {}. Value is out of range",
+                                    applyVisitor(FieldVisitorToString(), *field));
+                            else
+                                retention_ms = value;
+                        }
+                        else
+                        {
+                            retention_ms = encodeLogstoreRetentionForMetastore(SettingFieldInt64(*field).value);
+                        }
+                    }
+                    catch (const Exception & e)
+                    {
+                        if (e.code() == ErrorCodes::INVALID_SETTING_VALUE)
+                            throw;
+                        throw Exception(
+                            ErrorCodes::INVALID_SETTING_VALUE,
+                            "Invalid value for setting 'logstore_retention_ms': {}. Expected an integer value in milliseconds",
+                            applyVisitor(FieldVisitorToString(), *field));
+                    }
+                }
 
                 if (const auto * field = create.storage_settings->changes.tryGet("logstore_retention_bytes"))
-                    retention_bytes = field->get<UInt64>();
+                {
+                    try
+                    {
+                        /// `0` means "inherit defaults", negative values (e.g. -1) mean "no retention limit" and are stored as `UINT64_MAX`.
+                        if (field->getType() == Field::Types::UInt64)
+                        {
+                            const auto value = field->safeGet<UInt64>();
+                            if (value == 0)
+                                retention_bytes = 0;
+                            else if (value == kLogstoreRetentionNoLimit)
+                                throw Exception(
+                                    ErrorCodes::INVALID_SETTING_VALUE,
+                                    "Invalid value for setting 'logstore_retention_bytes': {}. Reserved value",
+                                    applyVisitor(FieldVisitorToString(), *field));
+                            else
+                                retention_bytes = value;
+                        }
+                        else
+                        {
+                            retention_bytes = encodeLogstoreRetentionForMetastore(SettingFieldInt64(*field).value);
+                        }
+                    }
+                    catch (const Exception & e)
+                    {
+                        if (e.code() == ErrorCodes::INVALID_SETTING_VALUE)
+                            throw;
+                        throw Exception(
+                            ErrorCodes::INVALID_SETTING_VALUE,
+                            "Invalid value for setting 'logstore_retention_bytes': {}. Expected an integer value (supports size suffixes "
+                            "like K, M, G)",
+                            applyVisitor(FieldVisitorToString(), *field));
+                    }
+                }
             }
         }
     }

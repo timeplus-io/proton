@@ -1,0 +1,384 @@
+tt append left anti append
+2
+4
+tt append anti vkv
+2
+4
+tt append left anti mut
+2
+4
+tt vkv anti append
+2
+4
+tt vkv left anti vkv
+2
+4
+tt vkv anti mut
+2
+4
+tt mut left anti append
+2
+4
+tt mut anti vkv
+2
+4
+tt mut left anti mut
+2
+4
+st append left anti append
+2
+4
+st append left anti vkv
+2
+4
+st append left anti mut
+2
+4
+st vkv left anti append
+2
+4
+st vkv left anti vkv
+2
+4
+st vkv left anti mut
+2
+4
+st mut left anti append
+2
+4
+st mut left anti vkv
+2
+4
+st mut left anti mut
+2
+4
+ss append left anti append
+2
+4
+ss append left anti vkv
+2
+4
+ss append left anti mut
+2
+4
+ss vkv left anti append
+2
+4
+ss vkv left anti vkv
+2
+4
+ss vkv left anti mut
+2
+4
+ss mut left anti append
+2
+4
+ss mut left anti vkv
+2
+4
+ss mut left anti mut
+2
+4
+plan append left anti append
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99922_left_append,shard=0
+    (Expression)
+    ExpressionTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99922_right_append,shard=0
+plan append anti vkv
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99922_left_append,shard=0
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromMergeTree)
+            ExpressionTransform
+              ReplacingSorted
+                ExpressionTransform
+                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          StreamingStoreSource 0 → 1
+          Description: stream=default.99922_right_vkv,shard=0
+plan append left anti mut
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99922_left_append,shard=0
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromStorageShard)
+            KeyValueStreamRangeSource(full_scan) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          KeyValueStreamStreamingSource 0 → 1
+          Description: stream=default.99922_right_mut,shard=0
+plan vkv anti append
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromMergeTree)
+            ExpressionTransform
+              ReplacingSorted
+                ExpressionTransform
+                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          StreamingStoreSource 0 → 1
+          Description: stream=default.99922_left_vkv,shard=0
+    (Expression)
+    ExpressionTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99922_right_append,shard=0
+plan vkv left anti vkv
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromMergeTree)
+            ExpressionTransform
+              ReplacingSorted
+                ExpressionTransform
+                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          StreamingStoreSource 0 → 1
+          Description: stream=default.99922_left_vkv,shard=0
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromMergeTree)
+            ExpressionTransform
+              ReplacingSorted
+                ExpressionTransform
+                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          StreamingStoreSource 0 → 1
+          Description: stream=default.99922_right_vkv,shard=0
+plan vkv anti mut
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromMergeTree)
+            ExpressionTransform
+              ReplacingSorted
+                ExpressionTransform
+                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          StreamingStoreSource 0 → 1
+          Description: stream=default.99922_left_vkv,shard=0
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromStorageShard)
+            KeyValueStreamRangeSource(full_scan) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          KeyValueStreamStreamingSource 0 → 1
+          Description: stream=default.99922_right_mut,shard=0
+plan mut left anti append
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromStorageShard)
+            KeyValueStreamRangeSource(full_scan) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          KeyValueStreamStreamingSource 0 → 1
+          Description: stream=default.99922_left_mut,shard=0
+    (Expression)
+    ExpressionTransform
+      (ReadFromStorageShard)
+      StreamingStoreSource 0 → 1
+      Description: stream=default.99922_right_append,shard=0
+plan mut anti vkv
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromStorageShard)
+            KeyValueStreamRangeSource(full_scan) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          KeyValueStreamStreamingSource 0 → 1
+          Description: stream=default.99922_left_mut,shard=0
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromMergeTree)
+            ExpressionTransform
+              ReplacingSorted
+                ExpressionTransform
+                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          StreamingStoreSource 0 → 1
+          Description: stream=default.99922_right_vkv,shard=0
+plan mut left anti mut
+(Expression)
+ExpressionTransform
+  (MemoryHashJoin)
+  StreamingJoinTransform 2 → 1
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromStorageShard)
+            KeyValueStreamRangeSource(full_scan) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          KeyValueStreamStreamingSource 0 → 1
+          Description: stream=default.99922_left_mut,shard=0
+    (Expression)
+    ExpressionTransform
+      (ChangelogConvertStep)
+      ChangelogConvertTransform
+        (Concat)
+        StreamingConcat 4 → 1
+          (Delay)
+          DelayedPorts × 2 2 → 2
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+            (ReadFromStorageShard)
+            KeyValueStreamRangeSource(full_scan) 0 → 1
+            (ReadFromPreparedSource)
+            MarkSource 0 → 1
+          (ReadFromStorageShard)
+          KeyValueStreamStreamingSource 0 → 1
+          Description: stream=default.99922_right_mut,shard=0
+tt null
+2	l2
+st null
+3	l3
+ss null
+2	l2

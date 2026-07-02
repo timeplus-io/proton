@@ -16,29 +16,32 @@ class SchemaNativeReader final
 {
     struct DeserializationContext
     {
-        DB::SerializationInfos infos;
-        std::vector<uint16_t> target_positions; // positions in column_positions to read. nlog::NO_POSITION <=> skip
+        DB::MutableSerializationInfos infos;
+
+        // positions in requested column_positions to read. nlog::NO_POSITION <=> skip
+        std::vector<uint16_t> target_positions;
     };
 
 public:
-    SchemaNativeReader(DB::ReadBuffer & istr_, bool partial_, uint16_t schema_version_, const SchemaContext & schema_ctx_);
+    SchemaNativeReader(uint16_t on_disk_schema_version_, const SchemaContext & schema_ctx_);
 
-    void read(DB::Block & res);
+    void read(DB::Block & res, DB::ReadBuffer & istr, bool partial) const;
 
 private:
-    inline void readFullForRequestFull(uint32_t rows, const DB::Block & header, DB::Block & res);
-    inline void readFullForRequestPartial(uint32_t rows, const DB::Block & header, DB::Block & res);
-    inline void readPartialForRequestFull(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res);
-    inline void readPartialForRequestPartial(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res);
-    inline void readSerialized(uint16_t columns, uint32_t rows, const DB::Block & header, DB::Block & res);
+    inline void readFullForRequestFull(DB::ReadBuffer & istr, uint32_t rows, DB::Block & res) const;
+    inline void readFullForRequestPartial(DB::ReadBuffer & istr, uint32_t rows, DB::Block & res) const;
+    inline void readPartialForRequestFull(DB::ReadBuffer & istr, uint16_t columns, uint32_t rows, DB::Block & res) const;
+    inline void readPartialForRequestPartial(DB::ReadBuffer & istr, uint16_t columns, uint32_t rows, DB::Block & res) const;
 
     void initDeserializationContext();
 
 private:
-    DB::ReadBuffer & istr;
-    bool partial;
-    uint16_t schema_version;
+    const uint16_t on_disk_schema_version;
     const SchemaContext & schema_ctx;
+
+    DB::Block on_disk_schema;
+    /// Requested columns.
+    DB::Block requested_header;
 
     /// Pre-build deserialization information
     DeserializationContext serde_ctx;

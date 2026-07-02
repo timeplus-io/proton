@@ -68,8 +68,11 @@ void StorageExternalTable::updateTableSchema(bool retry_in_background)
                     updateTableSchema();
                     return;
                 }
-                catch (const Exception &)
+                catch (...)
                 {
+                    tryLogCurrentException(
+                        getLogger("ExternalTable"),
+                        "Failed to fetch table structure for " + getStorageID().getFullTableName() + ", will retry");
                 }
             }
         });
@@ -128,12 +131,24 @@ void StorageExternalTable::updateTableSchema()
     ColumnsDescription desc;
     getTableSchema(getContext(), desc);
 
-    if (desc.empty())
-        return;
+    if (!desc.empty())
+    {
+        auto metadata = getInMemoryMetadata();
+        metadata.setColumns(std::move(desc));
+        setInMemoryMetadata(metadata);
+    }
+    else if (getInMemoryMetadataPtr()->getColumns().empty())
+    {
+        LOG_WARNING(
+            getLogger("StorageExternalTable"),
+            "External table `{}` has an empty schema (none fetched from the remote system nor declared at create "
+            "time); materialized views writing to it will fail with no matching columns",
+            getStorageID().getFullTableName());
+    }
 
-    auto metadata = getInMemoryMetadata();
-    metadata.setColumns(std::move(desc));
-    setInMemoryMetadata(metadata);
+    /// getTableSchema() throws on failure, so reaching here means the schema is determined (possibly empty);
+    /// mark ready so MV checkDependencies() proceeds instead of waiting forever on a legitimately empty schema.
+    ready = true;
 }
 
 void registerStorageExternalTable(StorageFactory & factory)

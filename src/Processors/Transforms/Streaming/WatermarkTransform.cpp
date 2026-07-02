@@ -28,6 +28,10 @@ void WatermarkTransform::transform(Chunk & chunk)
 {
     chunk.clearWatermark();
 
+    /// Snapshot prev flag and refresh atomically so historical/mute/avoid
+    /// branches still update state and never leak a stale flag to the next chunk.
+    const bool was_consecutive = std::exchange(prev_consecutive, chunk.isConsecutiveData());
+
     if (chunk.isHistoricalDataStart() && skip_stamping_for_backfill_data) [[unlikely]]
     {
         mute_watermark = true;
@@ -44,19 +48,23 @@ void WatermarkTransform::transform(Chunk & chunk)
     if (chunk.avoidWatermark())
         return;
 
+    /// Leading exited via avoidWatermark above (setConsecutiveDataFlag implies
+    /// setAvoidWatermark), so was_consecutive identifies the trailing of a pair.
     if (mute_watermark)
         watermark->processWithMutedWatermark(chunk);
+    else if (was_consecutive)
+        watermark->processWithConsecutiveData(chunk);
     else
         watermark->process(chunk);
 }
 
-void WatermarkTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void WatermarkTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { watermark->serialize(wb); });
 }
 
-void WatermarkTransform::recover(CheckpointContextPtr ckpt_ctx)
+void WatermarkTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType, ReadBuffer & rb) { watermark->deserialize(rb); });
 }

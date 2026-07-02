@@ -1,5 +1,4 @@
-#include "AvroRowInputFormat.h"
-#include "DataTypes/DataTypeLowCardinality.h"
+#include <Processors/Formats/Impl/AvroRowInputFormat.h>
 #if USE_AVRO
 
 #include <Core/Field.h>
@@ -19,6 +18,7 @@
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -934,6 +934,19 @@ bool AvroRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & ex
     return false;
 }
 
+size_t AvroRowInputFormat::countRows(size_t max_block_size)
+{
+    size_t num_rows = 0;
+    while (file_reader_ptr->hasMore() && num_rows < max_block_size)
+    {
+        file_reader_ptr->decr();
+        file_reader_ptr->decoder().drain();
+        ++num_rows;
+    }
+
+    return num_rows;
+}
+
 AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::AvroConfluentRowInputFormatID)
@@ -1213,6 +1226,7 @@ bool AvroSchemaWriter::write(bool replace_if_exist)
 
     WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
     write_buffer.write(schema_body.data(), schema_body.size());
+    write_buffer.finalize();
     return true;
 }
 

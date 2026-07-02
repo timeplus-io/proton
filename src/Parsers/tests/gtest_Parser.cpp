@@ -1,9 +1,11 @@
+#include <Databases/DatabasesCommon.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 /// proton: starts
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserSelectQuery.h>
+#include <Parsers/ParserShowTablesQuery.h>
 #include <Parsers/ParserSystemQuery.h>
 #include <Parsers/ParserTablePropertiesQuery.h>
 #include <Parsers/Streaming/ParserEmitQuery.h>
@@ -12,6 +14,7 @@
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/StorageInMemoryMetadata.h>
 
 #include <string_view>
 
@@ -239,8 +242,31 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery, ParserTest,
                                  {
                                      "CREATE STREAM tests (`device` string)",
                                      "CREATE STREAM tests\n(\n  `device` string\n)"
+                                 },
+                                 {
+                                     "CREATE INPUT tests (`device` string)",
+                                     "CREATE INPUT tests\n(\n  `device` string\n)"
                                  }
                              })));
+
+INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery_FAIL, ParserTest,
+                         ::testing::Combine(
+                             ::testing::Values(std::make_shared<ParserCreateQuery>()),
+                             ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+                                 {
+                                     "CREATE EXTERNAL INPUT tests (`device` string)"
+                                 }
+                             })));
+
+TEST(ParserCreateQuery, ShowCreateInputUsesInputKeyword)
+{
+    ParserCreateQuery parser;
+    constexpr std::string_view input_query = "CREATE INPUT tests (`device` string)";
+    auto ast = parseQuery(parser, input_query.begin(), input_query.end(), 0, 0);
+    auto create_query = parseCreateQueryFromAST(ast, "", "tests");
+
+    EXPECT_EQ("CREATE INPUT tests\n(\n  `device` string\n)", create_query->getQuery());
+}
 /// proton: ends
 
 /// proton: starts. ALTER STREAM test cases
@@ -251,6 +277,10 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                                  {
                                      "ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY",
                                      "ALTER STREAM tests\n  MODIFY TTL ttl + INTERVAL 1 DAY"
+                                 },
+                                 {
+                                     "ALTER INPUT tests MODIFY TTL ttl + INTERVAL 1 DAY",
+                                     "ALTER INPUT tests\n  MODIFY TTL ttl + INTERVAL 1 DAY"
                                  },
                                  {
                                      "ALTER stream tests MODIFY COLUMN id uint64 DEFAULT 64",
@@ -284,23 +314,16 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
 /// proton: ends
 
 /// proton: starts. DROP STREAM test cases
-INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
-                         ::testing::Combine(
-                             ::testing::Values(std::make_shared<ParserDropQuery>()),
-                             ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
-                                 {
-                                     "DROP STREAM tests",
-                                     "DROP STREAM tests"
-                                 },
-                                 {
-                                     "TRUNCATE STREAM tests",
-                                     "TRUNCATE STREAM tests"
-                                 },
-                                 {
-                                     "TRUNCATE tests",
-                                     "TRUNCATE STREAM tests"
-                                 }
-                             })));
+INSTANTIATE_TEST_SUITE_P(
+    ParserDropStreamQuery,
+    ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserDropQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {"DROP STREAM tests", "DROP STREAM tests"},
+            {"DROP INPUT tests", "DROP INPUT tests"},
+            {"TRUNCATE STREAM tests", "TRUNCATE STREAM tests"},
+            {"TRUNCATE tests", "TRUNCATE STREAM tests"}})));
 /// proton: ends
 
 /// proton: starts. `SYSTEM INSTALL/UNINSTALL PYTHON PACKAGE ...` test cases
@@ -446,6 +469,10 @@ INSTANTIATE_TEST_SUITE_P(ParserTablePropertiesQuery, ParserTest,
                 "SHOW CREATE STREAM db.test",
             },
             {
+                "SHOW CREATE INPUT db.test",
+                "SHOW CREATE STREAM db.test",
+            },
+            {
                 "SHOW CREATE VIEW db.testv",
                 "SHOW CREATE VIEW db.testv",
             },
@@ -466,6 +493,10 @@ INSTANTIATE_TEST_SUITE_P(ParserTablePropertiesQuery, ParserTest,
                 "EXISTS STREAM db.test",
             },
             {
+                "EXISTS INPUT db.test",
+                "EXISTS STREAM db.test",
+            },
+            {
                 "EXISTS VIEW db.testv",
                 "EXISTS VIEW db.testv",
             },
@@ -475,6 +506,41 @@ INSTANTIATE_TEST_SUITE_P(ParserTablePropertiesQuery, ParserTest,
             }
         }
 )));
+
+INSTANTIATE_TEST_SUITE_P(
+    ParserShowTablesQuery,
+    ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserShowTablesQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {
+                "SHOW STREAMS",
+                "SHOW STREAMS",
+            },
+            {
+                "SHOW INPUTS",
+                "SHOW INPUTS",
+            },
+            {
+                "SHOW TABLES",
+                "SHOW STREAMS",
+            },
+            {
+                "SHOW VIEWS",
+                "SHOW VIEWS",
+            },
+            {
+                "SHOW VIEWS FROM db LIKE 'v%'",
+                "SHOW VIEWS FROM db LIKE 'v%'",
+            },
+            {
+                "SHOW VIEWS NOT LIKE 'v%'",
+                "SHOW VIEWS NOT LIKE 'v%'",
+            },
+            {
+                "SHOW VIEWS ILIKE 'v%'",
+                "SHOW VIEWS ILIKE 'v%'",
+            }})));
 
 
 INSTANTIATE_TEST_SUITE_P(

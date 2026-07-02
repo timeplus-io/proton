@@ -80,11 +80,11 @@ struct Settings;
     M(Bool, remove_rolled_back_parts_immediately, 1, "Setting for an incomplete experimental feature.", 0) \
     \
     /** Inserts settings. */ \
-    M(UInt64, parts_to_delay_insert, 150, "If table contains at least that many active parts in single partition, artificially slow down insert into table. Disabled if set to 0", 0) \
+    M(UInt64, parts_to_delay_insert, 1000, "If table contains at least that many active parts in single partition, artificially slow down insert into table. Disabled if set to 0", 0) \
     M(UInt64, inactive_parts_to_delay_insert, 0, "If table contains at least that many inactive parts in single partition, artificially slow down insert into table.", 0) \
-    M(UInt64, parts_to_throw_insert, 300, "If more than this number active parts in single partition, throw 'Too many parts ...' exception.", 0) \
+    M(UInt64, parts_to_throw_insert, 3000, "If more than this number active parts in single partition, throw 'Too many parts ...' exception.", 0) \
     M(UInt64, inactive_parts_to_throw_insert, 0, "If more than this number inactive parts in single partition, throw 'Too many inactive parts ...' exception.", 0) \
-    M(UInt64, max_avg_part_size_for_too_many_parts, 10ULL * 1024 * 1024 * 1024, "The 'too many parts' check according to 'parts_to_delay_insert' and 'parts_to_throw_insert' will be active only if the average part size (in the relevant partition) is not larger than the specified threshold. If it is larger than the specified threshold, the INSERTs will be neither delayed or rejected. This allows to have hundreds of terabytes in a single table on a single server if the parts are successfully merged to larger parts. This does not affect the thresholds on inactive parts or total parts.", 0) \
+    M(UInt64, max_avg_part_size_for_too_many_parts, 1ULL * 1024 * 1024 * 1024, "The 'too many parts' check according to 'parts_to_delay_insert' and 'parts_to_throw_insert' will be active only if the average part size (in the relevant partition) is not larger than the specified threshold. If it is larger than the specified threshold, the INSERTs will be neither delayed or rejected. This allows to have hundreds of terabytes in a single table on a single server if the parts are successfully merged to larger parts. This does not affect the thresholds on inactive parts or total parts.", 0) \
     M(UInt64, max_delay_to_insert, 1, "Max delay of inserting data into MergeTree table in seconds, if there are a lot of unmerged parts in single partition.", 0) \
     M(UInt64, min_delay_to_insert_ms, 10, "Min delay of inserting data into MergeTree table in milliseconds, if there are a lot of unmerged parts in single partition.", 0) \
     M(UInt64, max_parts_in_total, 100000, "If more than this number active parts in all partitions in total, throw 'Too many parts ...' exception.", 0) \
@@ -129,6 +129,8 @@ struct Settings;
     M(UInt64, vertical_merge_algorithm_min_rows_to_activate, 16 * 8192, "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", 0) \
     M(UInt64, vertical_merge_algorithm_min_bytes_to_activate, 0, "Minimal (approximate) uncompressed size in bytes in merging parts to activate Vertical merge algorithm.", 0) \
     M(UInt64, vertical_merge_algorithm_min_columns_to_activate, 11, "Minimal amount of non-PK columns to activate Vertical merge algorithm.", 0) \
+    M(Bool, vertical_merge_remote_filesystem_prefetch, true, "If true prefetching of data from remote filesystem is used for the next column during merge.", 0) \
+    M(UInt64, max_merge_delayed_streams_for_parallel_write, 40, "The maximum number of streams (columns) we can write simultaneously in parallel during vertical merge to a remote/parallel-write disk. Bounds the number of MergedColumnOnlyOutputStream instances held in flight before the oldest is finished and flushed. Caps memory amplification on object storage (S3 etc.) for wide schemas.", 0) \
     \
     /** Compatibility settings */ \
     M(Bool, compatibility_allow_sampling_expression_not_in_primary_key, false, "Allow to create a table with sampling expression not in primary key. This is needed only to temporarily allow to run the server with wrong tables for backward compatibility.", 0) \
@@ -156,6 +158,7 @@ struct Settings;
     M(UInt64, min_marks_to_honor_max_concurrent_queries, 0, "Minimal number of marks to honor the MergeTree-level's max_concurrent_queries (0 - disabled). Queries will still be limited by other max_concurrent_queries settings.", 0) \
     M(UInt64, min_bytes_to_rebalance_partition_over_jbod, 0, "Minimal amount of bytes to enable part rebalance over JBOD array (0 - disabled).", 0) \
     M(Bool, check_sample_column_is_correct, true, "Check columns or columns by hash for sampling are unsigned integer.", 0) \
+    M(Bool, allow_vertical_merges_from_compact_to_wide_parts, true, "Allows vertical merges from compact to wide parts. This setting must have the same value on all replicas.", 0) \
     \
     /** Experimental/work in progress feature. Unsafe for production. */ \
     M(UInt64, part_moves_between_shards_enable, 0, "Experimental/Incomplete feature to move parts between shards. Does not take into account sharding expressions.", 0) \
@@ -216,9 +219,10 @@ struct Settings;
     M(String, logstore, "", "Backend streaming storage for write ahead log implementation", 1) \
     M(String, storage_type, "hybrid", "Stream can have streaming store and historical store. `hybrid` means having both. `streaming` means only have streaming store. `memory` means pure in-memory. No persistent historical store / streaming store", 0) \
     M(String, logstore_codec, "none", "Backend streaming storage compression mode. options `none` `lz4` `zstd`", 0) \
-    M(Int64, logstore_retention_bytes, 0, "When this threshold reaches, streaming storage deletes old data", 0) \
-    M(Int64, logstore_retention_ms, 0, "when this threshold reaches, streaming storage delete old data", 0) \
+    M(Int64, logstore_retention_bytes, 0, "When this threshold reaches, streaming storage (a.k.a logstore) deletes old data. 0 means system default retention policy (keeping around as little data as possible), -1 means no retention policy (keeping all data around)", 0) \
+    M(Int64, logstore_retention_ms, 0, "when this threshold reaches, streaming storage (a.k.a logstore) delete old data. 0 means system default retention policy (keeping around as little data as possible), -1 means no retention policy (keeping all data around)", 0) \
     M(Bool, local, false, "In a distributed env, local=true means it is a stream which is local to that node only and is not visible to other nodes in the cluster", 0) \
+    M(Bool, inline_historical_commit, true, "Inline commit the data to historical store in the background fetch thread instead of using a thread pool", 0) \
 // End of CONFIGURABLE_STREAM_SETTINGS
 
 #define LIST_STREAM_SETTINGS(M, ALIAS) \
@@ -252,8 +256,10 @@ struct StreamSettings : public BaseSettings<StreamSettingsTraits>
             || name == "min_bytes_for_compact_part" || name == "min_rows_for_compact_part";
     }
 
-    /// Check that the values are sane taking also query-level settings into account.
-    void sanityCheck(const Settings & query_settings) const;
+    /// Check that the values are sane taking also the background merge pool size into account.
+    /// `background_pool_tasks` = background_pool_size * background_merges_mutations_concurrency_ratio
+    /// (server-level settings), computed by the caller from ServerSettings.
+    void sanityCheck(size_t background_pool_tasks) const;
 };
 
 using StreamSettingsPtr = std::shared_ptr<const StreamSettings>;

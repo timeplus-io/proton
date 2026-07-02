@@ -35,10 +35,13 @@ public:
     /// in other words, not including, the specified (max_sn, ...].
     InMemoryIdempotentKeysPtr snapshotTo(Int64 max_sn, size_t max_ids_) const;
 
-    /// \return false if it was already present, true otherwise
+    /// \return true if the key is new; false if it was already present.
     bool add(Int64 sn, String & idem_key, const char * deduped_log_prefix = nullptr);
 
     const IdempotentKey & lastKey() const noexcept { return keys.back(); }
+
+    /// Drops entries with sn > \p max_sn. Assumes sn-ascending order. \return dropped count.
+    size_t rewindTo(Int64 max_sn);
 
     void setMaxIDs(size_t max_ids_) { max_ids = max_ids_; }
 

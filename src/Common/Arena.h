@@ -4,7 +4,11 @@
 #include <memory>
 #include <vector>
 #include <boost/noncopyable.hpp>
-#include <Core/Defines.h>
+#include <Common/Allocator.h>
+#include <Common/ProfileEvents.h>
+#include <Common/memcpySmall.h>
+#include <base/getPageSize.h>
+
 #if __has_include(<sanitizer/asan_interface.h>) && defined(ADDRESS_SANITIZER)
 #   include <sanitizer/asan_interface.h>
 #endif

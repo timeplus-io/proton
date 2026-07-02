@@ -6,9 +6,18 @@
 #include <Common/NamedCollections/NamedCollections.h>
 #include <Common/Exception.h>
 #include <Common/Throttler.h>
+#include <Common/formatReadable.h>
 #include <Interpreters/Context.h>
 #include <boost/algorithm/string/predicate.hpp>
 
+
+namespace ProfileEvents
+{
+    extern const Event S3GetRequestThrottlerCount;
+    extern const Event S3GetRequestThrottlerSleepMicroseconds;
+    extern const Event S3PutRequestThrottlerCount;
+    extern const Event S3PutRequestThrottlerSleepMicroseconds;
+}
 
 namespace DB
 {
@@ -208,7 +217,8 @@ S3Settings::RequestSettings::RequestSettings(
 
         size_t max_get_burst = config.getUInt64(key + "max_get_burst", default_max_get_burst);
 
-        get_request_throttler = std::make_shared<Throttler>(max_get_rps, max_get_burst);
+        get_request_throttler = std::make_shared<Throttler>(
+            max_get_rps, max_get_burst, ProfileEvents::S3GetRequestThrottlerCount, ProfileEvents::S3GetRequestThrottlerSleepMicroseconds);
     }
     if (UInt64 max_put_rps = config.getUInt64(key + "max_put_rps", settings.s3_max_put_rps))
     {
@@ -218,7 +228,8 @@ S3Settings::RequestSettings::RequestSettings(
 
         size_t max_put_burst = config.getUInt64(key + "max_put_burst", default_max_put_burst);
 
-        put_request_throttler = std::make_shared<Throttler>(max_put_rps, max_put_burst);
+        put_request_throttler = std::make_shared<Throttler>(
+            max_put_rps, max_put_burst, ProfileEvents::S3PutRequestThrottlerCount, ProfileEvents::S3PutRequestThrottlerSleepMicroseconds);
     }
 }
 
@@ -238,11 +249,17 @@ void S3Settings::RequestSettings::updateFromSettingsImpl(const Settings & settin
 
     if ((!if_changed || settings.s3_max_get_rps.changed || settings.s3_max_get_burst.changed) && settings.s3_max_get_rps)
         get_request_throttler = std::make_shared<Throttler>(
-            settings.s3_max_get_rps, settings.s3_max_get_burst ? settings.s3_max_get_burst : Throttler::default_burst_seconds * settings.s3_max_get_rps);
+            settings.s3_max_get_rps,
+            settings.s3_max_get_burst ? settings.s3_max_get_burst : Throttler::default_burst_seconds * settings.s3_max_get_rps,
+            ProfileEvents::S3GetRequestThrottlerCount,
+            ProfileEvents::S3GetRequestThrottlerSleepMicroseconds);
 
     if ((!if_changed || settings.s3_max_put_rps.changed || settings.s3_max_put_burst.changed) && settings.s3_max_put_rps)
         put_request_throttler = std::make_shared<Throttler>(
-            settings.s3_max_put_rps, settings.s3_max_put_burst ? settings.s3_max_put_burst : Throttler::default_burst_seconds * settings.s3_max_put_rps);
+            settings.s3_max_put_rps,
+            settings.s3_max_put_burst ? settings.s3_max_put_burst : Throttler::default_burst_seconds * settings.s3_max_put_rps,
+            ProfileEvents::S3PutRequestThrottlerCount,
+            ProfileEvents::S3PutRequestThrottlerSleepMicroseconds);
 
     /// proton: starts
     if (!if_changed || settings.s3_max_aws_request_failure_retries.changed)

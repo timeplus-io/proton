@@ -2,7 +2,7 @@
 
 #include "config.h"
 
-#if USE_AVRO
+#if USE_AVRO && USE_AWS_S3
 #include <Databases/ApacheIceberg/DatabaseIcebergSettings.h>
 #include <Storages/Iceberg/ICatalog.h>
 #include <Databases/DatabasesCommon.h>

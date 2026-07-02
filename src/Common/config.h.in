@@ -78,6 +78,7 @@
 #cmakedefine01 USE_SNOWFLAKE_FUNCS
 #cmakedefine01 USE_ENCRYPT_DECRYPT_FUNCS
 #cmakedefine01 USE_ARG_MIN_MAX_FUNCS
+#cmakedefine01 USE_AGGREGATES_EXTENDED
 #cmakedefine01 USE_PYTHON_UDF
 #cmakedefine01 USE_NUMPY
 #cmakedefine01 USE_PULSAR

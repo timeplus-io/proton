@@ -61,6 +61,12 @@ public:
         virtual ~IIterator() = default;
         virtual KeyWithInfo next() = 0;
 
+        /// Estimates how many streams we need to process all files.
+        /// If keys count >= max_threads_count, the returned number may not represent the actual number of the keys.
+        /// Intended to be called before any next() calls, may underestimate otherwise
+        /// fixme: May underestimate if the glob has a strong filter, so there are few matches among the first 1000 ListObjects results.
+        virtual size_t estimatedKeysCount() = 0;
+
         KeyWithInfo operator ()() { return next(); }
     };
 
@@ -78,6 +84,7 @@ public:
             std::function<void(FileProgress)> progress_callback_ = {});
 
         KeyWithInfo next() override;
+        size_t estimatedKeysCount() override;
 
     private:
         class Impl;
@@ -101,6 +108,7 @@ public:
             std::function<void(FileProgress)> progress_callback_ = {});
 
         KeyWithInfo next() override;
+        size_t estimatedKeysCount() override;
 
     private:
         class Impl;
@@ -111,11 +119,15 @@ public:
     class ReadTaskIterator : public IIterator
     {
     public:
-        explicit ReadTaskIterator(const ReadTaskCallback & callback_) : callback(callback_) {}
+        explicit ReadTaskIterator(const ReadTaskCallback & callback_, const size_t max_threads_count);
 
-        KeyWithInfo next() override { return {callback(), {}}; }
+        KeyWithInfo next() override;
+        size_t estimatedKeysCount() override;
 
     private:
+        KeysWithInfo buffer;
+        std::atomic_size_t index = 0;
+
         ReadTaskCallback callback;
     };
 
@@ -132,7 +144,8 @@ public:
         const String & bucket,
         const String & version_id,
         std::shared_ptr<IIterator> file_iterator_,
-        size_t download_thread_num);
+        const size_t max_parsing_threads_,
+        bool need_only_count_);
 
     ~StorageS3Source() override;
 
@@ -215,7 +228,8 @@ private:
     std::mutex reader_mutex;
     NamesAndTypesList requested_virtual_columns;
     std::shared_ptr<IIterator> file_iterator;
-    [[maybe_unused]] size_t download_thread_num = 1;
+    size_t max_parsing_threads = 1;
+    bool need_only_count;
 
     LoggerPtr log = getLogger("StorageS3Source");
 

@@ -72,6 +72,8 @@ public:
 
     std::optional<String> preferredColumn() const override { return external_stream->preferredColumn(); }
 
+    void validate() const;
+
 protected:
     StorageExternalStream(
         const ASTs & engine_args,

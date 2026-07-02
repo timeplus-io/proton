@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <Poco/Logger.h>
 #include <Poco/Message.h>
-// #include <base/EnumReflection.h>
+#include <base/EnumReflection.h>
 #include <Common/Logger.h>
 
 struct PreformattedMessage;
@@ -26,7 +26,7 @@ struct FormatStringHelperImpl
         formatStringCheckArgsNumImpl(message_format_string, sizeof...(Args));
     }
     template<typename T>
-    FormatStringHelperImpl(fmt::basic_runtime<T> && str) : message_format_string(), fmt_str(std::forward<fmt::basic_runtime<T>>(str)) {}
+    FormatStringHelperImpl(fmt::runtime_format_string<T> && str) : message_format_string(), fmt_str(std::forward<fmt::runtime_format_string<T>>(str)) {}
 
     PreformattedMessage format(Args && ...args) const;
 };
@@ -72,7 +72,7 @@ PreformattedMessage PreformattedMessage::create(FormatStringHelper<Args...> fmt,
 }
 
 template<typename T> struct is_fmt_runtime : std::false_type {};
-template<typename T> struct is_fmt_runtime<fmt::basic_runtime<T>> : std::true_type {};
+template<typename T> struct is_fmt_runtime<fmt::runtime_format_string<T>> : std::true_type {};
 
 template <typename T> constexpr std::string_view tryGetStaticFormatString(T && x)
 {
@@ -137,9 +137,9 @@ template<> struct ConstexprIfsAreNotIfdefs<true>
 
 template <typename... Ts> constexpr size_t numArgs(Ts &&...) { return sizeof...(Ts); }
 template <typename T, typename... Ts> constexpr auto firstArg(T && x, Ts &&...) { return std::forward<T>(x); }
-/// For implicit conversion of fmt::basic_runtime<> to char* for std::string ctor
-template <typename T, typename... Ts> constexpr auto firstArg(fmt::basic_runtime<T> && data, Ts &&...) { return data.str.data(); }
-template <typename T, typename... Ts> constexpr auto firstArg(const fmt::basic_runtime<T> & data, Ts &&...) { return data.str.data(); }
+/// For implicit conversion of fmt::runtime_format_string<> to std::string
+template <typename T, typename... Ts> constexpr auto firstArg(fmt::runtime_format_string<T> && data, Ts &&...) { return std::string(data.str.data(), data.str.size()); }
+template <typename T, typename... Ts> constexpr auto firstArg(const fmt::runtime_format_string<T> & data, Ts &&...) { return std::string(data.str.data(), data.str.size()); }
 
 consteval ssize_t formatStringCountArgsNum(const char * const str, size_t len)
 {
@@ -184,13 +184,13 @@ consteval void formatStringCheckArgsNum(T && str, size_t nargs)
 {
     formatStringCheckArgsNumImpl(tryGetStaticFormatString(str), nargs);
 }
-template<typename T> inline void formatStringCheckArgsNum(fmt::basic_runtime<T> &&, size_t) {}
+template<typename T> inline void formatStringCheckArgsNum(fmt::runtime_format_string<T> &&, size_t) {}
 template<> inline void formatStringCheckArgsNum(PreformattedMessage &, size_t) {}
 template<> inline void formatStringCheckArgsNum(const PreformattedMessage &, size_t) {}
 template<> inline void formatStringCheckArgsNum(PreformattedMessage &&, size_t) {}
 
 template<typename T> struct FormatStringTypeInfo{ static constexpr bool is_static = true; static constexpr bool has_format = true; };
-template<typename T> struct FormatStringTypeInfo<fmt::basic_runtime<T>> { static constexpr bool is_static = false; static constexpr bool has_format = false; };
+template<typename T> struct FormatStringTypeInfo<fmt::runtime_format_string<T>> { static constexpr bool is_static = false; static constexpr bool has_format = false; };
 template<> struct FormatStringTypeInfo<PreformattedMessage> { static constexpr bool is_static = false; static constexpr bool has_format = true; };
 
 /// This wrapper helps to avoid too frequent and noisy log messages.

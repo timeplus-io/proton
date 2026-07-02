@@ -179,15 +179,25 @@ protected:
     struct JoinGlobalMetrics
     {
         size_t total_join = 0;
+
+        size_t left_joining_rows = 0;
+        size_t left_joined_rows = 0;
+
+        size_t right_joining_rows = 0;
+        size_t right_joined_rows = 0;
+
         size_t left_block_and_right_range_bucket_no_intersection_skip = 0;
         size_t right_block_and_left_range_bucket_no_intersection_skip = 0;
 
         std::string string() const
         {
             return fmt::format(
-                "total_join={} "
+                "left_joining_rows={} left_joined_rows={}; right_joining_rows={} right_joined_rows={}; "
                 "left_block_and_right_range_bucket_no_intersection_skip={} right_block_and_left_range_bucket_no_intersection_skip={}",
-                total_join,
+                left_joining_rows,
+                left_joined_rows,
+                right_joining_rows,
+                right_joined_rows,
                 left_block_and_right_range_bucket_no_intersection_skip,
                 right_block_and_left_range_bucket_no_intersection_skip);
         }

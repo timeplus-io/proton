@@ -13,27 +13,20 @@
 
 namespace DB
 {
-void PrometheusRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse & response)
+void PrometheusRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse & response, const ProfileEvents::Event &)
 {
     try
     {
-        const auto & config = server.config();
-        unsigned keep_alive_timeout = config.getUInt("keep_alive_timeout", 10);
-
-        setResponseDefaultHeaders(response, keep_alive_timeout);
+        setResponseDefaultHeaders(response);
 
         response.setContentType("text/plain; version=0.0.4; charset=UTF-8");
 
-        WriteBufferFromHTTPServerResponse wb(response, request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD, keep_alive_timeout);
-        try
-        {
-            metrics_writer.write(wb);
-            wb.finalize();
-        }
-        catch (...)
-        {
-            wb.finalize();
-        }
+        WriteBufferFromHTTPServerResponse wb(response, request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD);
+        /// Write the metrics and finalize once. An earlier version also called finalize() from a
+        /// nested catch, double-finalizing the buffer on aborted scrapes; rely on the outer catch
+        /// below to log any failure instead.
+        metrics_writer.write(wb);
+        wb.finalize();
     }
     catch (...)
     {

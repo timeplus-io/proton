@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Storages/ExternalStream/ExternalStreamSettings.h"
 #include "config.h"
 
 #if USE_PULSAR
@@ -34,6 +35,9 @@ public:
         ContextPtr context);
     ~Pulsar() override = default;
 
+    void validate(const ContextPtr & context) const override;
+    void validateSettings(const ExternalStreamSettingsPtr & new_settings, bool change_settings, const ContextPtr & context) const override;
+
     String getName() const override { return "PulsarExternalStream"; }
 
     void startup() override;
@@ -67,7 +71,7 @@ private:
     void cacheVirtualColumnNamesAndTypes();
     VirtualHeader calculateVirtualHeader(const Block & header, const Block & non_virtual_header);
 
-    pulsar::ClientConfiguration createClientConfig();
+    pulsar::ClientConfiguration createClientConfig(const ExternalStreamSettingsPtr & settings_) const;
 
     pulsar::Reader
     createReader(const ContextPtr & context, const String & partition, std::optional<pulsar::MessageId> start_message_id = {});
@@ -78,7 +82,7 @@ private:
 
     const String partition_prefix;
 
-    std::atomic_flag pulsar_logger_set;
+    mutable std::atomic_flag pulsar_logger_set;
     pulsar::Client client;
 
     ExternalStreamCounterPtr external_stream_counter;

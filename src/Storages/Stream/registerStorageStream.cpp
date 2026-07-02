@@ -1,6 +1,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/Stream/StorageStream.h>
 #include <Storages/Stream/StorageStreamProperties.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
@@ -230,21 +231,25 @@ void registerStorageStream(StorageFactory & factory)
             }
             else
             {
-                /// Changelog with primary key or kv mode requires version column
-                if (properties->storage_settings->mode.value == ProtonConsts::CHANGELOG_KV_MODE)
+                /// Changelog with primary key or kv mode requires version column.
+                /// Accept both the proton-historical aliases (`changelog_kv`, `versioned_kv`) and the
+                /// upstream-aligned names (`versioned_collapsing`, `replacing`) — they map to the same
+                /// internal MergingParams::Mode.
+                const auto & mode_str = properties->storage_settings->mode.value;
+                if (mode_str == ProtonConsts::CHANGELOG_KV_MODE || mode_str == ProtonConsts::VERSIONED_COLLAPSING_MODE)
                 {
-                    merging_params.mode = MergeTreeData::MergingParams::ChangelogKV;
+                    merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
                     merging_params.sign_column = ProtonConsts::RESERVED_DELTA_FLAG;
                 }
-                else if (properties->storage_settings->mode.value == ProtonConsts::VERSIONED_KV_MODE)
+                else if (mode_str == ProtonConsts::VERSIONED_KV_MODE || mode_str == ProtonConsts::REPLACING_MODE)
                 {
-                    merging_params.mode = MergeTreeData::MergingParams::VersionedKV;
+                    merging_params.mode = MergeTreeData::MergingParams::Replacing;
                     merging_params.keep_versions = properties->storage_settings->keep_versions.value;
                 }
                 else
                 {
                     if (!args.attach)
-                        throw Exception(ErrorCodes::SYNTAX_ERROR, "Invalid storage mode='{}'", properties->storage_settings->mode.value);
+                        throw Exception(ErrorCodes::SYNTAX_ERROR, "Invalid storage mode='{}'", mode_str);
                 }
 
                 merging_params.version_column = properties->storage_settings->version_column.value;
@@ -253,6 +258,41 @@ void registerStorageStream(StorageFactory & factory)
                 if (!args.attach && metadata.primary_key.has(merging_params.version_column))
                     throw Exception(
                         ErrorCodes::SYNTAX_ERROR, "Version column as primary key is not supported in Changelog KV or Versioned KV stream");
+            }
+
+            /// Apply global default tiered-storage policy only when user didn't explicitly set storage_policy.
+            /// Priority: query setting > global config > engine default.
+            if (!args.attach)
+            {
+                bool has_explicit_storage_policy = false;
+                if (args.storage_def->settings)
+                {
+                    Field explicit_storage_policy;
+                    has_explicit_storage_policy = args.storage_def->settings->changes.tryGet("storage_policy", explicit_storage_policy);
+                }
+
+                if (!has_explicit_storage_policy)
+                {
+                    const auto global_tier_policy
+                        = args.getContext()->getConfigRef().getString("default_tier_storage_policy_historical", "");
+
+                    if (!global_tier_policy.empty())
+                    {
+                        /// Validate eagerly for clearer errors during CREATE STREAM.
+                        args.getContext()->getStoragePolicy(global_tier_policy);
+
+                        properties->storage_settings->storage_policy = global_tier_policy;
+
+                        if (!args.storage_def->settings)
+                        {
+                            auto settings_ast = std::make_shared<ASTSetQuery>();
+                            settings_ast->is_standalone = false;
+                            args.storage_def->set(args.storage_def->settings, settings_ast);
+                        }
+
+                        args.storage_def->settings->changes.insertSetting("storage_policy", global_tier_policy);
+                    }
+                }
             }
 
             // updates the default storage_settings with settings specified via SETTINGS arg in a query

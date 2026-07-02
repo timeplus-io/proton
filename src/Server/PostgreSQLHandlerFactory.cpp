@@ -1,13 +1,20 @@
-#include "PostgreSQLHandlerFactory.h"
+#include <Server/PostgreSQLHandlerFactory.h>
+#include <memory>
+#include <filesystem>
 #include <Server/PostgreSQLHandler.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
 namespace DB
 {
 
-PostgreSQLHandlerFactory::PostgreSQLHandlerFactory(IServer & server_)
+PostgreSQLHandlerFactory::PostgreSQLHandlerFactory(
+    IServer & server_,
+    const ProfileEvents::Event & read_event_,
+    const ProfileEvents::Event & write_event_)
     : server(server_)
     , log(getLogger("PostgreSQLHandlerFactory"))
+    , read_event(read_event_)
+    , write_event(write_event_)
 {
     auth_methods =
     {
@@ -39,7 +46,7 @@ std::shared_ptr<Poco::Net::TCPServerConnection> PostgreSQLHandlerFactory::create
 {
     Int32 connection_id = last_connection_id++;
     LOG_TRACE(log, "PostgreSQL connection. Id: {}. Address: {}", connection_id, socket.peerAddress().toString());
-    return std::make_shared<PostgreSQLHandler>(socket, server, tcp_server, ssl_enabled, connection_id, auth_methods);
+    return std::make_shared<PostgreSQLHandler>(socket, server, tcp_server, ssl_enabled, connection_id, auth_methods, read_event, write_event);
 }
 
 }

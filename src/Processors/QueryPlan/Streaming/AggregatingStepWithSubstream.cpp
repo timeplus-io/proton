@@ -30,7 +30,7 @@ ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = false,
-            .preserves_substream = true,
+            .preserves_shuffling = true,
         },
         {
             .preserves_number_of_rows = false,

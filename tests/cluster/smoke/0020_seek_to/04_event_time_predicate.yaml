@@ -70,16 +70,19 @@ steps:
 
 - type: check
   target_name: '2100'
+  timeout: 30 # address build need more time
   expected_result:
   - ['2022-12-01 00:00:01.111000+00:00', s1]
 
 - type: check
   target_name: '2101'
+  timeout: 30 # address build need more time
   expected_result: []
 
 - type: check
   target_name: '2102'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - ['2022-12-01 00:00:01.111000+00:00', s1]
   - ['2022-12-01 00:00:02.111000+00:00', s2]
@@ -87,6 +90,7 @@ steps:
 - type: check
   target_name: '2103'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - ['2022-12-01 00:00:01.111000+00:00', s1]
   - ['2022-12-01 00:00:02.111000+00:00', s2]
@@ -94,12 +98,14 @@ steps:
 
 - type: check
   target_name: '2104'
+  timeout: 30 # address build need more time
   expected_result:
   - ['2022-12-01 00:00:04.111000+00:00', s4]
 
 - type: check
   target_name: '2105'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - ['2022-12-01 00:00:03.111000+00:00', s3]
   - ['2022-12-01 00:00:04.111000+00:00', s4]
@@ -107,6 +113,7 @@ steps:
 - type: check
   target_name: '2106'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - ['2022-12-01 00:00:01.111000+00:00', s1]
   - ['2022-12-01 00:00:02.111000+00:00', s2]

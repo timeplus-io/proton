@@ -79,6 +79,7 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Storages/Proxy/ProxyStream.h>
 #include <Common/ProtonCommon.h>
+#include <fmt/ranges.h>
 /// proton: ends
 
 namespace DB

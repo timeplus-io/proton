@@ -46,7 +46,7 @@ protected:
     /// proton: starts.
     Chunk generate() override;
 
-    Chunk doCheckpoint(CheckpointContextPtr) override;
+    void doCheckpoint(CheckpointContextPtr) override;
     void doRecover(CheckpointContextPtr) override;
     void doResetStartSN(Int64 /*sn*/) override;
     /// proton: ends.

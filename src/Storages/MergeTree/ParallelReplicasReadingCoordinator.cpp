@@ -19,6 +19,7 @@
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/IntersectionsIndexes.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

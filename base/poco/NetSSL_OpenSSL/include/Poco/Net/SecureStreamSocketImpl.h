@@ -18,36 +18,41 @@
 #define NetSSL_SecureStreamSocketImpl_INCLUDED
 
 
+#include "Poco/Net/Context.h"
 #include "Poco/Net/NetSSL.h"
 #include "Poco/Net/SecureSocketImpl.h"
 #include "Poco/Net/StreamSocketImpl.h"
-#include "Poco/Net/Context.h"
 #include "Poco/Net/X509Certificate.h"
 
 
-namespace Poco {
-namespace Net {
-
-
-class NetSSL_API SecureStreamSocketImpl: public StreamSocketImpl
-	/// This class implements a SSL stream socket.
+namespace Poco
 {
-public:
+namespace Net
+{
+
+
+    class NetSSL_API SecureStreamSocketImpl : public StreamSocketImpl
+    /// This class implements a SSL stream socket.
+    {
+    public:
 	SecureStreamSocketImpl(Context::Ptr pContext);
 		/// Creates the SecureStreamSocketImpl.
 
-	SecureStreamSocketImpl(StreamSocketImpl* pStreamSocket, Context::Ptr pContext);
+	SecureStreamSocketImpl(StreamSocketImpl * pStreamSocket, Context::Ptr pContext);
 		/// Creates the SecureStreamSocketImpl.
 
-    void setSendTimeout(const Poco::Timespan& timeout);
-    void setReceiveTimeout(const Poco::Timespan& timeout);
+        void setSendTimeout(const Poco::Timespan & timeout);
+        void setReceiveTimeout(const Poco::Timespan & timeout);
 
-	SocketImpl* acceptConnection(SocketAddress& clientAddr);
+        void setSendThrottler(const Poco::Net::ThrottlerPtr & throttler = {});
+        void setReceiveThrottler(const Poco::Net::ThrottlerPtr & throttler = {});
+
+	SocketImpl * acceptConnection(SocketAddress & clientAddr);
 		/// Not supported by a SecureStreamSocket.
 		///
 		/// Throws a Poco::InvalidAccessException.
 
-	void connect(const SocketAddress& address);
+	void connect(const SocketAddress & address);
 		/// Initializes the socket and establishes a connection to
 		/// the TCP server at the given address.
 		///
@@ -55,20 +60,20 @@ public:
 		/// connection is established. Instead, incoming and outgoing
 		/// packets are restricted to the specified address.
 
-	void connect(const SocketAddress& address, const Poco::Timespan& timeout);
+	void connect(const SocketAddress & address, const Poco::Timespan & timeout);
 		/// Initializes the socket, sets the socket timeout and
 		/// establishes a connection to the TCP server at the given address.
 
-	void connectNB(const SocketAddress& address);
+	void connectNB(const SocketAddress & address);
 		/// Initializes the socket and establishes a connection to
 		/// the TCP server at the given address. Prior to opening the
 		/// connection the socket is set to nonblocking mode.
-		
+
 	void bind(const SocketAddress& address, bool reuseAddress = false, bool reusePort = false);
 		/// Not supported by a SecureStreamSocket.
 		///
 		/// Throws a Poco::InvalidAccessException.
-		
+
 	void listen(int backlog = 64);
 		/// Not supported by a SecureStreamSocket.
 		///
@@ -76,30 +81,30 @@ public:
 
 	void close();
 		/// Close the socket.
-	
-	int sendBytes(const void* buffer, int length, int flags = 0);
+
+	int sendBytes(const void * buffer, int length, int flags = 0);
 		/// Sends the contents of the given buffer through
 		/// the socket. Any specified flags are ignored.
 		///
 		/// Returns the number of bytes sent, which may be
 		/// less than the number of bytes specified.
-	
-	int receiveBytes(void* buffer, int length, int flags = 0);
+
+	int receiveBytes(void * buffer, int length, int flags = 0);
 		/// Receives data from the socket and stores it
 		/// in buffer. Up to length bytes are received.
 		///
 		/// Returns the number of bytes received.
-	
-	int sendTo(const void* buffer, int length, const SocketAddress& address, int flags = 0);
+
+	int sendTo(const void * buffer, int length, const SocketAddress & address, int flags = 0);
 		/// Not supported by a SecureStreamSocket.
 		///
 		/// Throws a Poco::InvalidAccessException.
-	
-	int receiveFrom(void* buffer, int length, SocketAddress& address, int flags = 0);
+
+	int receiveFrom(void * buffer, int length, SocketAddress & address, int flags = 0);
 		/// Not supported by a SecureStreamSocket.
 		///
 		/// Throws a Poco::InvalidAccessException.
-	
+
 	void sendUrgent(unsigned char data);
 		/// Not supported by a SecureStreamSocket.
 		///
@@ -118,28 +123,28 @@ public:
 		///
 		/// Since SSL does not support a half shutdown, this does
 		/// nothing.
-		
+
 	void shutdownSend();
 		/// Shuts down the receiving part of the socket connection.
 		///
 		/// Since SSL does not support a half shutdown, this does
 		/// nothing.
-		
+
 	void shutdown();
 		/// Shuts down the SSL connection.
-		
+
 	void abort();
 		/// Aborts the connection by closing the underlying
 		/// TCP connection. No orderly SSL shutdown is performed.
-		
+
 	bool secure() const;
 		/// Returns true iff the socket's connection is secure
 		/// (using SSL or TLS).
 
-	void setPeerHostName(const std::string& hostName);
+	void setPeerHostName(const std::string & hostName);
 		/// Sets the peer host name for certificate validation purposes.
-		
-	const std::string& getPeerHostName() const;
+
+	const std::string & getPeerHostName() const;
 		/// Returns the peer host name.
 
 	bool havePeerCertificate() const;
@@ -151,7 +156,7 @@ public:
 		///
 		/// Throws a SSLException if the peer did not
 		/// present a certificate.
-		
+
 	Context::Ptr context() const;
 		/// Returns the SSL context used by this socket.
 
@@ -159,7 +164,7 @@ public:
 		/// Enable lazy SSL handshake. If enabled, the SSL handshake
 		/// will be performed the first time date is sent or
 		/// received over the connection.
-		
+
 	bool getLazyHandshake() const;
 		/// Returns true if setLazyHandshake(true) has been called.
 
@@ -167,7 +172,7 @@ public:
 		/// Performs post-connect (or post-accept) peer certificate validation,
 		/// using the peer's IP address as host name.
 
-	void verifyPeerCertificate(const std::string& hostName);
+	void verifyPeerCertificate(const std::string & hostName);
 		/// Performs post-connect (or post-accept) peer certificate validation
 		/// using the given host name.
 
@@ -184,7 +189,7 @@ public:
 		/// is enabled).
 		///
 		/// If no connection is established, returns null.
-		
+
 	void useSession(Session::Ptr pSession);
 		/// Sets the SSL session to use for the next
 		/// connection. Setting a previously saved Session
@@ -194,30 +199,40 @@ public:
 		/// can be given.
 		///
 		/// Must be called before connect() to be effective.
-		
+
 	bool sessionWasReused();
 		/// Returns true iff a reused session was negotiated during
 		/// the handshake.
-		
-protected:
+
+	virtual void setBlocking(bool flag);
+        /// Sets the socket in blocking mode if flag is true,
+        /// disables blocking mode if flag is false.
+
+        virtual bool getBlocking() const;
+        /// Returns the blocking mode of the socket.
+        /// This method will only work if the blocking modes of
+        /// the socket are changed via the setBlocking method!
+
+
+    protected:
 	void acceptSSL();
 		/// Performs a SSL server-side handshake.
-	
+
 	void connectSSL();
 		/// Performs a SSL client-side handshake on an already connected TCP socket.
-	
+
 	~SecureStreamSocketImpl();
 		/// Destroys the SecureStreamSocketImpl.
 
 	static int lastError();
 	static void error();
-	static void error(const std::string& arg);
+	static void error(const std::string & arg);
 	static void error(int code);
-	static void error(int code, const std::string& arg);
+	static void error(int code, const std::string & arg);
 
-private:
-	SecureStreamSocketImpl(const SecureStreamSocketImpl&);
-	SecureStreamSocketImpl& operator = (const SecureStreamSocketImpl&);
+    private:
+	SecureStreamSocketImpl(const SecureStreamSocketImpl &);
+	SecureStreamSocketImpl & operator=(const SecureStreamSocketImpl &);
 
     StreamSocketImpl * underlying_socket;
 	SecureSocketImpl _impl;
@@ -231,13 +246,13 @@ private:
 //
 // inlines
 //
-inline const std::string& SecureStreamSocketImpl::getPeerHostName() const
+inline const std::string & SecureStreamSocketImpl::getPeerHostName() const
 {
 	return _impl.getPeerHostName();
 }
 
 
-inline void SecureStreamSocketImpl::setPeerHostName(const std::string& peerHostName)
+inline void SecureStreamSocketImpl::setPeerHostName(const std::string & peerHostName)
 {
 	_impl.setPeerHostName(peerHostName);
 }
@@ -254,13 +269,13 @@ inline Session::Ptr SecureStreamSocketImpl::currentSession()
 	return _impl.currentSession();
 }
 
-	
+
 inline void SecureStreamSocketImpl::useSession(Session::Ptr pSession)
 {
 	_impl.useSession(pSession);
 }
 
-	
+
 inline bool SecureStreamSocketImpl::sessionWasReused()
 {
 	return _impl.sessionWasReused();
@@ -279,7 +294,7 @@ inline void SecureStreamSocketImpl::error()
 }
 
 
-inline void SecureStreamSocketImpl::error(const std::string& arg)
+inline void SecureStreamSocketImpl::error(const std::string & arg)
 {
 	return SocketImpl::error(arg);
 }
@@ -291,13 +306,14 @@ inline void SecureStreamSocketImpl::error(int code)
 }
 
 
-inline void SecureStreamSocketImpl::error(int code, const std::string& arg)
+inline void SecureStreamSocketImpl::error(int code, const std::string & arg)
 {
 	return SocketImpl::error(code, arg);
 }
 
 
-} } // namespace Poco::Net
+}
+} // namespace Poco::Net
 
 
 #endif // NetSSL_SecureStreamSocketImpl_INCLUDED

@@ -11,6 +11,8 @@
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <base/defines.h>
+#include <base/errnoToString.h>
+
 
 using namespace DB;
 

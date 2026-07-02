@@ -1,0 +1,12 @@
+enable_backfill_from_historical_store	1
+throw_if_sequence_has_hole	0
+0
+1	a
+2	b
+3	c
+1	a
+2	b
+3	c
+1	a
+2	b
+3	c

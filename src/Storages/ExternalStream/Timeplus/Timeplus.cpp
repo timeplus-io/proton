@@ -62,6 +62,7 @@ void cacheStreamMetadata(const fs::path & filename, const ColumnsDescription & c
     writeVarUInt(shard_count, wbuf);
     auto columns_str = columns.toString();
     writeString(columns_str.data(), columns_str.size(), wbuf);
+    wbuf.finalize();
 }
 
 void loadCachedStreamMetadata(const fs::path & filename, ColumnsDescription & columns, UInt32 & shard_count)

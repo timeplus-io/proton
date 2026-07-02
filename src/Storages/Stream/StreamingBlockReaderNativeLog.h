@@ -46,11 +46,22 @@ public:
     /// Call this function only before read()
     void resetSequenceNumber(Int64 sn) override;
 
+    Int64 fetchedSequenceNumber() const override { return fetched_sn; }
+
     void setEmitControlBlock(bool emit_control_block_) noexcept { emit_control_block = emit_control_block_; }
 
     void setAllowFallbackToHistoricalStore(bool allow_fallback_to_historical_store_) noexcept
     {
         allow_fallback_to_historical_store = allow_fallback_to_historical_store_;
+    }
+
+    /// Controls behavior when the fetch position is below the current log_start_sn and the gap
+    /// cannot be filled from the historical store (or fallback is disabled). When true, the reader
+    /// throws SEQUENCE_COMPACTED_AWAY. When false (default), it advances the fetch start to the
+    /// current log_start_sn and keeps streaming.
+    void setThrowIfSequenceHasHole(bool throw_if_sequence_has_hole_) noexcept
+    {
+        throw_if_sequence_has_hole = throw_if_sequence_has_hole_;
     }
 
     void setAvoidFillDefaultsForMissingColumns(bool avoid_fill_defaults_for_missing_columns_) noexcept
@@ -93,6 +104,7 @@ private:
 
     static constexpr Int64 default_fetch_range = 10'000;
     bool allow_fallback_to_historical_store = true;
+    bool throw_if_sequence_has_hole = false;
     std::shared_ptr<HistoricalQueryContext> historical_ctx;
 };
 }

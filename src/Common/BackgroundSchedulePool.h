@@ -83,9 +83,6 @@ private:
     /// Tasks ordered by scheduled time.
     DelayedTasks delayed_tasks;
 
-    /// Thread group used for profiling purposes
-    ThreadGroupStatusPtr thread_group;
-
     CurrentMetrics::Metric tasks_metric;
     std::string thread_name;
 };

@@ -19,7 +19,7 @@ public:
     RestHTTPRequestHandler(IServer & server_, const String & name, bool is_snapshot_mode_, bool is_clickhouse_compatible_mode_);
     ~RestHTTPRequestHandler() override;
 
-    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
+    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response, const ProfileEvents::Event & write_even) override;
 
 private:
     IServer & server;

@@ -13,11 +13,14 @@
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/StorageSnapshot.h>
+#include <Common/CurrentThread.h>
 
 #include <base/shared_ptr_helper.h>
 
 #include <boost/smart_ptr/atomic_shared_ptr.hpp>
 #include <magic_enum.hpp>
+
+#include <optional>
 
 namespace DB
 {
@@ -120,6 +123,9 @@ private:
         std::atomic<uint64_t> executor_tid{0}; /// 0 means not running
 
         ContextMutablePtr query_context;
+        /// Refreshed by buildBackgroundPipeline so memory_tracker/ThreadGroup don't accumulate
+        /// across recoveries. Only the runPipeline thread may emplace/reset this.
+        std::optional<CurrentThread::QueryScope> query_scope;
         boost::atomic_shared_ptr<BlockIO> io;
         mutable boost::atomic_shared_ptr<Streaming::StreamingSourceMetricsPtrs> last_streaming_source_metrics;
         bool can_recover_without_checkpoint = false;

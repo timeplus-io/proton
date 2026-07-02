@@ -10,6 +10,7 @@
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/Logger.h>
+#include <fmt/ranges.h>
 
 namespace
 {

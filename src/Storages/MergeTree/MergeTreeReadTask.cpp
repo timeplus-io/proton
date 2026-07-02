@@ -181,7 +181,12 @@ MergeTreeReadTask::BlockAndProgress MergeTreeReadTask::read(const BlockSizeParam
     if (read_result.num_rows != 0)
     {
         for (const auto & column : read_result.columns)
-            column->assumeMutableRef().shrinkToFit();
+        {
+            /// Some columns may still be shared (for example materialized const PREWHERE columns).
+            /// Only shrink uniquely owned instances.
+            if (column->use_count() == 1)
+                column->assumeMutableRef().shrinkToFit();
+        }
         block = sample_block.cloneWithColumns(read_result.columns);
     }
 

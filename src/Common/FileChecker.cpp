@@ -156,7 +156,7 @@ void FileChecker::load()
     if (!disk->exists(files_info_path))
         return;
 
-    std::unique_ptr<ReadBuffer> in = disk->readFile(files_info_path);
+    std::unique_ptr<ReadBuffer> in = disk->readFile(files_info_path, getReadSettings());
     WriteBufferFromOwnString out;
 
     /// The JSON library does not support whitespace. We delete them. Inefficient.

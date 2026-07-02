@@ -882,6 +882,7 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, 
 
     /// proton: starts
     ParserKeyword s_alter_stream("ALTER STREAM");
+    ParserKeyword s_alter_input("ALTER INPUT");
     ParserKeyword s_alter_view("ALTER VIEW");
     /// proton: ends
     ParserKeyword s_alter_database("ALTER DATABASE");
@@ -889,8 +890,14 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, 
     ASTAlterQuery::AlterObjectType alter_object_type;
     /// proton: starts
     bool is_view = false;
+    bool is_input = false;
     if (s_alter_stream.ignore(pos, expected))
     {
+        alter_object_type = ASTAlterQuery::AlterObjectType::STREAM;
+    }
+    else if (s_alter_input.ignore(pos, expected))
+    {
+        is_input = true;
         alter_object_type = ASTAlterQuery::AlterObjectType::STREAM;
     }
     else if (s_alter_view.ignore(pos, expected))
@@ -936,6 +943,7 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, 
     query->alter_object = alter_object_type;
     /// proton: starts.
     query->is_view = is_view;
+    query->is_input = is_input;
     /// proton: ends.
 
     if (query->database)

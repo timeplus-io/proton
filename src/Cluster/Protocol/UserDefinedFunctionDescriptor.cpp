@@ -7,6 +7,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <ranges>
 

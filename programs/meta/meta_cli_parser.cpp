@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <ranges>
+#include <fmt/ranges.h>
 
 
 namespace cluster::meta

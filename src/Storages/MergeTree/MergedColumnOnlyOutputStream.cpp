@@ -5,6 +5,7 @@
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
@@ -102,6 +103,11 @@ MergedColumnOnlyOutputStream::fillChecksums(
 void MergedColumnOnlyOutputStream::finish(bool sync)
 {
     writer->finish(sync);
+}
+
+void MergedColumnOnlyOutputStream::cancel() noexcept
+{
+    writer->cancel();
 }
 
 }

@@ -5,6 +5,7 @@
 #include <Server/IServer.h>
 
 #include <Daemon/BaseDaemon.h>
+#include <Server/HTTP/HTTPContext.h>
 
 /// proton : starts
 #if USE_PYTHON_UDF
@@ -104,6 +105,8 @@ protected:
 
 private:
     ContextMutablePtr global_context;
+
+    HTTPContextPtr httpContext() const;
 
     /// proton: starts
 #if USE_V8

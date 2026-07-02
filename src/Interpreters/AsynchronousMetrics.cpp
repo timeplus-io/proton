@@ -1,12 +1,12 @@
-#include <Interpreters/Aggregator.h>
+#include <Common/formatReadable.h>
 #include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/AsynchronousMetricLog.h>
-#include <Interpreters/JIT/CompiledExpressionCache.h>
-#include <Interpreters/DatabaseCatalog.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/logger_useful.h>
+#include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/Aggregator.h>
+#include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
 #include <Interpreters/Cache/FileCache.h>
 #include <Storages/MarkCache.h>
@@ -16,7 +16,19 @@
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadHelpers.h>
 #include <Databases/IDatabase.h>
+
+#include <base/cgroupsv2.h>
+#include <base/find_symbols.h>
+#include <base/errnoToString.h>
+#include <base/getPageSize.h>
+#include <sys/resource.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/Jemalloc.h>
+
+#include <boost/locale/date_time_facet.hpp>
+
 #include <chrono>
+#include <string_view>
 
 #include "config.h"
 
@@ -60,6 +72,8 @@ namespace ErrorCodes
 {
     extern const int CORRUPTED_DATA;
     extern const int CANNOT_SYSCONF;
+    extern const int CANNOT_OPEN_FILE;
+    extern const int FILE_DOESNT_EXIST;
 }
 
 
@@ -67,21 +81,68 @@ namespace ErrorCodes
 
 static constexpr size_t small_buffer_size = 4096;
 
-static void openFileIfExists(const char * filename, std::optional<ReadBufferFromFilePRead> & out)
+void AsynchronousMetrics::openFileIfExists(const char * filename, std::optional<ReadBufferFromFilePRead> & out)
 {
-    /// Ignoring time of check is not time of use cases, as procfs/sysfs files are fairly persistent.
-
     std::error_code ec;
     if (std::filesystem::is_regular_file(filename, ec))
-        out.emplace(filename, small_buffer_size);
+    {
+        try
+        {
+            out.emplace(filename, small_buffer_size);
+        }
+        catch (const ErrnoException & e)
+        {
+            if (e.code() == ErrorCodes::CANNOT_OPEN_FILE)
+            {
+                LOG_INFO(log, "Can't open file for monitoring: {}", e.message());
+            }
+            else if (e.code() == ErrorCodes::FILE_DOESNT_EXIST)
+            {
+                LOG_INFO(log, "Can't open file for monitoring, because it has disappeared at this moment: {}", e.message());
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
 }
 
-static std::unique_ptr<ReadBufferFromFilePRead> openFileIfExists(const std::string & filename)
+std::unique_ptr<ReadBufferFromFilePRead> AsynchronousMetrics::openFileIfExists(const std::string & filename)
 {
     std::error_code ec;
     if (std::filesystem::is_regular_file(filename, ec))
-        return std::make_unique<ReadBufferFromFilePRead>(filename, small_buffer_size);
+    {
+        try
+        {
+            return std::make_unique<ReadBufferFromFilePRead>(filename, small_buffer_size);
+        }
+        catch (const ErrnoException & e)
+        {
+            if (e.code() == ErrorCodes::CANNOT_OPEN_FILE)
+            {
+                LOG_INFO(log, "Can't open file for monitoring: {}", e.message());
+            }
+            else if (e.code() == ErrorCodes::FILE_DOESNT_EXIST)
+            {
+                LOG_INFO(log, "Can't open file for monitoring, because it has disappeared at this moment: {}", e.message());
+            }
+            else
+            {
+                throw;
+            }
+        }
+    }
     return {};
+}
+
+void AsynchronousMetrics::openCgroupv2MetricFile(const std::string & filename, std::optional<ReadBufferFromFilePRead> & out)
+{
+    if (auto path = getCgroupsV2PathContainingFile(filename))
+    {
+        const auto full_path = (std::filesystem::path(path.value()) / filename).string();
+        openFileIfExists(full_path.c_str(), out);
+    }
 }
 
 #endif
@@ -90,11 +151,15 @@ static std::unique_ptr<ReadBufferFromFilePRead> openFileIfExists(const std::stri
 AsynchronousMetrics::AsynchronousMetrics(
     ContextPtr global_context_,
     int update_period_seconds,
-    const ProtocolServerMetricsFunc & protocol_server_metrics_func_)
+    const ProtocolServerMetricsFunc & protocol_server_metrics_func_,
+    bool update_jemalloc_epoch_,
+    bool update_rss_)
     : WithContext(global_context_)
     , update_period(update_period_seconds)
     , protocol_server_metrics_func(protocol_server_metrics_func_)
     , settings(std::make_unique<Settings>(global_context_->getSettingsRef()))
+    , update_jemalloc_epoch(update_jemalloc_epoch_)
+    , update_rss(update_rss_)
     , log(getLogger("AsynchronousMetrics"))
 {
     /// proton : starts. totalRows(settings) for versioned-kv, changelog-kv
@@ -102,38 +167,63 @@ AsynchronousMetrics::AsynchronousMetrics(
     /// proton : ends
 
 #if defined(OS_LINUX)
-    openFileIfExists("/proc/meminfo", meminfo);
-    openFileIfExists("/proc/loadavg", loadavg);
-    openFileIfExists("/proc/stat", proc_stat);
-    openFileIfExists("/proc/self/stat", proc_self_stat);
     openFileIfExists("/proc/cpuinfo", cpuinfo);
     openFileIfExists("/proc/sys/fs/file-nr", file_nr);
-    openFileIfExists("/proc/uptime", uptime);
     openFileIfExists("/proc/net/dev", net_dev);
+    openFileIfExists("/proc/self/stat", proc_self_stat);
 
     /// CGroups v2
-    openFileIfExists("/sys/fs/cgroup/memory.max", cgroupmem_limit_in_bytes);
-    if (cgroupmem_limit_in_bytes)
-    {
-        openFileIfExists("/sys/fs/cgroup/memory.current", cgroupmem_usage_in_bytes);
-    }
-    openFileIfExists("/sys/fs/cgroup/cpu.max", cgroupcpu_max);
+    openCgroupv2MetricFile("memory.max", cgroupmem_limit_in_bytes);
+    openCgroupv2MetricFile("cpu.max", cgroupcpu_max);
+    openCgroupv2MetricFile("cpu.stat", cgroupcpu_stat);
 
     /// CGroups v1
     if (!cgroupmem_limit_in_bytes)
     {
         openFileIfExists("/sys/fs/cgroup/memory/memory.limit_in_bytes", cgroupmem_limit_in_bytes);
-        openFileIfExists("/sys/fs/cgroup/memory/memory.usage_in_bytes", cgroupmem_usage_in_bytes);
     }
     if (!cgroupcpu_max)
     {
         openFileIfExists("/sys/fs/cgroup/cpu/cpu.cfs_period_us", cgroupcpu_cfs_period);
         openFileIfExists("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", cgroupcpu_cfs_quota);
     }
+    if (!cgroupcpu_stat)
+        openFileIfExists("/sys/fs/cgroup/cpuacct/cpuacct.stat", cgroupcpuacct_stat);
 
-    openSensors();
-    openBlockDevices();
-    openEDAC();
+    try
+    {
+        const auto [cgroup_path, version] = ICgroupsReader::getCgroupsPath();
+        LOG_INFO(getLogger("AsynchronousMetrics"),
+            "Will use cgroup reader from '{}' (cgroups version: {})",
+            cgroup_path,
+            (version == ICgroupsReader::CgroupsVersion::V1) ? "v1" : "v2");
+        cgroupmem_reader = ICgroupsReader::createCgroupsReader(version, cgroup_path);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(getLogger("AsynchronousMetrics"), "cgroups are not available");
+    }
+
+
+    openFileIfExists("/proc/loadavg", loadavg);
+
+    /// proton: starts
+    /// Keep procfs sources open even when cgroup metrics are available, so we can:
+    /// - report both CGroup* and OS* metrics (system-wide view),
+    /// - compute fallback/derived values consistently in mixed container + host environments.
+    /// proton: ends
+    openFileIfExists("/proc/stat", proc_stat);
+    openFileIfExists("/proc/uptime", uptime);
+
+    openFileIfExists("/proc/meminfo", meminfo);
+
+	    openFileIfExists("/proc/pressure/memory", memory_pressure);
+	    openFileIfExists("/proc/pressure/cpu", cpu_pressure);
+	    openFileIfExists("/proc/pressure/io", io_pressure);
+
+	    openSensors();
+	    openBlockDevices();
+	    openEDAC();
     openSensorsChips();
 #endif
 }
@@ -185,10 +275,10 @@ void AsynchronousMetrics::openBlockDevices()
         return;
 
     block_devices_rescan_delay.restart();
-
     block_devs.clear();
 
-    for (const auto & device_dir : std::filesystem::directory_iterator("/sys/block"))
+    for (const auto & device_dir : std::filesystem::directory_iterator("/sys/block",
+        std::filesystem::directory_options::skip_permission_denied))
     {
         String device_name = device_dir.path().filename();
 
@@ -430,14 +520,13 @@ uint64_t updateJemallocEpoch()
 }
 
 template <typename Value>
-static Value saveJemallocMetricImpl(AsynchronousMetricValues & values,
+static Value saveJemallocMetricImpl(
+    AsynchronousMetricValues & values,
     const std::string & jemalloc_full_name,
     const std::string & clickhouse_full_name)
 {
-    Value value{};
-    size_t size = sizeof(value);
-    mallctl(jemalloc_full_name.c_str(), &value, &size, nullptr, 0);
-    values[clickhouse_full_name] = value;
+    auto value = getJemallocValue<Value>(jemalloc_full_name.c_str());
+    values[clickhouse_full_name] = AsynchronousMetricValue(value, "An internal metric of the low-level memory allocator (jemalloc). See https://jemalloc.net/jemalloc.3.html");
     return value;
 }
 
@@ -690,6 +779,185 @@ AsynchronousMetrics::NetworkInterfaceStatValues::operator-(const AsynchronousMet
 #endif
 
 
+#if defined(OS_LINUX)
+
+void AsynchronousMetrics::applyCgroupCPUMetricsUpdate(
+    AsynchronousMetricValues & new_values, const ProcStatValuesCPU & delta_values, double multiplier)
+{
+    new_values["CGroupUserTime"]
+        = {delta_values.user * multiplier,
+           "The ratio of time the CPU core was running userspace code."
+           " This includes also the time when the CPU was under-utilized due to the reasons internal to the CPU (memory loads, pipeline "
+           "stalls, branch mispredictions, running another SMT core)."};
+    new_values["CGroupSystemTime"]
+        = {delta_values.system * multiplier, "The ratio of time the CPU core was running OS kernel (system) code."};
+}
+
+void AsynchronousMetrics::applyCPUMetricsUpdate(
+    AsynchronousMetricValues & new_values, const std::string & cpu_suffix, const ProcStatValuesCPU & delta_values, double multiplier)
+{
+    new_values["OSUserTime" + cpu_suffix] = { delta_values.user * multiplier,
+        "The ratio of time the CPU core was running userspace code. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " This includes also the time when the CPU was under-utilized due to the reasons internal to the CPU (memory loads, pipeline stalls, branch mispredictions, running another SMT core)."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSNiceTime" + cpu_suffix] = { delta_values.nice * multiplier,
+        "The ratio of time the CPU core was running userspace code with higher priority. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSSystemTime" + cpu_suffix] = { delta_values.system * multiplier,
+        "The ratio of time the CPU core was running OS kernel (system) code. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSIdleTime" + cpu_suffix] = { delta_values.idle * multiplier,
+        "The ratio of time the CPU core was idle (not even ready to run a process waiting for IO) from the OS kernel standpoint. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " This does not include the time when the CPU was under-utilized due to the reasons internal to the CPU (memory loads, pipeline stalls, branch mispredictions, running another SMT core)."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSIOWaitTime" + cpu_suffix] = { delta_values.iowait * multiplier,
+        "The ratio of time the CPU core was not running the code but when the OS kernel did not run any other process on this CPU as the processes were waiting for IO. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSIrqTime" + cpu_suffix] = { delta_values.irq * multiplier,
+        "The ratio of time spent for running hardware interrupt requests on the CPU. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " A high number of this metric may indicate hardware misconfiguration or a very high network load."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSSoftIrqTime" + cpu_suffix] = { delta_values.softirq * multiplier,
+        "The ratio of time spent for running software interrupt requests on the CPU. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " A high number of this metric may indicate inefficient software running on the system."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSStealTime" + cpu_suffix] = { delta_values.steal * multiplier,
+        "The ratio of time spent in other operating systems by the CPU when running in a virtualized environment. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " Not every virtualized environments present this metric, and most of them don't."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSGuestTime" + cpu_suffix] = { delta_values.guest * multiplier,
+        "The ratio of time spent running a virtual CPU for guest operating systems under the control of the Linux kernel (See `man procfs`). This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " This metric is irrelevant for ClickHouse, but still exists for completeness."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+    new_values["OSGuestNiceTime" + cpu_suffix] = { delta_values.guest_nice * multiplier,
+        "The ratio of time spent running a virtual CPU for guest operating systems under the control of the Linux kernel, when a guest was set to a higher priority (See `man procfs`). This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server."
+        " This metric is irrelevant for ClickHouse, but still exists for completeness."
+        " The value for a single CPU core will be in the interval [0..1]. The value for all CPU cores is calculated as a sum across them [0..num cores]."};
+}
+
+void AsynchronousMetrics::applyCgroupNormalizedCPUMetricsUpdate(
+    AsynchronousMetricValues & new_values, double num_cpus_to_normalize, const ProcStatValuesCPU & delta_values_all_cpus, double multiplier)
+{
+    chassert(num_cpus_to_normalize);
+
+    new_values["CGroupUserTimeNormalized"]
+        = {delta_values_all_cpus.user * multiplier / num_cpus_to_normalize,
+           "The value is similar to `CGroupUserTime` but divided by the number of available CPU cores to be measured in the [0..1] "
+           "interval regardless of the number of cores."
+           " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is "
+           "non-uniform, and still get the average resource utilization metric."};
+    new_values["CGroupSystemTimeNormalized"]
+        = {delta_values_all_cpus.system * multiplier / num_cpus_to_normalize,
+           "The value is similar to `CGroupSystemTime` but divided by the number of available CPU cores to be measured in the [0..1] "
+           "interval regardless of the number of cores."
+           " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is "
+           "non-uniform, and still get the average resource utilization metric."};
+}
+
+void AsynchronousMetrics::applyNormalizedCPUMetricsUpdate(
+    AsynchronousMetricValues & new_values,
+    double num_cpus_to_normalize,
+    const ProcStatValuesCPU & delta_values_all_cpus,
+    double multiplier)
+{
+    new_values["OSUserTimeNormalized"] = { delta_values_all_cpus.user * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSUserTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSNiceTimeNormalized"] = { delta_values_all_cpus.nice * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSNiceTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSSystemTimeNormalized"] = { delta_values_all_cpus.system * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSSystemTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSIdleTimeNormalized"] = { delta_values_all_cpus.idle * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSIdleTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSIOWaitTimeNormalized"] = { delta_values_all_cpus.iowait * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSIOWaitTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSIrqTimeNormalized"] = { delta_values_all_cpus.irq * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSIrqTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSSoftIrqTimeNormalized"] = { delta_values_all_cpus.softirq * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSSoftIrqTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSStealTimeNormalized"] = { delta_values_all_cpus.steal * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSStealTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSGuestTimeNormalized"] = { delta_values_all_cpus.guest * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSGuestTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+    new_values["OSGuestNiceTimeNormalized"] = { delta_values_all_cpus.guest_nice * multiplier / num_cpus_to_normalize,
+        "The value is similar to `OSGuestNiceTime` but divided to the number of CPU cores to be measured in the [0..1] interval regardless of the number of cores."
+        " This allows you to average the values of this metric across multiple servers in a cluster even if the number of cores is non-uniform, and still get the average resource utilization metric."};
+}
+
+static void readStringUntilEquals(String & s, ReadBuffer & buf)
+{
+    s.clear();
+    while (!buf.eof())
+    {
+        char * next_pos = find_first_symbols<'='>(buf.position(), buf.buffer().end());
+        s.append(buf.position(), next_pos - buf.position());
+        buf.position() = next_pos;
+
+        if (buf.hasPendingData())
+            return;
+    }
+}
+
+void readPressureFile(
+    AsynchronousMetricValues & new_values, const std::string & type, ReadBufferFromFilePRead & in,
+    std::unordered_map<String, uint64_t> & prev_pressure_vals, bool first_run)
+{
+    in.rewind();
+    /// The shape of this file is:
+    /// some avg10=0.00 avg60=0.00 avg300=0.00 total=0
+    /// full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+
+    /// We need the first field to capture whether it's a partial or total stall.
+    /// We also ignore the time averages as well. Recording the counter (the last field)
+    /// lets us recreate any average, with better identification of any short spikes
+    while (!in.eof())
+    {
+        String stall_type;
+        readStringUntilWhitespace(stall_type, in);
+
+        String skip;
+        // skip avg10=
+        readStringUntilEquals(skip, in);
+        ++in.position();
+        // skip avg60=
+        readStringUntilEquals(skip, in);
+        ++in.position();
+        // skip avg300=
+        readStringUntilEquals(skip, in);
+        ++in.position();
+        // skip total=
+        readStringUntilEquals(skip, in);
+        ++in.position();
+
+        uint64_t counter;
+        readText(counter, in);
+
+        String metric_key = fmt::format("PSI_{}_{}", type, stall_type);
+
+        if (!first_run)
+        {
+            uint64_t prev = prev_pressure_vals[metric_key];
+
+            uint64_t delta = counter - prev;
+            new_values[metric_key] = AsynchronousMetricValue(delta,
+                "Microseconds of stall time since last measurement."
+                "Upstream docs can be found https://docs.kernel.org/accounting/psi.html for the metrics and how to interpret them");
+        }
+
+        prev_pressure_vals[metric_key] = counter;
+        skipToNextLineOrEOF(in);
+    }
+}
+#endif
+
 void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_time)
 {
     Stopwatch watch;
@@ -706,88 +974,97 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     /// proton : ends
 
     auto current_time = std::chrono::system_clock::now();
-    auto time_after_previous_update [[maybe_unused]] = current_time - previous_update_time;
+    auto time_since_previous_update = current_time - previous_update_time;
     previous_update_time = update_time;
 
     /// This is also a good indicator of system responsiveness.
-    new_values["Jitter"] = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - update_time).count() / 1e9;
+    new_values["Jitter"] = { std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - update_time).count() / 1e9,
+        "The difference in time the thread for calculation of the asynchronous metrics was scheduled to wake up and the time it was in fact, woken up."
+        " A proxy-indicator of overall system latency and responsiveness." };
 
+    if (auto mark_cache = locked_context->getMarkCache())
     {
-        if (auto mark_cache = locked_context->getMarkCache())
-        {
-            new_values["MarkCacheBytes"] = mark_cache->weight();
-            new_values["MarkCacheFiles"] = mark_cache->count();
-        }
+        new_values["MarkCacheBytes"] = { mark_cache->weight(), "Total size of mark cache in bytes" };
+        new_values["MarkCacheFiles"] = { mark_cache->count(), "Total number of mark files cached in the mark cache" };
     }
 
+    if (auto uncompressed_cache = locked_context->getUncompressedCache())
     {
-        if (auto uncompressed_cache = locked_context->getUncompressedCache())
-        {
-            new_values["UncompressedCacheBytes"] = uncompressed_cache->weight();
-            new_values["UncompressedCacheCells"] = uncompressed_cache->count();
-        }
+        new_values["UncompressedCacheBytes"] = { uncompressed_cache->weight(),
+        "Total size of uncompressed cache in bytes. Uncompressed cache does not usually improve the performance and should be mostly avoided." };
+        new_values["UncompressedCacheCells"] = { uncompressed_cache->count(),
+        "Total number of entries in the uncompressed cache. Each entry represents a decompressed block of data. Uncompressed cache does not usually improve performance and should be mostly avoided." };
     }
 
+    if (auto index_mark_cache = locked_context->getIndexMarkCache())
     {
-        if (auto index_mark_cache = locked_context->getIndexMarkCache())
-        {
-            new_values["IndexMarkCacheBytes"] = index_mark_cache->weight();
-            new_values["IndexMarkCacheFiles"] = index_mark_cache->count();
-        }
+        new_values["IndexMarkCacheBytes"] = { index_mark_cache->weight(), "Total size of mark cache for secondary indices in bytes." };
+        new_values["IndexMarkCacheFiles"] = { index_mark_cache->count(), "Total number of mark files cached in the mark cache for secondary indices." };
     }
 
+    if (auto index_uncompressed_cache = locked_context->getIndexUncompressedCache())
     {
-        if (auto index_uncompressed_cache = locked_context->getIndexUncompressedCache())
-        {
-            new_values["IndexUncompressedCacheBytes"] = index_uncompressed_cache->weight();
-            new_values["IndexUncompressedCacheCells"] = index_uncompressed_cache->count();
-        }
+        new_values["IndexUncompressedCacheBytes"] = { index_uncompressed_cache->weight(),
+        "Total size of uncompressed cache in bytes for secondary indices. Uncompressed cache does not usually improve the performance and should be mostly avoided." };
+    new_values["IndexUncompressedCacheCells"] = { index_uncompressed_cache->count(),
+        "Total number of entries in the uncompressed cache for secondary indices. Each entry represents a decompressed block of data. Uncompressed cache does not usually improve performance and should be mostly avoided." };
     }
 
+    if (auto mmap_cache = locked_context->getMMappedFileCache())
     {
-        if (auto mmap_cache = locked_context->getMMappedFileCache())
-        {
-            new_values["MMapCacheCells"] = mmap_cache->count();
-        }
+        new_values["MMapCacheCells"] = { mmap_cache->count(),
+            "The number of files opened with `mmap` (mapped in memory)."
+            " This is used for queries with the setting `local_filesystem_read_method` set to  `mmap`."
+            " The files opened with `mmap` are kept in the cache to avoid costly TLB flushes."};
     }
 
     {
         auto caches = FileCacheFactory::instance().getAll();
+        size_t total_bytes = 0;
+        size_t total_files = 0;
+
         for (const auto & [_, cache_data] : caches)
         {
-            new_values["FilesystemCacheBytes"] = cache_data->cache->getUsedCacheSize();
-            new_values["FilesystemCacheFiles"] = cache_data->cache->getFileSegmentsNum();
+            total_bytes += cache_data->cache->getUsedCacheSize();
+            total_files += cache_data->cache->getFileSegmentsNum();
         }
+
+        new_values["FilesystemCacheBytes"] = { total_bytes,
+            "Total bytes in the `cache` virtual filesystem. This cache is hold on disk." };
+        new_values["FilesystemCacheFiles"] = { total_files,
+            "Total number of cached file segments in the `cache` virtual filesystem. This cache is hold on disk." };
     }
 
 #if USE_ROCKSDB
-    {
         if (auto metadata_cache = locked_context->tryGetMergeTreeMetadataCache())
         {
-            new_values["MergeTreeMetadataCacheSize"] = metadata_cache->getEstimateNumKeys();
+            new_values["MergeTreeMetadataCacheSize"] = { metadata_cache->getEstimateNumKeys(),
+            "The size of the metadata cache for tables. This cache is experimental and not used in production." };
         }
-    }
 #endif
 
 #if USE_EMBEDDED_COMPILER
+    if (auto * compiled_expression_cache = CompiledExpressionCacheFactory::instance().tryGetCache())
     {
-        if (auto * compiled_expression_cache = CompiledExpressionCacheFactory::instance().tryGetCache())
-        {
-            new_values["CompiledExpressionCacheBytes"] = compiled_expression_cache->weight();
-            new_values["CompiledExpressionCacheCount"]  = compiled_expression_cache->count();
-        }
+        new_values["CompiledExpressionCacheBytes"] = { compiled_expression_cache->weight(),
+            "Total bytes used for the cache of JIT-compiled code." };
+        new_values["CompiledExpressionCacheCount"] = { compiled_expression_cache->count(),
+            "Total entries in the cache of JIT-compiled code." };
     }
 #endif
 
-    new_values["Uptime"] = locked_context->getUptimeSeconds();
+    new_values["Uptime"] = { getContext()->getUptimeSeconds(),
+        "The server uptime in seconds. It includes the time spent for server initialization before accepting connections." };
 
+    if (const auto stats = getHashTablesCacheStatistics())
     {
-        if (const auto stats = getHashTablesCacheStatistics())
-        {
-            new_values["HashTableStatsCacheEntries"] = stats->entries;
-            new_values["HashTableStatsCacheHits"] = stats->hits;
-            new_values["HashTableStatsCacheMisses"] = stats->misses;
-        }
+        new_values["HashTableStatsCacheEntries"] = { stats->entries,
+            "The number of entries in the cache of hash table sizes."
+            " The cache for hash table sizes is used for predictive optimization of GROUP BY." };
+        new_values["HashTableStatsCacheHits"] = { stats->hits,
+            "The number of times the prediction of a hash table size was correct." };
+        new_values["HashTableStatsCacheMisses"] = { stats->misses,
+            "The number of times the prediction of a hash table size was incorrect." };
     }
 
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
@@ -800,8 +1077,11 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     // 'epoch' is a special mallctl -- it updates the statistics. Without it, all
     // the following calls will return stale values. It increments and returns
     // the current epoch number, which might be useful to log as a sanity check.
-    auto epoch = updateJemallocEpoch();
-    new_values["jemalloc.epoch"] = epoch;
+    auto epoch = update_jemalloc_epoch ? updateJemallocEpoch() : getJemallocValue<uint64_t>("epoch");
+    new_values["jemalloc.epoch"]
+        = {epoch,
+           "An internal incremental update number of the statistics of jemalloc (Jason Evans' memory allocator), used in all other "
+           "`jemalloc` metrics."};
 
     // Collect the statistics themselves.
     saveJemallocMetric<size_t>(new_values, "allocated");
@@ -815,8 +1095,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     saveJemallocMetric<uint64_t>(new_values, "background_thread.num_runs");
     saveJemallocMetric<uint64_t>(new_values, "background_thread.run_intervals");
     saveAllArenasMetric<size_t>(new_values, "pactive");
-    [[maybe_unused]] size_t je_malloc_pdirty = saveAllArenasMetric<size_t>(new_values, "pdirty");
-    [[maybe_unused]] size_t je_malloc_pmuzzy = saveAllArenasMetric<size_t>(new_values, "pmuzzy");
+    saveAllArenasMetric<size_t>(new_values, "pdirty");
+    saveAllArenasMetric<size_t>(new_values, "pmuzzy");
     saveAllArenasMetric<size_t>(new_values, "dirty_purged");
     saveAllArenasMetric<size_t>(new_values, "muzzy_purged");
 #endif
@@ -826,94 +1106,152 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     {
         MemoryStatisticsOS::Data & data = memory_statistics_data;
 
-        new_values["MemoryVirtual"] = data.virt;
-        new_values["MemoryResident"] = data.resident;
+        new_values["MemoryVirtual"] = { data.virt,
+            "The size of the virtual address space allocated by the server process, in bytes."
+            " The size of the virtual address space is usually much greater than the physical memory consumption, and should not be used as an estimate for the memory consumption."
+            " The large values of this metric are totally normal, and makes only technical sense."};
+        new_values["MemoryResident"] = { data.resident,
+            "The amount of physical memory used by the server process, in bytes." };
 
-        /// Part of process RSS not tracked by the server's jemalloc arena. On builds
-        /// with embedded free-threaded CPython this covers the mimalloc heap the
-        /// interpreter uses internally (invisible to jemalloc-based profiling).
+        /// Expose the part of process RSS that is *not* tracked by the server's
+        /// jemalloc arena. On builds with embedded free-threaded CPython this
+        /// covers the mimalloc heap that the interpreter uses internally —
+        /// something jemalloc-based profiling and `system.jemalloc_*` commands
+        /// do not see. It is an approximation (also includes non-heap mappings
+        /// like code pages, thread stacks, non-jemalloc libs), so treat it as
+        /// a blind-spot indicator, not a precise allocator number.
         {
             UInt64 non_jemalloc = (data.resident > jemalloc_resident)
                                 ? (data.resident - jemalloc_resident)
                                 : 0;
-            new_values["NonJemallocMemory"] = non_jemalloc;
+            new_values["NonJemallocMemory"] = { non_jemalloc,
+                "Approximate amount of process RSS not accounted for by jemalloc "
+                "(`MemoryResident` - `jemalloc.resident`). Useful as a blind-spot "
+                "indicator for allocators outside jemalloc — notably the mimalloc "
+                "heap owned by the embedded free-threaded CPython runtime. Also "
+                "includes non-heap mappings (code, thread stacks, other libs)." };
         }
 
-        /// RSS decomposition from /proc/self/smaps_rollup (Linux >= 4.14). Splits
-        /// anonymous (heap, mimalloc, stacks) vs file-backed (.so/.py/mmap) pages.
-        /// All fields read zero when smaps_rollup is unavailable.
+        /// RSS decomposition sourced from /proc/self/smaps_rollup (Linux >= 4.14).
+        /// These split `NonJemallocMemory` into allocator-owned anonymous memory
+        /// (heap, mimalloc, stacks) vs. file-backed pages (loaded `.so`/`.py` code,
+        /// mmapped data). Always published so dashboards stay stable across hosts;
+        /// all fields read zero when smaps_rollup is unavailable (kernel < 4.14,
+        /// or restricted by seccomp / hidepid).
         {
-            new_values["MemoryAnonymous"] = data.anonymous;
+            new_values["MemoryAnonymous"] = { data.anonymous,
+                "Anonymous RSS of the process (heap, thread stacks, anonymous mmaps). "
+                "On free-threaded CPython builds this includes the mimalloc heap "
+                "owned by the embedded interpreter. `MemoryAnonymous - jemalloc.resident` "
+                "isolates the non-jemalloc allocator footprint better than "
+                "`NonJemallocMemory` because it excludes code and mapped files. "
+                "Zero if /proc/self/smaps_rollup is unavailable on this kernel." };
 
+            /// Derived as `MemoryResident - MemoryAnonymous` only when smaps_rollup
+            /// actually gave us a number — otherwise the subtraction would degenerate
+            /// to `MemoryResident` and be misleading.
             UInt64 file_backed = 0;
             if (data.smaps_rollup_available && data.resident > data.anonymous)
                 file_backed = data.resident - data.anonymous;
-            new_values["MemoryFileBacked"] = file_backed;
+            new_values["MemoryFileBacked"] = { file_backed,
+                "File-backed RSS of the process (loaded `.so` libraries, `.py` modules, "
+                "mmapped data files). Derived as `MemoryResident - MemoryAnonymous`. "
+                "Zero if smaps_rollup is unavailable (cannot split file-backed from "
+                "anonymous RSS without it)." };
 
-            new_values["MemoryAnonHugePages"] = data.anon_huge_pages;
-            new_values["MemoryPrivateDirty"] = data.private_dirty;
-            new_values["MemoryPss"] = data.pss;
-            new_values["MemorySwap"] = data.swap;
+            new_values["MemoryAnonHugePages"] = { data.anon_huge_pages,
+                "Subset of `MemoryAnonymous` backed by transparent huge pages. "
+                "Non-zero values indicate jemalloc or mimalloc arenas promoted to THP. "
+                "Zero if smaps_rollup is unavailable." };
+
+            new_values["MemoryPrivateDirty"] = { data.private_dirty,
+                "Private dirty pages — memory that would be lost if the process died. "
+                "Practical upper bound on data the process is carrying that is not "
+                "persisted anywhere else. Zero if smaps_rollup is unavailable." };
+
+            new_values["MemoryPss"] = { data.pss,
+                "Proportional set size: private pages plus each shared page divided "
+                "by the number of processes mapping it. Fairer than RSS when multiple "
+                "timeplusd processes share memory (embedded libs, page cache). "
+                "Zero if smaps_rollup is unavailable." };
+
+            new_values["MemorySwap"] = { data.swap,
+                "Resident pages that have been swapped out. Non-zero values indicate "
+                "memory pressure; jemalloc/mimalloc stats will under-report true usage. "
+                "Zero if smaps_rollup is unavailable." };
         }
 
 #if USE_PYTHON_UDF
-        /// mimalloc process-wide stats from the embedded free-threaded CPython runtime.
-        /// Registered only when the build links mimalloc (ENABLE_PYTHON_FREE_THREADED=ON).
+        /// mimalloc process-wide stats from the embedded free-threaded CPython
+        /// runtime. Registered only when the build actually links mimalloc in
+        /// (ENABLE_PYTHON_FREE_THREADED=ON). Thread-safe; reads atomic counters,
+        /// does not acquire the GIL.
         if (cpython::mimallocEnabled())
         {
             auto mi = cpython::getMimallocProcessInfo();
-            new_values["PythonMimallocCommitted"] = mi.current_commit;
-            new_values["PythonMimallocPeakCommitted"] = mi.peak_commit;
+            new_values["PythonMimallocCommitted"] = { mi.current_commit,
+                "Current bytes committed in mimalloc arenas (pages mapped with "
+                "PROT_READ|PROT_WRITE). Grows with Python allocation demand, "
+                "shrinks only when mimalloc returns arenas to the OS. "
+                "Complement to `jemalloc.resident` — together they cover the "
+                "process allocator footprint without the guesswork of "
+                "`NonJemallocMemory`. Note: this counter is mimalloc's view "
+                "of what it has committed; the actual resident portion is "
+                "reflected in `MemoryAnonymous`." };
+            new_values["PythonMimallocPeakCommitted"] = { mi.peak_commit,
+                "Peak committed bytes observed in mimalloc arenas since "
+                "process start." };
         }
 #endif
+        UInt64 page_cache_bytes = 0;
+        /// proton: starts
+        /// Proton does not currently expose ClickHouse userspace page cache via Context.
+        /// Keep the metric, but treat userspace page cache size as 0.
+        /// proton: ends
+
+        UInt64 resident_without_page_cache = (data.resident > page_cache_bytes)
+                                          ? (data.resident - page_cache_bytes)
+                                          : 0;
+
+        new_values["MemoryResidentWithoutPageCache"] = {
+            resident_without_page_cache,
+            "The amount of physical memory used by the server process, excluding userspace page cache, in bytes. "
+            "This provides a more accurate view of actual memory usage when userspace page cache is utilized. "
+            "When userspace page cache is disabled, this value equals MemoryResident."
+        };
 
 #if !defined(OS_FREEBSD)
-        new_values["MemoryShared"] = data.shared;
+        new_values["MemoryShared"] = { data.shared,
+            "The amount of memory used by the server process, that is also shared by another processes, in bytes."
+            " ClickHouse does not use shared memory, but some memory can be labeled by OS as shared for its own reasons."
+            " This metric does not make a lot of sense to watch, and it exists only for completeness reasons."};
 #endif
-        new_values["MemoryCode"] = data.code;
-        new_values["MemoryDataAndStack"] = data.data_and_stack;
+        new_values["MemoryCode"] = { data.code,
+            "The amount of virtual memory mapped for the pages of machine code of the server process, in bytes." };
+        new_values["MemoryDataAndStack"] = { data.data_and_stack,
+            "The amount of virtual memory mapped for the use of stack and for the allocated memory, in bytes."
+            " It is unspecified whether it includes the per-thread stacks and most of the allocated memory, that is allocated with the 'mmap' system call."
+            " This metric exists only for completeness reasons. I recommend to use the `MemoryResident` metric for monitoring."};
+        /// proton: starts
+        mutable_context->setMemoryUsedMB(static_cast<uint32_t>(data.resident / 1024 / 1024));
+        new_values["MemoryTracker.Amount"] = { total_memory_tracker.get(), "Total amount of memory accounted by ClickHouse memory tracker, in bytes." };
+        new_values["MemoryTracker.Peak"] = { total_memory_tracker.getPeak(), "Peak amount of memory accounted by ClickHouse memory tracker since server start, in bytes." };
+        /// proton: ends
 
-        /// We must update the value of total_memory_tracker periodically.
-        /// Otherwise it might be calculated incorrectly - it can include a "drift" of memory amount.
-        /// See https://github.com/ClickHouse/ClickHouse/issues/10293
+        if (update_rss)
+            MemoryTracker::updateRSS(data.resident);
+    }
+
+    {
+        struct rusage rusage{};
+        if (!getrusage(RUSAGE_SELF, &rusage))
         {
-            Int64 amount = total_memory_tracker.get();
-            Int64 peak = total_memory_tracker.getPeak();
-            Int64 rss = data.resident;
-            Int64 free_memory_in_allocator_arenas = 0;
-
-#if USE_JEMALLOC
-            /// According to jemalloc man, pdirty is:
-            ///
-            ///     Number of pages within unused extents that are potentially
-            ///     dirty, and for which madvise() or similar has not been called.
-            ///
-            /// So they will be subtracted from RSS to make accounting more
-            /// accurate, since those pages are not really RSS but a memory
-            /// that can be used at anytime via jemalloc.
-            free_memory_in_allocator_arenas = je_malloc_pdirty * getPageSize();
-#endif
-
-            /// proton : starts
-            mutable_context->setMemoryUsedMB(static_cast<uint32_t>(data.resident / 1024 / 1024));
-
-            new_values["MemoryTracker.Amount"] = amount;
-            new_values["MemoryTracker.Peak"] = peak;
-
-            Int64 difference = rss - amount;
-
-            /// Log only if difference is high (50MB). This is for convenience. The threshold is arbitrary.
-            if (difference >= 52'428'800 || difference <= -52'428'800)
-                LOG_INFO(log,
-                    "MemoryTracking: was {}, peak {}, free memory in arenas {}, will set to {} (RSS), difference: {}",
-                    ReadableSize(amount),
-                    ReadableSize(peak),
-                    ReadableSize(free_memory_in_allocator_arenas),
-                    ReadableSize(rss),
-                    ReadableSize(difference));
-            /// proton : ends
-
-            total_memory_tracker.setRSS(rss, free_memory_in_allocator_arenas);
+            new_values["MemoryResidentMax"] = { rusage.ru_maxrss * 1024 /* KiB -> bytes */,
+                "Maximum amount of physical memory used by the server process, in bytes." };
+        }
+        else
+        {
+            LOG_ERROR(log, "Cannot obtain resource usage: {}", errnoToString(errno));
         }
     }
 #endif
@@ -941,11 +1279,22 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             assertChar('/', *loadavg);
             readText(threads_total, *loadavg);
 
-            new_values["LoadAverage1"] = loadavg1;
-            new_values["LoadAverage5"] = loadavg5;
-            new_values["LoadAverage15"] = loadavg15;
-            new_values["OSThreadsRunnable"] = threads_runnable;
-            new_values["OSThreadsTotal"] = threads_total;
+#define LOAD_AVERAGE_DOCUMENTATION \
+    " The load represents the number of threads across all the processes (the scheduling entities of the OS kernel)," \
+    " that are currently running by CPU or waiting for IO, or ready to run but not being scheduled at this point of time." \
+    " This number includes all the processes, not only clickhouse-server. The number can be greater than the number of CPU cores," \
+    " if the system is overloaded, and many processes are ready to run but waiting for CPU or IO."
+
+            new_values["LoadAverage1"] = { loadavg1,
+                "The whole system load, averaged with exponential smoothing over 1 minute." LOAD_AVERAGE_DOCUMENTATION };
+            new_values["LoadAverage5"] = { loadavg5,
+                "The whole system load, averaged with exponential smoothing over 5 minutes." LOAD_AVERAGE_DOCUMENTATION };
+            new_values["LoadAverage15"] = { loadavg15,
+                "The whole system load, averaged with exponential smoothing over 15 minutes." LOAD_AVERAGE_DOCUMENTATION };
+            new_values["OSThreadsRunnable"] = { threads_runnable,
+                "The total number of 'runnable' threads, as the OS kernel scheduler seeing it." };
+            new_values["OSThreadsTotal"] = { threads_total,
+                "The total number of threads, as the OS kernel scheduler seeing it." };
         }
         catch (...)
         {
@@ -962,12 +1311,74 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             Float64 uptime_seconds = 0;
             readText(uptime_seconds, *uptime);
 
-            new_values["OSUptime"] = uptime_seconds;
+            new_values["OSUptime"] = { uptime_seconds, "The uptime of the host server (the machine where ClickHouse is running), in seconds." };
         }
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
+    }
+
+    Float64 max_cpu_cgroups = 0;
+    if (cgroupcpu_max)
+    {
+        try
+        {
+            cgroupcpu_max->rewind();
+
+            uint64_t quota = 0;
+            uint64_t period = 0;
+
+            std::string line;
+            readText(line, *cgroupcpu_max);
+
+            auto space = line.find(' ');
+
+            if (line.rfind("max", space) == std::string::npos)
+            {
+                auto field1 = line.substr(0, space);
+                quota = std::stoull(field1);
+            }
+
+            if (space != std::string::npos)
+            {
+                auto field2 = line.substr(space + 1);
+                period = std::stoull(field2);
+            }
+
+            if (quota > 0 && period > 0)
+                max_cpu_cgroups = static_cast<Float64>(quota) / period;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+    else if (cgroupcpu_cfs_quota && cgroupcpu_cfs_period)
+    {
+        try
+        {
+            cgroupcpu_cfs_quota->rewind();
+            cgroupcpu_cfs_period->rewind();
+
+            uint64_t quota = 0;
+            uint64_t period = 0;
+
+            tryReadText(quota, *cgroupcpu_cfs_quota);
+            tryReadText(period, *cgroupcpu_cfs_period);
+
+            if (quota > 0 && period > 0)
+                max_cpu_cgroups = static_cast<Float64>(quota) / period;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    if (max_cpu_cgroups > 0)
+    {
+        new_values["CGroupMaxCPU"] = { max_cpu_cgroups, "The maximum number of CPU cores according to CGroups."};
     }
 
     /// proton: starts.
@@ -981,7 +1392,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             if (-1 == hz)
                 throwFromErrno("Cannot call 'sysconf' to obtain system HZ", ErrorCodes::CANNOT_SYSCONF);
 
-            double multiplier = 1.0 / hz / (std::chrono::duration_cast<std::chrono::nanoseconds>(time_after_previous_update).count() / 1e9);
+            double multiplier = 1.0 / hz / (std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_previous_update).count() / 1e9);
 
             SelfProcStats current_values{};
             current_values.read(*proc_self_stat);
@@ -990,14 +1401,17 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             {
                 SelfProcStats delta_values = current_values - self_proc_stats;
 
-                new_values["ProtonUserTime"] = delta_values.utime * multiplier;
-                new_values["ProtonSystemTime"] = delta_values.stime * multiplier;
-                new_values["ProtonChildUserTime"] = delta_values.cutime * multiplier;
-                new_values["ProtonChildSystemTime"] = delta_values.cstime * multiplier;
+                new_values["ProtonUserTime"] = { delta_values.utime * multiplier, "CPU time ratio spent in user mode by the proton process during the interval." };
+                new_values["ProtonSystemTime"] = { delta_values.stime * multiplier, "CPU time ratio spent in kernel mode by the proton process during the interval." };
+                new_values["ProtonChildUserTime"] = { delta_values.cutime * multiplier, "CPU time ratio spent in user mode by children of the proton process during the interval." };
+                new_values["ProtonChildSystemTime"] = { delta_values.cstime * multiplier, "CPU time ratio spent in kernel mode by children of the proton process during the interval." };
 
-                mutable_context->setCPUUsage(
-                    new_values["ProtonUserTime"] + new_values["ProtonSystemTime"] + new_values["ProtonChildUserTime"]
-                    + new_values["ProtonChildSystemTime"]);
+                const double cpu_usage =
+                    new_values["ProtonUserTime"].value +
+                    new_values["ProtonSystemTime"].value +
+                    new_values["ProtonChildUserTime"].value +
+                    new_values["ProtonChildSystemTime"].value;
+                mutable_context->setCPUUsage(cpu_usage);
             }
             self_proc_stats = current_values;
         }
@@ -1008,6 +1422,71 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
     /// proton: ends.
 
+    if (cgroupcpu_stat || cgroupcpuacct_stat)
+    {
+        try
+        {
+            ReadBufferFromFilePRead & in = cgroupcpu_stat ? *cgroupcpu_stat : *cgroupcpuacct_stat;
+            ProcStatValuesCPU current_values{};
+
+            /// We re-read the file from the beginning each time
+            in.rewind();
+
+            while (!in.eof())
+            {
+                String name;
+                readStringUntilWhitespace(name, in);
+                skipWhitespaceIfAny(in);
+
+                /// `user_usec` for cgroup v2 and `user` for cgroup v1
+                if (name.starts_with("user"))
+                {
+                    readText(current_values.user, in);
+                    skipToNextLineOrEOF(in);
+                }
+                /// `system_usec` for cgroup v2 and `system` for cgroup v1
+                else if (name.starts_with("system"))
+                {
+                    readText(current_values.system, in);
+                    skipToNextLineOrEOF(in);
+                }
+                else
+                    skipToNextLineOrEOF(in);
+            }
+
+            if (!first_run)
+            {
+                auto get_clock_ticks = [&]()
+                {
+                    if (auto hz = sysconf(_SC_CLK_TCK); hz != -1)
+                        return hz;
+                    else
+                        throwFromErrno("Cannot call 'sysconf' to obtain system HZ", ErrorCodes::CANNOT_SYSCONF);
+                };
+                const auto cgroup_version_specific_divisor = cgroupcpu_stat ? 1e6 : get_clock_ticks();
+                const double multiplier = 1.0 / cgroup_version_specific_divisor
+                    / (std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_previous_update).count() / 1e9);
+
+                const ProcStatValuesCPU delta_values = current_values - cgroup_values_all_cpus;
+                applyCgroupCPUMetricsUpdate(new_values, delta_values, multiplier);
+                if (max_cpu_cgroups > 0)
+                    applyCgroupNormalizedCPUMetricsUpdate(new_values, max_cpu_cgroups, delta_values, multiplier);
+
+                /// proton: starts
+                mutable_context->setOSCPUUsage(delta_values.user * multiplier + delta_values.system * multiplier);
+                /// proton: ends
+            }
+
+            cgroup_values_all_cpus = current_values;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            openCgroupv2MetricFile("cpu.stat", cgroupcpu_stat);
+            if (!cgroupcpu_stat)
+                openFileIfExists("/sys/fs/cgroup/cpuacct/cpuacct.stat", cgroupcpuacct_stat);
+        }
+    }
     if (proc_stat)
     {
         try
@@ -1018,7 +1497,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             if (-1 == hz)
                 throwFromErrno("Cannot call 'sysconf' to obtain system HZ", ErrorCodes::CANNOT_SYSCONF);
 
-            double multiplier = 1.0 / hz / (std::chrono::duration_cast<std::chrono::nanoseconds>(time_after_previous_update).count() / 1e9);
+            double multiplier = 1.0 / hz / (std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_previous_update).count() / 1e9);
             size_t num_cpus = 0;
 
             ProcStatValuesOther current_other_values{};
@@ -1063,16 +1542,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                         else
                             delta_values_all_cpus = delta_values;
 
-                        new_values["OSUserTime" + cpu_suffix] = delta_values.user * multiplier;
-                        new_values["OSNiceTime" + cpu_suffix] = delta_values.nice * multiplier;
-                        new_values["OSSystemTime" + cpu_suffix] = delta_values.system * multiplier;
-                        new_values["OSIdleTime" + cpu_suffix] = delta_values.idle * multiplier;
-                        new_values["OSIOWaitTime" + cpu_suffix] = delta_values.iowait * multiplier;
-                        new_values["OSIrqTime" + cpu_suffix] = delta_values.irq * multiplier;
-                        new_values["OSSoftIrqTime" + cpu_suffix] = delta_values.softirq * multiplier;
-                        new_values["OSStealTime" + cpu_suffix] = delta_values.steal * multiplier;
-                        new_values["OSGuestTime" + cpu_suffix] = delta_values.guest * multiplier;
-                        new_values["OSGuestNiceTime" + cpu_suffix] = delta_values.guest_nice * multiplier;
+                        applyCPUMetricsUpdate(new_values, cpu_suffix, delta_values, multiplier);
                     }
 
                     prev_values = current_values;
@@ -1097,14 +1567,18 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                     UInt64 processes_running = 0;
                     readText(processes_running, *proc_stat);
                     skipToNextLineOrEOF(*proc_stat);
-                    new_values["OSProcessesRunning"] = processes_running;
+                    new_values["OSProcessesRunning"] = { processes_running,
+                        "The number of runnable (running or ready to run) threads by the operating system."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
                 else if (name == "procs_blocked")
                 {
                     UInt64 processes_blocked = 0;
                     readText(processes_blocked, *proc_stat);
                     skipToNextLineOrEOF(*proc_stat);
-                    new_values["OSProcessesBlocked"] = processes_blocked;
+                    new_values["OSProcessesBlocked"] = { processes_blocked,
+                        "Number of threads blocked waiting for I/O to complete (`man procfs`)."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
                 else
                     skipToNextLineOrEOF(*proc_stat);
@@ -1114,28 +1588,21 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             {
                 ProcStatValuesOther delta_values = current_other_values - proc_stat_values_other;
 
-                new_values["OSInterrupts"] = delta_values.interrupts;
-                new_values["OSContextSwitches"] = delta_values.context_switches;
-                new_values["OSProcessesCreated"] = delta_values.processes_created;
+                new_values["OSInterrupts"] = { delta_values.interrupts, "The number of interrupts on the host machine. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                new_values["OSContextSwitches"] = { delta_values.context_switches, "The number of context switches that the system underwent on the host machine. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                new_values["OSProcessesCreated"] = { delta_values.processes_created, "The number of processes created. This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
 
                 /// Also write values normalized to 0..1 by diving to the number of CPUs.
                 /// These values are good to be averaged across the cluster of non-uniform servers.
 
-                if (num_cpus)
-                {
-                    new_values["OSUserTimeNormalized"] = delta_values_all_cpus.user * multiplier / num_cpus;
-                    new_values["OSNiceTimeNormalized"] = delta_values_all_cpus.nice * multiplier / num_cpus;
-                    new_values["OSSystemTimeNormalized"] = delta_values_all_cpus.system * multiplier / num_cpus;
-                    new_values["OSIdleTimeNormalized"] = delta_values_all_cpus.idle * multiplier / num_cpus;
-                    new_values["OSIOWaitTimeNormalized"] = delta_values_all_cpus.iowait * multiplier / num_cpus;
-                    new_values["OSIrqTimeNormalized"] = delta_values_all_cpus.irq * multiplier / num_cpus;
-                    new_values["OSSoftIrqTimeNormalized"] = delta_values_all_cpus.softirq * multiplier / num_cpus;
-                    new_values["OSStealTimeNormalized"] = delta_values_all_cpus.steal * multiplier / num_cpus;
-                    new_values["OSGuestTimeNormalized"] = delta_values_all_cpus.guest * multiplier / num_cpus;
-                    new_values["OSGuestNiceTimeNormalized"] = delta_values_all_cpus.guest_nice * multiplier / num_cpus;
-                }
+                Float64 num_cpus_to_normalize = max_cpu_cgroups > 0 ? max_cpu_cgroups : num_cpus;
 
+                if (num_cpus_to_normalize > 0)
+                    applyNormalizedCPUMetricsUpdate(new_values, num_cpus_to_normalize, delta_values_all_cpus, multiplier);
+
+                /// proton: starts
                 mutable_context->setOSCPUUsage(delta_values_all_cpus.user * multiplier + delta_values_all_cpus.system * multiplier);
+                /// proton: ends
             }
 
             proc_stat_values_other = current_other_values;
@@ -1146,21 +1613,18 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         }
     }
 
-    if (cgroupmem_limit_in_bytes && cgroupmem_usage_in_bytes)
+    if (cgroupmem_limit_in_bytes && cgroupmem_reader)
     {
         try
         {
             cgroupmem_limit_in_bytes->rewind();
-            cgroupmem_usage_in_bytes->rewind();
-
             uint64_t limit = 0;
-            uint64_t usage = 0;
-
             tryReadText(limit, *cgroupmem_limit_in_bytes);
-            tryReadText(usage, *cgroupmem_usage_in_bytes);
 
-            new_values["CGroupMemoryTotal"] = limit;
-            new_values["CGroupMemoryUsed"] = usage;
+            uint64_t usage = cgroupmem_reader->readMemoryUsage();
+
+            new_values["CGroupMemoryTotal"] = { limit, "Total memory limit for the cgroup where the server runs, in bytes (0 or very large value means unlimited)." };
+            new_values["CGroupMemoryUsed"] = { usage, "The amount of memory used in cgroup, in bytes (excluding page cache and reclaimable kernel memory)." };
         }
         catch (...)
         {
@@ -1194,8 +1658,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 period = std::stoull(field2);
             }
 
-            new_values["CGroupCpuCfsPeriod"] = period;
-            new_values["CGroupCpuCfsQuota"] = quota;
+            new_values["CGroupCpuCfsPeriod"] = { period, "CPU CFS period for cgroup v2, in microseconds." };
+            new_values["CGroupCpuCfsQuota"] = { quota, "CPU CFS quota for cgroup v2, in microseconds (max means unlimited)." };
         }
         catch (...)
         {
@@ -1215,15 +1679,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             tryReadText(quota, *cgroupcpu_cfs_quota);
             tryReadText(period, *cgroupcpu_cfs_period);
 
-            new_values["CGroupCpuCfsPeriod"] = period;
-            new_values["CGroupCpuCfsQuota"] = quota;
+            new_values["CGroupCpuCfsPeriod"] = { period, "CPU CFS period for cgroup v1, in microseconds." };
+            new_values["CGroupCpuCfsQuota"] = { quota, "CPU CFS quota for cgroup v1, in microseconds (-1 means unlimited)." };
         }
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
     }
-
     if (meminfo)
     {
         try
@@ -1267,56 +1730,64 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
                 if (name == "MemTotal:")
                 {
-                    new_values["OSMemoryTotal"] = bytes;
+                    new_values["OSMemoryTotal"] = { bytes, "The total amount of memory on the host system, in bytes." };
                 }
                 else if (name == "MemFree:")
                 {
-                    /// We cannot simply name this metric "Free", because it confuses users.
-                    /// See https://www.linuxatemyram.com/
-                    /// For convenience we also provide OSMemoryFreePlusCached, that should be somewhat similar to OSMemoryAvailable.
-
                     free_plus_cached_bytes += bytes;
-                    new_values["OSMemoryFreeWithoutCached"] = bytes;
+                    new_values["OSMemoryFreeWithoutCached"] = { bytes,
+                        "The amount of free memory on the host system, in bytes."
+                        " This does not include the memory used by the OS page cache memory, in bytes."
+                        " The page cache memory is also available for usage by programs, so the value of this metric can be confusing."
+                        " See the `OSMemoryAvailable` metric instead."
+                        " For convenience we also provide the `OSMemoryFreePlusCached` metric, that should be somewhat similar to OSMemoryAvailable."
+                        " See also https://www.linuxatemyram.com/."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
                 else if (name == "MemAvailable:")
                 {
-                    new_values["OSMemoryAvailable"] = bytes;
+                    new_values["OSMemoryAvailable"] = { bytes, "The amount of memory available to be used by programs, in bytes. This is very similar to the `OSMemoryFreePlusCached` metric."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
                 else if (name == "Buffers:")
                 {
-                    new_values["OSMemoryBuffers"] = bytes;
+                    new_values["OSMemoryBuffers"] = { bytes, "The amount of memory used by OS kernel buffers, in bytes. This should be typically small, and large values may indicate a misconfiguration of the OS."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
                 else if (name == "Cached:")
                 {
                     free_plus_cached_bytes += bytes;
-                    new_values["OSMemoryCached"] = bytes;
+                    new_values["OSMemoryCached"] = { bytes, "The amount of memory used by the OS page cache, in bytes. Typically, almost all available memory is used by the OS page cache - high values of this metric are normal and expected."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
                 else if (name == "SwapCached:")
                 {
-                    new_values["OSMemorySwapCached"] = bytes;
+                    new_values["OSMemorySwapCached"] = { bytes, "The amount of memory in swap that was also loaded in RAM. Swap should be disabled on production systems. If the value of this metric is large, it indicates a misconfiguration."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
 
                 skipToNextLineOrEOF(*meminfo);
             }
 
-            new_values["OSMemoryFreePlusCached"] = free_plus_cached_bytes;
+            new_values["OSMemoryFreePlusCached"] = { free_plus_cached_bytes, "The amount of free memory plus OS page cache memory on the host system, in bytes. This memory is available to be used by programs. The value should be very similar to `OSMemoryAvailable`."
+                " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
 
             /// proton: starts
-            if (cgroupmem_limit_in_bytes && cgroupmem_usage_in_bytes)
+            if (cgroupmem_limit_in_bytes && cgroupmem_reader)
             {
                 /// cgroup - container case
                 /// If max memory is not set for cgroup, it will be `max` which is not parsable, hence
-                /// it is possible new_values["CGroupMemoryTotal"] == 0. If this is the case, use host
+                /// it is possible new_values["CGroupMemoryTotal"].value == 0. If this is the case, use host
                 /// total memory
-                auto cgroup_mem_total = new_values["CGroupMemoryTotal"];
-                if (cgroup_mem_total == 0 || cgroup_mem_total > new_values["OSMemoryTotal"])
+                double cgroup_mem_total = new_values["CGroupMemoryTotal"].value;
+                if (cgroup_mem_total == 0 || cgroup_mem_total > new_values["OSMemoryTotal"].value)
                 {
                     /// Correct the cgroup memory total, sometimes /sys/fs/cgroup/memory/memory.limit_in_bytes doens't have a right value
-                    new_values["CGroupMemoryTotal"] = new_values["OSMemoryTotal"];
-                    cgroup_mem_total = new_values["OSMemoryTotal"];
+                    new_values["CGroupMemoryTotal"].value = new_values["OSMemoryTotal"].value;
+                    cgroup_mem_total = new_values["OSMemoryTotal"].value;
                 }
 
-                mutable_context->setOSMemoryFreeMB(static_cast<uint32_t>((cgroup_mem_total - new_values["CGroupMemoryUsed"]) / 1024 / 1024));
+                mutable_context->setOSMemoryFreeMB(static_cast<uint32_t>((cgroup_mem_total - new_values["CGroupMemoryUsed"].value) / 1024 / 1024));
             }
             else
             {
@@ -1365,7 +1836,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                     if (auto colon = s.find_first_of(':'))
                     {
                         auto mhz = std::stod(s.substr(colon + 2));
-                        new_values[fmt::format("CPUFrequencyMHz_{}", core_id)] = mhz;
+                        new_values[fmt::format("CPUFrequencyMHz_{}", core_id)] = { mhz, "The current frequency of the CPU, in MHz. Most of the modern CPUs adjust the frequency dynamically for power saving and Turbo Boosting." };
                     }
                 }
             }
@@ -1373,6 +1844,46 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+
+	    if (cpu_pressure)
+	    {
+	        try
+	        {
+	            readPressureFile(new_values, "CPU", cpu_pressure.value(), prev_pressure_vals, first_run);
+	        }
+	        catch (...)
+	        {
+	            tryLogCurrentException(__PRETTY_FUNCTION__);
+	            openFileIfExists("/proc/pressure/cpu", cpu_pressure);
+	        }
+	    }
+
+    if (memory_pressure)
+    {
+        try
+        {
+            readPressureFile(new_values, "MEM", memory_pressure.value(), prev_pressure_vals, first_run);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            openFileIfExists("/proc/pressure/memory", memory_pressure);
+        }
+    }
+
+    if (io_pressure)
+    {
+        try
+        {
+            readPressureFile(new_values, "IO", io_pressure.value(), prev_pressure_vals, first_run);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            openFileIfExists("/proc/pressure/io", io_pressure);
         }
     }
 
@@ -1384,7 +1895,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
             uint64_t open_files = 0;
             readText(open_files, *file_nr);
-            new_values["OSOpenFiles"] = open_files;
+            new_values["OSOpenFiles"] = { open_files, "The total number of opened files on the host machine."
+                " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
         }
         catch (...)
         {
@@ -1405,7 +1917,17 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
             BlockDeviceStatValues current_values{};
             BlockDeviceStatValues & prev_values = block_device_stats[name];
-            current_values.read(*device);
+
+            try
+            {
+                current_values.read(*device);
+            }
+            catch (const ErrnoException & e)
+            {
+                LOG_DEBUG(log, "Cannot read statistics about the block device '{}': {}.",
+                    name, errnoToString(e.getErrno()));
+                continue;
+            }
 
             BlockDeviceStatValues delta_values = current_values - prev_values;
             prev_values = current_values;
@@ -1419,33 +1941,80 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             /// Always in milliseconds according to the docs.
             static constexpr double time_multiplier = 1e-6;
 
-            new_values["BlockReadOps_" + name] = delta_values.read_ios;
-            new_values["BlockWriteOps_" + name] = delta_values.write_ios;
-            new_values["BlockDiscardOps_" + name] = delta_values.discard_ops;
+#define BLOCK_DEVICE_EXPLANATION \
+    " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." \
+    " Source: `/sys/block`. See https://www.kernel.org/doc/Documentation/block/stat.txt"
 
-            new_values["BlockReadMerges_" + name] = delta_values.read_merges;
-            new_values["BlockWriteMerges_" + name] = delta_values.write_merges;
-            new_values["BlockDiscardMerges_" + name] = delta_values.discard_merges;
+            new_values["BlockReadOps_" + name] = { delta_values.read_ios,
+                "Number of read operations requested from the block device."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockWriteOps_" + name] = { delta_values.write_ios,
+                "Number of write operations requested from the block device."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockDiscardOps_" + name] = { delta_values.discard_ops,
+                "Number of discard operations requested from the block device. These operations are relevant for SSD."
+                " Discard operations are not used by ClickHouse, but can be used by other processes on the system."
+                BLOCK_DEVICE_EXPLANATION };
 
-            new_values["BlockReadBytes_" + name] = delta_values.read_sectors * sector_size;
-            new_values["BlockWriteBytes_" + name] = delta_values.write_sectors * sector_size;
-            new_values["BlockDiscardBytes_" + name] = delta_values.discard_sectors * sector_size;
+            new_values["BlockReadMerges_" + name] = { delta_values.read_merges,
+                "Number of read operations requested from the block device and merged together by the OS IO scheduler."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockWriteMerges_" + name] = { delta_values.write_merges,
+                "Number of write operations requested from the block device and merged together by the OS IO scheduler."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockDiscardMerges_" + name] = { delta_values.discard_merges,
+                "Number of discard operations requested from the block device and merged together by the OS IO scheduler."
+                " These operations are relevant for SSD. Discard operations are not used by ClickHouse, but can be used by other processes on the system."
+                BLOCK_DEVICE_EXPLANATION };
 
-            new_values["BlockReadTime_" + name] = delta_values.read_ticks * time_multiplier;
-            new_values["BlockWriteTime_" + name] = delta_values.write_ticks * time_multiplier;
-            new_values["BlockDiscardTime_" + name] = delta_values.discard_ticks * time_multiplier;
+            new_values["BlockReadBytes_" + name] = { delta_values.read_sectors * sector_size,
+                "Number of bytes read from the block device."
+                " It can be lower than the number of bytes read from the filesystem due to the usage of the OS page cache, that saves IO."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockWriteBytes_" + name] = { delta_values.write_sectors * sector_size,
+                "Number of bytes written to the block device."
+                " It can be lower than the number of bytes written to the filesystem due to the usage of the OS page cache, that saves IO."
+                " A write to the block device may happen later than the corresponding write to the filesystem due to write-through caching."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockDiscardBytes_" + name] = { delta_values.discard_sectors * sector_size,
+                "Number of discarded bytes on the block device."
+                " These operations are relevant for SSD. Discard operations are not used by ClickHouse, but can be used by other processes on the system."
+                BLOCK_DEVICE_EXPLANATION };
 
-            new_values["BlockInFlightOps_" + name] = delta_values.in_flight_ios;
+            new_values["BlockReadTime_" + name] = { delta_values.read_ticks * time_multiplier,
+                "Time in seconds spend in read operations requested from the block device, summed across all the operations."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockWriteTime_" + name] = { delta_values.write_ticks * time_multiplier,
+                "Time in seconds spend in write operations requested from the block device, summed across all the operations."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockDiscardTime_" + name] = { delta_values.discard_ticks * time_multiplier,
+                "Time in seconds spend in discard operations requested from the block device, summed across all the operations."
+                " These operations are relevant for SSD. Discard operations are not used by ClickHouse, but can be used by other processes on the system."
+                BLOCK_DEVICE_EXPLANATION };
 
-            new_values["BlockActiveTime_" + name] = delta_values.io_ticks * time_multiplier;
-            new_values["BlockQueueTime_" + name] = delta_values.time_in_queue * time_multiplier;
+            new_values["BlockInFlightOps_" + name] = { delta_values.in_flight_ios,
+                "This value counts the number of I/O requests that have been issued to"
+                " the device driver but have not yet completed. It does not include IO"
+                " requests that are in the queue but not yet issued to the device driver."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockActiveTime_" + name] = { delta_values.io_ticks * time_multiplier,
+                "Time in seconds the block device had the IO requests queued."
+                BLOCK_DEVICE_EXPLANATION };
+            new_values["BlockQueueTime_" + name] = { delta_values.time_in_queue * time_multiplier,
+                "This value counts the number of milliseconds that IO requests have waited"
+                " on this block device. If there are multiple IO requests waiting, this"
+                " value will increase as the product of the number of milliseconds times the"
+                " number of requests waiting."
+                BLOCK_DEVICE_EXPLANATION };
 
             if (delta_values.in_flight_ios)
             {
                 /// TODO Check if these values are meaningful.
 
-                new_values["BlockActiveTimePerOp_" + name] = delta_values.io_ticks * time_multiplier / delta_values.in_flight_ios;
-                new_values["BlockQueueTimePerOp_" + name] = delta_values.time_in_queue * time_multiplier / delta_values.in_flight_ios;
+                new_values["BlockActiveTimePerOp_" + name] = { delta_values.io_ticks * time_multiplier / delta_values.in_flight_ios,
+                    "Similar to the `BlockActiveTime` metrics, but the value is divided to the number of IO operations to count the per-operation time." };
+                new_values["BlockQueueTimePerOp_" + name] = { delta_values.time_in_queue * time_multiplier / delta_values.in_flight_ios,
+                    "Similar to the `BlockQueueTime` metrics, but the value is divided to the number of IO operations to count the per-operation time." };
             }
         }
     }
@@ -1454,7 +2023,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         LOG_DEBUG(log, "Cannot read statistics from block devices: {}", getCurrentExceptionMessage(false));
 
         /// Try to reopen block devices in case of error
-        /// (i.e. ENOENT means that some disk had been replaced, and it may apperas with a new name)
+        /// (i.e. ENOENT or ENODEV means that some disk had been replaced, and it may appear with a new name)
         try
         {
             openBlockDevices();
@@ -1533,15 +2102,31 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
                 if (!first_run)
                 {
-                    new_values["NetworkReceiveBytes_" + interface_name] = delta_values.recv_bytes;
-                    new_values["NetworkReceivePackets_" + interface_name] = delta_values.recv_packets;
-                    new_values["NetworkReceiveErrors_" + interface_name] = delta_values.recv_errors;
-                    new_values["NetworkReceiveDrop_" + interface_name] = delta_values.recv_drop;
+                    new_values["NetworkReceiveBytes_" + interface_name] = { delta_values.recv_bytes,
+                        " Number of bytes received via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                    new_values["NetworkReceivePackets_" + interface_name] = { delta_values.recv_packets,
+                        " Number of network packets received via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                    new_values["NetworkReceiveErrors_" + interface_name] = { delta_values.recv_errors,
+                        " Number of times error happened receiving via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                    new_values["NetworkReceiveDrop_" + interface_name] = { delta_values.recv_drop,
+                        " Number of bytes a packet was dropped while received via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
 
-                    new_values["NetworkSendBytes_" + interface_name] = delta_values.send_bytes;
-                    new_values["NetworkSendPackets_" + interface_name] = delta_values.send_packets;
-                    new_values["NetworkSendErrors_" + interface_name] = delta_values.send_errors;
-                    new_values["NetworkSendDrop_" + interface_name] = delta_values.send_drop;
+                    new_values["NetworkSendBytes_" + interface_name] = { delta_values.send_bytes,
+                        " Number of bytes sent via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                    new_values["NetworkSendPackets_" + interface_name] = { delta_values.send_packets,
+                        " Number of network packets sent via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                    new_values["NetworkSendErrors_" + interface_name] = { delta_values.send_errors,
+                        " Number of times error (e.g. TCP retransmit) happened while sending via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
+                    new_values["NetworkSendDrop_" + interface_name] = { delta_values.send_drop,
+                        " Number of times a packed was dropped while sending via the network interface."
+                        " This is a system-wide metric, it includes all the processes on the host machine, not just clickhouse-server." };
                 }
             }
         }
@@ -1560,7 +2145,8 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             in.rewind();
             Int64 temperature = 0;
             readText(temperature, in);
-            new_values[fmt::format("Temperature{}", i)] = temperature * 0.001;
+            new_values[fmt::format("Temperature{}", i)] = { temperature * 0.001,
+                "The temperature of the corresponding device in ℃. A sensor can return an unrealistic value. Source: `/sys/class/thermal`" };
         }
     }
     catch (...)
@@ -1593,18 +2179,17 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 }
                 catch (const ErrnoException & e)
                 {
-                    LOG_DEBUG(
-                        log,
-                        "Hardware monitor '{}', sensor '{}' exists but could not be read, error {}.",
-                        hwmon_name,
-                        sensor_name,
-                        e.getErrno());
+                    LOG_DEBUG(log, "Hardware monitor '{}', sensor '{}' exists but could not be read: {}.",
+                        hwmon_name, sensor_name, errnoToString(e.getErrno()));
+                    continue;
                 }
 
                 if (sensor_name.empty())
-                    new_values[fmt::format("Temperature_{}", hwmon_name)] = temperature * 0.001;
+                    new_values[fmt::format("Temperature_{}", hwmon_name)] = { temperature * 0.001,
+                        "The temperature reported by the corresponding hardware monitor in ℃. A sensor can return an unrealistic value. Source: `/sys/class/hwmon`" };
                 else
-                    new_values[fmt::format("Temperature_{}_{}", hwmon_name, sensor_name)] = temperature * 0.001;
+                    new_values[fmt::format("Temperature_{}_{}", hwmon_name, sensor_name)] = { temperature * 0.001,
+                        "The temperature reported by the corresponding hardware monitor and the corresponding sensor in ℃. A sensor can return an unrealistic value. Source: `/sys/class/hwmon`" };
             }
         }
     }
@@ -1640,7 +2225,11 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 in.rewind();
                 uint64_t errors = 0;
                 readText(errors, in);
-                new_values[fmt::format("EDAC{}_Correctable", i)] = errors;
+                new_values[fmt::format("EDAC{}_Correctable", i)] = { errors,
+                    "The number of correctable ECC memory errors."
+                    " A high number of this value indicates bad RAM which has to be immediately replaced,"
+                    " because in presence of a high number of corrected errors, a number of silent errors may happen as well, leading to data corruption."
+                    " Source: `/sys/devices/system/edac/mc/`" };
             }
 
             if (edac[i].second)
@@ -1649,7 +2238,11 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 in.rewind();
                 uint64_t errors = 0;
                 readText(errors, in);
-                new_values[fmt::format("EDAC{}_Uncorrectable", i)] = errors;
+                new_values[fmt::format("EDAC{}_Uncorrectable", i)] = { errors,
+                    "The number of uncorrectable ECC memory errors."
+                    " A non-zero number of this value indicates bad RAM which has to be immediately replaced,"
+                    " because it indicates potential data corruption."
+                    " Source: `/sys/devices/system/edac/mc/`" };
             }
         }
     }
@@ -1673,12 +2266,18 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     auto addFilesystemMetrics = [&](const String & name, const String & path) {
         auto stat = getStatVFS(path);
 
-        new_values[fmt::format("Filesystem{}PathTotalBytes", name)] = stat.f_blocks * stat.f_frsize;
-        new_values[fmt::format("Filesystem{}PathAvailableBytes", name)] = stat.f_bavail * stat.f_frsize;
-        new_values[fmt::format("Filesystem{}PathUsedBytes", name)] = (stat.f_blocks - stat.f_bavail) * stat.f_frsize;
-        new_values[fmt::format("Filesystem{}PathTotalINodes", name)] = stat.f_files;
-        new_values[fmt::format("Filesystem{}PathAvailableINodes", name)] = stat.f_favail;
-        new_values[fmt::format("Filesystem{}PathUsedINodes", name)] = stat.f_files - stat.f_favail;
+        new_values[fmt::format("Filesystem{}PathTotalBytes", name)] = { stat.f_blocks * stat.f_frsize,
+            "The size of the volume where the timeplus path is mounted, in bytes." };
+        new_values[fmt::format("Filesystem{}PathAvailableBytes", name)] = { stat.f_bavail * stat.f_frsize,
+            "Available bytes on the volume where the timeplus path is mounted." };
+        new_values[fmt::format("Filesystem{}PathUsedBytes", name)] = { (stat.f_blocks - stat.f_bavail) * stat.f_frsize,
+            "Used bytes on the volume where the timeplus path is mounted." };
+        new_values[fmt::format("Filesystem{}PathTotalINodes", name)] = { stat.f_files,
+            "The total number of inodes on the volume where the timeplus path is mounted. If it is less than 25 million, it indicates a misconfiguration." };
+        new_values[fmt::format("Filesystem{}PathAvailableINodes", name)] = { stat.f_favail,
+            "The number of available inodes on the volume where the timeplus path is mounted. If it is close to zero, it indicates a misconfiguration, and you will get 'no space left on device' even when the disk is not full." };
+        new_values[fmt::format("Filesystem{}PathUsedINodes", name)] = { stat.f_files - stat.f_favail,
+            "Used inodes on the volume where the timeplus path is mounted." };
     };
 
     /// Free space in filesystems at data path and logs path.
@@ -1724,10 +2323,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             auto available = disk->getAvailableSpace();
             auto unreserved = disk->getUnreservedSpace();
 
-            new_values[fmt::format("DiskTotal_{}", name)] = total;
-            new_values[fmt::format("DiskUsed_{}", name)] = total - available;
-            new_values[fmt::format("DiskAvailable_{}", name)] = available;
-            new_values[fmt::format("DiskUnreserved_{}", name)] = unreserved;
+            new_values[fmt::format("DiskTotal_{}", name)] = { total,
+                "The total size in bytes of the disk (virtual filesystem). Remote filesystems can show a large value like 16 EiB." };
+            new_values[fmt::format("DiskUsed_{}", name)] = { total - available,
+                "Used bytes on the disk (virtual filesystem). Remote filesystems not always provide this information." };
+            new_values[fmt::format("DiskAvailable_{}", name)] = { available,
+                "Available bytes on the disk (virtual filesystem). Remote filesystems can show a large value like 16 EiB." };
+            new_values[fmt::format("DiskUnreserved_{}", name)] = { unreserved,
+                "Available bytes on the disk (virtual filesystem) without the reservations for merges, fetches, and moves. Remote filesystems can show a large value like 16 EiB." };
 
             /// proton : start
             if (!disk->isRemote())
@@ -1785,44 +2388,46 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             }
         }
 
-        new_values["ReplicasMaxQueueSize"] = max_queue_size;
-        new_values["ReplicasMaxInsertsInQueue"] = max_inserts_in_queue;
-        new_values["ReplicasMaxMergesInQueue"] = max_merges_in_queue;
+        new_values["ReplicasMaxQueueSize"] = { max_queue_size, "Maximum queue size (in the number of operations like get, merge) across Replicated tables." };
+        new_values["ReplicasMaxInsertsInQueue"] = { max_inserts_in_queue, "Maximum number of INSERT operations in the queue (still to be replicated) across Replicated tables." };
+        new_values["ReplicasMaxMergesInQueue"] = { max_merges_in_queue, "Maximum number of merge operations in the queue (still to be applied) across Replicated tables." };
 
-        new_values["ReplicasSumQueueSize"] = sum_queue_size;
-        new_values["ReplicasSumInsertsInQueue"] = sum_inserts_in_queue;
-        new_values["ReplicasSumMergesInQueue"] = sum_merges_in_queue;
+        new_values["ReplicasSumQueueSize"] = { sum_queue_size, "Sum queue size (in the number of operations like get, merge) across Replicated tables." };
+        new_values["ReplicasSumInsertsInQueue"] = { sum_inserts_in_queue, "Sum of INSERT operations in the queue (still to be replicated) across Replicated tables." };
+        new_values["ReplicasSumMergesInQueue"] = { sum_merges_in_queue, "Sum of merge operations in the queue (still to be applied) across Replicated tables." };
 
-        new_values["ReplicasMaxAbsoluteDelay"] = max_absolute_delay;
-        new_values["ReplicasMaxRelativeDelay"] = max_relative_delay;
+        new_values["ReplicasMaxAbsoluteDelay"] = { max_absolute_delay, "Maximum difference in seconds between the most fresh replicated part and the most fresh data part still to be replicated, across Replicated tables. A very high value indicates a replica with no data." };
+        new_values["ReplicasMaxRelativeDelay"] = { max_relative_delay, "Maximum difference between the replica delay and the delay of the most up-to-date replica of the same table, across Replicated tables." };
 
-        new_values["MaxPartCountForPartition"] = max_part_count_for_partition;
+        new_values["MaxPartCountForPartition"] = { max_part_count_for_partition, "Maximum number of parts per partition across all partitions of all tables of MergeTree family. Values larger than 300 indicates misconfiguration, overload, or massive data loading." };
 
-        new_values["NumberOfDatabases"] = number_of_databases;
-        new_values["NumberOfTables"] = total_number_of_tables;
+        new_values["NumberOfDatabases"] = { number_of_databases, "Total number of databases on the server." };
+        new_values["NumberOfTables"] = { total_number_of_tables, "Total number of tables summed across the databases on the server, excluding the databases that cannot contain MergeTree tables."
+            " The excluded database engines are those who generate the set of tables on the fly, like `Lazy`, `MySQL`, `PostgreSQL`, `SQlite`."};
 
-        new_values["TotalBytesOfMergeTreeTables"] = total_number_of_bytes;
-        new_values["TotalRowsOfMergeTreeTables"] = total_number_of_rows;
-        new_values["TotalPartsOfMergeTreeTables"] = total_number_of_parts;
+        new_values["TotalBytesOfMergeTreeTables"] = { total_number_of_bytes, "Total amount of bytes (compressed, including data and indices) stored in all tables of MergeTree family." };
+        new_values["TotalRowsOfMergeTreeTables"] = { total_number_of_rows, "Total amount of rows (records) stored in all tables of MergeTree family." };
+        new_values["TotalPartsOfMergeTreeTables"] = { total_number_of_parts, "Total amount of data parts in all tables of MergeTree family."
+            " Numbers larger than 10 000 will negatively affect the server startup time and it may indicate unreasonable choice of the partition key." };
 
-        auto get_metric_name = [](const String & name) -> const char *
+        auto get_metric_name_doc = [](const String & name) -> std::pair<const char *, const char *>
         {
-            static std::map<String, const char *> metric_map =
+            static std::map<String, std::pair<const char *, const char *>> metric_map =
             {
-                {"tcp_port", "TCPThreads"},
-                {"tcp_port_secure", "TCPSecureThreads"},
-                {"http_port", "HTTPThreads"},
-                {"https_port", "HTTPSecureThreads"},
-                {"interserver_http_port", "InterserverThreads"},
-                {"interserver_https_port", "InterserverSecureThreads"},
-                {"mysql_port", "MySQLThreads"},
-                {"postgresql_port", "PostgreSQLThreads"},
-                {"grpc_port", "GRPCThreads"},
-                {"prometheus.port", "PrometheusThreads"}
+                {"tcp_port", {"TCPThreads", "Number of threads in the server of the TCP protocol (without TLS)."}},
+                {"tcp_port_secure", {"TCPSecureThreads", "Number of threads in the server of the TCP protocol (with TLS)."}},
+                {"http_port", {"HTTPThreads", "Number of threads in the server of the HTTP interface (without TLS)."}},
+                {"https_port", {"HTTPSecureThreads", "Number of threads in the server of the HTTPS interface."}},
+                {"interserver_http_port", {"InterserverThreads", "Number of threads in the server of the replicas communication protocol (without TLS)."}},
+                {"interserver_https_port", {"InterserverSecureThreads", "Number of threads in the server of the replicas communication protocol (with TLS)."}},
+                {"mysql_port", {"MySQLThreads", "Number of threads in the server of the MySQL compatibility protocol."}},
+                {"postgresql_port", {"PostgreSQLThreads", "Number of threads in the server of the PostgreSQL compatibility protocol."}},
+                {"grpc_port", {"GRPCThreads", "Number of threads in the server of the GRPC protocol."}},
+                {"prometheus.port", {"PrometheusThreads", "Number of threads in the server of the Prometheus endpoint. Note: prometheus endpoints can be also used via the usual HTTP/HTTPs ports."}}
             };
             auto it = metric_map.find(name);
             if (it == metric_map.end())
-                return nullptr;
+                return { nullptr, nullptr };
             else
                 return it->second;
         };
@@ -1830,14 +2435,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         const auto server_metrics = protocol_server_metrics_func();
         for (const auto & server_metric : server_metrics)
         {
-            if (const auto * name = get_metric_name(server_metric.port_name))
-                new_values[name] = server_metric.current_threads;
+            if (auto name_doc = get_metric_name_doc(server_metric.port_name); name_doc.first != nullptr)
+                new_values[name_doc.first] = { server_metric.current_threads, name_doc.second };
         }
     }
 
     /// Add more metrics as you wish.
 
-    new_values["AsynchronousMetricsCalculationTimeSpent"] = watch.elapsedSeconds();
+    new_values["AsynchronousMetricsCalculationTimeSpent"] = { watch.elapsedSeconds(), "Time in seconds spent for calculation of asynchronous metrics (this is the overhead of asynchronous metrics)." };
 
     /// Log the new metrics.
     if (auto asynchronous_metric_log = locked_context->getAsynchronousMetricLog())

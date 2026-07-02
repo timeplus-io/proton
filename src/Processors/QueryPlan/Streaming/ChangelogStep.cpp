@@ -17,7 +17,7 @@ DB::ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = false,
-            .preserves_substream = false,
+            .preserves_shuffling = false,
         },
         {
             .preserves_number_of_rows = false,

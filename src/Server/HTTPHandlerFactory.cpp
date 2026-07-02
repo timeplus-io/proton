@@ -87,13 +87,22 @@ static inline auto createHandlersFactoryFromConfig(
                     "{}.{}.handler.type", prefix, key);
 
             if (handler_type == "static")
+            {
                 main_handler_factory->addHandler(createStaticHandlerFactory(server, prefix + "." + key));
+            }
             else if (handler_type == "dynamic_query_handler")
+            {
                 main_handler_factory->addHandler(createDynamicHandlerFactory(server, prefix + "." + key));
+            }
             else if (handler_type == "predefined_query_handler")
+            {
                 main_handler_factory->addHandler(createPredefinedHandlerFactory(server, prefix + "." + key));
+            }
             else if (handler_type == "prometheus")
-                main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key));
+            {
+                main_handler_factory->addHandler(
+                    createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key));
+            }
             else
                 throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Unknown handler type '{}' in config here: {}.{}.handler.type",
                     handler_type, prefix, key);

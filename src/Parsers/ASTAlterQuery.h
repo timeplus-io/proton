@@ -230,6 +230,7 @@ public:
     AlterObjectType alter_object = AlterObjectType::UNKNOWN;
     /// proton: starts.
     bool is_view = false;
+    bool is_input = false;
     /// proton: ends.
 
     ASTExpressionList * command_list = nullptr;

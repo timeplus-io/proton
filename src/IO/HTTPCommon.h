@@ -1,16 +1,17 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
 #include <mutex>
+#include <string_view>
 
 #include <Poco/Net/Context.h>
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/URI.h>
-#include <Common/PoolBase.h>
 #include <Poco/URIStreamFactory.h>
+#include <Common/HTTPConnectionPool.h>
+#include <Common/ProxyConfiguration.h>
 
 #include <IO/ConnectionTimeouts.h>
 
@@ -19,20 +20,6 @@ namespace DB
 {
 
 class HTTPServerResponse;
-
-class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSession>
-{
-private:
-    const std::string host;
-    const UInt16 port;
-    const bool https;
-    using Base = PoolBase<Poco::Net::HTTPClientSession>;
-
-    ObjectPtr allocObject() override;
-
-public:
-    SingleEndpointHTTPSessionPool(const std::string & host_, UInt16 port_, bool https_, size_t max_pool_size_);
-};
 
 class HTTPException : public Exception
 {
@@ -51,7 +38,7 @@ public:
     HTTPException * clone() const override { return new HTTPException(*this); }
     void rethrow() const override { throw *this; }
 
-    int getHTTPStatus() const { return http_status; }
+    Poco::Net::HTTPResponse::HTTPStatus getHTTPStatus() const { return http_status; }
 
 private:
     Poco::Net::HTTPResponse::HTTPStatus http_status{};
@@ -67,61 +54,28 @@ private:
     const char * className() const noexcept override { return "DB::HTTPException"; }
 };
 
-using PooledHTTPSessionPtr = SingleEndpointHTTPSessionPool::Entry;
 using HTTPSessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
 
-/// If a session have this tag attached, it will be reused without calling `reset()` on it.
-/// All pooled sessions don't have this tag attached after being taken from a pool.
-/// If the request and the response were fully written/read, the client code should add this tag
-/// explicitly by calling `markSessionForReuse()`.
-struct HTTPSessionReuseTag
-{
-};
-
-void markSessionForReuse(Poco::Net::HTTPSession & session);
-void markSessionForReuse(HTTPSessionPtr session);
-void markSessionForReuse(PooledHTTPSessionPtr session);
-
-
-void setResponseDefaultHeaders(HTTPServerResponse & response, size_t keep_alive_timeout);
+void setResponseDefaultHeaders(HTTPServerResponse & response);
 
 /// Create session object to perform requests and set required parameters.
-HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts);
-
-/// As previous method creates session, but tooks it from pool, without and with proxy uri.
-PooledHTTPSessionPtr makePooledHTTPSession(
+HTTPSessionPtr makeHTTPSession(
+    HTTPConnectionGroupType group,
     const Poco::URI & uri,
     const ConnectionTimeouts & timeouts,
-    size_t per_endpoint_pool_size,
-    bool wait_on_pool_size_limit = true);
-
-PooledHTTPSessionPtr makePooledHTTPSession(
-    const Poco::URI & uri,
-    const Poco::URI & proxy_uri,
-    const ConnectionTimeouts & timeouts,
-    size_t per_endpoint_pool_size,
-    bool wait_on_pool_size_limit = true);
+    ProxyConfiguration proxy_config = {}
+);
 
 /// proton: starts
-PooledHTTPSessionPtr makePooledHTTPSession(
+HTTPSessionPtr makeHTTPSession(
+    HTTPConnectionGroupType group,
     const Poco::URI & uri,
     const String & private_key_file,
     const String & certificate_file,
     const String & ca_location,
     Poco::Net::Context::VerificationMode verification_mode,
     const ConnectionTimeouts & timeouts,
-    size_t per_endpoint_pool_size);
-
-PooledHTTPSessionPtr makePooledHTTPSession(
-    const Poco::URI & uri,
-    const Poco::URI & proxy_uri,
-    const String & private_key_file,
-    const String & certificate_file,
-    const String & ca_location,
-    Poco::Net::Context::VerificationMode verification_mode,
-    const ConnectionTimeouts & timeouts,
-    size_t per_endpoint_pool_size,
-    bool wait_on_pool_size_limit = true);
+    ProxyConfiguration proxy_config = {});
 /// proton: ends
 
 bool isRedirect(Poco::Net::HTTPResponse::HTTPStatus status);
@@ -135,7 +89,6 @@ std::istream * receiveResponse(
     Poco::Net::HTTPClientSession & session, const Poco::Net::HTTPRequest & request, Poco::Net::HTTPResponse & response, bool allow_redirects);
 
 void assertResponseIsOk(
-    const Poco::Net::HTTPRequest & request, Poco::Net::HTTPResponse & response, std::istream & istr, bool allow_redirects = false);
+    const String & uri, Poco::Net::HTTPResponse & response, std::istream & istr, bool allow_redirects = false);
 
-void setTimeouts(Poco::Net::HTTPClientSession & session, const ConnectionTimeouts & timeouts);
 }

@@ -62,6 +62,7 @@ public:
 
     /// proton : starts
     bool isLocal() const override { return false; }
+    bool squashInsert() const noexcept override { return false; }
     /// proton : ends
 
 protected:

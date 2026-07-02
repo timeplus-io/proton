@@ -10,6 +10,7 @@
 #include <Compression/CompressionFactory.h>
 #include <Storages/MergeTree/IDataPartStorage.h>
 #include <optional>
+#include <fmt/ranges.h>
 
 
 namespace DB

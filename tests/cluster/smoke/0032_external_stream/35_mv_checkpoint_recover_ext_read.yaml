@@ -67,9 +67,10 @@ steps:
         github_events
       SETTINGS
         seek_to = 'earliest';
+    node: [p1]
 
   - type: wait
-    time: 1
+    time: 3
 
   - type: kafka
     name: produce
@@ -89,6 +90,7 @@ steps:
         type: int32
       - name: value
         type: string
+    node: [p1]
 
   - type: check
     target_name: ext-34-1

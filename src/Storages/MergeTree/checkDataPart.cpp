@@ -16,6 +16,7 @@
 #include <Common/SipHash.h>
 #include <Common/ZooKeeper/IKeeper.h>
 #include <Poco/Net/NetException.h>
+#include <fmt/ranges.h>
 
 
 namespace CurrentMetrics

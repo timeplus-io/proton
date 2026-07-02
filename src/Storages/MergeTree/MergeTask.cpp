@@ -1,8 +1,11 @@
 #include <Storages/MergeTree/MergeTask.h>
 
+#include <limits>
 #include <memory>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
+#include <Common/Exception.h>
 #include <Common/logger_useful.h>
 #include <Common/ActionBlocker.h>
 #include <Processors/Transforms/CheckSortedTransform.h>
@@ -67,11 +70,11 @@ static void extractMergingAndGatheringColumns(
         key_columns.emplace(merging_params.sign_column);
 
     /// Force version column for Replacing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
+    if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
         key_columns.emplace(merging_params.version_column);
 
     /// Force sign column for VersionedCollapsing mode. Version is already in primary key.
-    if (merging_params.mode == MergeTreeData::MergingParams::ChangelogKV)
+    if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
         key_columns.emplace(merging_params.sign_column);
 
     /// Force to merge at least one column in case of empty key
@@ -188,7 +191,7 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
 
     SerializationInfo::Settings info_settings =
     {
-        .ratio_of_defaults_for_sparse = global_ctx->data->getSettings()->ratio_of_defaults_for_sparse_serialization,
+        .ratio_of_defaults_for_sparse = global_ctx->data_settings->ratio_of_defaults_for_sparse_serialization,
         .choose_kind = true,
     };
 
@@ -208,6 +211,31 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare()
     }
 
     global_ctx->new_data_part->setColumns(global_ctx->storage_columns, infos, global_ctx->metadata_snapshot->getMetadataVersion());
+
+    /// Determine columns that are absent in all source parts — either fully expired or
+    /// never written (e.g. just-added via ALTER ADD COLUMN) — and mark them as expired so
+    /// the merge writer skips them. Columns with a DEFAULT expression are excluded so
+    /// reads can compute the current DEFAULT via evaluateMissingDefaults; a later
+    /// ALTER MODIFY DEFAULT then changes observed values for old rows (lazy-DEFAULT
+    /// semantic). Mirrors upstream PR #88860 (commits cd76461a9c6 + e31823519c6).
+    {
+        NameSet columns_present_in_parts;
+        columns_present_in_parts.reserve(global_ctx->storage_columns.size());
+        for (const auto & part : global_ctx->future_part->parts)
+            for (const auto & col : part->getColumns())
+                columns_present_in_parts.emplace(col.name);
+
+        const auto & columns_desc = global_ctx->metadata_snapshot->getColumns();
+
+        for (const auto & storage_column : global_ctx->storage_columns)
+        {
+            if (!columns_present_in_parts.contains(storage_column.name)
+                && !columns_desc.getDefault(storage_column.name))
+            {
+                global_ctx->new_data_part->expired_columns.emplace(storage_column.name);
+            }
+        }
+    }
 
     const auto & local_part_min_ttl = global_ctx->new_data_part->ttl_infos.part_min_ttl;
     if (local_part_min_ttl && local_part_min_ttl <= global_ctx->time_of_merge)
@@ -343,6 +371,12 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::execute()
     return subtasks_iterator != subtasks.end();
 }
 
+void MergeTask::ExecuteAndFinalizeHorizontalPart::cancel() noexcept
+{
+    // if (ctx->merge_projection_parts_task_ptr)
+    //     ctx->merge_projection_parts_task_ptr->cancel();
+}
+
 
 bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
 {
@@ -384,9 +418,8 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::executeImpl()
     if (ctx->need_remove_expired_values && global_ctx->ttl_merges_blocker->isCancelled())
         throw Exception(ErrorCodes::ABORTED, "Cancelled merging parts with expired TTL");
 
-    const auto data_settings = global_ctx->data->getSettings();
     const size_t sum_compressed_bytes_upper_bound = global_ctx->merge_list_element_ptr->total_size_bytes_compressed;
-    ctx->need_sync = needSyncPart(ctx->sum_input_rows_upper_bound, sum_compressed_bytes_upper_bound, *data_settings);
+    ctx->need_sync = needSyncPart(ctx->sum_input_rows_upper_bound, sum_compressed_bytes_upper_bound, *global_ctx->data_settings);
 
     return false;
 }
@@ -419,25 +452,37 @@ bool MergeTask::VerticalMergeStage::prepareVerticalMergeForAllColumns() const
                         "of bytes written to rows_sources file ({}). It is a bug.",
                         sum_input_rows_exact, input_rows_filtered, rows_sources_count);
 
-    ctx->rows_sources_read_buf = std::make_unique<CompressedReadBufferFromFile>(ctx->tmp_disk->readFile(fileName(ctx->rows_sources_file->path())));
+    ctx->rows_sources_read_buf = std::make_unique<CompressedReadBufferFromFile>(
+        ctx->tmp_disk->readFile(fileName(ctx->rows_sources_file->path()), getReadSettings()));
 
     /// For external cycle
     global_ctx->gathering_column_names_size = global_ctx->gathering_column_names.size();
     ctx->column_num_for_vertical_merge = 0;
     ctx->it_name_and_type = global_ctx->gathering_columns.cbegin();
 
+    bool all_parts_on_remote_disks = std::ranges::all_of(global_ctx->future_part->parts,
+        [](const auto & part) { return part->isStoredOnRemoteDisk(); });
+    ctx->use_prefetch = all_parts_on_remote_disks
+        && global_ctx->data_settings->vertical_merge_remote_filesystem_prefetch;
+
+    if (ctx->use_prefetch && ctx->it_name_and_type != global_ctx->gathering_columns.end())
+        ctx->prepared_pipe = createPipeForReadingOneColumn(ctx->it_name_and_type->name);
+
+    /// Bound the number of in-flight per-column write streams. For disks that support parallel
+    /// writes (e.g. S3) each `MergedColumnOnlyOutputStream` keeps its own multi-MiB upload buffer
+    /// alive until `finish()` is called, so an unbounded queue scales memory linearly with column
+    /// count. Disks without parallel-write support keep the historical behavior (single in-flight
+    /// stream, finish at end) since interleaving finishes there gains nothing.
+    if (global_ctx->new_data_part->getDataPartStorage().supportParallelWrite())
+        ctx->max_delayed_streams = global_ctx->data_settings->max_merge_delayed_streams_for_parallel_write;
+    else
+        ctx->max_delayed_streams = std::numeric_limits<size_t>::max();
+
     return false;
 }
 
-void MergeTask::VerticalMergeStage::prepareVerticalMergeForOneColumn() const
+Pipe MergeTask::VerticalMergeStage::createPipeForReadingOneColumn(const String & column_name) const
 {
-    const auto & [column_name, column_type] = *ctx->it_name_and_type;
-    Names column_names{column_name};
-
-    ctx->progress_before = global_ctx->merge_list_element_ptr->progress.load(std::memory_order_relaxed);
-
-    global_ctx->column_progress = std::make_unique<MergeStageProgress>(ctx->progress_before, ctx->column_sizes->columnWeight(column_name));
-
     Pipes pipes;
     for (size_t part_num = 0; part_num < global_ctx->future_part->parts.size(); ++part_num)
     {
@@ -445,19 +490,56 @@ void MergeTask::VerticalMergeStage::prepareVerticalMergeForOneColumn() const
             *global_ctx->data,
             global_ctx->storage_snapshot,
             global_ctx->future_part->parts[part_num],
-            column_names,
+            Names{column_name},
             ctx->read_with_direct_io,
             /*take_column_types_from_storage=*/ true,
             /*quiet=*/ false,
-            global_ctx->input_rows_filtered);
+            global_ctx->input_rows_filtered,
+            /*prefetch=*/ ctx->use_prefetch);
 
         pipes.emplace_back(std::move(pipe));
     }
 
-    auto pipe = Pipe::unitePipes(std::move(pipes));
+    return Pipe::unitePipes(std::move(pipes));
+}
+
+void MergeTask::VerticalMergeStage::prepareVerticalMergeForOneColumn() const
+{
+    const auto & column_name = ctx->it_name_and_type->name;
+
+    ctx->progress_before = global_ctx->merge_list_element_ptr->progress.load(std::memory_order_relaxed);
+
+    global_ctx->column_progress = std::make_unique<MergeStageProgress>(ctx->progress_before, ctx->column_sizes->columnWeight(column_name));
+
+    Pipe pipe;
+    if (ctx->prepared_pipe)
+    {
+        pipe = std::move(*ctx->prepared_pipe);
+
+        /// Kick off prefetch for the next column while we process the current one.
+        auto next_column_it = std::next(ctx->it_name_and_type);
+        if (next_column_it != global_ctx->gathering_columns.end())
+            ctx->prepared_pipe = createPipeForReadingOneColumn(next_column_it->name);
+        else
+            ctx->prepared_pipe.reset();
+    }
+    else
+    {
+        pipe = createPipeForReadingOneColumn(column_name);
+    }
 
     ctx->rows_sources_read_buf->seek(0, 0);
-    auto transform = std::make_unique<ColumnGathererTransform>(pipe.getHeader(), pipe.numOutputPorts(), *ctx->rows_sources_read_buf);
+
+    /// Use cached settings — calling global_ctx->data->getSettings() here races with
+    /// storage teardown and crashed in pthread_mutex_lock at offset 0x50 of a freed
+    /// MergeTreeData on shutdown. See MergeTask.h::GlobalRuntimeContext::data_settings.
+    auto transform = std::make_unique<ColumnGathererTransform>(
+        pipe.getHeader(),
+        pipe.numOutputPorts(),
+        *ctx->rows_sources_read_buf,
+        global_ctx->data_settings->merge_max_block_size,
+        global_ctx->data_settings->merge_max_block_size_bytes);
+
     pipe.addTransform(std::move(transform));
 
     ctx->column_parts_pipeline = QueryPipeline(std::move(pipe));
@@ -517,6 +599,15 @@ void MergeTask::VerticalMergeStage::finalizeVerticalMergeForOneColumn() const
 
     ctx->delayed_streams.emplace_back(std::move(ctx->column_to));
 
+    /// Cap the number of in-flight per-column write streams (see `max_delayed_streams` init in
+    /// `prepareVerticalMergeForAllColumns`). Each stream pinned here owns an upload buffer on
+    /// remote disks, so the queue would otherwise scale with column count.
+    while (ctx->delayed_streams.size() > ctx->max_delayed_streams)
+    {
+        ctx->delayed_streams.front()->finish(ctx->need_sync);
+        ctx->delayed_streams.pop_front();
+    }
+
     if (global_ctx->rows_written != ctx->column_elems_written)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Written {} elements of column {}, but {} rows of PK columns",
@@ -565,13 +656,13 @@ bool MergeTask::MergeProjectionsStage::mergeMinMaxIndexAndPrepareProjections() c
         double elapsed_seconds = global_ctx->merge_list_element_ptr->watch.elapsedSeconds();
         LOG_DEBUG(ctx->log,
             "Merge sorted {} rows, containing {} columns ({} merged, {} gathered) in {} sec., {} rows/sec., {}/sec.",
-            global_ctx->merge_list_element_ptr->rows_read,
+            global_ctx->merge_list_element_ptr->rows_read.load(),
             global_ctx->all_column_names.size(),
             global_ctx->merging_column_names.size(),
             global_ctx->gathering_column_names.size(),
             elapsed_seconds,
-            global_ctx->merge_list_element_ptr->rows_read / elapsed_seconds,
-            ReadableSize(global_ctx->merge_list_element_ptr->bytes_read_uncompressed / elapsed_seconds));
+            static_cast<double>(global_ctx->merge_list_element_ptr->rows_read.load()) / elapsed_seconds,
+            ReadableSize(static_cast<double>(global_ctx->merge_list_element_ptr->bytes_read_uncompressed.load()) / elapsed_seconds));
     }
 
 
@@ -613,13 +704,11 @@ bool MergeTask::MergeProjectionsStage::mergeMinMaxIndexAndPrepareProjections() c
         if (projection.type == ProjectionDescription::Type::Aggregate)
             projection_merging_params.mode = MergeTreeData::MergingParams::Aggregating;
 
-        const Settings & settings = global_ctx->context->getSettingsRef();
-
         ctx->tasks_for_projections.emplace_back(std::make_shared<MergeTask>(
             projection_future_part,
             projection.metadata,
             global_ctx->merge_entry,
-            std::make_unique<MergeListElement>((*global_ctx->merge_entry)->table_id, projection_future_part, settings),
+            std::make_unique<MergeListElement>((*global_ctx->merge_entry)->table_id, projection_future_part, global_ctx->context),
             global_ctx->time_of_merge,
             global_ctx->context,
             global_ctx->space_reservation,
@@ -706,7 +795,24 @@ bool MergeTask::VerticalMergeStage::execute()
 
     /// Move to the next subtask in an array of subtasks
     ++subtasks_iterator;
+
     return subtasks_iterator != subtasks.end();
+}
+
+void MergeTask::VerticalMergeStage::cancel() noexcept
+{
+    if (ctx->column_to)
+        ctx->column_to->cancel();
+
+    // if (ctx->prepared_pipeline.has_value())
+    //     ctx->prepared_pipeline->pipeline.cancel();
+
+    for (auto & stream : ctx->delayed_streams)
+        stream->cancel();
+
+    if (ctx->executor)
+        ctx->executor->cancel();
+
 }
 
 bool MergeTask::MergeProjectionsStage::execute()
@@ -718,6 +824,12 @@ bool MergeTask::MergeProjectionsStage::execute()
     /// Move to the next subtask in an array of subtasks
     ++subtasks_iterator;
     return subtasks_iterator != subtasks.end();
+}
+
+void MergeTask::MergeProjectionsStage::cancel() noexcept
+{
+    for (auto & prj_task: ctx->tasks_for_projections)
+        prj_task->cancel();
 }
 
 
@@ -776,6 +888,20 @@ bool MergeTask::execute()
     return true;
 }
 
+void MergeTask::cancel() noexcept
+{
+    if (stages_iterator != stages.end())
+        (*stages_iterator)->cancel();
+
+    if (global_ctx->merging_executor)
+        global_ctx->merging_executor->cancel();
+
+    global_ctx->merged_pipeline.cancel();
+
+    if (global_ctx->to)
+        global_ctx->to->cancel();
+}
+
 
 void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
 {
@@ -788,14 +914,13 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
     /// We count total amount of bytes in parts
     /// and use direct_io + aio if there is more than min_merge_bytes_to_use_direct_io
     ctx->read_with_direct_io = false;
-    const auto data_settings = global_ctx->data->getSettings();
-    if (data_settings->min_merge_bytes_to_use_direct_io != 0)
+    if (global_ctx->data_settings->min_merge_bytes_to_use_direct_io != 0)
     {
         size_t total_size = 0;
         for (const auto & part : global_ctx->future_part->parts)
         {
             total_size += part->getBytesOnDisk();
-            if (total_size >= data_settings->min_merge_bytes_to_use_direct_io)
+            if (total_size >= global_ctx->data_settings->min_merge_bytes_to_use_direct_io)
             {
                 LOG_DEBUG(ctx->log, "Will merge parts reading files in O_DIRECT");
                 ctx->read_with_direct_io = true;
@@ -853,8 +978,8 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
     ctx->blocks_are_granules_size = (global_ctx->chosen_merge_algorithm == MergeAlgorithm::Vertical);
 
     /// There is no sense to have the block size bigger than one granule for merge operations.
-    const UInt64 merge_block_size_rows = data_settings->merge_max_block_size;
-    const UInt64 merge_block_size_bytes = data_settings->merge_max_block_size_bytes;
+    const UInt64 merge_block_size_rows = global_ctx->data_settings->merge_max_block_size;
+    const UInt64 merge_block_size_bytes = global_ctx->data_settings->merge_max_block_size_bytes;
     sort_description.compile_sort_description = global_ctx->data->getContext()->getSettingsRef().compile_sort_description;
 
     switch (ctx->merging_params.mode)
@@ -888,7 +1013,7 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
             merged_transform = std::make_shared<AggregatingSortedTransform>(header, pipes.size(), sort_description, merge_block_size_rows, merge_block_size_bytes);
             break;
 
-        case MergeTreeData::MergingParams::VersionedKV:
+        case MergeTreeData::MergingParams::Replacing:
             merged_transform = std::make_shared<ReplacingSortedTransform>(
                 header, pipes.size(), sort_description, ctx->merging_params.version_column,
                 merge_block_size_rows, merge_block_size_bytes, ctx->rows_sources_write_buf.get(), ctx->blocks_are_granules_size);
@@ -900,7 +1025,7 @@ void MergeTask::ExecuteAndFinalizeHorizontalPart::createMergedStream()
                 ctx->merging_params.graphite_params, global_ctx->time_of_merge);
             break;
 
-        case MergeTreeData::MergingParams::ChangelogKV:
+        case MergeTreeData::MergingParams::VersionedCollapsing:
             merged_transform = std::make_shared<VersionedCollapsingTransform>(
                 header, pipes.size(), sort_description, ctx->merging_params.sign_column, ctx->merging_params.version_column,
                 merge_block_size_rows, merge_block_size_bytes, ctx->rows_sources_write_buf.get(), ctx->blocks_are_granules_size);
@@ -946,30 +1071,43 @@ MergeAlgorithm MergeTask::ExecuteAndFinalizeHorizontalPart::chooseMergeAlgorithm
 {
     const size_t total_rows_count = global_ctx->merge_list_element_ptr->total_rows_count;
     const size_t total_size_bytes_uncompressed = global_ctx->merge_list_element_ptr->total_size_bytes_uncompressed;
-    const auto data_settings = global_ctx->data->getSettings();
-
     if (global_ctx->deduplicate)
         return MergeAlgorithm::Horizontal;
-    if (data_settings->enable_vertical_merge_algorithm == 0)
+    if (global_ctx->data_settings->enable_vertical_merge_algorithm == 0)
         return MergeAlgorithm::Horizontal;
     if (ctx->need_remove_expired_values)
         return MergeAlgorithm::Horizontal;
 
-    for (const auto & part : global_ctx->future_part->parts)
-        if (!part->supportsVerticalMerge() || !isFullPartStorage(part->getDataPartStorage()))
-            return MergeAlgorithm::Horizontal;
+    if (global_ctx->future_part->part_format.part_type != MergeTreeDataPartType::Wide)
+        return MergeAlgorithm::Horizontal;
+    if (global_ctx->future_part->part_format.storage_type != MergeTreeDataPartStorageType::Full)
+        return MergeAlgorithm::Horizontal;
+
+    /// Operator escape hatch ported from upstream PR #46282. When false, refuse to vertical-merge
+    /// any group of source parts whose types are not all Wide — i.e. compact source parts force
+    /// the merge to horizontal. Default true, matching upstream's post-#52295 default. Set to
+    /// false on a per-stream basis if a regression shows up against compact-to-wide vertical
+    /// merges.
+    if (!global_ctx->data_settings->allow_vertical_merges_from_compact_to_wide_parts)
+    {
+        for (const auto & part : global_ctx->future_part->parts)
+        {
+            if (!isWidePart(part))
+                return MergeAlgorithm::Horizontal;
+        }
+    }
 
     bool is_supported_storage =
         ctx->merging_params.mode == MergeTreeData::MergingParams::Ordinary ||
         ctx->merging_params.mode == MergeTreeData::MergingParams::Collapsing ||
-        ctx->merging_params.mode == MergeTreeData::MergingParams::VersionedKV ||
-        ctx->merging_params.mode == MergeTreeData::MergingParams::ChangelogKV;
+        ctx->merging_params.mode == MergeTreeData::MergingParams::Replacing ||
+        ctx->merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing;
 
-    bool enough_ordinary_cols = global_ctx->gathering_columns.size() >= data_settings->vertical_merge_algorithm_min_columns_to_activate;
+    bool enough_ordinary_cols = global_ctx->gathering_columns.size() >= global_ctx->data_settings->vertical_merge_algorithm_min_columns_to_activate;
 
-    bool enough_total_rows = total_rows_count >= data_settings->vertical_merge_algorithm_min_rows_to_activate;
+    bool enough_total_rows = total_rows_count >= global_ctx->data_settings->vertical_merge_algorithm_min_rows_to_activate;
 
-    bool enough_total_bytes = total_size_bytes_uncompressed >= data_settings->vertical_merge_algorithm_min_bytes_to_activate;
+    bool enough_total_bytes = total_size_bytes_uncompressed >= global_ctx->data_settings->vertical_merge_algorithm_min_bytes_to_activate;
 
     bool no_parts_overflow = global_ctx->future_part->parts.size() <= RowSourcePart::MAX_PARTS;
 

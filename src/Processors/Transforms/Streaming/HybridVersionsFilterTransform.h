@@ -23,6 +23,7 @@ public:
         const Block & output_header,
         std::vector<std::string> key_column_names,
         const std::string & version_column_name,
+        bool late_insert_overrides_,
         std::string spill_dir,
         size_t max_hot_key_count,
         const std::string & kv_options,
@@ -33,8 +34,8 @@ public:
     String getName() const override { return "HybridVersionsFilterTransform"; }
 
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-    void recover(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx) override;
 
 private:
     void
@@ -61,6 +62,8 @@ private:
     SerializationPtr version_column_serialization;
     std::vector<size_t> key_sizes;
     bool has_nullable_key = false;
+
+    const bool late_insert_overrides = true;
 
     const bool backfill_key_unique = false;
     bool backfill_started = false;

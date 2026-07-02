@@ -150,6 +150,9 @@ public:
     UInt64 getLogStoreDiskSize() const;
     UInt64 getStorageSize() const override;
 
+    /// Metrics-only variant: TTL-cached at the per-shard level. Not for correctness paths.
+    UInt64 getHistoricalStorageSizeForMetrics() const;
+
     Int64 getMetricTime(bool reset = true) override;
     UInt64 readBytes(bool reset = true, bool external_ingress = false) override;
     UInt64 readRows(bool reset = true, bool external_ingress = false) override;

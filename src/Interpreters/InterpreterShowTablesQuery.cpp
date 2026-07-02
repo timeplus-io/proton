@@ -5,6 +5,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
+#include <Interpreters/ShowInputsVerbose.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/ColumnsDescription.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
@@ -135,7 +136,14 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 
     /// Exclude Alerts
     if (!query.dictionaries)
-        rewritten_query << " AND engine != 'StorageAlert'";
+    {
+        if (query.only_views)
+            rewritten_query << " AND engine IN ('View', 'MaterializedView')";
+        else if (query.only_inputs)
+            rewritten_query << " AND is_input = 1";
+        else
+            rewritten_query << " AND engine != 'StorageAlert'";
+    }
     /// proton: ends.
 
     if (!query.like.empty())
@@ -173,6 +181,15 @@ BlockIO InterpreterShowTablesQuery::execute()
 
         return res;
     }
+
+    /// proton: starts
+    if (query.only_inputs && getContext()->getSettingsRef().verbose.value)
+    {
+        BlockIO res;
+        res.pipeline = executeShowInputsVerbose(query, getContext());
+        return res;
+    }
+    /// proton: ends
 
     /// proton: starts
     auto current_context = Context::createCopy(getContext());

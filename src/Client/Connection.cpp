@@ -14,14 +14,15 @@
 #include <Formats/NativeWriter.h>
 #include <Client/Connection.h>
 #include <Client/ConnectionParameters.h>
+#include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/NetException.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DNSResolver.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/OpenSSLHelpers.h>
+#include <Common/formatReadable.h>
 #include <Common/randomSeed.h>
-#include <Common/logger_useful.h>
 #include <Core/Block.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -63,14 +64,8 @@ namespace ErrorCodes
 
 Connection::~Connection()
 {
-    try{
-        if (connected)
-            Connection::disconnect();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
+    if (Connection::isConnected())
+        Connection::disconnect();
 }
 
 Connection::Connection(const String & host_, UInt16 port_,
@@ -81,16 +76,15 @@ Connection::Connection(const String & host_, UInt16 port_,
     const String & cluster_secret_,
     const String & client_name_,
     Protocol::Compression compression_,
-    Protocol::Secure secure_,
-    Poco::Timespan sync_request_timeout_)
+    Protocol::Secure secure_)
     : host(host_), port(port_), default_database(default_database_)
-    , user(user_), password(password_), quota_key(quota_key_)
+    , user(user_), password(password_)
+    , quota_key(quota_key_)
     , cluster(cluster_)
     , cluster_secret(cluster_secret_)
     , client_name(client_name_)
     , compression(compression_)
     , secure(secure_)
-    , sync_request_timeout(sync_request_timeout_)
     , log_wrapper(*this)
 {
     /// Don't connect immediately, only on first need.
@@ -104,138 +98,177 @@ Connection::Connection(const String & host_, UInt16 port_,
 
 void Connection::connect(const ConnectionTimeouts & timeouts)
 {
+    /// if connection was broken it is necessary to cancel it before reconnecting
+    disconnect();
+
     try
     {
-        if (connected)
-            disconnect();
-
         LOG_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}{}{}",
             default_database.empty() ? "(not specified)" : default_database,
             user,
             static_cast<bool>(secure) ? ". Secure" : "",
             static_cast<bool>(compression) ? "" : ". Uncompressed");
 
-        if (static_cast<bool>(secure))
-        {
-#if USE_SSL
-            socket = std::make_unique<Poco::Net::SecureStreamSocket>();
+        auto addresses = DNSResolver::instance().resolveAddressList(host, port);
+        const auto & connection_timeout = static_cast<bool>(secure) ? timeouts.secure_connection_timeout : timeouts.connection_timeout;
 
-            /// we resolve the ip when we open SecureStreamSocket, so to make Server Name Indication (SNI)
-            /// work we need to pass host name separately. It will be send into TLS Hello packet to let
-            /// the server know which host we want to talk with (single IP can process requests for multiple hosts using SNI).
-            static_cast<Poco::Net::SecureStreamSocket*>(socket.get())->setPeerHostName(host);
+        for (auto it = addresses.begin(); it != addresses.end();)
+        {
+            if (isConnected())
+                disconnect();
+
+            if (static_cast<bool>(secure))
+            {
+#if USE_SSL
+                socket = std::make_unique<Poco::Net::SecureStreamSocket>();
+
+                /// we resolve the ip when we open SecureStreamSocket, so to make Server Name Indication (SNI)
+                /// work we need to pass host name separately. It will be send into TLS Hello packet to let
+                /// the server know which host we want to talk with (single IP can process requests for multiple hosts using SNI).
+                static_cast<Poco::Net::SecureStreamSocket*>(socket.get())->setPeerHostName(host);
 #else
                 throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "tcp_secure protocol is disabled because poco library was built without NetSSL support.");
 #endif
-        }
-        else
-        {
-            socket = std::make_unique<Poco::Net::StreamSocket>();
+            }
+            else
+            {
+                socket = std::make_unique<Poco::Net::StreamSocket>();
+            }
+
+            try
+            {
+                socket->connect(*it, connection_timeout);
+                current_resolved_address = *it;
+                break;
+            }
+            catch (DB::NetException &)
+            {
+                if (++it == addresses.end())
+                    throw;
+                continue;
+            }
+            catch (Poco::Net::NetException &)
+            {
+                if (++it == addresses.end())
+                    throw;
+                continue;
+            }
+            catch (Poco::TimeoutException &)
+            {
+                if (++it == addresses.end())
+                    throw;
+                continue;
+            }
         }
 
-        current_resolved_address = DNSResolver::instance().resolveAddress(host, port);
-
-        const auto & connection_timeout = static_cast<bool>(secure) ? timeouts.secure_connection_timeout : timeouts.connection_timeout;
-        socket->connect(*current_resolved_address, connection_timeout);
         socket->setReceiveTimeout(timeouts.receive_timeout);
         socket->setSendTimeout(timeouts.send_timeout);
         socket->setNoDelay(true);
-        if (timeouts.tcp_keep_alive_timeout.totalSeconds())
+        int tcp_keep_alive_timeout_in_sec = timeouts.tcp_keep_alive_timeout.totalSeconds();
+        if (tcp_keep_alive_timeout_in_sec)
         {
             socket->setKeepAlive(true);
             socket->setOption(IPPROTO_TCP,
 #if defined(TCP_KEEPALIVE)
                 TCP_KEEPALIVE
 #else
-                TCP_KEEPIDLE  // OS_DARWIN
+                TCP_KEEPIDLE  // __APPLE__
 #endif
-                , timeouts.tcp_keep_alive_timeout);
+                , tcp_keep_alive_timeout_in_sec);
         }
 
         in = std::make_shared<ReadBufferFromPocoSocket>(*socket);
         in->setAsyncCallback(std::move(async_callback));
 
         out = std::make_shared<WriteBufferFromPocoSocket>(*socket);
-
         connected = true;
 
         sendHello();
         receiveHello(timeouts.handshake_timeout);
+
         if (server_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_ADDENDUM)
             sendAddendum();
 
         LOG_TRACE(log_wrapper.get(), "Connected to {} server version {}.{}.{}.",
             server_name, server_version_major, server_version_minor, server_version_patch);
     }
+    catch (DB::NetException & e)
+    {
+        disconnect();
+
+        /// Remove this possible stale entry from cache
+        DNSResolver::instance().removeHostFromCache(host);
+
+        /// Add server address to exception. Exception will preserve stack trace.
+        e.addMessage("({})", getDescription());
+        throw;
+    }
     catch (Poco::Net::NetException & e)
     {
         disconnect();
 
-        /// Add server address to exception. Also Exception will remember stack trace. It's a pity that more precise exception type is lost.
+        /// Remove this possible stale entry from cache
+        DNSResolver::instance().removeHostFromCache(host);
+
+        /// Add server address to exception. Also Exception will remember new stack trace. It's a pity that more precise exception type is lost.
         throw NetException(ErrorCodes::NETWORK_ERROR, "{} ({})", e.displayText(), getDescription());
     }
     catch (Poco::TimeoutException & e)
     {
-        /// disconnect() will reset the socket, get timeouts before.
-        const std::string & message = fmt::format("{} ({}, receive timeout {} ms, send timeout {} ms)",
-            e.displayText(), getDescription(),
-            socket->getReceiveTimeout().totalMilliseconds(),
-            socket->getSendTimeout().totalMilliseconds());
-
         disconnect();
 
-        /// Add server address to exception. Also Exception will remember stack trace. It's a pity that more precise exception type is lost.
-        throw NetException(ErrorCodes::SOCKET_TIMEOUT, message);
+        /// Remove this possible stale entry from cache
+        DNSResolver::instance().removeHostFromCache(host);
+
+        /// Add server address to exception. Also Exception will remember new stack trace. It's a pity that more precise exception type is lost.
+        /// This exception can only be thrown from socket->connect(), so add information about connection timeout.
+        const auto & connection_timeout = static_cast<bool>(secure) ? timeouts.secure_connection_timeout : timeouts.connection_timeout;
+        throw NetException(
+            ErrorCodes::SOCKET_TIMEOUT,
+            "{} ({}, connection timeout {} ms)",
+            e.displayText(),
+            getDescription(),
+            connection_timeout.totalMilliseconds());
     }
+    catch (...)
+    {
+        disconnect();
+        throw;
+    }
+}
+
+void Connection::cancel() noexcept
+{
+    if (maybe_compressed_out)
+        maybe_compressed_out->cancel();
+
+    if (out)
+        out->cancel();
+
+    if (socket)
+        socket->close();
+
+    reset();
+}
+
+void Connection::reset() noexcept
+{
+    maybe_compressed_out.reset();
+    out.reset();
+    socket.reset();
+    nonce.reset();
+
+    connected = false;
 }
 
 
 void Connection::disconnect()
 {
-    in = nullptr;
+    in.reset();
     last_input_packet_type.reset();
-    std::exception_ptr finalize_exception;
 
-    try
-    {
-        // finalize() can write and throw an exception.
-        if (maybe_compressed_out)
-            maybe_compressed_out->finalize();
-    }
-    catch (...)
-    {
-        /// Don't throw an exception here, it will leave Connection in invalid state.
-        finalize_exception = std::current_exception();
-
-        if (out)
-        {
-            out->cancel();
-            out = nullptr;
-        }
-    }
-    maybe_compressed_out = nullptr;
-
-    try
-    {
-        if (out)
-            out->finalize();
-    }
-    catch (...)
-    {
-        /// Don't throw an exception here, it will leave Connection in invalid state.
-        finalize_exception = std::current_exception();
-    }
-    out = nullptr;
-
-    if (socket)
-        socket->close();
-
-    socket = nullptr;
-    connected = false;
-    nonce.reset();
-
-    if (finalize_exception)
-        std::rethrow_exception(finalize_exception);
+    // no point to finalize tcp connections
+    cancel();
 }
 
 
@@ -387,7 +420,7 @@ void Connection::getServerVersion(const ConnectionTimeouts & timeouts,
                                   UInt64 & version_patch,
                                   UInt64 & revision)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     name = server_name;
@@ -399,7 +432,7 @@ void Connection::getServerVersion(const ConnectionTimeouts & timeouts,
 
 UInt64 Connection::getServerRevision(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     return server_revision;
@@ -407,7 +440,7 @@ UInt64 Connection::getServerRevision(const ConnectionTimeouts & timeouts)
 
 const String & Connection::getServerTimezone(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     return server_timezone;
@@ -415,7 +448,7 @@ const String & Connection::getServerTimezone(const ConnectionTimeouts & timeouts
 
 const String & Connection::getServerDisplayName(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     return server_display_name;
@@ -423,11 +456,11 @@ const String & Connection::getServerDisplayName(const ConnectionTimeouts & timeo
 
 void Connection::forceConnected(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
     {
         connect(timeouts);
     }
-    else if (!ping())
+    else if (!ping(timeouts))
     {
         LOG_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
         connect(timeouts);
@@ -447,11 +480,14 @@ void Connection::sendClusterNameAndSalt()
 }
 #endif
 
-bool Connection::ping()
+bool Connection::ping(const ConnectionTimeouts & timeouts)
 {
+    /// Keep the timeout guard visible to the catch block: on errors we call disconnect(),
+    /// which destroys `socket`, so the guard must not try to restore timeouts in its destructor.
+    std::optional<TimeoutSetter> timeout_setter;
     try
     {
-        TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
+        timeout_setter.emplace(*socket, timeouts.sync_request_timeout, true);
 
         UInt64 pong = 0;
         writeVarUInt(Protocol::Client::Ping, *out);
@@ -478,6 +514,13 @@ bool Connection::ping()
     }
     catch (const Poco::Exception & e)
     {
+        if (timeout_setter)
+            timeout_setter->was_reset = true;
+
+        /// Explicitly disconnect since ping() can receive EndOfStream,
+        /// and in this case this ping() will return false,
+        /// while next ping() may return true.
+        disconnect();
         LOG_TRACE(log_wrapper.get(), fmt::runtime(e.displayText()));
         return false;
     }
@@ -488,10 +531,10 @@ bool Connection::ping()
 TablesStatusResponse Connection::getTablesStatus(const ConnectionTimeouts & timeouts,
                                                  const TablesStatusRequest & request)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
-    TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
+    TimeoutSetter timeout_setter(*socket, timeouts.sync_request_timeout, true);
 
     writeVarUInt(Protocol::Client::TablesStatusRequest, *out);
     request.write(*out, server_revision);
@@ -538,7 +581,7 @@ void Connection::sendQuery(
         client_info = &new_client_info;
     }
 
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     /// Query is not executed within sendQuery() function.
@@ -637,7 +680,7 @@ void Connection::sendQuery(
 
     maybe_compressed_in.reset();
     if (maybe_compressed_out && maybe_compressed_out != out)
-        maybe_compressed_out->cancel();
+        maybe_compressed_out->finalize();
     maybe_compressed_out.reset();
     block_in.reset();
     block_logs_in.reset();
@@ -685,11 +728,12 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
     size_t prev_bytes = out->count();
 
     block_out->write(block);
-    maybe_compressed_out->next();
+    if (maybe_compressed_out != out)
+        maybe_compressed_out->next();
     out->next();
 
     if (throttler)
-        throttler->add(out->count() - prev_bytes);
+        throttler->throttle(out->count() - prev_bytes);
 }
 
 void Connection::sendIgnoredPartUUIDs(const std::vector<UUID> & uuids)
@@ -997,13 +1041,14 @@ Packet Connection::receivePacket()
 
             default:
                 /// In unknown state, disconnect - to not leave unsynchronised connection.
-                disconnect();
                 throw Exception(ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}",
                     toString(res.type), getDescription());
         }
     }
     catch (Exception & e)
     {
+        disconnect();
+
         /// This is to consider ATTEMPT_TO_READ_AFTER_EOF as a remote exception.
         e.setRemoteException();
 
@@ -1011,6 +1056,11 @@ Packet Connection::receivePacket()
         if (e.code() != ErrorCodes::UNKNOWN_PACKET_FROM_SERVER)
             e.addMessage("while receiving packet from " + getDescription());
 
+        throw;
+    }
+    catch (...)
+    {
+        disconnect();
         throw;
     }
 }
@@ -1041,7 +1091,7 @@ Block Connection::receiveDataImpl(NativeReader & reader)
     Block res = reader.read();
 
     if (throttler)
-        throttler->add(in->count() - prev_bytes);
+        throttler->throttle(in->count() - prev_bytes);
 
     return res;
 }
@@ -1056,7 +1106,6 @@ Block Connection::receiveProfileEvents()
 
 void Connection::initInputBuffers()
 {
-
 }
 
 

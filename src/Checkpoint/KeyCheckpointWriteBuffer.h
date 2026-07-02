@@ -11,9 +11,16 @@ namespace DB
 class KeyCheckpointWriteBuffer
 {
 public:
+    ~KeyCheckpointWriteBuffer();
+
     bool initialized() const;
 
-    void init(std::string_view key_, VersionType version_, CheckpointType type_, std::unique_ptr<WriteBufferFromFileBase> file_buf, uint32_t next_seq_num_ = 0);
+    void init(
+        std::string_view key_,
+        VersionType version_,
+        CheckpointType type_,
+        std::unique_ptr<WriteBufferFromFileBase> file_buf,
+        uint32_t next_seq_num_ = 0);
 
     /// \brief append partial ckpt data to key checkpoint file by idx
     /// \return success to append if the key ckpt write buffer is initialized and the seq_num is expected, otherwise return false

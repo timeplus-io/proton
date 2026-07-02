@@ -1,10 +1,11 @@
-#include <string>
-
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/LimitReadBuffer.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/copyData.h>
 #include <IO/WriteHelpers.h>
+
+#include <iostream>
+#include <string>
 
 
 int main(int argc, char ** argv)
@@ -36,6 +37,8 @@ int main(int argc, char ** argv)
 
     writeCString("\n--- the rest ---\n", out);
     copyData(in, out);
+
+    out.finalize();
 
     return 0;
 }

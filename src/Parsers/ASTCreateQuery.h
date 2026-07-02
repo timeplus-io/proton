@@ -95,6 +95,8 @@ public:
         ScheduledMaterializedView = 22,
     };
     Type type = Type::Stream;
+    /// Set when query was created via CREATE/ATTACH INPUT.
+    bool is_input{false};
 
     ASTSetQuery * storage_settings;
     ASTPtr mv_inner_storage_ttl;

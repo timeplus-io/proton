@@ -68,6 +68,7 @@
 
 /// proton: starts.
 #include <Storages/Stream/StorageSystemStreamSettings.h>
+#include <Storages/System/StorageSystemInputs.h>
 #include <Storages/System/StorageSystemServer.h>
 #if USE_PYTHON_UDF
 #include <Storages/System/StorageSystemPythonPackageTasks.h>
@@ -95,6 +96,7 @@ void attachSystemTablesLocal(ContextPtr context, IDatabase & system_database)
     attach<StorageSystemZeros>(context, system_database, "zeros_mt", true);
     attach<StorageSystemDatabases>(context, system_database, "databases");
     attach<StorageSystemTables>(context, system_database, "tables");
+    attach<StorageSystemInputs>(context, system_database, "inputs");
     attach<StorageSystemColumns>(context, system_database, "columns");
     attach<StorageSystemFunctions>(context, system_database, "functions");
     attach<StorageSystemEvents>(context, system_database, "events");

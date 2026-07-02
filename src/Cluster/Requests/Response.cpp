@@ -69,7 +69,7 @@ ByteVector Response::serializeWithHeader(const ResponseHeader & header) const
     ByteVector buffer(approx_size);
 
     {
-        DB::WriteBufferFromVector wb(buffer);
+        DB::WriteBufferFromVector<ByteVector> wb(buffer);
         serializeWithHeader(wb, header);
         wb.finalize();
     }
@@ -101,7 +101,7 @@ ByteVector Response::serializeWithSizeAndHeader(const ResponseHeader & header) c
     uint32_t prefix_length = 0;
 
     {
-        DB::WriteBufferFromVector wb(buffer);
+        DB::WriteBufferFromVector<ByteVector> wb(buffer);
 
         DB::writeIntBinary(prefix_length, wb);
 

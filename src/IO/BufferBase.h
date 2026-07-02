@@ -126,6 +126,7 @@ protected:
 
     /// Indicator of 15 bytes pad_right
     bool padded{false};
+    bool canceled{false};
 };
 
 

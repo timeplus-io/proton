@@ -57,6 +57,7 @@ public:
         const Block & output_header,
         std::vector<std::string> key_column_names,
         const std::string & version_column_name,
+        bool late_insert_overrides_,
         bool backfill_key_unique_);
 
     ~ChangelogConvertTransform() override = default;
@@ -67,8 +68,8 @@ public:
     void work() override;
 
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-    void recover(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx) override;
 
     static Block transformOutputHeader(const Block & output_header);
 
@@ -85,6 +86,8 @@ private:
     std::vector<size_t> key_column_positions;
     std::optional<size_t> version_column_position;
     std::vector<size_t> key_sizes;
+
+    const bool late_insert_overrides = true;
 
     const bool backfill_key_unique = false;
     bool backfill_started = false;

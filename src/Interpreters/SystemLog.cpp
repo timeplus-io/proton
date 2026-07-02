@@ -1,4 +1,8 @@
 #include <Interpreters/SystemLog.h>
+
+#include <base/scope_guard.h>
+#include <Common/Logger.h>
+#include <Common/logger_useful.h>
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/CrashLog.h>
 #include <Interpreters/MetricLog.h>
@@ -31,10 +35,8 @@
 #include <Common/setThreadName.h>
 #include <Common/MemoryTrackerBlockerInThread.h>
 #include <IO/WriteHelpers.h>
-
 #include <Poco/Util/AbstractConfiguration.h>
-#include <Common/logger_useful.h>
-#include <base/scope_guard.h>
+
 
 ///proton: starts
 #include <Bootstrap/Globals.h>
@@ -53,6 +55,7 @@
 #include <Storages/Stream/StorageStream.h>
 #include <base/sleep.h>
 #include <Common/ProtonCommon.h>
+#include <fmt/ranges.h>
 ///proton: ends
 
 
@@ -66,6 +69,57 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_STREAM;
     extern const int NOT_A_LEADER;
+    extern const int NOT_IMPLEMENTED;
+}
+
+namespace
+{
+    class StorageWithComment : public IAST
+    {
+    public:
+        ASTPtr storage;
+        ASTPtr comment;
+
+        String getID(char) const override { return "Storage with comment definition"; }
+
+        ASTPtr clone() const override
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method clone is not supported");
+        }
+
+        void formatImpl(const FormatSettings &, FormatState &, FormatStateStacked) const override
+        {
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method formatImpl is not supported");
+        }
+    };
+
+    class ParserStorageWithComment : public IParserBase
+    {
+    protected:
+        const char * getName() const override { return "storage definition with comment"; }
+        bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint=true) override
+        {
+            ParserStorage storage_p;
+            ASTPtr storage;
+
+            if (!storage_p.parse(pos, storage, expected))
+                return false;
+
+            ParserKeyword s_comment("COMMENT");
+            ParserStringLiteral string_literal_parser;
+            ASTPtr comment;
+
+            if (s_comment.ignore(pos, expected))
+                string_literal_parser.parse(pos, comment, expected);
+
+            auto storage_with_comment = std::make_shared<StorageWithComment>();
+            storage_with_comment->storage = std::move(storage);
+            storage_with_comment->comment = std::move(comment);
+
+            node = storage_with_comment;
+            return true;
+        }
+    };
 }
 
 namespace
@@ -130,11 +184,13 @@ std::shared_ptr<TSystemLog> createSystemLog(
         String ttl = config.getString(config_prefix + ".ttl", "");
         if (!ttl.empty())
             engine += " TTL " + ttl;
-        engine += " ORDER BY (event_date, event_time)";
+
+        engine += " ORDER BY ";
+        engine += TSystemLog::getDefaultOrderBy();
     }
 
-    // Validate engine definition grammatically to prevent some configuration errors
-    ParserStorage storage_parser;
+    /// Validate engine definition syntax to prevent some configuration errors.
+    ParserStorageWithComment storage_parser;
     parseQuery(storage_parser, engine.data(), engine.data() + engine.size(),
             "Storage to create table for " + config_prefix, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
@@ -725,7 +781,6 @@ void SystemLog<LogElement>::prepareTable()
     is_prepared = true;
 }
 
-
 template <typename LogElement>
 ASTPtr SystemLog<LogElement>::getCreateTableQuery()
 {
@@ -734,18 +789,36 @@ ASTPtr SystemLog<LogElement>::getCreateTableQuery()
     create->setDatabase(table_id.database_name);
     create->setTable(table_id.table_name);
 
-    auto ordinary_columns = LogElement::getNamesAndTypes();
-    auto alias_columns = LogElement::getNamesAndAliases();
     auto new_columns_list = std::make_shared<ASTColumns>();
-    new_columns_list->set(new_columns_list->columns, InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns));
+
+    if (const char * custom_column_list = LogElement::getCustomColumnList())
+    {
+        ParserColumnDeclarationList parser;
+        const Settings & settings = getContext()->getSettingsRef();
+
+        ASTPtr columns_list_raw = parseQuery(parser, custom_column_list, "columns declaration list", settings.max_query_size, settings.max_parser_depth);
+        new_columns_list->set(new_columns_list->columns, columns_list_raw);
+    }
+    else
+    {
+        auto ordinary_columns = LogElement::getNamesAndTypes();
+        auto alias_columns = LogElement::getNamesAndAliases();
+
+        new_columns_list->set(new_columns_list->columns, InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns));
+    }
+
     create->set(create->columns_list, new_columns_list);
 
-    ParserStorage storage_parser;
-    ASTPtr storage_ast = parseQuery(
+    ParserStorageWithComment storage_parser;
+
+    ASTPtr storage_with_comment_ast = parseQuery(
         storage_parser, storage_def.data(), storage_def.data() + storage_def.size(),
         "Storage to create table for " + LogElement::name(), 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
-    create->set(create->storage, storage_ast);
+    StorageWithComment & storage_with_comment = storage_with_comment_ast->as<StorageWithComment &>();
+
+    create->set(create->storage, storage_with_comment.storage);
+    create->set(create->comment, storage_with_comment.comment);
 
     /// Write additional (default) settings for MergeTree engine to make it make it possible to compare ASTs
     /// and recreate tables on settings changes.

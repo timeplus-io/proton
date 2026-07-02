@@ -35,8 +35,8 @@ public:
     void work() override;
 
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-    void recover(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx) override;
 
     static Block transformHeader(Block header, const HashJoinPtr & join);
 
@@ -83,6 +83,7 @@ private:
 
     SERDE int64_t watermark = INVALID_WATERMARK;
 
+    static constexpr Int64 log_metrics_interval_ms = 60'000;
     NO_SERDE Int64 last_log_ts = 0;
 
     /// Right-side backfill state machine for enrichment joins.

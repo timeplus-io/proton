@@ -14,8 +14,6 @@
 namespace ProfileEvents
 {
     extern const Event AsynchronousReadWaitMicroseconds;
-    extern const Event LocalReadThrottlerBytes;
-    extern const Event LocalReadThrottlerSleepMicroseconds;
 }
 
 namespace CurrentMetrics
@@ -96,7 +94,7 @@ bool AsynchronousReadBufferFromFileDescriptor::nextImpl()
         assert(offset <= size);
         size_t bytes_read = size - offset;
         if (throttler)
-            throttler->add(bytes_read, ProfileEvents::LocalReadThrottlerBytes, ProfileEvents::LocalReadThrottlerSleepMicroseconds);
+            throttler->throttle(bytes_read);
 
         if (bytes_read)
         {
@@ -123,7 +121,7 @@ bool AsynchronousReadBufferFromFileDescriptor::nextImpl()
         assert(offset <= size);
         size_t bytes_read = size - offset;
         if (throttler)
-            throttler->add(bytes_read, ProfileEvents::LocalReadThrottlerBytes, ProfileEvents::LocalReadThrottlerSleepMicroseconds);
+            throttler->throttle(bytes_read);
 
         if (bytes_read)
         {
@@ -262,6 +260,11 @@ void AsynchronousReadBufferFromFileDescriptor::rewind()
     working_buffer.resize(0);
     pos = working_buffer.begin();
     file_offset_of_buffer_end = 0;
+    bytes_to_ignore = 0;
+
+    /// A previous read cycle may have failed, leaving the buffer in a canceled state.
+    /// Reset so the next read cycle can proceed normally after rewind.
+    canceled = false;
 }
 
 size_t AsynchronousReadBufferFromFileDescriptor::getFileSize()

@@ -80,10 +80,19 @@ public:
         return result;
     }
 
-    void push(TaskRuntimeDataPtr item) { queue.push_back(std::move(item));}
-
-    void remove(StorageID id)
+    void push(TaskRuntimeDataPtr item)
     {
+        queue.push_back(std::move(item));
+    }
+
+    void cancelAndRemove(StorageID id)
+    {
+        for (auto & item : queue)
+        {
+            if (item->task->getStorageID() == id)
+                item->task->cancel();
+        }
+
         auto it = std::remove_if(queue.begin(), queue.end(),
             [&] (auto item) -> bool { return item->task->getStorageID() == id; });
         queue.erase(it, queue.end());
@@ -96,7 +105,7 @@ private:
     boost::circular_buffer<TaskRuntimeDataPtr> queue{0};
 };
 
-/// Uses a heap to pop a task with minimal priority
+/// Uses a heap to pop a task with minimal priority.
 class MergeMutateRuntimeQueue
 {
 public:
@@ -115,8 +124,14 @@ public:
         std::push_heap(buffer.begin(), buffer.end(), TaskRuntimeData::comparePtrByPriority);
     }
 
-    void remove(StorageID id)
+    void cancelAndRemove(StorageID id)
     {
+        for (auto & item : buffer)
+        {
+            if (item->task->getStorageID() == id)
+                item->task->cancel();
+        }
+
         auto it = std::remove_if(buffer.begin(), buffer.end(),
             [&] (auto item) -> bool { return item->task->getStorageID() == id; });
         buffer.erase(it, buffer.end());

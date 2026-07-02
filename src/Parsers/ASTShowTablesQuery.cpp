@@ -69,9 +69,17 @@ void ASTShowTablesQuery::formatQueryImpl(const FormatSettings & settings, Format
     }
     else
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW " << (temporary ? "TEMPORARY " : "") <<
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SHOW " << (temporary ? "TEMPORARY " : "");
         /// proton: starts
-             (dictionaries ? "DICTIONARIES" : "STREAMS") << (settings.hilite ? hilite_none : "");
+        if (dictionaries)
+            settings.ostr << "DICTIONARIES";
+        else if (only_views)
+            settings.ostr << "VIEWS";
+        else if (only_inputs)
+            settings.ostr << "INPUTS";
+        else
+            settings.ostr << "STREAMS";
+        settings.ostr << (settings.hilite ? hilite_none : "");
         /// proton: ends
 
         if (!from.empty())

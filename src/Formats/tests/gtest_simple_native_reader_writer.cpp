@@ -37,7 +37,7 @@ TEST(SimpleNative, ReadWriteBlock)
     auto header = block.cloneEmpty();
 
     std::vector<char> data;
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<std::vector<char>> wb{data};
 
     DB::SimpleNativeWriter<DB::Block> writer(wb, header, 0);
 
@@ -61,7 +61,7 @@ TEST(SimpleNative, ReadWriteBlockInfo)
     block.info.is_overflows = true;
 
     std::vector<char> data;
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<std::vector<char>> wb{data};
 
     DB::SimpleNativeWriter<DB::Block> writer(wb, header, 1);
 
@@ -83,7 +83,7 @@ TEST(SimpleNative, ReadWriteChunk)
     auto header = block.cloneEmpty();
 
     std::vector<char> data;
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<std::vector<char>> wb{data};
 
     DB::SimpleNativeWriter<DB::Chunk> writer(wb, header, 0);
 

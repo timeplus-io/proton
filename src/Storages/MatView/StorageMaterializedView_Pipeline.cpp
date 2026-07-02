@@ -18,15 +18,19 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <base/ClockUtils.h>
 #include <base/getThreadId.h>
+#include <Common/MemoryTracker.h>
 #include <Common/ProtonCommon.h>
 #include <Common/Stopwatch.h>
+#include <Common/formatReadable.h>
 #include <Common/scope_guard_safe.h>
 #include <Common/setThreadName.h>
 
 #include <absl/container/flat_hash_set.h>
 #include <boost/smart_ptr/make_shared.hpp>
 
+#include <atomic>
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace ProfileEvents
 {
@@ -388,6 +392,7 @@ void StorageMaterializedView::runPipeline() noexcept
 
     SCOPE_EXIT_SAFE({
         pipeline_state.resetPipeline();
+        pipeline_state.query_scope.reset();
         pipeline_state.query_context.reset();
 
         current_status = getPipelineStatus();
@@ -406,9 +411,11 @@ void StorageMaterializedView::runPipeline() noexcept
 
         pipeline_state.query_context = Context::createCopy(getContext());
         syncInnerQueryContext(pipeline_state.query_context);
-        CurrentThread::QueryScope query_scope(pipeline_state.query_context);
+        pipeline_state.query_scope.emplace(pipeline_state.query_context);
 
-        pipeline_state.pause_on_start = pipeline_state.query_context->getSettingsRef().pause_on_start.value;
+        /// Also honor the _tp_pause_all_materialized_views ops knob via the one-shot pause_on_start state: force a pause on attach to avoid the reboot memory storm
+        pipeline_state.pause_on_start = pipeline_state.query_context->getSettingsRef().pause_on_start.value
+            || (init_params->attach && getContext()->getConfigRef().getBool("_tp_pause_all_materialized_views", false));
 
         /// Pipeline Status Transition:
         /// Normal case: Initializing -> CheckingDependencies -> BuildingPipeline -> ExecutingPipeline => (Exit) None
@@ -628,7 +635,32 @@ void StorageMaterializedView::buildBackgroundPipeline()
     LOG_INFO(logger, "Building pipeline for query_id={}", getInnerQueryId());
     try
     {
+        /// BlockIO before QueryScope so the old ThreadGroup destructs; then a fresh
+        /// scope/group, otherwise an alloc that threw at the user/global limit
+        /// leaves amount bumped on the query tracker across recoveries.
         pipeline_state.resetPipeline();
+        pipeline_state.query_scope.reset();
+        pipeline_state.query_scope.emplace(pipeline_state.query_context);
+
+        /// RSS near the hard limit: building now would trip MEMORY_LIMIT_EXCEEDED mid-flight; bounce to the backoff retry instead.
+        if (const Int64 mem_limit = total_memory_tracker.getHardLimit(); mem_limit > 0)
+        {
+            const double configured_ratio = getContext()->getConfigRef().getDouble("mv_execution_memory_usage_to_server_limit_ratio", 0.9);
+            const double ratio = (configured_ratio > 0.0 && configured_ratio <= 1.0) ? configured_ratio : 0.9;
+            const Int64 rss = total_memory_tracker.getRSS();
+            if (rss >= static_cast<Int64>(static_cast<double>(mem_limit) * ratio))
+            {
+                pipeline_state.setException(
+                    ErrorCodes::MEMORY_LIMIT_EXCEEDED,
+                    fmt::format(
+                        "Deferred building MV pipeline: RSS {} reached {:.0f}% of the memory hard limit {}",
+                        ReadableSize(rss),
+                        ratio * 100,
+                        ReadableSize(mem_limit)));
+                pipeline_state.compareAndUpdateStatus(current_status, PipelineState::Status::AutoRecovering);
+                return;
+            }
+        }
 
         auto target_table = getTargetTable();
         auto metadata_snapshot = getInMemoryMetadataPtr();
@@ -642,6 +674,10 @@ void StorageMaterializedView::buildBackgroundPipeline()
         pipeline_state.query_context->setInsertionTable(target_table->getStorageID());
         pipeline_state.query_context->setIngestMode(IngestMode::Sync); /// Sync ingest to make sure the sink is successful
         pipeline_state.query_context->setSetting("insert_max_tries", 100);
+        /// MatView background pipeline must not silently skip records that are pruned from
+        /// nativelog and missing from the historical store — raise SEQUENCE_COMPACTED_AWAY so
+        /// the recovery policy can react (see prepareRecoveryAfterException / isPermanentError).
+        pipeline_state.query_context->setSetting("throw_if_sequence_has_hole", true);
         pipeline_state.query_context->setCreator(getStorageID().getFullNameNotQuoted());
         pipeline_state.query_context->setQueryFromMaterializedView(true);
 
@@ -660,8 +696,8 @@ void StorageMaterializedView::buildBackgroundPipeline()
             pipeline_state.written_bytes.fetch_add(value.written_bytes, std::memory_order_relaxed);
             pipeline_state.written_rows.fetch_add(value.written_rows, std::memory_order_relaxed);
         });
-        CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
-        CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
+        CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds].store(0, std::memory_order_relaxed);
+        CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds].store(0, std::memory_order_relaxed);
 
         io->pipeline = buildQueryPipelineImpl(inner_query, pipeline_state.query_context, &pipeline_state.can_recover_without_checkpoint);
 
@@ -1093,7 +1129,7 @@ void StorageMaterializedView::prepareRecoveryAfterException()
                         "Cannot recover pipeline, The same error '{}' has occurred more than {} times in a row. Need recover/recreate "
                         "manually",
                         ErrorCodes::getName(err_code),
-                        settings.recovery_retry_for_same_error);
+                        settings.recovery_retry_for_same_error.value);
                     pipeline_state.updateStatus(PipelineState::Status::Error);
                     return;
                 }

@@ -1,16 +1,16 @@
-#include "ORCBlockInputFormat.h"
-#include <boost/algorithm/string/case_conv.hpp>
-#if USE_ORC
+#include <Processors/Formats/Impl/ORCBlockInputFormat.h>
 
+#if USE_ORC
+#include <DataTypes/NestedUtils.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/SchemaInferenceUtils.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
-#include "ArrowBufferedStreams.h"
-#include "ArrowColumnToCHColumn.h"
-#include "ArrowFieldIndexUtil.h"
-#include <DataTypes/NestedUtils.h>
+#include <boost/algorithm/string/case_conv.hpp>
+#include <Processors/Formats/Impl/ArrowBufferedStreams.h>
+#include <Processors/Formats/Impl/ArrowColumnToCHColumn.h>
+#include <Processors/Formats/Impl/ArrowFieldIndexUtil.h>
 
 namespace DB
 {
@@ -22,7 +22,9 @@ namespace ErrorCodes
 }
 
 ORCBlockInputFormat::ORCBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_)
-    : IInputFormat(std::move(header_), &in_, ProcessorID::ORCBlockInputFormatID), format_settings(format_settings_), skip_stripes(format_settings.orc.skip_stripes)
+    : IInputFormat(std::move(header_), &in_, ProcessorID::ORCBlockInputFormatID)
+    , format_settings(format_settings_)
+    , skip_stripes(format_settings.orc.skip_stripes)
 {
 }
 
@@ -41,6 +43,9 @@ Chunk ORCBlockInputFormat::generate()
 
     if (stripe_current >= stripe_total)
         return {};
+
+    if (need_only_count)
+        return getChunkForCount(file_reader->GetRawORCReader()->getStripe(stripe_current++)->getNumberOfRows());
 
     auto batch_result = file_reader->ReadStripe(stripe_current, include_indices);
     if (!batch_result.ok())

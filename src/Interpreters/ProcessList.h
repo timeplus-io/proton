@@ -88,7 +88,7 @@ protected:
     ClientInfo client_info;
 
     /// Info about all threads involved in query execution
-    ThreadGroupStatusPtr thread_group;
+    ThreadGroupPtr thread_group;
 
     Stopwatch watch;
 
@@ -154,7 +154,7 @@ public:
         const String & query_,
         const ClientInfo & client_info_,
         QueryPriorities::Handle && priority_handle_,
-        ThreadGroupStatusPtr && thread_group_,
+        ThreadGroupPtr && thread_group_,
         IAST::QueryKind query_kind_,
         UInt64 watch_start_nanoseconds);
 
@@ -384,6 +384,12 @@ protected:
     void increaseQueryKindAmount(const IAST::QueryKind & query_kind);
     void decreaseQueryKindAmount(const IAST::QueryKind & query_kind);
     QueryAmount getQueryKindAmount(const IAST::QueryKind & query_kind) const;
+
+    /// proton: starts
+    /// Calculate effective memory limit considering both query-level max_memory_usage
+    /// and global max_query_memory_usage_to_ram_ratio setting
+    static UInt64 calculateEffectiveMemoryLimit(UInt64 query_max_memory_usage, const ContextPtr & context);
+    /// proton: ends
 
 public:
     using EntryPtr = std::shared_ptr<ProcessListEntry>;

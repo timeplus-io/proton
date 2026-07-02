@@ -22,6 +22,11 @@ public:
 
 private:
     void updateOutputStream() override;
+    /// proton: starts. ARRAY JOIN expands rows in place on the same stream and leaves
+    /// non-array columns untouched, so the left shuffle survives unless a shuffle key is
+    /// itself one of the array-joined columns.
+    void preserveShuffleDescriptionIfValid(const DataStream & input_stream);
+    /// proton: ends.
 
     ArrayJoinActionPtr array_join;
 };

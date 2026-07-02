@@ -75,7 +75,8 @@ StreamingStoreSource::StreamingStoreSource(
             /*is_stopped_=*/[shard_store = std::move(stream_shard_store_)] { return shard_store->isStopped(); },
             /*is_local_=*/is_local_,
             logger);
-        nlog_reader->setAllowFallbackToHistoricalStore(settings.allow_fallback_to_historical_store.value);
+        nlog_reader->setAllowFallbackToHistoricalStore(settings.enable_backfill_from_historical_store.value);
+        nlog_reader->setThrowIfSequenceHasHole(settings.throw_if_sequence_has_hole.value);
         reader = std::move(nlog_reader);
     }
     else
@@ -119,6 +120,11 @@ void StreamingStoreSource::readAndProcess()
 std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
 {
     return reader->getStreamShard();
+}
+
+Int64 StreamingStoreSource::lastFetchedSN() const
+{
+    return reader->fetchedSequenceNumber();
 }
 
 std::pair<Int64, Int64> StreamingStoreSource::sequenceRange() const

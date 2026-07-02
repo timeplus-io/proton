@@ -37,7 +37,11 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/IAST.h>
+
+/// proton: starts
+#include <Functions/UserDefined/UDFHelper.h>
+#include <Parsers/ParserSelectQuery.h>
+/// proton: ends
 
 /// proton: starts. to port new planer
 ///#include <Analyzer/TableNode.h>
@@ -87,10 +91,12 @@
 #include <memory>
 #include <filesystem>
 #include <optional>
+#include <ranges>
 #include <cassert>
 
 /// proton : starts
 #include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
+#include <fmt/ranges.h>
 /// proton : ends
 
 namespace fs = std::filesystem;
@@ -266,6 +272,20 @@ size_t getClusterQueriedNodes(const Settings & settings, const ClusterPtr & clus
     return (num_remote_shards + num_local_shards) * settings.max_parallel_replicas;
 }
 
+/// proton: starts. Rewrite remote fetch query to simple SELECT required_columns
+ASTPtr buildRemoteFetchQuery(const Names & required_columns, const String & database, const String & table, ContextPtr context)
+{
+    auto query_str = fmt::format(
+        "SELECT {} FROM {}.{}",
+        fmt::join(required_columns | std::views::transform([](const String & name) { return backQuoteIfNeed(name); }), ", "),
+        database.empty() ? backQuoteIfNeed(context->getCurrentDatabase()) : backQuoteIfNeed(database),
+        backQuoteIfNeed(table));
+
+    ParserSelectQuery parser;
+    return parseQuery(
+        parser, query_str.data(), query_str.data() + query_str.size(), "remote fetch query", 0, context->getSettingsRef().max_parser_depth);
+}
+/// proton: ends
 }
 
 /// For destruction of std::unique_ptr of type that is incomplete in class definition.
@@ -408,8 +428,10 @@ QueryProcessingStage::Enum StorageDistributed::getQueryProcessingStage(
         }
     }
 
-    /// proton: starts. So far streaming processing only support remote fetch columns.
-    if (query_info.isStreaming())
+    /// proton: starts
+    /// So far streaming processing only supports remote fetch columns. Also force FetchColumns for any query with UDFs
+    /// to avoid sending UDF calls to remote servers that may not have the UDF defined.
+    if (query_info.isStreaming() || Streaming::hasUserDefinedFunction(query_info.query, local_context))
         return QueryProcessingStage::FetchColumns;
     /// proton: ends.
 
@@ -598,7 +620,7 @@ QueryTreeNodePtr buildQueryTreeDistributedTableReplacedWithLocalTable(const Sele
 
 void StorageDistributed::read(
     QueryPlan & query_plan,
-    const Names &,
+    const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
@@ -632,9 +654,23 @@ void StorageDistributed::read(
         header =
             InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage).analyze()).getSampleBlock();
 
-        modified_query_info.query = ClusterProxy::rewriteSelectQuery(
-            local_context, modified_query_info.query,
-            remote_database, remote_table, remote_table_function_ptr);
+        // proton: starts. Optimize remote fetch query to a simple SELECT of required columns.
+        //
+        // We use `buildRemoteFetchQuery` only if all of the following are true:
+        //   - The query is at the FetchColumns stage (so only the required columns need to be read).
+        //   - The remote source is a regular table (not a table function).
+        //   - `column_names` is not empty (there is an explicit list of columns to fetch).
+        //
+        // In this scenario, we can safely replace the original query with a simplified:
+        //     SELECT <required_columns> FROM remote_database.remote_table
+        // This is sufficient for the FetchColumns stage, can be more efficient, and avoids issues
+        // where the remote query might reference unknown UDF functions.
+        if (processed_stage == QueryProcessingStage::FetchColumns && !remote_table_function_ptr && !column_names.empty())
+            modified_query_info.query = buildRemoteFetchQuery(column_names, remote_database, remote_table, local_context);
+        else
+            modified_query_info.query = ClusterProxy::rewriteSelectQuery(
+                local_context, modified_query_info.query, remote_database, remote_table, remote_table_function_ptr);
+        /// proton: ends.
 
         /// Return directly (with correct header) if no shard to query.
         if (query_info.getCluster()->getShardsInfo().empty())
@@ -920,7 +956,7 @@ void StorageDistributed::startup()
         if (inc > file_names_increment.value)
             file_names_increment.value.store(inc);
     }
-    LOG_DEBUG(log, "Auto-increment is {}", file_names_increment.value);
+    LOG_DEBUG(log, "Auto-increment is {}", file_names_increment.value.load());
 }
 
 
@@ -1194,7 +1230,7 @@ ClusterPtr StorageDistributed::skipUnusedShards(
         LOG_DEBUG(log,
             "Number of values for sharding key exceeds optimize_skip_unused_shards_limit={}, "
             "try to increase it, but note that this may increase query processing time.",
-            local_context->getSettingsRef().optimize_skip_unused_shards_limit);
+            local_context->getSettingsRef().optimize_skip_unused_shards_limit.value);
         return nullptr;
     }
 

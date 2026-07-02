@@ -6,6 +6,7 @@
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadHelpers.h>
 #include <Common/logger_useful.h>
+#include <Common/formatReadable.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Backups/BackupEntryFromSmallFile.h>
@@ -13,6 +14,7 @@
 #include <Disks/SingleDiskVolume.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -264,6 +266,7 @@ DataPartStorageOnDiskBase::getReplicatedFilesDescription(const NameSet & file_na
     ReplicatedFilesDescription description;
     auto relative_path = fs::path(root_path) / part_dir;
     auto disk = volume->getDisk();
+    auto read_settings = getReadSettings();
 
     auto actual_file_names = getActualFileNamesOnDisk(file_names);
     for (const auto & name : actual_file_names)
@@ -274,9 +277,9 @@ DataPartStorageOnDiskBase::getReplicatedFilesDescription(const NameSet & file_na
         auto & file_desc = description.files[name];
 
         file_desc.file_size = file_size;
-        file_desc.input_buffer_getter = [disk, path, file_size]
+        file_desc.input_buffer_getter = [disk, path, file_size, read_settings]
         {
-            return disk->readFile(path, ReadSettings{}.adjustBufferSize(file_size), file_size, file_size);
+            return disk->readFile(path, read_settings.adjustBufferSize(file_size), file_size, file_size);
         };
     }
 
@@ -360,7 +363,7 @@ void DataPartStorageOnDiskBase::backup(
     {
         String relative_filepath = fs::path(part_dir) / filepath;
         String full_filepath = fs::path(root_path) / part_dir / filepath;
-        backup_entries.emplace_back(relative_filepath, std::make_unique<BackupEntryFromSmallFile>(disk, full_filepath));
+        backup_entries.emplace_back(relative_filepath, std::make_unique<BackupEntryFromSmallFile>(disk, full_filepath, getReadSettings()));
     }
 }
 
@@ -561,6 +564,15 @@ void DataPartStorageOnDiskBase::remove(
                 disk->removeSharedRecursive(
                     fs::path(to) / "", !can_remove_description->can_remove_anything, can_remove_description->files_not_to_remove);
             }
+            catch (const fs::filesystem_error & e)
+            {
+                if (e.code() == std::errc::no_such_file_or_directory)
+                {
+                    /// Directory was already removed by a concurrent cleanup path.
+                }
+                else
+                    throw;
+            }
             catch (...)
             {
                 LOG_ERROR(
@@ -572,7 +584,8 @@ void DataPartStorageOnDiskBase::remove(
         try
         {
             disk->moveDirectory(from, to);
-            part_dir = part_dir_without_slash;
+            /// NOTE: keep part_dir unchanged to avoid concurrent readers (e.g. system.parts)
+            /// observing a transient delete_tmp_ path while this part is being removed.
         }
         catch (const Exception & e)
         {
@@ -674,7 +687,15 @@ void DataPartStorageOnDiskBase::clearDirectory(
     if (checksums.empty() || incomplete_temporary_part)
     {
         /// If the part is not completely written, we cannot use fast path by listing files.
-        disk->removeSharedRecursive(fs::path(dir) / "", !can_remove_shared_data, names_not_to_remove);
+        try
+        {
+            disk->removeSharedRecursive(fs::path(dir) / "", !can_remove_shared_data, names_not_to_remove);
+        }
+        catch (const fs::filesystem_error & e)
+        {
+            if (e.code() != std::errc::no_such_file_or_directory)
+                throw;
+        }
         return;
     }
 
@@ -706,7 +727,15 @@ void DataPartStorageOnDiskBase::clearDirectory(
         /// Recursive directory removal does many excessive "stat" syscalls under the hood.
 
         LOG_ERROR(log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, dir), getCurrentExceptionMessage(false));
-        disk->removeSharedRecursive(fs::path(dir) / "", !can_remove_shared_data, names_not_to_remove);
+        try
+        {
+            disk->removeSharedRecursive(fs::path(dir) / "", !can_remove_shared_data, names_not_to_remove);
+        }
+        catch (const fs::filesystem_error & e)
+        {
+            if (e.code() != std::errc::no_such_file_or_directory)
+                throw;
+        }
     }
 }
 

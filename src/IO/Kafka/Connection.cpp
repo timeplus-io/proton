@@ -4,6 +4,7 @@
 #include <IO/Kafka/mapErrorCode.h>
 #include <Common/logger_useful.h>
 
+#include <mutex>
 #include <sstream>
 
 namespace DB
@@ -168,15 +169,17 @@ ConsumerPtr Connection::getConsumer(const std::string & topic)
 
 void Connection::updateConsumer(ConsumerPtr consumer)
 {
-    auto topic = consumer->topicName();
+    /// Called from Consumer::recreate() which holds the consumer lock.
+    /// Do not call Consumer methods which acquire lock to avoid deadlock.
+
+    const auto & topic = consumer->topicName();
 
     std::lock_guard lock{consumers_mutex};
-
     /// getConsumerHandle and markTopicConsumed in consumeFrom shall be
     /// in one transaction (under one mutex), otherwise there is race condition
     /// https://github.com/timeplus-io/proton-enterprise/issues/7606
     auto new_handle = getConsumerHandleWithLockHeld(topic);
-    consumer->updateFrom(Consumer{shared_from_this(), new_handle, topic});
+    consumer->updateFromWithLockHeld(Consumer{shared_from_this(), new_handle, topic});
     new_handle->markTopicConsumed(topic, consumer);
 }
 
@@ -368,13 +371,25 @@ WatermarkOffsets Connection::getWatermarkOffsets(const std::string & topic, int3
 void Connection::withAnyHandle(std::function<void(rd_kafka_t *)> func)
 {
     /// Since we just need a handle for some temporary jobs, we don't care about the limits.
-    for (const auto & ref : producer_handles)
-        if (auto handle = ref.lock())
-            return func(handle->get());
+    {
+        std::lock_guard lock{producers_mutex};
+        for (const auto & ref : producer_handles)
+            if (auto handle = ref.lock())
+            {
+                func(handle->get());
+                return;
+            }
+    }
 
-    for (const auto & ref : consumer_handles)
-        if (auto handle = ref.lock())
-            return func(handle->get());
+    {
+        std::lock_guard lock{consumers_mutex};
+        for (const auto & ref : consumer_handles)
+            if (auto handle = ref.lock())
+            {
+                func(handle->get());
+                return;
+            }
+    }
 
     auto handle = std::make_shared<ConsumerHandle>(shared_from_this(), rd_kafka_conf_dup(conf.get()));
     setOauthBearerToken(handle->get());

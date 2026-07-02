@@ -9,6 +9,7 @@
 #include <Common/LoggingFormatStringHelpers.h>
 #include <Common/Logger.h>
 #include <Common/AtomicLogger.h>
+#include <Common/MemoryTrackerBlockerInThread.h>
 
 namespace Poco { class Logger; }
 
@@ -75,6 +76,10 @@ namespace impl
         auto _channel = _logger->getChannel();                                                                      \
         if (!_channel)                                                                                              \
             break;                                                                                                  \
+                                                                                                                    \
+        /* Note, we need to block memory tracking to avoid taking into account this memory in the query context */  \
+        /* Since this memory will be freed either in async log flush thread, or in the system.text_log flush */     \
+        MemoryTrackerBlockerInThread block_memory_tracker(VariableContext::Global);                                 \
                                                                                                                     \
         constexpr size_t _nargs = CH_VA_ARGS_NARGS(__VA_ARGS__);                                                    \
         using LogTypeInfo = FormatStringTypeInfo<std::decay_t<decltype(LOG_IMPL_FIRST_ARG(__VA_ARGS__))>>;          \

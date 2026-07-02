@@ -1,4 +1,4 @@
-#include "ArrowBlockInputFormat.h"
+#include <Processors/Formats/Impl/ArrowBlockInputFormat.h>
 
 #if USE_ARROW
 
@@ -10,8 +10,8 @@
 #include <arrow/api.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/result.h>
-#include "ArrowBufferedStreams.h"
-#include "ArrowColumnToCHColumn.h"
+#include <Processors/Formats/Impl/ArrowBufferedStreams.h>
+#include <Processors/Formats/Impl/ArrowColumnToCHColumn.h>
 
 
 namespace DB
@@ -24,7 +24,9 @@ namespace ErrorCodes
 }
 
 ArrowBlockInputFormat::ArrowBlockInputFormat(ReadBuffer & in_, const Block & header_, bool stream_, const FormatSettings & format_settings_)
-    : IInputFormat(header_, &in_, ProcessorID::ArrowBlockInputFormatID), stream{stream_}, format_settings(format_settings_)
+    : IInputFormat(header_, &in_, ProcessorID::ArrowBlockInputFormatID)
+    , stream(stream_)
+    , format_settings(format_settings_)
 {
 }
 
@@ -45,6 +47,9 @@ Chunk ArrowBlockInputFormat::generate()
         batch_result = stream_reader->Next();
         if (batch_result.ok() && !(*batch_result))
             return res;
+
+        if (need_only_count && batch_result.ok())
+            return getChunkForCount((*batch_result)->num_rows());
     }
     else
     {
@@ -56,6 +61,15 @@ Chunk ArrowBlockInputFormat::generate()
 
         if (record_batch_current >= record_batch_total)
             return res;
+
+        if (need_only_count)
+        {
+            auto rows = file_reader->RecordBatchCountRows(record_batch_current++);
+            if (!rows.ok())
+                throw ParsingException(
+                    ErrorCodes::CANNOT_READ_ALL_DATA, "Error while reading batch of Arrow data: {}", rows.status().ToString());
+            return getChunkForCount(*rows);
+        }
 
         batch_result = file_reader->ReadRecordBatch(record_batch_current);
     }
@@ -145,7 +159,8 @@ void ArrowBlockInputFormat::prepareReader()
         "Arrow",
         format_settings.arrow.allow_missing_columns,
         format_settings.null_as_default,
-        format_settings.arrow.case_insensitive_column_matching);
+        format_settings.arrow.case_insensitive_column_matching,
+        stream);
 
     if (stream)
         record_batch_total = -1;

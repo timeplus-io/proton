@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include "gtest_disk.h"
+#include <Disks/tests/gtest_disk.h>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -68,11 +68,12 @@ TYPED_TEST(DiskTest, writeFile)
     {
         std::unique_ptr<DB::WriteBuffer> out = this->disk->writeFile("test_file");
         writeString("test data", *out);
+        out->finalize();
     }
 
     DB::String data;
     {
-        std::unique_ptr<DB::ReadBuffer> in = this->disk->readFile("test_file");
+        std::unique_ptr<DB::ReadBuffer> in = this->disk->readFile("test_file", DB::getReadSettings());
         readString(data, *in);
     }
 
@@ -86,12 +87,15 @@ TYPED_TEST(DiskTest, readFile)
     {
         std::unique_ptr<DB::WriteBuffer> out = this->disk->writeFile("test_file");
         writeString("test data", *out);
+        out->finalize();
     }
+
+    auto read_settings = DB::getReadSettings();
 
     // Test SEEK_SET
     {
         String buf(4, '0');
-        std::unique_ptr<DB::SeekableReadBuffer> in = this->disk->readFile("test_file");
+        std::unique_ptr<DB::SeekableReadBuffer> in = this->disk->readFile("test_file", read_settings);
 
         in->seek(5, SEEK_SET);
 
@@ -101,7 +105,7 @@ TYPED_TEST(DiskTest, readFile)
 
     // Test SEEK_CUR
     {
-        std::unique_ptr<DB::SeekableReadBuffer> in = this->disk->readFile("test_file");
+        std::unique_ptr<DB::SeekableReadBuffer> in = this->disk->readFile("test_file", read_settings);
         String buf(4, '0');
 
         in->readStrict(buf.data(), 4);

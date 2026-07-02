@@ -4,6 +4,7 @@
 #include <Common/logger_useful.h>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <ranges>
 

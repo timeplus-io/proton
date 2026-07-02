@@ -290,6 +290,8 @@ int SecureSocketImpl::sendBytes(const void* buffer, int length, int flags)
 	poco_assert (_pSocket->initialized());
 	poco_check_ptr (_pSSL);
 
+	_pSocket->throttleSend(length, _pSocket->getBlocking() && (flags & MSG_DONTWAIT) == 0);
+
 	int rc;
 	if (_needHandshake)
 	{
@@ -314,6 +316,9 @@ int SecureSocketImpl::sendBytes(const void* buffer, int length, int flags)
 		rc = handleError(rc);
 		if (rc == 0) throw SSLConnectionUnexpectedlyClosedException();
 	}
+
+	_pSocket->useSendThrottlerBudget(rc);
+
 	return rc;
 }
 
@@ -327,6 +332,8 @@ int SecureSocketImpl::receiveBytes(void* buffer, int length, int flags)
 	/// Special case: just check that we can read from socket
 	if ((flags & MSG_DONTWAIT) && (flags & MSG_PEEK))
 		return _pSocket->receiveBytes(buffer, length, flags);
+
+        _pSocket->throttleRecv(length, _pSocket->getBlocking() && (flags & MSG_DONTWAIT) == 0);
 
 	int rc;
 	if (_needHandshake)
@@ -352,6 +359,9 @@ int SecureSocketImpl::receiveBytes(void* buffer, int length, int flags)
 	{
 		return handleError(rc);
 	}
+
+	_pSocket->useRecvThrottlerBudget(rc);
+
 	return rc;
 }
 
@@ -627,6 +637,16 @@ bool SecureSocketImpl::sessionWasReused()
 		return SSL_session_reused(_pSSL) != 0;
 	else
 		return false;
+}
+
+void SecureSocketImpl::setBlocking(bool flag)
+{
+    _pSocket->setBlocking(flag);
+}
+
+bool SecureSocketImpl::getBlocking() const
+{
+    return _pSocket->getBlocking();
 }
 
 

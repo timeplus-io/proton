@@ -6,6 +6,8 @@
 #include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
+#include <IO/CascadeWriteBuffer.h>
+#include <Compression/CompressedWriteBuffer.h>
 #include <Common/re2.h>
 
 namespace CurrentMetrics
@@ -32,7 +34,7 @@ public:
     HTTPHandler(IServer & server_, const std::string & name);
     virtual ~HTTPHandler() override;
 
-    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
+    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response, const ProfileEvents::Event & write_event) override;
 
     /// This method is called right before the query execution.
     virtual void customizeContext(HTTPServerRequest & /* request */, ContextMutablePtr /* context */) {}
@@ -53,10 +55,21 @@ private:
          * WriteBufferFromHTTPServerResponse out
          */
 
-        std::shared_ptr<WriteBufferFromHTTPServerResponse> out;
-        /// Points to 'out' or to CompressedWriteBuffer(*out), depending on settings.
+        /// Holds original response buffer
+        std::shared_ptr<WriteBufferFromHTTPServerResponse> out_holder;
+        /// If HTTP compression is enabled holds compression wrapper over original response buffer
+        std::shared_ptr<WriteBuffer> wrap_compressed_holder;
+        /// Points either to out_holder or to wrap_compressed_holder
+        std::shared_ptr<WriteBuffer> out;
+
+        /// If internal compression is enabled holds compression wrapper over out buffer
+        std::shared_ptr<CompressedWriteBuffer> out_compressed_holder;
+        /// Points to 'out' or to CompressedWriteBuffer(*out)
         std::shared_ptr<WriteBuffer> out_maybe_compressed;
-        /// Points to 'out' or to CompressedWriteBuffer(*out) or to CascadeWriteBuffer.
+
+        /// If output should be delayed holds cascade buffer
+        std::shared_ptr<CascadeWriteBuffer> out_delayed_and_compressed_holder;
+        /// Points to out_maybe_compressed or to CascadeWriteBuffer.
         std::shared_ptr<WriteBuffer> out_maybe_delayed_and_compressed;
 
         bool finalized = false;
@@ -64,9 +77,9 @@ private:
 
         bool exception_is_written = false;
 
-        inline bool hasDelayed() const
+        bool hasDelayed() const
         {
-            return out_maybe_delayed_and_compressed != out_maybe_compressed;
+            return out_maybe_delayed_and_compressed && out_maybe_delayed_and_compressed != out_maybe_compressed;
         }
 
         inline void finalize()
@@ -75,12 +88,14 @@ private:
                 return;
             finalized = true;
 
-            if (out_maybe_delayed_and_compressed)
-                out_maybe_delayed_and_compressed->finalize();
-            if (out_maybe_compressed)
-                out_maybe_compressed->finalize();
-            if (out)
-                out->finalize();
+            if (out_delayed_and_compressed_holder)
+                out_delayed_and_compressed_holder->finalize();
+            if (out_compressed_holder)
+                out_compressed_holder->finalize();
+            if (wrap_compressed_holder)
+                wrap_compressed_holder->finalize();
+            if (out_holder)
+                out_holder->finalize();
         }
 
         void cancel()
@@ -89,21 +104,22 @@ private:
                 return;
             canceled = true;
 
-            if (out_maybe_delayed_and_compressed)
-                out_maybe_delayed_and_compressed->cancel();
-            if (out_maybe_compressed)
-                out_maybe_compressed->cancel();
-            if (out)
-                out->cancel();
+            if (out_delayed_and_compressed_holder)
+                out_delayed_and_compressed_holder->cancel();
+            if (out_compressed_holder)
+                out_compressed_holder->cancel();
+            if (wrap_compressed_holder)
+                wrap_compressed_holder->cancel();
+            if (out_holder)
+                out_holder->cancel();
         }
-
 
         bool isCanceled() const
         {
             return canceled;
         }
 
-        inline bool isFinalized() const
+        bool isFinalized() const
         {
             return finalized;
         }
@@ -145,11 +161,12 @@ private:
         HTMLForm & params,
         HTTPServerResponse & response,
         Output & used_output,
-        std::optional<CurrentThread::QueryScope> & query_scope);
+        std::optional<CurrentThread::QueryScope> & query_scope,
+        const ProfileEvents::Event & write_event);
 
-    void trySendExceptionToClient(
-        const std::string & s,
+    bool trySendExceptionToClient(
         int exception_code,
+        const std::string & message,
         HTTPServerRequest & request,
         HTTPServerResponse & response,
         Output & used_output);

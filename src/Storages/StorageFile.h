@@ -1,8 +1,9 @@
 #pragma once
 
-#include <Storages/IStorage.h>
+
 #include <Storages/ExternalDataSourceConfiguration.h>
 #include <Storages/Cache/SchemaCache.h>
+#include <Storages/IStorage.h>
 #include <Common/FileRenamer.h>
 
 #include <atomic>
@@ -101,6 +102,8 @@ public:
         ContextPtr context);
 
     static SchemaCache & getSchemaCache(const ContextPtr & context);
+
+    bool supportsTrivialCountOptimization() const override { return true; }
 
 protected:
     friend class StorageFileSource;

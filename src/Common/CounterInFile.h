@@ -103,6 +103,7 @@ public:
                 wb.truncate(0);
                 DB::writeIntText(res, wb);
                 DB::writeChar('\n', wb);
+                wb.finalize();
                 wb.sync();
             }
 
@@ -175,6 +176,7 @@ public:
                 wb.truncate(0);
                 DB::writeIntText(value, wb);
                 DB::writeChar('\n', wb);
+                wb.finalize();
                 wb.sync();
             }
         }

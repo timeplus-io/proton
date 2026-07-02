@@ -130,8 +130,21 @@ Chunk StreamingStoreSourceBase::generate()
 
         /// After processing blocks, check again to see if there are new results
         if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
+        {
             /// Act as a heart beat
-            return header_chunk.clone();
+            auto heartbeat_chunk = header_chunk.clone();
+
+            /// If there are gaps due to empty entries/records, \processed_sn also needs to be advanced
+            if (auto fetched_sn = lastFetchedSN(); fetched_sn > lastProcessedSN())
+            {
+                setLastProcessedSN(fetched_sn);
+
+                /// Always set the sequence number to the chunk context for remote read
+                if (query_context->getSettingsRef().remote_fetch.value)
+                    heartbeat_chunk.setSN(fetched_sn);
+            }
+            return heartbeat_chunk;
+        }
 
         /// result_blocks is not empty, fallthrough
     }
@@ -145,15 +158,8 @@ Chunk StreamingStoreSourceBase::generate()
     return std::move((iter++)->first);
 }
 
-/// 1) Generate a checkpoint barrier
-/// 2) Checkpoint the sequence number just before the barrier
-Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_ctx)
+void StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_ctx)
 {
-    /// Prepare checkpoint barrier chunk
-    auto result = header_chunk.clone();
-    result.setCheckpointContext(current_ckpt_ctx);
-
-    /// Commit the checkpoint : shard
     auto stream_shard = getStreamShard();
     auto processor_id = static_cast<UInt32>(pid);
 
@@ -165,10 +171,6 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
     });
 
     LOG_INFO(logger, "Saved checkpoint sn={}", lastProcessedSN());
-
-    /// FIXME, if commit failed ?
-    /// Propagate checkpoint barriers
-    return result;
 }
 
 void StreamingStoreSourceBase::doRecover(CheckpointContextPtr ckpt_ctx_)
@@ -212,5 +214,4 @@ bool StreamingStoreSourceBase::dedupBlock(const cluster::SchemaRecordPtr & recor
 
     return !idempotent_keys->add(record->getSN(), record->idempotentKey(), /*deduped_log_prefix=*/"Skipping duplicate block processing");
 }
-
 }

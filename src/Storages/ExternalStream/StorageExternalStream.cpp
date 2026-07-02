@@ -57,6 +57,7 @@ extern const int INCORRECT_QUERY;
 extern const int INVALID_SETTING_VALUE;
 extern const int LICENSE_VIOLATED;
 extern const int NOT_IMPLEMENTED;
+extern const int SUPPORT_IS_DISABLED;
 extern const int TYPE_MISMATCH;
 extern const int UNSUPPORTED;
 }
@@ -140,7 +141,10 @@ StoragePtr createExternalStream(
             attach,
             std::move(external_stream_counter),
             std::move(context));
-
+#else
+    if (type == StreamTypes::PULSAR)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
+                        "Pulsar external stream is disabled, rebuild with USE_PULSAR");
 #endif
 
 #if USE_AWS_S3 && USE_AVRO && USE_PARQUET
@@ -151,7 +155,10 @@ StoragePtr createExternalStream(
             std::move(external_stream_settings),
             std::move(external_stream_counter),
             std::move(context));
-
+#else
+    if (type == StreamTypes::ICEBERG)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
+                        "Iceberg external stream is disabled, rebuild with USE_AWS_S3 && USE_AVRO && USE_PARQUET");
 #endif
 
 #if USE_NATSIO
@@ -163,6 +170,10 @@ StoragePtr createExternalStream(
             attach,
             std::move(external_stream_counter),
             std::move(context));
+#else
+    if (type == StreamTypes::NATS_JETSTREAM)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
+                        "NATS JetStream external stream is disabled, rebuild with USE_NATSIO");
 #endif
 #if USE_PYTHON_UDF
     if (type == ExternalStreamTypes::PYTHON)
@@ -223,7 +234,7 @@ StoragePtr createExternalStream(
     }
 #else
     if (type == ExternalStreamTypes::PYTHON)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Python external stream is disabled, rebuild with USE_PYTHON_UDF");
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Python external stream is disabled, rebuild with USE_PYTHON_UDF");
 #endif
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external stream type: {}", type);
 }
@@ -427,7 +438,7 @@ void StorageExternalStream::checkAlterSettingsIsPossible(const AlterCommands & c
         throw Exception(ErrorCodes::UNSUPPORTED, "Alter external stream type is not supported");
 
     if (auto impl = std::dynamic_pointer_cast<StorageExternalStreamImpl>(external_stream))
-        impl->verifySettings(new_settings, /*change_settings=*/true, context_);
+        impl->validateSettings(new_settings, /*change_settings*/true, context_);
 }
 
 void StorageExternalStream::alter(const AlterCommands & params, ContextPtr context_, AlterLockHolder &)
@@ -443,6 +454,12 @@ void StorageExternalStream::alter(const AlterCommands & params, ContextPtr conte
     /// The nested stream (usually ExternalStreamImpl) metadata will not be updated until restart.
     auto db = DatabaseCatalog::instance().getDatabase(table_id.database_name);
     db->alterTable(context_, table_id, new_metadata, params.front().typeString(), params.astCommands(table_id));
+}
+
+void StorageExternalStream::validate() const
+{
+    if (auto impl = std::dynamic_pointer_cast<StorageExternalStreamImpl>(external_stream))
+        impl->validate(getContext());
 }
 
 void registerStorageExternalStream(StorageFactory & factory)

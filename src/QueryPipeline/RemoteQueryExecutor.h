@@ -16,8 +16,8 @@ namespace DB
 
 class Context;
 
-class Throttler;
-using ThrottlerPtr = std::shared_ptr<Throttler>;
+class IThrottler;
+using ThrottlerPtr = std::shared_ptr<IThrottler>;
 
 struct Progress;
 using ProgressCallback = std::function<void(const Progress & progress)>;
@@ -199,6 +199,7 @@ public:
     void setLogger(LoggerPtr logger) { log = logger; }
 
     const Block & getHeader() const { return header; }
+    bool isFinished() const { return finished; }
 
     /// proton: starts. Expose the util function to outside usage.
     static Block adaptBlockStructure(const Block & block, const Block & header);

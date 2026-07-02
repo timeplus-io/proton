@@ -32,6 +32,7 @@ public:
 
     virtual cluster::SchemaRecordPtrs read() = 0;
     virtual void resetSequenceNumber(Int64 sn) = 0;
+    virtual Int64 fetchedSequenceNumber() const = 0;
     virtual std::pair<Int64, Int64> sequenceRange() const = 0;
 
     std::pair<String, Int32> getStreamShard() const;

@@ -22,6 +22,7 @@
 #include <Processors/Transforms/FilterSortedStreamByRange.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
+#include <fmt/ranges.h>
 
 using namespace DB;
 

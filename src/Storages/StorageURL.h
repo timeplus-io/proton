@@ -1,18 +1,19 @@
 #pragma once
 
-#include <Poco/URI.h>
 #include <base/shared_ptr_helper.h>
-#include <Processors/Sinks/SinkToStorage.h>
 #include <Formats/FormatSettings.h>
 #include <IO/CompressionMethod.h>
 #include <IO/HTTPHeaderEntries.h>
-#include <Storages/IStorage.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
-#include <Storages/StorageFactory.h>
-#include <Storages/ExternalDataSourceConfiguration.h>
+#include <Processors/Sinks/SinkToStorage.h>
+#include <Processors/ISource.h>
 #include <Storages/Cache/SchemaCache.h>
+#include <Storages/ExternalDataSourceConfiguration.h>
+#include <Storages/IStorage.h>
 #include <Storages/StorageConfiguration.h>
+#include <Storages/StorageFactory.h>
 #include <Storages/prepareReadingFromFormat.h>
+#include <Poco/URI.h>
 
 
 namespace DB
@@ -23,6 +24,7 @@ using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
 
 struct ConnectionTimeouts;
 class NamedCollection;
+class PullingPipelineExecutor;
 
 /**
  * This class represents table engine for external urls.
@@ -130,6 +132,82 @@ private:
         const HTTPHeaderEntries & headers,
         const Poco::Net::HTTPBasicCredentials & credentials,
         const ContextPtr & context);
+};
+
+class StorageURLSource : public ISource
+{
+    using URIParams = std::vector<std::pair<String, String>>;
+
+public:
+    struct URIInfo
+    {
+        using FailoverOptions = std::vector<String>;
+        std::vector<FailoverOptions> uri_list_to_read;
+        std::atomic<size_t> next_uri_to_read = 0;
+    };
+    using URIInfoPtr = std::shared_ptr<URIInfo>;
+
+    StorageURLSource(
+        const ReadFromFormatInfo & info,
+        URIInfoPtr uri_info_,
+        const std::string & http_method,
+        std::function<void(std::ostream &)> callback,
+        const String & format,
+        const std::optional<FormatSettings> & format_settings,
+        String name_,
+        ContextPtr context,
+        UInt64 max_block_size,
+        const ConnectionTimeouts & timeouts,
+        CompressionMethod compression_method,
+        size_t max_parsing_threads,
+        const HTTPHeaderEntries & headers_ = {},
+        const URIParams & params = {},
+        bool glob_url = false,
+        bool need_only_count_ = false);
+
+    ~StorageURLSource() override;
+
+    String getName() const override { return name; }
+
+    Chunk generate() override;
+
+    void onCancel() noexcept override;
+
+    static void setCredentials(Poco::Net::HTTPBasicCredentials & credentials, const Poco::URI & request_uri);
+
+    static std::tuple<Poco::URI, std::unique_ptr<ReadWriteBufferFromHTTP>> getFirstAvailableURIAndReadBuffer(
+        std::vector<String>::const_iterator & option,
+        const std::vector<String>::const_iterator & end,
+        ContextPtr context,
+        const URIParams & params,
+        const String & http_method,
+        std::function<void(std::ostream &)> callback,
+        const ConnectionTimeouts & timeouts,
+        Poco::Net::HTTPBasicCredentials & credentials,
+        const HTTPHeaderEntries & headers,
+        bool glob_url,
+        bool delay_initialization);
+
+private:
+    using InitializeFunc = std::function<void(const URIInfo::FailoverOptions &)>;
+    InitializeFunc initialize;
+
+    String name;
+    ColumnsDescription columns_description;
+    NamesAndTypesList requested_columns;
+    Block block_for_format;
+    URIInfoPtr uri_info;
+    bool need_only_count;
+
+    std::unique_ptr<ReadBuffer> read_buf;
+    std::shared_ptr<IInputFormat> input_format;
+    std::unique_ptr<QueryPipeline> pipeline;
+    std::unique_ptr<PullingPipelineExecutor> reader;
+    /// onCancell and generate can be called concurrently and both of them
+    /// have R/W access to reader pointer.
+    std::mutex reader_mutex;
+
+    Poco::Net::HTTPBasicCredentials credentials;
 };
 
 class StorageURLSink final : public SinkToStorage

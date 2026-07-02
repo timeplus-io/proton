@@ -249,7 +249,7 @@ public:
 
         void addPart(MutableDataPartPtr & part);
 
-        void rollback();
+        void rollback(DataPartsLock * lock = nullptr);
 
         /// Immediately remove parts from table's data_parts set and change part
         /// state to temporary. Useful for new parts which not present in table.
@@ -331,9 +331,9 @@ public:
             Collapsing          = 1,
             Summing             = 2,
             Aggregating         = 3,
-            VersionedKV         = 5,
+            Replacing           = 5,    /// Was VersionedKV in proton-internal naming; same merge semantics.
             Graphite            = 6,
-            ChangelogKV         = 7,
+            VersionedCollapsing = 7,    /// Was ChangelogKV in proton-internal naming; same merge semantics.
         };
 
         Mode mode;
@@ -544,7 +544,9 @@ public:
 
     /// If the table contains too many active parts, sleep for a while to give them time to merge.
     /// If until is non-null, wake up from the sleep earlier if the event happened.
-    void delayInsertOrThrowIfNeeded(Poco::Event * until, const ContextPtr & query_context) const;
+    /// When allow_throw=false (background commit paths), the function loops with 1s sleeps instead
+    /// of throwing TOO_MANY_PARTS, so NativeLog consumers are not interrupted by transient backpressure.
+    void delayInsertOrThrowIfNeeded(Poco::Event * until, const ContextPtr & query_context, bool allow_throw = true) const;
 
     /// Renames temporary part to a permanent part and adds it to the parts set.
     /// It is assumed that the part does not intersect with existing parts.
@@ -613,7 +615,7 @@ public:
     /// It includes parts that have been just removed by these method
     /// and Outdated parts covered by drop_range that were removed earlier for any reason.
     PartsToRemoveFromZooKeeper removePartsInRangeFromWorkingSetAndGetPartsToRemoveFromZooKeeper(
-        MergeTreeTransaction * txn, const MergeTreePartInfo & drop_range, DataPartsLock & lock);
+        MergeTreeTransaction * txn, const MergeTreePartInfo & drop_range, DataPartsLock & lock, bool create_empty_part = true);
 
     /// Restores Outdated part and adds it to working set
     void restoreAndActivatePart(const DataPartPtr & part, DataPartsLock * acquired_lock = nullptr);
@@ -904,7 +906,9 @@ public:
     WriteAheadLogPtr getWriteAheadLog();
 
     constexpr static auto EMPTY_PART_TMP_PREFIX = "tmp_empty_";
-    MergeTreeData::MutableDataPartPtr createEmptyPart(MergeTreePartInfo & new_part_info, const MergeTreePartition & partition, const String & new_part_name, const MergeTreeTransactionPtr & txn);
+    std::pair<MergeTreeData::MutableDataPartPtr, scope_guard> createEmptyPart(
+        MergeTreePartInfo & new_part_info, const MergeTreePartition & partition,
+        const String & new_part_name, const MergeTreeTransactionPtr & txn);
 
     MergeTreeDataFormatVersion format_version;
 
@@ -1144,8 +1148,8 @@ protected:
     /// Strongly connected with two fields above.
     /// Every task that is finished will ask to assign a new one into an executor.
     /// These callbacks will be passed to the constructor of each task.
-    std::function<void(bool)> common_assignee_trigger;
-    std::function<void(bool)> moves_assignee_trigger;
+    IExecutableTask::TaskResultCallback common_assignee_trigger;
+    IExecutableTask::TaskResultCallback moves_assignee_trigger;
 
     using DataPartIteratorByInfo = DataPartsIndexes::index<TagByInfo>::type::iterator;
     using DataPartIteratorByStateAndInfo = DataPartsIndexes::index<TagByStateAndInfo>::type::iterator;
@@ -1280,7 +1284,8 @@ protected:
         const String & new_part_name,
         const DataPartPtr & result_part,
         const DataPartsVector & source_parts,
-        const MergeListEntry * merge_entry);
+        const MergeListEntry * merge_entry,
+        std::shared_ptr<ProfileEvents::Counters::Snapshot> profile_counters);
 
     /// If part is assigned to merge or mutation (possibly replicated)
     /// Should be overridden by children, because they can have different

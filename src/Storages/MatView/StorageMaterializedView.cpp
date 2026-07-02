@@ -21,6 +21,7 @@
 #include <Common/checkStackSize.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -732,7 +733,7 @@ void StorageMaterializedView::validateModifiedQuery(ASTPtr new_query) const
     }
     else
     {
-        auto old_pipeline = buildQueryPipelineImpl(getInMemoryMetadataPtr()->getSelectQuery().inner_query, query_context);
+        auto old_pipeline = buildQueryPipelineImpl(getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone(), query_context);
         old_stateful_nodes_descs = formatNodeDescriptions(ExecutingGraph::statefulNodeDescriptions(old_pipeline.getProcessors()));
     }
 

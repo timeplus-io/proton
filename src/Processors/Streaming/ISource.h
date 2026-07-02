@@ -63,7 +63,8 @@ public:
     bool hasProcessedNewDataSinceLastCheckpoint() const noexcept { return lastProcessedSN() > lastCheckpointSN(); }
 
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr ckpt_ctx_) override final;
+    /// Source-side checkpoint entry: schedules a request; persistence happens later in tryGenerate.
+    void triggerCheckpoint(CheckpointContextPtr ckpt_ctx_);
     void recover(CheckpointContextPtr ckpt_ctx_) override final;
 
     struct Metrics
@@ -86,13 +87,13 @@ private:
     std::optional<Chunk> tryGenerate() override;
 
     /// \brief Checkpointing the source state (include lastProcessedSN())
-    virtual Chunk doCheckpoint(CheckpointContextPtr)
+    void doCheckpoint(CheckpointContextPtr) override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for checkpoting of {}", getName());
     }
 
     /// \brief Recovering the source state (include lastCheckpointSN())
-    virtual void doRecover(CheckpointContextPtr)
+    void doRecover(CheckpointContextPtr) override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for recovering of {}", getName());
     }

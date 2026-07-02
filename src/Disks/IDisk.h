@@ -204,7 +204,7 @@ public:
         const String & from_file_path,
         IDisk & to_disk,
         const String & to_file_path,
-        const ReadSettings & read_settings = {},
+        const ReadSettings & read_settings,
         const WriteSettings & write_settings = {});
 
     /// List files at `path` and add their names to `file_names`
@@ -213,7 +213,7 @@ public:
     /// Open the file for read and return ReadBufferFromFileBase object.
     virtual std::unique_ptr<ReadBufferFromFileBase> readFile( /// NOLINT
         const String & path,
-        const ReadSettings & settings = ReadSettings{},
+        const ReadSettings & settings,
         std::optional<size_t> read_hint = {},
         std::optional<size_t> file_size = {}) const = 0;
 

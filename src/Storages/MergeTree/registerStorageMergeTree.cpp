@@ -124,11 +124,11 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     else if (name_part == "Aggregating")
         merging_params.mode = MergeTreeData::MergingParams::Aggregating;
     else if (name_part == "Replacing")
-        merging_params.mode = MergeTreeData::MergingParams::VersionedKV;
+        merging_params.mode = MergeTreeData::MergingParams::Replacing;
     else if (name_part == "Graphite")
         merging_params.mode = MergeTreeData::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
-        merging_params.mode = MergeTreeData::MergingParams::ChangelogKV;
+        merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
     else if (!name_part.empty())
         throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown storage {}",
             args.engine_name + verbose_help_message);
@@ -169,7 +169,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         case MergeTreeData::MergingParams::Summing:
             add_optional_param("list of columns to sum");
             break;
-        case MergeTreeData::MergingParams::VersionedKV:
+        case MergeTreeData::MergingParams::Replacing:
             add_optional_param("version");
             break;
         case MergeTreeData::MergingParams::Collapsing:
@@ -178,7 +178,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         case MergeTreeData::MergingParams::Graphite:
             add_mandatory_param("'config_element_for_graphite_schema'");
             break;
-        case MergeTreeData::MergingParams::ChangelogKV: {
+        case MergeTreeData::MergingParams::VersionedCollapsing: {
             add_mandatory_param("sign column");
             add_mandatory_param("version");
             break;
@@ -249,7 +249,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                             verbose_help_message);
         --arg_cnt;
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::VersionedKV)
+    else if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
     {
         /// If the last element is not index_granularity or replica_name (a literal), then this is the name of the version column.
         if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
@@ -288,7 +288,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         --arg_cnt;
         setGraphitePatternsFromConfig(context, graphite_config_name, merging_params.graphite_params);
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::ChangelogKV)
+    else if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
     {
         if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.version_column))
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Version column name must be an unquoted string{}", verbose_help_message);

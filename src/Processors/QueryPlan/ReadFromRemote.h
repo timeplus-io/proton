@@ -10,8 +10,8 @@
 
 namespace DB
 {
-class Throttler;
-using ThrottlerPtr = std::shared_ptr<Throttler>;
+class IThrottler;
+using ThrottlerPtr = std::shared_ptr<IThrottler>;
 
 /// Reading step from remote servers.
 /// Unite query results from several shards.

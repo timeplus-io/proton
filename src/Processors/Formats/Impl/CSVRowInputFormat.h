@@ -1,9 +1,7 @@
 #pragma once
 
 #include <optional>
-#include <unordered_map>
 
-#include <Core/Block.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
 #include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
@@ -11,6 +9,8 @@
 
 namespace DB
 {
+
+class Block;
 
 /** A stream for inputting data in csv format.
   * Does not conform with https://tools.ietf.org/html/rfc4180 because it skips spaces and tabs between values.
@@ -40,6 +40,8 @@ private:
     bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
 
+    bool supportsCountRows() const override { return true; }
+
 protected:
     std::shared_ptr<PeekableReadBuffer> buf;
 };
@@ -59,6 +61,8 @@ public:
 
     bool readField(IColumn & column, const DataTypePtr & type, const SerializationPtr & serialization, bool is_last_file_column, const String & column_name) override;
 
+    void skipRow() override;
+
     void skipField(size_t /*file_column*/) override { skipField(); }
     void skipField();
 
@@ -75,6 +79,7 @@ public:
     std::vector<String> readRow() { return readRowImpl<false>(); }
     std::vector<String> readRowForHeaderDetection() override { return readHeaderRow(); }
 
+    bool checkForSuffix() override;
 
     template <bool is_header>
     std::vector<String> readRowImpl();
@@ -104,6 +109,6 @@ private:
     DataTypes buffered_types;
 };
 
-std::pair<bool, size_t> fileSegmentationEngineCSVImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, size_t min_rows);
+std::pair<bool, size_t> fileSegmentationEngineCSVImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_bytes, size_t min_rows, size_t max_rows, const FormatSettings & settings);
 
 }

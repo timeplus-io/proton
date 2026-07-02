@@ -30,7 +30,7 @@
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Interpreters/MetadataHelper.h>
 #include <Parsers/queryToString.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 /// proton: ends.
 
 namespace fs = std::filesystem;

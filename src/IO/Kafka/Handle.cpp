@@ -36,13 +36,23 @@ Handle::~Handle()
 {
     stopped.test_and_set();
     poller.wait();
+
+    /// Drain queue before destroy handle to avoid hanging.
+    /// https://github.com/confluentinc/librdkafka/wiki/Proper-termination-sequence/b182d62033a62365027ab080d0e85db619f37375#producers-and-simple-legacy-consumers
+    if (rk)
+    {
+        while (rd_kafka_outq_len(rk.get()) > 0)
+            rd_kafka_poll(rk.get(), 50);
+        rk.reset();  /// delete with rd_kafka_destroy
+        LOG_INFO(logger, "Kafka handle is destroyed.");
+    }
 }
 
 void Handle::startPolling()
 {
     std::call_once(poll_flag, [this]() {
         poller.scheduleOrThrowOnError([this] {
-            LOG_INFO(logger, "Start polling");
+            LOG_INFO(logger, "Polling start");
 
             Stopwatch log_timer;
             while (!stopped.test())

@@ -59,8 +59,8 @@ Sink::Sink(
     LOG_INFO(
         logger,
         "Writing to ClickHouse with max_insert_block_size={} max_insert_block_bytes={} insert_block_timeout_ms={}",
-        context->getSettingsRef().max_insert_block_size,
-        context->getSettingsRef().max_insert_block_bytes,
+        context->getSettingsRef().max_insert_block_size.value,
+        context->getSettingsRef().max_insert_block_bytes.value,
         timeout);
 
     if (columns_to_send.size() != header.columns())
@@ -117,10 +117,10 @@ void Sink::flushBatch()
     addToBatch({});
 }
 
-void Sink::checkpoint(CheckpointContextPtr ckpt_ctx)
+void Sink::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     flushBatch();
-    IProcessor::checkpoint(ckpt_ctx);
+    IProcessor::doCheckpoint(ckpt_ctx);
 }
 
 void Sink::removeSuperfluousColumns(Block & block) const

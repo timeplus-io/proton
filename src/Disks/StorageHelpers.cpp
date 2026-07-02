@@ -54,6 +54,8 @@ cluster::protocol::DiskDescriptor::DiskType parseDiskType(const StoragePolicyCon
         disk_type = cluster::protocol::DiskDescriptor::DiskType::S3;
     else if (type == "s3_plain")
         disk_type = cluster::protocol::DiskDescriptor::DiskType::S3Plain;
+    else if (type == "s3_plain_rewritable")
+        disk_type = cluster::protocol::DiskDescriptor::DiskType::S3Plain;
     else if (type == "web")
         disk_type = cluster::protocol::DiskDescriptor::DiskType::Web;
     else if (type == "azure_blob_storage")
@@ -148,8 +150,12 @@ cluster::protocol::StoragePolicyDescriptorPtr getStoragePolicyDescriptorFromConf
 
     auto disk_map = context->getDisksMap();
     auto check_and_create_volume = [&](const String & volume_key, cluster::protocol::VolumeDescriptor & target_desc) {
-        target_desc.max_data_part_size = config->getUInt64(volume_key + ".max_data_part_size", 0);
-        target_desc.max_data_part_size_ratio = config->getDouble(volume_key + ".max_data_part_size", 0);
+        target_desc.max_data_part_size = config->getUInt64(volume_key + ".max_data_part_size_bytes", 0);
+        target_desc.max_data_part_size_ratio = config->getDouble(volume_key + ".max_data_part_size_ratio", 0);
+        target_desc.perform_ttl_move_on_insert = config->getBool(volume_key + ".perform_ttl_move_on_insert", true);
+        target_desc.prefer_not_to_merge = config->getBool(volume_key + ".prefer_not_to_merge", false);
+        target_desc.volume_priority = config->getUInt64(volume_key + ".volume_priority", std::numeric_limits<UInt64>::max());
+        target_desc.least_used_ttl_ms = config->getUInt64(volume_key + ".least_used_ttl_ms", 60'000);
         String load_balancing_str = config->getString(volume_key + ".load_balancing", "unknown");
         target_desc.load_balancing = parseVolumeLoadBalancing(load_balancing_str);
 
@@ -183,7 +189,7 @@ cluster::protocol::StoragePolicyDescriptorPtr getStoragePolicyDescriptorFromConf
         cluster::protocol::VolumeDescriptor volume_desc;
         volume_desc.name = vol_name;
         check_and_create_volume(volumes_prefix + "." + vol_name, volume_desc);
-        desc->volumes.emplace_back(volume_desc);
+        desc->volumes.emplace_back(std::move(volume_desc));
     }
 
     return desc;
@@ -209,9 +215,9 @@ StoragePolicyConfigurationPtr getStoragePolicyConfigurationFromDescriptor(const 
     {
         Poco::AutoPtr<Poco::XML::Element> volume_element(xml_document->createElement(vol.name));
 
-        /// max_data_part_size or max_data_part_size_ratio
+        /// max_data_part_size_bytes or max_data_part_size_ratio
         if (vol.max_data_part_size != 0)
-            append_property(volume_element, "max_data_part_size", fmt::format("{}", vol.max_data_part_size));
+            append_property(volume_element, "max_data_part_size_bytes", fmt::format("{}", vol.max_data_part_size));
 
         if (vol.max_data_part_size_ratio > 0.0)
             append_property(volume_element, "max_data_part_size_ratio", fmt::format("{}", vol.max_data_part_size_ratio));
@@ -219,6 +225,10 @@ StoragePolicyConfigurationPtr getStoragePolicyConfigurationFromDescriptor(const 
         /// perform_ttl_move_on_insert, by default is true
         if (!vol.perform_ttl_move_on_insert)
             append_property(volume_element, "perform_ttl_move_on_insert", fmt::format("{}", vol.perform_ttl_move_on_insert));
+
+        /// prefer_not_to_merge, by default is false
+        if (vol.prefer_not_to_merge)
+            append_property(volume_element, "prefer_not_to_merge", fmt::format("{}", vol.prefer_not_to_merge));
 
         /// load_balancing
         if (vol.load_balancing != cluster::protocol::VolumeDescriptor::VolumeLoadBalancing::Unknown)
@@ -228,7 +238,15 @@ StoragePolicyConfigurationPtr getStoragePolicyConfigurationFromDescriptor(const 
             append_property(volume_element, "load_balancing", val);
         }
 
-        /// TODO: volume_priority
+        /// volume_priority — UINT64_MAX (default) and 0 (legacy pre-v2 metastore default) both
+        /// mean "no explicit priority". A real explicit priority is 1..N.
+        if (vol.volume_priority != std::numeric_limits<UInt64>::max() && vol.volume_priority != 0)
+            append_property(volume_element, "volume_priority", fmt::format("{}", vol.volume_priority));
+
+        /// least_used_ttl_ms — only emit when the user explicitly chose something other than the
+        /// 60000 default, to keep the resulting XML compact for the common case.
+        if (vol.least_used_ttl_ms != 60'000)
+            append_property(volume_element, "least_used_ttl_ms", fmt::format("{}", vol.least_used_ttl_ms));
 
         /// create 'disks' elements
         auto append_disk = [&](const auto & name) {

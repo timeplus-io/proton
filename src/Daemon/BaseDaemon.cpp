@@ -10,7 +10,6 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-
 #if defined(OS_LINUX)
     #include <sys/prctl.h>
 #endif
@@ -19,6 +18,7 @@
 #include <csignal>
 #include <unistd.h>
 
+#include <algorithm>
 #include <typeinfo>
 #include <iostream>
 #include <fstream>
@@ -30,6 +30,7 @@
 #include <Poco/Exception.h>
 #include <Poco/ErrorHandler.h>
 #include <Poco/Environment.h>
+#include <Poco/Pipe.h>
 
 #include <Common/ErrorHandlers.h>
 #include <base/argsToConfig.h>
@@ -77,6 +78,7 @@ namespace DB
     {
         extern const int CANNOT_SET_SIGNAL_HANDLER;
         extern const int CANNOT_SEND_SIGNAL;
+        extern const int SYSTEM_ERROR;
     }
 }
 
@@ -114,7 +116,7 @@ static void writeSignalIDtoSignalPipe(int sig)
     char buf[signal_pipe_buf_size];
     WriteBufferFromFileDescriptor out(signal_pipe.fds_rw[1], signal_pipe_buf_size, buf);
     writeBinary(sig, out);
-    out.next();
+    out.finalize();
 
     errno = saved_errno;
 }
@@ -154,10 +156,10 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     writePODBinary(*info, out);
     writePODBinary(signal_context, out);
     writePODBinary(stack_trace, out);
+    writeVectorBinary(Exception::thread_frame_pointers, out);
     writeBinary(static_cast<UInt32>(getThreadId()), out);
     writePODBinary(current_thread, out);
-
-    out.next();
+    out.finalize();
 
     if (sig != SIGTSTP) /// This signal is used for debugging.
     {
@@ -176,6 +178,16 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     }
 
     errno = saved_errno;
+}
+
+
+static bool getenvBool(const char * name)
+{
+    bool res = false;
+    const char * env_var = getenv(name); // NOLINT(concurrency-mt-unsafe)
+    if (env_var && 0 == strcmp(env_var, "1"))
+        res = true;
+    return res;
 }
 
 
@@ -251,6 +263,7 @@ public:
                 siginfo_t info{};
                 ucontext_t * context{};
                 StackTrace stack_trace(NoCapture{});
+                std::vector<StackTrace::FramePointers> thread_frame_pointers;
                 UInt32 thread_num{};
                 ThreadStatus * thread_ptr{};
 
@@ -261,6 +274,7 @@ public:
                 }
 
                 readPODBinary(stack_trace, in);
+                readVectorBinary(thread_frame_pointers, in);
                 readBinary(thread_num, in);
                 readPODBinary(thread_ptr, in);
 
@@ -268,12 +282,12 @@ public:
                 /// Example: segfault while symbolizing stack trace.
                 try
                 {
-                    std::thread([=, this] { onFault(sig, info, context, stack_trace, thread_num, thread_ptr); }).detach();
+                    std::thread([=, this] { onFault(sig, info, context, stack_trace, thread_frame_pointers, thread_num, thread_ptr); }).detach();
                 }
                 catch (...)
                 {
                     /// Likely cannot allocate thread
-                    onFault(sig, info, context, stack_trace, thread_num, thread_ptr);
+                    onFault(sig, info, context, stack_trace, thread_frame_pointers, thread_num, thread_ptr);
                 }
             }
         }
@@ -309,6 +323,7 @@ private:
         const siginfo_t & info,
         ucontext_t * context,
         const StackTrace & stack_trace,
+        const std::vector<StackTrace::FramePointers> & thread_frame_pointers,
         UInt32 thread_num,
         ThreadStatus * thread_ptr) const
     {
@@ -405,7 +420,32 @@ private:
         }
 
         /// Write symbolized stack trace line by line for better grep-ability.
-        stack_trace.toStringEveryLine([&](const std::string & s) { LOG_FATAL(log, fmt::runtime(s)); });
+        stack_trace.toStringEveryLine([&](std::string_view s) { LOG_FATAL(log, fmt::runtime(s)); });
+
+        /// In case it's a scheduled job write all previous jobs origins call stacks
+        std::for_each(thread_frame_pointers.rbegin(), thread_frame_pointers.rend(),
+            [this](const StackTrace::FramePointers & frame_pointers)
+            {
+                if (size_t size = std::ranges::find(frame_pointers, nullptr) - frame_pointers.begin())
+                {
+                    LOG_FATAL(log, "========================================");
+                    WriteBufferFromOwnString bare_stacktrace;
+                    writeString("Job's origin stack trace:", bare_stacktrace);
+                    std::for_each_n(frame_pointers.begin(), size,
+                        [&bare_stacktrace](const void * ptr)
+                        {
+                            writeChar(' ', bare_stacktrace);
+                            writePointerHex(ptr, bare_stacktrace);
+                        }
+                    );
+
+                    LOG_FATAL(log, fmt::runtime(bare_stacktrace.str()));
+
+                    StackTrace::toStringEveryLine(const_cast<void **>(frame_pointers.data()), 0, size, [this](std::string_view s) { LOG_FATAL(log, fmt::runtime(s)); });
+                }
+            }
+        );
+
 
 #if defined(OS_LINUX)
         /// Write information about binary checksum. It can be difficult to calculate, so do it only after printing stack trace.
@@ -495,8 +535,7 @@ static DISABLE_SANITIZER_INSTRUMENTATION void sanitizerDeathCallback()
     writePODBinary(stack_trace, out);
     writeBinary(UInt32(getThreadId()), out);
     writePODBinary(current_thread, out);
-
-    out.next();
+    out.finalize();
 
     /// The time that is usually enough for separate thread to print info into log.
     sleepForSeconds(20);
@@ -537,7 +576,7 @@ static DISABLE_SANITIZER_INSTRUMENTATION void sanitizerDeathCallback()
     writeBinary(static_cast<int>(SignalListener::StdTerminate), out);
     writeBinary(static_cast<UInt32>(getThreadId()), out);
     writeBinary(log_message, out);
-    out.next();
+    out.finalize();
 
     abort();
 }
@@ -630,6 +669,7 @@ std::string BaseDaemon::getDefaultConfigFileName() const
 
 void BaseDaemon::closeFDs()
 {
+    /// NOTE: may benefit from close_range() (linux 5.9+)
 #if defined(OS_FREEBSD) || defined(OS_DARWIN)
     fs::path proc_path{"/dev/fd"};
 #else
@@ -949,7 +989,7 @@ void BaseDaemon::initializeTerminationAndSignalProcessing()
     signal_listener_thread.start(*signal_listener);
 
 #if defined(__ELF__) && !defined(OS_FREEBSD)
-    String build_id_hex = SymbolIndex::instance()->getBuildIDHex();
+    String build_id_hex = SymbolIndex::instance().getBuildIDHex();
     if (build_id_hex.empty())
         build_id = "";
     else
@@ -1067,23 +1107,57 @@ void BaseDaemon::setupWatchdog()
     if (argv0)
         original_process_name = argv0;
 
+    bool restart = getenvBool("PROTON_WATCHDOG_RESTART");
+    bool forward_signals = !getenvBool("PROTON_WATCHDOG_NO_FORWARD");
+
     while (true)
     {
+        /// This pipe is used to synchronize notifications to the service manager from the child process
+        /// to be sent after the notifications from the parent process.
+        Poco::Pipe notify_sync;
+
         static pid_t pid = -1;
         pid = fork();
 
         if (-1 == pid)
-            throw Poco::Exception("Cannot fork");
+            DB::throwFromErrno("Cannot fork", DB::ErrorCodes::SYSTEM_ERROR);
 
         if (0 == pid)
         {
+            updateCurrentThreadIdAfterFork();
             logger().information("Forked a child process to watch");
 #if defined(OS_LINUX)
             if (0 != prctl(PR_SET_PDEATHSIG, SIGKILL))
                 logger().warning("Cannot do prctl to ask termination with parent.");
+
+            if (getppid() == 1)
+                throw Poco::Exception("Parent watchdog process has exited.");
 #endif
+
+            {
+                notify_sync.close(Poco::Pipe::CLOSE_WRITE);
+                /// Read from the pipe will block until the pipe is closed.
+                /// This way we synchronize with the parent process.
+                char buf[1];
+                if (0 != notify_sync.readBytes(buf, sizeof(buf)))
+                    throw Poco::Exception("Unexpected result while waiting for watchdog synchronization pipe to close.");
+            }
+
             return;
         }
+
+#if defined(OS_LINUX)
+        /// Tell the service manager the actual main process is not this one but the forked process
+        /// because it is going to be serving the requests and it is going to send "READY=1" notification
+        /// when it is fully started.
+        /// NOTE: we do this right after fork() and then notify the child process to "unblock" so that it finishes initialization
+        /// and sends "READY=1" after we have sent "MAINPID=..."
+        systemdNotify(fmt::format("MAINPID={}\n", pid));
+#endif
+
+        /// Close the pipe after notifying the service manager.
+        /// The child process is waiting for the pipe to be closed.
+        notify_sync.close();
 
         /// Change short thread name and process name.
         setThreadName("clckhouse-watch");   /// 15 characters
@@ -1103,30 +1177,56 @@ void BaseDaemon::setupWatchdog()
             logger().setChannel(log);
         }
 
+        /// Cuncurrent writing logs to the same file from two threads is questionable on its own,
+        ///  but rotating them from two threads is disastrous.
+        if (auto * channel = dynamic_cast<DB::OwnSplitChannel *>(logger().getChannel()))
+        {
+            channel->setChannelProperty("log", Poco::FileChannel::PROP_ROTATION, "never");
+            channel->setChannelProperty("log", Poco::FileChannel::PROP_ROTATEONOPEN, "false");
+        }
+
         logger().information(fmt::format("Will watch for the process with pid {}", pid));
 
         /// Forward signals to the child process.
-        addSignalHandler(
-            {SIGHUP, SIGINT, SIGQUIT, SIGTERM},
-            [](int sig, siginfo_t *, void *)
-            {
-                /// Forward all signals except INT as it can be send by terminal to the process group when user press Ctrl+C,
-                /// and we process double delivery of this signal as immediate termination.
-                if (sig == SIGINT)
-                    return;
-
-                const char * error_message = "Cannot forward signal to the child process.\n";
-                if (0 != ::kill(pid, sig))
+        if (forward_signals)
+        {
+            addSignalHandler(
+                {SIGHUP, SIGINT, SIGQUIT, SIGTERM},
+                [](int sig, siginfo_t *, void *)
                 {
-                    auto res = write(STDERR_FILENO, error_message, strlen(error_message));
-                    (void)res;
+                    /// Forward all signals except INT as it can be send by terminal to the process group when user press Ctrl+C,
+                    /// and we process double delivery of this signal as immediate termination.
+                    if (sig == SIGINT)
+                        return;
+
+                    const char * error_message = "Cannot forward signal to the child process.\n";
+                    if (0 != ::kill(pid, sig))
+                    {
+                        auto res = write(STDERR_FILENO, error_message, strlen(error_message));
+                        (void)res;
+                    }
+                },
+                nullptr);
+        }
+        else
+        {
+            for (const auto & sig : {SIGHUP, SIGINT, SIGQUIT, SIGTERM})
+            {
+                if (SIG_ERR == signal(sig, SIG_IGN))
+                {
+                    char * signal_description = strsignal(sig); // NOLINT(concurrency-mt-unsafe)
+                    throwFromErrno(fmt::format("Cannot ignore {}", signal_description), ErrorCodes::SYSTEM_ERROR);
                 }
-            },
-            nullptr);
+            }
+        }
 
         int status = 0;
         do
         {
+            // Close log files to prevent keeping descriptors of unlinked rotated files.
+            // On next log write files will be reopened.
+            closeLogs(logger());
+
             if (-1 != waitpid(pid, &status, WUNTRACED | WCONTINUED) || errno == ECHILD)
             {
                 if (WIFSTOPPED(status))
@@ -1152,9 +1252,13 @@ void BaseDaemon::setupWatchdog()
             _exit(WEXITSTATUS(status));
         }
 
+        int exit_code;
+
         if (WIFSIGNALED(status))
         {
             int sig = WTERMSIG(status);
+
+            exit_code = 128 + sig;
 
             if (sig == SIGKILL)
             {
@@ -1167,22 +1271,24 @@ void BaseDaemon::setupWatchdog()
                 logger().fatal(fmt::format("Child process was terminated by signal {}.", sig));
 
                 if (sig == SIGINT || sig == SIGTERM || sig == SIGQUIT)
-                    _exit(128 + sig);
+                    _exit(exit_code);
             }
         }
         else
         {
+            // According to POSIX, this should never happen.
             logger().fatal("Child process was not exited normally by unknown reason.");
+            exit_code = 42;
         }
 
-        /// Automatic restart is not enabled but you can play with it.
-#if 1
-        _exit(WEXITSTATUS(status));
-#else
-        logger().information("Will restart.");
-        if (argv0)
-            memcpy(argv0, original_process_name.c_str(), original_process_name.size());
-#endif
+        if (restart)
+        {
+            logger().information("Will restart.");
+            if (argv0)
+                memcpy(argv0, original_process_name.c_str(), original_process_name.size());
+        }
+        else
+            _exit(exit_code);
     }
 }
 
@@ -1191,3 +1297,58 @@ String BaseDaemon::getStoredBinaryHash() const
 {
     return stored_binary_hash;
 }
+
+#if defined(OS_LINUX)
+void systemdNotify(const std::string_view & command)
+{
+    const char * path = getenv("NOTIFY_SOCKET");  // NOLINT(concurrency-mt-unsafe)
+
+    if (path == nullptr)
+        return; /// not using systemd
+
+    int s = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+
+    if (s == -1)
+        DB::throwFromErrno("Can't create UNIX socket for systemd notify.", DB::ErrorCodes::SYSTEM_ERROR);
+
+    SCOPE_EXIT({ close(s); });
+
+    const size_t len = strlen(path);
+
+    struct sockaddr_un addr;
+
+    addr.sun_family = AF_UNIX;
+
+    if (len < 2 || len > sizeof(addr.sun_path) - 1)
+        throw DB::Exception(DB::ErrorCodes::SYSTEM_ERROR, "NOTIFY_SOCKET env var value \"{}\" is wrong.", path);
+
+    memcpy(addr.sun_path, path, len + 1); /// write last zero as well.
+
+    size_t addrlen = offsetof(struct sockaddr_un, sun_path) + len;
+
+    /// '@' means this is Linux abstract socket, per documentation sun_path[0] must be set to '\0' for it.
+    if (path[0] == '@')
+        addr.sun_path[0] = 0;
+    else if (path[0] == '/')
+        addrlen += 1; /// non-abstract-addresses should be zero terminated.
+    else
+        throw DB::Exception(DB::ErrorCodes::SYSTEM_ERROR, "Wrong UNIX path \"{}\" in NOTIFY_SOCKET env var", path);
+
+    const struct sockaddr *sock_addr = reinterpret_cast <const struct sockaddr *>(&addr);
+
+    size_t sent_bytes_total = 0;
+    while (sent_bytes_total < command.size())
+    {
+        auto sent_bytes = sendto(s, command.data() + sent_bytes_total, command.size() - sent_bytes_total, 0, sock_addr, static_cast<socklen_t>(addrlen));
+        if (sent_bytes == -1)
+        {
+            if (errno == EINTR)
+                continue;
+            else
+                DB::throwFromErrno("Failed to notify systemd, sendto returned error.", DB::ErrorCodes::SYSTEM_ERROR);
+        }
+        else
+            sent_bytes_total += sent_bytes;
+    }
+}
+#endif

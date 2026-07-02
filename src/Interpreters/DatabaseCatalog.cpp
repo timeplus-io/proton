@@ -25,6 +25,7 @@
 #include <base/isSharedPtrUnique.h>
 
 #include "config.h"
+#include <fmt/ranges.h>
 
 
 namespace CurrentMetrics
@@ -186,10 +187,31 @@ void DatabaseCatalog::shutdownImpl()
 
     /// We still hold "databases" (instead of std::move) for Buffer tables to flush data correctly.
 
-    for (auto & database : current_databases)
-        database.second->shutdown();
+    /// Delay shutdown of temporary and system databases. They will be shutdown last.
+    /// Because some databases might use them until their shutdown is called, but calling shutdown
+    /// on temporary database means clearing its set of tables, which will lead to unnecessary errors like "table not found".
+    std::vector<DatabasePtr> databases_with_delayed_shutdown;
 
-    tables_marked_dropped.clear();
+    for (auto & database : current_databases)
+    {
+        if (database.first == TEMPORARY_DATABASE || database.first == SYSTEM_DATABASE)
+        {
+            databases_with_delayed_shutdown.push_back(database.second);
+            continue;
+        }
+
+        LOG_TRACE(log, "Shutting down database {}", database.first);
+        database.second->shutdown();
+    }
+
+    LOG_TRACE(log, "Shutting down system databases");
+    for (auto & database : databases_with_delayed_shutdown)
+        database->shutdown();
+
+    {
+        std::lock_guard lock(tables_marked_dropped_mutex);
+        tables_marked_dropped.clear();
+    }
 
     std::lock_guard lock(databases_mutex);
     for (const auto & db : databases)

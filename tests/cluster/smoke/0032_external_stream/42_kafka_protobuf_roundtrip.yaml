@@ -1,0 +1,196 @@
+description: |
+  Test kafka external stream with batch and parallel parsing.
+  Steps:
+    1.Create kafka topic
+    2.Create external stream with ProtobufSingle
+    3.Create MVs to read Kafka with varies batch / parallel settings
+    4.Insert messages into Kafka
+    5.Verify MVs have same data as inserted messages
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test_protobuf_42
+
+  - type: kafka
+    name: create
+    topic: test_protobuf_42
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: query
+    sql: drop stream if exists test_protobuf_42_source;
+
+  - type: query
+    sql: drop stream if exists test_protobuf_42_non_batch_non_parallel;
+
+  - type: query
+    sql: drop stream if exists test_protobuf_42_batch_non_parallel;
+
+  - type: query
+    sql: drop stream if exists test_protobuf_42_non_batch_parallel;
+
+  - type: query
+    sql: drop stream if exists test_protobuf_42_batch_parallel;
+
+  - type: query
+    sql: drop stream if exists test_kafka_42
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FORMAT SCHEMA schema_name_42 AS
+      $$
+      syntax = "proto3";
+      message SearchRequest { 
+        string query = 1;
+        int32 page_number = 2;
+      }
+      $$
+      TYPE Protobuf;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_kafka_42
+      (
+        query string,
+        page_number int
+      )
+      SETTINGS type = 'kafka',
+          brokers = 'k1:9092',
+          topic = 'test_protobuf_42',
+          data_format = 'ProtobufSingle',
+          format_schema = 'schema_name_42:SearchRequest';
+
+  - type: query
+    sql: create materialized view test_protobuf_42_non_batch_non_parallel as select * from test_kafka_42
+
+  - type: query
+    sql: create materialized view test_protobuf_42_batch_non_parallel as select * from test_kafka_42 settings parse_messages_in_batch=1
+
+  - type: query
+    sql: create materialized view test_protobuf_42_non_batch_parallel as select * from test_kafka_42 settings parse_messages_in_batch=0, parallel_parsing=1;
+
+  - type: query
+    sql: create materialized view test_protobuf_42_batch_parallel as select * from test_kafka_42 settings parse_messages_in_batch=1, parallel_parsing=1;
+
+  - type: query
+    sql: create stream test_protobuf_42_source (query string, page_number int);
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_protobuf_42_source(query, page_number) select random_printable_ascii(43) as query, rand() as page_number from numbers(10000);
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_kafka_42(query, page_number) select query, page_number from table(test_protobuf_42_source);
+
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: test-kafka-42-1-0
+    query: select count() as ct from (select * except (_tp_time) from table(test_protobuf_42_source) except select * except (_tp_time) from table(test_protobuf_42_non_batch_non_parallel));
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: stream
+    name: test-kafka-42-1-10000
+    query: select count() as ct from table(test_protobuf_42_non_batch_non_parallel);
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: check
+    target_name: test-kafka-42-1-0
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: test-kafka-42-1-10000
+    expected_result:
+      - [10000]
+
+  - type: stream
+    name: test-kafka-42-2-0
+    query: select count() as ct from (select * except (_tp_time) from table(test_protobuf_42_source) except select * except (_tp_time) from table(test_protobuf_42_batch_non_parallel));
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: stream
+    name: test-kafka-42-2-10000
+    query: select count() as ct from table(test_protobuf_42_batch_non_parallel);
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: check
+    target_name: test-kafka-42-2-0
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: test-kafka-42-2-10000
+    expected_result:
+      - [10000]
+
+  - type: stream
+    name: test-kafka-42-3-0
+    query: select count() as ct from (select * except (_tp_time) from table(test_protobuf_42_source) except select * except (_tp_time) from table(test_protobuf_42_non_batch_parallel));
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: stream
+    name: test-kafka-42-3-10000
+    query: select count() as ct from table(test_protobuf_42_non_batch_parallel);
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: check
+    target_name: test-kafka-42-3-0
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: test-kafka-42-3-10000
+    expected_result:
+      - [10000]
+
+  - type: stream
+    name: test-kafka-42-4-0
+    query: select count() as ct from (select * except (_tp_time) from table(test_protobuf_42_source) except select * except (_tp_time) from table(test_protobuf_42_batch_parallel));
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: stream
+    name: test-kafka-42-4-10000
+    query: select count() as ct from table(test_protobuf_42_batch_parallel);
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: check
+    target_name: test-kafka-42-4-0
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: test-kafka-42-4-10000
+    expected_result:
+      - [10000]

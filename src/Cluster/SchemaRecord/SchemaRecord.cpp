@@ -24,7 +24,7 @@ ByteVector SchemaRecord::serialize() const
     ByteVector data{approximateSerializedSize()};
 
     {
-        DB::WriteBufferFromVector wb{data};
+        DB::WriteBufferFromVector<ByteVector> wb{data};
 
         DB::writeVarUInt(flags, wb);
         DB::writeStringBinary(idempotent_key, wb);
@@ -62,6 +62,8 @@ void SchemaRecord::serializeData(DB::WriteBuffer & wb) const
 
             SchemaNativeWriter writer(compressed_out, column_positions);
             writer.write(block);
+
+            compressed_out.finalize();
         }
     }
     else
@@ -80,6 +82,8 @@ void SchemaRecord::serializeData(DB::WriteBuffer & wb) const
 
             DB::NativeWriter writer(compressed_out, DBMS_TCP_PROTOCOL_VERSION, DB::Block{});
             writer.write(block);
+
+            compressed_out.finalize();
         }
     }
 }
@@ -115,14 +119,14 @@ void SchemaRecord::deserializeData(DB::ReadBuffer & rb, const SchemaContext & sc
         /// Data
         if (compression_codec == DB::CompressionMethodByte::NONE)
         {
-            SchemaNativeReader reader(rb, partial, schema_version, schema_ctx);
-            reader.read(block);
+            SchemaNativeReader reader(schema_version, schema_ctx);
+            reader.read(block, rb, partial);
         }
         else
         {
             DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
-            SchemaNativeReader reader(compressed_in, partial, schema_version, schema_ctx);
-            reader.read(block);
+            SchemaNativeReader reader(schema_version, schema_ctx);
+            reader.read(block, compressed_in, partial);
         }
     }
     else

@@ -5,7 +5,7 @@
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <DataTypes/DataTypeString.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Common/Logger.h>
+#include <Common/logger_useful.h>
 
 
 namespace DB

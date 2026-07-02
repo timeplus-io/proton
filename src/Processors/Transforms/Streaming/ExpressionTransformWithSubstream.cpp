@@ -6,6 +6,7 @@
 #include <Interpreters/Streaming/Substream/MemorySubstreamHashMap.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {

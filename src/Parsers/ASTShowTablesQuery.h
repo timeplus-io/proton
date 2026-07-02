@@ -21,6 +21,10 @@ public:
     bool m_settings{false};
     bool changed{false};
     bool temporary{false};
+    /// proton: starts
+    bool only_views{false};
+    bool only_inputs{false};
+    /// proton: ends
     bool caches{false};
 
     String cluster_str;

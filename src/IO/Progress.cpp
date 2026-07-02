@@ -1,4 +1,4 @@
-#include "Progress.h"
+#include <IO/Progress.h>
 
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
@@ -164,6 +164,7 @@ void Progress::read(ReadBuffer & in, UInt64 server_revision)
 {
     ProgressValues values;
     values.read(in, server_revision);
+
     read_rows.store(values.read_rows, std::memory_order_relaxed);
     read_bytes.store(values.read_bytes, std::memory_order_relaxed);
     total_rows_to_read.store(values.total_rows_to_read, std::memory_order_relaxed);
@@ -182,6 +183,11 @@ void Progress::write(WriteBuffer & out, UInt64 client_revision) const
 void Progress::writeJSON(WriteBuffer & out) const
 {
     getValues().writeJSON(out);
+}
+
+void Progress::incrementElapsedNs(UInt64 elapsed_ns_)
+{
+    elapsed_ns.fetch_add(elapsed_ns_, std::memory_order_relaxed);
 }
 
 }

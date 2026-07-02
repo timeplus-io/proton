@@ -420,7 +420,7 @@ void commonTestImpl(
 {
     auto hash_join_type = magic_enum::enum_name(context->getSettingsRef().default_hash_join.value);
     auto lower_strictness = Poco::toLower(String(strictness));
-    if (lower_strictness != "asof" && lower_strictness != "any" && lower_strictness != "latest")
+    if (lower_strictness != "asof" && lower_strictness != "any" && lower_strictness != "latest" && lower_strictness != "anti")
     {
         if (Streaming::isKeyValueStorage(left_data_stream_semantic))
             left_data_stream_semantic = Streaming::DataStreamSemantic::Changelog;
@@ -1108,6 +1108,104 @@ TEST(StreamingHashJoin, AppendLeftLatestJoinAppend)
                     /// output header: col_1, col_2, t2.col_2
                     .values = "(1, '2023-1-1 00:00:01', '2023-1-1 00:00:01')",
                 },
+            },
+        },
+        context);
+}
+
+TEST(StreamingHashJoin, AppendLeftAntiJoinAppend)
+{
+    auto context = getContext().context;
+    Block left_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+
+    /// stream(t1) left anti join stream(t2) on t1.col_1 = t2.col_1
+    commonTest(
+        /*join kind*/ "left",
+        /*join strictness*/ "anti",
+        /*on_clause*/ "t1.col_1 = t2.col_1",
+        left_header,
+        Streaming::StorageSemantic::Append,
+        /*left_primary_key_column_indexes*/ std::nullopt,
+        right_header,
+        Streaming::StorageSemantic::Append,
+        /*right_primary_key_column_indexes*/ std::nullopt,
+        /*to_join_steps*/
+        {
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00')", context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(2, '2023-1-1 00:00:00')", context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(2, '2023-1-1 00:00:00', '1970-1-1 00:00:00')",
+                },
+            },
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')", context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(3, '2023-1-1 00:00:01')", context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(4, '2023-1-1 00:00:01')", context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(4, '2023-1-1 00:00:01', '1970-1-1 00:00:00')",
+                },
+            },
+        },
+        context);
+}
+
+TEST(StreamingHashJoin, AppendLeftAntiJoinVersionedKV)
+{
+    auto context = getContext().context;
+    Block left_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+    Block right_header = prepareBlock(/*types*/ {"int", "datetime64(3, 'UTC')"}, /*no data*/ "", context);
+
+    /// stream(t1) left anti join versioned_kv(t2) on t1.col_1 = t2.col_1
+    commonTest(
+        /*join kind*/ "left",
+        /*join strictness*/ "anti",
+        /*on_clause*/ "t1.col_1 = t2.col_1",
+        left_header,
+        Streaming::StorageSemantic::Append,
+        /*left_primary_key_column_indexes*/ std::nullopt,
+        right_header,
+        Streaming::StorageSemantic::VersionedKV,
+        /*right_primary_key_column_indexes*/ std::vector<size_t>{0},
+        /*to_join_steps*/
+        {
+            {
+                /*to join pos*/ ToJoinStep::RIGHT,
+                /*to join block*/ prepareBlockByHeader(right_header, "(1, '2023-1-1 00:00:00')", context),
+                /*expected join results*/ ExpectedJoinResults{},
+            },
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(2, '2023-1-1 00:00:00')", context),
+                /*expected join results*/
+                ExpectedJoinResults{
+                    /// output header: col_1, col_2, t2.col_2
+                    .values = "(2, '2023-1-1 00:00:00', '1970-1-1 00:00:00')",
+                },
+            },
+            {
+                /*to join pos*/ ToJoinStep::LEFT,
+                /*to join block*/ prepareBlockByHeader(left_header, "(1, '2023-1-1 00:00:00')", context),
+                /*expected join results*/ ExpectedJoinResults{},
             },
         },
         context);

@@ -24,8 +24,8 @@ public:
 
     /// proton: starts.
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-    void recover(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx) override;
     /// proton: ends.
 
 protected:

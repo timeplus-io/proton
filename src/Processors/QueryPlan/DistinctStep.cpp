@@ -34,7 +34,7 @@ static ITransformingStep::Traits getTraits(bool pre_distinct, bool already_disti
             .preserves_number_of_streams = pre_distinct || already_distinct_columns,
             .preserves_sorting = true, /// Sorting is preserved indeed because of implementation.
             /// proton: starts.
-            .preserves_substream = false,
+            .preserves_shuffling = false,
             /// proton: ends.
         },
         {

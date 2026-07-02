@@ -209,7 +209,11 @@ IBlocksStreamPtr HybridHashJoin::getNonJoinedBlocks(
 
 String HybridHashJoin::metricsString() const
 {
-    return "";
+    return fmt::format(
+        "Left stream metrics: {{{}}}, right stream metrics: {{{}}}, global join metrics: {{{}}}",
+        left_data.index->metricsString(),
+        right_data.index->metricsString(),
+        join_metrics.string());
 }
 
 void HybridHashJoin::cancel()

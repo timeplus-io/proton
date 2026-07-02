@@ -33,6 +33,8 @@ public:
     /// Call this function only before read()
     void resetSequenceNumber(Int64 offset) override;
 
+    Int64 fetchedSequenceNumber() const override { return consume_ctx.offset - 1; }
+
 private:
     cluster::klog::KafkaWALSimpleConsumerPtr consumer;
     cluster::klog::KafkaWALContext consume_ctx;

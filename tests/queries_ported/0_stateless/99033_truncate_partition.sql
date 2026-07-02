@@ -3,7 +3,7 @@ DROP VIEW IF EXISTS 99033_mv;
 DROP STREAM IF EXISTS 99033_v;
 
 -- Create stream and materialized view
-CREATE STREAM 99033_v(id int) settings shards=3;
+CREATE STREAM 99033_v(id int) settings shards=3, old_parts_lifetime=0;
 CREATE MATERIALIZED VIEW 99033_mv AS SELECT * FROM 99033_v;
 
 -- Insert test data with delays between inserts

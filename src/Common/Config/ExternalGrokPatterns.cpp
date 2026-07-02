@@ -3,8 +3,14 @@
 #include <Interpreters/Context.h>
 
 #include <fstream>
+#include <string_view>
 #include <sys/stat.h>
 #include <Poco/Util/AbstractConfiguration.h>
+
+/// Default grok pattern set shipped with the binary (used when no external file is configured).
+constexpr unsigned char resource_grok_patterns[] = {
+#embed "../../../programs/server/grok-patterns"
+};
 
 namespace DB::ErrorCodes
 {
@@ -90,19 +96,13 @@ void ExternalGrokPatterns::loadPatternsFromFile()
     {
         LOG_WARNING(log, "External grok patterns file '{}' does not exist, trying embedded resource", file_name);
 
-        /// Try to load the patterns from embedded resource
-        auto resource_data = getResource("grok-patterns");
-        if (!resource_data.empty())
-        {
-            std::string resource_string(resource_data);
-            std::istringstream resource_stream(resource_string);
-            loadPatternsFromStream(resource_stream);
-        }
-        else
-        {
-            LOG_ERROR(log, "Failed to load grok patterns from both file and embedded resource");
-            patterns = std::make_unique<std::unordered_map<String, String>>();
-        }
+        /// Load the embedded grok patterns from `.rodata` (embedded via C23 `#embed`).
+        std::string_view resource_data(
+            reinterpret_cast<const char *>(resource_grok_patterns),
+            std::size(resource_grok_patterns));
+        std::string resource_string(resource_data);
+        std::istringstream resource_stream(resource_string);
+        loadPatternsFromStream(resource_stream);
         return;
     }
 

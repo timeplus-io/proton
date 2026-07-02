@@ -12,6 +12,7 @@ enum class Strictness : uint8_t
     Asof, /// For the last JOIN column, pick the latest value
     Range,
     Multiple, /// Non unique join. Used for partial primary key join
+    Anti, /// Emit left rows whose key is NOT present in the latest right snapshot
 };
 
 /// Join method.

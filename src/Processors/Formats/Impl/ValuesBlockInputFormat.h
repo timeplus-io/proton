@@ -56,11 +56,14 @@ public:
     const BlockMissingValues & getMissingValues() const override { return block_missing_values; }
 
     size_t getApproxBytesReadForChunk() const override { return approx_bytes_read_for_chunk; }
+
+    static bool skipToNextRow(ReadBuffer * buf, size_t min_chunk_bytes, int balance);
+
 private:
     ValuesBlockInputFormat(std::unique_ptr<PeekableReadBuffer> buf_, const Block & header_, const RowInputFormatParams & params_,
                            const FormatSettings & format_settings_);
 
-    enum class ParserType
+    enum class ParserType : uint8_t
     {
         Streaming,
         BatchTemplate,
@@ -84,6 +87,8 @@ private:
 
     void readPrefix();
     void readSuffix();
+
+    size_t countRows(size_t max_block_size);
 
     std::unique_ptr<PeekableReadBuffer> buf;
 

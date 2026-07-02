@@ -5,6 +5,7 @@
 #include <IO/ConnectionTimeouts.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Formats/IRowInputFormat.h>
+#include "Common/HTTPConnectionPool.h"
 #include <Common/sendRequest.h>
 
 #include <Poco/Net/HTTPRequest.h>
@@ -52,6 +53,7 @@ public:
         Poco::Timespan recv_timeout{static_cast<Poco::Timespan::TimeDiff>(remote_udf_payload->command_read_timeout_milliseconds * 1000)};
         auto timeouts = ConnectionTimeouts().withConnectionTimeout(2).withSendTimeout(5).withReceiveTimeout(recv_timeout);
         auto [resp, http_status] = sendRequest(
+            HTTPConnectionGroupType::HTTP,
             uri,
             Poco::Net::HTTPRequest::HTTP_POST,
             context->getCurrentQueryId(),

@@ -372,9 +372,11 @@ public:
     /// Output processors have only inputs ports like IOutputFormat processors
     bool isSink() const { return !inputs.empty() && outputs.empty(); }
 
-    virtual void checkpoint(CheckpointContextPtr);
+    void checkpoint(CheckpointContextPtr);
+    virtual void doCheckpoint(CheckpointContextPtr);
 
-    virtual void recover(CheckpointContextPtr) { }
+    virtual void recover(CheckpointContextPtr);
+    virtual void doRecover(CheckpointContextPtr) { }
 
     VersionType getVersion() const;
     void setVersion(VersionType version_) { version = version_; }

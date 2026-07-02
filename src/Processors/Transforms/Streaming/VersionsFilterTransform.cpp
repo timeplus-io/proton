@@ -7,6 +7,7 @@
 #include <Interpreters/Streaming/ChooseHashMethod.h>
 #include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -17,8 +18,10 @@ VersionsFilterTransform::VersionsFilterTransform(
     const DB::Block & output_header,
     std::vector<std::string> key_column_names,
     const std::string & version_column_name,
+    bool late_insert_overrides_,
     bool backfill_key_unique_)
     : ISimpleTransform(input_header, output_header, false, ProcessorID::VersionsFilterTransformID)
+    , late_insert_overrides(late_insert_overrides_)
     , backfill_key_unique(backfill_key_unique_)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
     , last_log_ts(MonotonicMilliseconds::now())
@@ -165,14 +168,14 @@ void VersionsFilterTransform::doFilter(
         }
         else
         {
-            if (current_version == latest_version)
-            {
-                /// Do nothing
-            }
-            else if (current_version > latest_version)
+            if (current_version > latest_version)
             {
                 /// Update the new version
                 latest_version = std::move(current_version);
+            }
+            else if (late_insert_overrides && current_version == latest_version)
+            {
+                /// Do nothing, keep the existing version
             }
             else [[unlikely]]
             {
@@ -213,7 +216,7 @@ void VersionsFilterTransform::transformToOutputColumns(Columns & columns) const
     columns.swap(output_columns);
 }
 
-void VersionsFilterTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void VersionsFilterTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         FormatSettings format_settings;
@@ -226,7 +229,7 @@ void VersionsFilterTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     });
 }
 
-void VersionsFilterTransform::recover(CheckpointContextPtr ckpt_ctx)
+void VersionsFilterTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this]([[maybe_unused]] VersionType version_, ReadBuffer & rb) {
         FormatSettings format_settings;

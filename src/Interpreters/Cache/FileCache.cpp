@@ -12,6 +12,10 @@
 #include <Common/hex.h>
 #include <Common/randomSeed.h>
 
+/// proton: starts
+#include <Common/logger_useful.h>
+/// proton: ends
+
 #include <filesystem>
 
 

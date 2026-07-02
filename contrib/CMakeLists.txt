@@ -165,7 +165,6 @@ if (ENABLE_NLP)
     add_contrib (libstemmer-c-cmake libstemmer_c)
     add_contrib (wordnet-blast-cmake wordnet-blast)
     add_contrib (lemmagen-c-cmake lemmagen-c)
-    add_contrib (nlp-data-cmake nlp-data)
     add_contrib (cld2-cmake cld2)
 endif()
 
@@ -197,7 +196,10 @@ if (ENABLE_PYTHON_UDF)
     message(STATUS "Enable Python UDF support")
 endif()
 
-add_contrib (pulsar-cmake)
+option (ENABLE_PULSAR "Enable Apache Pulsar client" ${ENABLE_LIBRARIES})
+if (ENABLE_PULSAR)
+    add_contrib (pulsar-cmake)
+endif()
 # proton: ends
 
 add_contrib (ulid-c-cmake ulid-c)

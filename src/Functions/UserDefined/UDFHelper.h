@@ -17,6 +17,8 @@ namespace DB
 {
 
 class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
+
 class UserDefinedExecutableFunction;
 using UserDefinedExecutableFunctionPtr = std::shared_ptr<const UserDefinedExecutableFunction>;
 
@@ -41,5 +43,8 @@ cluster::CreateUserDefinedFunctionRequestPtr createUserDefinedFunctionRequest(
 void runPythonUDFInitHook(
     const cluster::protocol::PythonUserDefinedFunctionPayload & payload, const String & udf_name, const String & module_name);
 #endif
+
+/// Check if the query AST has user defined function
+bool hasUserDefinedFunction(const ASTPtr & query, ContextPtr context);
 }
 }

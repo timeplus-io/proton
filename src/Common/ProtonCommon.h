@@ -39,6 +39,7 @@ const String RESERVED_EVENT_SEQUENCE_ID = "_tp_sn";
 const String RESERVED_EVENT_SEQUENCE_INDEX = RESERVED_EVENT_SEQUENCE_ID + "_index";
 const String RESERVED_DELTA_FLAG = "_tp_delta";
 const String RESERVED_SHARD = "_tp_shard";
+const String RESERVED_SCHEMA_VERSION = "_tp_schema_version";
 const String RESERVED_MESSAGE_KEY = "_tp_message_key";
 const String RESERVED_MESSAGE_HEADERS = "_tp_message_headers";
 const String RESERVED_ERROR = "_tp_error";
@@ -84,8 +85,18 @@ constexpr uint64_t SECONDARY_INDEX_STARTING_ID = PRIMARY_KEY_INDEX_ID + 1;
 /// Storage modes
 const String APPEND_MODE = "append";
 const String CHANGELOG_MODE = "changelog";
-const String CHANGELOG_KV_MODE = "changelog_kv";
-const String VERSIONED_KV_MODE = "versioned_kv";
+
+/// Stream engine subtypes
+const String CHANGELOG_KV_MODE = "changelog_kv"; /// proton-historical alias for VERSIONED_COLLAPSING_MODE
+const String VERSIONED_KV_MODE = "versioned_kv"; /// proton-historical alias for REPLACING_MODE
+
+/// ClickHouse MergeTree merging modes
+const String REPLACING_MODE = "Replacing"; /// upstream-aligned alias for VERSIONED_KV_MODE
+const String VERSIONED_COLLAPSING_MODE = "VersionedCollapsing"; /// upstream-aligned alias for CHANGELOG_KV_MODE
+const String SUMMING_MODE = "Summing";
+const String COLLAPSING_MODE = "Collapsing";
+const String AGGREGATING_MODE = "Aggregating";
+const String GRAPHITE_MODE = "Graphite";
 
 const std::map<String, String> LOG_STORE_SETTING_NAME_TO_KAFKA
     = {{"logstore_retention_bytes", "retention.bytes"},

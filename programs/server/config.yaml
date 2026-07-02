@@ -81,6 +81,44 @@ node:
         port: 5432
         is_tls_port: false
 
+# storage_configuration:
+#  disks:
+#    global_s3_disk_nativelog: # disk name
+#      type: s3_plain
+#      endpoint: http://localhost:9000/timeplus/nativelog/
+#      access_key_id: minioadmin
+#      secret_access_key: minioadmin
+
+#    global_s3_disk_historical: # disk name
+#      type: s3
+#      endpoint: http://localhost:9000/timeplus/historical/
+#      access_key_id: minioadmin
+#      secret_access_key: minioadmin
+
+#    global_s3_disk_checkpoint: # disk name
+#      type: s3_plain
+#      endpoint: http://localhost:9000/timeplus/checkpoint/
+#      access_key_id: minioadmin
+#      secret_access_key: minioadmin
+
+#  policies:
+#    global_tiered_historical:
+#      volumes:
+#        hot:
+#          disk: default
+#        cold:
+#          disk: global_s3_disk_historical
+#      move_factor: 0.2
+
+# # Default shared disk name for NativeLog
+# default_shared_disk_nativelog: global_s3_disk_nativelog
+
+# # Default tiered storage policy name for historical data
+# default_tier_storage_policy_historical: global_tiered_historical
+
+# # Default shared disk name for Materialized View checkpoint
+# default_shared_disk_checkpoint: global_s3_disk_checkpoint
+
 # Path to historical data directory, with trailing slash.
 path: /var/lib/proton/
 
@@ -147,7 +185,7 @@ query_state_checkpoint:
     log_flush_bytes: 1
     log_retention_size: 1
     log_retention_ms: 7200000 # 2 hours
-    log_min_size_to_keep: 1
+    log_min_size_to_keep: 1073741824 # 1GB
 
 metadata:
     # SINGLE-INSTANCE: metadata.server NOT USED - internal server config for distributed mode
@@ -167,7 +205,7 @@ metadata:
             - /var/lib/proton/metastore/
         log:
             check_crcs: false
-            retention_check_ms: 30000
+            retention_check_ms: 300000 # Every 5 minutes
             # Fetch related configs
             fetch_max_wait_ms: 500 # max wait time if no records are available
             fetch_max_bytes: 65536 # max bytes to fetch per request
@@ -177,7 +215,7 @@ metadata:
             retention_size: 1
             retention_ms: 86400000
             # Minimize log to keep around which is immune to retention policy
-            min_size_to_keep: 1
+            min_size_to_keep: 20971520 # 20MB
             # For metadata log, we don't actually care the timestamp, sn inverted indexes.
             # So set a big interval bytes and entries
             index_interval_bytes: 4294967296
@@ -288,12 +326,6 @@ cluster:
 # ServerDescriptor expects these at root level (not under cluster section)
 cluster_id: proton
 intercluster_secret: proton
-
-# Enable telemetry. This is used to collect the version and runtime environment information to Timeplus, Inc.
-telemetry_enabled:
-    "@from_env": TELEMETRY_ENABLED
-    "@replace": true
-    "#text": true
 
 grpc:
     enabled: false
@@ -647,13 +679,16 @@ part_log:
 #     flush_interval_milliseconds: 7500
 #     level: ''
 
+# TTL (seconds) for metrics-only caches; read once at startup.
+metrics_cache_ttl_seconds: 1800
+
 # Metric log contains rows with current values of ProfileEvents, CurrentMetrics collected with "collect_interval_milliseconds" interval.
 metric_log:
     database: system
     table: metric_log
     flush_interval_milliseconds: 7500
     collect_interval_milliseconds: 1000
-    ttl: 'event_date + INTERVAL 30 DAY DELETE'
+    ttl: 'event_date + INTERVAL 14 DAY DELETE'
 
 # Asynchronous metric log contains values of metrics from
 # system.asynchronous_metrics.
@@ -699,6 +734,7 @@ processors_profile_log:
     database: system
     table: processors_profile_log
     partition_by: to_YYYYMM(event_date)
+    ttl: 'event_date + INTERVAL 30 DAY DELETE'
     flush_interval_milliseconds: 7500
 
 # Log of asynchronous inserts. It allows to check status of insert query in fire-and-forget mode.
@@ -716,7 +752,7 @@ stream_metric_log:
     engine: |-
         engine Stream(1, rand())
              order by (to_hour(_tp_time), database, name)
-             ttl to_datetime(_tp_time) + INTERVAL 1 YEAR DELETE
+             ttl to_datetime(_tp_time) + INTERVAL 14 DAY DELETE
              settings logstore_codec='zstd'
     database: system
     table: stream_metric_log
@@ -954,14 +990,14 @@ settings:
         nlog_adhoc_pool_size: 16 # Thread pool size for nativelog ad-hoc tasks
         optimize_aggregation_emit_on_updates: true # Optimize aggregation for updates/changes, it may also lead to significantly increased memory usage in extreme scenarios
 
-        max_hot_keys: 100000  # If not zero, it specifies the number of hot keys will kept in-memory when using hybrid hash table. Zero means no limits
+        max_hot_keys: 100000  # If not zero, it specifies the number of hot keys will be kept in-memory when using hybrid hash table. Zero means no limits
 
         default_hash_table: memory # Default hash table: 'memory' or 'hybrid', which is used for a streaming query like join, aggregation.
 
         default_hash_join: memory # Default hash join: 'memory' or 'hybrid', which is used for a streaming join.
         query_timeout_sec: 30 # Distributed (DDL) query timeout in seconds
 
-        allow_fallback_to_historical_store: true # Allow nativelog reader fallback to historical store if sequence compacted away
+        parse_messages_in_batch: false # Allow batch parsing messages in KafkaSource
 
     stream:
         default_shards: 1
@@ -969,6 +1005,7 @@ settings:
         ingest_mode: "sync"    # Data ingestion mode for Stream
         logstore: "nativelog"
         storage_type: "hybrid"
+        inline_historical_commit: true # Commit data to historical store inline in the poll thread instead of in a thread pool
         logstore_codec: none
         logstore_retention_bytes: 0 # when this threshold reaches, streaming storage delete old data. 0 means no limit
         logstore_retention_ms: 0 # when this threshold reaches, streaming storage delete old data. <= 0 means no limit
@@ -977,8 +1014,6 @@ settings:
 #
 # For 'Connection: keep-alive' in HTTP 1.1
 keep_alive_timeout: 60
-
-telemetry_interval_ms: 300000   # 5 minutes
 
 # Default root page on http[s] server. For example load UI from https://tabix.io/ when opening http://localhost:8123
 # http_server_default_response: |-
@@ -1039,7 +1074,18 @@ default_session_timeout: 60
 # correct maximum value.
 # max_open_files: 262144
 
-# show_addresses_in_stack_traces: true
+# This allows to disable exposing addresses in stack traces for security reasons.
+# Please be aware that it does not improve security much, but makes debugging much harder.
+# The addresses that are small offsets from zero will be displayed nevertheless to show nullptr dereferences.
+# Regardless of this configuration, the addresses are visible in the system.stack_trace and system.trace_log tables
+# if the user has access to these tables.
+# I don't recommend to change this setting.
+# show_addresses_in_stack_traces: false
+#
+# Delay (in seconds) to wait for unfinished queries before force exit.
+# shutdown_wait_unfinished: 5
+#
+# If set true Proton will wait for running queries finish before shutdown.
 # shutdown_wait_unfinished_queries: false
 
 # Maximum number of threads in the Global thread pool.
@@ -1095,6 +1141,15 @@ max_server_memory_usage: 0
 
 # On memory constrained environments you may have to set this to value larger than 1.
 max_server_memory_usage_to_ram_ratio: 0.8
+# Maximum memory usage per query as a ratio of total RAM.
+# If max_memory_usage is explicitly set for a query, it takes precedence.
+# 0 means disabled. Default is 0.
+max_query_memory_usage_to_ram_ratio: 0
+
+# A materialized view only builds its background pipeline while the resident set
+# size stays below this ratio of the server memory limit (max_server_memory_usage);
+# above it, the build is deferred to backoff retry. Values outside (0, 1] use 0.9.
+mv_execution_memory_usage_to_server_limit_ratio: 0.9
 
 # Limit the size of the cache. e.g., uncompressed_cache_size or mark_cache_size
 cache_size_to_ram_max_ratio: 0.5
@@ -1162,7 +1217,26 @@ max_concurrent_select_queries: 1000
 # background_buffer_flush_schedule_pool_size: 16
 # background_message_broker_schedule_pool_size: 16
 
+# Background merge/mutation thread pool for *MergeTree-engine tables.
+# Only takes effect at server startup (a config reload does NOT resize the pool).
+# Total queued merge/mutation tasks = background_pool_size * background_merges_mutations_concurrency_ratio.
+# Lower these to cap concurrent merge memory/CPU during heavy backlog or recovery.
+# background_pool_size: 16
+# background_merges_mutations_concurrency_ratio: 2
+# background_move_pool_size: 8
+# background_fetches_pool_size: 8
+# background_common_pool_size: 8
+
 # bg_reconnect_mysql_dict_interval: 1000
+
+# Delay start server, for troubleshooting
+_tp_delay_server_start_seconds: 0
+
+# If abort proton when LOG_PANIC(logger, ...) is invoked.  For troubleshooting / testing
+_tp_log_panic_abort: false
+
+# Force all materialized views to start paused on first attach (cluster reboot memory intervention). For troubleshooting
+_tp_pause_all_materialized_views: false
 
 # Ephemeral local API user for Python UDFs and other in-process callers.
 # The user and its token live in memory only - never written to disk,
@@ -1174,3 +1248,9 @@ max_concurrent_select_queries: 1000
 local_api_user:
     enabled: true
     privileges: SELECT,INSERT,CREATE TEMPORARY TABLE
+
+# Delay start server
+_tp_delay_server_start_seconds: 0
+
+# If abort the server when LOG_PANIC(logger, ...) is invoked. For troubleshooting / testing
+_tp_log_panic_abort: false

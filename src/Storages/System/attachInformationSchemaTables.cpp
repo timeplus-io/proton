@@ -3,8 +3,41 @@
 #include <Storages/System/attachSystemTablesImpl.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Common/getResource.h>
 #include <Interpreters/Context.h>
+
+#include <string_view>
+
+/// Embedded information_schema DDL — shipped with the binary via C23 `#embed`.
+constexpr unsigned char resource_schemata_sql[] = {
+#embed "InformationSchema/schemata.sql"
+};
+constexpr unsigned char resource_tables_sql[] = {
+#embed "InformationSchema/tables.sql"
+};
+constexpr unsigned char resource_views_sql[] = {
+#embed "InformationSchema/views.sql"
+};
+constexpr unsigned char resource_columns_sql[] = {
+#embed "InformationSchema/columns.sql"
+};
+
+namespace
+{
+
+std::string_view getInformationSchemaResource(std::string_view name)
+{
+    if (name == "schemata")
+        return {reinterpret_cast<const char *>(resource_schemata_sql), std::size(resource_schemata_sql)};
+    if (name == "tables")
+        return {reinterpret_cast<const char *>(resource_tables_sql), std::size(resource_tables_sql)};
+    if (name == "views")
+        return {reinterpret_cast<const char *>(resource_views_sql), std::size(resource_views_sql)};
+    if (name == "columns")
+        return {reinterpret_cast<const char *>(resource_columns_sql), std::size(resource_columns_sql)};
+    return {};
+}
+
+}
 
 namespace DB
 {
@@ -21,14 +54,13 @@ static void createInformationSchemaView(ContextMutablePtr context, IDatabase & d
             return;
         bool is_uppercase = database.getDatabaseName() == DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE;
 
-        String metadata_resource_name = view_name + ".sql";
-        auto attach_query = getResource(metadata_resource_name);
+        auto attach_query = getInformationSchemaResource(view_name);
         if (attach_query.empty())
             return;
 
         ParserCreateQuery parser;
         ASTPtr ast = parseQuery(parser, attach_query.data(), attach_query.data() + attach_query.size(),
-                                "Attach query from embedded resource " + metadata_resource_name,
+                                "Attach query from embedded resource " + view_name + ".sql",
                                 DBMS_DEFAULT_MAX_QUERY_SIZE, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         auto & ast_create = ast->as<ASTCreateQuery &>();

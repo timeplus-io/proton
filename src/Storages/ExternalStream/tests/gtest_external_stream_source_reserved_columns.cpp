@@ -1,5 +1,6 @@
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
+#include <Processors/Executors/StreamingFormatExecutor.h>
 #include <Storages/ExternalStream/ExternalStreamSource.h>
 #include <Storages/StorageSnapshot.h>
 #include <Storages/StorageValues.h>
@@ -27,7 +28,11 @@ public:
     {
     }
 
-    void init(const String & data_format, const FormatSettings & format_settings) { initInputFormatExecutor(data_format, format_settings); }
+    void init(const String & data_format, const FormatSettings & format_settings)
+    {
+        getPhysicalHeader();
+        format_executor = getInputFormatExecutor(data_format, format_settings).first;
+    }
 
     const Block & getPhysicalHeaderForTest() const { return physical_header; }
 
@@ -38,6 +43,8 @@ public:
     }
 
     MutableColumns getResultColumnsForTest() { return format_executor->getResultColumns(); }
+
+    std::shared_ptr<StreamingFormatExecutor> format_executor;
 };
 
 ColumnsDescription makeColumns()

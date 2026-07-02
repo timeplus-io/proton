@@ -20,6 +20,14 @@ class ProtobufReader;
 class ProtobufSerializer;
 class ReadBuffer;
 
+/// proton: starts
+/// Collapse the expanded map_entry form of a protobuf schema (a synthetic nested message with
+/// `option map_entry = true` plus a `repeated <Entry> field = N;`) back into `map<K,V>` sugar.
+/// Schema-Registry/descriptor-canonicalized schemas use the expanded form, which the protobuf
+/// source parser rejects. No-op when no `map_entry` option is present. Exposed for testing.
+String collapseProtobufMapEntries(String schema);
+/// proton: ends
+
 /** Stream designed to deserialize data from the google protobuf format.
   * One Protobuf message is parsed as one row of data.
   *
@@ -46,14 +54,17 @@ public:
     String getName() const override { return "ProtobufRowInputFormat"; }
 
     void setReadBuffer(ReadBuffer & in_) override;
-    void resetParser() override;
 
 private:
     bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
     bool allowSyncAfterError() const override;
     void syncAfterError() override;
 
+    bool supportsCountRows() const override { return true; }
+    size_t countRows(size_t max_block_size) override;
+
     void createReaderAndSerializer();
+    void destroyReaderAndSerializer();
 
     std::unique_ptr<ProtobufReader> reader;
     std::vector<size_t> missing_column_indices;
@@ -97,6 +108,7 @@ private:
     bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
 
     bool flatten_google_wrappers {false};
+    bool collapse_map_entry {true};
     std::shared_ptr<SchemaRegistryWithCache> registry;
     std::vector<size_t> missing_column_indices;
 };
@@ -112,6 +124,7 @@ private:
     std::shared_ptr<ProtobufConfluentRowInputFormat::SchemaRegistryWithCache> registry;
     String subject;
     bool skip_unsupported_fields;
+    bool collapse_map_entry {true};
 };
 
 class ProtobufSchemaWriter : public IExternalSchemaWriter

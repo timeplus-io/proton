@@ -52,7 +52,7 @@
 #include <Access/SettingsConstraintsAndProfileIDs.h>
 #include <Access/ExternalAuthenticators.h>
 #include <Access/GSSAcceptor.h>
-#include <IO/ResourceManagerFactory.h>
+#include <Common/Scheduler/ResourceManagerFactory.h>
 #include <Backups/BackupFactory.h>
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Interpreters/EmbeddedDictionaries.h>
@@ -71,6 +71,9 @@
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/WriteSettings.h>
+/// proton: starts
+#include <base/getMemoryAmount.h>
+/// proton: ends
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTIdentifier.h>
@@ -123,6 +126,22 @@ namespace ProfileEvents
 {
     extern const Event ContextLock;
     extern const Event ContextLockWaitMicroseconds;
+    extern const Event LocalReadThrottlerBytes;
+    extern const Event LocalReadThrottlerSleepMicroseconds;
+    extern const Event LocalWriteThrottlerBytes;
+    extern const Event LocalWriteThrottlerSleepMicroseconds;
+    extern const Event RemoteReadThrottlerBytes;
+    extern const Event RemoteReadThrottlerSleepMicroseconds;
+    extern const Event RemoteWriteThrottlerBytes;
+    extern const Event RemoteWriteThrottlerSleepMicroseconds;
+    extern const Event QueryLocalReadThrottlerBytes;
+    extern const Event QueryLocalReadThrottlerSleepMicroseconds;
+    extern const Event QueryLocalWriteThrottlerBytes;
+    extern const Event QueryLocalWriteThrottlerSleepMicroseconds;
+    extern const Event QueryRemoteReadThrottlerBytes;
+    extern const Event QueryRemoteReadThrottlerSleepMicroseconds;
+    extern const Event QueryRemoteWriteThrottlerBytes;
+    extern const Event QueryRemoteWriteThrottlerSleepMicroseconds;
 }
 
 namespace CurrentMetrics
@@ -168,18 +187,26 @@ namespace ErrorCodes
     extern const int STREAM_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT;
     extern const int LOGICAL_ERROR;
     extern const int INVALID_SETTING_VALUE;
+    extern const int NOT_IMPLEMENTED;
     extern const int UNKNOWN_FUNCTION;
     extern const int ILLEGAL_COLUMN;
     extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
     extern const int UNKNOWN_DISK;
     extern const int UNKNOWN_READ_METHOD;
-    extern const int NOT_IMPLEMENTED;
-    extern const int UNKNOWN_FUNCTION;
     /// proton: starts
     extern const int UNKNOWN_USER;
     extern const int DISK_USAGE_RATIO_THRESHOLD_EXCEEDED;
     /// proton: ends
 }
+
+#define SHUTDOWN(log, desc, ptr, method) do \
+{ \
+    if (ptr) \
+    { \
+        LOG_DEBUG(log, "Shutting down " desc); \
+        (ptr)->method; \
+    } \
+} while (false)
 
 /** Set of known objects (environment), that could be used in query.
   * Shared (global) part. Order of members (especially, order of destruction) is very important.
@@ -384,6 +411,9 @@ struct ContextSharedPart : boost::noncopyable
     const String this_host;
     cluster::NodeID this_node_id = 1; /// Always 1
     double max_disk_util = 0.9;
+    /// proton: starts
+    UInt64 max_query_memory_usage_cached = 0; /// Cached max query memory (total_memory * ratio)
+    /// proton: ends
 
 
     mutable ContextSharedMutex task_scheduler_mutex;
@@ -536,20 +566,17 @@ struct ContextSharedPart : boost::noncopyable
         /// Stop periodic reloading of the configuration files.
         /// This must be done first because otherwise the reloading may pass a changed config
         /// to some destroyed parts of ContextSharedPart.
-        if (external_dictionaries_loader)
-            external_dictionaries_loader->enablePeriodicUpdates(false);
+        SHUTDOWN(log, "dictionaries loader", external_dictionaries_loader, enablePeriodicUpdates(false));
+        SHUTDOWN(log, "models loader", external_models_loader, enablePeriodicUpdates(false));
 
-        if (external_models_loader)
-            external_models_loader->enablePeriodicUpdates(false);
-
+        LOG_TRACE(log, "Shutting down named sessions");
         Session::shutdownNamedSessions();
-
         /**  After system_logs have been shut down it is guaranteed that no system table gets created or written to.
           *  Note that part changes at shutdown won't be logged to part log.
           */
-        if (system_logs)
-            system_logs->shutdown();
+        SHUTDOWN(log, "system logs", system_logs, shutdown());
 
+        LOG_TRACE(log, "Shutting down database catalog");
         DatabaseCatalog::shutdown();
 
         NamedCollectionFactory::instance().shutdown();
@@ -566,10 +593,9 @@ struct ContextSharedPart : boost::noncopyable
 
         // delete_async_insert_queue.reset();
 
-        // SHUTDOWN(log, "merges executor", merge_mutate_executor, wait());
-        // SHUTDOWN(log, "fetches executor", fetch_executor, wait());
-        // SHUTDOWN(log, "moves executor", moves_executor, wait());
-        // SHUTDOWN(log, "common executor", common_executor, wait());
+        SHUTDOWN(log, "merges executor", merge_mutate_executor, wait());
+        SHUTDOWN(log, "moves executor", moves_executor, wait());
+        SHUTDOWN(log, "common executor", common_executor, wait());
 
         TransactionLog::shutdownIfAny();
 
@@ -603,6 +629,7 @@ struct ContextSharedPart : boost::noncopyable
 
         /// Background operations in cache use background schedule pool.
         /// Deactivate them before destructing it.
+        LOG_TRACE(log, "Shutting down caches");
         const auto & caches = FileCacheFactory::instance().getAll();
         for (const auto & [_, cache] : caches)
             cache->cache->deactivateBackgroundOperations();
@@ -712,6 +739,24 @@ struct ContextSharedPart : boost::noncopyable
         /// A warning goes both: into server's log; stored to be placed in `system.warnings` table.
         log->warning(message);
         warnings.push_back(message);
+    }
+
+    void configureServerWideThrottling()
+    {
+        if (auto bandwidth = server_settings.max_remote_read_network_bandwidth_for_server)
+            remote_read_throttler = std::make_shared<Throttler>(bandwidth, ProfileEvents::RemoteReadThrottlerBytes, ProfileEvents::RemoteReadThrottlerSleepMicroseconds);
+
+        if (auto bandwidth = server_settings.max_remote_write_network_bandwidth_for_server)
+            remote_write_throttler = std::make_shared<Throttler>(bandwidth, ProfileEvents::RemoteWriteThrottlerBytes, ProfileEvents::RemoteWriteThrottlerSleepMicroseconds);
+
+        if (auto bandwidth = server_settings.max_local_read_bandwidth_for_server)
+            local_read_throttler = std::make_shared<Throttler>(bandwidth, ProfileEvents::LocalReadThrottlerBytes, ProfileEvents::LocalReadThrottlerSleepMicroseconds);
+
+        if (auto bandwidth = server_settings.max_local_write_bandwidth_for_server)
+            local_write_throttler = std::make_shared<Throttler>(bandwidth, ProfileEvents::LocalWriteThrottlerBytes, ProfileEvents::LocalWriteThrottlerSleepMicroseconds);
+
+        if (auto bandwidth = server_settings.max_backup_bandwidth_for_server)
+            backups_server_throttler = std::make_shared<Throttler>(bandwidth);
     }
 
     /// proton : starts
@@ -2674,123 +2719,109 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 ThrottlerPtr Context::getRemoteReadThrottler() const
 {
     ThrottlerPtr throttler;
-
-    const auto & query_settings = getSettingsRef();
-    UInt64 bandwidth_for_server = shared->server_settings.max_remote_read_network_bandwidth_for_server;
-    if (bandwidth_for_server)
     {
-        std::lock_guard lock(mutex);
-        if (!shared->remote_read_throttler)
-            shared->remote_read_throttler = std::make_shared<Throttler>(bandwidth_for_server);
+        std::lock_guard lock(shared->mutex);
         throttler = shared->remote_read_throttler;
     }
 
-    if (query_settings.max_remote_read_network_bandwidth)
+    if (auto bandwidth = getSettingsRef().max_remote_read_network_bandwidth)
     {
         std::lock_guard lock(mutex);
         if (!remote_read_query_throttler)
-            remote_read_query_throttler = std::make_shared<Throttler>(query_settings.max_remote_read_network_bandwidth, throttler);
+            remote_read_query_throttler = std::make_shared<Throttler>(bandwidth, throttler, ProfileEvents::QueryRemoteReadThrottlerBytes, ProfileEvents::QueryRemoteReadThrottlerSleepMicroseconds);
         throttler = remote_read_query_throttler;
     }
-
     return throttler;
 }
 
 ThrottlerPtr Context::getRemoteWriteThrottler() const
 {
     ThrottlerPtr throttler;
-
-    const auto & query_settings = getSettingsRef();
-    UInt64 bandwidth_for_server = shared->server_settings.max_remote_write_network_bandwidth_for_server;
-    if (bandwidth_for_server)
     {
-        std::lock_guard lock(mutex);
-        if (!shared->remote_write_throttler)
-            shared->remote_write_throttler = std::make_shared<Throttler>(bandwidth_for_server);
+        std::lock_guard lock(shared->mutex);
         throttler = shared->remote_write_throttler;
     }
 
-    if (query_settings.max_remote_write_network_bandwidth)
+    if (auto bandwidth = getSettingsRef().max_remote_write_network_bandwidth)
     {
         std::lock_guard lock(mutex);
         if (!remote_write_query_throttler)
-            remote_write_query_throttler = std::make_shared<Throttler>(query_settings.max_remote_write_network_bandwidth, throttler);
+            remote_write_query_throttler = std::make_shared<Throttler>(bandwidth, throttler, ProfileEvents::QueryRemoteWriteThrottlerBytes, ProfileEvents::QueryRemoteWriteThrottlerSleepMicroseconds);
         throttler = remote_write_query_throttler;
     }
-
     return throttler;
 }
 
 ThrottlerPtr Context::getLocalReadThrottler() const
 {
     ThrottlerPtr throttler;
-
-    if (shared->server_settings.max_local_read_bandwidth_for_server)
     {
-        std::lock_guard lock(mutex);
-        if (!shared->local_read_throttler)
-            shared->local_read_throttler = std::make_shared<Throttler>(shared->server_settings.max_local_read_bandwidth_for_server);
+        std::lock_guard lock(shared->mutex);
         throttler = shared->local_read_throttler;
     }
 
-    const auto & query_settings = getSettingsRef();
-    if (query_settings.max_local_read_bandwidth)
+    if (auto bandwidth = getSettingsRef().max_local_read_bandwidth)
     {
         std::lock_guard lock(mutex);
         if (!local_read_query_throttler)
-            local_read_query_throttler = std::make_shared<Throttler>(query_settings.max_local_read_bandwidth, throttler);
+            local_read_query_throttler = std::make_shared<Throttler>(bandwidth, throttler, ProfileEvents::QueryLocalReadThrottlerBytes, ProfileEvents::QueryLocalReadThrottlerSleepMicroseconds);
         throttler = local_read_query_throttler;
     }
-
     return throttler;
 }
 
 ThrottlerPtr Context::getLocalWriteThrottler() const
 {
     ThrottlerPtr throttler;
-
-    if (shared->server_settings.max_local_write_bandwidth_for_server)
     {
-        std::lock_guard lock(mutex);
-        if (!shared->local_write_throttler)
-            shared->local_write_throttler = std::make_shared<Throttler>(shared->server_settings.max_local_write_bandwidth_for_server);
+        std::lock_guard lock(shared->mutex);
         throttler = shared->local_write_throttler;
     }
 
-    const auto & query_settings = getSettingsRef();
-    if (query_settings.max_local_write_bandwidth)
+    if (auto bandwidth = getSettingsRef().max_local_write_bandwidth)
     {
         std::lock_guard lock(mutex);
         if (!local_write_query_throttler)
-            local_write_query_throttler = std::make_shared<Throttler>(query_settings.max_local_write_bandwidth, throttler);
+            local_write_query_throttler = std::make_shared<Throttler>(bandwidth, throttler, ProfileEvents::QueryLocalWriteThrottlerBytes, ProfileEvents::QueryLocalWriteThrottlerSleepMicroseconds);
         throttler = local_write_query_throttler;
     }
-
     return throttler;
 }
 
 ThrottlerPtr Context::getBackupsThrottler() const
 {
-    ThrottlerPtr throttler;
-
-    if (shared->server_settings.max_backup_bandwidth_for_server)
-    {
-        std::lock_guard lock(mutex);
-        if (!shared->backups_server_throttler)
-            shared->backups_server_throttler = std::make_shared<Throttler>(shared->server_settings.max_backup_bandwidth_for_server);
-        throttler = shared->backups_server_throttler;
-    }
-
-    const auto & query_settings = getSettingsRef();
-    if (query_settings.max_backup_bandwidth)
+    ThrottlerPtr throttler = shared->backups_server_throttler;
+    if (auto bandwidth = getSettingsRef().max_backup_bandwidth)
     {
         std::lock_guard lock(mutex);
         if (!backups_query_throttler)
-            backups_query_throttler = std::make_shared<Throttler>(query_settings.max_backup_bandwidth, throttler);
+            backups_query_throttler = std::make_shared<Throttler>(bandwidth, throttler);
         throttler = backups_query_throttler;
     }
-
     return throttler;
+}
+
+void Context::reloadRemoteThrottlerConfig(size_t read_bandwidth, size_t write_bandwidth) const
+{
+    if (read_bandwidth)
+    {
+        std::lock_guard lock(shared->mutex);
+        if (!shared->remote_read_throttler)
+            shared->remote_read_throttler = std::make_shared<Throttler>(read_bandwidth, ProfileEvents::RemoteReadThrottlerBytes, ProfileEvents::RemoteReadThrottlerSleepMicroseconds);
+    }
+
+    if (shared->remote_read_throttler)
+        std::static_pointer_cast<Throttler>(shared->remote_read_throttler)->setMaxSpeed(read_bandwidth);
+
+    if (write_bandwidth)
+    {
+        std::lock_guard lock(shared->mutex);
+        if (!shared->remote_write_throttler)
+            shared->remote_write_throttler = std::make_shared<Throttler>(write_bandwidth, ProfileEvents::RemoteWriteThrottlerBytes, ProfileEvents::RemoteWriteThrottlerSleepMicroseconds);
+    }
+
+    if (shared->remote_write_throttler)
+        std::static_pointer_cast<Throttler>(shared->remote_write_throttler)->setMaxSpeed(write_bandwidth);
 }
 
 /// proton: starts.
@@ -3351,8 +3382,14 @@ const StreamSettings & Context::getStreamSettings() const
     {
         const auto & config = shared->getConfigRefWithLock(lock);
         StreamSettings settings;
-        /// Apply configured stream settings.
-        settings.applyChanges(loadSettingChangesFromConfig<ConfigurableStreamSettingsTraits>("settings.stream", config));
+        /// Apply configured stream settings. Use the full StreamSettingsTraits (rather than
+        /// the curated ConfigurableStreamSettingsTraits) so operators can override any
+        /// per-table MergeTree default — including startup-time safety thresholds like
+        /// max_suspicious_broken_parts_bytes — directly from settings.stream in config.yaml.
+        /// StreamSettings is the alias for MergeTreeSettings, so all merge tree settings are
+        /// already valid stream settings; flattening them under settings.stream avoids both
+        /// a nested merge_tree sub-block and the legacy root-level <merge_tree> XML block.
+        settings.applyChanges(loadSettingChangesFromConfig<StreamSettingsTraits>("settings.stream", config));
         shared->stream_settings.emplace(settings);
     }
 
@@ -3484,6 +3521,13 @@ double Context::getUptimeSeconds() const
 }
 
 
+Int64 Context::getMetricsCacheTTLSeconds() const
+{
+    /// Clamp >= 1s to prevent a refresh storm from a misconfigured 0/negative.
+    return std::max<Int64>(getConfigRef().getInt64("metrics_cache_ttl_seconds", /*default=*/30 * 60), /*min=*/1);
+}
+
+
 void Context::setConfigReloadCallback(ConfigReloadCallback && callback)
 {
     /// Is initialized at server startup, so lock isn't required. Otherwise use mutex.
@@ -3537,7 +3581,10 @@ void Context::setApplicationType(ApplicationType type)
     shared->application_type = type;
 
     if (type == ApplicationType::SERVER)
+    {
         shared->server_settings.loadSettingsFromConfig(Poco::Util::Application::instance().config());
+        shared->configureServerWideThrottling();
+    }
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
@@ -3990,44 +4037,55 @@ void Context::initializeBackgroundExecutorsIfNeeded()
     if (shared->is_background_executors_initialized)
         return;
 
-    const size_t max_merges_and_mutations = static_cast<size_t>(getSettingsRef().background_pool_size * getSettingsRef().background_merges_mutations_concurrency_ratio.value);
+    /// These are server-level pool sizes: read them from ServerSettings so they are honored from the
+    /// top-level config (config.yaml/config.xml), consistent with the other background schedule pools
+    /// (which already read shared->server_settings). Previously they were read from the default profile
+    /// (getSettingsRef()), so a top-level `background_pool_size` was silently ignored for the merge pool.
+    /// Defaults are identical in both Settings and ServerSettings, so unconfigured servers are unaffected.
+    /// Applied once at startup; changing them still requires a restart.
+    const auto & server_settings = getServerSettings();
+    const size_t background_pool_size = server_settings.background_pool_size;
+    const size_t background_move_pool_size = server_settings.background_move_pool_size;
+    const size_t background_fetches_pool_size = server_settings.background_fetches_pool_size;
+    const size_t background_common_pool_size = server_settings.background_common_pool_size;
+    const size_t max_merges_and_mutations = static_cast<size_t>(background_pool_size * server_settings.background_merges_mutations_concurrency_ratio);
 
     /// With this executor we can execute more tasks than threads we have
     shared->merge_mutate_executor = MergeMutateBackgroundExecutor::create
     (
         "MergeMutate",
-        /*max_threads_count*/getSettingsRef().background_pool_size,
+        /*max_threads_count*/background_pool_size,
         /*max_tasks_count*/max_merges_and_mutations,
         CurrentMetrics::BackgroundMergesAndMutationsPoolTask
     );
 
     LOG_INFO(shared->log, "Initialized background executor for merges and mutations with num_threads={}, num_tasks={}",
-        getSettingsRef().background_pool_size, max_merges_and_mutations);
+        background_pool_size, max_merges_and_mutations);
 
     shared->moves_executor = OrdinaryBackgroundExecutor::create
     (
         "Move",
-        getSettingsRef().background_move_pool_size,
-        getSettingsRef().background_move_pool_size,
+        background_move_pool_size,
+        background_move_pool_size,
         CurrentMetrics::BackgroundMovePoolTask
     );
 
     LOG_INFO(shared->log, "Initialized background executor for move operations with num_threads={}, num_tasks={}",
-        getSettingsRef().background_move_pool_size, getSettingsRef().background_move_pool_size);
+        background_move_pool_size, background_move_pool_size);
 
     LOG_INFO(shared->log, "Initialized background executor for fetches with num_threads={}, num_tasks={}",
-        getSettingsRef().background_fetches_pool_size, getSettingsRef().background_fetches_pool_size);
+        background_fetches_pool_size, background_fetches_pool_size);
 
     shared->common_executor = OrdinaryBackgroundExecutor::create
     (
         "Common",
-        getSettingsRef().background_common_pool_size,
-        getSettingsRef().background_common_pool_size,
+        background_common_pool_size,
+        background_common_pool_size,
         CurrentMetrics::BackgroundCommonPoolTask
     );
 
     LOG_INFO(shared->log, "Initialized background executor for common operations (e.g. clearing old parts) with num_threads={}, num_tasks={}",
-        getSettingsRef().background_common_pool_size, getSettingsRef().background_common_pool_size);
+        background_common_pool_size, background_common_pool_size);
 
     shared->is_background_executors_initialized = true;
 }
@@ -4135,12 +4193,14 @@ ReadSettings Context::getReadSettings() const
     /// Zero read buffer will not make progress.
     if (!settings.max_read_buffer_size)
     {
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE,
-            "Invalid value '{}' for max_read_buffer_size", settings.max_read_buffer_size);
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE, "Invalid value '{}' for max_read_buffer_size", settings.max_read_buffer_size.value);
     }
 
-    res.local_fs_buffer_size = settings.max_read_buffer_size;
-    res.remote_fs_buffer_size = settings.max_read_buffer_size;
+    res.local_fs_buffer_size
+        = settings.max_read_buffer_size_local_fs ? settings.max_read_buffer_size_local_fs : settings.max_read_buffer_size;
+    res.remote_fs_buffer_size
+        = settings.max_read_buffer_size_remote_fs ? settings.max_read_buffer_size_remote_fs : settings.max_read_buffer_size;
     res.prefetch_buffer_size = settings.prefetch_buffer_size;
     res.direct_io_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
@@ -4438,6 +4498,28 @@ const String & Context::getSpillDirPath() const noexcept
 void Context::setMaxDiskUtil(double max_disk_util)
 {
     shared->max_disk_util = max_disk_util;
+}
+
+void Context::setMaxQueryMemoryUsageToRamRatio(double ratio)
+{
+    /// proton: starts
+    /// Cache the calculated value instead of just the ratio
+    if (ratio > 0.0 && ratio <= 1.0)
+    {
+        UInt64 total_memory = getMemoryAmountOrZeroCached();
+        if (total_memory > 0)
+            shared->max_query_memory_usage_cached = static_cast<UInt64>(total_memory * ratio);
+    }
+    else
+    {
+        shared->max_query_memory_usage_cached = 0;
+    }
+    /// proton: ends
+}
+
+UInt64 Context::getMaxQueryMemoryUsage() const
+{
+    return shared->max_query_memory_usage_cached;
 }
 
 void Context::checkDiskUtil() const

@@ -1,0 +1,134 @@
+description: |
+  Test Pulsar external stream with batch parsing.
+  Steps:
+    1.Create Pulsar topic
+    2.Create external stream with ProtobufSingle
+    3.Create MVs to read Pulsar with batch / non-batch parsing
+    4.Insert messages into Pulsar
+    5.Verify MVs have same data as inserted messages
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_protobuf_23
+
+  - type: pulsar
+    name: create
+    topic: test_protobuf_23
+    partitions: 1
+
+  - type: query
+    sql: drop stream if exists test_protobuf_23_source;
+
+  - type: query
+    sql: drop stream if exists test_protobuf_23_non_batch;
+
+  - type: query
+    sql: drop stream if exists test_protobuf_23_batch;
+
+  - type: query
+    sql: drop stream if exists test_pulsar_23;
+
+  - type: query
+    sql: |
+      CREATE OR REPLACE FORMAT SCHEMA schema_name_23 AS
+      $$
+      syntax = "proto3";
+      message SearchRequest { 
+        string query = 1;
+        int32 page_number = 2;
+      }
+      $$
+      TYPE Protobuf;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM test_pulsar_23
+      (
+        query string,
+        page_number int
+      )
+      SETTINGS type = 'pulsar',
+          service_url = 'pulsar://pulsar:6650',
+          topic = 'test_protobuf_23',
+          data_format = 'ProtobufSingle',
+          format_schema = 'schema_name_23:SearchRequest';
+
+  - type: query
+    sql: create materialized view test_protobuf_23_non_batch as select * from test_pulsar_23 settings parse_messages_in_batch=0;
+
+  - type: query
+    sql: create materialized view test_protobuf_23_batch     as select * from test_pulsar_23 settings parse_messages_in_batch=1;
+
+  - type: query
+    sql: create stream test_protobuf_23_source (query string, page_number int);
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_protobuf_23_source(query, page_number) select random_printable_ascii(43) as query, rand() as page_number from numbers(10000);
+
+  - type: wait
+    time: 3
+
+  - type: query
+    sql: insert into test_pulsar_23(query, page_number) select query, page_number from table(test_protobuf_23_source);
+
+  - type: wait
+    time: 3
+
+  - type: stream
+    name: test-pulsar-23-1-0
+    query: select count() as ct from (select * except (_tp_time) from table(test_protobuf_23_source) except select * except (_tp_time) from table(test_protobuf_23_non_batch));
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: stream
+    name: test-pulsar-23-1-10000
+    query: select count() as ct from table(test_protobuf_23_non_batch);
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: check
+    target_name: test-pulsar-23-1-0
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: test-pulsar-23-1-10000
+    expected_result:
+      - [10000]
+
+  - type: stream
+    name: test-pulsar-23-2-0
+    query: select count() as ct from (select * except (_tp_time) from table(test_protobuf_23_source) except select * except (_tp_time) from table(test_protobuf_23_batch));
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: stream
+    name: test-pulsar-23-2-10000
+    query: select count() as ct from table(test_protobuf_23_batch);
+    schema:
+      - name: ct
+        type: uint64
+
+  - type: check
+    target_name: test-pulsar-23-2-0
+    expected_result:
+      - [0]
+
+  - type: check
+    target_name: test-pulsar-23-2-10000
+    expected_result:
+      - [10000]

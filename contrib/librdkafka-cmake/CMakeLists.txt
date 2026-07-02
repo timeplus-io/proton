@@ -30,7 +30,7 @@ set(SRCS
     "${RDKAFKA_SOURCE_DIR}/rdkafka_msg.c"
     "${RDKAFKA_SOURCE_DIR}/rdkafka_msgset_reader.c"
     "${RDKAFKA_SOURCE_DIR}/rdkafka_msgset_writer.c"
-    "${RDKAFKA_SOURCE_DIR}/rdkafka_offset.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/rdkafka_offset_patched.c" # issue-12063
     "${RDKAFKA_SOURCE_DIR}/rdkafka_op.c"
     "${RDKAFKA_SOURCE_DIR}/rdkafka_partition.c"
     "${RDKAFKA_SOURCE_DIR}/rdkafka_pattern.c"
@@ -149,6 +149,17 @@ endif()
 if(WITH_OAUTHBEARER_OIDC)
     list(APPEND SRCS "${RDKAFKA_SOURCE_DIR}/rdkafka_sasl_oauthbearer_oidc.c")
 endif()
+
+# https://github.com/timeplus-io/proton-enterprise/issues/12063
+# Apply downstream patch to rdkafka_offset.c (guard against ERR__DESTROY during offset reset)
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/rdkafka_offset_patched.c"
+    COMMAND ${CMAKE_COMMAND} -E copy "${RDKAFKA_SOURCE_DIR}/rdkafka_offset.c" "${CMAKE_CURRENT_BINARY_DIR}/rdkafka_offset_patched.c"
+    COMMAND patch -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/rdkafka_offset_destroy_guard.patch" "${CMAKE_CURRENT_BINARY_DIR}/rdkafka_offset_patched.c"
+    DEPENDS "${RDKAFKA_SOURCE_DIR}/rdkafka_offset.c"
+            "${CMAKE_CURRENT_SOURCE_DIR}/rdkafka_offset_destroy_guard.patch"
+    COMMENT "Patching rdkafka_offset.c with destroy guard"
+)
 
 add_library(_rdkafka ${SRCS})
 add_library(ch_contrib::rdkafka ALIAS _rdkafka)

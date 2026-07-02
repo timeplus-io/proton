@@ -41,6 +41,9 @@ private:
     bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
 
+    size_t countRows(size_t max_block_size) override;
+    bool supportsCountRows() const override { return true; }
+
     const String & columnName(size_t i) const;
     size_t columnIndex(StringRef name, size_t key_index);
     bool advanceToNextKey(size_t key_index);
@@ -51,6 +54,7 @@ private:
     void readNestedData(const String & name, MutableColumns & columns);
 
     virtual void readRowStart(MutableColumns &) {}
+    virtual void skipRowStart() {}
 
     /// Buffer for the read from the stream field name. Used when you have to copy it.
     /// Also, if processing of Nested data is in progress, it holds the common prefix

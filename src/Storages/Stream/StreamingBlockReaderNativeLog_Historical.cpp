@@ -1,5 +1,7 @@
 #include <Storages/Stream/StreamingBlockReaderNativeLog.h>
 
+#include <Common/logger_useful.h>
+
 #include <Bootstrap/Globals.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
@@ -9,6 +11,7 @@
 #include <Common/quoteString.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {

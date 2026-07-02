@@ -11,6 +11,7 @@
 #include <Common/HybridHashTable/HybridKeyGetter.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -28,11 +29,13 @@ HybridVersionsFilterTransform::HybridVersionsFilterTransform(
     const DB::Block & output_header,
     std::vector<std::string> key_column_names,
     const std::string & version_column_name,
+    bool late_insert_overrides_,
     std::string spill_dir,
     size_t max_hot_key_count,
     const std::string & kv_options,
     bool backfill_key_unique_)
     : ISimpleTransform(input_header, output_header, false, ProcessorID::HybridVersionsFilterTransformID)
+    , late_insert_overrides(late_insert_overrides_)
     , backfill_key_unique(backfill_key_unique_)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
     , last_log_ts(MonotonicMilliseconds::now())
@@ -200,14 +203,14 @@ void HybridVersionsFilterTransform::doFilter(
         else
         {
             const Field & latest_version = *static_cast<const Field *>(result.getMapped());
-            if (current_version == latest_version)
-            {
-                /// Do nothing
-            }
-            else if (current_version > latest_version)
+            if (current_version > latest_version)
             {
                 /// Update the new version
                 *static_cast<Field *>(result.getMutableMapped()) = std::move(current_version);
+            }
+            else if (late_insert_overrides && current_version == latest_version)
+            {
+                /// Do nothing, keep the existing version
             }
             else [[unlikely]]
             {
@@ -294,7 +297,7 @@ RocksDBPtr HybridVersionsFilterTransform::getOrCreateRocksDB(const HybridConfig 
     return rocks;
 }
 
-void HybridVersionsFilterTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void HybridVersionsFilterTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->settings);
     auto & settings = ckpt_ctx->request_ctx->settings;
@@ -323,7 +326,7 @@ void HybridVersionsFilterTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     ckpt_ctx->coordinator->checkpoint(getLogicID(), std::move(ckpt), ckpt_ctx);
 }
 
-void HybridVersionsFilterTransform::recover(CheckpointContextPtr ckpt_ctx)
+void HybridVersionsFilterTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     auto ckpt = ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx);
     switch (ckpt->type())

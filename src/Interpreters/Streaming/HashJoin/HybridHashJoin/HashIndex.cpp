@@ -1,5 +1,6 @@
 #include <Interpreters/Streaming/HashJoin/HybridHashJoin/HashIndex.h>
 #include <Interpreters/Streaming/HashJoin/HybridHashJoin/HybridHashJoin.h>
+#include <fmt/ranges.h>
 
 namespace DB::Streaming
 {
@@ -305,5 +306,48 @@ size_t HashIndex::getBufferSizeInBytes() const
     }
 
     return bytes;
+}
+
+String HashIndex::metricsString() const
+{
+    size_t approximate_rows = 0;
+    size_t cached_bytes = 0;
+
+    auto collect_rows_and_bytes = [&](const HybridHashJoinMapsVariants & index) {
+        std::vector<const HybridMapsVariant *> maps_vector;
+        maps_vector.reserve(index.size());
+        for (size_t i = 0; i < index.size(); ++i)
+            maps_vector.push_back(&index[i]);
+
+        hybridJoinDispatch(
+            join->getStreamingKind(),
+            join->getStreamingStrictness(),
+            maps_vector,
+            [&](auto /*kind_*/, auto /*strictness_*/, const auto & maps_vector_) {
+                for (const auto & map : maps_vector_)
+                {
+                    approximate_rows += map->table.approximateCount();
+                    cached_bytes += map->table.getBufferSizeInBytes();
+                }
+            });
+    };
+
+    {
+        std::scoped_lock lock(mutex);
+        collect_rows_and_bytes(*current_hash_index);
+
+        for (const auto & [_, index_with_timestamps] : range_bucket_hash_indexes)
+            collect_rows_and_bytes(*index_with_timestamps.index);
+    }
+
+    return fmt::format(
+        "approximate_rows={}, cached_bytes={}, range_buckets={}, join_start_bucket_offset={}, join_stop_bucket_offset={}, "
+        "current_watermark={}",
+        approximate_rows,
+        cached_bytes,
+        range_bucket_hash_indexes.size(),
+        join_start_bucket_offset,
+        join_stop_bucket_offset,
+        current_watermark.load());
 }
 }

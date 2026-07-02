@@ -25,7 +25,7 @@ class ClientInfo;
 /// Packet that could be received from server.
 struct Packet
 {
-    UInt64 type;
+    UInt64 type = Protocol::Server::MAX; // default value has to be invalid
 
     Block block;
     std::unique_ptr<Exception> exception;
@@ -37,8 +37,6 @@ struct Packet
     InitialAllRangesAnnouncement announcement;
     ParallelReadRequest request;
     ParallelReadResponse response;
-
-    Packet() : type(Protocol::Server::Hello) {}
 };
 
 
@@ -124,7 +122,7 @@ public:
     virtual bool isConnected() const = 0;
 
     /// Check if connection is still active with ping request.
-    virtual bool checkConnected() = 0;
+    virtual bool checkConnected(const ConnectionTimeouts & /*timeouts*/) = 0;
 
     /** Disconnect.
       * This may be used, if connection is left in unsynchronised state

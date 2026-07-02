@@ -7,6 +7,7 @@
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
+#include <Common/logger_useful.h>
 
 #include <fmt/format.h>
 #include <Poco/Dynamic/Var.h>

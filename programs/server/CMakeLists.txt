@@ -1,13 +1,9 @@
-include(${proton_SOURCE_DIR}/cmake/embed_binary.cmake)
-
 set(CLICKHOUSE_SERVER_SOURCES
     MetricsTransmitter.cpp
     Server.cpp
     Server_Python.cpp
     Server_V8.cpp
 )
-
-set (LINK_RESOURCE_LIB INTERFACE "-Wl,${WHOLE_ARCHIVE} $<TARGET_FILE:clickhouse_server_configs> -Wl,${NO_WHOLE_ARCHIVE}")
 
 set (CLICKHOUSE_SERVER_LINK
     PRIVATE
@@ -20,8 +16,6 @@ set (CLICKHOUSE_SERVER_LINK
         clickhouse_storages_system
         clickhouse_table_functions
         string_utils
-
-    ${LINK_RESOURCE_LIB}
 
     PUBLIC
         daemon
@@ -42,9 +36,8 @@ endif ()
 proton_program_add(server)
 
 install(FILES config.yaml users.yaml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT proton)
-
-clickhouse_embed_binaries(
-    TARGET clickhouse_server_configs
-    RESOURCES config.yaml users.yaml embedded.xml play.html grok-patterns
-)
-add_dependencies(clickhouse-server-lib clickhouse_server_configs)
+# play.html, embedded.xml, config.yaml, users.yaml, and grok-patterns are
+# embedded into their respective consumers via C23 `#embed` (no .incbin
+# static lib, no -rdynamic dlsym lookup). Server.cpp hosts the
+# `embedded.xml` fallback (registered with ConfigProcessor at startup).
+set_source_files_properties(Server.cpp PROPERTIES COMPILE_FLAGS -Wno-c23-extensions)

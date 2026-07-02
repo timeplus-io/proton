@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/MemoryTrackerBlockerInThread.h>
+#include <Common/logger_useful.h>
 
 #include <utility>
 
@@ -31,12 +32,8 @@ void MergeTreeDataPartWriterOnDisk::Stream::preFinalize()
     compressor.finalize();
     plain_hashing.finalize();
 
-    if (compress_marks)
-    {
-        marks_compressed_hashing.finalize();
-        marks_compressor.finalize();
-    }
-
+    marks_compressed_hashing.finalize();
+    marks_compressor.finalize();
     marks_hashing.finalize();
 
     plain_file->preFinalize();
@@ -52,6 +49,20 @@ void MergeTreeDataPartWriterOnDisk::Stream::finalize()
 
     plain_file->finalize();
     marks_file->finalize();
+}
+
+void MergeTreeDataPartWriterOnDisk::Stream::cancel() noexcept
+{
+    compressed_hashing.cancel();
+    compressor.cancel();
+    plain_hashing.cancel();
+
+    marks_compressed_hashing.cancel();
+    marks_compressor.cancel();
+    marks_hashing.cancel();
+
+    plain_file->cancel();
+    marks_file->cancel();
 }
 
 void MergeTreeDataPartWriterOnDisk::Stream::sync() const
@@ -108,7 +119,6 @@ void MergeTreeDataPartWriterOnDisk::Stream::addToChecksums(MergeTreeData::DataPa
     checksums.files[name + marks_file_extension].file_hash = marks_hashing.getHash();
 }
 
-
 MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
     const String & data_part_name_,
     const String & logger_name_,
@@ -143,7 +153,23 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
 
     if (settings.rewrite_primary_key)
         initPrimaryIndex();
+
     initSkipIndices();
+}
+
+void MergeTreeDataPartWriterOnDisk::cancel() noexcept
+{
+    if (index_file_stream)
+        index_file_stream->cancel();
+    if (index_file_hashing_stream)
+        index_file_hashing_stream->cancel();
+    if (index_compressor_stream)
+        index_compressor_stream->cancel();
+    if (index_source_hashing_stream)
+        index_source_hashing_stream->cancel();
+
+    for (auto & stream : skip_indices_streams)
+        stream->cancel();
 }
 
 // Implementation is split into static functions for ability
@@ -176,11 +202,15 @@ static size_t computeIndexGranularityImpl(
             index_granularity_for_block = index_granularity_bytes / size_of_row_in_bytes;
         }
     }
-    if (index_granularity_for_block == 0) /// very rare case when index granularity bytes less then single row
-        index_granularity_for_block = 1;
+    /// We should be less or equal than fixed index granularity.
+    /// But if block size is a granule size then do not adjust it.
+    /// Granularity greater than fixed granularity might come from compact part.
+    if (!blocks_are_granules)
+        index_granularity_for_block = std::min(fixed_index_granularity_rows, index_granularity_for_block);
 
-    /// We should be less or equal than fixed index granularity
-    index_granularity_for_block = std::min(fixed_index_granularity_rows, index_granularity_for_block);
+    /// Very rare case when index granularity bytes less than single row.
+    if (index_granularity_for_block == 0)
+        index_granularity_for_block = 1;
     return index_granularity_for_block;
 }
 

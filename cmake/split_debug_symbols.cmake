@@ -16,24 +16,45 @@ macro(proton_split_debug_symbols)
     endif()
 
     if(APPLE)
-        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+        # macOS: cp + in-place strip. Mach-O `strip` split-debug tooling
+        # is treated as out-of-scope for this PR, so preserve prior behavior.
+        add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
+            COMMAND cp "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            # Splits debug symbols into separate file, leaves the binary untouched:
+            COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            # Associate stripped binary with debug symbols:
+            COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMENT "Stripping proton binary" VERBATIM
+        )
     else()
-        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note --keep-section=.proton.hash "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+        # Linux: atomic strip (`<src> -o <dst>`) — strip reads the original
+        # and writes the stripped output directly to the destination, so a
+        # failed strip can't leave a half-copied binary behind. Mirrors
+        # upstream ClickHouse's split_debug_symbols flow.
+        #
+        # `--strip-debug` (vs strip's default `--strip-all`) keeps `.symtab`
+        # so SymbolIndex can resolve function names in crash backtraces when
+        # the `-proton-debug` package is not installed — required now that
+        # `-Wl,--no-export-dynamic` has shrunk `.dynsym` (see upstream
+        # PR ClickHouse/ClickHouse#47475). `.proton.hash` is a non-debug
+        # section, so `--keep-section` is no longer needed.
+        #
+        # `.note` and `.comment` are removed in line with Debian's stripping
+        # policy (https://www.debian.org/doc/debian-policy/ch-files.html).
+        add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
+            COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND "${STRIP_PATH}" --strip-debug --remove-section=.comment --remove-section=.note "${STRIP_BINARY_PATH}" -o "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMENT "Stripping proton binary" VERBATIM
+        )
     endif()
-
-    add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
-        COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
-        COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
-        COMMAND cp "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
-        # Splits debug symbols into separate file, leaves the binary untouched:
-        COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
-        COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
-        # Strips binary, sections '.note' & '.comment' are removed in line with Debian's stripping policy: www.debian.org/doc/debian-policy/ch-files.html, section '.proton.hash' is needed for integrity check:
-        COMMAND ${STRIP_COMMAND}
-        # Associate stripped binary with debug symbols:
-        COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
-        COMMENT "Stripping proton binary" VERBATIM
-    )
 
     install(PROGRAMS ${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT proton)
     install(FILES ${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug DESTINATION ${CMAKE_INSTALL_LIBDIR}/debug/${CMAKE_INSTALL_FULL_BINDIR} COMPONENT proton)
@@ -59,21 +80,29 @@ macro(proton_split_debug_symbols_without_install)
     endif()
 
     if(APPLE)
-        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+        add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
+            COMMAND cp "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMENT "Stripping proton binary (no install)" VERBATIM
+        )
     else()
-        set(STRIP_COMMAND "${STRIP_PATH}" --remove-section=.comment --remove-section=.note --keep-section=.proton.hash "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}")
+        # Same atomic `--strip-debug` + `-o` flow as proton_split_debug_symbols;
+        # see that macro for rationale.
+        add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
+            COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
+            COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
+            COMMAND "${STRIP_PATH}" --strip-debug --remove-section=.comment --remove-section=.note "${STRIP_BINARY_PATH}" -o "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
+            COMMENT "Stripping proton binary (no install)" VERBATIM
+        )
     endif()
-
-    add_custom_command(TARGET ${STRIP_TARGET} POST_BUILD
-        COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/lib/debug/bin"
-        COMMAND mkdir -p "${STRIP_DESTINATION_DIR}/bin"
-        COMMAND cp "${STRIP_BINARY_PATH}" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
-        COMMAND "${OBJCOPY_PATH}" --only-keep-debug "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}" "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
-        COMMAND chmod 0644 "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug"
-        COMMAND ${STRIP_COMMAND}
-        COMMAND "${OBJCOPY_PATH}" --add-gnu-debuglink "${STRIP_DESTINATION_DIR}/lib/debug/bin/${STRIP_TARGET}.debug" "${STRIP_DESTINATION_DIR}/bin/${STRIP_TARGET}"
-        COMMENT "Stripping proton binary (no install)" VERBATIM
-    )
 endmacro()
 
 

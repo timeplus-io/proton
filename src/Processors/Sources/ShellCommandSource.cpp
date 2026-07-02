@@ -3,6 +3,7 @@
 #include <sys/poll.h>
 
 #include <Common/Stopwatch.h>
+#include <Common/logger_useful.h>
 
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>

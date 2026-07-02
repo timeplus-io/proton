@@ -509,8 +509,7 @@ namespace
                         UInt64 u64 = readUInt();
                         if (u64 < 2)
                             return castNumber<NumberType>(u64);
-                        else
-                            cannotConvertValue(toString(u64), field_descriptor.type_name(), TypeName<NumberType>);
+                        cannotConvertValue(toString(u64), field_descriptor.type_name(), TypeName<NumberType>);
                     };
 
                     default_function = [this]() -> NumberType { return static_cast<NumberType>(field_descriptor.default_value_bool()); };
@@ -522,9 +521,10 @@ namespace
                 {
                     write_function = [this](NumberType value)
                     {
-                        WriteBufferFromString buf{text_buffer};
-                        writeText(value, buf);
-                        buf.finalize();
+                        {
+                            WriteBufferFromString buf{text_buffer};
+                            writeText(value, buf);
+                        }
                         writeStr(text_buffer);
                     };
 
@@ -915,7 +915,7 @@ namespace
         template <typename NumberType>
         void toStringAppend(NumberType value, PaddedPODArray<UInt8> & str)
         {
-            WriteBufferFromVector buf{str, AppendModeTag{}};
+            auto buf = WriteBufferFromVector<PaddedPODArray<UInt8>>(str, AppendModeTag{});
             writeText(value, buf);
         }
 

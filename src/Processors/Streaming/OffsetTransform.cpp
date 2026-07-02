@@ -244,7 +244,7 @@ void OffsetTransform::work()
     metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
-void OffsetTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void OffsetTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
@@ -260,7 +260,7 @@ void OffsetTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     });
 }
 
-void OffsetTransform::recover(CheckpointContextPtr ckpt_ctx)
+void OffsetTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
         readIntBinary(rows_read, rb);

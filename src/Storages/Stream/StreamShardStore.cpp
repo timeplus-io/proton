@@ -1,3 +1,4 @@
+#include <Storages/LogStoreRetention.h>
 #include <Storages/Stream/StreamCallbackData.h>
 #include <Storages/Stream/StreamShardStore.h>
 #include <Storages/Stream/StreamingBlockReaderNativeLog.h>
@@ -25,6 +26,8 @@
 #include <Storages/Stream/StreamingStoreSource.h>
 #include <base/sleep.h>
 #include <Common/ProtonCommon.h>
+#include <Common/ThreadPool.h>
+#include <Common/scope_guard_safe.h>
 #include <Common/setThreadName.h>
 
 namespace DB
@@ -36,6 +39,7 @@ extern const int INVALID_CONFIG_PARAMETER;
 extern const int UNKNOWN_EXCEPTION;
 extern const int RESOURCE_NOT_INITED;
 extern const int SEQUENCE_COMPACTED_AWAY;
+extern const int TOO_MANY_PARTS;
 }
 
 StreamShardStore::StreamShardStore(
@@ -60,7 +64,9 @@ StreamShardStore::StreamShardStore(
     // no replica set setup needed
     assert(shard_ != cluster::Nulls::NullShardID);
 
-    if (!inmemory) // always real replica
+    inline_historical_commit = storage_stream.getSettings()->inline_historical_commit;
+
+    if (!inmemory && !isVirtualReplica()) // always real replica
     {
         assert(relative_data_path_.ends_with('/'));
         auto shard_path = fmt::format("{}{}/", relative_data_path_, shard_);
@@ -88,7 +94,19 @@ StreamShardStore::StreamShardStore(
         }
 
         LOG_INFO(logger, "Load committed sn={} from path={}", sn, shard_path);
+
+        /// Cache once: metric tick fast path is a pure load.
+        for (const auto & disk : storage->getStoragePolicy()->getDisks())
+        {
+            if (disk->isRemote())
+            {
+                has_remote_disk = true;
+                break;
+            }
+        }
     }
+
+    metrics_cache_ttl_seconds = context_->getMetricsCacheTTLSeconds();
 }
 
 StreamShardStore::~StreamShardStore()
@@ -578,7 +596,11 @@ void StreamShardStore::alterLogSettings(
         return;
 
     auto & native_log = Globals::getNativeLog();
-    if (auto err = native_log.alter({stream_shard}, flush_settings, retention_settings); err != DB::ErrorCodes::OK)
+
+    const auto & defaults = *native_log.getConfig().log_config;
+    const auto effective_retention_settings = normalizeNativeLogRetentionSettingsForAlter(retention_settings, defaults);
+
+    if (auto err = native_log.alter({stream_shard}, flush_settings, effective_retention_settings); err != DB::ErrorCodes::OK)
         throw DB::Exception(err, "Failed to update settings for {}", stream_shard.string());
 }
 
@@ -625,6 +647,23 @@ void StreamShardStore::backgroundPollNativeLog()
     /// We like to retain control block for data mutation like drop partition, delete data etc
     block_reader.setEmitControlBlock(true);
     block_reader.setAllowFallbackToHistoricalStore(false);
+    block_reader.setThrowIfSequenceHasHole(true);
+
+    /// Use the latest in-memory historical offset here rather than committedSN(), because
+    /// committed_sn.txt lags behind successful part commits. After a read failure or compaction
+    /// we need to rebuild the fetch session from the last applied sn seen by this process.
+    auto resetBlockReaderToInMemoryCommittedSN = [this, &block_reader](const char * reason) noexcept {
+        auto next_sn = storage->inMemoryCommittedSN() + 1;
+        try
+        {
+            block_reader.resetSequenceNumber(next_sn);
+            LOG_INFO(logger, "Reset block reader to next sn={} after {}", next_sn, reason);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, fmt::format("Failed to reset block reader to next sn={} after {}", next_sn, reason));
+        }
+    };
 
     cluster::SchemaRecordPtrs batch;
     size_t batch_size = 100;
@@ -689,20 +728,20 @@ void StreamShardStore::backgroundPollNativeLog()
             {
                 /// The only case for now we will run into this case is snapshot case, in which scenario the current
                 /// shard replica receives historical snapshot from its peer and the data in local log gets truncated
-                /// to the snapshot sn which is committed in local file system.
-                auto next_sn = storage->committedSN() + 1;
-                block_reader.resetSequenceNumber(next_sn);
-                LOG_INFO(logger, "Resetting block reader to next sn={} because of error '{}'", next_sn, e.message());
+                /// to the snapshot sn which is already applied in the local historical store.
+                resetBlockReaderToInMemoryCommittedSN("SEQUENCE_COMPACTED_AWAY");
             }
             else
             {
-                tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->committedSN() + 1));
+                tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->inMemoryCommittedSN() + 1));
+                resetBlockReaderToInMemoryCommittedSN("read failure");
             }
             sleepForMilliseconds(2000);
         }
         catch (...)
         {
-            tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->committedSN() + 1));
+            tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->inMemoryCommittedSN() + 1));
+            resetBlockReaderToInMemoryCommittedSN("read failure");
             sleepForMilliseconds(2000);
         }
     }
@@ -838,58 +877,113 @@ void StreamShardStore::doCommit(
         assert(outstanding_sns.size() >= local_committed_sns.size());
     }
 
-    /// We use trySchedule to avoid blocking the current thread for a long time when the pool is full.
-    bool scheduled = false;
-    using CommitData = std::tuple<Block, SequencePair, std::shared_ptr<IdempotentKeys>, SequenceRanges>;
-    auto commit_data = std::make_shared<CommitData>(std::move(block), seq_pair, std::move(keys), std::move(missing_sequence_ranges));
-    while (!scheduled)
+    if (inline_historical_commit)
     {
-        if (isStopped())
+        /// Retry on TOO_MANY_PARTS: data is durable in NativeLog so it is safe to wait until the
+        /// merge pool catches up rather than throw and leave the sequence pointer stuck.
+        /// onStart() only checks parts count with no side effects, so the sink is created once
+        /// and reused across retries.
+        auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
+        auto * merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
+        merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(seq_pair.first, seq_pair.second, keys));
+        merge_tree_sink->setMissingSequenceRanges(std::move(missing_sequence_ranges));
+
+        while (!isStopped())
         {
-            LOG_INFO(logger, "Aborted scheduling part commit, current_sn_range={}-{} shard={}", seq_pair.first, seq_pair.second, shard());
-            return;
+            try
+            {
+                merge_tree_sink->onStart();
+                break;
+            }
+            catch (const Exception & e)
+            {
+                if (e.code() != ErrorCodes::TOO_MANY_PARTS)
+                    throw;
+                LOG_WARNING(
+                    logger,
+                    "Inline commit backpressure sn_range={}-{}: {}, sleeping 1s",
+                    seq_pair.first,
+                    seq_pair.second,
+                    e.message());
+                sleepForMilliseconds(1000);
+            }
         }
 
-        scheduled = part_commit_pool.trySchedule(
-            [&, commit_data, metadata, this]() mutable {
-                auto & [moved_block, moved_seq, moved_keys, moved_sequence_ranges] = *commit_data;
+        if (isStopped())
+            return;
 
-                while (!isStopped())
-                {
-                    try
+        /// Reset index time here
+        assignIndexTime(block.findByName(ProtonConsts::RESERVED_INDEX_TIME));
+
+        merge_tree_sink->consume(Chunk(block.getColumns(), block.rows()));
+        merge_tree_sink->onFinish();
+        progressSequences(seq_pair);
+    }
+    else
+    {
+        /// Commit blocks to file system async
+        /// We use trySchedule to avoid blocking the current thread for a long time when the pool is full
+        bool scheduled = false;
+        using CommitData = std::tuple<Block, SequencePair, std::shared_ptr<IdempotentKeys>, SequenceRanges>;
+        auto commit_data = std::make_shared<CommitData>(std::move(block), seq_pair, std::move(keys), std::move(missing_sequence_ranges));
+        while (!scheduled)
+        {
+            if (isStopped())
+            {
+                LOG_INFO(
+                    logger,
+                    "Aborted scheduling part commit, current_sn_range={}-{} shard={}",
+                    seq_pair.first,
+                    seq_pair.second,
+                    shard());
+                return;
+            }
+
+            scheduled = part_commit_pool.trySchedule(
+                [&, commit_data, metadata, this]() mutable {
+                    auto & [moved_block, moved_seq, moved_keys, moved_sequence_ranges] = *commit_data;
+
+                    auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
+
+                    /// Setup sequence numbers to persistent them to file system
+                    auto * merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
+                    merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
+                    merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
+
+                    while (!isStopped())
                     {
-                        auto sink = storage->write(nullptr, metadata, storage_stream.getContext());
+                        try
+                        {
+                            merge_tree_sink->onStart();
+                            break;
+                        }
+                        catch (...)
+                        {
+                            LOG_ERROR(
+                                logger,
+                                "Failed to commit rows={} to file system, exception={}",
+                                moved_block.rows(),
+                                getCurrentExceptionMessage(true, true));
 
-                        auto * merge_tree_sink = static_cast<MergeTreeSink *>(sink.get());
-                        merge_tree_sink->setSequenceInfo(std::make_shared<SequenceInfo>(moved_seq.first, moved_seq.second, moved_keys));
-                        merge_tree_sink->setMissingSequenceRanges(std::move(moved_sequence_ranges));
-
-                        merge_tree_sink->onStart();
-
-                        assignIndexTime(const_cast<ColumnWithTypeAndName *>(moved_block.findByName(ProtonConsts::RESERVED_INDEX_TIME)));
-
-                        merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
-                        merge_tree_sink->onFinish();
-                        break;
+                            sleepForMilliseconds(2000);
+                        }
                     }
-                    catch (...)
-                    {
-                        LOG_ERROR(
-                            logger,
-                            "Failed to commit rows={} to file system, exception={}",
-                            moved_block.rows(),
-                            getCurrentExceptionMessage(true, true));
-                        /// FIXME : specific error handling. When we sleep here, it occupied the current thread
-                        sleepForMilliseconds(2000);
-                    }
-                }
 
-                progressSequences(moved_seq);
-            },
-            /*wait_timeout_ms=*/{500});
+                    if (isStopped())
+                        return;
 
-        if (!scheduled)
-            LOG_WARNING(logger, "No available threads in background commit pool with size={}, retry", part_commit_pool.getMaxThreads());
+                    /// Reset index time here
+                    assignIndexTime(moved_block.findByName(ProtonConsts::RESERVED_INDEX_TIME));
+
+                    merge_tree_sink->consume(Chunk(moved_block.getColumns(), moved_block.rows()));
+                    merge_tree_sink->onFinish();
+                    progressSequences(moved_seq);
+                },
+                /*wait_timeout_ms=*/{500});
+
+            if (!scheduled)
+                LOG_WARNING(logger, "No available threads in background commit pool with size={}, retry", part_commit_pool.getMaxThreads());
+        }
     }
 
     commitSN();
@@ -966,8 +1060,7 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
                 if (current_has_dynamic != incoming_has_dynamic)
                 {
                     chassert(start_sn >= 0 && end_sn >= start_sn);
-                    doCommit(
-                        std::move(block), std::make_pair(start_sn, end_sn), std::move(keys), missing_sequence_ranges, metadata);
+                    doCommit(std::move(block), std::make_pair(start_sn, end_sn), std::move(keys), missing_sequence_ranges, metadata);
                     block.clear();
                     keys = std::make_shared<IdempotentKeys>();
                     block.swap(rec->getBlock());
@@ -1058,6 +1151,7 @@ void StreamShardStore::commit(cluster::SchemaRecordPtrs records, SequenceRanges 
         {
             if (block)
             {
+                /// First commit what we have accumulated
                 chassert(start_sn >= 0 && rec->getSN() >= start_sn);
                 doCommit(std::move(block), std::make_pair(start_sn, end_sn), std::move(keys), std::move(missing_sequence_ranges), metadata);
             }
@@ -1173,12 +1267,8 @@ void StreamShardStore::initNativeLog()
     auto log_config = native_log.getConfig().log_config->clone();
     log_config->flush_interval_entries = static_cast<int32_t>(ssettings->logstore_flush_messages.value);
     log_config->flush_interval_ms = static_cast<int32_t>(ssettings->logstore_flush_ms.value);
-
-    if (ssettings->logstore_retention_bytes.value)
-        log_config->retention_size = ssettings->logstore_retention_bytes.value;
-
-    if (ssettings->logstore_retention_ms.value)
-        log_config->retention_ms = ssettings->logstore_retention_ms.value;
+    applyLogstoreRetentionSettingsToLogConfig(
+        ssettings->logstore_retention_bytes.value, ssettings->logstore_retention_ms.value, *log_config);
 
     log_config->inmemory = inmemory;
 
@@ -1282,6 +1372,63 @@ UInt64 StreamShardStore::getLogStoreDiskSize() const
 UInt64 StreamShardStore::getStorageSize() const
 {
     return getLogStoreDiskSize() + (storage ? storage->getStorageSize() : 0);
+}
+
+UInt64 StreamShardStore::getHistoricalStorageSizeForMetrics() const
+{
+    if (!has_remote_disk)
+        return storage ? storage->getStorageSize() : 0;
+
+    UInt64 cached;
+    Int64 last_ts;
+    {
+        std::scoped_lock cache_lock(storage_size_cache_mutex);
+        cached = cached_storage_size;
+        last_ts = last_storage_size_cached_ts;
+    }
+
+    /// Cold cache (last_ts == 0): on fresh boot, `now - 0 > ttl` may not fire.
+    if ((last_ts == 0 || MonotonicSeconds::now() - last_ts > metrics_cache_ttl_seconds)
+        && !storage_size_refresh_scheduled.test_and_set())
+        fetchAndCacheHistoricalStorageSizeAsync(last_ts);
+
+    return cached;
+}
+
+void StreamShardStore::fetchAndCacheHistoricalStorageSizeAsync(Int64 ts_expected) const
+{
+    auto self = shared_from_this();
+    auto scheduled = storage_stream.getContext()->getAdhocSchedulePool().trySchedule([self, ts_expected] {
+        SCOPE_EXIT_SAFE({ self->storage_size_refresh_scheduled.clear(); });
+        setThreadName("StrmSizeRefresh");
+
+        try
+        {
+            /// Skip if a competing refresh already advanced last_storage_size_cached_ts.
+            {
+                std::scoped_lock cache_lock(self->storage_size_cache_mutex);
+                if (self->last_storage_size_cached_ts != ts_expected)
+                    return;
+            }
+
+            auto size = self->storage ? self->storage->getStorageSize() : 0;
+
+            std::scoped_lock cache_lock(self->storage_size_cache_mutex);
+            if (self->last_storage_size_cached_ts == ts_expected)
+            {
+                self->cached_storage_size = size;
+                self->last_storage_size_cached_ts = MonotonicSeconds::now();
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(self->logger, "Failed to refresh stream shard storage size");
+        }
+    });
+
+    /// Schedule failed: clear flag so a future tick retries.
+    if (!scheduled)
+        storage_size_refresh_scheduled.clear();
 }
 
 UInt64 StreamShardStore::maxEntrySize() const

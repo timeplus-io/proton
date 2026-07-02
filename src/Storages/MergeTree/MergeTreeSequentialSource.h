@@ -18,7 +18,8 @@ Pipe createMergeTreeSequentialSource(
     bool read_with_direct_io,
     bool take_column_types_from_storage,
     bool quiet,
-    std::shared_ptr<std::atomic<size_t>> filtered_rows_count);
+    std::shared_ptr<std::atomic<size_t>> filtered_rows_count,
+    bool prefetch = false);
 
 class QueryPlan;
 

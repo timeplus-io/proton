@@ -65,31 +65,30 @@ namespace DB::Streaming
     return should_finalize;
 }
 
-BlocksList HybridAggregator::convertToBlocksWithoutKey(HybridAggregatedDataVariants & data_variants, bool final_) const
+BlocksList HybridAggregator::convertToBlocksWithoutKey(HybridAggregatedDataVariants & data_variants) const
 {
     if (params->tracking_updates_type == TrackingUpdatesType::UpdatesWithRetract)
-        return convertToBlocksWithoutKeyForRetracts(data_variants, final_);
+        return convertToBlocksWithoutKeyForRetracts(data_variants);
 
-    auto res_header = params->getHeader(input_header, final_);
-    return BlocksList{doConvertOnePlace(data_variants.without_key.get(), res_header, final_)};
+    return BlocksList{doConvertOnePlace(data_variants.without_key.get(), getHeader())};
 }
 
-BlocksList HybridAggregator::convertToBlocksWithoutKeyForRetracts(HybridAggregatedDataVariants & data_variants, bool final_) const
+BlocksList HybridAggregator::convertToBlocksWithoutKeyForRetracts(HybridAggregatedDataVariants & data_variants) const
 {
     assert(params->tracking_updates_type == TrackingUpdatesType::UpdatesWithRetract);
 
-    auto res_header = params->getHeader(input_header, final_);
+    auto res_header = getHeader();
     BlocksList blocks;
     if (data_variants.without_key_retracts)
     {
-        blocks.push_back(doConvertOnePlace(data_variants.without_key_retracts.get(), res_header, final_));
+        blocks.push_back(doConvertOnePlace(data_variants.without_key_retracts.get(), res_header));
         auto retract_delta_col = ColumnInt8::create(blocks.back().rows(), static_cast<Int8>(-1));
         auto delta_col_type = DataTypeFactory::instance().get(TypeIndex::Int8);
         blocks.back().insert(ColumnWithTypeAndName{std::move(retract_delta_col), std::move(delta_col_type), "_tp_delta"});
         data_variants.resetRetractWithoutKey();
     }
 
-    blocks.push_back(doConvertOnePlace(data_variants.without_key.get(), res_header, final_));
+    blocks.push_back(doConvertOnePlace(data_variants.without_key.get(), res_header));
     {
         auto delta_col = ColumnInt8::create(blocks.back().rows(), static_cast<Int8>(1));
         auto delta_col_type = DataTypeFactory::instance().get(TypeIndex::Int8);
@@ -99,28 +98,16 @@ BlocksList HybridAggregator::convertToBlocksWithoutKeyForRetracts(HybridAggregat
     return blocks;
 }
 
-Block HybridAggregator::doConvertOnePlace(AggregateDataPtr data, const Block & res_header, bool final_) const
+Block HybridAggregator::doConvertOnePlace(AggregateDataPtr data, const Block & res_header) const
 {
     size_t rows = 1;
-    auto && out_cols = prepareOutputBlockColumns(
-        res_header,
-        /*aggregates_pools=*/{}, /// FIXME arenas
-        final_,
-        rows);
+    auto && out_cols = prepareOutputBlockColumns(res_header, /*aggregates_pool=*/nullptr, rows);
 
-    auto && [key_columns, raw_key_columns, aggregate_columns, final_aggregate_columns, aggregate_columns_data] = out_cols;
+    auto && [key_columns, raw_key_columns, final_aggregate_columns] = out_cols;
 
-    if (!final_)
-    {
-        for (size_t i = 0; i < params->aggregates_size; ++i)
-            aggregate_columns_data[i]->push_back(data + offsets_of_aggregate_states[i]);
-    }
-    else
-    {
-        insertAggregatesIntoColumns(data, final_aggregate_columns, /*arena=*/nullptr);
-    }
+    insertAggregatesIntoColumns(data, final_aggregate_columns, /*arena=*/nullptr);
 
-    return finalizeBlock(res_header, std::move(out_cols), final_, rows);
+    return finalizeBlock(res_header, std::move(out_cols), rows);
 }
 
 }

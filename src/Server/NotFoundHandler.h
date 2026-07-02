@@ -9,7 +9,7 @@ namespace DB
 class NotFoundHandler : public HTTPRequestHandler
 {
 public:
-    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
+    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response, const ProfileEvents::Event & write_event) override;
 };
 
 }

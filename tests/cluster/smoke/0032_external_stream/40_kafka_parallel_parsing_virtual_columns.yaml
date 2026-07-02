@@ -1,0 +1,125 @@
+tags:
+  - parallel parsing
+  - virtual columns
+
+description: |
+  Test kafka external stream with parallel parsing and virtual columns.
+  Verify that virtual columns like _tp_message_key work correctly
+  with parallel parsing enabled.
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test_parallel_vcol_40
+
+  - type: kafka
+    name: create
+    topic: test_parallel_vcol_40
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists ext_parallel_vcol_40;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ext_parallel_vcol_40(
+        id int32,
+        value string,
+        _tp_message_key string
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'test_parallel_vcol_40',
+      data_format = 'JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: parallel-vcol-40-1
+    query: select id, value, _tp_message_key from ext_parallel_vcol_40 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=4, record_consume_batch_count=2;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  - type: stream
+    name: parallel-vcol-40-2
+    query: select _tp_message_key from ext_parallel_vcol_40 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=1, record_consume_batch_count=2;
+    schema:
+      - name: _tp_message_key
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ext_parallel_vcol_40(id, value, _tp_message_key) values (0, 'hello world', 'a message key')
+
+  - type: kafka
+    name: produce
+    topic: test_parallel_vcol_40
+    messages:
+      - id: 1
+        value: alice
+      - id: 2
+        value: bob
+      - id: 3
+        value: charlie
+
+  - type: query
+    sql: insert into ext_parallel_vcol_40(value, id, _tp_message_key) values ('one', 1, 'one')('one', 2, 'one')('one', 3, 'one')('one', 4, 'one')('one', 5, 'one')
+
+  - type: query
+    sql: insert into ext_parallel_vcol_40(value, id, _tp_message_key) values ('six', 6, 'one')('seven', 7, 'one')('eight', 8, 'one')('nine', 9, 'one')('ten', 10, 'one')
+
+  - type: check
+    target_name: parallel-vcol-40-1
+    expected_result:
+      - [0, 'hello world', 'a message key']
+      - [1, alice, '']
+      - [2, bob, '']
+      - [3, charlie, '']
+      - [1, one, one]
+      - [2, one, one]
+      - [3, one, one]
+      - [4, one, one]
+      - [5, one, one]
+      - [6, six, one]
+      - [7, seven, one]
+      - [8, eight, one]
+      - [9, nine, one]
+      - [10, ten, one]
+
+  - type: check
+    target_name: parallel-vcol-40-2
+    expected_result:
+      - ['a message key']
+      - ['']
+      - ['']
+      - ['']
+      - [one]
+      - [one]
+      - [one]
+      - [one]
+      - [one]
+      - [one]
+      - [one]
+      - [one]
+      - [one]
+      - [one]

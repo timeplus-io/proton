@@ -40,6 +40,11 @@
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Common/ActionLock.h>
+#include <Common/DNSResolver.h>
+#include <Common/HostResolvePool.h>
+#include <Common/ShellCommand.h>
+#include <Common/SymbolIndex.h>
 #include <Common/ThreadFuzzer.h>
 #include <csignal>
 
@@ -52,6 +57,10 @@
 
 #if USE_AWS_S3
 #include <IO/S3/Client.h>
+#endif
+
+#if USE_JEMALLOC
+#include <Common/Jemalloc.h>
 #endif
 
 #include "config.h"
@@ -272,8 +281,15 @@ BlockIO InterpreterSystemQuery::execute()
         {
             getContext()->checkAccess(AccessType::SYSTEM_DROP_DNS_CACHE);
             DNSResolver::instance().dropCache();
+            HostResolversPool::instance().dropCache();
             /// Reinitialize clusters to update their resolved_addresses
             /// system_context->reloadClusterConfig();
+            break;
+        }
+        case Type::DROP_CONNECTIONS_CACHE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_DROP_CONNECTIONS_CACHE);
+            HTTPConnectionPools::instance().dropCache();
             break;
         }
         case Type::DROP_MARK_CACHE:
@@ -436,16 +452,6 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
             system_context->reloadConfig();
             break;
-        case Type::RELOAD_SYMBOLS:
-        {
-#if defined(__ELF__) && !defined(OS_FREEBSD)
-            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_SYMBOLS);
-            SymbolIndex::reload();
-            break;
-#else
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "SYSTEM RELOAD SYMBOLS is not supported on current platform");
-#endif
-        }
         case Type::STOP_MERGES:
             startStopAction(ActionLocks::PartsMerge, false);
             break;
@@ -592,6 +598,33 @@ BlockIO InterpreterSystemQuery::execute()
             return executeListPythonPackages(query);
         }
         /// proton: ends
+
+#if USE_JEMALLOC
+        case Type::JEMALLOC_PURGE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_JEMALLOC);
+            executeJemallocControl(query);
+            break;
+        }
+        case Type::JEMALLOC_ENABLE_PROFILE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_JEMALLOC);
+            executeJemallocControl(query);
+            break;
+        }
+        case Type::JEMALLOC_DISABLE_PROFILE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_JEMALLOC);
+            executeJemallocControl(query);
+            break;
+        }
+        case Type::JEMALLOC_FLUSH_PROFILE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_JEMALLOC);
+            executeJemallocControl(query);
+            break;
+        }
+#endif
         default:
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown type of SYSTEM query");
     }
@@ -631,7 +664,8 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_SHUTDOWN);
             break;
         }
-        case Type::DROP_DNS_CACHE: [[fallthrough]];
+        case Type::DROP_DNS_CACHE:
+        case Type::DROP_CONNECTIONS_CACHE:
         case Type::DROP_MARK_CACHE: [[fallthrough]];
         case Type::DROP_MMAP_CACHE: [[fallthrough]];
 #if USE_EMBEDDED_COMPILER
@@ -672,11 +706,6 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::RELOAD_CONFIG:
         {
             required_access.emplace_back(AccessType::SYSTEM_RELOAD_CONFIG);
-            break;
-        }
-        case Type::RELOAD_SYMBOLS:
-        {
-            required_access.emplace_back(AccessType::SYSTEM_RELOAD_SYMBOLS);
             break;
         }
         case Type::STOP_MERGES: [[fallthrough]];
@@ -824,6 +853,16 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             break;
         }
         /// proton : ends
+#if USE_JEMALLOC
+        case Type::JEMALLOC_PURGE:
+        case Type::JEMALLOC_ENABLE_PROFILE:
+        case Type::JEMALLOC_DISABLE_PROFILE:
+        case Type::JEMALLOC_FLUSH_PROFILE:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_JEMALLOC);
+            break;
+        }
+#endif
         case Type::END: break;
     }
     return required_access;

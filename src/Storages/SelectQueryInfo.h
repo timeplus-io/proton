@@ -257,12 +257,11 @@ struct SelectQueryInfo
     bool is_projection_query = false;
     bool merge_tree_empty_result = false;
     bool settings_limit_offset_done = false;
+    bool is_parameterized_view = false;
     bool optimize_trivial_count = false;
 
     Block minmax_count_projection_block;
     MergeTreeDataSelectAnalysisResultPtr merge_tree_select_result_ptr;
-
-    bool is_parameterized_view = false;
 
     // If limit is not 0, that means it's a trivial limit query.
     UInt64 limit = 0;

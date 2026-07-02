@@ -1,6 +1,7 @@
 #include <Cluster/Protocol/ListStoragePoliciesResponseData.h>
 
 #include <IO/WriteHelpers.h>
+#include <fmt/ranges.h>
 
 namespace cluster::protocol
 {

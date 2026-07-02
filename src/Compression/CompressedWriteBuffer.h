@@ -20,8 +20,6 @@ public:
         bool use_adaptive_buffer_size_ = false,
         size_t adaptive_buffer_initial_size = DBMS_DEFAULT_INITIAL_ADAPTIVE_BUFFER_SIZE);
 
-    ~CompressedWriteBuffer() override;
-
     /// The amount of compressed data
     size_t getCompressedBytes()
     {
@@ -48,6 +46,8 @@ private:
     /// That is made in order to handle the use case when several CompressedWriteBuffers write to the one file.
     /// Usually the CompressedWriteBuffer does not own the out buffer.
     void finalizeImpl() override;
+    /// cancel call cancels the out buffer.
+    void cancelImpl() noexcept override;
 
     WriteBuffer & out;
     CompressionCodecPtr codec;

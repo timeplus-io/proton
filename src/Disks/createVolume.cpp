@@ -35,7 +35,7 @@ VolumePtr createVolumeFromConfig(
     String raid_type = config.getString(config_prefix + ".raid_type", "JBOD");
     if (raid_type == "JBOD")
     {
-        return std::make_shared<VolumeJBOD>(name, config, config_prefix, disk_selector);
+        return std::make_shared<VolumeJBOD>(std::move(name), config, config_prefix, disk_selector);
     }
     throw Exception(ErrorCodes::UNKNOWN_RAID_TYPE, "Unknown RAID type '{}'", raid_type);
 }

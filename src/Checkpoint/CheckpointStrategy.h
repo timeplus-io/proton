@@ -9,7 +9,8 @@ struct CheckpointStrategy
 {
     bool async : 1 {true};
     bool incremental : 1 {true};
-    uint8_t unused : 6;
+    bool offsets_only : 1 {false};
+    uint8_t unused : 5;
 };
 static_assert(sizeof(CheckpointStrategy) == 1);
 }

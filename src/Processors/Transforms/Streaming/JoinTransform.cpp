@@ -3,6 +3,7 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Interpreters/Streaming/HashJoin/joinKind.h>
 #include <Interpreters/TableJoin.h>
+#include <Common/logger_useful.h>
 #include <base/ClockUtils.h>
 #include <Common/logger_useful.h>
 
@@ -31,7 +32,7 @@ JoinTransform::JoinTransform(
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , logger(getLogger("StreamingJoinTransform"))
     , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
-    , last_log_ts(MonotonicSeconds::now())
+    , last_log_ts(MonotonicMilliseconds::now())
 {
     assert(join);
 
@@ -271,7 +272,7 @@ void JoinTransform::work()
         output_chunks.back().setCheckpointContext(std::move(requested_ckpt));
     }
 
-    if (auto now = MonotonicSeconds::now(); now - last_log_ts > 60)
+    if (auto now = MonotonicMilliseconds::now(); now - last_log_ts >= log_metrics_interval_ms)
     {
         LOG_INFO(logger, "{}, watermark={}", join->metricsString(), watermark);
         last_log_ts = now;

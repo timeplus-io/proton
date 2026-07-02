@@ -8,7 +8,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 $CLICKHOUSE_CLIENT -q 'DROP VIEW IF EXISTS 99021_mv;'
 $CLICKHOUSE_CLIENT -q 'DROP STREAM IF EXISTS 99021_v;'
 
-$CLICKHOUSE_CLIENT -q 'CREATE STREAM 99021_v(id int) settings shards=3;'
+$CLICKHOUSE_CLIENT -q 'CREATE STREAM 99021_v(id int) settings shards=3, old_parts_lifetime=0;'
 $CLICKHOUSE_CLIENT -q 'CREATE MATERIALIZED VIEW 99021_mv AS select * from 99021_v;'
 
 sleep 1

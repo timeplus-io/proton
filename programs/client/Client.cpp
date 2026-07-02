@@ -275,7 +275,7 @@ bool Client::executeMultiQuery(const String & all_queries_text)
                     server_exception.reset();
                     have_error = false;
 
-                    if (!connection->checkConnected())
+                    if (!connection->checkConnected(connection_parameters.timeouts))
                         connect();
                 }
 
@@ -418,6 +418,11 @@ try
 {
     UseSSL use_ssl;
     MainThreadStatus::getInstance();
+
+    /// proton: starts.
+    StackTrace::setShowAddresses(config().getBool("show_addresses_in_stack_traces", true));
+    /// proton: ends.
+
     setupSignalHandler();
 
     std::cout << std::fixed << std::setprecision(3);

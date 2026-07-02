@@ -15,7 +15,7 @@ namespace Kafka
 
 class Connection final : public std::enable_shared_from_this<Connection>
 {
-    friend Consumer::Version Consumer::recreate(Consumer::Version);
+    friend bool Consumer::recreate(UInt64 cooldown_ms);
 
 public:
 #if USE_AWS_MSK_IAM

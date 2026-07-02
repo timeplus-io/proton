@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Core/Block.h>
 #include <Processors/Formats/Impl/JSONEachRowRowInputFormat.h>
 #include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
@@ -11,6 +10,7 @@
 namespace DB
 {
 
+class Block;
 class ReadBuffer;
 
 
@@ -29,6 +29,7 @@ private:
     void readPrefix() override;
     void readSuffix() override {}
     void readRowStart(MutableColumns & columns) override;
+    void skipRowStart() override;
     bool checkEndOfData(bool is_first_row) override;
 
     std::optional<size_t> field_index_for_object_name;

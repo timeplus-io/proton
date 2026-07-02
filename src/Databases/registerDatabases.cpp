@@ -32,7 +32,7 @@ void registerDatabaseSQLite(DatabaseFactory & factory);
 void registerDatabaseHDFS(DatabaseFactory & factory);
 #endif
 
-#if USE_AVRO
+#if USE_AVRO && USE_AWS_S3
 void registerDatabaseIceberg(DatabaseFactory & factory);
 #endif
 
@@ -63,7 +63,7 @@ void registerDatabases()
     registerDatabaseHDFS(factory);
 #endif
 
-#if USE_AVRO
+#if USE_AVRO && USE_AWS_S3
     registerDatabaseIceberg(factory);
 #endif
 }

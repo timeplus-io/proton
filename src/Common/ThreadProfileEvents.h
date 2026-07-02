@@ -11,7 +11,6 @@
 #include <boost/noncopyable.hpp>
 
 
-
 #if defined(OS_LINUX)
 #include <linux/taskstats.h>
 #else

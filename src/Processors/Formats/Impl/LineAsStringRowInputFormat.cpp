@@ -1,7 +1,8 @@
 #include <Processors/Formats/Impl/LineAsStringRowInputFormat.h>
-#include <Formats/JSONUtils.h>
 #include <base/find_symbols.h>
 #include <IO/ReadHelpers.h>
+#include <Formats/FormatFactory.h>
+#include <Formats/JSONUtils.h>
 
 namespace DB
 {
@@ -57,8 +58,19 @@ bool LineAsStringRowInputFormat::readRow(MutableColumns & columns, RowReadExtens
         return false;
 
     readLineObject(*columns[0]);
-
     return true;
+}
+
+size_t LineAsStringRowInputFormat::countRows(size_t max_block_size)
+{
+    size_t num_rows = 0;
+    while (!in->eof() && num_rows < max_block_size)
+    {
+        skipToNextLineOrEOF(*in);
+        ++num_rows;
+    }
+
+    return num_rows;
 }
 
 void registerInputFormatLineAsString(FormatFactory & factory)

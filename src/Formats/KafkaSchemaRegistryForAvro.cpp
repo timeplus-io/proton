@@ -1,9 +1,18 @@
 #include <Formats/KafkaSchemaRegistryForAvro.h>
 
+#include <IO/HTTPCommon.h>
+#include <Poco/Net/HTTPResponse.h>
+
 #if USE_AVRO
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int INCORRECT_DATA;
+extern const int RESOURCE_NOT_FOUND;
+}
 
 namespace
 {
@@ -92,6 +101,13 @@ std::pair<UInt32, avro::ValidSchema> KafkaSchemaRegistryForAvro::fetchAndCompile
         auto schema = registry.fetchLatestSchemaForSubject(subject_name);
         auto valid_schema = avro::compileJsonSchemaFromString(schema.second);
         return {schema.first, std::move(valid_schema)};
+    }
+    catch (const HTTPException & e)
+    {
+        if (e.getHTTPStatus() == Poco::Net::HTTPResponse::HTTP_NOT_FOUND)
+            throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "Subject '{}' is not found in Kafka schema registry", subject_name);
+
+        throw;
     }
     catch (const avro::Exception & e)
     {

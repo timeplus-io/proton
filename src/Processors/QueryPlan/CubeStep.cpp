@@ -18,7 +18,7 @@ static ITransformingStep::Traits getTraits()
             .preserves_number_of_streams = false,
             .preserves_sorting = false,
             /// proton: starts.
-            .preserves_substream = false,
+            .preserves_shuffling = false,
             /// proton: ends.
         },
         {

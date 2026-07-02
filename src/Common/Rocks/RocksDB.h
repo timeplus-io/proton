@@ -102,7 +102,7 @@ private:
         else
         {
             auto begin_offset = internal_buf.size();
-            WriteBufferFromVector buffer(internal_buf, AppendModeTag{});
+            WriteBufferFromVector<std::string> buffer(internal_buf, AppendModeTag{});
             writeBinary(x, buffer);
             buffer.finalize();
             chassert(buffer.count() == internal_buf.size() - begin_offset);

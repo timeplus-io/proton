@@ -16,6 +16,7 @@ struct JoinFeatures
     static constexpr bool is_all_join = STRICTNESS == Strictness::All;
     static constexpr bool is_asof_join = STRICTNESS == Strictness::Asof;
     static constexpr bool is_range_join = STRICTNESS == Strictness::Range;
+    static constexpr bool is_anti_join = STRICTNESS == Strictness::Anti;
 
     static constexpr bool left = KIND == Kind::Left;
     static constexpr bool right = KIND == Kind::Right;
@@ -23,7 +24,7 @@ struct JoinFeatures
     static constexpr bool full = KIND == Kind::Full;
 
     static constexpr bool need_replication = is_all_join || (is_latest_join && right) || is_range_join || is_multi_join;
-    static constexpr bool need_filter = !need_replication && (inner || right);
+    static constexpr bool need_filter = !need_replication && (inner || right || (is_anti_join && left));
     static constexpr bool add_missing = left || full;
 
     static constexpr bool need_flags = HashMapGetter<KIND, STRICTNESS>::flagged;

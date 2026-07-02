@@ -6,6 +6,7 @@
 #include <Bootstrap/Globals.h>
 #include <Cluster/KafkaLog/KafkaWALPool.h>
 #include <Cluster/NativeLog/NativeLog.h>
+#include <Columns/ColumnsNumber.h>
 #include <Interpreters/MetadataHelper.h>
 #include <Interpreters/Streaming/ASTToJSONUtils.h>
 #include <Interpreters/Streaming/DDLHelper.h>
@@ -76,6 +77,7 @@ TableRestRouterHandler::Table::Table(const String & node_identity_, const String
         {"database", &database},
         {"name", &name},
         {"engine", &engine},
+        {"is_input", &is_input},
         {"mode", &mode},
         {"uuid", &uuid},
         {"dependencies_table", &dependencies_table},
@@ -112,6 +114,14 @@ TableRestRouterHandler::Table::Table(const String & node_identity_, const String
                 }
                 else
                     assert(false && "Invalid type of uuid column.");
+            }
+            else if (col.name == "is_input")
+            {
+                auto type_id = col.type->getTypeId();
+                if (type_id == TypeIndex::UInt8)
+                    *static_cast<UInt8 *>(it->second) = static_cast<const ColumnUInt8 *>(col.column.get())->getElement(row);
+                else
+                    *static_cast<UInt8 *>(it->second) = 0;
             }
             else
             {

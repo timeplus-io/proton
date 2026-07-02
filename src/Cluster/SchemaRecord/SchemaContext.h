@@ -52,6 +52,11 @@ struct SchemaContext
     /// Check if on storage schema version is compatible with run time query schema version
     bool serializableCompatible(uint16_t on_storage_schema_version) const;
 
+    const DB::ColumnsDescription & getColumnsDescription(uint16_t schema_version) const
+    {
+        return schema_provider->getColumnsDescription(schema_version);
+    }
+
     void setAvoidFillDefaultsForMissingColumns(bool avoid_fill_defaults_for_missing_columns_) const noexcept
     {
         avoid_fill_defaults_for_missing_columns = avoid_fill_defaults_for_missing_columns_;

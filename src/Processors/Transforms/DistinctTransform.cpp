@@ -117,13 +117,13 @@ void DistinctTransform::transform(Chunk & chunk)
 }
 
 /// proton: starts.
-void DistinctTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void DistinctTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) { data.serialize(wb); });
 }
 
-void DistinctTransform::recover(CheckpointContextPtr ckpt_ctx)
+void DistinctTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) { data.deserialize(rb); });
 }

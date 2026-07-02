@@ -168,26 +168,22 @@ if (NOT ENABLE_MATH_FUNCS)
 endif()
 
 if (NOT ENABLE_GEO_FUNCS)
-    list(REMOVE_ITEM clickhouse_functions_sources
-            greatCircleDistance.cpp
-            pointInEllipses.cpp
-            pointInPolygon.cpp
-            polygonsIntersection.cpp
-            polygonsUnion.cpp
-            polygonArea.cpp
-            polygonConvexHull.cpp
-            polygonsSymDifference.cpp
-            polygonsEquals.cpp
-            polygonsDistance.cpp
-            polygonsWithin.cpp
-            polygonPerimeter.cpp
-            geohashEncode.cpp
-            geohashDecode.cpp
-            geohashesInBox.cpp
-            wkt.cpp
-            svg.cpp
-            )
+    # add_headers_and_sources globs with pattern `./*.cpp`; entries look like
+    # `<dir>/./<file>.cpp`. Match on the trailing filename via FILTER.
+    list(FILTER clickhouse_functions_sources EXCLUDE REGEX
+            "/(greatCircleDistance|pointInEllipses|pointInPolygon|polygonsIntersection|polygonsUnion|polygonArea|polygonConvexHull|polygonsSymDifference|polygonsEquals|polygonsDistance|polygonsWithin|polygonPerimeter|geohashEncode|geohashDecode|geohashesInBox|wkt|svg)\\.cpp$")
     message(STATUS "Geo functions are disabled")
+endif()
+
+if (NOT ENABLE_VECTOR_DISTANCE_FUNCS)
+    # vectorFunctions.cpp stays compiled: it registers tuple/interval helpers
+    # (tuple_plus/minus/multiply/divide/negate, tuple_*_by_number,
+    # add/subtract_tuple_of_intervals, add/subtract_interval, dot_product) that
+    # FunctionBinaryArithmetic dispatches to for `(tuple) +/-/* (tuple|number)`
+    # and date+interval expressions. Only the norm/distance/normalize/cosine
+    # registrations live in vectorDistanceFunctions.cpp and are gated here.
+    list(FILTER clickhouse_functions_sources EXCLUDE REGEX "/vectorDistanceFunctions\\.cpp$")
+    message(STATUS "Vector distance functions are disabled")
 endif()
 
 if (NOT ENABLE_H3_GEO_FUNCS)

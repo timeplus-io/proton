@@ -238,6 +238,11 @@ void BackgroundSchedulePool::threadFunction()
 
     while (!shutdown)
     {
+        /// Flush any untracked allocations made before the main loop starts waiting/executing tasks.
+        /// This avoids long-term drift in global memory tracking for long-lived background threads.
+        if (current_thread)
+            current_thread->flushUntrackedMemory();
+
         /// We have to wait with timeout to prevent very rare deadlock, caused by the following race condition:
         /// 1. Background thread N: threadFunction(): checks for shutdown (it's false)
         /// 2. Main thread: ~BackgroundSchedulePool(): sets shutdown to true, calls queue.wakeUpAll(), it triggers
@@ -251,6 +256,9 @@ void BackgroundSchedulePool::threadFunction()
         {
             TaskNotification & task_notification = static_cast<TaskNotification &>(*notification);
             task_notification.execute();
+
+            if (current_thread)
+                current_thread->flushUntrackedMemory();
         }
     }
 }

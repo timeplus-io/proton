@@ -25,7 +25,7 @@ namespace JSONUtils
 {
     template <const char opening_bracket, const char closing_bracket>
     static std::pair<bool, size_t>
-    fileSegmentationEngineJSONEachRowImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, size_t min_rows)
+    fileSegmentationEngineJSONEachRowImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_bytes, size_t min_rows, size_t max_rows)
     {
         skipWhitespaceIfAny(in);
 
@@ -33,16 +33,19 @@ namespace JSONUtils
         size_t balance = 0;
         bool quotes = false;
         size_t number_of_rows = 0;
+        bool need_more_data = true;
 
-        while (loadAtPosition(in, memory, pos)
-               && (balance || memory.size() + static_cast<size_t>(pos - in.position()) < min_chunk_size || number_of_rows < min_rows))
+        if (max_rows && (max_rows < min_rows))
+            max_rows = min_rows;
+
+        while (loadAtPosition(in, memory, pos) && need_more_data)
         {
             const auto current_object_size = memory.size() + static_cast<size_t>(pos - in.position());
-            if (min_chunk_size != 0 && current_object_size > 10 * min_chunk_size)
-                throw ParsingException(ErrorCodes::INCORRECT_DATA,
-                    "Size of JSON object is extremely large. Expected not greater than {} bytes, but current is {} bytes per row. "
+            if (min_bytes != 0 && current_object_size > 10 * min_bytes)
+                throw Exception(ErrorCodes::INCORRECT_DATA,
+                    "Size of JSON object at position {} is extremely large. Expected not greater than {} bytes, but current is {} bytes per row. "
                     "Increase the value setting 'min_chunk_bytes_for_parallel_parsing' or check your data manually, "
-                    "most likely JSON is malformed", min_chunk_size, current_object_size);
+                    "most likely JSON is malformed", in.count(), min_bytes, current_object_size);
 
             if (quotes)
             {
@@ -50,7 +53,7 @@ namespace JSONUtils
 
                 if (pos > in.buffer().end())
                     throw Exception(ErrorCodes::LOGICAL_ERROR, "Position in buffer is out of bounds. There must be a bug.");
-                else if (pos == in.buffer().end())
+                if (pos == in.buffer().end())
                     continue;
 
                 if (*pos == '\\')
@@ -71,10 +74,10 @@ namespace JSONUtils
 
                 if (pos > in.buffer().end())
                     throw Exception(ErrorCodes::LOGICAL_ERROR, "Position in buffer is out of bounds. There must be a bug.");
-                else if (pos == in.buffer().end())
+                if (pos == in.buffer().end())
                     continue;
 
-                else if (*pos == opening_bracket)
+                if (*pos == opening_bracket)
                 {
                     ++balance;
                     ++pos;
@@ -96,8 +99,13 @@ namespace JSONUtils
                     ++pos;
                 }
 
-                if (balance == 0)
+                if (!quotes && balance == 0)
+                {
                     ++number_of_rows;
+                    if ((number_of_rows >= min_rows)
+                        && ((memory.size() + static_cast<size_t>(pos - in.position()) >= min_bytes) || (number_of_rows == max_rows)))
+                        need_more_data = false;
+                }
             }
         }
 
@@ -105,15 +113,96 @@ namespace JSONUtils
         return {loadAtPosition(in, memory, pos), number_of_rows};
     }
 
-    std::pair<bool, size_t> fileSegmentationEngineJSONEachRow(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size)
+    std::pair<bool, size_t> fileSegmentationEngineJSONEachRow(
+        ReadBuffer & in, DB::Memory<> & memory, size_t min_bytes, size_t max_rows)
     {
-        return fileSegmentationEngineJSONEachRowImpl<'{', '}'>(in, memory, min_chunk_size, 1);
+        return fileSegmentationEngineJSONEachRowImpl<'{', '}'>(in, memory, min_bytes, 1, max_rows);
     }
 
-    std::pair<bool, size_t>
-    fileSegmentationEngineJSONCompactEachRow(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, size_t min_rows)
+    std::pair<bool, size_t> fileSegmentationEngineJSONCompactEachRow(
+        ReadBuffer & in, DB::Memory<> & memory, size_t min_bytes, size_t min_rows, size_t max_rows)
     {
-        return fileSegmentationEngineJSONEachRowImpl<'[', ']'>(in, memory, min_chunk_size, min_rows);
+        return fileSegmentationEngineJSONEachRowImpl<'[', ']'>(in, memory, min_bytes, min_rows, max_rows);
+    }
+
+    template <const char opening_bracket, const char closing_bracket>
+    void skipRowForJSONEachRowImpl(ReadBuffer & in)
+    {
+        size_t balance = 0;
+        bool quotes = false;
+        while (!in.eof())
+        {
+            if (quotes)
+            {
+                auto * pos = find_first_symbols<'\\', '"'>(in.position(), in.buffer().end());
+                in.position() = pos;
+
+                if (in.position() > in.buffer().end())
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Position in buffer is out of bounds. There must be a bug.");
+                if (in.position() == in.buffer().end())
+                    continue;
+
+                if (*in.position() == '\\')
+                {
+                    ++in.position();
+                    if (!in.eof())
+                        ++in.position();
+                }
+                else if (*in.position() == '"')
+                {
+                    ++in.position();
+                    quotes = false;
+                }
+            }
+            else
+            {
+                auto * pos = find_first_symbols<opening_bracket, closing_bracket, '\\', '"'>(in.position(), in.buffer().end());
+                in.position() = pos;
+
+                if (in.position() > in.buffer().end())
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Position in buffer is out of bounds. There must be a bug.");
+                if (in.position() == in.buffer().end())
+                    continue;
+
+                if (*in.position() == opening_bracket)
+                {
+                    ++balance;
+                    ++in.position();
+                }
+                else if (*in.position() == closing_bracket)
+                {
+                    --balance;
+                    ++in.position();
+                }
+                else if (*in.position() == '\\')
+                {
+                    ++in.position();
+                    if (!in.eof())
+                        ++in.position();
+                }
+                else if (*in.position() == '"')
+                {
+                    quotes = true;
+                    ++in.position();
+                }
+
+                if (balance == 0)
+                    return;
+            }
+        }
+
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Unexpected eof");
+
+    }
+
+    void skipRowForJSONEachRow(ReadBuffer & in)
+    {
+        skipRowForJSONEachRowImpl<'{', '}'>(in);
+    }
+
+    void skipRowForJSONCompactEachRow(ReadBuffer & in)
+    {
+        skipRowForJSONEachRowImpl<'[', ']'>(in);
     }
 
     NamesAndTypesList readRowAndGetNamesAndDataTypesForJSONEachRow(ReadBuffer & in, const FormatSettings & settings, JSONInferenceInfo * inference_info)
@@ -416,7 +505,6 @@ namespace JSONUtils
             writeTitle("rows_before_limit_at_least", out, 1, " ");
             writeIntText(rows_before_limit, out);
         }
-
         if (write_statistics)
         {
             writeFieldDelimiter(out, 2);
@@ -604,10 +692,15 @@ namespace JSONUtils
         auto names_and_types = JSONUtils::readMetadata(in, settings);
         for (const auto & [name, type] : names_and_types)
         {
+            if (!header.has(name))
+                continue;
+
             auto header_type = header.getByName(name).type;
-            if (header.has(name) && !type->equals(*header_type))
+            if (!type->equals(*header_type))
                 throw Exception(
-                    ErrorCodes::INCORRECT_DATA, "Type {} of column '{}' from metadata is not the same as type in header {}", type->getName(), name, header_type->getName());
+                    ErrorCodes::INCORRECT_DATA,
+                    "Type {} of column '{}' from metadata is not the same as type in header {}",
+                    type->getName(), name, header_type->getName());
         }
         return names_and_types;
     }

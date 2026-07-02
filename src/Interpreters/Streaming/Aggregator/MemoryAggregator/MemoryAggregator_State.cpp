@@ -1,5 +1,7 @@
 #include <Interpreters/Streaming/Aggregator/MemoryAggregator/MemoryAggregator.h>
 
+#include <Common/logger_useful.h>
+
 namespace DB::Streaming
 {
 
@@ -15,9 +17,9 @@ void NO_INLINE MemoryAggregator::destroyImpl(Table & table) const
     });
 }
 
-void MemoryAggregator::destroyAggregateStates(AggregateDataPtr & place) const
+void MemoryAggregator::destroyAggregateStates(AggregateDataPtr & place, bool skip_state_func) const
 {
-    doDestroyAggregateStates(place);
+    doDestroyAggregateStates(place, skip_state_func);
     place = nullptr;
 }
 
@@ -29,7 +31,8 @@ void MemoryAggregator::serializeAggregateStates(const AggregateDataPtr & place, 
         aggregate_functions[i]->serialize(place + offsets_of_aggregate_states[i], wb);
 }
 
-void MemoryAggregator::deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer & rb, Arena * arena, std::optional<size_t> old_aggregates_size) const
+void MemoryAggregator::deserializeAggregateStates(
+    AggregateDataPtr & place, ReadBuffer & rb, Arena * arena, std::optional<size_t> old_aggregates_size) const
 {
     chassert(place);
 

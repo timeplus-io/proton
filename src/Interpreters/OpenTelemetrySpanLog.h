@@ -18,6 +18,7 @@ struct OpenTelemetrySpanLogElement : public OpenTelemetry::Span
     static NamesAndTypesList getNamesAndTypes();
     static NamesAndAliases getNamesAndAliases();
     void appendToBlock(MutableColumns & columns) const;
+    static const char * getCustomColumnList() { return nullptr; }
 };
 
 // OpenTelemetry standartizes some Log data as well, so it's not just

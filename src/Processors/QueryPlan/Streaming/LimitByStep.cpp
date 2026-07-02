@@ -18,7 +18,7 @@ static ITransformingStep::Traits getTraits()
             .returns_single_stream = true,
             .preserves_number_of_streams = false,
             .preserves_sorting = true,
-            .preserves_substream = true,
+            .preserves_shuffling = true,
         },
         {
             .preserves_number_of_rows = false,

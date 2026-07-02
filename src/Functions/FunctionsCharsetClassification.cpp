@@ -1,4 +1,7 @@
 #include <Common/FrequencyHolder.h>
+
+#if USE_NLP
+
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsTextClassification.h>
 
@@ -150,3 +153,5 @@ REGISTER_FUNCTION(DetectCharset)
 }
 
 }
+
+#endif

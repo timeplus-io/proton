@@ -351,6 +351,7 @@ try
     /// 'resetParser' doesn't work for parallel parsing.
     key.settings.set("input_format_parallel_parsing", false);
     insert_context->makeQueryContext();
+
     insert_context->setSettings(key.settings);
 
     /// Set initial_query_id, because it's used in InterpreterInsertQuery for table lock.

@@ -21,6 +21,7 @@
 #include <QueryPipeline/Pipe.h>
 #include <Storages/Distributed/DistributedSettings.h>
 #include <Storages/SelectQueryInfo.h>
+#include <fmt/ranges.h>
 
 #include <ranges>
 
@@ -92,7 +93,7 @@ ContextMutablePtr updateSettingsAndClientInfoForCluster(
 
             if (log)
                 LOG_TRACE(
-                    log, "force_optimize_skip_unused_shards_nesting is now {}", new_settings.force_optimize_skip_unused_shards_nesting);
+                    log, "force_optimize_skip_unused_shards_nesting is now {}", new_settings.force_optimize_skip_unused_shards_nesting.value);
         }
     }
 
@@ -112,7 +113,7 @@ ContextMutablePtr updateSettingsAndClientInfoForCluster(
             new_settings.optimize_skip_unused_shards_nesting.changed = true;
 
             if (log)
-                LOG_TRACE(log, "optimize_skip_unused_shards_nesting is now {}", new_settings.optimize_skip_unused_shards_nesting);
+                LOG_TRACE(log, "optimize_skip_unused_shards_nesting is now {}", new_settings.optimize_skip_unused_shards_nesting.value);
         }
     }
 

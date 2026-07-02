@@ -4,6 +4,9 @@
 #include <Cluster/MetaStore/MetaStore.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+
+#include <Core/Names.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -12,6 +15,8 @@
 #include <Storages/ExternalTable/StorageExternalTable.h>
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/Stream/StorageStream.h>
+#include <Common/Exception.h>
+#include <Common/ProtonCommon.h>
 
 namespace DB
 {
@@ -173,7 +178,15 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
     if (ast_create_query.isMaterializedView())
     {
         if (metadata.settings_changes)
+        {
             ast_create_query.set(ast_create_query.storage_settings, metadata.settings_changes);
+
+            /// If there are only read-only settings changes, then no need to display them additionally (e.g., index_granularity)
+            if (std::ranges::all_of(ast_create_query.storage_settings->changes, [](const auto & change) {
+                    return StreamSettings::isReadonlySetting(change.name);
+                }))
+                ast_create_query.reset(ast_create_query.storage_settings);
+        }
 
         if (!ast_create_query.storage)
         {
@@ -211,7 +224,59 @@ void updateMetadataByCreateQuery(
         auto select = SelectQueryDescription::getSelectQueryFromASTForView(create.select->clone(), context);
         new_metadata.setSelectQuery(select);
 
-        /// 2) Update inner storage settings and TTL
+        /// 2) Update the MV schema (columns) to match the new SELECT query.
+        /// Only applicable to MVs with an explicit external target stream (INTO target_stream):
+        /// the target's schema is fixed by the user, so we intersect the new SELECT output with
+        /// the target columns (dropping any SELECT columns absent from the target) and always
+        /// preserve the two mandatory system columns (_tp_time / _tp_sn) from existing metadata.
+        /// For MVs without an explicit target the inner storage does not support column changes,
+        /// so we leave the MV schema untouched.
+        if (mv->hasExternalTarget())
+        {
+            try
+            {
+                Block as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(
+                    select.inner_query->clone(), context, false /* is_subquery */, nullptr /* output_data_stream_semantic */);
+
+                /// Collect column names present in the target stream.
+                NameSet target_col_names;
+                if (auto target = mv->tryGetTargetTable())
+                {
+                    for (const auto & col : target->getInMemoryMetadata().getColumns())
+                        target_col_names.insert(col.name);
+                }
+
+                ColumnsDescription merged_columns;
+                NameSet added_col_names;
+                for (const auto & col : as_select_sample.getNamesAndTypesList())
+                {
+                    /// Drop columns absent from the target — they cannot be written there.
+                    if (!target_col_names.empty() && !target_col_names.contains(col.name))
+                        continue;
+
+                    merged_columns.add(ColumnDescription(col.name, col.type));
+                    added_col_names.insert(col.name);
+                }
+
+                /// Always preserve the two mandatory system columns from existing metadata.
+                for (const auto & sys_col_name : {ProtonConsts::RESERVED_EVENT_TIME, ProtonConsts::RESERVED_EVENT_SEQUENCE_ID})
+                {
+                    if (!added_col_names.contains(sys_col_name))
+                    {
+                        if (new_metadata.getColumns().has(sys_col_name))
+                            merged_columns.add(new_metadata.getColumns().get(sys_col_name));
+                    }
+                }
+
+                new_metadata.setColumns(merged_columns);
+            }
+            catch (...)
+            {
+                tryLogCurrentException("MetadataHelper", "Failed to update MV schema from new SELECT query, keeping previous schema");
+            }
+        }
+
+        /// 3) Update inner storage settings and TTL
         if (create.isMaterializedView() && !create.storage)
         {
             auto inner_storage = mv->tryGetTargetTable();
@@ -250,7 +315,7 @@ void updateMetadataByCreateQuery(
             }
         }
 
-        /// 3) Update mv TTL
+        /// 4) Update mv TTL
         if (create.mv_inner_storage_ttl)
         {
             new_metadata.setTableTTLs(TTLTableDescription::getTTLForTableFromAST(

@@ -310,17 +310,17 @@ DB::Block deserializeBlock(
     /// Control block is always in NativeInSchemaFull
     if (compression_codec == DB::CompressionMethodByte::NONE)
     {
-        SchemaNativeReader reader(rb, /*partial_=*/false, schema_version, schema_ctx);
+        SchemaNativeReader reader(schema_version, schema_ctx);
         DB::Block result;
-        reader.read(result);
+        reader.read(result, rb, /*partial_=*/false);
         return result;
     }
     else
     {
         DB::CompressedReadBuffer compressed_in = DB::CompressedReadBuffer(rb);
-        SchemaNativeReader reader(compressed_in, /*partial_=*/false, schema_version, schema_ctx);
+        SchemaNativeReader reader(schema_version, schema_ctx);
         DB::Block result;
-        reader.read(result);
+        reader.read(result, compressed_in, /*partial_=*/false);
         return result;
     }
 }

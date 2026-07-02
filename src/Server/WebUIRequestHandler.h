@@ -12,12 +12,11 @@ class IServer;
 class WebUIRequestHandler : public HTTPRequestHandler
 {
 private:
-    IServer & server;
+    [[maybe_unused]] IServer & server;
     std::string resource_name;
 public:
     WebUIRequestHandler(IServer & server_, std::string resource_name_);
-    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
+    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response, const ProfileEvents::Event & write_event) override;
 };
 
 }
-

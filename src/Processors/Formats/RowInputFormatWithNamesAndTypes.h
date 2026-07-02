@@ -48,6 +48,7 @@ protected:
     void resetParser() override;
     bool isGarbageAfterField(size_t index, ReadBuffer::Position pos) override;
     void setReadBuffer(ReadBuffer & in_) override;
+    void readPrefix() override;
 
     const FormatSettings format_settings;
     DataTypes data_types;
@@ -55,25 +56,29 @@ protected:
 
 private:
     bool readRow(MutableColumns & columns, RowReadExtension & ext) override;
-    void readPrefix() override;
 
-    /// proton: starts.
-    void beforeRollbackInputBuffer() override;
-    /// proton: ends
+    size_t countRows(size_t max_block_size) override;
+
     bool parseRowAndPrintDiagnosticInfo(MutableColumns & columns, WriteBuffer & out) override;
     void tryDeserializeField(const DataTypePtr & type, IColumn & column, size_t file_column) override;
 
     void tryDetectHeader(std::vector<String> & column_names, std::vector<String> & type_names);
 
-    bool is_binary;
-    bool with_names;
-    bool with_types;
-    std::unique_ptr<FormatWithNamesAndTypesReader> format_reader;
-    bool try_detect_header;
-    bool is_header_detected = false;
+    /// proton: starts.
+    void beforeRollbackInputBuffer() override;
+    /// proton: ends
 
 protected:
+    bool with_names;
+    bool with_types;
+
+    std::unique_ptr<FormatWithNamesAndTypesReader> format_reader;
     std::unordered_map<String, size_t> column_indexes_by_names;
+
+private:
+    bool is_binary;
+    bool try_detect_header;
+    bool is_header_detected = false;
 };
 
 /// Base class for parsing data in input formats with -WithNames and -WithNamesAndTypes suffixes.
@@ -115,6 +120,16 @@ public:
     virtual void skipNames() = 0;
     /// Skip the whole row with types.
     virtual void skipTypes() = 0;
+
+    virtual size_t countRows(size_t /*max_block_size*/)
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method countRows is not implemented for format reader");
+    }
+
+    virtual void skipRow()
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method skipRow is not implemented for format reader");
+    }
 
     /// Skip delimiters, if any.
     virtual void skipPrefixBeforeHeader() {}
@@ -189,4 +204,3 @@ private:
 };
 
 }
-

@@ -218,6 +218,7 @@ KafkaSink::KafkaSink(
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(std::move(producer_))
     , connection_timeout_ms(connection_timeout_ms_)
+    , flush_timeout_ms(std::max<UInt64>(context->getSettingsRef().insert_timeout_ms, 15'000))
     , refresh_topic_partitions(refresh_topic_partitions_)
     , checkpoint_timeout_ms(context->getSettingsRef().insert_timeout_ms)
     , partition_cnt(producer->getPartitionCount(connection_timeout_ms))
@@ -441,7 +442,7 @@ void KafkaSink::onFinish()
     /// Make sure all outstanding requests are transmitted and handled.
     /// It should not block for ever here, otherwise, it will block proton from stopping the job
     /// or block proton from terminating.
-    if (auto err = rd_kafka_flush(producer->getHandle(), /*timeout_ms=*/15000); err)
+    if (auto err = rd_kafka_flush(producer->getHandle(), flush_timeout_ms); err)
         LOG_ERROR(logger, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -476,7 +477,7 @@ KafkaSink::~KafkaSink()
     onFinish();
 }
 
-void KafkaSink::checkpoint(CheckpointContextPtr context)
+void KafkaSink::doCheckpoint(CheckpointContextPtr context)
 {
     Stopwatch timer;
     do
@@ -497,7 +498,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         if (is_finished.test())
         {
             /// for a final check, it should not wait for too long
-            if (auto err = rd_kafka_flush(producer->getHandle(), 15000 /* time_ms */); err)
+            if (auto err = rd_kafka_flush(producer->getHandle(), flush_timeout_ms); err)
                 throw Exception(DB::Kafka::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
             if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -522,7 +523,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
 
     state.reset();
 
-    IProcessor::checkpoint(context);
+    IProcessor::doCheckpoint(context);
 }
 
 void KafkaSink::State::reset()

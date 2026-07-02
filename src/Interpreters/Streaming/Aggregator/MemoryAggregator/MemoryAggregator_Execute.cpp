@@ -1,6 +1,7 @@
 #include <Interpreters/Streaming/Aggregator/MemoryAggregator/MemoryAggregator.h>
 
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -57,11 +58,6 @@ std::pair<bool, bool> MemoryAggregator::executeOnBlock(
       * To make them work anyway, we materialize them.
       */
     Columns materialized_columns = materializeKeyColumns(columns, key_columns, result.isLowCardinality());
-
-    /// proton: starts. For window start/end aggregation, we will need setup timestamp of the aggr to
-    /// enable memory recycling.
-    setupAggregatesPoolTimestamps(row_begin, row_end, key_columns, result.aggregates_pool);
-    /// proton: ends
 
     NestedColumnsHolder nested_columns_holder;
     AggregateFunctionInstructions aggregate_functions_instructions;
@@ -123,13 +119,14 @@ template <typename Method>
     {
         bucket_arenas.resize(row_end - row_begin);
 
+        /// For two level time bucket aggregation, the first key column is the window_start or window_end bucket column
         for (size_t i = row_begin; i < row_end; ++i)
-            bucket_arenas[i - row_begin] = result.getBucketAndArena(key_columns, i);
+            bucket_arenas[i - row_begin] = result.getOrCreateTimeBucketArena(key_columns[0]->getInt(i)).get();
     }
     else
     {
         bucket_arenas.reserve(1);
-        bucket_arenas.push_back(result.aggregates_pool);
+        bucket_arenas.push_back(result.aggregates_pool.get());
     }
 
     /// Optimization for special case when there are no aggregate functions.
@@ -173,7 +170,7 @@ template <typename Method>
 
         if (!has_arrays && !needTrackUpdates())
         {
-            auto * aggregates_pool = result.aggregates_pool;
+            auto * aggregates_pool = result.aggregates_pool.get();
             for (AggregateFunctionInstruction * inst = aggregate_instructions; inst->that; ++inst)
             {
                 inst->batch_that->addBatchLookupTable8(
@@ -215,7 +212,7 @@ template <typename Method>
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[row_end]);
 
     /// For all rows.
-    Arena * aggregates_pool = result.aggregates_pool;
+    Arena * aggregates_pool = result.aggregates_pool.get();
 
     for (size_t i = row_begin; i < row_end; ++i)
     {

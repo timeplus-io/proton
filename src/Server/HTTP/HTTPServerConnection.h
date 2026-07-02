@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Interpreters/Context.h>
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
+#include <Server/HTTP/HTTPContext.h>
 
 #include <Poco/Net/HTTPServerParams.h>
 #include <Poco/Net/HTTPServerSession.h>
@@ -15,11 +15,13 @@ class HTTPServerConnection : public Poco::Net::TCPServerConnection
 {
 public:
     HTTPServerConnection(
-        ContextPtr context,
+        HTTPContextPtr context,
         TCPServer & tcp_server,
         const Poco::Net::StreamSocket & socket,
         Poco::Net::HTTPServerParams::Ptr params,
-        HTTPRequestHandlerFactoryPtr factory);
+        HTTPRequestHandlerFactoryPtr factory,
+        const ProfileEvents::Event & read_event_ = ProfileEvents::end(),
+        const ProfileEvents::Event & write_event_ = ProfileEvents::end());
 
     void run() override;
 
@@ -27,10 +29,12 @@ protected:
     static void sendErrorResponse(Poco::Net::HTTPServerSession & session, Poco::Net::HTTPResponse::HTTPStatus status);
 
 private:
-    ContextPtr context;
+    HTTPContextPtr context;
     TCPServer & tcp_server;
     Poco::Net::HTTPServerParams::Ptr params;
     HTTPRequestHandlerFactoryPtr factory;
+    ProfileEvents::Event read_event;
+    ProfileEvents::Event write_event;
     bool stopped;
     std::mutex mutex;  // guards the |factory| with assumption that creating handlers is not thread-safe.
 };

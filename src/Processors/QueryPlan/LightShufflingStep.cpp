@@ -13,18 +13,19 @@ static ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = false,
             .preserves_sorting = false,
-            .preserves_substream = false,
+            .preserves_shuffling = false,
         },
         {
             .preserves_number_of_rows = true,
         }};
 }
 
-LightShufflingStep::LightShufflingStep(const DataStream & input_stream_, std::vector<size_t> key_positions_, size_t max_num_outputs_)
+LightShufflingStep::LightShufflingStep(const DataStream & input_stream_, Names keys_, size_t max_num_outputs_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
-    , key_positions(std::move(key_positions_))
+    , keys(std::move(keys_))
     , max_num_outputs(max_num_outputs_)
 {
+    output_stream->shuffle_description = ShuffleDescription{ShuffleDescription::Kind::Light, keys};
 }
 
 void LightShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
@@ -43,7 +44,7 @@ void LightShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, cons
     {
         /// M -> N
         pipeline.addShufflingTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<LightShufflingTransform>(header, num_outputs, key_positions);
+            return std::make_shared<LightShufflingTransform>(header, num_outputs, keys);
         });
     }
 }

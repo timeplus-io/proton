@@ -3,6 +3,7 @@
 #include <Bootstrap/Globals.h>
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Checkpoint/CheckpointRequestContext.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Common/VersionRevision.h>
@@ -141,7 +142,11 @@ std::pair<CheckpointEpoch, CheckpointSettingsPtr> PipelineExecutor::recover(Chec
     const auto & ckpt_storage = ckpt_coordinator.getCheckpointStorage(ckpt_settings->replication_type);
     auto recovered_epoch = ckpt_storage.getLastCommittedEpoch(ckpt_ctx);
     if (!recovered_epoch.empty())
-        graph->recover(ckpt_ctx->cloneWithEpoch(recovered_epoch));
+    {
+        auto recover_request_ctx = std::make_shared<CheckpointRequestContext>();
+        recover_request_ctx->settings = ckpt_settings;
+        graph->recover(ckpt_ctx->cloneWithEpoch(recovered_epoch, std::move(recover_request_ctx)));
+    }
 
     LOG_INFO(
         log,

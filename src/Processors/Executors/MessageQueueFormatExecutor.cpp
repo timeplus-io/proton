@@ -55,7 +55,7 @@ void MessageQueueFormatExecutor::execute(const Block & block, MessageCallback me
             row_format->writePrefixIfNeeded();
             size_t i = 0;
             for (; accumulated_rows < max_rows_per_message && row < rows_in_block
-                 && (max_message_size == 0 || accumulated_size + buffer->stringRef().size < max_message_size);
+                 && (max_message_size == 0 || accumulated_size + buffer->stringView().size() < max_message_size);
                  ++i, ++row, ++accumulated_rows)
             {
                 if (i != 0)
@@ -63,14 +63,14 @@ void MessageQueueFormatExecutor::execute(const Block & block, MessageCallback me
                 row_format->writeRow(columns, row);
             }
 
-            if (accumulated_rows >= max_rows_per_message || accumulated_size + buffer->stringRef().size >= max_message_size)
+            if (accumulated_rows >= max_rows_per_message || accumulated_size + buffer->stringView().size() >= max_message_size)
             {
                 doFlush(message_callback);
                 flushed = true;
             }
             else
             {
-                accumulated_size += buffer->stringRef().size;
+                accumulated_size += buffer->stringView().size();
             }
         }
 

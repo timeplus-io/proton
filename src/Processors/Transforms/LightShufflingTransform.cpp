@@ -19,10 +19,19 @@ UInt16 bestTotalOutputStreams(size_t num_output_streams)
     return to_power_of_two(std::min<UInt32>(static_cast<UInt32>(num_output_streams), 256));
 }
 
-LightShufflingTransform::LightShufflingTransform(Block header_, size_t num_outputs_, std::vector<size_t> key_positions_)
+static std::vector<size_t> keyPositions(const Block & header, const Names & keys)
+{
+    std::vector<size_t> key_positions;
+    key_positions.reserve(keys.size());
+    for (const auto & key : keys)
+        key_positions.emplace_back(header.getPositionByName(key));
+    return key_positions;
+}
+
+LightShufflingTransform::LightShufflingTransform(Block header_, size_t num_outputs_, const Names & keys_)
     : IProcessor(InputPorts{1, header_}, OutputPorts(num_outputs_, header_), ProcessorID::LightShufflingTransformID)
     , shuffled_output_chunks(num_outputs_)
-    , chunk_splitter(std::move(key_positions_), num_outputs_)
+    , chunk_splitter(keyPositions(header_, keys_), num_outputs_)
 {
     assert(num_outputs_ > 0 && (num_outputs_ & (num_outputs_ - 1)) == 0);
 

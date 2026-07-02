@@ -15,9 +15,9 @@ StreamCallbackData::StreamCallbackData(StreamShardStore * stream_shard_store_, c
 
 void StreamCallbackData::wait() const
 {
-    while (outstanding_commits != 0)
+    while (outstanding_commits.load() != 0)
     {
-        LOG_INFO(stream_shard_store->logger, "Waiting for outstanding commits={} to finish", outstanding_commits);
+        LOG_INFO(stream_shard_store->logger, "Waiting for outstanding commits={} to finish", outstanding_commits.load());
         sleepForMilliseconds(200);
     }
 }

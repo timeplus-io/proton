@@ -73,10 +73,71 @@ void serializeTwoLevelHashMap(const Map & map, MappedSerializer && mapped_serial
     map.writeUpdatedBuckets(wb);
 }
 
+/// The arena lifecyle is maintained by `two_level_pool_getter` and they shall be valid across the whole life cycle of deserializeTwoLevelHashMap
 template <typename Map, typename MappedDeserializer>
-void deserializeTwoLevelHashMap(Map & map, MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
+void deserializeTwoLevelHashMap(
+    Map & map,
+    MappedDeserializer && mapped_deserializer,
+    Arena & pool,
+    std::function<ArenaPtr(Int64)> && two_level_pool_getter,
+    ReadBuffer & rb)
 {
-    deserializeHashMap<Map, MappedDeserializer>(map, std::move(mapped_deserializer), pool, rb);
+    constexpr bool is_time_bucket_hash_map = requires { map.getBucket(typename Map::key_type{}); };
+    if constexpr (!is_time_bucket_hash_map)
+    {
+        deserializeHashMap<Map, MappedDeserializer>(map, std::move(mapped_deserializer), pool, rb);
+    }
+    else
+    {
+        /// Implementation for TimeBucketHashMap
+        chassert(two_level_pool_getter);
+
+        typename Map::key_type key;
+        typename Map::LookupResult lookup_result;
+        bool inserted;
+        UInt32 size;
+        DB::readIntBinary<UInt32>(size, rb);
+
+        Arena tmp_pool;
+        Arena * curr_pool = &tmp_pool;
+        Int64 curr_bucket = std::numeric_limits<Int64>::min();
+        for (size_t i = 0; i < size; ++i)
+        {
+            /* Key */
+            if constexpr (std::is_same_v<typename Map::key_type, StringRef>)
+            {
+                key = DB::readStringBinaryInto(*curr_pool, rb);
+
+                /// Usually only a few time buckets
+                auto bucket = map.getBucket(key);
+                if (bucket == curr_bucket) [[likely]]
+                {
+                    /// For the same bucket, we have saved the key into \curr_pool
+                    map.emplace(SerializedKeyHolder{key, *curr_pool}, lookup_result, inserted);
+                }
+                else
+                {
+                    /// For the different bucket, we shall save the key into \new_pool and rollback the key size from previous pool
+                    auto new_pool = two_level_pool_getter(bucket).get();
+                    map.emplace(ArenaKeyHolder{key, *new_pool}, lookup_result, inserted);
+
+                    curr_pool->rollback(key.size);
+                    curr_pool = new_pool;
+                    curr_bucket = bucket;
+                }
+            }
+            else
+            {
+                DB::readBinary(key, rb);
+                curr_pool = two_level_pool_getter(map.getBucket(key)).get();
+                map.emplace(key, lookup_result, inserted);
+            }
+            chassert(inserted);
+            /* Mapped */
+            mapped_deserializer(lookup_result->getMapped(), *curr_pool, rb);
+        }
+    }
+
     map.readUpdatedBuckets(rb); /// recover buckets updated status
 }
 
