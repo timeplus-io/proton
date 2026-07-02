@@ -4,6 +4,7 @@
 
 /// proton: starts.
 #include <Interpreters/Streaming/HashJoin/IHashJoin.h>
+#include <base/scope_guard.h>
 /// proton: ends.
 
 /// proton: starts.
@@ -146,6 +147,13 @@ void JoiningTransform::work()
 {
     if (has_input)
     {
+        /// proton: starts.
+        auto start_ns = MonotonicNanoseconds::now();
+        metrics.processed_bytes += input_chunk.bytes();
+        metrics.processed_rows += input_chunk.rows();
+        SCOPE_EXIT({ metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns; });
+        /// proton: ends.
+
         transform(input_chunk);
         output_chunk.swap(input_chunk);
         has_input = not_processed != nullptr;
@@ -190,7 +198,12 @@ void JoiningTransform::transform(Chunk & chunk)
         initialized = true;
 
         /// proton: starts.
-        LOG_INFO(getLogger("JoiningTransform"), "built hash map, total joined data {} rows, {} bytes", join->getTotalRowCount(), join->getTotalByteCount());
+        LOG_INFO(
+            getLogger("JoiningTransform"),
+            "Built right-side join state ({}): rows={}, bytes={}",
+            join->getName(),
+            join->getTotalRowCount(),
+            join->getTotalByteCount());
         /// proton: ends.
 
         if (join->alwaysReturnsEmptySet() && !on_totals)

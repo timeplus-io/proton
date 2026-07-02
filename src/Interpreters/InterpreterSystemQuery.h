@@ -52,6 +52,7 @@ private:
     void doExecuteStreamAdmission(const ASTSystemQuery & system, std::string_view admission_action);
     void executeMaterializedViewAdmission(const ASTSystemQuery & system);
     void executeSetLogLevel(const ASTSystemQuery & system);
+    void executeJemallocControl(const ASTSystemQuery & system);
     BlockIO executeShowLoggers(const ASTSystemQuery & system);
     void executePauseTask(const ASTSystemQuery & system);
     void executeResumeTask(const ASTSystemQuery & system);

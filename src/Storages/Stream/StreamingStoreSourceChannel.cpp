@@ -60,4 +60,9 @@ std::pair<String, Int32> StreamingStoreSourceChannel::getStreamShard() const
 {
     return multiplexer->getStreamShard();
 }
+
+Int64 StreamingStoreSourceChannel::lastFetchedSN() const
+{
+    return -1; /// Not implemented
+}
 }

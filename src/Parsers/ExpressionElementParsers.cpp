@@ -2230,6 +2230,7 @@ const char * ParserAlias::restricted_keywords[] =
     "LATEST",
     "STORAGE_SETTINGS",
     "COMMENT",
+    "TTL",
     /// proton: ends.
     nullptr
 };

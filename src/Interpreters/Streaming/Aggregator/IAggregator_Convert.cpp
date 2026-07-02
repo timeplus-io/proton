@@ -104,7 +104,7 @@ ALWAYS_INLINE Block IAggregator::insertResultsIntoColumns(
             /*destroy_place_after_insert=*/false);
     }
 
-    return finalizeBlock(getHeader(/*final_=*/true), std::move(out_cols), /*final=*/true, places.size());
+    return finalizeBlock(getHeader(), std::move(out_cols), places.size());
 }
 
 ALWAYS_INLINE Block
@@ -126,7 +126,7 @@ IAggregator::insertResultsIntoColumns(PaddedPODArray<ConstAggregateDataPtr> & pl
             /*destroy_place_after_insert=*/false);
     }
 
-    return finalizeBlock(getHeader(/*final_=*/true), std::move(out_cols), /*final=*/true, places.size());
+    return finalizeBlock(getHeader(), std::move(out_cols), places.size());
 }
 
 }

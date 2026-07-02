@@ -2,8 +2,8 @@
 
 #include <boost/noncopyable.hpp>
 
-#include <Common/ProfileEvents.h>
 #include <Common/Allocator.h>
+#include <Common/ProfileEvents.h>
 
 #include <Common/Exception.h>
 #include <Core/Defines.h>
@@ -203,6 +203,12 @@ private:
         const size_t prev_size = Base::position() - memory.data();
         memory.resize(2 * prev_size + 1);
         Base::set(memory.data() + prev_size, memory.size() - prev_size, 0);
+    }
+
+    void finalizeImpl() final
+    {
+        /// there is no need to allocate twice more memory at finalize()
+        /// So make that call no op, do not call here nextImpl()
     }
 };
 

@@ -6,6 +6,7 @@
 #include <Common/logger_useful.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -21,25 +22,29 @@ bool InMemoryIdempotentKeys::add(Int64 sn, String & idem_key, const char * dedup
     if (idem_key.empty())
         return true; /// Treats it as always new
 
-    bool existed = false;
     {
         std::shared_lock lock(mutex);
-        existed = keys_index.contains(idem_key);
-    }
-
-    if (existed)
-    {
-        if (deduped_log_prefix)
-            LOG_INFO(logger, "{}: idempotent_key={} sn={}", deduped_log_prefix, idem_key, sn);
-
-        return false;
+        if (keys_index.contains(idem_key))
+        {
+            if (deduped_log_prefix)
+                LOG_INFO(logger, "{}: idempotent_key={} sn={}", deduped_log_prefix, idem_key, sn);
+            return false;
+        }
     }
 
     std::unique_lock lock(mutex);
+
+    if (keys_index.contains(idem_key))
+    {
+        if (deduped_log_prefix)
+            LOG_INFO(logger, "{}: idempotent_key={} sn={}", deduped_log_prefix, idem_key, sn);
+        return false;
+    }
+
     while (keys.size() >= max_ids)
     {
         [[maybe_unused]] auto removed = keys_index.erase(keys.front().second);
-        assert(removed == 1);
+        chassert(removed == 1);
 
         keys.pop_front();
     }
@@ -47,12 +52,33 @@ bool InMemoryIdempotentKeys::add(Int64 sn, String & idem_key, const char * dedup
     keys.emplace_back(sn, std::move(idem_key));
 
     [[maybe_unused]] auto [_, inserted] = keys_index.emplace(keys.back().second);
-    assert(inserted);
+    chassert(inserted);
 
-    assert(keys.size() == keys_index.size());
+    chassert(keys.size() == keys_index.size());
 
     has_updates_since_last_serialization = true;
     return true;
+}
+
+size_t InMemoryIdempotentKeys::rewindTo(Int64 max_sn)
+{
+    std::unique_lock lock(mutex);
+
+    size_t dropped = 0;
+    while (!keys.empty() && keys.back().first > max_sn)
+    {
+        [[maybe_unused]] auto removed = keys_index.erase(keys.back().second);
+        chassert(removed == 1);
+        keys.pop_back();
+        ++dropped;
+    }
+
+    chassert(keys.size() == keys_index.size());
+
+    if (dropped > 0)
+        has_updates_since_last_serialization = true;
+
+    return dropped;
 }
 
 size_t InMemoryIdempotentKeys::size() const

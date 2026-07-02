@@ -3,6 +3,8 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Common/Exception.h>
+#include <Common/SharedLockGuard.h>
+#include <Common/LockMemoryExceptionInThread.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -96,8 +98,10 @@ std::unique_ptr<WriteBufferFromFileBase> MetadataStorageFromPlainObjectStorageMo
 
     if (validate_content)
     {
+        LockMemoryExceptionInThread temporarily_lock_exceptions;
+
         std::string data;
-        auto read_buf = object_storage->readObject(object);
+        auto read_buf = object_storage->readObject(object, ReadSettings{});
         readStringUntilEOF(data, *read_buf);
         if (data != path_from)
             throw Exception(
@@ -111,7 +115,7 @@ std::unique_ptr<WriteBufferFromFileBase> MetadataStorageFromPlainObjectStorageMo
     auto write_buf = object_storage->writeObject(
         object,
         WriteMode::Rewrite,
-        /* object_attributes */ std::nullopt,
+        /*object_attributes*/ std::nullopt,
         /*buf_size*/ DBMS_DEFAULT_BUFFER_SIZE,
         /*settings*/ {});
 

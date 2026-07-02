@@ -155,8 +155,37 @@ elseif(GLIBC_COMPATIBILITY)
     message (${RECONFIGURE_MESSAGE_LEVEL} "Glibc compatibility cannot be enabled in current configuration")
 endif ()
 
-# Make sure the final executable has symbols exported
-set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+# proton: starts
+# Dynamic symbol export is expensive (~86 MiB of .dynsym/.dynstr on release
+# builds due to templated C++ symbols) and is a prerequisite for the
+# LD_PRELOAD/dlsym collision reported in ClickHouse#43933. Since the
+# getResource()/dlsym resource-loading path has been replaced by C23
+# `#embed` directives that inline resources into `.rodata`, the only
+# remaining consumer of exported symbols is the Python UDF runtime
+# (libpython dlsym() into pip C extensions). Keep `-rdynamic` only when
+# Python is enabled (Proton-specific gating — ENABLE_PYTHON_UDF /
+# ENABLE_PROTON_PYTHON do not exist upstream); otherwise actively drop
+# exports. Matches upstream ClickHouse PR #47475 where Python is absent.
+if (OS_LINUX)
+    if (ENABLE_PYTHON_UDF OR ENABLE_PROTON_PYTHON)
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+    else ()
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-export-dynamic")
+    endif ()
+
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
+
+    # Mirrors upstream ClickHouse (CMakeLists.txt:152-162): --icf=all tree-wide
+    # on Linux+lld is the upstream default, not a local invention. -faddrsig
+    # below (line 337) keeps address-taken symbols in first-party TUs safe.
+    if (LINKER_NAME MATCHES "lld" AND NOT SANITIZE AND NOT SANITIZE_COVERAGE AND NOT WITH_COVERAGE)
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--icf=all")
+    endif ()
+else ()
+    # Non-Linux: keep prior behavior.
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+endif ()
+# proton: ends
 
 if (OS_DARWIN)
     # The `-all_load` flag forces loading of all symbols from all libraries,
@@ -251,10 +280,17 @@ endif()
 
 include(cmake/cpu_features.cmake)
 
-# Asynchronous unwind tables are needed for Query Profiler.
-# They are already by default on some platforms but possibly not on all platforms.
-# Enable it explicitly.
-set (COMPILER_FLAGS "${COMPILER_FLAGS} -fasynchronous-unwind-tables")
+
+# Query Profiler doesn't work on MacOS for several reasons
+# - PHDR cache is not available
+# - We use native functionality to get stacktraces which is not async signal safe
+# and thus we don't need to generate asynchronous unwind tables
+if (NOT OS_DARWIN)
+    # Asynchronous unwind tables are needed for Query Profiler.
+    # They are already by default on some platforms but possibly not on all platforms.
+    # Enable it explicitly.
+    set (COMPILER_FLAGS "${COMPILER_FLAGS} -fasynchronous-unwind-tables")
+endif()
 
 # Reproducible builds.
 if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
@@ -288,6 +324,20 @@ endif ()
 # benchmarks.
 if (COMPILER_GCC OR COMPILER_CLANG)
     set(COMPILER_FLAGS "${COMPILER_FLAGS} -falign-functions=32")
+endif ()
+
+# Emit each function / data item into its own section so the linker can drop
+# unreachable ones (--gc-sections) and fold identical ones (--icf=all).
+# Sanitizer and coverage builds require exact section layout; skip them.
+if (NOT SANITIZE AND NOT SANITIZE_COVERAGE AND NOT WITH_COVERAGE)
+    if (COMPILER_GCC OR COMPILER_CLANG)
+        set (COMPILER_FLAGS "${COMPILER_FLAGS} -ffunction-sections -fdata-sections")
+    endif ()
+    if (COMPILER_CLANG AND OS_LINUX)
+        # Address-significance table improves lld --icf=all precision by
+        # distinguishing address-taken symbols from non-address-taken ones.
+        set (COMPILER_FLAGS "${COMPILER_FLAGS} -faddrsig")
+    endif ()
 endif ()
 
 if (ARCH_AMD64)
@@ -340,14 +390,17 @@ set (DEBUG_INFO_FLAGS "-g -gdwarf-4")
 set (CMAKE_BUILD_COLOR_MAKEFILE          ON)
 set (CMAKE_CXX_FLAGS                     "${CMAKE_CXX_FLAGS} ${COMPILER_FLAGS} ${PLATFORM_EXTRA_CXX_FLAG} ${COMMON_WARNING_FLAGS} ${CXX_WARNING_FLAGS}")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 ${DEBUG_INFO_FLAGS} ${CMAKE_CXX_FLAGS_ADD}")
+set (CMAKE_CXX_FLAGS_MINSIZEREL          "${CMAKE_CXX_FLAGS_MINSIZEREL} -Os ${DEBUG_INFO_FLAGS} ${CMAKE_CXX_FLAGS_ADD}")
 set (CMAKE_CXX_FLAGS_DEBUG               "${CMAKE_CXX_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} ${CMAKE_CXX_FLAGS_ADD}")
 
 set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} ${COMMON_WARNING_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3 ${DEBUG_INFO_FLAGS} ${CMAKE_C_FLAGS_ADD}")
+set (CMAKE_C_FLAGS_MINSIZEREL            "${CMAKE_C_FLAGS_MINSIZEREL} -Os ${DEBUG_INFO_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} ${CMAKE_C_FLAGS_ADD}")
 
 set (CMAKE_ASM_FLAGS                     "${CMAKE_ASM_FLAGS} ${COMPILER_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
 set (CMAKE_ASM_FLAGS_RELWITHDEBINFO      "${CMAKE_ASM_FLAGS_RELWITHDEBINFO} -O3 ${DEBUG_INFO_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
+set (CMAKE_ASM_FLAGS_MINSIZEREL          "${CMAKE_ASM_FLAGS_MINSIZEREL} -Os ${DEBUG_INFO_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
 set (CMAKE_ASM_FLAGS_DEBUG               "${CMAKE_ASM_FLAGS_DEBUG} -O0 ${DEBUG_INFO_FLAGS} ${CMAKE_ASM_FLAGS_ADD}")
 
 if (COMPILER_CLANG)
@@ -377,6 +430,9 @@ if (COMPILER_CLANG)
         set (CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -flto=thin -fwhole-program-vtables")
         set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -flto=thin -fwhole-program-vtables")
         set (CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO} -flto=thin -fwhole-program-vtables")
+        set (CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL} -flto=thin -fwhole-program-vtables")
+        set (CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -flto=thin -fwhole-program-vtables")
+        set (CMAKE_EXE_LINKER_FLAGS_MINSIZEREL "${CMAKE_EXE_LINKER_FLAGS_MINSIZEREL} -flto=thin -fwhole-program-vtables")
     elseif (ENABLE_THINLTO)
         message (${RECONFIGURE_MESSAGE_LEVEL} "Cannot enable ThinLTO")
     endif ()
@@ -467,6 +523,8 @@ if (NOT OS_ANDROID AND OS_LINUX AND NOT ARCH_S390X AND NOT SANITIZE AND NOT ENAB
     # Disabled with sanitizers to avoid issues with maximum relocation size: https://github.com/ClickHouse/ClickHouse/pull/49145
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fno-pie")
     set (CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -fno-pie")
+    set (CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -fno-pie")
+    set (CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL} -fno-pie")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie -Wl,-no-pie")
 endif ()
 

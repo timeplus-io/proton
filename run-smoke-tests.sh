@@ -311,6 +311,13 @@ p1:
     http_snap_port: ${SERVER_TABLE_HTTP}
     postgres_port: ${SERVER_PGSQL_PORT}
     prometheus_port: ${SERVER_PROM_PORT:-9363}
+# k1:
+#   host: localhost
+#   kafka:
+#     brokers:
+#     - "127.0.0.1:19092"
+#   pulsar:
+#     service_url: pulsar://127.0.0.1:6650
 EOF
 }
 

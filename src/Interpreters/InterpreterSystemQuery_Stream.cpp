@@ -7,6 +7,7 @@
 #include <Cluster/NativeLog/NativeLog.h>
 #include <Cluster/Requests/ChangeLogLevelRequest.h>
 #include <Columns/ColumnString.h>
+#include <Common/Jemalloc.h>
 #include <DataTypes/DataTypeString.h>
 #include <Loggers/Loggers.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -161,7 +162,7 @@ void InterpreterSystemQuery::executeMaterializedViewAdmission(const ASTSystemQue
     if (err.hasError())
         throw Exception(
             err.error_code,
-            "Failed to {} '{}.{}' {} error_message={}",
+            "Failed to {} '{}.{}' {} : {}",
             admission_action,
             table_id.database_name,
             table_id.table_name,
@@ -283,6 +284,33 @@ void InterpreterSystemQuery::executeSetLogLevel(const ASTSystemQuery & query)
             err.error_code,
             err.error_message);
     }
+}
+
+void InterpreterSystemQuery::executeJemallocControl(const ASTSystemQuery & system)
+{
+#if !USE_JEMALLOC
+    (void)system;
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Jemalloc support is not enabled in this build");
+#else
+    auto type = system.type;
+    switch (type)
+    {
+        case ASTSystemQuery::Type::JEMALLOC_PURGE:
+            purgeJemallocArenas();
+            break;
+        case ASTSystemQuery::Type::JEMALLOC_ENABLE_PROFILE:
+            setJemallocProfileActive(true);
+            break;
+        case ASTSystemQuery::Type::JEMALLOC_DISABLE_PROFILE:
+            setJemallocProfileActive(false);
+            break;
+        case ASTSystemQuery::Type::JEMALLOC_FLUSH_PROFILE:
+            flushJemallocProfile("/tmp/jemalloc_proton");
+            break;
+        default:
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported jemalloc operation type {}", ASTSystemQuery::typeToString(type));
+    }
+#endif
 }
 
 BlockIO InterpreterSystemQuery::executeShowLoggers(const ASTSystemQuery &)

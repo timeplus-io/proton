@@ -35,8 +35,8 @@ public:
         /// Examples: true for FilterStep, false for PartialSortingStep
         bool preserves_sorting;
 
-        /// proton: starts. Keep substream flag unchanged.
-        bool preserves_substream;
+        /// proton: starts. Rows stay on their pipeline stream and shuffle keys stay unchanged.
+        bool preserves_shuffling = false;
         /// proton: ends.
     };
 

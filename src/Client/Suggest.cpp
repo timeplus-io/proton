@@ -1,12 +1,13 @@
-#include "Suggest.h"
+#include <Client/Suggest.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <Core/Settings.h>
 #include <Columns/ColumnString.h>
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Common/Macros.h>
-#include "Core/Protocol.h"
+#include <Core/Protocol.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/Operators.h>
 #include <Functions/FunctionFactory.h>
@@ -120,13 +121,13 @@ void Suggest::load(ContextPtr context, const ConnectionParameters & connection_p
 
                 WriteBufferFromFileDescriptor out(STDERR_FILENO, 4096);
                 out << "Cannot load data for command line suggestions: " << getCurrentExceptionMessage(false, true) << "\n";
-                out.next();
+                out.finalize();
             }
             catch (...)
             {
                 WriteBufferFromFileDescriptor out(STDERR_FILENO, 4096);
                 out << "Cannot load data for command line suggestions: " << getCurrentExceptionMessage(false, true) << "\n";
-                out.next();
+                out.finalize();
             }
 
             break;

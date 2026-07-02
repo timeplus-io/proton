@@ -21,7 +21,7 @@ std::unique_ptr<PocoTemporaryFile> createTemporaryFile(const std::string & folde
 
 
 // Determine what block device is responsible for specified path
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 String getBlockDeviceId([[maybe_unused]] const String & path);
@@ -34,13 +34,13 @@ enum class BlockDeviceType
 };
 
 // Try to determine block device type
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 BlockDeviceType getBlockDeviceType([[maybe_unused]] const String & device_id);
 
 // Get size of read-ahead in bytes for specified block device
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id);

@@ -25,6 +25,7 @@
 #include <pulsar/Result.h>
 
 #include <algorithm>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -60,28 +61,6 @@ UInt64 getPartitionNo(const String & partition, const String & prefix)
     return ISource::NO_STREAM;
 }
 
-ExternalStreamSettingsPtr validateSettings(ExternalStreamSettingsPtr && settings)
-{
-    assert(settings->type.value == StreamTypes::PULSAR);
-
-    if (settings->service_url.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "service_url cannot be empty");
-
-    if (settings->topic.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "topic cannot be empty");
-
-    /// Make sure that client_cert and client_key are both empty or both not empty.
-    if ((settings->client_cert.value.empty() && !settings->client_key.value.empty())
-        || (!settings->client_cert.value.empty() && settings->client_key.value.empty()))
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "client_cert and client_key must be used together");
-
-    /// Only one authentication can be used.
-    if (!settings->client_cert.value.empty() && !settings->client_key.value.empty() && !settings->jwt.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "client_cert and client_key cannot be used with jwt at the same time");
-
-    return std::move(settings);
-}
-
 void validateMessageKeyColumnType(const DataTypePtr & type)
 {
     if (!WhichDataType{type}.isStringOrFixedString())
@@ -104,87 +83,93 @@ Pulsar::Pulsar(
     StorageID storage_id,
     StorageInMemoryMetadata metadata,
     ExternalStreamSettingsPtr settings_,
-    bool attach,
+    bool /*attach*/,
     ExternalStreamCounterPtr counter,
     ContextPtr context)
-    : StorageExternalStreamImpl(std::move(storage_id), std::move(metadata), validateSettings(std::move(settings_)), context)
-    , client(serviceUrl(), createClientConfig())
+    : StorageExternalStreamImpl(std::move(storage_id), std::move(metadata), std::move(settings_), context)
+    , client(serviceUrl(), createClientConfig(settings))
     , external_stream_counter(std::move(counter))
 {
-    if (!attach)
-    {
-        std::vector<String> partitions;
-        auto res = executeWithRetry(
-            [&, this]() { return client.getPartitionsForTopic(settings->topic.value, partitions); },
-            "getPartitionsForTopic",
-            /*timeout_ms=*/2'000,
-            logger);
-
-        if (res != pulsar::ResultOk)
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE,
-                "Failed to get partitions of topic {} on {}, error={}",
-                settings->topic.value,
-                serviceUrl(),
-                pulsar::strResult(res));
-
-        LOG_INFO(
-            logger,
-            "Created Pulsar external stream on topic {} with {} partitions: [{}]",
-            settings->topic.value,
-            partitions.size(),
-            fmt::join(partitions, ", "));
-    }
-
+    assert(settings->type.value == StreamTypes::PULSAR);
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
-
-    if (columns.has(ProtonConsts::RESERVED_EVENT_TIME))
-    {
-        if (attach)
-        {
-            LOG_WARNING(
-                logger,
-                "Column `{}` is a reserved virtual column for Pulsar external streams and is no longer supported as a physical column. "
-                "It will be ignored in payload parsing and treated as transport metadata.",
-                ProtonConsts::RESERVED_EVENT_TIME);
-        }
-        else
-        {
-            throw Exception(
-                ErrorCodes::ILLEGAL_COLUMN,
-                "Column `{}` is a reserved virtual column for Pulsar external streams and cannot be defined as a physical column",
-                ProtonConsts::RESERVED_EVENT_TIME);
-        }
-    }
-
     if (columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
     {
-        validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
         /// Each row has its own message key, it only make senses to generate one message per row when message key is used
         settings->set("one_message_per_row", true);
     }
 
-    if (columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
-        validateMessageHeadersColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_HEADERS).type);
-
     cacheVirtualColumnNamesAndTypes();
 }
 
-pulsar::ClientConfiguration Pulsar::createClientConfig()
+void Pulsar::validate(const ContextPtr & context) const
+{
+    validateSettings(settings, false, context);
+
+    const auto & columns = getInMemoryMetadataPtr()->getColumns();
+
+    if (columns.has(ProtonConsts::RESERVED_EVENT_TIME))
+        throw Exception(
+            ErrorCodes::ILLEGAL_COLUMN,
+            "Column `{}` is a reserved virtual column for Pulsar external streams and cannot be defined as a physical column",
+            ProtonConsts::RESERVED_EVENT_TIME);
+
+    if (columns.has(ProtonConsts::RESERVED_MESSAGE_KEY))
+        validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
+
+    if (columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS))
+        validateMessageHeadersColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_HEADERS).type);
+}
+
+void Pulsar::validateSettings(const ExternalStreamSettingsPtr & new_settings, bool /*change_settings*/, const ContextPtr & /*context*/) const
+{
+
+    if (new_settings->service_url.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "service_url cannot be empty");
+
+    if (new_settings->topic.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "topic cannot be empty");
+
+    /// Make sure that client_cert and client_key are both empty or both not empty.
+    if ((new_settings->client_cert.value.empty() && !new_settings->client_key.value.empty())
+        || (!new_settings->client_cert.value.empty() && new_settings->client_key.value.empty()))
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "client_cert and client_key must be used together");
+
+    /// Only one authentication can be used.
+    if (!new_settings->client_cert.value.empty() && !new_settings->client_key.value.empty() && !new_settings->jwt.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "client_cert and client_key cannot be used with jwt at the same time");
+
+    std::vector<String> partitions;
+    pulsar::Client temp_client{new_settings->service_url.value, createClientConfig(new_settings)};
+    auto res = executeWithRetry(
+        [&temp_client, &new_settings, &partitions]() { return temp_client.getPartitionsForTopic(new_settings->topic.value, partitions); },
+        "getPartitionsForTopic",
+        /*timeout_ms=*/2'000,
+        logger);
+
+    if (res != pulsar::ResultOk)
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE,
+            "Failed to get partitions of topic {} on {}, error={}",
+            new_settings->topic.value,
+            new_settings->service_url.value,
+            pulsar::strResult(res));
+}
+
+pulsar::ClientConfiguration Pulsar::createClientConfig(const ExternalStreamSettingsPtr & settings_) const
 {
     pulsar::ClientConfiguration config;
 
     config.setUseTls(serviceUrl().starts_with("pulsar+ssl://"));
 
-    if (settings->skip_server_cert_check)
+    if (settings_->skip_server_cert_check)
         config.setTlsAllowInsecureConnection(true);
 
-    if (settings->validate_hostname)
+    if (settings_->validate_hostname)
         config.setValidateHostName(true);
 
-    const auto & ca_cert = settings->ca_cert.value;
-    const auto & client_cert = settings->client_cert.value;
-    const auto & client_key = settings->client_key.value;
+    const auto & ca_cert = settings_->ca_cert.value;
+    const auto & client_cert = settings_->client_cert.value;
+    const auto & client_key = settings_->client_key.value;
 
     if (!ca_cert.empty() || !client_cert.empty() || !client_key.empty())
     {
@@ -202,7 +187,6 @@ pulsar::ClientConfiguration Pulsar::createClientConfig()
             /// When ca_cert is provided, it should only accept valid server certs.
             config.setTlsAllowInsecureConnection(false);
         }
-
 
         if (!client_cert.empty())
         {

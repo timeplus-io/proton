@@ -8,6 +8,8 @@
 #include <TableFunctions/TableFunctionExplain.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
+#include <Interpreters/InterpreterSetQuery.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -72,7 +74,10 @@ static Block executeMonoBlock(QueryPipeline & pipeline)
 StoragePtr TableFunctionExplain::executeImpl(
     const ASTPtr & /*ast_function*/, ContextPtr context, const std::string & table_name, ColumnsDescription /*cached_columns*/) const
 {
-    BlockIO blockio = getInterpreter(context).execute();
+    /// To support settings inside explain subquery.
+    auto mutable_context = Context::createCopy(context);
+    InterpreterSetQuery::applySettingsFromQuery(query, mutable_context);
+    BlockIO blockio = getInterpreter(mutable_context).execute();
     Block block = executeMonoBlock(blockio.pipeline);
 
     StorageID storage_id(getDatabaseName(), table_name);

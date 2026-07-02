@@ -121,6 +121,14 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
         create.to_inner_uuid = UUIDHelpers::Nil;
     }
 
+    /// For inputs, prefer emitting the canonical user-facing form without `ENGINE = ExternalStream`.
+    /// `CREATE INPUT ... SETTINGS ...` is the primary DDL; engine is an internal implementation detail.
+    {
+        auto & create = create_query->as<ASTCreateQuery &>();
+        if (create.is_input && create.storage)
+            create.storage->engine = nullptr;
+    }
+
     String res = create_query->formatWithPossiblyHidingSensitiveData(/*max_length=*/0, /*one_line=*/false, /*show_secrets=*/false);
 
     MutableColumnPtr column = ColumnString::create();

@@ -216,28 +216,33 @@ void ColumnAggregateFunction::ensureOwnership()
         size_t size_of_state = func->sizeOfData();
         size_t align_of_state = func->alignOfData();
 
+        Container new_data;
+        new_data.resize_exact(size);
+
         size_t rollback_pos = 0;
         try
         {
             for (size_t i = 0; i < size; ++i)
             {
-                ConstAggregateDataPtr old_place = data[i];
-                data[i] = arena.alignedAlloc(size_of_state, align_of_state);
-                func->create(data[i]);
+                new_data[i] = arena.alignedAlloc(size_of_state, align_of_state);
+                func->create(new_data[i]);
                 ++rollback_pos;
-                func->merge(data[i], old_place, &arena);
+
+                func->merge(new_data[i], data[i], &arena);
             }
         }
         catch (...)
         {
             /// If we failed to take ownership, destroy all temporary data.
-
             if (!func->hasTrivialDestructor())
+            {
                 for (size_t i = 0; i < rollback_pos; ++i)
-                    func->destroy(data[i]);
-
+                    func->destroy(new_data[i]);
+            }
             throw;
         }
+
+        data = std::move(new_data);
 
         /// Now we own all data.
         src.reset();
@@ -371,9 +376,10 @@ void ColumnAggregateFunction::updateWeakHash32(WeakHash32 & hash) const
     std::vector<UInt8> v;
     for (size_t i = 0; i < s; ++i)
     {
-        WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
-        func->serialize(data[i], wbuf, version);
-        wbuf.finalize();
+        {
+            WriteBufferFromVector<std::vector<UInt8>> wbuf(v);
+            func->serialize(data[i], wbuf, version);
+        }
         hash_data[i] = ::updateWeakHash32(v.data(), v.size(), hash_data[i]);
     }
 }

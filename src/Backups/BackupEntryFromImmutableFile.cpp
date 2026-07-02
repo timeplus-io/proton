@@ -24,6 +24,11 @@ BackupEntryFromImmutableFile::BackupEntryFromImmutableFile(
 
 BackupEntryFromImmutableFile::~BackupEntryFromImmutableFile() = default;
 
+std::unique_ptr<ReadBuffer> BackupEntryFromImmutableFile::getReadBuffer(const ReadSettings & read_settings) const
+{
+    return disk->readFile(file_path, read_settings);
+}
+
 UInt64 BackupEntryFromImmutableFile::getSize() const
 {
     std::lock_guard lock{get_file_size_mutex};
@@ -31,12 +36,6 @@ UInt64 BackupEntryFromImmutableFile::getSize() const
         file_size = disk->getFileSize(file_path);
     return *file_size;
 }
-
-std::unique_ptr<ReadBuffer> BackupEntryFromImmutableFile::getReadBuffer() const
-{
-    return disk->readFile(file_path);
-}
-
 
 DataSourceDescription BackupEntryFromImmutableFile::getDataSourceDescription() const
 {

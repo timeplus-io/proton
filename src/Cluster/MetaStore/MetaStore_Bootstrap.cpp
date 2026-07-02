@@ -9,6 +9,7 @@
 #include <Common/CurrentMetrics.h>
 
 #include <base/sleep.h>
+#include <fmt/ranges.h>
 
 namespace fs = std::filesystem;
 

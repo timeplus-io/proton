@@ -121,6 +121,9 @@ public:
     uint32_t flush_bytes = 0;
 
     /// Retention settings for `delete` policy, per interval or per data volume whichever reaches first
+    /// - `0`: inherit system defaults (no per-stream override)
+    /// - `UINT64_MAX`: no retention limit (keep all data)
+    /// - `> 0`: explicit threshold
     uint64_t retention_ms = 0; /// Data old than this interval will be deleted
     uint64_t retention_bytes = 0; /// When data volume reaches this threshold, old data will be deleted
 

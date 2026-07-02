@@ -24,7 +24,7 @@ RocksDBPtr HybridChangelogConvertTransform::getOrCreateRocksDB(const HybridConfi
     return rocks;
 }
 
-void HybridChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void HybridChangelogConvertTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->settings);
     auto & settings = ckpt_ctx->request_ctx->settings;
@@ -53,7 +53,7 @@ void HybridChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     ckpt_ctx->coordinator->checkpoint(getLogicID(), std::move(ckpt), ckpt_ctx);
 }
 
-void HybridChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
+void HybridChangelogConvertTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     auto ckpt = ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx);
     switch (ckpt->type())

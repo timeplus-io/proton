@@ -1,10 +1,11 @@
+#include <Server/PostgreSQLHandler.h>
 #include <IO/ReadBufferFromPocoSocket.h>
 #include <IO/ReadHelpers.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromPocoSocket.h>
+#include <IO/WriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
-#include "PostgreSQLHandler.h"
 #include <Parsers/parseQuery.h>
 #include <Server/TCPServer.h>
 #include <Common/setThreadName.h>
@@ -32,12 +33,16 @@ PostgreSQLHandler::PostgreSQLHandler(
     TCPServer & tcp_server_,
     bool ssl_enabled_,
     Int32 connection_id_,
-    std::vector<std::shared_ptr<PostgreSQLProtocol::PGAuthentication::AuthenticationMethod>> & auth_methods_)
+    std::vector<std::shared_ptr<PostgreSQLProtocol::PGAuthentication::AuthenticationMethod>> & auth_methods_,
+    const ProfileEvents::Event & read_event_,
+    const ProfileEvents::Event & write_event_)
     : Poco::Net::TCPServerConnection(socket_)
     , server(server_)
     , tcp_server(tcp_server_)
     , ssl_enabled(ssl_enabled_)
     , connection_id(connection_id_)
+    , read_event(read_event_)
+    , write_event(write_event_)
     , authentication_manager(auth_methods_)
 {
     changeIO(socket());
@@ -45,8 +50,8 @@ PostgreSQLHandler::PostgreSQLHandler(
 
 void PostgreSQLHandler::changeIO(Poco::Net::StreamSocket & socket)
 {
-    in = std::make_shared<ReadBufferFromPocoSocket>(socket);
-    out = std::make_shared<WriteBufferFromPocoSocket>(socket);
+    in = std::make_shared<ReadBufferFromPocoSocket>(socket, read_event);
+    out = std::make_shared<AutoCanceledWriteBuffer<WriteBufferFromPocoSocket>>(socket, write_event);
     message_transport = std::make_shared<PostgreSQLProtocol::Messaging::MessageTransport>(in.get(), out.get());
 }
 
@@ -74,13 +79,13 @@ void PostgreSQLHandler::run()
                 if (!tcp_server.isOpen())
                     return;
             PostgreSQLProtocol::Messaging::FrontMessageType message_type = message_transport->receiveMessageType();
-
             if (!tcp_server.isOpen())
                 return;
             switch (message_type)
             {
                 case PostgreSQLProtocol::Messaging::FrontMessageType::QUERY:
                     processQuery();
+                    message_transport->flush();
                     break;
                 case PostgreSQLProtocol::Messaging::FrontMessageType::TERMINATE:
                     LOG_DEBUG(log, "Client closed the connection");
@@ -203,7 +208,7 @@ void PostgreSQLHandler::establishSecureConnection(Int32 & payload_size, Int32 & 
 #if USE_SSL
 void PostgreSQLHandler::makeSecureConnectionSSL()
 {
-    message_transport->send('S');
+    message_transport->send('S', true);
     ss = std::make_shared<Poco::Net::SecureStreamSocket>(
         Poco::Net::SecureStreamSocket::attach(socket(), Poco::Net::SSLManager::instance().defaultServerContext()));
     changeIO(*ss);

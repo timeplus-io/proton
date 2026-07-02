@@ -17,6 +17,7 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
+#include <fmt/ranges.h>
 
 
 namespace DB

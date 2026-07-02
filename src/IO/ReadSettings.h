@@ -4,10 +4,9 @@
 #include <string>
 #include <Core/Defines.h>
 #include <Interpreters/Cache/FileCache_fwd.h>
-#include <Common/Throttler_fwd.h>
 #include <Common/Priority.h>
-#include <IO/ResourceLink.h>
-
+#include <Common/Scheduler/ResourceLink.h>
+#include <Common/IThrottler.h>
 
 namespace DB
 {
@@ -71,7 +70,9 @@ struct ReadSettings
     /// Method to use reading from remote filesystem.
     RemoteFSReadMethod remote_fs_method = RemoteFSReadMethod::read;
 
-    size_t local_fs_buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
+    /// https://eklitzke.org/efficient-file-copying-on-linux
+    size_t local_fs_buffer_size = 128 * 1024;
+
     size_t remote_fs_buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
     size_t prefetch_buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
 
@@ -112,10 +113,9 @@ struct ReadSettings
     ThrottlerPtr remote_throttler;
     ThrottlerPtr local_throttler;
 
-    // Resource to be used during reading
-    ResourceLink resource_link;
+    IOSchedulingSettings io_scheduling;
 
-    size_t http_max_tries = 1;
+    size_t http_max_tries = 10;
     size_t http_retry_initial_backoff_ms = 100;
     size_t http_retry_max_backoff_ms = 1600;
     bool http_skip_not_found_url_for_globs = true;

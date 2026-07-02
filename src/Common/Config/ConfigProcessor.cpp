@@ -15,12 +15,14 @@
 #include <Poco/Util/XMLConfiguration.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Exception.h>
-#include <Common/getResource.h>
 #include <Common/logger_useful.h>
 #include <base/errnoToString.h>
 #include <base/sort.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
+
+#include <string_view>
+#include <unordered_map>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 
@@ -39,6 +41,21 @@ namespace ErrorCodes
 
 /// For cutting preprocessed path to this base
 static std::string main_config_path;
+
+/// Registry of per-binary embedded config fallbacks. Populated by each program's
+/// main() via ConfigProcessor::registerEmbeddedConfig; consulted when a config
+/// file is missing on disk. Wrapped in a Meyers singleton so ordering across
+/// static initialization is well-defined.
+static std::unordered_map<std::string, std::string_view> & embedded_configs()
+{
+    static std::unordered_map<std::string, std::string_view> map;
+    return map;
+}
+
+void ConfigProcessor::registerEmbeddedConfig(std::string name, std::string_view content)
+{
+    embedded_configs()[std::move(name)] = content;
+}
 
 
 bool ConfigProcessor::isPreprocessedFile(const std::string & path)
@@ -493,23 +510,14 @@ XMLDocumentPtr ConfigProcessor::processConfig(
     }
     else
     {
-        /// These embedded files added during build with some cmake magic.
-        /// Look at the end of programs/server/CMakeLists.txt.
-        std::string embedded_name;
-        if (path == "config.xml")
-            embedded_name = "embedded.xml";
-
-        if (path == "keeper_config.xml")
-            embedded_name = "keeper_embedded.xml";
-
-        /// When we can use config embedded in binary.
-        if (!embedded_name.empty())
+        /// Fall back to an embedded default config registered by the consumer binary
+        /// (see ConfigProcessor::registerEmbeddedConfig). Each program owns its own
+        /// `#embed` block for the file it ships with; ConfigProcessor just queries
+        /// the registry so it stays decoupled from `programs/server/`.
+        if (auto it = embedded_configs().find(path); it != embedded_configs().end())
         {
-            auto resource = getResource(embedded_name);
-            if (resource.empty())
-                throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Configuration file {} doesn't exist and there is no embedded config", path);
             LOG_DEBUG(log, "There is no file '{}', will use embedded config.", path);
-            config = dom_parser.parseMemory(resource.data(), resource.size());
+            config = dom_parser.parseMemory(it->second.data(), it->second.size());
         }
         else
             throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Configuration file {} doesn't exist", path);

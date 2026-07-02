@@ -42,6 +42,11 @@ const std::unordered_set<std::string_view> ENABLED_COMMANDS{
 
     "DROP_FORMAT_SCHEMA_CACHE",
 
+    "JEMALLOC_PURGE",
+    "JEMALLOC_ENABLE_PROFILE",
+    "JEMALLOC_DISABLE_PROFILE",
+    "JEMALLOC_FLUSH_PROFILE",
+
     "SET_LOG_LEVEL",
 
     "SHOW_LOGGERS",

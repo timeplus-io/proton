@@ -67,6 +67,21 @@ static bool isUnlimitedQuery(const IAST * ast)
     return false;
 }
 
+/// proton: starts
+UInt64 ProcessList::calculateEffectiveMemoryLimit(UInt64 query_max_memory_usage, const ContextPtr & context)
+{
+    UInt64 effective_memory_limit = query_max_memory_usage;
+
+    /// If query-level max_memory_usage is explicitly set (non-zero), use it
+    if (effective_memory_limit > 0)
+        return effective_memory_limit;
+
+    /// Otherwise, use the cached max query memory value from context
+    effective_memory_limit = context->getMaxQueryMemoryUsage();
+
+    return effective_memory_limit;
+}
+/// proton: ends
 
 ProcessList::EntryPtr
 ProcessList::insert(const String & query_, const IAST * ast, ContextMutablePtr query_context, UInt64 watch_start_nanoseconds)
@@ -219,16 +234,23 @@ ProcessList::insert(const String & query_, const IAST * ast, ContextMutablePtr q
             }
 
             /// Set query-level memory trackers
-            thread_group->memory_tracker.setOrRaiseHardLimit(settings.max_memory_usage);
+            /// proton: starts
+            UInt64 effective_memory_limit = calculateEffectiveMemoryLimit(settings.max_memory_usage, query_context);
+            thread_group->memory_tracker.setOrRaiseHardLimit(effective_memory_limit);
+            /// proton: ends
             thread_group->memory_tracker.setSoftLimit(settings.memory_overcommit_ratio_denominator);
 
             if (query_context->hasTraceCollector())
             {
                 /// Set up memory profiling
                 thread_group->memory_tracker.setProfilerStep(settings.memory_profiler_step);
+
                 thread_group->memory_tracker.setSampleProbability(settings.memory_profiler_sample_probability);
+                thread_group->memory_tracker.setSampleMinAllocationSize(settings.memory_profiler_sample_min_allocation_size);
+                thread_group->memory_tracker.setSampleMaxAllocationSize(settings.memory_profiler_sample_max_allocation_size);
+                thread_group->performance_counters.setTraceProfileEvents(settings.trace_profile_events);
             }
-            thread_group->memory_tracker.setDescription("(for query)");
+            thread_group->memory_tracker.setDescription("Query");
             if (settings.memory_tracker_fault_probability > 0.0)
                 thread_group->memory_tracker.setFaultProbability(settings.memory_tracker_fault_probability);
 
@@ -260,7 +282,7 @@ ProcessList::insert(const String & query_, const IAST * ast, ContextMutablePtr q
         /// Track memory usage for all simultaneously running queries from single user.
         user_process_list.user_memory_tracker.setOrRaiseHardLimit(settings.max_memory_usage_for_user);
         user_process_list.user_memory_tracker.setSoftLimit(settings.memory_overcommit_ratio_denominator_for_user);
-        user_process_list.user_memory_tracker.setDescription("(for user)");
+        user_process_list.user_memory_tracker.setDescription("User");
 
         if (!user_process_list.user_throttler)
         {
@@ -338,7 +360,7 @@ QueryStatus::QueryStatus(
     const String & query_,
     const ClientInfo & client_info_,
     QueryPriorities::Handle && priority_handle_,
-    ThreadGroupStatusPtr && thread_group_,
+    ThreadGroupPtr && thread_group_,
     IAST::QueryKind query_kind_,
     UInt64 watch_start_nanoseconds)
     : WithContext(context_)

@@ -1,0 +1,143 @@
+tags:
+  - batch parsing
+  - materialized view
+
+description: |
+  Test Pulsar external stream with batch parsing in materialized view.
+  Verifies that batch parsing works correctly with MV checkpoint/recovery.
+  Steps:
+    1. Create Pulsar topic
+    2. Create external stream
+    3. Create MV with parse_messages_in_batch=1
+    4. Produce messages
+    5. Pause/Resume MV and verify checkpoint behavior
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_batch_mv_19
+
+  - type: pulsar
+    name: create
+    topic: test_batch_mv_19
+
+  - type: query
+    sql: drop view if exists mv_pulsar_batch_19
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_mv_19
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_mv_19(
+        id int32,
+        value string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_mv_19',
+      data_format = 'JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  # Create MV with batch parsing enabled
+  - type: query
+    sql: |
+      CREATE MATERIALIZED VIEW mv_pulsar_batch_19 AS
+      SELECT id, value
+      FROM ex_pulsar_batch_mv_19
+      SETTINGS
+        seek_to = 'earliest',
+        parse_messages_in_batch = 1;
+
+  - type: wait
+    time: 2
+
+  # Start a stream query to monitor MV output
+  - type: stream
+    name: pulsar-batch-mv-19
+    query: select id, value from mv_pulsar_batch_19 settings seek_to='earliest';
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  # Phase 1: Initial data
+  - type: query
+    sql: insert into ex_pulsar_batch_mv_19(id, value) values (1, 'one'), (2, 'two'), (3, 'three');
+
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: pulsar-batch-mv-19
+    expected_result:
+      - [1, one]
+      - [2, two]
+      - [3, three]
+
+  # Phase 2: Pause MV and produce data (should not be consumed)
+  - type: query
+    sql: system pause materialized view mv_pulsar_batch_19;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ex_pulsar_batch_mv_19(id, value) values (4, 'four'), (5, 'five');
+
+  - type: wait
+    time: 1
+
+  # Verify no new data while paused
+  - type: check
+    target_name: pulsar-batch-mv-19
+    expected_result: []
+
+  # Phase 3: Resume MV - should catch up from checkpoint
+  - type: query
+    sql: system resume materialized view mv_pulsar_batch_19;
+
+  - type: wait
+    time: 2
+
+  # Verify MV resumed and consumed pending messages
+  - type: check
+    target_name: pulsar-batch-mv-19
+    expected_result:
+      - [4, four]
+      - [5, five]
+
+  # Phase 4: Continue producing after resume
+  - type: query
+    sql: insert into ex_pulsar_batch_mv_19(id, value) values (6, 'six'), (7, 'seven');
+
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: pulsar-batch-mv-19
+    expected_result:
+      - [6, six]
+      - [7, seven]
+
+  - type: query
+    sql: drop view mv_pulsar_batch_19
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_mv_19

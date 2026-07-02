@@ -81,6 +81,11 @@ struct CheckpointContext final : public std::enable_shared_from_this<CheckpointC
         const_cast<CheckpointRequestContext *>(request_ctx.get())->addFinishCallbackNoExcept(std::move(callback));
     }
 
+    bool isOffsetsOnly() const
+    {
+        return request_ctx && request_ctx->settings && request_ctx->settings->isOffsetsOnly();
+    }
+
     /// Checkpoint epoch / monotonically increasing
     CheckpointEpoch epoch;
 

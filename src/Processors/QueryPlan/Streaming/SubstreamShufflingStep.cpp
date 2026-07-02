@@ -15,17 +15,19 @@ static ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = false,
             .preserves_sorting = false,
-            .preserves_substream = false,
+            .preserves_shuffling = false,
         },
         {
             .preserves_number_of_rows = true,
         }};
 }
 
-SubstreamShufflingStep::SubstreamShufflingStep(const DataStream & input_stream_, std::vector<size_t> key_positions_, size_t max_thread_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits()), key_positions(std::move(key_positions_)), max_thread(max_thread_)
+SubstreamShufflingStep::SubstreamShufflingStep(const DataStream & input_stream_, Names keys_, size_t max_thread_)
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits())
+    , keys(std::move(keys_))
+    , max_thread(max_thread_)
 {
-    output_stream->with_substream = true;
+    output_stream->shuffle_description = ShuffleDescription{ShuffleDescription::Kind::Substream, keys};
 }
 
 void SubstreamShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
@@ -38,23 +40,17 @@ void SubstreamShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, 
     assert(output_num >= 1);
 
     if (pipeline.getNumStreams() > 1)
-    {
-        /// M -> N
         pipeline.addShufflingTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-            return std::make_shared<SubstreamShufflingTransform>(header, output_num, key_positions);
+            return std::make_shared<SubstreamShufflingTransform>(header, output_num, keys);
         });
-    }
     else
-    {
-        /// 1 -> 1
-        pipeline.addTransform(std::make_shared<SubstreamShufflingTransform>(pipeline.getHeader(), output_num, key_positions));
-    }
+        pipeline.addTransform(std::make_shared<SubstreamShufflingTransform>(pipeline.getHeader(), output_num, keys));
 }
 
 void SubstreamShufflingStep::updateOutputStream()
 {
     output_stream = createOutputStream(input_streams.front(), input_streams.front().header, getDataStreamTraits());
-    output_stream->with_substream = true;
+    output_stream->shuffle_description = ShuffleDescription{ShuffleDescription::Kind::Substream, keys};
 }
 
 }

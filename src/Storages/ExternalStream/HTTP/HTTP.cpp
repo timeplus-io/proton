@@ -5,9 +5,12 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/ExternalStream/HTTP/HTTPSink.h>
 #include <Common/Base64.h>
+#include <Common/Exception.h>
 
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/String.h>
+
+#include <algorithm>
 
 namespace DB
 {
@@ -16,6 +19,7 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int INVALID_SETTING_VALUE;
+extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace ExternalStream
@@ -41,7 +45,7 @@ HTTP::HTTP(
     StorageInMemoryMetadata metadata,
     std::unique_ptr<ExternalStreamSettings> settings_,
     ASTStorage * storage_def,
-    bool attach,
+    bool /*attach*/,
     ContextPtr context)
     : StorageExternalStreamImpl(std::move(storage_id), std::move(metadata), std::move(settings_), context)
     , timeouts(getHTTPTimeouts(context))
@@ -65,6 +69,42 @@ HTTP::HTTP(
 
     compression_method = chooseCompressionMethod(/*path=*/"", settings->compression_method);
 
+    storage_settings = storage_def->settings->changes;
+}
+
+void HTTP::validate(const ContextPtr & context) const
+{
+    validateSettings(settings, false, context);
+
+    for (const auto & ss : storage_settings)
+    {
+        if (ss.name.starts_with("http_header_"))
+        {
+            if (ss.value.getType() != Field::Types::Which::String)
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE, "The value of {} must be a string, but got {}", ss.name, ss.value.getTypeName());
+        }
+    }
+}
+
+void HTTP::validateSettings(const ExternalStreamSettingsPtr & new_settings, bool, const ContextPtr &) const
+{
+    if (new_settings->write_url.value.empty() && new_settings->url.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Settings `url` and `write_url` cannot be both empty");
+
+    if (!new_settings->username.value.empty())
+    {
+        if (std::ranges::any_of(storage_settings, [](const auto & s) { return s.name == "http_header_Authorization"; }))
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Settings conflict: username and http_header_Authorization are both set");
+    }
+}
+
+void HTTP::startup()
+try
+{
+    StorageExternalStreamImpl::startup();
+
+
     if (auto ca_pem = settings->ssl_ca_pem.value; !ca_pem.empty())
     {
         ca_file = tmpdir / "ca.pem";
@@ -81,41 +121,28 @@ HTTP::HTTP(
         WriteBufferFromFile(key_file).write(key_pem.data(), key_pem.size());
     }
 
-    skip_ssl_verification = settings->skip_ssl_cert_check;
-
-    for (const auto & setting : storage_def->settings->changes)
+    for (const auto & ss : storage_settings)
     {
-        if (setting.name.starts_with("http_header_"))
+        if (ss.name.starts_with("http_header_"))
         {
-            if (setting.value.getType() != Field::Types::Which::String)
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE,
-                    "The value of {} must be a string, but got {}",
-                    setting.name,
-                    setting.value.getTypeName());
-
-            auto name = setting.name.substr(12); /// remove the prefix
+            auto name = ss.name.substr(12); /// remove the prefix
             std::ranges::replace(name, '_', '-'); /// HTTP headers use `-` not `_`
-            headers.push_back({name, setting.value.get<String>()});
+            headers.push_back({name, ss.value.get<String>()});
         }
     }
 
     if (!settings->username.value.empty())
     {
-        if (auto it = std::ranges::find_if(headers, [](const auto & header) { return header.name == "Authorization"; });
-            it != headers.end())
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Settings conflict: username and http_header_Authorization are both set");
-
         auto credentials = DB::base64Encode(fmt::format("{}:{}", settings->username.value, settings->password.value));
         headers.push_back({"Authorization", fmt::format("Basic {}", std::move(credentials))});
     }
 
-    /// Validate only on creation
-    if (!attach)
-    {
-        if (write_url.empty())
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Settings `url` and `wrtie_url` cannot be both empty");
-    }
+    started = true;
+}
+catch (...)
+{
+    /// This is unlikely to happen. Catch the exception just for safety.
+    tryLogCurrentException(logger, "Failed in startup HTTP external stream");
 }
 
 Pipe HTTP::read(
@@ -132,6 +159,9 @@ Pipe HTTP::read(
 
 SinkToStoragePtr HTTP::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
 {
+    if (!started)
+        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "HTTP external stream is not started due to error");
+
     bool has_wildcards = write_url.find(PartitionedSink::PARTITION_ID_WILDCARD) != String::npos;
     const auto * insert_query = dynamic_cast<const ASTInsertQuery *>(query.get());
     ASTPtr partition_by_ast = nullptr;
@@ -146,7 +176,7 @@ SinkToStoragePtr HTTP::write(const ASTPtr & query, const StorageMetadataPtr & me
         .headers = headers,
         .ca_cert_file = ca_file,
         .client_key_file = key_file,
-        .insecure_connection = skip_ssl_verification,
+        .insecure_connection = settings->skip_ssl_cert_check,
         .format = dataFormat(),
         .format_settings = getFormatSettings(query_context),
         .compression_method = compression_method,

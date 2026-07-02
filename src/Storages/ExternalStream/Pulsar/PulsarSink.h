@@ -38,7 +38,7 @@ public:
     String getName() const override { return "PulsarSink"; }
 
     void consume(Chunk chunk) override;
-    void checkpoint(CheckpointContextPtr context) override;
+    void doCheckpoint(CheckpointContextPtr context) override;
     void onFinish() override;
 
 private:

@@ -207,7 +207,6 @@ target_include_directories(_orc SYSTEM PRIVATE
     ${ORC_ADDITION_SOURCE_DIR}
     ${ARROW_SRC_DIR})
 
-
 # === arrow
 
 set(LIBRARY_DIR "${proton_SOURCE_DIR}/contrib/arrow/cpp/src/arrow")
@@ -538,9 +537,10 @@ target_include_directories(_parquet SYSTEM BEFORE
         "${proton_SOURCE_DIR}/contrib/arrow/cpp/src"
         "${CMAKE_CURRENT_SOURCE_DIR}/cpp/src")
 target_link_libraries(_parquet
-    PUBLIC _arrow
-    PRIVATE
+    PUBLIC
+        _arrow
         ch_contrib::thrift
+    PRIVATE
         boost::headers_only
         boost::regex
         OpenSSL::Crypto OpenSSL::SSL)

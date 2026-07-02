@@ -29,6 +29,7 @@ struct CheckpointSettings
 
     bool isAsync() const { return strategy.async; }
     bool isIncremental() const { return strategy.incremental; }
+    bool isOffsetsOnly() const { return strategy.offsets_only; }
 
     void serialize(VersionType version, WriteBuffer & wb) const;
     void deserialize(VersionType version, ReadBuffer & rb);

@@ -357,7 +357,7 @@ std::unique_ptr<ReadBufferFromFileBase>
 DiskCheckpointStorage::initKeyFileReadBuffer(const std::string & key, CheckpointContextPtr ckpt_ctx) const
 {
     auto disk = getDisk(ckpt_ctx);
-    return disk->readFile(ckpt_ctx->checkpointDir() / key);
+    return disk->readFile(ckpt_ctx->checkpointDir() / key, ReadSettings{});
 }
 
 uint64_t DiskCheckpointStorage::getStorageSize(CheckpointContextPtr ckpt_ctx) const

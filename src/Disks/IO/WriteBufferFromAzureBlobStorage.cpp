@@ -6,12 +6,11 @@
 #include <Common/getRandomASCIIString.h>
 #include <Common/logger_useful.h>
 #include <Common/Throttler.h>
+#include <Common/Scheduler/ResourceGuard.h>
 
 
 namespace ProfileEvents
 {
-    extern const Event RemoteWriteThrottlerBytes;
-    extern const Event RemoteWriteThrottlerSleepMicroseconds;
 }
 
 namespace DB
@@ -69,28 +68,25 @@ WriteBufferFromAzureBlobStorage::~WriteBufferFromAzureBlobStorage()
 
 void WriteBufferFromAzureBlobStorage::execWithRetry(std::function<void()> func, size_t num_tries)
 {
-    auto handle_exception = [&](const auto & e, size_t i)
-    {
-        if (i == num_tries - 1)
-            throw;
-
-        LOG_DEBUG(log, "Write at attempt {} for blob `{}` failed: {}", i + 1, blob_path, e.Message);
-    };
-
     for (size_t i = 0; i < num_tries; ++i)
     {
         try
         {
+            ResourceGuard rlock(ResourceGuard::Metrics::getIOWrite(), write_settings.io_scheduling.write_resource_link, cost); // Note that zero-cost requests are ignored
             func();
+            rlock.unlock(cost);
             break;
-        }
-        catch (const Azure::Core::Http::TransportException & e)
-        {
-            handle_exception(e, i);
         }
         catch (const Azure::Core::RequestFailedException & e)
         {
-            handle_exception(e, i);
+            if (i == num_tries - 1)
+                throw;
+
+            LOG_DEBUG(log, "Write at attempt {} for blob `{}` failed: {} {}", i + 1, blob_path, e.what(), e.Message);
+        }
+        catch (...)
+        {
+            throw;
         }
     }
 }
@@ -172,7 +168,7 @@ void WriteBufferFromAzureBlobStorage::writePart()
         execWithRetry([&](){ block_blob_client.StageBlock(part_data->block_id, memory_stream); }, max_unexpected_write_error_retries, part_data->data_size);
 
         if (write_settings.remote_throttler)
-            write_settings.remote_throttler->add(part_data->data_size, ProfileEvents::RemoteWriteThrottlerBytes, ProfileEvents::RemoteWriteThrottlerSleepMicroseconds);
+            write_settings.remote_throttler->throttle(part_data->data_size);
     };
 
     task_tracker->add(std::move(upload_worker));

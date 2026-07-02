@@ -5,7 +5,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
 namespace DB
@@ -63,7 +63,9 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
         if (auto * view = storage->as<StorageView>())
         {
             InterpreterSelectWithUnionQuery interpreter(
-                view->getInMemoryMetadataPtr()->getSelectQuery().inner_query, context, SelectQueryOptions().subquery().analyze());
+                view->getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone(),
+                context,
+                SelectQueryOptions().subquery().analyze());
             if (interpreter.hasAggregation())
                 throw Exception(
                     ErrorCodes::BAD_ARGUMENTS,

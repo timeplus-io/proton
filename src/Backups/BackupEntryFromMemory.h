@@ -15,9 +15,9 @@ public:
     BackupEntryFromMemory(const void * data_, size_t size_, const std::optional<UInt128> & checksum_ = {});
     BackupEntryFromMemory(String data_, const std::optional<UInt128> & checksum_ = {});
 
+    std::unique_ptr<ReadBuffer> getReadBuffer(const ReadSettings &) const override;
     UInt64 getSize() const override { return data.size(); }
     std::optional<UInt128> getChecksum() const override { return checksum; }
-    std::unique_ptr<ReadBuffer> getReadBuffer() const override;
 
     String getFilePath() const override
     {

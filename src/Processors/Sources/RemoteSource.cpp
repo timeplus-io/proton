@@ -66,28 +66,34 @@ void RemoteSource::setStorageLimits(const std::shared_ptr<const StorageLimitsLis
 
 ISource::Status RemoteSource::prepare()
 {
+    /// proton: starts.
+    /// Keep all finish paths symmetric; otherwise dependency-driven schedulers may wait forever.
+    auto finish_source = [this]() -> Status
+    {
+        query_executor->finish(&read_context);
+        if (dependency_port && !dependency_port->isFinished())
+            dependency_port->finish();
+        getPort().finish();
+        is_async_state = false;
+        return Status::Finished;
+    };
+    /// proton: ends.
+
     /// Check if query was cancelled before returning Async status. Otherwise it may lead to infinite loop.
     if (was_query_canceled)
-    {
-        getPort().finish();
-        return Status::Finished;
-    }
+        return finish_source();
 
     if (is_async_state)
         return Status::Async;
+
+    if (query_executor->isFinished())
+        return finish_source();
 
     Status status = ISource::prepare();
     /// To avoid resetting the connection (because of "unfinished" query) in the
     /// RemoteQueryExecutor it should be finished explicitly.
     if (status == Status::Finished)
-    {
-        query_executor->finish(&read_context);
-        if (dependency_port)
-            dependency_port->finish();
-        is_async_state = false;
-
-        return status;
-    }
+        return finish_source();
 
     if (status == Status::PortFull)
     {
@@ -217,18 +223,13 @@ void RemoteSource::onUpdatePorts()
 }
 
 /// proton: starts.
-Chunk RemoteSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+void RemoteSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
-    /// Prepare checkpoint barrier chunk
-    auto result = Chunk{getPort().getHeader().getColumns(), 0};
-    result.setCheckpointContext(ckpt_ctx_);
-
     ckpt_ctx_->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) {
         writeIntBinary(lastProcessedSN(), wb);
     });
 
     LOG_INFO(logger, "Saved checkpoint sn={}", lastProcessedSN());
-    return result;
 }
 
 void RemoteSource::doRecover(CheckpointContextPtr ckpt_ctx_)

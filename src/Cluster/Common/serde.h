@@ -5,7 +5,7 @@
 
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
 
 namespace cluster
@@ -22,7 +22,7 @@ ByteContainer serialize(const Serializable & s, uint16_t version)
         /// to void reallocate since we already have approx serialized size
         buffer.resize(s.approximateSerializedSize());
 
-    DB::WriteBufferFromVector wb(buffer);
+    DB::WriteBufferFromVector<ByteContainer> wb(buffer);
     s.serialize(wb, version);
     return buffer;
 }
@@ -46,7 +46,7 @@ ByteContainer serializeBinary(const T & t)
         /// to void reallocate since we already have approx serialized size
         buffer.resize(sizeof(t));
 
-    DB::WriteBufferFromVector wb(buffer);
+    DB::WriteBufferFromVector<ByteContainer> wb(buffer);
     DB::writeBinary(t, wb);
     return buffer;
 }

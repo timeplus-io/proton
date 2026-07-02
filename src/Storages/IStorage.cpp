@@ -17,13 +17,13 @@
 #include <Common/StringUtils/StringUtils.h>
 
 /// proton: starts.
-#include <Bootstrap/Globals.h>
-#include <Cluster/MetaStore/MetaStore.h>
 #include <Interpreters/MetadataHelper.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/SchemaBlock.h>
+#include <Storages/storageUtil.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 /// proton: ends.
 
 namespace DB
@@ -376,16 +376,20 @@ void IStorage::setInMemoryMetadata(const StorageInMemoryMetadata & metadata_)
         metadata.set(std::make_unique<StorageInMemoryMetadata>(metadata_));
 
         updated = metadata.get();
-        multi_version_metadata.emplace(updated->getVersion(), std::make_pair(updated, updated->getSampleBlock()));
+        multi_version_metadata.emplace(updated->getVersion(), std::make_shared<SchemaBlock>(updated, updated->getSampleBlock()));
         /// Special 'ANY_SCHEMA_VERSION' always use latest metadata/schema
-        multi_version_metadata.emplace(
-            cluster::SchemaRecord::ANY_SCHEMA_VERSION, std::make_pair(updated, updated->getSampleBlock()));
+        multi_version_metadata.insert_or_assign(
+            cluster::SchemaRecord::ANY_SCHEMA_VERSION, std::make_shared<SchemaBlock>(updated, updated->getSampleBlock()));
     }
 
     onInMemoryMetadataUpdate(updated);
 }
 
-std::pair<StorageMetadataPtr, const Block &> IStorage::getMetadataByVersion(UInt16 version) const
+StorageMetadataPtr IStorage::getInMemoryMetadataByVersion(UInt16 version) const { return getMetadataByVersion(version)->storage_metadata; }
+
+const Block & IStorage::getSchemaByVersion(UInt16 version) const { return getMetadataByVersion(version)->schema_block; }
+
+SchemaBlockPtr IStorage::getMetadataByVersion(UInt16 version) const
 {
     {
         std::shared_lock lock(multi_metadata_mutex);
@@ -402,7 +406,7 @@ std::pair<StorageMetadataPtr, const Block &> IStorage::getMetadataByVersion(UInt
         std::unique_lock lock(multi_metadata_mutex);
         for (auto & loaded_metadata : loaded_metadata_vec)
             multi_version_metadata.emplace(
-                loaded_metadata->getVersion(), std::make_pair(loaded_metadata, loaded_metadata->getSampleBlock()));
+                loaded_metadata->getVersion(), std::make_shared<SchemaBlock>(loaded_metadata, loaded_metadata->getSampleBlock()));
 
         loaded_from_metastore.test_and_set();
 

@@ -11,10 +11,11 @@ CREATE STREAM 99072_jsn_num_str (cl_ord_id string);
 -- Default is on: numeric value for a String column should succeed
 INSERT INTO 99073_jsn_num_str_mut FORMAT JSONEachRow {"cl_ord_id": 12345, "v": 1};
 
-SELECT cl_ord_id, v FROM 99073_jsn_num_str_mut ORDER BY cl_ord_id;
-
 INSERT INTO 99072_jsn_num_str FORMAT JSONEachRow {"cl_ord_id": 12345};
 
+SELECT sleep(3) FORMAT Null;
+
+SELECT cl_ord_id, v FROM 99073_jsn_num_str_mut ORDER BY cl_ord_id;
 SELECT cl_ord_id FROM 99072_jsn_num_str ORDER BY cl_ord_id;
 
 -- Disable and verify failure

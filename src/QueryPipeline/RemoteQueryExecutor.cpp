@@ -8,7 +8,6 @@
 #include <IO/ReadHelpers.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <QueryPipeline/Pipe.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/QueryPlan/QueryPlan.h>
@@ -24,12 +23,18 @@
 #include <Client/MultiplexedConnections.h>
 #include <Client/HedgedConnections.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <IO/ReadBufferFromString.h>
+#include <base/scope_guard.h>
 
 
 namespace ProfileEvents
 {
     extern const Event ParallelReplicasAvailableCount;
+}
+
+namespace ProfileEvents
+{
+    extern const Event ReadTaskRequestsReceived;
+    extern const Event MergeTreeReadTaskRequestsReceived;
 }
 
 namespace DB
@@ -586,6 +591,8 @@ void RemoteQueryExecutor::processReadTaskRequest()
 {
     if (!task_iterator)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Distributed task iterator is not initialized");
+
+    ProfileEvents::increment(ProfileEvents::ReadTaskRequestsReceived);
     auto response = (*task_iterator)();
     connections->sendReadTaskResponse(response);
 }
@@ -595,6 +602,7 @@ void RemoteQueryExecutor::processMergeTreeReadTaskRequest(ParallelReadRequest re
     if (!parallel_reading_coordinator)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Coordinator for parallel reading from replicas is not initialized");
 
+    ProfileEvents::increment(ProfileEvents::MergeTreeReadTaskRequestsReceived);
     auto response = parallel_reading_coordinator->handleRequest(std::move(request));
     connections->sendMergeTreeReadTaskResponse(response);
 }
@@ -609,6 +617,9 @@ void RemoteQueryExecutor::processMergeTreeInitialReadAnnouncement(InitialAllRang
 
 void RemoteQueryExecutor::finish(std::unique_ptr<ReadContext> * read_context)
 {
+    /// Make sure repeated finish() calls become no-op even if draining throws.
+    SCOPE_EXIT({ finished = true; });
+
     /** If one of:
       * - nothing started to do;
       * - received all packets before EndOfStream;

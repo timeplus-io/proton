@@ -189,7 +189,7 @@ public:
                     if (matches_per_row > max_matches_per_row)
                         throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE,
                                 "Too many matches per row (> {}) in the result of function {}",
-                                max_matches_per_row, getName());
+                                max_matches_per_row.value, getName());
 
                     pos = matched_groups[0].data() + std::max<size_t>(1, matched_groups[0].size());
                 }

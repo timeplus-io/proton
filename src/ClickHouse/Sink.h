@@ -29,7 +29,7 @@ public:
 protected:
     void onCancel() noexcept override;
     void onFinish() override { flushBatch(); }
-    void checkpoint(CheckpointContextPtr) override;
+    void doCheckpoint(CheckpointContextPtr) override;
 
 private:
     void removeSuperfluousColumns(Block & block) const;

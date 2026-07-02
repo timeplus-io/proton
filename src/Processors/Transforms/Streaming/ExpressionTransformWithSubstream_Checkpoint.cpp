@@ -17,11 +17,11 @@ extern const int CREATE_CHECKPOINT_FAILED;
 extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
-void ExpressionTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
+void ExpressionTransformWithSubstream::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(isStreaming());
     if (!hasState())
-        return IProcessor::checkpoint(std::move(ckpt_ctx));
+        return IProcessor::doCheckpoint(std::move(ckpt_ctx));
 
     chassert(ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->settings);
     const auto & settings = ckpt_ctx->request_ctx->settings;
@@ -49,7 +49,7 @@ void ExpressionTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx)
     ckpt_ctx->coordinator->checkpoint(getLogicID(), std::move(ckpt), ckpt_ctx);
 }
 
-void ExpressionTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
+void ExpressionTransformWithSubstream::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     if (!isStreaming() || !hasState())
         return;

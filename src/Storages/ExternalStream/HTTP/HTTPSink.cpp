@@ -9,6 +9,7 @@
 #include <Common/Base64.h>
 
 #include <base/JSON.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -68,19 +69,19 @@ HTTPSink::HTTPSink(
     , http_config(http_config_)
     , batch_config(batch_config_)
     , uri(http_config.uri)
-    , session(makePooledHTTPSession(
+    , session(makeHTTPSession(
+          HTTPConnectionGroupType::HTTP,
           uri,
           http_config.client_key_file,
           http_config.ca_cert_file,
           /*ca_location=*/"",
           http_config.insecure_connection ? Poco::Net::Context::VerificationMode::VERIFY_NONE
                                           : Poco::Net::Context::VerificationMode::VERIFY_RELAXED,
-          http_config.timeouts,
-          /*per_endpoint_pool_size=*/10))
+          http_config.timeouts))
+        //   /*per_endpoint_pool_size=*/10))
     , context(context_)
 {
     session->setKeepAlive(true);
-    session->setKeepAliveTimeout(http_config.timeouts.http_keep_alive_timeout);
 
     if (auto it = std::ranges::find_if(http_config.headers, [](const auto & header) { return header.name == "Content-Type"; });
         it != http_config.headers.end())
@@ -152,10 +153,10 @@ void HTTPSink::send(const String & message) const
     write_buffer->finalize();
 }
 
-void HTTPSink::checkpoint(CheckpointContextPtr checkpoint_context)
+void HTTPSink::doCheckpoint(CheckpointContextPtr checkpoint_context)
 {
     flush();
-    IProcessor::checkpoint(checkpoint_context);
+    IProcessor::doCheckpoint(checkpoint_context);
 }
 
 void HTTPSink::flush()

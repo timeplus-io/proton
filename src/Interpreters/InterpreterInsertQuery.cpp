@@ -3,7 +3,6 @@
 #include <Access/Common/AccessFlags.h>
 #include <Access/EnabledQuota.h>
 #include <Columns/ColumnNullable.h>
-#include <Processors/Transforms/buildPushingToViewsChain.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <IO/ConnectionTimeouts.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -16,18 +15,20 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sinks/EmptySink.h>
 #include <Processors/Transforms/CheckConstraintsTransform.h>
 #include <Processors/Transforms/CountingTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <Processors/Transforms/SquashingChunksTransform.h>
+#include <Processors/Transforms/buildPushingToViewsChain.h>
 #include <Processors/Transforms/getSourceFromASTInsertQuery.h>
-#include <Processors/QueryPlan/QueryPlan.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <Common/ThreadStatus.h>
 #include <Common/checkStackSize.h>
 
 
@@ -222,8 +223,14 @@ Chain InterpreterInsertQuery::buildChain(
     std::atomic_uint64_t * elapsed_counter_ms,
     bool is_streaming)
 {
+    ThreadGroupPtr running_group;
+    if (current_thread)
+        running_group = current_thread->getThreadGroup();
+    if (!running_group)
+        running_group = std::make_shared<ThreadGroup>(getContext());
+
     auto sample = getSampleBlock(columns, table, metadata_snapshot);
-    return buildChainImpl(table, metadata_snapshot, sample, thread_status_holder, elapsed_counter_ms, is_streaming);
+    return buildChainImpl(table, metadata_snapshot, sample, thread_status_holder, running_group, elapsed_counter_ms, is_streaming);
 }
 
 Chain InterpreterInsertQuery::buildChainImpl(
@@ -231,6 +238,7 @@ Chain InterpreterInsertQuery::buildChainImpl(
     const StorageMetadataPtr & metadata_snapshot,
     const Block & query_sample_block,
     ThreadStatusesHolderPtr thread_status_holder,
+    ThreadGroupPtr /*running_group*/,
     std::atomic_uint64_t * elapsed_counter_ms,
     bool is_streaming)
 {
@@ -563,10 +571,18 @@ BlockIO InterpreterInsertQuery::execute()
             pipeline = interpreter_watch.buildQueryPipeline();
         }
 
+        ThreadGroupPtr running_group;
+        if (current_thread)
+            running_group = current_thread->getThreadGroup();
+        if (!running_group)
+            running_group = std::make_shared<ThreadGroup>(getContext());
         for (size_t i = 0; i < out_streams_size; ++i)
         {
-            auto out = buildChainImpl(
-                table, metadata_snapshot, query_sample_block, {}, nullptr, table->supportsStreamingQuery() || pipeline.isStreaming());
+            auto out = buildChainImpl(table, metadata_snapshot, query_sample_block,
+                /* thread_status_holder= */ nullptr,
+                running_group,
+                /* elapsed_counter_ms= */ nullptr,
+                table->supportsStreamingQuery() || pipeline.isStreaming());
             out_chains.emplace_back(std::move(out));
         }
     }

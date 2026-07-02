@@ -124,10 +124,7 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
         }
     }
 
-    /// Always emit a watermark for emit on update
-    if (params.mode == EmitMode::OnUpdate && !chunk.hasWatermark())
-        chunk.setWatermark(useEventTime() ? watermark_ts : MonotonicNanoseconds::now());
-
+    stampIfOnUpdate(chunk);
     processPeriodic(chunk);
 }
 
@@ -281,6 +278,21 @@ void WatermarkStamper::processWatermarkImpl(Chunk & chunk)
     }
 }
 
+void WatermarkStamper::processWithConsecutiveData(Chunk & chunk)
+{
+    /// Other modes need process() to advance processPeriodic / processTimeout timers.
+    if (params.mode == EmitMode::OnUpdate && !chunk.hasRows())
+        stampIfOnUpdate(chunk);
+    else
+        process(chunk);
+}
+
+void WatermarkStamper::stampIfOnUpdate(Chunk & chunk)
+{
+    if (params.mode == EmitMode::OnUpdate && !chunk.hasWatermark())
+        chunk.setWatermark(useEventTime() ? watermark_ts : MonotonicNanoseconds::now());
+}
+
 void WatermarkStamper::processWatermark(Chunk & chunk)
 {
     if (!chunk.hasRows())
@@ -305,9 +317,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
         }
     }
 
-    /// Always emit a watermark for emit on update
-    if (params.mode == EmitMode::OnUpdate && !chunk.hasWatermark())
-        chunk.setWatermark(useEventTime() ? watermark_ts : MonotonicNanoseconds::now());
+    stampIfOnUpdate(chunk);
 }
 
 void WatermarkStamper::initPeriodicTimer(const WindowInterval & interval)

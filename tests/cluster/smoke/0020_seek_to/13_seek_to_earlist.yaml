@@ -70,6 +70,7 @@ steps:
 - type: check
   target_name: '2100'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - [s1]
   - [s2]
@@ -79,6 +80,7 @@ steps:
 - type: check
   target_name: '2101'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - [s1]
   - [s2]
@@ -88,33 +90,39 @@ steps:
 - type: check
   target_name: '2102'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - [3, 1]
   - [4, 1]
 
 - type: check
   target_name: '2103'
+  timeout: 30 # address build need more time
   expected_result:
   - ["error_code:183"]
 
 - type: check
   target_name: '2104'
+  timeout: 30 # address build need more time
   expected_result:
   - ["error_code:183"]
 
 - type: check
   target_name: '2105'
+  timeout: 30 # address build need more time
   expected_result:
   - ["error_code:183"]
 
 - type: check
   target_name: '2106'
+  timeout: 30 # address build need more time
   expected_result:
   - ["error_code:183"]
 
 - type: check
   target_name: '2107'
   mode: random
+  timeout: 30 # address build need more time
   expected_result:
   - [s1]
   - [s2]

@@ -2,6 +2,7 @@
 #include <Interpreters/Streaming/Aggregator/HybridAggregator/HybridAggregator.h>
 #include <Interpreters/Streaming/Aggregator/HybridAggregator/TrackingCount.h>
 #include <Common/HybridHashTable/HybridKeyGetter.h>
+#include <Common/formatReadable.h>
 
 namespace DB
 {
@@ -53,7 +54,7 @@ HybridAggregator::convertToBlocks(IAggregatedDataVariants & variants, size_t /*m
         }
         case HybridHashType::WithoutKey:
         {
-            blocks = convertToBlocksWithoutKey(data_variants, /*final=*/true);
+            blocks = convertToBlocksWithoutKey(data_variants);
             break;
         }
 
@@ -153,7 +154,7 @@ BlocksList HybridAggregator::convertToBlocksForAll(Table & table) const
     PaddedPODArray<ConstAggregateDataPtr> places;
 
     auto init_out_cols = [&]() {
-        out_cols = prepareOutputBlockColumns(getHeader(/*final=*/true), /*aggregates_pools=*/{}, /*final=*/true, max_block_size);
+        out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, max_block_size);
         shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
 
         places.clear();
@@ -267,7 +268,7 @@ BlocksList HybridAggregator::convertToBlocksForUpdates(Table & table, Table * up
     PaddedPODArray<ConstAggregateDataPtr> places;
 
     auto init_out_cols = [&]() {
-        out_cols = prepareOutputBlockColumns(getHeader(/*final=*/true), /*aggregates_pools=*/{}, /*final=*/true, max_block_size);
+        out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, max_block_size);
         shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
 
         places.clear();
@@ -426,12 +427,12 @@ BlocksList HybridAggregator::convertToBlocksForRetracts(Table & table, Table * r
     auto delta_col_type = DataTypeFactory::instance().get(TypeIndex::Int8);
 
     auto init_out_cols = [&]() {
-        out_cols = prepareOutputBlockColumns(getHeader(/*final=*/true), /*aggregates_pools=*/{}, /*final=*/true, max_block_size);
+        out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, max_block_size);
         shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
         places.clear();
         places.reserve(max_block_size);
 
-        retract_out_cols = prepareOutputBlockColumns(getHeader(/*final=*/true), /*aggregates_pools=*/{}, /*final=*/true, max_block_size);
+        retract_out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, max_block_size);
         shuffled_key_sizes = KeyGetter::shuffleKeyColumns(retract_out_cols.raw_key_columns, key_sizes);
         retract_places.clear();
         retract_places.reserve(max_block_size);
@@ -561,7 +562,7 @@ BlocksList HybridAggregator::mergeAndConvertToBlocks(
             initStates(result);
 
             mergeWithoutKey(result, many_data_variants, merge_arena);
-            return convertToBlocksWithoutKey(result, /*final=*/true);
+            return convertToBlocksWithoutKey(result);
         }
 
 #define M(NAME, IS_TWO_LEVEL) \

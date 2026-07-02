@@ -10,6 +10,7 @@
 #include <Common/logger_useful.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -21,11 +22,13 @@ HybridChangelogConvertTransform::HybridChangelogConvertTransform(
     const Block & output_header,
     std::vector<std::string> key_column_names,
     const std::string & version_column_name,
+    bool late_insert_overrides_,
     std::string spill_dir,
     size_t max_hot_key_count,
     const std::string & kv_options,
     bool backfill_key_unique_)
     : IProcessor({input_header}, {output_header}, ProcessorID::HybridChangelogConvertTransformID)
+    , late_insert_overrides(late_insert_overrides_)
     , backfill_key_unique(backfill_key_unique_)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
     , last_log_ts(MonotonicMilliseconds::now())
@@ -387,7 +390,7 @@ void HybridChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnR
                 Field current_version;
                 input_columns[*input_version_column_position]->get(row, current_version);
 
-                if (prev_version <= current_version)
+                if (current_version > prev_version || (late_insert_overrides && current_version == prev_version))
                 {
                     retract_and_update();
                 }

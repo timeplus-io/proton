@@ -27,6 +27,7 @@
 #include <Common/OpenSSLHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/config_version.h>
+#include <Common/formatReadable.h>
 #include <Common/randomSeed.h>
 
 #include <base/scope_guard.h>
@@ -64,14 +65,15 @@ extern const int EMPTY_DATA_PASSED;
 namespace ClickHouse
 {
 
-Connection::~Connection() = default;
+Connection::~Connection()
+{
+    if (Connection::isConnected())
+        Connection::disconnect();
+}
 
-Connection::Connection(
-    const String & host_,
-    UInt16 port_,
+Connection::Connection(const String & host_, UInt16 port_,
     const String & default_database_,
-    const String & user_,
-    const String & password_,
+    const String & user_, const String & password_,
     const String & quota_key_,
     const String & cluster_,
     const String & cluster_secret_,
@@ -109,16 +111,15 @@ Connection::Connection(
     setDescription();
 }
 
+
 void Connection::connect(const ConnectionTimeouts & timeouts)
 {
+    /// if connection was broken it is necessary to cancel it before reconnecting
+    disconnect();
+
     try
     {
-        if (connected)
-            disconnect();
-
-        LOG_TRACE(
-            log_wrapper.get(),
-            "Connecting. Database: {}. User: {}{}{}",
+        LOG_TRACE(log_wrapper.get(), "Connecting. Database: {}. User: {}{}{}",
             default_database.empty() ? "(not specified)" : default_database,
             user,
             static_cast<bool>(secure) ? ". Secure" : "",
@@ -206,21 +207,24 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
         in->setAsyncCallback(std::move(async_callback));
 
         out = std::make_shared<WriteBufferFromPocoSocket>(*socket);
-
         connected = true;
 
         sendHello();
         receiveHello();
+
         if (server_revision >= DBMS_MIN_PROTOCOL_VERSION_WITH_ADDENDUM)
             sendAddendum();
 
-        LOG_TRACE(
-            log_wrapper.get(),
-            "Connected to {} server version {}.{}.{}.",
-            server_name,
-            server_version_major,
-            server_version_minor,
-            server_version_patch);
+        LOG_TRACE(log_wrapper.get(), "Connected to {} server version {}.{}.{}.",
+            server_name, server_version_major, server_version_minor, server_version_patch);
+    }
+    catch (DB::NetException & e)
+    {
+        disconnect();
+
+        /// Add server address to exception. Exception will preserve stack trace.
+        e.addMessage("({})", getDescription());
+        throw;
     }
     catch (Poco::Net::NetException & e)
     {
@@ -231,32 +235,57 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
     }
     catch (Poco::TimeoutException & e)
     {
-        /// disconnect() will reset the socket, get timeouts before.
-        const std::string & message = fmt::format(
-            "{} ({}, receive timeout {} ms, send timeout {} ms)",
-            e.displayText(),
-            getDescription(),
-            socket->getReceiveTimeout().totalMilliseconds(),
-            socket->getSendTimeout().totalMilliseconds());
-
         disconnect();
 
-        /// Add server address to exception. Also Exception will remember stack trace. It's a pity that more precise exception type is lost.
-        throw NetException(ErrorCodes::SOCKET_TIMEOUT, message);
+
+        /// Add server address to exception. Also Exception will remember new stack trace. It's a pity that more precise exception type is lost.
+        /// This exception can only be thrown from socket->connect(), so add information about connection timeout.
+        const auto & connection_timeout = static_cast<bool>(secure) ? timeouts.secure_connection_timeout : timeouts.connection_timeout;
+        throw NetException(
+            ErrorCodes::SOCKET_TIMEOUT,
+            "{} ({}, connection timeout {} ms)",
+            e.displayText(),
+            getDescription(),
+            connection_timeout.totalMilliseconds());
     }
+    catch (...)
+    {
+        disconnect();
+        throw;
+    }
+}
+
+void Connection::cancel() noexcept
+{
+    if (maybe_compressed_out)
+        maybe_compressed_out->cancel();
+
+    if (out)
+        out->cancel();
+
+    if (socket)
+        socket->close();
+
+    reset();
+}
+
+void Connection::reset() noexcept
+{
+    maybe_compressed_out.reset();
+    out.reset();
+    socket.reset();
+
+    connected = false;
 }
 
 
 void Connection::disconnect()
 {
-    maybe_compressed_out = nullptr;
-    in = nullptr;
+    in.reset();
     last_input_packet_type.reset();
-    out = nullptr; // can write to socket
-    if (socket)
-        socket->close();
-    socket = nullptr;
-    connected = false;
+
+    // no point to finalize tcp connections
+    cancel();
 }
 
 
@@ -354,11 +383,7 @@ void Connection::receiveHello()
     else if (packet_type == Protocol::Server::Exception)
         receiveException()->rethrow();
     else
-    {
-        /// Close connection, to not stay in unsynchronised state.
-        disconnect();
         throwUnexpectedPacket(packet_type, "Hello or Exception");
-    }
 }
 
 void Connection::setDefaultDatabase(const String & database)
@@ -394,7 +419,7 @@ void Connection::getServerVersion(
     UInt64 & version_patch,
     UInt64 & revision)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     name = server_name;
@@ -406,7 +431,7 @@ void Connection::getServerVersion(
 
 UInt64 Connection::getServerRevision(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     return server_revision;
@@ -414,7 +439,7 @@ UInt64 Connection::getServerRevision(const ConnectionTimeouts & timeouts)
 
 const String & Connection::getServerTimezone(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     return server_timezone;
@@ -422,7 +447,7 @@ const String & Connection::getServerTimezone(const ConnectionTimeouts & timeouts
 
 const String & Connection::getServerDisplayName(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     return server_display_name;
@@ -430,11 +455,11 @@ const String & Connection::getServerDisplayName(const ConnectionTimeouts & timeo
 
 void Connection::forceConnected(const ConnectionTimeouts & timeouts)
 {
-    if (!connected)
+    if (!isConnected())
     {
         connect(timeouts);
     }
-    else if (!ping())
+    else if (!ping(timeouts))
     {
         LOG_TRACE(log_wrapper.get(), "Connection was closed, will reconnect.");
         connect(timeouts);
@@ -454,11 +479,14 @@ void Connection::sendClusterNameAndSalt()
 }
 #endif
 
-bool Connection::ping()
+bool Connection::ping(const ConnectionTimeouts & timeouts)
 {
+    /// Keep the timeout guard visible to the catch block: on errors we call disconnect(),
+    /// which destroys `socket`, so the guard must not try to restore timeouts in its destructor.
+    std::optional<TimeoutSetter> timeout_setter;
     try
     {
-        TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
+        timeout_setter.emplace(*socket, timeouts.sync_request_timeout, true);
 
         UInt64 pong = 0;
         writeVarUInt(Protocol::Client::Ping, *out);
@@ -485,6 +513,13 @@ bool Connection::ping()
     }
     catch (const Poco::Exception & e)
     {
+        if (timeout_setter)
+            timeout_setter->was_reset = true;
+
+        /// Explicitly disconnect since ping() can receive EndOfStream,
+        /// and in this case this ping() will return false,
+        /// while next ping() may return true.
+        disconnect();
         LOG_TRACE(log_wrapper.get(), fmt::runtime(e.displayText()));
         return false;
     }
@@ -494,7 +529,7 @@ bool Connection::ping()
 
 TablesStatusResponse Connection::getTablesStatus(const ConnectionTimeouts & timeouts, const TablesStatusRequest & request)
 {
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
@@ -544,7 +579,7 @@ void Connection::sendQuery(
         client_info = &new_client_info;
     }
 
-    if (!connected)
+    if (!isConnected())
         connect(timeouts);
 
     /// Query is not executed within sendQuery() function.
@@ -571,6 +606,14 @@ void Connection::sendQuery(
         compression_codec = CompressionCodecFactory::instance().getDefaultCodec();
 
     query_id = query_id_;
+
+    /// Avoid reusing connections that had been left in the intermediate state
+    /// (i.e. not all packets had been sent).
+    bool completed = false;
+    SCOPE_EXIT({
+        if (!completed)
+            disconnect();
+    });
 
     writeVarUInt(Protocol::Client::Query, *out);
     writeStringBinary(query_id, *out);
@@ -641,6 +684,8 @@ void Connection::sendQuery(
     }
 
     maybe_compressed_in.reset();
+    if (maybe_compressed_out && maybe_compressed_out != out)
+        maybe_compressed_out->finalize();
     maybe_compressed_out.reset();
     block_in.reset();
     block_logs_in.reset();
@@ -653,6 +698,8 @@ void Connection::sendQuery(
         sendData(Block(), "", false);
         out->next();
     }
+
+    completed = true;
 }
 
 
@@ -660,7 +707,7 @@ void Connection::sendCancel()
 {
     /// If we already disconnected.
     if (!out)
-        return;
+        throw Exception(ErrorCodes::NETWORK_ERROR, "Connection to {} terminated", getDescription());
 
     writeVarUInt(Protocol::Client::Cancel, *out);
     out->next();
@@ -688,11 +735,12 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
     size_t prev_bytes = out->count();
 
     block_out->write(block);
-    maybe_compressed_out->next();
+    if (maybe_compressed_out != out)
+        maybe_compressed_out->next();
     out->next();
 
     if (throttler)
-        throttler->add(out->count() - prev_bytes);
+        throttler->throttle(out->count() - prev_bytes);
 }
 
 void Connection::sendData(
@@ -721,7 +769,7 @@ void Connection::sendData(
     out->next();
 
     if (throttler)
-        throttler->add(out->count() - prev_bytes);
+        throttler->throttle(out->count() - prev_bytes);
 }
 
 void Connection::sendIgnoredPartUUIDs(const std::vector<UUID> & uuids)
@@ -795,12 +843,9 @@ void Connection::sendScalarsData(Scalars & data)
     double elapsed = watch.elapsedSeconds();
 
     if (compression == Protocol::Compression::Enable)
-        LOG_DEBUG(
-            log_wrapper.get(),
+        LOG_DEBUG(log_wrapper.get(),
             "Sent data for {} scalars, total {} rows in {} sec., {} rows/sec., {} ({}/sec.), compressed {} times to {} ({}/sec.)",
-            data.size(),
-            rows,
-            elapsed,
+            data.size(), rows, elapsed,
             static_cast<size_t>(rows / watch.elapsedSeconds()),
             ReadableSize(maybe_compressed_out_bytes),
             ReadableSize(maybe_compressed_out_bytes / watch.elapsedSeconds()),
@@ -808,12 +853,9 @@ void Connection::sendScalarsData(Scalars & data)
             ReadableSize(out_bytes),
             ReadableSize(out_bytes / watch.elapsedSeconds()));
     else
-        LOG_DEBUG(
-            log_wrapper.get(),
+        LOG_DEBUG(log_wrapper.get(),
             "Sent data for {} scalars, total {} rows in {} sec., {} rows/sec., {} ({}/sec.), no compression.",
-            data.size(),
-            rows,
-            elapsed,
+            data.size(), rows, elapsed,
             static_cast<size_t>(rows / watch.elapsedSeconds()),
             ReadableSize(maybe_compressed_out_bytes),
             ReadableSize(maybe_compressed_out_bytes / watch.elapsedSeconds()));
@@ -914,12 +956,9 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
     double elapsed = watch.elapsedSeconds();
 
     if (compression == Protocol::Compression::Enable)
-        LOG_DEBUG(
-            log_wrapper.get(),
+        LOG_DEBUG(log_wrapper.get(),
             "Sent data for {} external tables, total {} rows in {} sec., {} rows/sec., {} ({}/sec.), compressed {} times to {} ({}/sec.)",
-            data.size(),
-            rows,
-            elapsed,
+            data.size(), rows, elapsed,
             static_cast<size_t>(rows / watch.elapsedSeconds()),
             ReadableSize(maybe_compressed_out_bytes),
             ReadableSize(maybe_compressed_out_bytes / watch.elapsedSeconds()),
@@ -927,12 +966,9 @@ void Connection::sendExternalTablesData(ExternalTablesData & data)
             ReadableSize(out_bytes),
             ReadableSize(out_bytes / watch.elapsedSeconds()));
     else
-        LOG_DEBUG(
-            log_wrapper.get(),
+        LOG_DEBUG(log_wrapper.get(),
             "Sent data for {} external tables, total {} rows in {} sec., {} rows/sec., {} ({}/sec.), no compression.",
-            data.size(),
-            rows,
-            elapsed,
+            data.size(), rows, elapsed,
             static_cast<size_t>(rows / watch.elapsedSeconds()),
             ReadableSize(maybe_compressed_out_bytes),
             ReadableSize(maybe_compressed_out_bytes / watch.elapsedSeconds()));
@@ -1045,13 +1081,14 @@ Packet Connection::receivePacket()
 
             default:
                 /// In unknown state, disconnect - to not leave unsynchronised connection.
-                disconnect();
-                throw Exception(
-                    ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", toString(res.type), getDescription());
+                throw Exception(ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}",
+                    toString(res.type), getDescription());
         }
     }
     catch (Exception & e)
     {
+        disconnect();
+
         /// This is to consider ATTEMPT_TO_READ_AFTER_EOF as a remote exception.
         e.setRemoteException();
 
@@ -1059,6 +1096,11 @@ Packet Connection::receivePacket()
         if (e.code() != ErrorCodes::UNKNOWN_PACKET_FROM_SERVER)
             e.addMessage("while receiving packet from " + getDescription());
 
+        throw;
+    }
+    catch (...)
+    {
+        disconnect();
         throw;
     }
 }
@@ -1089,7 +1131,7 @@ Block Connection::receiveDataImpl(NativeReader & reader)
     Block res = reader.read();
 
     if (throttler)
-        throttler->add(in->count() - prev_bytes);
+        throttler->throttle(in->count() - prev_bytes);
 
     return res;
 }
@@ -1199,14 +1241,14 @@ InitialAllRangesAnnouncement Connection::receiveInitialParallelReadAnnouncement(
 }
 
 
-void Connection::throwUnexpectedPacket(UInt64 packet_type, const char * expected) const
+void Connection::throwUnexpectedPacket(UInt64 packet_type, const char * expected)
 {
-    throw NetException(
-        ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
+    /// Close connection, to avoid leaving it in an unsynchronised state.
+    disconnect();
+
+    throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
         "Unexpected packet from server {} (expected {}, got {})",
-        getDescription(),
-        expected,
-        String(Protocol::Server::toString(packet_type)));
+        getDescription(), expected, String(Protocol::Server::toString(packet_type)));
 }
 
 ServerConnectionPtr Connection::createConnection(const ConnectionParameters & parameters, ContextPtr)

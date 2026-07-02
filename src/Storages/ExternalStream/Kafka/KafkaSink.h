@@ -57,7 +57,7 @@ public:
 
     void consume(Chunk chunk) override;
     void onFinish() override;
-    void checkpoint(CheckpointContextPtr) override;
+    void doCheckpoint(CheckpointContextPtr) override;
 
 private:
     void onMessageDelivery(rd_kafka_resp_err_t err);
@@ -78,6 +78,7 @@ private:
     DB::Kafka::ProducerPtr producer;
 
     UInt64 connection_timeout_ms{0};
+    UInt64 flush_timeout_ms{0};
     bool refresh_topic_partitions{false};
     UInt64 checkpoint_timeout_ms{0};
     Int32 partition_cnt{0};

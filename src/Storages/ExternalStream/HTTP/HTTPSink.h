@@ -34,7 +34,7 @@ public:
     void consume(Chunk chunk) override;
     void onFinish() override;
 
-    void checkpoint(CheckpointContextPtr context) override;
+    void doCheckpoint(CheckpointContextPtr context) override;
 
 private:
     void send(const String & message) const;
@@ -52,7 +52,7 @@ private:
 
     Stopwatch request_timer;
 
-    PooledHTTPSessionPtr session;
+    HTTPSessionPtr session;
 
     ContextPtr context;
 };

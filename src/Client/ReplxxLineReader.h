@@ -3,6 +3,8 @@
 #include "LineReader.h"
 #include <replxx.hxx>
 
+#include <unistd.h>
+
 
 namespace DB
 {
@@ -10,13 +12,22 @@ namespace DB
 class ReplxxLineReader : public LineReader
 {
 public:
-    ReplxxLineReader(
-        Suggest & suggest,
-        const String & history_file_path,
-        bool multiline,
-        Patterns extenders_,
-        Patterns delimiters_,
-        replxx::Replxx::highlighter_callback_t highlighter_);
+    struct Options
+    {
+        Suggest & suggest;
+        String history_file_path;
+        bool multiline = false;
+        Patterns extenders;
+        Patterns delimiters;
+        replxx::Replxx::highlighter_callback_with_pos_t highlighter;
+        std::istream & input_stream = std::cin;
+        std::ostream & output_stream = std::cout;
+        int in_fd = STDIN_FILENO;
+        int out_fd = STDOUT_FILENO;
+        int err_fd = STDERR_FILENO;
+    };
+
+    explicit ReplxxLineReader(Options && options);
     ~ReplxxLineReader() override;
 
     void enableBracketedPaste() override;
@@ -31,7 +42,7 @@ private:
     void openEditor();
 
     replxx::Replxx rx;
-    replxx::Replxx::highlighter_callback_t highlighter;
+    replxx::Replxx::highlighter_callback_with_pos_t highlighter;
 
     // used to call flock() to synchronize multiple clients using same history file
     int history_file_fd = -1;

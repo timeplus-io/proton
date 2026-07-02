@@ -8,6 +8,9 @@
 #include <DataTypes/NestedUtils.h>
 #include <base/EnumReflection.h>
 
+/// proton: starts
+#include <Core/Field.h>
+/// proton: ends
 
 namespace DB
 {

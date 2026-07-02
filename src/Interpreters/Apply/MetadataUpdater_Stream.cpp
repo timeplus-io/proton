@@ -16,6 +16,7 @@
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/Stream/StorageStream.h>
 #include <Common/Exception.h>
+#include <Common/LogstoreRetentionSettings.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -535,12 +536,12 @@ int MetadataUpdater::doHandleUpdateStreamSettings(
     {
         if (k == "retention_bytes")
         {
-            desc.retention_bytes = v;
+            desc.retention_bytes = encodeLogstoreRetentionForMetastore(v);
             log_store_setting_changed = true;
         }
         else if (k == "retention_ms")
         {
-            desc.retention_ms = v;
+            desc.retention_ms = encodeLogstoreRetentionForMetastore(v);
             log_store_setting_changed = true;
         }
     }
@@ -561,8 +562,10 @@ int MetadataUpdater::doHandleUpdateStreamSettings(
                     std::unordered_map<std::string, int32_t> flush_settings
                         = {{"flush_messages", desc.flush_messages}, {"flush_ms", desc.flush_ms}};
 
+                    const auto retention_bytes_setting = decodeLogstoreRetentionForRuntime(desc.retention_bytes);
+                    const auto retention_ms_setting = decodeLogstoreRetentionForRuntime(desc.retention_ms);
                     std::unordered_map<std::string, int64_t> retention_settings
-                        = {{"retention_bytes", desc.retention_bytes}, {"retention_ms", desc.retention_ms}};
+                        = {{"retention_bytes", retention_bytes_setting}, {"retention_ms", retention_ms_setting}};
 
                     stream->alterLogSettings(flush_settings, retention_settings);
                 }
@@ -655,8 +658,7 @@ int MetadataUpdater::doHandleAlterStreamSchema(
             }
             updateInMemoryMetadataForStream(table, table_id, desc, new_metadata);
 
-            /// FIXME: After modifying the mv query, we also need to update the mv schema if added selected columns,
-            /// Currently this will cause incorrect results for `show create`, but will not affect the execution of mv
+            /// The MV schema (columns) is now updated in updateMetadataByCreateQuery() when the SELECT query changes.
             if (auto * mv = table->as<StorageMaterializedView>())
                 mv->onAlterQuery();
         }

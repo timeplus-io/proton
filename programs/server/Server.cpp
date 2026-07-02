@@ -6,11 +6,11 @@
 #include <cerrno>
 #include <pwd.h>
 #include <unistd.h>
-#include <Poco/Version.h>
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
+#include <Common/Jemalloc.h>
 #include <Common/scope_guard_safe.h>
 #include <base/phdr_cache.h>
 #include <Common/ErrorHandlers.h>
@@ -20,11 +20,16 @@
 #include <base/errnoToString.h>
 #include <base/coverage.h>
 #include <base/safeExit.h>
+#include <base/sleep.h>
+#include <Common/formatReadable.h>
 #include <Common/MemoryTracker.h>
+#include <Common/MemoryWorker.h>
 #include <Common/VersionRevision.h>
 #include <Common/DNSResolver.h>
+#include <Common/CgroupsMemoryUsageObserver.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
+#include <Common/Config/ConfigProcessor.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
@@ -35,6 +40,7 @@
 #include <Common/getMappedArea.h>
 #include <Common/remapExecutable.h>
 #include <Common/TLDListsHolder.h>
+#include <Common/HTTPConnectionPool.h>
 #include <IO/ReadHelpers.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/IOThreadPool.h>
@@ -62,9 +68,8 @@
 #include <Databases/registerDatabases.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
-#include <Disks/IVolume.h>
-#include <IO/Resource/registerSchedulerNodes.h>
-#include <IO/Resource/registerResourceManagers.h>
+#include <Common/Scheduler/Nodes/registerSchedulerNodes.h>
+#include <Common/Scheduler/Nodes/registerResourceManagers.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include "MetricsTransmitter.h"
@@ -75,18 +80,16 @@
 #include <Common/ThreadFuzzer.h>
 #include <Common/getHashOfLoadedBinary.h>
 #include <Common/filesystemHelpers.h>
+#include <Compression/CompressionCodecEncrypted.h>
 #include <Common/Elf.h>
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <Interpreters/AsynchronousInsertQueue.h>
-#if USE_PYTHON_UDF
-#include <CPython/AsyncPythonPackageManager.h>
-#endif
-#include <Compression/CompressionCodecEncrypted.h>
 #include <Core/ServerSettings.h>
 #include <filesystem>
 
+#include "config.h"
 #include <Common/config_version.h>
 
 /// proton: starts
@@ -98,7 +101,6 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/Apply/MetadataUpdater.h>
 #include <Interpreters/BuiltinSchemasProvisioner.h>
-#include <Interpreters/TelemetryCollector.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
 #include <Access/LocalApiToken.h>
 #include <Task/TaskScheduler.h>
@@ -117,7 +119,7 @@
 #include <V8/V8Includes.h>
 #endif
 
-bool LOG_PANIC_ABORT = true;
+bool LOG_PANIC_ABORT = false;
 
 #if USE_PYTHON_UDF
 #include <CPython/AsyncPythonPackageManager.h>
@@ -143,10 +145,6 @@ bool LOG_PANIC_ABORT = true;
 #   include <Server/GRPCServer.h>
 #endif
 
-#if USE_JEMALLOC
-#    include <jemalloc/jemalloc.h>
-#endif
-
 #if USE_AZURE_BLOB_STORAGE
 #   include <azure/storage/common/internal/xml_wrapper.hpp>
 #endif
@@ -156,6 +154,7 @@ namespace CurrentMetrics
     extern const Metric Revision;
     extern const Metric VersionInteger;
     extern const Metric MemoryTracking;
+    extern const Metric MergesMutationsMemoryTracking;
     extern const Metric MaxDDLEntryID;
     extern const Metric MaxPushedDDLEntryID;
     extern const Metric MemoryAmount;
@@ -165,37 +164,39 @@ namespace CurrentMetrics
 namespace ProfileEvents
 {
     extern const Event MainConfigLoads;
+    extern const Event InterfaceNativeSendBytes;
+    extern const Event InterfaceNativeReceiveBytes;
+    extern const Event InterfaceHTTPSendBytes;
+    extern const Event InterfaceHTTPReceiveBytes;
+    extern const Event InterfacePrometheusSendBytes;
+    extern const Event InterfacePrometheusReceiveBytes;
+    extern const Event InterfaceInterserverSendBytes;
+    extern const Event InterfaceInterserverReceiveBytes;
+    extern const Event InterfaceMySQLSendBytes;
+    extern const Event InterfaceMySQLReceiveBytes;
+    extern const Event InterfacePostgreSQLSendBytes;
+    extern const Event InterfacePostgreSQLReceiveBytes;
 }
 
 namespace fs = std::filesystem;
 
-#if USE_JEMALLOC
-static bool jemallocOptionEnabled(const char *name)
-{
-    bool value;
-    size_t size = sizeof(value);
-
-    if (mallctl(name, reinterpret_cast<void *>(&value), &size, /* newp= */ nullptr, /* newlen= */ 0))
-        throw Poco::SystemException("mallctl() failed");
-
-    return value;
-}
-#else
-static bool jemallocOptionEnabled(const char *) { return false; }
-#endif
+/// Minimal fallback config shipped with the server binary, used when the
+/// real configuration file is missing on disk (e.g. running the binary
+/// without a proper install). Inlined via C23 `#embed`; the bytes land
+/// directly in `.rodata`.
+constexpr unsigned char resource_embedded_xml[] = {
+#embed "embedded.xml"
+};
 
 int mainServer(int argc, char ** argv)
 {
-    DB::Server app;
+    /// Register our bundled fallback before anything tries to load the config.
+    /// ConfigProcessor queries this registry when the on-disk file is absent.
+    DB::ConfigProcessor::registerEmbeddedConfig("config.xml",
+        std::string_view(reinterpret_cast<const char *>(resource_embedded_xml),
+                         std::size(resource_embedded_xml)));
 
-    if (jemallocOptionEnabled("opt.background_thread"))
-    {
-        LOG_ERROR(&app.logger(),
-            "jemalloc.background_thread was requested, "
-            "however Proton uses percpu_arena and background_thread most likely will not give any benefits, "
-            "and also background_thread is not compatible with Proton watchdog "
-            "(that can be disabled with PROTON_WATCHDOG_ENABLE=0)");
-    }
+    DB::Server app;
 
     /// Do not fork separate process from watchdog if we attached to terminal.
     /// Otherwise it breaks gdb usage.
@@ -583,17 +584,20 @@ void checkForUsersNotInMainConfig(
     }
 }
 
+namespace
+{
+
 /// Unused in other builds
 #if defined(OS_LINUX)
-static String readString(const String & path)
+String readLine(const String & path)
 {
     ReadBufferFromFile in(path);
     String contents;
-    readStringUntilEOF(contents, in);
+    readStringUntilNewlineInto(contents, in);
     return contents;
 }
 
-static int readNumber(const String & path)
+int readNumber(const String & path)
 {
     ReadBufferFromFile in(path);
     int result;
@@ -603,7 +607,7 @@ static int readNumber(const String & path)
 
 #endif
 
-static void sanityChecks(Server * server)
+void sanityChecks(Server * server)
 {
     std::string data_path = server->getDefaultPath();
     std::string logs_path = server->config().getString("logger.log", "");
@@ -612,7 +616,7 @@ static void sanityChecks(Server * server)
     try
     {
         const char * filename = "/sys/devices/system/clocksource/clocksource0/current_clocksource";
-        String clocksource = readString(filename);
+        String clocksource = readLine(filename);
         if (clocksource.find("tsc") == std::string::npos && clocksource.find("kvm-clock") == std::string::npos)
             server->context()->addWarningMessage("Linux is not using a fast clock source. Performance can be degraded. Check " + String(filename));
     }
@@ -631,7 +635,7 @@ static void sanityChecks(Server * server)
 
     try
     {
-        if (readString("/sys/kernel/mm/transparent_hugepage/enabled").find("[always]") != std::string::npos)
+        if (readLine("/sys/kernel/mm/transparent_hugepage/enabled").find("[always]") != std::string::npos)
             server->context()->addWarningMessage("Linux transparent hugepage are set to \"always\".");
     }
     catch (...)
@@ -700,9 +704,15 @@ static void sanityChecks(Server * server)
     }
 }
 
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 try
 {
+#if USE_JEMALLOC
+    setJemallocBackgroundThreads(true);
+#endif
+
     Poco::Logger * log = &logger();
 
     /// proton: starts
@@ -720,7 +730,17 @@ try
     ServerSettings server_settings;
     server_settings.loadSettingsFromConfig(config());
 
-    ///StackTrace::setShowAddresses(server_settings.show_addresses_in_stack_traces);
+    StackTrace::setShowAddresses(server_settings.show_addresses_in_stack_traces);
+
+    /// proton : starts
+    if (auto sleep_sec = config().getUInt64("_tp_delay_server_start_seconds", 0); sleep_sec != 0)
+    {
+        LOG_INFO(log, "Sleeping {} before start", sleep_sec);
+        sleepForSeconds(sleep_sec);
+    }
+
+    LOG_PANIC_ABORT = config().getBool("_tp_log_panic_abort", false);
+    /// proton : ends
 
     /// When building openssl into clickhouse, clickhouse owns the configuration
     /// Therefore, the clickhouse openssl configuration should be kept separate from
@@ -775,12 +795,13 @@ try
     global_context->addWarningMessage("Server was built with sanitizer. It will work slowly.");
 #endif
 
-    const auto memory_amount = getMemoryAmount();
+    const size_t physical_server_memory = getMemoryAmount();
 
-    LOG_INFO(log, "Available RAM: {}; physical cores: {}; logical cores: {}.",
-        formatReadableSizeWithBinarySuffix(memory_amount),
-        getNumberOfPhysicalCPUCores(),  // on ARM processors it can show only enabled at current moment cores
-        std::thread::hardware_concurrency());
+    LOG_INFO(log, "Available RAM: {}; logical cores: {}; used cores: {}.",
+        formatReadableSizeWithBinarySuffix(physical_server_memory),
+        std::thread::hardware_concurrency(),
+        getNumberOfPhysicalCPUCores()  // on ARM processors it can show only enabled at current moment cores
+        );
 
     sanityChecks(this);
 
@@ -855,8 +876,18 @@ try
     }
 
     /// This object will periodically calculate some metrics.
+    MemoryWorkerConfig memory_worker_config{
+        .rss_update_period_ms = server_settings.memory_worker_period_ms,
+        .purge_dirty_pages_threshold_ratio = server_settings.memory_worker_purge_dirty_pages_threshold_ratio,
+        .purge_total_memory_threshold_ratio = server_settings.memory_worker_purge_total_memory_threshold_ratio,
+        .correct_tracker = server_settings.memory_worker_correct_memory_tracker,
+        .use_cgroup = server_settings.memory_worker_use_cgroup,
+    };
+
+    MemoryWorker memory_worker(memory_worker_config);
     AsynchronousMetrics async_metrics(
-        global_context, server_settings.asynchronous_metrics_update_period_s,
+        global_context,
+        server_settings.asynchronous_metrics_update_period_s,
         [&]() -> std::vector<ProtocolServerMetrics>
         {
             std::vector<ProtocolServerMetrics> metrics;
@@ -868,7 +899,9 @@ try
             for (const auto & server : servers)
                 metrics.emplace_back(ProtocolServerMetrics{server.getPortName(), server.currentThreads()});
             return metrics;
-        }
+        },
+        /*update_jemalloc_epoch_=*/memory_worker.getSource() != MemoryWorker::MemoryUsageSource::Jemalloc,
+        /*update_rss_=*/memory_worker.getSource() == MemoryWorker::MemoryUsageSource::None
     );
 
     Settings::checkNoSettingNamesAtTopLevel(config(), config_path);
@@ -1201,7 +1234,20 @@ try
         SensitiveDataMasker::setInstance(std::make_unique<SensitiveDataMasker>(config(), "query_masking_rules"));
     }
 
-    /// proton: starts.
+    std::optional<CgroupsMemoryUsageObserver> cgroups_memory_usage_observer;
+    try
+    {
+        auto wait_time = server_settings.cgroups_memory_usage_observer_wait_time;
+        if (wait_time != 0)
+            cgroups_memory_usage_observer.emplace(std::chrono::seconds(wait_time));
+    }
+    catch (Exception &)
+    {
+        tryLogCurrentException(log, "Disabling cgroup memory observer because of an error during initialization");
+    }
+
+    /// proton: starts. Note the bootstrap may have implicitly depend on AsynchronousMetrics
+    /// which updates the global Context::node_metrics when AsynchronousMetrics was constructed
     DB::bootstrap(global_context, log);
 
     /// Register REST API handler in advance
@@ -1233,36 +1279,91 @@ try
             new_server_settings.loadSettingsFromConfig(*config);
 
             size_t max_server_memory_usage = new_server_settings.max_server_memory_usage;
-
             double max_server_memory_usage_to_ram_ratio = new_server_settings.max_server_memory_usage_to_ram_ratio;
-            size_t default_max_server_memory_usage = static_cast<size_t>(memory_amount * max_server_memory_usage_to_ram_ratio);
+
+            size_t current_physical_server_memory = getMemoryAmount(); /// With cgroups, the amount of memory available to the server can be changed dynamically.
+            size_t default_max_server_memory_usage = static_cast<size_t>(current_physical_server_memory * max_server_memory_usage_to_ram_ratio);
 
             if (max_server_memory_usage == 0)
             {
                 max_server_memory_usage = default_max_server_memory_usage;
                 LOG_INFO(log, "Setting max_server_memory_usage was set to {}"
-                              " ({} available * {:.2f} max_server_memory_usage_to_ram_ratio)",
-                         formatReadableSizeWithBinarySuffix(max_server_memory_usage),
-                         formatReadableSizeWithBinarySuffix(memory_amount),
-                         max_server_memory_usage_to_ram_ratio);
+                    " ({} available * {:.2f} max_server_memory_usage_to_ram_ratio)",
+                    formatReadableSizeWithBinarySuffix(max_server_memory_usage),
+                    formatReadableSizeWithBinarySuffix(current_physical_server_memory),
+                    max_server_memory_usage_to_ram_ratio);
             }
             else if (max_server_memory_usage > default_max_server_memory_usage)
             {
                 max_server_memory_usage = default_max_server_memory_usage;
                 LOG_INFO(log, "Setting max_server_memory_usage was lowered to {}"
-                              " because the system has low amount of memory. The amount was"
-                              " calculated as {} available"
-                              " * {:.2f} max_server_memory_usage_to_ram_ratio",
-                         formatReadableSizeWithBinarySuffix(max_server_memory_usage),
-                         formatReadableSizeWithBinarySuffix(memory_amount),
-                         max_server_memory_usage_to_ram_ratio);
+                    " because the system has low amount of memory. The amount was"
+                    " calculated as {} available"
+                    " * {:.2f} max_server_memory_usage_to_ram_ratio",
+                    formatReadableSizeWithBinarySuffix(max_server_memory_usage),
+                    formatReadableSizeWithBinarySuffix(current_physical_server_memory),
+                    max_server_memory_usage_to_ram_ratio);
             }
 
             total_memory_tracker.setHardLimit(max_server_memory_usage);
             total_memory_tracker.setDescription("(total)");
             total_memory_tracker.setMetric(CurrentMetrics::MemoryTracking);
+            total_memory_tracker.setJemallocFlushProfileInterval(new_server_settings.jemalloc_flush_profile_interval_bytes);
+            total_memory_tracker.setJemallocFlushProfileOnMemoryExceeded(new_server_settings.jemalloc_flush_profile_on_memory_exceeded);
 
-            total_memory_tracker.setAllowUseJemallocMemory(new_server_settings.allow_use_jemalloc_memory);
+            size_t merges_mutations_memory_usage_soft_limit = new_server_settings.merges_mutations_memory_usage_soft_limit;
+
+            size_t default_merges_mutations_server_memory_usage = static_cast<size_t>(current_physical_server_memory * new_server_settings.merges_mutations_memory_usage_to_ram_ratio);
+            if (merges_mutations_memory_usage_soft_limit == 0)
+            {
+                merges_mutations_memory_usage_soft_limit = default_merges_mutations_server_memory_usage;
+                LOG_INFO(log, "Setting merges_mutations_memory_usage_soft_limit was set to {}"
+                    " ({} available * {:.2f} merges_mutations_memory_usage_to_ram_ratio)",
+                    formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit),
+                    formatReadableSizeWithBinarySuffix(current_physical_server_memory),
+                    new_server_settings.merges_mutations_memory_usage_to_ram_ratio.value);
+            }
+            else if (merges_mutations_memory_usage_soft_limit > default_merges_mutations_server_memory_usage)
+            {
+                merges_mutations_memory_usage_soft_limit = default_merges_mutations_server_memory_usage;
+                LOG_WARNING(log, "Setting merges_mutations_memory_usage_soft_limit was set to {}"
+                    " ({} available * {:.2f} merges_mutations_memory_usage_to_ram_ratio)",
+                    formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit),
+                    formatReadableSizeWithBinarySuffix(current_physical_server_memory),
+                    new_server_settings.merges_mutations_memory_usage_to_ram_ratio.value);
+            }
+
+            /// The background (merges/mutations) tracker is a child of the total tracker, so its soft limit
+            /// must never exceed the total hard limit -- otherwise it is inert (the total cap always binds first)
+            /// and, worse, it advertises a merge budget the server can never actually grant.
+            if (max_server_memory_usage != 0 && merges_mutations_memory_usage_soft_limit > max_server_memory_usage)
+            {
+                LOG_WARNING(log, "Setting merges_mutations_memory_usage_soft_limit was lowered to {}"
+                    " to not exceed max_server_memory_usage ({})",
+                    formatReadableSizeWithBinarySuffix(max_server_memory_usage),
+                    formatReadableSizeWithBinarySuffix(max_server_memory_usage));
+                merges_mutations_memory_usage_soft_limit = max_server_memory_usage;
+            }
+
+            LOG_INFO(log, "Merges and mutations memory limit is set to {}",
+                formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit));
+            background_memory_tracker.setSoftLimit(merges_mutations_memory_usage_soft_limit);
+            background_memory_tracker.setDescription("(background)");
+            background_memory_tracker.setMetric(CurrentMetrics::MergesMutationsMemoryTracking);
+
+            /// proton: starts
+            /// Log resource limit configurations
+            UInt64 max_query_memory = global_context->getMaxQueryMemoryUsage();
+            if (max_query_memory > 0)
+            {
+                double ratio = global_context->getConfigRef().getDouble("max_query_memory_usage_to_ram_ratio", 0.8);
+                LOG_INFO(log, "Default max_query_memory_usage set to {} ({} available * {:.2f} max_query_memory_usage_to_ram_ratio). "
+                         "Can be overridden per query with max_memory_usage setting.",
+                         formatReadableSizeWithBinarySuffix(max_query_memory),
+                         formatReadableSizeWithBinarySuffix(current_physical_server_memory),
+                         ratio);
+            }
+            /// proton: ends
 
             auto * global_overcommit_tracker = global_context->getGlobalOvercommitTracker();
             total_memory_tracker.setOvercommitTracker(global_overcommit_tracker);
@@ -1292,6 +1393,13 @@ try
             if (config->has("max_partition_size_to_drop"))
                 global_context->setMaxPartitionSizeToDrop(config->getUInt64("max_partition_size_to_drop"));
 
+            size_t read_bandwidth = new_server_settings.max_remote_read_network_bandwidth_for_server;
+            size_t write_bandwidth = new_server_settings.max_remote_write_network_bandwidth_for_server;
+
+            global_context->reloadRemoteThrottlerConfig(read_bandwidth,write_bandwidth);
+            LOG_INFO(log, "Setting max_remote_read_network_bandwidth_for_server was set to {}", read_bandwidth);
+            LOG_INFO(log, "Setting max_remote_write_network_bandwidth_for_server was set to {}", write_bandwidth);
+
             global_context->getProcessList().setMaxSize(new_server_settings.max_concurrent_queries);
             global_context->getProcessList().setMaxInsertQueriesAmount(new_server_settings.max_concurrent_insert_queries);
             global_context->getProcessList().setMaxSelectQueriesAmount(new_server_settings.max_concurrent_select_queries);
@@ -1305,8 +1413,28 @@ try
             global_context->updateInterserverCredentials(*config);
 
             CompressionCodecEncrypted::Configuration::instance().tryLoad(*config, "encryption_codecs");
-
             NamedCollectionFactory::instance().reloadFromConfig(*config);
+
+            HTTPConnectionPools::instance().setLimits(
+                HTTPConnectionPools::Limits{
+                    new_server_settings.disk_connections_soft_limit,
+                    new_server_settings.disk_connections_warn_limit,
+                    new_server_settings.disk_connections_store_limit,
+                    new_server_settings.disk_connections_hard_limit,
+                },
+                HTTPConnectionPools::Limits{
+                    new_server_settings.storage_connections_soft_limit,
+                    new_server_settings.storage_connections_warn_limit,
+                    new_server_settings.storage_connections_store_limit,
+                    new_server_settings.storage_connections_hard_limit,
+                },
+                HTTPConnectionPools::Limits{
+                    new_server_settings.http_connections_soft_limit,
+                    new_server_settings.http_connections_warn_limit,
+                    new_server_settings.http_connections_store_limit,
+                    new_server_settings.http_connections_hard_limit,
+                });
+
             ProfileEvents::increment(ProfileEvents::MainConfigLoads);
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
@@ -1315,7 +1443,7 @@ try
     auto access_control = global_context->getAccessControl();
     try
     {
-        access_control->setUpFromMainConfig(config(), config_path);
+        access_control->setupFromMainConfig(config(), config_path);
     }
     catch (...)
     {
@@ -1326,6 +1454,12 @@ try
     /// Create the ephemeral local API user used by Python UDFs and other
     /// in-process callers to authenticate back to the database engine.
     LocalApiToken::initialize(global_context);
+
+    if (cgroups_memory_usage_observer)
+    {
+        cgroups_memory_usage_observer->setOnMemoryAmountAvailableChangedFn([&]() { main_config_reloader->reload(); });
+        cgroups_memory_usage_observer->startThread();
+    }
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]()
@@ -1339,7 +1473,7 @@ try
 
     /// Set up caches.
 
-    size_t max_cache_size = static_cast<size_t>(memory_amount * server_settings.cache_size_to_ram_max_ratio);
+    const size_t max_cache_size = static_cast<size_t>(physical_server_memory * server_settings.cache_size_to_ram_max_ratio);
 
     /// Size of cache for uncompressed blocks. Zero means disabled.
     size_t uncompressed_cache_size = server_settings.uncompressed_cache_size;
@@ -1412,7 +1546,9 @@ try
 
     /// Check sanity of MergeTreeSettings on server startup
     /// proton: starts. replace 'merge tree' to stream settings
-    global_context->getStreamSettings().sanityCheck(settings);
+    global_context->getStreamSettings().sanityCheck(static_cast<size_t>(
+        global_context->getServerSettings().background_pool_size
+        * global_context->getServerSettings().background_merges_mutations_concurrency_ratio));
 
     /// try set up encryption. There are some errors in config, error will be printed and server wouldn't start.
     CompressionCodecEncrypted::Configuration::instance().load(config(), "encryption_codecs");
@@ -1433,7 +1569,6 @@ try
         /// ScheduleThreadPool in `global_context` which will be deleted after calling `global_context->shutdown()`
         /// which causes use after free segfault when ExternalGrokPatterns/PlacementService tries to deactivate its task from the
         /// ScheduleThreadPool which doesn't exist any more
-        TelemetryCollector::instance(global_context).shutdown();
 
         global_context->shutdown();
 
@@ -1466,7 +1601,7 @@ try
                 LOG_INFO(log, "Closed all listening sockets.");
 
             if (current_connections > 0)
-                current_connections = waitServersToFinish(servers_to_start_before_tables, servers_lock, config().getInt("shutdown_wait_unfinished", 5));
+                current_connections = waitServersToFinish(servers_to_start_before_tables, servers_lock, server_settings.shutdown_wait_unfinished);
 
             if (current_connections)
                 LOG_INFO(log, "Closed connections to servers for tables. But {} remain. Probably some tables of other users cannot finish their connections after context shutdown.", current_connections);
@@ -1573,8 +1708,6 @@ try
     LOG_DEBUG(log, "Loaded metadata.");
 
     /// proton : starts.
-    auto & telemetry_collector = DB::TelemetryCollector::instance(global_context);
-    telemetry_collector.startup();
 
     std::optional<BuiltinSchemasProvisioner> builtin_schemas_provisioner;
     builtin_schemas_provisioner.emplace(global_context, config());
@@ -1599,17 +1732,26 @@ try
         global_context->initializeTraceCollector();
 
         /// Set up server-wide memory profiler (for total memory tracker).
-        UInt64 total_memory_profiler_step = config().getUInt64("total_memory_profiler_step", 0);
-        if (total_memory_profiler_step)
+        if (server_settings.total_memory_profiler_step)
         {
-            total_memory_tracker.setProfilerStep(total_memory_profiler_step);
+            total_memory_tracker.setProfilerStep(server_settings.total_memory_profiler_step);
         }
 
-        double total_memory_tracker_sample_probability = config().getDouble("total_memory_tracker_sample_probability", 0);
-        if (total_memory_tracker_sample_probability > 0.0)
+        if (server_settings.total_memory_tracker_sample_probability > 0.0)
         {
-            total_memory_tracker.setSampleProbability(total_memory_tracker_sample_probability);
+            total_memory_tracker.setSampleProbability(server_settings.total_memory_tracker_sample_probability);
         }
+
+        if (server_settings.total_memory_profiler_sample_min_allocation_size)
+        {
+            total_memory_tracker.setSampleMinAllocationSize(server_settings.total_memory_profiler_sample_min_allocation_size);
+        }
+
+        if (server_settings.total_memory_profiler_sample_max_allocation_size)
+        {
+            total_memory_tracker.setSampleMaxAllocationSize(server_settings.total_memory_profiler_sample_max_allocation_size);
+        }
+
     }
 #endif
 
@@ -1669,6 +1811,7 @@ try
                                 "to configuration file.)");
         }
 
+        memory_worker.start();
         async_metrics.start();
 
         {
@@ -1727,6 +1870,13 @@ try
             LOG_INFO(log, "Ready for connections.");
         }
 
+#if defined(OS_LINUX)
+        /// Tell the service manager that service startup is finished.
+        /// NOTE: the parent clickhouse-watchdog process must do systemdNotify("MAINPID={}\n", child_pid); before
+        /// the child process notifies 'READY=1'.
+        systemdNotify("READY=1\n");
+#endif
+
         SCOPE_EXIT_SAFE({
             LOG_INFO(log, "Received termination signal.");
 
@@ -1765,7 +1915,7 @@ try
                 global_context->getProcessList().killAllQueries();
 
             if (current_connections)
-                current_connections = waitServersToFinish(servers, servers_lock, config().getInt("shutdown_wait_unfinished", 5));
+                current_connections = waitServersToFinish(servers, servers_lock, server_settings.shutdown_wait_unfinished);
 
             if (current_connections)
                 LOG_INFO(log, "Closed connections. But {} remain."
@@ -1809,7 +1959,11 @@ catch (...)
     return static_cast<UInt8>(code) ? code : -1;
 }
 
-/// Public facing servers
+HTTPContextPtr Server::httpContext() const
+{
+    return std::make_shared<HTTPContext>(context());
+}
+
 void Server::createServers(
     Poco::Util::AbstractConfiguration & config,
     ServerDescriptorPtr server_descriptor,
@@ -1859,7 +2013,7 @@ void Server::createServers(
                             port_name,
                             "https://" + address.toString(),
                             std::make_unique<HTTPServer>(
-                                context(),
+                                httpContext(),
                                 createHandlerFactory(*this, async_metrics, "HTTPSHandler-factory"),
                                 server_pool,
                                 socket,
@@ -1882,7 +2036,7 @@ void Server::createServers(
                             port_name,
                             "http://" + address.toString(),
                             std::make_unique<HTTPServer>(
-                                context(),
+                                httpContext(),
                                 createHandlerFactory(*this, async_metrics, "HTTPHandler-factory"),
                                 server_pool,
                                 socket,
@@ -2090,7 +2244,7 @@ void Server::createServers(
                             port_name,
                             "https://" + address.toString(),
                             std::make_unique<HTTPServer>(
-                                context(),
+                                httpContext(),
                                 createHandlerFactory(*this, async_metrics, "SnapshotHTTPSHandler-factory"),
                                 server_pool,
                                 socket,
@@ -2113,7 +2267,7 @@ void Server::createServers(
                             port_name,
                             "http://" + address.toString(),
                             std::make_unique<HTTPServer>(
-                                context(),
+                                httpContext(),
                                 createHandlerFactory(*this, async_metrics, "SnapshotHTTPHandler-factory"),
                                 server_pool,
                                 socket,
@@ -2162,7 +2316,7 @@ void Server::createServers(
                     port_name,
                     "Prometheus: http://" + address.toString(),
                     std::make_unique<HTTPServer>(
-                        context(),
+                        httpContext(),
                         createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"),
                         server_pool,
                         socket,

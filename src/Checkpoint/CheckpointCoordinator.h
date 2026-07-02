@@ -104,6 +104,9 @@ public:
     bool updateCheckpointInterval(const String & qid, Int64 & interval);
 
 private:
+    void fetchAndCacheStorageSizeAsync(CheckpointableQueryPtr query, Int64 ts_expected) const;
+    void fetchAndCacheStorageStatAsync(CheckpointableQueryPtr query, Int64 ts_expected) const;
+
     void triggerCheckpointAfter(uint64_t delay_seconds, const String & qid);
 
     void triggerCheckpoint(const String & qid) noexcept;
@@ -141,6 +144,7 @@ private:
     static constexpr String GRAPH_CKPT_FILE = "dag";
 
     CheckpointConfig config;
+
 
     mutable std::mutex ckpt_storages_mutex;
     mutable absl::flat_hash_map<CheckpointReplicationType, std::unique_ptr<const CheckpointStorage>>

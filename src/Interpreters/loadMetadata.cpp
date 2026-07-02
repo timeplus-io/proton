@@ -1,4 +1,3 @@
-#include <Common/quoteString.h>
 #include <Common/ThreadPool.h>
 
 #include <Parsers/ParserCreateQuery.h>

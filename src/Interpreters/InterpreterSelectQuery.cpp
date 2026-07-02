@@ -1616,21 +1616,16 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                 executeWhere(query_plan, expressions.before_where, expressions.remove_where_filter);
 
             /// proton : starts.
-            if (expressions.hasPartitionBy() && !substream_shuffled_before_join)
+            if (expressions.hasPartitionBy()
+                && !query_plan.getCurrentDataStream().isShuffledBy(
+                    expressions.partition_by_keys, ShuffleDescription::Kind::Substream))
                 executeSubstreamShuffling(query_plan, expressions.before_partition_by, expressions.partition_by_keys);
 
             /// TODO, if there is no aggregation / or parent select doesn't have aggregation (recursively)
             /// avoid shuffle by step as an optimization
-            if (settings.allow_independent_shard_processing.value)
-            {
-                /// Data is already shuffled (on file system)
-                light_shuffled = true;
-            }
-            else if (expressions.hasShuffleBy() && !light_shuffled)
-            {
+            if (!settings.allow_independent_shard_processing.value && expressions.hasShuffleBy()
+                && !query_plan.getCurrentDataStream().isShuffledBy(expressions.shuffle_by_keys, ShuffleDescription::Kind::Light))
                 executeLightShuffling(query_plan, expressions.before_shuffle_by, expressions.shuffle_by_keys);
-                light_shuffled = true;
-            }
 
             buildStreamingProcessingQueryPlanAfterJoin(query_plan);
             /// proton : ends
@@ -2212,6 +2207,11 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (!query.prewhere() && !query.where() && !context->getCurrentTransaction())
         {
+            /// Some storages can optimize trivial count in read() method instead of totalRows() because it still can
+            /// require reading some data (but much faster than reading columns).
+            /// Set a special flag in query info so the storage will see it and optimize count in read() method.
+            query_info.optimize_trivial_count = optimize_trivial_count;
+
             /// proton: starts. If is explain query or only analyze, we don't care about the count value, so we can use a faster `approximateTotalRows()`
             if (options.is_explain || options.only_analyze)
                 num_rows = storage->approximateTotalRows(settings);
@@ -2271,7 +2271,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             ErrorCodes::TOO_MANY_COLUMNS,
             "Limit for number of columns to read exceeded. Requested: {}, maximum: {}",
             required_columns.size(),
-            settings.max_columns_to_read);
+            settings.max_columns_to_read.toString());
 
     /// General limit for the number of threads.
     size_t max_threads_execute_query = settings.max_threads;
@@ -2643,7 +2643,7 @@ void InterpreterSelectQuery::executeAggregation(
     /// proton: starts. The historical aggregation step does not preserves substream (i.e. output without substream id),
     /// so we need to add substream shuffling again after it. This is easier than supporting AggregatingStepWithSubstream.
     /// we can skip computing \partiton_by_expr which already serve as grouping keys.
-    bool need_substream_processing = query_plan.getCurrentDataStream().with_substream;
+    bool need_substream_processing = query_plan.getCurrentDataStream().hasSubstream();
 
     auto aggregating_step = std::make_unique<AggregatingStep>(
         query_plan.getCurrentDataStream(),
@@ -2655,7 +2655,8 @@ void InterpreterSelectQuery::executeAggregation(
         merge_threads,
         temporary_data_merge_threads,
         storage_has_evenly_distributed_read,
-        light_shuffled,
+        settings.allow_independent_shard_processing.value
+            || query_plan.getCurrentDataStream().isShuffledBy(keys, ShuffleDescription::Kind::Light),
         std::move(sort_description_for_merging),
         std::move(group_by_sort_description),
         should_produce_results_in_order_of_bucket_number,
@@ -2752,7 +2753,7 @@ void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modific
     query_plan.addStep(std::move(step));
 }
 
-void InterpreterSelectQuery::executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description, bool preserves_substream)
+void InterpreterSelectQuery::executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description)
 {
     if (!expression)
         return;
@@ -2765,8 +2766,7 @@ void InterpreterSelectQuery::executeExpression(QueryPlan & query_plan, const Act
         settings.default_hash_table,
         context->getSpillDirForCurrentQuery("expression"),
         settings.max_hot_keys,
-        settings.kv_options,
-        preserves_substream);
+        settings.kv_options);
     /// proton: ends.
 
     expression_step->setStepDescription(description);
@@ -2928,9 +2928,7 @@ void InterpreterSelectQuery::executeMergeSorted(QueryPlan & query_plan, const st
 
 void InterpreterSelectQuery::executeProjection(QueryPlan & query_plan, const ActionsDAGPtr & expression)
 {
-    /// proton: starts. Substream is only work in current layer
-    executeExpression(query_plan, expression, "Projection", /*preserves_substream=*/false);
-    /// proton: ends.
+    executeExpression(query_plan, expression, "Projection");
 }
 
 
@@ -3147,7 +3145,7 @@ void InterpreterSelectQuery::initSettings()
 {
     auto & query = getSelectQuery();
     if (query.settings())
-        InterpreterSetQuery(query.settings(), context).executeForCurrentContext();
+        InterpreterSetQuery(query.settings(), context).executeForCurrentContext(options.ignore_setting_constraints);
 
     /// auto & client_info = context->getClientInfo();
     /// auto min_major = DBMS_MIN_MAJOR_VERSION_WITH_CURRENT_AGGREGATION_VARIANT_SELECTION_METHOD;

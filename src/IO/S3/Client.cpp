@@ -29,6 +29,7 @@
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/ProxyConfigurationResolverProvider.h>
 
 
 namespace ProfileEvents
@@ -150,11 +151,12 @@ std::unique_ptr<Client> Client::create(
     const PocoHTTPClientConfiguration & client_configuration,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
     const ClientSettings & client_settings,
-    std::shared_ptr<RetryContext> retry_context_)    /// proton: updates
+    std::shared_ptr<RetryContext> retry_context_,    /// proton: updates
+    const String & server_side_encryption_s3_)    /// proton: SSE-S3 algorithm (e.g. "AES256")
 {
     verifyClientConfiguration(client_configuration);
     return std::unique_ptr<Client>(
-        new Client(max_redirects_, std::move(sse_kms_config_), credentials_provider, client_configuration, sign_payloads, client_settings, std::move(retry_context_))); /// proton: added retry_context_
+        new Client(max_redirects_, std::move(sse_kms_config_), credentials_provider, client_configuration, sign_payloads, client_settings, std::move(retry_context_), server_side_encryption_s3_)); /// proton: added retry_context_ and SSE-S3
 }
 
 std::unique_ptr<Client> Client::clone() const
@@ -185,7 +187,8 @@ Client::Client(
     const PocoHTTPClientConfiguration & client_configuration_,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads_,
     const ClientSettings & client_settings_,
-    std::shared_ptr<Client::RetryContext> retry_context_)    /// proton: updates
+    std::shared_ptr<Client::RetryContext> retry_context_,    /// proton: updates
+    const String & server_side_encryption_s3_)    /// proton: SSE-S3 algorithm (e.g. "AES256")
     : Aws::S3::S3Client(credentials_provider_, client_configuration_, sign_payloads_, client_settings_.use_virtual_addressing)
     , credentials_provider(credentials_provider_)
     , client_configuration(client_configuration_)
@@ -193,6 +196,7 @@ Client::Client(
     , client_settings(client_settings_)
     , max_redirects(max_redirects_)
     , sse_kms_config(std::move(sse_kms_config_))
+    , server_side_encryption_s3(server_side_encryption_s3_)    /// proton: SSE-S3
     , retry_context(std::move(retry_context_))    /// proton: updates
     , log(getLogger("S3Client"))
 {
@@ -263,6 +267,7 @@ Client::Client(
     , api_mode(other.api_mode)
     , max_redirects(other.max_redirects)
     , sse_kms_config(other.sse_kms_config)
+    , server_side_encryption_s3(other.server_side_encryption_s3)    /// proton: SSE-S3
     , log(getLogger("S3Client"))
 {
     cache = std::make_shared<ClientCache>(*other.cache);
@@ -341,6 +346,16 @@ void Client::setKMSHeaders(RequestType & request) const
         if (sse_kms_config.bucket_key_enabled)
             request.SetBucketKeyEnabled(*sse_kms_config.bucket_key_enabled);
     }
+    /// proton: starts
+    /// SSE-S3 (e.g. "AES256"). Only applied when SSE-KMS is not configured, and — like SSE-KMS —
+    /// only on PUT/Copy/CreateMultipartUpload requests (the request types this template is instantiated for),
+    /// so the x-amz-server-side-encryption header is never sent on GET/HEAD where S3 would reject it.
+    else if (!server_side_encryption_s3.empty())
+    {
+        request.SetServerSideEncryption(
+            Model::ServerSideEncryptionMapper::GetServerSideEncryptionForName(server_side_encryption_s3));
+    }
+    /// proton: ends
 }
 
 // Explicitly instantiate this method only for the request types that support KMS headers
@@ -1009,7 +1024,8 @@ std::unique_ptr<S3::Client> ClientFactory::create( // NOLINT
     ServerSideEncryptionKMSConfig sse_kms_config,
     HTTPHeaderEntries headers,
     CredentialsConfiguration credentials_configuration,
-    const String & session_token)
+    const String & session_token,
+    const String & server_side_encryption_s3)    /// proton: SSE-S3 algorithm (e.g. "AES256")
 {
     PocoHTTPClientConfiguration client_configuration = cfg_;
     client_configuration.updateSchemeAndRegion();
@@ -1062,7 +1078,8 @@ std::unique_ptr<S3::Client> ClientFactory::create( // NOLINT
         client_settings.is_s3express_bucket ? Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::RequestDependent
                                             : Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
         client_settings,
-        std::move(retry_context)); /// proton: added retry_context
+        std::move(retry_context),    /// proton: added retry_context
+        server_side_encryption_s3);    /// proton: SSE-S3
 }
 
 PocoHTTPClientConfiguration ClientFactory::createClientConfiguration( // NOLINT
@@ -1072,12 +1089,18 @@ PocoHTTPClientConfiguration ClientFactory::createClientConfiguration( // NOLINT
     bool enable_s3_requests_logging,
     bool for_disk_s3,
     const ThrottlerPtr & get_request_throttler,
-    const ThrottlerPtr & put_request_throttler)
+    const ThrottlerPtr & put_request_throttler,
+    const String & protocol)
 {
     auto context = Context::getGlobalContextInstance();
     chassert(context);
+    auto proxy_configuration_resolver = ProxyConfigurationResolverProvider::get(ProxyConfiguration::protocolFromString(protocol));
 
-    return PocoHTTPClientConfiguration(
+    auto per_request_configuration = [=]{ return proxy_configuration_resolver->resolve(); };
+    auto error_report = [=](const ProxyConfiguration & req) { proxy_configuration_resolver->errorReport(req); };
+
+    auto config = PocoHTTPClientConfiguration(
+        per_request_configuration,
         force_region,
         remote_host_filter,
         s3_max_redirects,
@@ -1085,7 +1108,12 @@ PocoHTTPClientConfiguration ClientFactory::createClientConfiguration( // NOLINT
         for_disk_s3,
         context->getGlobalContext()->getSettingsRef().s3_use_adaptive_timeouts,
         get_request_throttler,
-        put_request_throttler);
+        put_request_throttler,
+        error_report);
+
+    config.scheme = Aws::Http::SchemeMapper::FromString(protocol.c_str());
+
+    return config;
 }
 
 bool isS3ExpressEndpoint(const std::string & endpoint)

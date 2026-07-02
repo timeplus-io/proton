@@ -1,5 +1,6 @@
 #include <Checkpoint/FileCheckpoint.h>
 
+#include <Common/logger_useful.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <IO/ReadBufferFromFile.h>
@@ -31,7 +32,7 @@ FileCheckpoint::FileCheckpoint(VersionType version_, std::unique_ptr<ReadBuffer>
 
 FileCheckpoint::FileCheckpoint(const DiskPath & ckpt_path)
 {
-    auto rb = ckpt_path.disk->readFile(ckpt_path.path);
+    auto rb = ckpt_path.disk->readFile(ckpt_path.path, ReadSettings{});
     readVarUInt(version, *rb);
     data.emplace<MaterializedEntity>(ckpt_path);
 }
@@ -89,7 +90,7 @@ void FileCheckpoint::materializeTo(WriteBufferFromFileBase & wb)
     }
     else if (auto * materialized_path = std::get_if<MaterializedEntity>(&data))
     {
-        auto file_buf = materialized_path->disk->readFile(materialized_path->path);
+        auto file_buf = materialized_path->disk->readFile(materialized_path->path, ReadSettings{});
         copyData(*file_buf, wb);
     }
     else
@@ -155,7 +156,7 @@ void FileCheckpoint::serializeEntity(WriteBuffer & wb, bool compress)
     else if (auto * materialized_path = std::get_if<MaterializedEntity>(&data))
     {
         auto copy_data = [materialized_path](WriteBuffer & out) {
-            auto file_buf = materialized_path->disk->readFile(materialized_path->path);
+            auto file_buf = materialized_path->disk->readFile(materialized_path->path, ReadSettings{});
             /// Skip version and ts
             VersionType version_;
             readVarUInt(version_, *file_buf);
@@ -208,7 +209,7 @@ void FileCheckpoint::recover(std::function<void(ReadBuffer &)> do_recover, bool 
     }
     else if (auto * materialized_path = std::get_if<MaterializedEntity>(&data))
     {
-        auto file_buf = materialized_path->disk->readFile(materialized_path->path);
+        auto file_buf = materialized_path->disk->readFile(materialized_path->path, ReadSettings{});
         /// Skip version and ts
         VersionType recovered_version;
         readVarUInt(recovered_version, *file_buf);

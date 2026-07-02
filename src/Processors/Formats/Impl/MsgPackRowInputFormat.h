@@ -6,7 +6,6 @@
 
 #include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/ISchemaReader.h>
-#include <Formats/FormatFactory.h>
 #include <IO/PeekableReadBuffer.h>
 #include <msgpack.hpp>
 #include <stack>
@@ -73,7 +72,11 @@ private:
 
     bool readRow(MutableColumns & columns, RowReadExtension & ext) override;
 
-    bool readObject();
+    template <typename Parser>
+    bool readObject(Parser & msgpack_parser);
+
+    size_t countRows(size_t max_block_size) override;
+    bool supportsCountRows() const override { return true; }
 
     std::unique_ptr<PeekableReadBuffer> buf;
     MsgPackVisitor visitor;

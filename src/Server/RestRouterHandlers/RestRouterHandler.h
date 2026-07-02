@@ -1,5 +1,7 @@
 #pragma once
 
+#include <IO/HTTPCommon.h>
+#include <IO/Operators.h>
 #include <Interpreters/Context.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Server/HTTP/HTTPRequestHandler.h>
@@ -152,7 +154,7 @@ private:
     {
         auto result{handleNotImplemented()};
         response.setStatusAndReason(HTTPResponse::HTTPStatus(result.second));
-        *response.send() << result.first << std::endl;
+        *response.send() << result.first << "\n";
     }
 
     std::pair<String, Int32> handleNotImplemented() const

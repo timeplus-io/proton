@@ -3,6 +3,7 @@
 #include <Storages/Stream/StreamingBlockReaderKafka.h>
 #include <Storages/Stream/StreamingStoreSourceMultiplexer.h>
 
+#include <Common/logger_useful.h>
 #include <Bootstrap/Globals.h>
 #include <Cluster/Common/Constants.h>
 #include <Cluster/KafkaLog/KafkaWALPool.h>

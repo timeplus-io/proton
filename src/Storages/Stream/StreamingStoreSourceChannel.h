@@ -30,6 +30,7 @@ public:
 private:
     void readAndProcess() override;
     std::pair<String, Int32> getStreamShard() const override;
+    Int64 lastFetchedSN() const override;
 
 private:
     static std::atomic<uint32_t> sequence_id;

@@ -145,7 +145,6 @@ int mainCompressor(int argc, char ** argv)
         else
             codec = CompressionCodecFactory::instance().get(method_family, level);
 
-
         std::unique_ptr<ReadBufferFromFileBase> rb;
         std::unique_ptr<WriteBufferFromFileBase> wb;
 
@@ -189,6 +188,8 @@ int mainCompressor(int argc, char ** argv)
             CompressedWriteBuffer to(*wb, codec, block_size);
             copyData(*rb, to);
         }
+
+        wb->finalize();
     }
     catch (...)
     {

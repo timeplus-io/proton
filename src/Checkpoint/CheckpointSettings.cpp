@@ -5,6 +5,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 
 namespace DB
@@ -162,6 +163,10 @@ void CheckpointSettings::parseImpl()
 
     if (auto iter = settings_map.find("incremental"); iter != settings_map.end())
         strategy.incremental = parseBoolTextWord(iter->second, "incremental");
+
+    if (auto iter = settings_map.find("offsets_only"); iter != settings_map.end())
+        strategy.offsets_only = parseBoolTextWord(iter->second, "offsets_only");
+
 
     /// Other unknown settings are ignored
 }

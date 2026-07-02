@@ -22,7 +22,7 @@
 #include <Storages/parseShards.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
-#include <Formats/FormatSettings.h>
+#include "Storages/ExternalStream/StorageExternalStreamImpl.h"
 #include <Formats/KafkaSchemaRegistryForAvro.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -41,6 +41,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int ABORTED;
 extern const int ILLEGAL_COLUMN;
 extern const int INVALID_CONFIG_PARAMETER;
 extern const int INVALID_SETTING_VALUE;
@@ -234,83 +235,12 @@ void validateMessageHeadersColumnType(const DataTypePtr & type)
 namespace ExternalStream
 {
 
-void Kafka::verifySettings(const ExternalStreamSettingsPtr & new_settings, bool /*change_settings*/, ContextPtr /*context_*/) const
-{
-    chassert(new_settings->type.value == StreamTypes::KAFKA || new_settings->type.value == StreamTypes::REDPANDA);
-
-    if (new_settings->topic.value.empty())
-    {
-        LOG_ERROR(logger, "Setting `topic` is empty");
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
-    }
-
-    if (!new_settings->message_key.value.empty())
-    {
-        LOG_ERROR(logger, "Setting `message_key` is deprecated, it won't be used");
-        throw Exception(
-            ErrorCodes::INVALID_SETTING_VALUE, "Setting `message_key` is deprecated, define the _tp_message_key column instead");
-    }
-
-    if (!new_settings->kafka_schema_registry_url.value.empty())
-    {
-        const auto & format = new_settings->data_format.value;
         const bool format_supported = format == "ProtobufSingle" || format == "Avro";
-        const bool key_uses_registry = !new_settings->message_key_schema_name.value.empty();
-        /// The schema registry URL is valid if either the message body format requires it
         /// (Avro/ProtobufSingle) or the message key is Avro-encoded via `message_key_schema_name`.
-        if (!format_supported && !key_uses_registry)
-        {
-            LOG_ERROR(
-                logger,
                 "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats, "
                 "or `message_key_schema_name` for Avro-encoded keys: actual='{}'",
-                format);
-
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE,
                 "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats, "
                 "or `message_key_schema_name` for Avro-encoded keys");
-        }
-    }
-
-    if (!new_settings->message_key_schema_name.value.empty() && new_settings->kafka_schema_registry_url.value.empty())
-    {
-        throw Exception(
-            ErrorCodes::INVALID_SETTING_VALUE,
-            "`message_key_schema_name` is only supported when `kafka_schema_registry_url` is set");
-    }
-
-    const auto & columns = getInMemoryMetadataPtr()->getColumns();
-    const bool has_event_time = columns.has(ProtonConsts::RESERVED_EVENT_TIME);
-    const bool has_message_key = columns.has(ProtonConsts::RESERVED_MESSAGE_KEY);
-    const bool has_message_headers = columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS);
-
-    if (has_event_time)
-    {
-        LOG_WARNING(
-            logger,
-            "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and is no longer supported as a physical column. "
-            "It will be ignored in payload parsing and treated as transport metadata.",
-            ProtonConsts::RESERVED_EVENT_TIME);
-
-        throw Exception(
-            ErrorCodes::ILLEGAL_COLUMN,
-            "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and cannot be defined as a physical column",
-            ProtonConsts::RESERVED_EVENT_TIME);
-    }
-
-    if (has_event_time || has_message_key || has_message_headers)
-    {
-        if (new_settings->isChanged("one_message_per_row") && !new_settings->one_message_per_row)
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE,
-                "`one_message_per_row` cannot be set to `false` when the `{}` / `{}` / `{}` column is defined",
-                ProtonConsts::RESERVED_EVENT_TIME,
-                ProtonConsts::RESERVED_MESSAGE_KEY,
-                ProtonConsts::RESERVED_MESSAGE_HEADERS);
-    }
-}
-
 
 DB::Kafka::Conf Kafka::createConf(KafkaExternalStreamSettings settings_)
 {
@@ -330,7 +260,7 @@ Kafka::Kafka(
     StorageInMemoryMetadata storage_metadata_,
     std::unique_ptr<ExternalStreamSettings> settings_,
     ASTs engine_args_,
-    bool attach,
+    bool /*attach*/,
     ExternalStreamCounterPtr external_stream_counter_,
     ContextPtr context)
     : StorageExternalStreamImpl(std::move(storage_id), storage_metadata_, std::move(settings_), context)
@@ -340,9 +270,6 @@ Kafka::Kafka(
 {
     assert(external_stream_counter);
 
-    if (!attach)
-        verifySettings(settings, false, context);
-
     const auto & columns = getInMemoryMetadataPtr()->getColumns();
     const bool has_event_time = columns.has(ProtonConsts::RESERVED_EVENT_TIME);
     const bool has_message_key = columns.has(ProtonConsts::RESERVED_MESSAGE_KEY);
@@ -351,29 +278,8 @@ Kafka::Kafka(
     if (has_event_time || has_message_key || has_message_headers)
         settings->set("one_message_per_row", true);
 
-    if (has_message_key)
-    {
-        validateMessageKeyColumnType(
-            columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type,
             settings->message_key_schema_name.value.empty() ? raw_message_key_types : avro_message_key_types);
-
-        if (hasCustomShardingExpr())
-            throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE,
-                "`sharding_expr` cannot be set when the `{}` column is defined",
-                ProtonConsts::RESERVED_MESSAGE_KEY);
-
-        if (!settings->message_key_schema_name.value.empty())
-        {
-            FormatSettings key_format_settings = getFormatSettings(context);
-            key_format_settings.kafka_schema_registry.subject_name = settings->message_key_schema_name.value;
             avro_key_schema_registry = KafkaSchemaRegistryForAvro::getOrCreate(key_format_settings);
-        }
-    }
-
-    if (has_message_headers)
-        validateMessageHeadersColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_HEADERS).type);
-
     cacheVirtualColumnNamesAndTypes();
 
     auto conf = createConf(settings->getKafkaSettings());
@@ -392,11 +298,29 @@ Kafka::Kafka(
     else
         topic_refresh_interval_ms = 300'000;
 
-    client = DB::Kafka::ConnectionFactory::instance().getConnection(std::move(conf));
+    /// Atomic store paired with the atomic_load_explicit in getClient(): even
+    /// though no other thread can see this Kafka instance during construction,
+    /// keeping store/load symmetric on `client` makes the data race analyzable
+    /// and avoids subtle re-ordering surprises if the constructor is later
+    /// inlined in a way that lets the publication of `this` race the assignment.
+    std::atomic_store_explicit(
+        &client,
+        DB::Kafka::ConnectionFactory::instance().getConnection(std::move(conf)),
+        std::memory_order_release);
+}
 
-    if (!attach)
-        /// Only validate cluster / topic for external stream creation
-        validate();
+DB::Kafka::ConnectionPtr Kafka::getClient() const
+{
+    /// `client` may be reset to nullptr by shutdown() concurrently with reads
+    /// from materialized-view pipelines. Load atomically — std::shared_ptr's
+    /// own copy/assign is not atomic w.r.t. concurrent reset(), so a plain
+    /// `client->...` access is racy and crashes inside getConsumer when
+    /// shutdown has just nulled the member (SIGSEGV at offset 0x50, see
+    /// tests/external_stream/kafka_external_stream.md).
+    auto local_client = std::atomic_load_explicit(&client, std::memory_order_acquire);
+    if (!local_client)
+        throw Exception(ErrorCodes::ABORTED, "Kafka external stream is shutting down");
+    return local_client;
 }
 
 void Kafka::startup()
@@ -411,7 +335,10 @@ void Kafka::shutdown(bool /*dropping*/)
 
     /// Release all resources here rather than relying on the deconstructor.
     /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
-    client.reset();
+    /// Atomic store paired with atomic_load_explicit in getClient() — without atomic
+    /// publication of the empty pointer, a concurrent reader can observe a torn
+    /// or partially-reset shared_ptr and crash inside Connection::getConsumer.
+    std::atomic_store_explicit(&client, DB::Kafka::ConnectionPtr{}, std::memory_order_release);
 
     tryRemoveTempDir();
 }
@@ -472,14 +399,102 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
         for (auto [shard, timestamp] : std::ranges::views::zip(shards_to_query, seek_timestamps))
             partition_timestamps.emplace_back(shard, timestamp);
 
-        return client->getOffsetsForTimestamps(settings->topic.value, partition_timestamps);
+        return getClient()->getOffsetsForTimestamps(settings->topic.value, partition_timestamps);
     }
 }
 
-/// Validate the topic still exists, specified partitions are still valid etc
-void Kafka::validate()
+void Kafka::validateSettings(const ExternalStreamSettingsPtr & new_settings, bool /*change_settings*/, const ContextPtr & /*context_*/) const
 {
-    if (client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds()) < 1)
+    chassert(new_settings->type.value == StreamTypes::KAFKA || new_settings->type.value == StreamTypes::REDPANDA);
+
+    if (new_settings->topic.value.empty())
+    {
+        LOG_ERROR(logger, "Setting `topic` is empty");
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", new_settings->type.value);
+    }
+
+    if (!new_settings->message_key.value.empty())
+    {
+        LOG_ERROR(logger, "Setting `message_key` is deprecated, it won't be used");
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE, "Setting `message_key` is deprecated, define the _tp_message_key column instead");
+    }
+
+    if (!new_settings->kafka_schema_registry_url.value.empty())
+    {
+        const auto & format = new_settings->data_format.value;
+        const bool format_supported = format == "ProtobufSingle" || format == "Avro";
+        if (!format_supported)
+        {
+            LOG_ERROR(
+                logger,
+                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats: actual='{}'",
+                format);
+
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE,
+                "Kafka external stream with schema registry only supports 'ProtobufSingle' or 'Avro' data formats");
+        }
+    }
+
+    const auto & columns = getInMemoryMetadataPtr()->getColumns();
+    const bool has_event_time = columns.has(ProtonConsts::RESERVED_EVENT_TIME);
+    const bool has_message_key = columns.has(ProtonConsts::RESERVED_MESSAGE_KEY);
+    const bool has_message_headers = columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS);
+
+    if (has_event_time)
+    {
+        LOG_WARNING(
+            logger,
+            "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and is no longer supported as a physical column. "
+            "It will be ignored in payload parsing and treated as transport metadata.",
+            ProtonConsts::RESERVED_EVENT_TIME);
+
+        throw Exception(
+            ErrorCodes::ILLEGAL_COLUMN,
+            "Column `{}` is a reserved virtual column for Kafka/Redpanda external streams and cannot be defined as a physical column",
+            ProtonConsts::RESERVED_EVENT_TIME);
+    }
+
+    if (has_event_time || has_message_key || has_message_headers)
+    {
+        if (new_settings->isChanged("one_message_per_row") && !new_settings->one_message_per_row)
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE,
+                "`one_message_per_row` cannot be set to `false` when the `{}` / `{}` / `{}` column is defined",
+                ProtonConsts::RESERVED_EVENT_TIME,
+                ProtonConsts::RESERVED_MESSAGE_KEY,
+                ProtonConsts::RESERVED_MESSAGE_HEADERS);
+    }
+}
+
+void Kafka::validateColumns() const
+{
+    const auto & columns = getInMemoryMetadataPtr()->getColumns();
+    const bool has_message_key = columns.has(ProtonConsts::RESERVED_MESSAGE_KEY);
+    const bool has_message_headers = columns.has(ProtonConsts::RESERVED_MESSAGE_HEADERS);
+
+    if (has_message_headers)
+        validateMessageHeadersColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_HEADERS).type);
+
+    if (has_message_key)
+    {
+        validateMessageKeyColumnType(columns.getColumn({GetColumnsOptions::Kind::All}, ProtonConsts::RESERVED_MESSAGE_KEY).type);
+
+        if (hasCustomShardingExpr())
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE,
+                "`sharding_expr` cannot be set when the `{}` column is defined",
+                ProtonConsts::RESERVED_MESSAGE_KEY);
+    }
+}
+
+void Kafka::validate(const ContextPtr & context) const
+{
+    validateSettings(settings, false, context);
+    validateColumns();
+
+    if (getClient()->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds()) < 1)
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Topic has no partitions, topic={}", topicName());
 }
 
@@ -489,14 +504,20 @@ std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
     if (!settings->one_message_per_row.value)
         return {};
 
+    const auto connection_timeout_ms = settings->connection_timeout_ms.value.totalMilliseconds();
+
+    /// Hoist getClient() out of the per-shard loop: one atomic_load + null-check
+    /// for the whole totalRows() call, and the local `local_client` keeps the
+    /// Connection alive even if shutdown() reset the member mid-loop.
+    auto local_client = getClient();
     auto shards_to_query = parseQueryShards(
-        settings_ref.shards.value, client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds()));
+        settings_ref.shards.value, local_client->getPartitionCount(topicName(), connection_timeout_ms));
     LOG_INFO(logger, "Counting number of messages topic={} partitions=[{}]", topicName(), fmt::join(shards_to_query, ","));
 
     UInt64 rows = 0;
     for (auto shard : shards_to_query)
     {
-        auto marks = client->getConsumer(topicName())->queryWatermarkOffsets(static_cast<Int32>(shard));
+        auto marks = local_client->getConsumer(topicName())->queryWatermarkOffsets(static_cast<Int32>(shard), connection_timeout_ms);
         LOG_INFO(logger, "Watermark offsets topic={} partition={} low={} high={}", topicName(), shard, marks.low, marks.high);
         rows += marks.high - marks.low;
     }
@@ -505,14 +526,17 @@ std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
 
 std::vector<int64_t> Kafka::getLastSNs() const
 {
-    auto partitions = client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds());
+    /// Hoist getClient() out of the per-partition loop. local_client keeps
+    /// the Connection alive across the whole sweep even if shutdown() races.
+    auto local_client = getClient();
+    auto partitions = local_client->getPartitionCount(topicName(), settings->connection_timeout_ms.value.totalMilliseconds());
 
     std::vector<int64_t> result;
     result.reserve(partitions);
 
     for (int32_t i = 0; i < partitions; ++i)
     {
-        auto offset = client->getWatermarkOffsets(topicName(), i);
+        auto offset = local_client->getWatermarkOffsets(topicName(), i);
         result.push_back(std::max(offset.high - 1, offset.low));
     }
 
@@ -528,13 +552,14 @@ Pipe Kafka::read(
     size_t max_block_size,
     size_t /*num_streams*/)
 {
+    const auto connection_timeout_ms = static_cast<UInt64>(settings->connection_timeout_ms.value.totalMilliseconds());
+
     /// The consumer can be shared between all the sources in the same pipe, because each source reads from a different partition.
-    auto consumer = client->getConsumer(topicName());
+    auto consumer = getClient()->getConsumer(topicName());
 
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
-    auto shards_to_query = parseQueryShards(
-        context->getSettingsRef().shards.value, consumer->getPartitionCount(settings->connection_timeout_ms.value.totalMilliseconds()));
+    auto shards_to_query = parseQueryShards(context->getSettingsRef().shards.value, consumer->getPartitionCount(connection_timeout_ms));
     chassert(!shards_to_query.empty());
 
     auto streaming = query_info.isStreaming();
@@ -576,7 +601,7 @@ Pipe Kafka::read(
             std::optional<Int64> high_watermark = std::nullopt;
             if (!streaming)
             {
-                auto marks = consumer->queryWatermarkOffsets(static_cast<Int32>(shard));
+                auto marks = consumer->queryWatermarkOffsets(static_cast<Int32>(shard), connection_timeout_ms);
                 LOG_INFO(logger, "Watermarks topic={} partition={} low={} high={}", topicName(), shard, marks.low, marks.high);
                 high_watermark = marks.high;
 
@@ -602,7 +627,10 @@ Pipe Kafka::read(
                 offset,
                 high_watermark,
                 max_block_size,
-                settings->consumer_stall_timeout_ms.totalMilliseconds(),
+                KafkaSource::Timeouts{
+                    .connection_timeout_ms = connection_timeout_ms,
+                    .consumer_stall_timeout_ms = static_cast<UInt64>(settings->consumer_stall_timeout_ms.totalMilliseconds()),
+                },
                 avro_key_schema_registry,
                 external_stream_counter,
                 context,
@@ -630,18 +658,11 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
     if (hasSchemaRegistryUrl() && data_format == "ProtobufSingle")
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Write Protobuf data with schema registry is not supported");
 
+    auto producer = getClient()->getProducer(topicName());
     /// Encoding _tp_message_key as Avro binary (Confluent wire format) on write is not yet implemented.
     /// Currently only decoding Avro-encoded keys on read is supported. When this is implemented,
-    /// the sink will need to: fetch the schema from the registry, serialize the key JSON string
-    /// into a GenericDatum, binary-encode it, and prepend the Confluent wire header (magic byte + schema ID).
     if (avro_key_schema_registry)
-        throw Exception(
-            ErrorCodes::NOT_IMPLEMENTED,
             "Writing Avro-encoded message keys via schema registry is not yet supported. "
-            "`message_key_schema_name` is currently read-only. "
-            "To write a plain-text message key, omit `message_key_schema_name` and insert a string into `_tp_message_key` directly.");
-
-    auto producer = client->getProducer(topicName());
 
     auto sink = std::make_shared<KafkaSink>(
         *this,

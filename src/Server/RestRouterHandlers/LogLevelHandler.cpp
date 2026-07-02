@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string/replace.hpp>
 #include <Common/re2.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

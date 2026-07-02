@@ -22,6 +22,8 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserKeyword s_tables("TABLES");
     /// proton: starts
     ParserKeyword s_streams("STREAMS");
+    ParserKeyword s_inputs("INPUTS");
+    ParserKeyword s_views("VIEWS");
     /// proton: ends
     ParserKeyword s_databases("DATABASES");
     ParserKeyword s_clusters("CLUSTERS");
@@ -138,10 +140,15 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             query->temporary = true;
 
         /// proton: starts
-        if (!s_tables.ignore(pos, expected) && !s_streams.ignore(pos, expected))
-        /// proton: ends
+        if (s_inputs.ignore(pos, expected))
         {
-            if (s_dictionaries.ignore(pos, expected, false))
+            query->only_inputs = true;
+        }
+        else if (!s_tables.ignore(pos, expected) && !s_streams.ignore(pos, expected))
+        {
+            if (s_views.ignore(pos, expected))
+                query->only_views = true;
+            else if (s_dictionaries.ignore(pos, expected, false))
                 query->dictionaries = true;
             else
                 return false;

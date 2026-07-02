@@ -1,6 +1,7 @@
 #include <Checkpoint/KeyCheckpointWriteBuffer.h>
 
 #include <IO/WriteHelpers.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -9,8 +10,24 @@ bool KeyCheckpointWriteBuffer::initialized() const
     return file_buf != nullptr;
 }
 
+KeyCheckpointWriteBuffer::~KeyCheckpointWriteBuffer()
+{
+    try
+    {
+        reset();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+}
+
 void KeyCheckpointWriteBuffer::init(
-    std::string_view key_, VersionType version_, CheckpointType type_, std::unique_ptr<WriteBufferFromFileBase> file_buf_, uint32_t next_seq_num_)
+    std::string_view key_,
+    VersionType version_,
+    CheckpointType type_,
+    std::unique_ptr<WriteBufferFromFileBase> file_buf_,
+    uint32_t next_seq_num_)
 {
     chassert(!initialized());
 
@@ -46,7 +63,12 @@ void KeyCheckpointWriteBuffer::finalize()
 
 void KeyCheckpointWriteBuffer::reset()
 {
-    file_buf.reset();
+    if (file_buf)
+    {
+        file_buf->cancel();
+        file_buf.reset();
+    }
+
     stopwatch.reset();
 }
 

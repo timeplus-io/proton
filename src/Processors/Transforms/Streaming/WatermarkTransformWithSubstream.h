@@ -32,13 +32,15 @@ public:
     Status prepare() override;
     void work() override;
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr) override;
-    void recover(CheckpointContextPtr) override;
+    void doCheckpoint(CheckpointContextPtr) override;
+    void doRecover(CheckpointContextPtr) override;
 
 
 private:
     inline WatermarkStamper & getOrCreateSubstreamWatermark(const SubstreamID & id);
     inline bool removeSubstreamWatermark(const SubstreamID & id);
+
+    bool releaseConsecutivePartnerIfDifferent(const SubstreamID & was_consecutive_id, const SubstreamID & current_id);
 
     void initSubstreamHashMap(HashTableType hash_table_type, const String & spill_dir, size_t max_hot_key_count, const String & kv_options);
 
@@ -55,6 +57,10 @@ private:
 
     bool skip_stamping_for_backfill_data;
     bool mute_watermark = false;
+
+    /// INVALID_SUBSTREAM_ID when the previous chunk was not a consecutive-begin.
+    /// Not serialized: a consecutive pair cannot straddle a checkpoint barrier.
+    SubstreamID prev_consecutive_id = INVALID_SUBSTREAM_ID;
 
     LoggerPtr logger;
 

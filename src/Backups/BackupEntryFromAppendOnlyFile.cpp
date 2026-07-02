@@ -17,9 +17,9 @@ BackupEntryFromAppendOnlyFile::BackupEntryFromAppendOnlyFile(
 {
 }
 
-std::unique_ptr<ReadBuffer> BackupEntryFromAppendOnlyFile::getReadBuffer() const
+std::unique_ptr<ReadBuffer> BackupEntryFromAppendOnlyFile::getReadBuffer(const ReadSettings & read_settings) const
 {
-    auto buf = BackupEntryFromImmutableFile::getReadBuffer();
+    auto buf = BackupEntryFromImmutableFile::getReadBuffer(read_settings);
     return std::make_unique<LimitReadBuffer>(std::move(buf), LimitReadBuffer::Settings{.read_no_more = limit, .expect_eof = true});
 }
 

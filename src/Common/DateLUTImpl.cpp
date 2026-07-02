@@ -3,7 +3,6 @@
 #include <cctz/civil_time.h>
 #include <cctz/time_zone.h>
 #include <cctz/zone_info_source.h>
-#include <Common/getResource.h>
 #include <Common/Exception.h>
 
 #include <algorithm>
@@ -11,6 +10,11 @@
 #include <chrono>
 #include <cstring>
 #include <memory>
+#include <string_view>
+
+/// Defined in contrib/cctz-cmake/CMakeLists.txt's generated TimeZones.generated.cpp
+/// alongside the embedded tzdata byte arrays.
+std::string_view getTimeZone(const char * name);
 
 
 namespace DB
@@ -265,7 +269,7 @@ namespace cctz_extension
             const std::string & name,
             const std::function<std::unique_ptr<cctz::ZoneInfoSource>(const std::string & name)> & fallback)
         {
-            std::string_view resource = getResource(name);
+            std::string_view resource = getTimeZone(name.c_str());
             if (!resource.empty())
                 return std::make_unique<Source>(resource.data(), resource.size());
 

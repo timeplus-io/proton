@@ -25,6 +25,7 @@ namespace ErrorCodes
 extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
 extern const int UNKNOWN_FUNCTION;
 extern const int BAD_ARGUMENTS;
+extern const int SYNTAX_ERROR;
 }
 /// proton: ends
 
@@ -176,10 +177,16 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         for (const auto & kv : kv_list->children)
         {
             auto * kv_pair = kv->as<ASTPair>();
-            auto key = kv_pair->first;
-            auto pair_value = kv_pair->second->as<ASTLiteral>()->value;
             if (!kv_pair)
-                throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Key-value pair expected");
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "Key-value pair expected");
+
+            const auto & key = kv_pair->first;
+
+            const auto * literal = kv_pair->second->as<ASTLiteral>();
+            if (!literal)
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "Value for '{}' must be a literal", key);
+
+            const auto & pair_value = literal->value;
             
             if (key == "url")
             {
@@ -202,6 +209,10 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
             else if (key == "execution_timeout")
             {
                 ast_execution_timeout = pair_value.safeGet<UInt64>();
+            }
+            else
+            {
+                throw Exception(ErrorCodes::SYNTAX_ERROR, "Unknown remote function parameter '{}'", key);
             }
         }
         /// check if URL is set

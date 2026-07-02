@@ -30,6 +30,9 @@ public:
 
 private:
     void updateOutputStream() override;
+    /// proton: starts.
+    void preserveShuffleDescriptionIfValid(const DataStream & input_stream);
+    /// proton: ends.
 
     ActionsDAGPtr actions_dag;
     String filter_column_name;

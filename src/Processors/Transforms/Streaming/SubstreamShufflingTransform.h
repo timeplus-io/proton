@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Names.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Streaming/SubstreamChunkSplitter.h>
 #include <Common/Logger.h>
@@ -18,7 +19,7 @@ namespace Streaming
 class SubstreamShufflingTransform final : public IProcessor
 {
 public:
-    SubstreamShufflingTransform(Block header_, size_t num_outputs_, std::vector<size_t> key_positions_);
+    SubstreamShufflingTransform(Block header_, size_t num_outputs_, const Names & keys_);
 
     String getName() const override { return "SubstreamShufflingTransform"; }
 

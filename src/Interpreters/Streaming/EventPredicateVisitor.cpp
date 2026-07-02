@@ -76,13 +76,13 @@ Int64 parseSeekToSequenceNumber(const Field & value, DataTypePtr type)
     if (isNativeInteger(type))
     {
         Int64 sn = value.get<Int64>();
-        if (sn >= cluster::Constants::LogStartSN)
-            return sn;
+        return sn >= cluster::Constants::LogStartSN ? sn : cluster::Constants::LogStartSN;
     }
 
     throw Exception(
         ErrorCodes::UNEXPECTED_EXPRESSION,
-        "The event sequence number predicate requrie a constant number or expression greater than or equal to {}", cluster::Constants::LogStartSN);
+        "The event sequence number predicate require a constant number or expression greater than or equal to {}",
+        cluster::Constants::LogStartSN);
 }
 
 Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
@@ -112,7 +112,9 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
         else
             throw Exception(
                 ErrorCodes::UNEXPECTED_EXPRESSION,
-                "The event sequence number predicate expression must be constant sequence number expression. But got '{}'",
+                "The event sequence number predicate expression must be constant sequence number expression greater than or equal to {}. "
+                "But got '{}'",
+                cluster::Constants::LogStartSN,
                 ast->formatForErrorMessage());
     }
 }
@@ -177,7 +179,8 @@ std::pair<size_t, SeekBy> EventPredicateMatcher::Data::parseSeekBy(ASTPtr ast) c
     return {stream_pos.value(), seek_by};
 }
 
-std::tuple<size_t, SeekBy, Int64, bool> EventPredicateMatcher::Data::parseEventPredicate(ASTPtr & left_arg_ast, ASTPtr & right_arg_ast) const
+std::tuple<size_t, SeekBy, Int64, bool>
+EventPredicateMatcher::Data::parseEventPredicate(ASTPtr & left_arg_ast, ASTPtr & right_arg_ast) const
 {
     auto [left_stream_pos, left_seek_by] = parseSeekBy(left_arg_ast);
     auto [right_stream_pos, right_seek_by] = parseSeekBy(right_arg_ast);

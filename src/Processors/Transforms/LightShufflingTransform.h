@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Names.h>
 #include <Processors/IProcessor.h>
 #include <Processors/LightChunkSplitter.h>
 
@@ -13,7 +14,7 @@ namespace DB
 class LightShufflingTransform final : public IProcessor
 {
 public:
-    LightShufflingTransform(Block header_, size_t num_outputs_, std::vector<size_t> key_positions_);
+    LightShufflingTransform(Block header_, size_t num_outputs_, const Names & keys_);
 
     String getName() const override { return "LightShufflingTransform"; }
 

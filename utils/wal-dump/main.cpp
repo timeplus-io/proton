@@ -46,6 +46,8 @@ static void dump(const std::string & bin_path)
         out << block.dumpStructure() << "\n";
         out << "\n" << DB::flush;
     }
+
+    out.finalize();
 }
 
 

@@ -82,6 +82,9 @@ using RestoreDataTasks = std::vector<std::function<void()>>;
 /// proton: starts.
 class Chunk;
 using ChunkList = std::list<Chunk>;
+
+struct SchemaBlock;
+using SchemaBlockPtr = std::shared_ptr<SchemaBlock>;
 /// proton: ends.
 
 struct ColumnSize
@@ -231,11 +234,11 @@ public:
         create_query.set(std::make_unique<StorageInMemoryCreateQuery>(*create_query_));
     }
 
-    std::pair<StorageMetadataPtr, const Block &> getMetadataByVersion(UInt16 /*version*/) const;
+    SchemaBlockPtr getMetadataByVersion(UInt16 /*version*/) const;
 
-    StorageMetadataPtr getInMemoryMetadataByVersion(UInt16 version) const { return getMetadataByVersion(version).first; }
+    StorageMetadataPtr getInMemoryMetadataByVersion(UInt16 version) const;
 
-    const Block & getSchemaByVersion(UInt16 version) const { return getMetadataByVersion(version).second; }
+    const Block & getSchemaByVersion(UInt16 version) const;
 
     /// Insert queries squash blocks for buffering (see InterpreterInsertQuery.cpp).
     /// However, not all storages need this feature, for example, external streams
@@ -301,6 +304,10 @@ public:
     /// because those are internally translated into 'ALTER UPDATE' mutations.
     virtual bool supportsDelete() const { return false; }
 
+    /// Return true if the trivial count query could be optimized without reading the data at all
+    /// in totalRows() or totalRowsByPartitionPredicate() methods or with optimized reading in read() method.
+    virtual bool supportsTrivialCountOptimization() const { return false; }
+
     /// proton: starts. Need to ensure thread safety
     virtual bool isReady() const { return true; }
 
@@ -328,7 +335,7 @@ protected:
     MultiVersionStorageCreateQueryPtr create_query;
 
     mutable SharedMutex multi_metadata_mutex;
-    mutable std::unordered_map<UInt32, std::pair<StorageMetadataPtr, const Block>> multi_version_metadata;
+    mutable std::unordered_map<UInt32, SchemaBlockPtr> multi_version_metadata;
     mutable std::atomic_flag loaded_from_metastore;
     /// When storage is inited, init this data member
     mutable Streaming::DataStreamSemanticEx data_stream_semantic;

@@ -1,5 +1,8 @@
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
 
+#include <Common/logger_useful.h>
+
+
 namespace DB::V8
 {
 void CacheDictionaryBridge::getCardinality(const v8::FunctionCallbackInfo<v8::Value> & args)

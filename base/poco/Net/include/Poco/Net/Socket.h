@@ -18,23 +18,25 @@
 #define Net_Socket_INCLUDED
 
 
+#include <vector>
 #include "Poco/Net/Net.h"
 #include "Poco/Net/SocketImpl.h"
-#include <vector>
 
 
-namespace Poco {
-namespace Net {
-
-
-class Net_API Socket
-	/// Socket is the common base class for
-	/// StreamSocket, ServerSocket, DatagramSocket and other
-	/// socket classes.
-	///
-	/// It provides operations common to all socket types.
+namespace Poco
 {
-public:
+namespace Net
+{
+
+
+    class Net_API Socket
+    /// Socket is the common base class for
+    /// StreamSocket, ServerSocket, DatagramSocket and other
+    /// socket classes.
+    ///
+    /// It provides operations common to all socket types.
+    {
+    public:
 	enum SelectMode
 		/// The mode argument to poll() and select().
 	{
@@ -42,49 +44,49 @@ public:
 		SELECT_WRITE = 2,
 		SELECT_ERROR = 4
 	};
-	
+
 	typedef std::vector<Socket> SocketList;
 
 	Socket();
 		/// Creates an uninitialized socket.
 
-	Socket(const Socket& socket);
+	Socket(const Socket & socket);
 		/// Copy constructor.
 		///
 		/// Attaches the SocketImpl from the other socket and
 		/// increments the reference count of the SocketImpl.
-		
-	Socket& operator = (const Socket& socket);
+
+	Socket & operator=(const Socket & socket);
 		/// Assignment operator.
 		///
 		/// Releases the socket's SocketImpl and
 		/// attaches the SocketImpl from the other socket and
 		/// increments the reference count of the SocketImpl.
-		
+
 	virtual ~Socket();
 		/// Destroys the Socket and releases the
 		/// SocketImpl.
-		
-	bool operator == (const Socket& socket) const;
+
+	bool operator==(const Socket & socket) const;
 		/// Returns true if both sockets share the same
 		/// SocketImpl, false otherwise.
 
-	bool operator != (const Socket& socket) const;
+	bool operator!=(const Socket & socket) const;
 		/// Returns false if both sockets share the same
 		/// SocketImpl, true otherwise.
 
-	bool operator <  (const Socket& socket) const;
-		/// Compares the SocketImpl pointers.
-	
-	bool operator <= (const Socket& socket) const;
+	bool operator<(const Socket & socket) const;
 		/// Compares the SocketImpl pointers.
 
-	bool operator >  (const Socket& socket) const;
+	bool operator<=(const Socket & socket) const;
 		/// Compares the SocketImpl pointers.
 
-	bool operator >= (const Socket& socket) const;
+	bool operator>(const Socket & socket) const;
 		/// Compares the SocketImpl pointers.
-		
+
+	bool operator>=(const Socket & socket) const;
+		/// Compares the SocketImpl pointers.
+
 	void close();
 		/// Closes the socket.
 
@@ -103,7 +105,7 @@ public:
 		///
 		/// Returns the number of sockets ready.
 		///
-		/// After return, 
+		/// After return,
 		///   * readList contains those sockets ready for reading,
 		///   * writeList contains those sockets ready for writing,
 		///   * exceptList contains those sockets with a pending error.
@@ -118,10 +120,10 @@ public:
 		/// In this case, the return value may be greater than the sum
 		/// of all sockets in all list.
 
-	bool poll(const Poco::Timespan& timeout, int mode) const;
-		/// Determines the status of the socket, using a 
+	bool poll(const Poco::Timespan & timeout, int mode) const;
+		/// Determines the status of the socket, using a
 		/// call to poll() or select().
-		/// 
+		///
 		/// The mode argument is constructed by combining the values
 		/// of the SelectMode enumeration.
 		///
@@ -134,7 +136,7 @@ public:
 
 	void setSendBufferSize(int size);
 		/// Sets the size of the send buffer.
-		
+
 	int getSendBufferSize() const;
 		/// Returns the size of the send buffer.
 		///
@@ -144,7 +146,7 @@ public:
 
 	void setReceiveBufferSize(int size);
 		/// Sets the size of the receive buffer.
-		
+
 	int getReceiveBufferSize() const;
 		/// Returns the size of the receive buffer.
 		///
@@ -152,9 +154,9 @@ public:
 		/// value previously set with setReceiveBufferSize(),
 		/// as the system is free to adjust the value.
 
-	void setSendTimeout(const Poco::Timespan& timeout);
+	void setSendTimeout(const Poco::Timespan & timeout);
 		/// Sets the send timeout for the socket.
-	
+
 	Poco::Timespan getSendTimeout() const;
 		/// Returns the send timeout for the socket.
 		///
@@ -162,18 +164,30 @@ public:
 		/// timeout previously set with setSendTimeout(),
 		/// as the system is free to adjust the value.
 
-	void setReceiveTimeout(const Poco::Timespan& timeout);
+	void setReceiveTimeout(const Poco::Timespan & timeout);
 		/// Sets the send timeout for the socket.
 		///
 		/// On systems that do not support SO_RCVTIMEO, a
 		/// workaround using poll() is provided.
-	
+
 	Poco::Timespan getReceiveTimeout() const;
 		/// Returns the receive timeout for the socket.
 		///
 		/// The returned timeout may be different than the
 		/// timeout previously set with getReceiveTimeout(),
 		/// as the system is free to adjust the value.
+
+	void setSendThrottler(const Poco::Net::ThrottlerPtr & throttler = {});
+        /// Sets the throttler that is used to limit the speed of data sent through the socket.
+
+        Poco::Net::ThrottlerPtr getSendThrottler() const;
+        /// Returns the throttler that is used to limit the speed of data sent through the socket.
+
+        void setReceiveThrottler(const Poco::Net::ThrottlerPtr & throttler = {});
+        /// Sets the throttler that is used to limit the speed of data received through the socket.
+
+        Poco::Net::ThrottlerPtr getReceiveThrottler() const;
+        /// Returns the throttler that is used to limit the speed of data received through the socket.
 
 	void setOption(int level, int option, int value);
 		/// Sets the socket option specified by level and option
@@ -186,56 +200,56 @@ public:
 	void setOption(int level, int option, unsigned char value);
 		/// Sets the socket option specified by level and option
 		/// to the given integer value.
-		
-	void setOption(int level, int option, const Poco::Timespan& value);
-		/// Sets the socket option specified by level and option
-		/// to the given time value.
-		
-	void setOption(int level, int option, const IPAddress& value);
+
+	void setOption(int level, int option, const Poco::Timespan & value);
 		/// Sets the socket option specified by level and option
 		/// to the given time value.
 
-	void getOption(int level, int option, int& value) const;
-		/// Returns the value of the socket option 
+	void setOption(int level, int option, const IPAddress & value);
+		/// Sets the socket option specified by level and option
+		/// to the given time value.
+
+	void getOption(int level, int option, int & value) const;
+		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, unsigned& value) const;
-		/// Returns the value of the socket option 
+	void getOption(int level, int option, unsigned & value) const;
+		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, unsigned char& value) const;
-		/// Returns the value of the socket option 
+	void getOption(int level, int option, unsigned char & value) const;
+		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, Poco::Timespan& value) const;
-		/// Returns the value of the socket option 
+	void getOption(int level, int option, Poco::Timespan & value) const;
+		/// Returns the value of the socket option
 		/// specified by level and option.
-	
-	void getOption(int level, int option, IPAddress& value) const;
-		/// Returns the value of the socket option 
+
+	void getOption(int level, int option, IPAddress & value) const;
+		/// Returns the value of the socket option
 		/// specified by level and option.
 
 	void setLinger(bool on, int seconds);
 		/// Sets the value of the SO_LINGER socket option.
-		
-	void getLinger(bool& on, int& seconds) const;
+
+	void getLinger(bool & on, int & seconds) const;
 		/// Returns the value of the SO_LINGER socket option.
-	
+
 	void setNoDelay(bool flag);
 		/// Sets the value of the TCP_NODELAY socket option.
-		
+
 	bool getNoDelay() const;
 		/// Returns the value of the TCP_NODELAY socket option.
-	
+
 	void setKeepAlive(bool flag);
 		/// Sets the value of the SO_KEEPALIVE socket option.
-		
+
 	bool getKeepAlive() const;
 		/// Returns the value of the SO_KEEPALIVE socket option.
-	
+
 	void setReuseAddress(bool flag);
 		/// Sets the value of the SO_REUSEADDR socket option.
-	
+
 	bool getReuseAddress() const;
 		/// Returns the value of the SO_REUSEADDR socket option.
 
@@ -243,16 +257,16 @@ public:
 		/// Sets the value of the SO_REUSEPORT socket option.
 		/// Does nothing if the socket implementation does not
 		/// support SO_REUSEPORT.
-	
+
 	bool getReusePort() const;
 		/// Returns the value of the SO_REUSEPORT socket option.
 		///
 		/// Returns false if the socket implementation does not
 		/// support SO_REUSEPORT.
-		
+
 	void setOOBInline(bool flag);
 		/// Sets the value of the SO_OOBINLINE socket option.
-	
+
 	bool getOOBInline() const;
 		/// Returns the value of the SO_OOBINLINE socket option.
 
@@ -262,25 +276,25 @@ public:
 
 	bool getBlocking() const;
 		/// Returns the blocking mode of the socket.
-		/// This method will only work if the blocking modes of 
+		/// This method will only work if the blocking modes of
 		/// the socket are changed via the setBlocking method!
 
 	SocketAddress address() const;
 		/// Returns the IP address and port number of the socket.
-		
+
 	SocketAddress peerAddress() const;
 		/// Returns the IP address and port number of the peer socket.
 
-	SocketImpl* impl() const;
+	SocketImpl * impl() const;
 		/// Returns the SocketImpl for this socket.
-		
+
 	bool secure() const;
 		/// Returns true iff the socket's connection is secure
 		/// (using SSL or TLS).
-		
+
 	static bool supportsIPv4();
 		/// Returns true if the system supports IPv4.
-		
+
 	static bool supportsIPv6();
 		/// Returns true if the system supports IPv6.
 
@@ -298,7 +312,7 @@ public:
         /// Returns the socket descriptor for this socket.
 
 protected:
-	Socket(SocketImpl* pImpl);
+	Socket(SocketImpl * pImpl);
 		/// Creates the Socket and attaches the given SocketImpl.
 		/// The socket takes ownership of the SocketImpl.
 
@@ -310,9 +324,8 @@ class FDCompare
 	/// Used in poll() member function.
 {
 public:
-	FDCompare(int fd): _fd(fd) { }
-	inline bool operator()(const Socket& socket) const
-	{ return socket.sockfd() == _fd; }
+	FDCompare(int fd) : _fd(fd) { }
+	inline bool operator()(const Socket & socket) const { return socket.sockfd() == _fd; }
 
 private:
 	FDCompare();
@@ -320,44 +333,44 @@ private:
 };
 #endif
 
-	SocketImpl* _pImpl;
+	SocketImpl * _pImpl;
 };
 
 
 //
 // inlines
 //
-inline bool Socket::operator == (const Socket& socket) const
+inline bool Socket::operator==(const Socket & socket) const
 {
 	return _pImpl == socket._pImpl;
 }
 
 
-inline bool Socket::operator != (const Socket& socket) const
+inline bool Socket::operator!=(const Socket & socket) const
 {
 	return _pImpl != socket._pImpl;
 }
 
 
-inline bool Socket::operator <  (const Socket& socket) const
+inline bool Socket::operator<(const Socket & socket) const
 {
 	return _pImpl < socket._pImpl;
 }
 
 
-inline bool Socket::operator <= (const Socket& socket) const
+inline bool Socket::operator<=(const Socket & socket) const
 {
 	return _pImpl <= socket._pImpl;
 }
 
 
-inline bool Socket::operator >  (const Socket& socket) const
+inline bool Socket::operator>(const Socket & socket) const
 {
 	return _pImpl > socket._pImpl;
 }
 
 
-inline bool Socket::operator >= (const Socket& socket) const
+inline bool Socket::operator>=(const Socket & socket) const
 {
 	return _pImpl >= socket._pImpl;
 }
@@ -386,7 +399,7 @@ inline void Socket::setSendBufferSize(int size)
 	_pImpl->setSendBufferSize(size);
 }
 
-	
+
 inline int Socket::getSendBufferSize() const
 {
 	return _pImpl->getSendBufferSize();
@@ -398,7 +411,7 @@ inline void Socket::setReceiveBufferSize(int size)
 	_pImpl->setReceiveBufferSize(size);
 }
 
-	
+
 inline int Socket::getReceiveBufferSize() const
 {
 	return _pImpl->getReceiveBufferSize();
@@ -428,6 +441,28 @@ inline Poco::Timespan Socket::getReceiveTimeout() const
 	return _pImpl->getReceiveTimeout();
 }
 
+    inline void Socket::setSendThrottler(const Poco::Net::ThrottlerPtr & throttler)
+    {
+        _pImpl->setSendThrottler(throttler);
+    }
+
+
+    inline Poco::Net::ThrottlerPtr Socket::getSendThrottler() const
+    {
+        return _pImpl->getSendThrottler();
+    }
+
+
+    inline void Socket::setReceiveThrottler(const Poco::Net::ThrottlerPtr & throttler)
+    {
+        _pImpl->setReceiveThrottler(throttler);
+    }
+
+
+    inline Poco::Net::ThrottlerPtr Socket::getReceiveThrottler() const
+    {
+        return _pImpl->getReceiveThrottler();
+    }
 
 inline void Socket::setOption(int level, int option, int value)
 {
@@ -452,7 +487,7 @@ inline void Socket::setOption(int level, int option, const Poco::Timespan& value
 	_pImpl->setOption(level, option, value);
 }
 
-	
+
 inline void Socket::setOption(int level, int option, const IPAddress& value)
 {
 	_pImpl->setOption(level, option, value);
@@ -494,7 +529,7 @@ inline void Socket::setLinger(bool on, int seconds)
 	_pImpl->setLinger(on, seconds);
 }
 
-	
+
 inline void Socket::getLinger(bool& on, int& seconds) const
 {
 	_pImpl->getLinger(on, seconds);
@@ -506,7 +541,7 @@ inline void Socket::setNoDelay(bool flag)
 	_pImpl->setNoDelay(flag);
 }
 
-	
+
 inline bool Socket::getNoDelay() const
 {
 	return _pImpl->getNoDelay();
@@ -518,7 +553,7 @@ inline void Socket::setKeepAlive(bool flag)
 	_pImpl->setKeepAlive(flag);
 }
 
-	
+
 inline bool Socket::getKeepAlive() const
 {
 	return _pImpl->getKeepAlive();
@@ -548,7 +583,7 @@ inline bool Socket::getReusePort() const
 	return _pImpl->getReusePort();
 }
 
-	
+
 inline void Socket::setOOBInline(bool flag)
 {
 	_pImpl->setOOBInline(flag);
@@ -590,7 +625,7 @@ inline SocketAddress Socket::address() const
 	return _pImpl->address();
 }
 
-	
+
 inline SocketAddress Socket::peerAddress() const
 {
 	return _pImpl->peerAddress();
@@ -625,7 +660,8 @@ inline void Socket::init(int af)
 }
 
 
-} } // namespace Poco::Net
+}
+} // namespace Poco::Net
 
 
 #endif // Net_Socket_INCLUDED

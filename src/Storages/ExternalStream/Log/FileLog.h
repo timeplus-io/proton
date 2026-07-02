@@ -23,6 +23,9 @@ public:
     FileLog(StorageID storage_id, StorageInMemoryMetadata metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
     ~FileLog() override = default;
 
+    void validate(const ContextPtr & context) const override;
+    void validateSettings(const ExternalStreamSettingsPtr & new_settings, bool change_settings, const ContextPtr & context) const override;
+
     String getName() const override { return "FileLogExternalStream"; }
 
     bool supportsAccurateSeekTo() const noexcept override { return false; }

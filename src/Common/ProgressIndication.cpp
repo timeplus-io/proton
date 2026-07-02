@@ -15,6 +15,7 @@
 /// http://en.wikipedia.org/wiki/ANSI_escape_code
 #define CLEAR_TO_END_OF_LINE "\033[K"
 
+
 namespace DB
 {
 
@@ -71,7 +72,6 @@ void ProgressIndication::updateThreadEventData(HostToTimesMap & new_hosts_data)
 double ProgressIndication::getCPUUsage()
 {
     std::lock_guard lock(profile_events_mutex);
-
     return cpu_usage_meter.rate(getElapsedNanoseconds());
 }
 
@@ -92,15 +92,15 @@ void ProgressIndication::writeFinalProgress()
     if (progress.read_rows < 1000)
         return;
 
-    std::cout << "Processed " << formatReadableQuantity(progress.read_rows) << " rows, "
+    output_stream << "Processed " << formatReadableQuantity(progress.read_rows) << " rows, "
                 << formatReadableSizeWithDecimalSuffix(progress.read_bytes);
 
     UInt64 elapsed_ns = getElapsedNanoseconds();
     if (elapsed_ns)
-        std::cout << " (" << formatReadableQuantity(progress.read_rows * 1000000000.0 / elapsed_ns) << " rows/s., "
+        output_stream << " (" << formatReadableQuantity(progress.read_rows * 1000000000.0 / elapsed_ns) << " rows/s., "
                     << formatReadableSizeWithDecimalSuffix(progress.read_bytes * 1000000000.0 / elapsed_ns) << "/s.)";
     else
-        std::cout << ". ";
+        output_stream << ". ";
 }
 
 void ProgressIndication::writeProgress(WriteBufferFromFileDescriptor & message)
@@ -121,7 +121,7 @@ void ProgressIndication::writeProgress(WriteBufferFromFileDescriptor & message)
 
     const char * indicator = indicators[increment % 8];
 
-    size_t terminal_width = getTerminalWidth();
+    size_t terminal_width = getTerminalWidth(in_fd, err_fd);
 
     if (!written_progress_chars)
     {

@@ -165,7 +165,7 @@ void LogManager::loadLogs(const LogConfigMap & log_config_overrides)
     for (auto & pool : thread_pools)
         pool->wait();
 
-    LOG_INFO(logger, "Loaded {} logs in {}ms", total_logs, stopwatch.elapsedMilliseconds());
+    LOG_INFO(logger, "Loaded {} logs in {}ms", total_logs.load(), stopwatch.elapsedMilliseconds());
 }
 
 /// The structure of a root log dir
@@ -681,11 +681,23 @@ LogPtr LogManager::remove(const StreamShard & stream_shard)
 
     if (log)
     {
-        log->renameDir(Log::logDeleteDirName(stream_shard));
+        auto rename_err = log->renameDir(Log::logDeleteDirName(stream_shard));
+        if (rename_err != DB::ErrorCodes::OK)
+        {
+            LOG_ERROR(
+                logger,
+                "Failed to rename log directory for shard={} from {} to {}, error={}",
+                stream_shard.string(),
+                log->logDir().c_str(),
+                Log::logDeleteDirName(stream_shard),
+                DB::ErrorCodes::getName(rename_err));
+        }
+        else
+        {
+            addLogToBeDeleted(log);
 
-        addLogToBeDeleted(log);
-
-        LOG_INFO(logger, "Log for shard={} is renamed to {} and it scheduled for deletion", stream_shard.string(), log->logDir().c_str());
+            LOG_INFO(logger, "Log for shard={} is renamed to {} and is scheduled for deletion", stream_shard.string(), Log::logDeleteDirName(stream_shard));
+        }
     }
     else
     {

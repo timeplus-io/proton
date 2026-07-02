@@ -23,6 +23,9 @@ public:
     /// Finalize producer.
     virtual void finish() = 0;
 
+    /// Cancel producer.
+    virtual void cancel() noexcept = 0;
+
     virtual ~IMessageProducer() = default;
 };
 

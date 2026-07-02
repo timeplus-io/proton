@@ -33,7 +33,7 @@ class Context;
 /**
  * ORDER-PRESERVING parallel parsing of data formats.
  * It splits original data into chunks. Then each chunk is parsed by different thread.
- * The number of chunks equals to the number or parser threads.
+ * The number of chunks equals to the number of parser threads.
  * The size of chunk is equal to min_chunk_bytes_for_parallel_parsing setting.
  *
  *                    Parsers
@@ -85,19 +85,23 @@ public:
         ReadBuffer & in;
         Block header;
         InternalParserCreator internal_parser_creator;
-        FormatFactory::FileSegmentationEngine file_segmentation_engine;
+        FormatFactory::FileSegmentationEngineCreator file_segmentation_engine_creator;
         String format_name;
+        FormatSettings format_settings;
         size_t max_threads;
         size_t min_chunk_bytes;
+        size_t max_block_size;
         bool is_server;
     };
 
     explicit ParallelParsingInputFormat(Params params)
         : IInputFormat(std::move(params.header), &params.in, ProcessorID::ParallelParsingInputFormatID)
         , internal_parser_creator(params.internal_parser_creator)
-        , file_segmentation_engine(params.file_segmentation_engine)
+        , file_segmentation_engine_creator(params.file_segmentation_engine_creator)
         , format_name(params.format_name)
+        , format_settings(params.format_settings)
         , min_chunk_bytes(params.min_chunk_bytes)
+        , max_block_size(params.max_block_size)
         , is_server(params.is_server)
         , pool(CurrentMetrics::ParallelParsingInputFormatThreads, CurrentMetrics::ParallelParsingInputFormatThreadsActive, params.max_threads)
     {
@@ -105,8 +109,6 @@ public:
         // couple more units so that the segmentation thread doesn't spuriously
         // bump into reader thread on wraparound.
         processing_units.resize(params.max_threads + 2);
-
-        LOG_TRACE(getLogger("ParallelParsingInputFormat"), "Parallel parsing is used");
     }
 
     ~ParallelParsingInputFormat() override
@@ -194,9 +196,11 @@ private:
 
     const InternalParserCreator internal_parser_creator;
     /// Function to segment the file. Then "parsers" will parse that segments.
-    FormatFactory::FileSegmentationEngine file_segmentation_engine;
+    FormatFactory::FileSegmentationEngineCreator file_segmentation_engine_creator;
     const String format_name;
+    const FormatSettings format_settings;
     const size_t min_chunk_bytes;
+    const size_t max_block_size;
 
     BlockMissingValues last_block_missing_values;
     size_t last_approx_bytes_read_for_chunk = 0;
@@ -319,8 +323,8 @@ private:
         }
     }
 
-    void segmentatorThreadFunction(ThreadGroupStatusPtr thread_group);
-    void parserThreadFunction(ThreadGroupStatusPtr thread_group, size_t current_ticket_number);
+    void segmentatorThreadFunction(ThreadGroupPtr thread_group);
+    void parserThreadFunction(ThreadGroupPtr thread_group, size_t current_ticket_number);
 
     /// Save/log a background exception, set termination flag, wake up all
     /// threads. This function is used by segmentator and parsed threads.

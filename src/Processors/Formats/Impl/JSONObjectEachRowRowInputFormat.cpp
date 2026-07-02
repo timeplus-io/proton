@@ -55,6 +55,11 @@ void JSONObjectEachRowInputFormat::readRowStart(MutableColumns & columns)
     }
 }
 
+void JSONObjectEachRowInputFormat::skipRowStart()
+{
+    JSONUtils::readFieldName(*in, format_settings.json);
+}
+
 bool JSONObjectEachRowInputFormat::checkEndOfData(bool is_first_row)
 {
     if (in->eof() || JSONUtils::checkAndSkipObjectEnd(*in))

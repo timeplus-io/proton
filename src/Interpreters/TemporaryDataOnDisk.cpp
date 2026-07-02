@@ -143,6 +143,10 @@ struct TemporaryFileStream::OutputWriter
     {
         if (finalized)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot write to finalized stream");
+
+        if (cancelled)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot write to cancelled stream");
+
         size_t written_bytes = out_writer.write(block);
         num_rows += block.rows();
         return written_bytes;
@@ -153,15 +157,30 @@ struct TemporaryFileStream::OutputWriter
         if (finalized)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot flush finalized stream");
 
-        out_compressed_buf.next();
-        out_buf->next();
-        out_writer.flush();
+        if (cancelled)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot write to cancelled stream");
+
+        try
+        {
+            out_compressed_buf.next();
+            out_buf->next();
+            out_writer.flush();
+        }
+        catch (...)
+        {
+            cancel();
+            throw;
+        }
+
     }
 
     void finalize()
     {
         if (finalized)
             return;
+
+        if (cancelled)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot finalize stream after cancellation.");
 
         /// if we called finalize() explicitly, and got an exception,
         /// we don't want to get it again in the destructor, so set finalized flag first
@@ -172,11 +191,23 @@ struct TemporaryFileStream::OutputWriter
         out_buf->finalize();
     }
 
+    void cancel()
+    {
+        if (finalized || cancelled)
+            return;
+
+        cancelled = true;
+
+        out_compressed_buf.cancel();
+        out_buf->cancel();
+    }
+
     ~OutputWriter()
     {
         try
         {
-            finalize();
+            if (!finalized && !cancelled)
+                finalize();
         }
         catch (...)
         {
@@ -191,6 +222,7 @@ struct TemporaryFileStream::OutputWriter
     std::atomic_size_t num_rows = 0;
 
     bool finalized = false;
+    bool cancelled = false;
 };
 
 struct TemporaryFileStream::InputReader
@@ -258,7 +290,15 @@ void TemporaryFileStream::flush()
     if (!out_writer)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing has been finished");
 
-    out_writer->flush();
+    try
+    {
+        out_writer->flush();
+    }
+    catch (...)
+    {
+        out_writer.reset();
+        throw;
+    }
 }
 
 TemporaryFileStream::Stat TemporaryFileStream::finishWriting()

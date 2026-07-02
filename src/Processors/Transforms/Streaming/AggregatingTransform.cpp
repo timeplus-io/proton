@@ -91,7 +91,12 @@ IProcessor::Status AggregatingTransform::prepare()
     /// Only possible after local checkpointed and other AggregatingTransforms don't finish checkpoint yet.
     /// Check it before input, since we can not fetch new data until all checkpoint request completed
     if (ckpt_request)
+    {
+        /// Still handle the heartbeat chunk propagation
+        current_chunk = Chunk{getInputs().front().getHeader().getColumns(), 0};
+        read_current_chunk = true;
         return Status::Ready;
+    }
 
     bool need_process = false;
     /// cond-1: Only possible after finalize failed (because other threads were finalizing)
@@ -183,7 +188,11 @@ void AggregatingTransform::consume(Chunk chunk)
         need_propagate_heartbeat = true;
     }
 
-    if (params->emitOnExecute())
+    if (chunk.requestCheckpoint())
+    {
+        checkpointAlignment(chunk.getCheckpointContext());
+    }
+    else if (params->emitOnExecute())
     {
         auto finalized_chunk = executeAndFinalizeColumns(chunk, num_rows);
         if (finalized_chunk.hasRows())
@@ -211,8 +220,6 @@ void AggregatingTransform::consume(Chunk chunk)
         finalizeAlignment(chunk.getChunkContext());
     else if (need_finalization)
         finalize(chunk.getChunkContext());
-    else if (chunk.requestCheckpoint())
-        checkpointAlignment(chunk.getCheckpointContext());
 
     /// If the last attempt to finalize failed (because other threads were finalizing), then we will continue to try in this processing.
     /// But there is already output, we will try in the next `work()`
@@ -271,8 +278,8 @@ Chunk AggregatingTransform::executeAndFinalizeColumns(Chunk & chunk, size_t num_
         }
         case EmitMode::PerEvent:
         {
-            finalized_block = params->aggregator->executeAndFinalizePerRow(
-                std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns);
+            finalized_block
+                = params->aggregator->executeAndFinalizePerRow(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns);
             break;
         }
         default:
@@ -528,8 +535,11 @@ void AggregatingTransform::checkpointAlignment(const CheckpointContextPtr & ckpt
         many_data->last_checkpointing_transform.store(this);
     }
 
-    /// Do checkpoint for itself
-    checkpoint(ckpt_request);
+    /// Do checkpoint for itself, required the variants lock
+    {
+        std::lock_guard lock{variants_mutex};
+        checkpoint(ckpt_request);
+    }
 
     /// Last checkpoint request done, reset the progress of checkpointing
     if (is_last_checkpoint_transform)

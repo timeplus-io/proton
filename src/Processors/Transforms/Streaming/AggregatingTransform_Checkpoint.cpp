@@ -50,7 +50,7 @@ RocksDBPtr AggregatingTransform::getOrCreateRocksDB(const HybridConfig & config)
     return rocks;
 }
 
-void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void AggregatingTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->settings);
     const auto & settings = ckpt_ctx->request_ctx->settings;
@@ -70,7 +70,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     ckpt_ctx->coordinator->checkpoint(getLogicID(), std::move(ckpt), ckpt_ctx);
 }
 
-void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
+void AggregatingTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     auto ckpt = ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx);
     switch (ckpt->type())

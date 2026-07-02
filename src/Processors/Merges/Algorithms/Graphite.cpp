@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <base/sort.h>
 
 #include <Poco/Util/AbstractConfiguration.h>

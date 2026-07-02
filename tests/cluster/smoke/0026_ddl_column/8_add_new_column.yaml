@@ -1,7 +1,6 @@
 tags:
 - append_only
 - materialized view
-- probe_bug
 
 description: |
   Test append-only stream streaming query and mv query after add a column to the existing schema

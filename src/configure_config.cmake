@@ -150,7 +150,17 @@ else()
 endif()
 # Enable / disable aggregation functions
 
+option(ENABLE_AGGREGATES_EXTENDED "Enable extended aggregation functions (sumMap/xirr/avgWeighted/deltaSumTimestamp/sparkbar/simpleLinearRegression/covar/corr/groupArrayMoving)" ${ENABLE_ALL_FUNCS})
+if (ENABLE_AGGREGATES_EXTENDED)
+    set(USE_AGGREGATES_EXTENDED 1)
+endif()
+
 # Enable / disable functions
+
+option(ENABLE_VECTOR_DISTANCE_FUNCS "Enable vector/array distance functions (cosineDistance/L2Distance/dotProduct/etc.)" ${ENABLE_ALL_FUNCS})
+# No USE_VECTOR_DISTANCE_FUNCS macro: the gate is implemented as a source-list
+# filter in src/Functions/CMakeLists.txt (key off ENABLE_VECTOR_DISTANCE_FUNCS),
+# so disabled functions never compile and there is no runtime #if to honor.
 
 option(ENABLE_BITMAP_FUNCS "Enable bitmap functions" ${ENABLE_ALL_FUNCS})
 if (ENABLE_BITMAP_FUNCS)

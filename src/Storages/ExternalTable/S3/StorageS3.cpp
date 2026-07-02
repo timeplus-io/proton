@@ -200,6 +200,11 @@ public:
         return nextAssumeLocked();
     }
 
+    size_t objectsCount()
+    {
+        return buffer.size();
+    }
+
     ~Impl() { list_objects_pool.wait(); }
 
 private:
@@ -224,7 +229,6 @@ private:
     void fillInternalBufferAssumeLocked()
     {
         buffer.clear();
-
         assert(outcome_future.valid());
         auto outcome = outcome_future.get();
 
@@ -387,6 +391,11 @@ StorageS3Source::KeyWithInfo StorageS3Source::DisclosedGlobIterator::next()
     return pimpl->next();
 }
 
+size_t StorageS3Source::DisclosedGlobIterator::estimatedKeysCount()
+{
+    return pimpl->objectsCount();
+}
+
 class StorageS3Source::KeysIterator::Impl : WithContext
 {
 public:
@@ -464,6 +473,11 @@ public:
         return {key, info};
     }
 
+    size_t objectsCount()
+    {
+        return keys.size();
+    }
+
 private:
     Strings keys;
     std::atomic_size_t index = 0;
@@ -497,6 +511,44 @@ StorageS3Source::KeyWithInfo StorageS3Source::KeysIterator::next()
     return pimpl->next();
 }
 
+size_t StorageS3Source::KeysIterator::estimatedKeysCount()
+{
+    return pimpl->objectsCount();
+}
+
+StorageS3Source::ReadTaskIterator::ReadTaskIterator(
+    const DB::ReadTaskCallback & callback_,
+    const size_t max_threads_count)
+    : callback(callback_)
+{
+    ThreadPool pool(CurrentMetrics::StorageS3Threads, CurrentMetrics::StorageS3ThreadsActive, max_threads_count);
+    auto pool_scheduler = threadPoolCallbackRunner<String>(pool, "S3ReadTaskItr");
+
+    std::vector<std::future<String>> keys;
+    keys.reserve(max_threads_count);
+    for (size_t i = 0; i < max_threads_count; ++i)
+        keys.push_back(pool_scheduler([this] { return callback(); }, Priority{}));
+
+    pool.wait();
+    buffer.reserve(max_threads_count);
+    for (auto & key_future : keys)
+        buffer.emplace_back(key_future.get(), std::nullopt);
+}
+
+StorageS3Source::KeyWithInfo StorageS3Source::ReadTaskIterator::next()
+{
+    size_t current_index = index.fetch_add(1, std::memory_order_relaxed);
+    if (current_index >= buffer.size())
+        return {callback(), {}};
+
+    return buffer[current_index];
+}
+
+size_t StorageS3Source::ReadTaskIterator::estimatedKeysCount()
+{
+    return buffer.size();
+}
+
 Block StorageS3Source::getHeader(Block sample_block, const std::vector<NameAndTypePair> & requested_virtual_columns)
 {
     for (const auto & virtual_column : requested_virtual_columns)
@@ -520,7 +572,8 @@ StorageS3Source::StorageS3Source(
     const String & bucket_,
     const String & version_id_,
     std::shared_ptr<IIterator> file_iterator_,
-    const size_t download_thread_num_)
+    const size_t max_parsing_threads_,
+    bool need_only_count_)
     : ISource(getHeader(sample_block_, requested_virtual_columns_), true, ProcessorID::StorageS3SourceID)
     , WithContext(context_)
     , name(std::move(name_))
@@ -536,7 +589,8 @@ StorageS3Source::StorageS3Source(
     , format_settings(format_settings_)
     , requested_virtual_columns(requested_virtual_columns_)
     , file_iterator(file_iterator_)
-    , download_thread_num(download_thread_num_)
+    , max_parsing_threads(max_parsing_threads_)
+    , need_only_count(need_only_count_)
     , create_reader_pool(CurrentMetrics::StorageS3Threads, CurrentMetrics::StorageS3ThreadsActive, 1)
     , create_reader_scheduler(threadPoolCallbackRunner<ReaderHolder>(create_reader_pool, "CreateS3Reader"))
 {
@@ -574,6 +628,9 @@ StorageS3Source::ReaderHolder StorageS3Source::createReader()
     auto compression_method = chooseCompressionMethod(current_key, compression_hint);
 
     auto read_buf = createS3ReadBuffer(current_key, object_size);
+    if (need_only_count)
+        max_parsing_threads = 1;
+
     auto input_format = FormatFactory::instance().getInput(
         format,
         *read_buf,
@@ -581,10 +638,13 @@ StorageS3Source::ReaderHolder StorageS3Source::createReader()
         getContext(),
         max_block_size,
         format_settings,
-        std::nullopt,
-        std::nullopt,
+        max_parsing_threads,
+        /* max_download_threads= */std::nullopt,
         /* is_remote_fs */ true,
         compression_method);
+
+    if (need_only_count)
+        input_format->needOnlyCount();
 
     QueryPipelineBuilder builder;
     builder.init(Pipe(input_format));
@@ -1217,7 +1277,7 @@ std::shared_ptr<StorageS3Source::IIterator> StorageS3::createFileIterator(
 {
     if (distributed_processing)
     {
-        return std::make_shared<StorageS3Source::ReadTaskIterator>(local_context->getReadTaskCallback());
+        return std::make_shared<StorageS3Source::ReadTaskIterator>(local_context->getReadTaskCallback(), local_context->getSettingsRef().max_threads);
     }
     else if (is_key_with_globs)
     {
@@ -1314,7 +1374,26 @@ Pipe StorageS3::read(
         block_for_format = storage_snapshot->metadata->getSampleBlock();
     }
 
-    const size_t max_download_threads = local_context->getSettingsRef().max_download_threads;
+    size_t estimated_keys_count = iterator_wrapper->estimatedKeysCount();
+
+    if (estimated_keys_count > 1)
+        num_streams = std::min(num_streams, estimated_keys_count);
+    else
+    {
+        /// The amount of keys (zero) was probably underestimated.
+        /// We will keep one stream for this particular case.
+        num_streams = 1;
+    }
+
+    auto read_from_format_info = prepareReadingFromFormat(column_names, storage_snapshot, supportsSubsetOfColumns(local_context), getVirtuals());
+    bool need_only_count = (query_info.optimize_trivial_count || read_from_format_info.requested_columns.empty())
+        && local_context->getSettingsRef().optimize_count_from_files;
+
+    const size_t max_threads = local_context->getSettingsRef().max_threads;
+    const size_t max_parsing_threads = num_streams >= max_threads ? 1 : (max_threads / num_streams);
+    LOG_DEBUG(getLogger("StorageS3"), "Reading in {} streams, {} threads per stream", num_streams, max_parsing_threads);
+
+    pipes.reserve(num_streams);
     for (size_t i = 0; i < num_streams; ++i)
     {
         pipes.emplace_back(std::make_shared<StorageS3Source>( /// proton: updated
@@ -1332,13 +1411,11 @@ Pipe StorageS3::read(
             query_s3_configuration.url.bucket,
             query_s3_configuration.url.version_id,
             iterator_wrapper,
-            max_download_threads));
+            max_parsing_threads,
+            need_only_count));
     }
 
-    auto pipe = Pipe::unitePipes(std::move(pipes));
-
-    narrowPipe(pipe, num_streams);
-    return pipe;
+    return Pipe::unitePipes(std::move(pipes));
 }
 
 /// proton: starts

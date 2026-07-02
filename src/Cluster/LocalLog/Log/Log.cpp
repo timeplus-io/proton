@@ -88,7 +88,7 @@ Log::Log(int64_t log_start_sn_, EpochSequenceIndexPtr leader_epoch_index_, Logle
     LOG_INFO(
         logger,
         "Log constructor: log_start_sn={}, initial next_sn={}, log_ptr={}",
-        log_start_sn,
+        log_start_sn.load(),
         loglet->nextLogSequence(),
         static_cast<const void *>(this));
 }
@@ -515,7 +515,7 @@ int Log::trim(int64_t target_sn)
     auto log_end_sn = loglet->nextLogSequence();
     if (target_sn < log_end_sn)
     {
-        LOG_INFO(logger, "Truncating sn range [{}, {}), committed_sn={}", target_sn, log_end_sn, committed_sn);
+        LOG_INFO(logger, "Truncating sn range [{}, {}), committed_sn={}", target_sn, log_end_sn, committed_sn.load());
 
         if (loglet->firstSegment()->baseSequence() > target_sn)
         {

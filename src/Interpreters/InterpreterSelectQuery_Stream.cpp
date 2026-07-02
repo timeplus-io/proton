@@ -39,8 +39,9 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageValues.h>
 #include <Storages/StorageView.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 #include <Common/ProtonCommon.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -73,15 +74,6 @@ void addEventTimePredicate(ASTSelectQuery & select, Int64 utc_ms)
         select.setExpression(ASTSelectQuery::Expression::WHERE, makeASTFunction("and", greater, where));
     else
         select.setExpression(ASTSelectQuery::Expression::WHERE, greater);
-}
-
-std::vector<size_t> keyPositions(const Block & header, const Names & key_columns)
-{
-    std::vector<size_t> key_positions;
-    key_positions.reserve(key_columns.size());
-    for (const auto & key : key_columns)
-        key_positions.emplace_back(header.getPositionByName(key));
-    return key_positions;
 }
 
 /// Requires: 1) no window function 2) has aggregation
@@ -257,7 +249,7 @@ void InterpreterSelectQuery::processEmits()
 
         /// After handling, update setting for context.
         if (getSelectQuery().settings())
-            InterpreterSetQuery(getSelectQuery().settings(), context).executeForCurrentContext();
+            InterpreterSetQuery(getSelectQuery().settings(), context).executeForCurrentContext(options.ignore_setting_constraints);
     }
 }
 
@@ -643,7 +635,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         }
     }
 
-    if (query_plan.getCurrentDataStream().with_substream)
+    if (query_plan.getCurrentDataStream().hasSubstream())
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
             query_plan.getCurrentDataStream(),
             std::move(params),
@@ -659,7 +651,9 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             max_streams,
             emit_version,
             data_stream_semantic_pair.isChangelogOutput(),
-            settings.keys_already_sharded.value || light_shuffled,
+            settings.keys_already_sharded.value
+                || settings.allow_independent_shard_processing.value
+                || query_plan.getCurrentDataStream().isShuffledBy(keys, ShuffleDescription::Kind::Light),
             settings.aggregation_backfill_key_unique.value));
 }
 
@@ -883,9 +877,8 @@ void InterpreterSelectQuery::executeSubstreamShuffling(QueryPlan & query_plan, c
     }
     shuffle_output_streams = shuffle_output_streams == 0 ? 1 : shuffle_output_streams;
 
-    auto key_positions = keyPositions(query_plan.getCurrentDataStream().header, keys);
     query_plan.addStep(std::make_unique<Streaming::SubstreamShufflingStep>(
-        query_plan.getCurrentDataStream(), std::move(key_positions), shuffle_output_streams));
+        query_plan.getCurrentDataStream(), keys, shuffle_output_streams));
 }
 
 std::shared_ptr<const Streaming::EmitParams> InterpreterSelectQuery::emitParams()
@@ -911,7 +904,7 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan)
     const auto & settings = context->getSettingsRef();
     bool skip_stamping_for_backfill_data = !settings.emit_during_backfill.value;
 
-    if (query_plan.getCurrentDataStream().with_substream)
+    if (query_plan.getCurrentDataStream().hasSubstream())
         query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
             query_plan.getCurrentDataStream(),
             emit_params_copy,
@@ -952,10 +945,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPl
         /// 1) Non-join query
         /// 2) Streaming join table, and all partition by key columns are from left stream
         if (can_push_down_shuffle(analysis_result.before_partition_by->getRequiredColumnsNames()))
-        {
             executeSubstreamShuffling(query_plan, analysis_result.before_partition_by, analysis_result.partition_by_keys);
-            substream_shuffled_before_join = true;
-        }
         else
         {
             throw Exception(
@@ -967,10 +957,7 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPl
     else if (analysis_result.hasShuffleBy())
     {
         if (can_push_down_shuffle(analysis_result.before_shuffle_by->getRequiredColumnsNames()))
-        {
             executeLightShuffling(query_plan, analysis_result.before_shuffle_by, analysis_result.shuffle_by_keys);
-            light_shuffled = true;
-        }
     }
 
     buildWatermarkQueryPlan(query_plan);
@@ -1349,13 +1336,13 @@ bool InterpreterSelectQuery::isConsistentWithoutCheckpoint() const
             if (const auto * storage_ = std::get_if<StoragePtr>(&proxyed))
             {
                 if (auto * view = (*storage_)->as<StorageView>())
-                    proxyed_subquery = view->getInMemoryMetadataPtr()->getSelectQuery().inner_query;
+                    proxyed_subquery = view->getInMemoryMetadataPtr()->getSelectQuery().inner_query->clone();
                 else
                     proxyed_storage = *storage_;
             }
             else if (const auto * subquery_ = std::get_if<ASTPtr>(&proxyed))
             {
-                proxyed_subquery = (*subquery_)->children[0];
+                proxyed_subquery = (*subquery_)->children[0]->clone();
             }
 
             if (proxyed_subquery)
@@ -1401,10 +1388,9 @@ void InterpreterSelectQuery::executeLightShuffling(QueryPlan & query_plan, const
     executeExpression(query_plan, expression, "Before SHUFFLE BY");
 
     const auto & settings_ref = context->getSettingsRef();
-    auto key_positions = keyPositions(query_plan.getCurrentDataStream().header, keys);
     query_plan.addStep(std::make_unique<LightShufflingStep>(
         query_plan.getCurrentDataStream(),
-        std::move(key_positions),
+        keys,
         settings_ref.substreams.value != 0 ? settings_ref.substreams.value : settings_ref.max_threads.value));
 }
 

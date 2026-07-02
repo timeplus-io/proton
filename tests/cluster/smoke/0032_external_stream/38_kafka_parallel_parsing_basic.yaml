@@ -1,0 +1,122 @@
+tags:
+  - parallel parsing
+
+description: |
+  Test kafka external stream with parallel parsing enabled.
+  Steps:
+    1.Create kafka topic
+    2.Create external stream with JSONEachRow format
+    3.Query with parallel_parsing=1, parallel_parsing_threads=1, 2, 4
+    4.Produce JSON messages
+    5.Verify all messages received correctly
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test_parallel_38
+
+  - type: kafka
+    name: create
+    topic: test_parallel_38
+    settings:
+      partitions: 1
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists ext_parallel_38;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ext_parallel_38(
+        id int32,
+        value string
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'test_parallel_38',
+      data_format = 'JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: parallel-38-1
+    query: select id, value from ext_parallel_38 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=1, record_consume_batch_count=2;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: parallel-38-2
+    query: select id, value from ext_parallel_38 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=2, record_consume_batch_count=2;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: parallel-38-3
+    query: select id, value from ext_parallel_38 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=4, record_consume_batch_count=2;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  - type: kafka
+    name: produce
+    topic: test_parallel_38
+    messages:
+      - id: 1
+        value: alice
+      - id: 2
+        value: bob
+      - id: 3
+        value: charlie
+      - id: 4
+        value: david
+      - id: 5
+        value: eve
+
+  - type: check
+    target_name: parallel-38-1
+    expected_result:
+      - [1, 'alice']
+      - [2, 'bob']
+      - [3, 'charlie']
+      - [4, 'david']
+      - [5, 'eve']
+
+  - type: check
+    target_name: parallel-38-2
+    expected_result:
+      - [1, 'alice']
+      - [2, 'bob']
+      - [3, 'charlie']
+      - [4, 'david']
+      - [5, 'eve']
+
+  - type: check
+    target_name: parallel-38-3
+    expected_result:
+      - [1, 'alice']
+      - [2, 'bob']
+      - [3, 'charlie']
+      - [4, 'david']
+      - [5, 'eve']

@@ -127,14 +127,14 @@ public:
     /// Read single object
     virtual std::unique_ptr<ReadBufferFromFileBase> readObject( /// NOLINT
         const StoredObject & object,
-        const ReadSettings & read_settings = ReadSettings{},
+        const ReadSettings & read_settings,
         std::optional<size_t> read_hint = {},
         std::optional<size_t> file_size = {}) const = 0;
 
     /// Read multiple objects with common prefix
     virtual std::unique_ptr<ReadBufferFromFileBase> readObjects( /// NOLINT
         const StoredObjects & objects,
-        const ReadSettings & read_settings = ReadSettings{},
+        const ReadSettings & read_settings,
         std::optional<size_t> read_hint = {},
         std::optional<size_t> file_size = {}) const = 0;
 
@@ -185,9 +185,10 @@ public:
 
     /// Apply new settings, in most cases reiniatilize client and some other staff
     virtual void applyNewSettings(
-        const Poco::Util::AbstractConfiguration & config,
-        const std::string & config_prefix,
-        ContextPtr context) = 0;
+        const Poco::Util::AbstractConfiguration &,
+        const std::string & /*config_prefix*/,
+        ContextPtr)
+    {}
 
     /// Sometimes object storages have something similar to chroot or namespace, for example
     /// buckets in S3. If object storage doesn't have any namepaces return empty string.
@@ -236,16 +237,6 @@ public:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "This function is only implemented for AzureBlobStorage");
     }
 #endif
-
-
-protected:
-    /// Should be called from implementation of applyNewSettings()
-    void applyRemoteThrottlingSettings(ContextPtr context);
-
-private:
-    mutable std::mutex throttlers_mutex;
-    ThrottlerPtr remote_read_throttler;
-    ThrottlerPtr remote_write_throttler;
 };
 
 using ObjectStoragePtr = std::shared_ptr<IObjectStorage>;

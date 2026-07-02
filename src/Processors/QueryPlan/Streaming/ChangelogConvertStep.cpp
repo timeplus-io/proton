@@ -18,7 +18,7 @@ DB::ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = false,
-            .preserves_substream = false,
+            .preserves_shuffling = false,
         },
         {
             .preserves_number_of_rows = false,
@@ -31,6 +31,7 @@ ChangelogConvertStep::ChangelogConvertStep(
     Block output_header_,
     std::vector<std::string> key_column_names_,
     const std::string & version_column_name_,
+    bool late_insert_overrides_,
     HashTableType hash_table_type_,
     const std::string & spill_dir_,
     size_t max_hot_keys_,
@@ -39,6 +40,7 @@ ChangelogConvertStep::ChangelogConvertStep(
     : ITransformingStep(input_stream_, ChangelogConvertTransform::transformOutputHeader(output_header_), getTraits())
     , key_column_names(std::move(key_column_names_))
     , version_column_name(version_column_name_)
+    , late_insert_overrides(late_insert_overrides_)
     , hash_table_type(hash_table_type_)
     , spill_dir(spill_dir_)
     , kv_options(kv_options_)
@@ -55,13 +57,19 @@ void ChangelogConvertStep::transformPipeline(QueryPipelineBuilder & pipeline, co
         {
             case HashTableType::Memory:
                 return std::make_shared<ChangelogConvertTransform>(
-                    input_header, getOutputStream().header, key_column_names, version_column_name, backfill_key_unique);
+                    input_header,
+                    getOutputStream().header,
+                    key_column_names,
+                    version_column_name,
+                    late_insert_overrides,
+                    backfill_key_unique);
             case HashTableType::Hybrid:
                 return std::make_shared<HybridChangelogConvertTransform>(
                     input_header,
                     getOutputStream().header,
                     key_column_names,
                     version_column_name,
+                    late_insert_overrides,
                     fmt::format("{}-{}", spill_dir, transform_id++),
                     max_hot_keys,
                     kv_options,

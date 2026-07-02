@@ -53,7 +53,16 @@ public:
 		
 	SocketAddress serverAddress();
 		/// Returns the server's address.
-		
+
+	void setKeepAliveTimeout(Poco::Timespan keepAliveTimeout);
+		/// Sets the keep-alive timeout for this session.
+
+	size_t getKeepAliveTimeout() const { return _keepAliveTimeout.totalSeconds(); }
+		/// Returns the keep-alive timeout for this session in seconds.
+
+	size_t getMaxKeepAliveRequests() const { return _maxKeepAliveRequests; }
+		/// Returns the maximum number of requests that can be kept alive on this session.
+
 private:
 	bool           _firstRequest;
 	Poco::Timespan _keepAliveTimeout;
@@ -66,7 +75,7 @@ private:
 //
 inline bool HTTPServerSession::canKeepAlive() const
 {
-	return _maxKeepAliveRequests != 0;
+	return getKeepAlive() && _maxKeepAliveRequests > 0;
 }
 
 

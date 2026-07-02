@@ -67,10 +67,11 @@
 
 /// proton: starts.
 #include <Interpreters/Cluster.h>
-#include <Interpreters/CollectCreateTelemetry.h>
 #include <Interpreters/Streaming/ColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/storageUtil.h>
 #include <Common/SettingsChanges.h>
 /// proton: ends.
 
@@ -1237,6 +1238,14 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create, const Interp
 
     /// validateVirtualColumns(*res);
 
+    /// proton: starts
+    if (!create.attach)
+    {
+        if (auto external_stream = std::dynamic_pointer_cast<StorageExternalStream>(res))
+            external_stream->validate();
+    }
+    /// proton: ends
+
     if (from_path && !res->storesDataOnDisk())
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
@@ -1311,10 +1320,6 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create, const Interp
 
         throw;
     }
-
-    if (database->getDatabaseName() != "system")
-        collectCreateTelemetry(res, local_context);
-    /// proton: ends.
 
     return true;
 }

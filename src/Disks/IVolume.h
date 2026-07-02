@@ -5,6 +5,8 @@
 
 #include <Poco/Util/AbstractConfiguration.h>
 
+#include <limits>
+
 namespace DB
 {
 
@@ -50,7 +52,7 @@ public:
             bool perform_ttl_move_on_insert_ = true,
             VolumeLoadBalancing load_balancing_ = VolumeLoadBalancing::ROUND_ROBIN)
         : disks(std::move(disks_))
-        , name(name_)
+        , name(std::move(name_))
         , max_data_part_size(max_data_part_size_)
         , perform_ttl_move_on_insert(perform_ttl_move_on_insert_)
         , load_balancing(load_balancing_)
@@ -101,6 +103,9 @@ public:
     /// - ROUND_ROBIN
     /// - LEAST_USED
     const VolumeLoadBalancing load_balancing;
+    /// Ordering of this volume in the policy. Lower value = higher priority.
+    /// Default (UINT64_MAX) means "no explicit priority — keep declaration order".
+    UInt64 volume_priority = std::numeric_limits<UInt64>::max();
 };
 
 }

@@ -3,6 +3,7 @@
 #include <QueryPipeline/Pipe.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Cache/FileCacheFactory.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

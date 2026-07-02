@@ -53,6 +53,50 @@ ValuesBlockInputFormat::ValuesBlockInputFormat(
 {
 }
 
+/// Can be used in fileSegmentationEngine for parallel parsing of Values
+bool ValuesBlockInputFormat::skipToNextRow(ReadBuffer * buf, size_t min_chunk_bytes, int balance)
+{
+    skipWhitespaceIfAny(*buf);
+    if (buf->eof() || *buf->position() == ';')
+        return false;
+    bool quoted = false;
+
+    size_t chunk_begin_buf_count = buf->count();
+    while (!buf->eof() && (balance || buf->count() - chunk_begin_buf_count < min_chunk_bytes))
+    {
+        buf->position() = find_first_symbols<'\\', '\'', ')', '('>(buf->position(), buf->buffer().end());
+        if (buf->position() == buf->buffer().end())
+            continue;
+        if (*buf->position() == '\\')
+        {
+            ++buf->position();
+            if (!buf->eof())
+                ++buf->position();
+        }
+        else if (*buf->position() == '\'')
+        {
+            quoted ^= true;
+            ++buf->position();
+        }
+        else if (*buf->position() == ')')
+        {
+            ++buf->position();
+            if (!quoted)
+                --balance;
+        }
+        else if (*buf->position() == '(')
+        {
+            ++buf->position();
+            if (!quoted)
+                ++balance;
+        }
+    }
+
+    if (!buf->eof() && *buf->position() == ',')
+        ++buf->position();
+    return true;
+}
+
 Chunk ValuesBlockInputFormat::generate()
 {
     if (total_rows == 0)
@@ -63,14 +107,18 @@ Chunk ValuesBlockInputFormat::generate()
     block_missing_values.clear();
     size_t chunk_start = getDataOffsetMaybeCompressed(*buf);
 
-    for (size_t rows_in_block = 0; rows_in_block < params.max_block_size; ++rows_in_block)
+    size_t rows_in_block = 0;
+    for (; rows_in_block < params.max_block_size; ++rows_in_block)
     {
         try
         {
             skipWhitespaceIfAny(*buf);
             if (buf->eof() || *buf->position() == ';')
                 break;
-            readRow(columns, rows_in_block);
+            if (need_only_count)
+                skipToNextRow(buf.get(), 1, 0);
+            else
+                readRow(columns, rows_in_block);
         }
         catch (Exception & e)
         {
@@ -81,6 +129,18 @@ Chunk ValuesBlockInputFormat::generate()
     }
 
     approx_bytes_read_for_chunk = getDataOffsetMaybeCompressed(*buf) - chunk_start;
+
+    if (need_only_count)
+    {
+        if (!rows_in_block)
+        {
+            readSuffix();
+            return {};
+        }
+
+        total_rows += rows_in_block;
+        return getChunkForCount(rows_in_block);
+    }
 
     /// Evaluate expressions, which were parsed using templates, if any
     for (size_t i = 0; i < columns.size(); ++i)
@@ -107,8 +167,8 @@ Chunk ValuesBlockInputFormat::generate()
     for (const auto & column : columns)
         column->finalize();
 
-    size_t rows_in_block = columns[0]->size();
-    return Chunk{std::move(columns), rows_in_block};
+    size_t rows = columns[0]->size();
+    return Chunk{std::move(columns), rows};
 }
 
 void ValuesBlockInputFormat::readRow(MutableColumns & columns, size_t row_num)
@@ -119,7 +179,7 @@ void ValuesBlockInputFormat::readRow(MutableColumns & columns, size_t row_num)
     {
         skipWhitespaceIfAny(*buf);
         PeekableReadBufferCheckpoint checkpoint{*buf};
-        bool read;
+        bool read = false;
 
         /// Parse value using fast streaming parser for literals and slow SQL parser for expressions.
         /// If there is SQL expression in some row, template of this expression will be deduced,
@@ -129,7 +189,7 @@ void ValuesBlockInputFormat::readRow(MutableColumns & columns, size_t row_num)
             read = tryReadValue(*columns[column_idx], column_idx);
         else if (parser_type_for_column[column_idx] == ParserType::BatchTemplate)
             read = tryParseExpressionUsingTemplate(columns[column_idx], column_idx);
-        else /// if (parser_type_for_column[column_idx] == ParserType::SingleExpressionEvaluation)
+        else
             read = parseExpression(*columns[column_idx], column_idx);
 
         if (!read)
@@ -298,50 +358,6 @@ namespace
     }
 }
 
-/// Can be used in fileSegmentationEngine for parallel parsing of Values
-static bool skipToNextRow(PeekableReadBuffer * buf, size_t min_chunk_bytes, int balance)
-{
-    skipWhitespaceIfAny(*buf);
-    if (buf->eof() || *buf->position() == ';')
-        return false;
-    bool quoted = false;
-
-    size_t chunk_begin_buf_count = buf->count();
-    while (!buf->eof() && (balance || buf->count() - chunk_begin_buf_count < min_chunk_bytes))
-    {
-        buf->position() = find_first_symbols<'\\', '\'', ')', '('>(buf->position(), buf->buffer().end());
-        if (buf->position() == buf->buffer().end())
-            continue;
-        if (*buf->position() == '\\')
-        {
-            ++buf->position();
-            if (!buf->eof())
-                ++buf->position();
-        }
-        else if (*buf->position() == '\'')
-        {
-            quoted ^= true;
-            ++buf->position();
-        }
-        else if (*buf->position() == ')')
-        {
-            ++buf->position();
-            if (!quoted)
-                --balance;
-        }
-        else if (*buf->position() == '(')
-        {
-            ++buf->position();
-            if (!quoted)
-                ++balance;
-        }
-    }
-
-    if (!buf->eof() && *buf->position() == ',')
-        ++buf->position();
-    return true;
-}
-
 bool ValuesBlockInputFormat::parseExpression(IColumn & column, size_t column_idx)
 {
     const Block & header = getPort().getHeader();
@@ -401,7 +417,7 @@ bool ValuesBlockInputFormat::parseExpression(IColumn & column, size_t column_idx
             parser_type_for_column[column_idx] = ParserType::Streaming;
             return true;
         }
-        else if (rollback_on_exception)
+        if (rollback_on_exception)
             column.popBack(1);
     }
 

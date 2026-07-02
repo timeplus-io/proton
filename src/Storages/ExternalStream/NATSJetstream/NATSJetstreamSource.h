@@ -66,7 +66,7 @@ private:
 
     void parseFormat(natsMsg * msg);
 
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
     void doRecover(CheckpointContextPtr ckpt_ctx_) override;
     void doResetStartSN(Int64 sn) override;
 

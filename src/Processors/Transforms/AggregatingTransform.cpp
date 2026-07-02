@@ -7,6 +7,7 @@
 #include <Processors/Transforms/SquashingChunksTransform.h>
 #include <Core/ProtocolDefines.h>
 #include <Common/logger_useful.h>
+#include <Common/formatReadable.h>
 
 /// proton: starts
 #include <Processors/Transforms/convertToChunk.h>

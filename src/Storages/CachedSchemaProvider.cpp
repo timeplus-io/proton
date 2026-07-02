@@ -1,4 +1,5 @@
 #include <Storages/CachedSchemaProvider.h>
+#include <Storages/SchemaBlock.h>
 
 #include <Storages/IStorage.h>
 
@@ -13,9 +14,21 @@ CachedSchemaProvider::CachedSchemaProvider(const IStorage * storage_) : storage(
 const Block & CachedSchemaProvider::getSchema(const std::string & /*stream*/, const UUID & /*stream_id*/, uint16_t schema_version) const
 {
     if (auto it = schema_cache.find(schema_version); it != schema_cache.end())
-        return it->second;
+        return it->second->schema_block;
 
-    return schema_cache.emplace(schema_version, storage->getSchemaByVersion(schema_version)).first->second;
+    auto [it, inserted] = schema_cache.emplace(schema_version, storage->getMetadataByVersion(schema_version));
+    chassert(inserted);
+    return it->second->schema_block;
+}
+
+const ColumnsDescription & CachedSchemaProvider::getColumnsDescription(uint16_t schema_version) const
+{
+    if (auto it = schema_cache.find(schema_version); it != schema_cache.end())
+        return it->second->storage_metadata->getColumns();
+
+    auto [it, inserted] = schema_cache.emplace(schema_version, storage->getMetadataByVersion(schema_version));
+    chassert(inserted);
+    return it->second->storage_metadata->getColumns();
 }
 
 }

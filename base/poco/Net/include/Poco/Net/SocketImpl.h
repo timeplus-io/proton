@@ -19,17 +19,19 @@
 
 
 #include "Poco/Net/Net.h"
-#include "Poco/Net/SocketDefs.h"
 #include "Poco/Net/SocketAddress.h"
+#include "Poco/Net/SocketDefs.h"
+#include "Poco/Net/Throttler.h"
 #include "Poco/RefCountedObject.h"
 #include "Poco/Timespan.h"
 
+namespace Poco
+{
+namespace Net
+{
 
-namespace Poco {
-namespace Net {
 
-
-class Net_API SocketImpl: public Poco::RefCountedObject
+class Net_API SocketImpl : public Poco::RefCountedObject
 	/// This class encapsulates the Berkeley sockets API.
 	///
 	/// Subclasses implement specific socket types like
@@ -236,7 +238,7 @@ public:
 		/// value previously set with setReceiveBufferSize(),
 		/// as the system is free to adjust the value.
 
-	virtual void setSendTimeout(const Poco::Timespan& timeout);
+	virtual void setSendTimeout(const Poco::Timespan & timeout);
 		/// Sets the send timeout for the socket.
 
 	virtual Poco::Timespan getSendTimeout();
@@ -246,7 +248,7 @@ public:
 		/// timeout previously set with setSendTimeout(),
 		/// as the system is free to adjust the value.
 
-	virtual void setReceiveTimeout(const Poco::Timespan& timeout);
+	virtual void setReceiveTimeout(const Poco::Timespan & timeout);
 		/// Sets the send timeout for the socket.
 		///
 		/// On systems that do not support SO_RCVTIMEO, a
@@ -258,6 +260,18 @@ public:
 		/// The returned timeout may be different than the
 		/// timeout previously set with setReceiveTimeout(),
 		/// as the system is free to adjust the value.
+
+        virtual void setSendThrottler(const Poco::Net::ThrottlerPtr & throttler);
+        /// Sets the throttler that will be used to limit the speed of data sent through the socket.
+
+        virtual Poco::Net::ThrottlerPtr getSendThrottler();
+        /// Returns the throttler that is used to limit the speed of data sent through the socket.
+
+        virtual void setReceiveThrottler(const Poco::Net::ThrottlerPtr & throttler);
+        /// Sets the throttler that will be used to limit the speed of data received through the socket.
+
+        virtual Poco::Net::ThrottlerPtr getReceiveThrottler();
+        /// Returns the throttler that is used to limit the speed of data received through the socket.
 
 	virtual SocketAddress address();
 		/// Returns the IP address and port number of the socket.
@@ -277,46 +291,46 @@ public:
 		/// Sets the socket option specified by level and option
 		/// to the given integer value.
 
-	void setOption(int level, int option, const Poco::Timespan& value);
+	void setOption(int level, int option, const Poco::Timespan & value);
 		/// Sets the socket option specified by level and option
 		/// to the given time value.
 
-	void setOption(int level, int option, const IPAddress& value);
+	void setOption(int level, int option, const IPAddress & value);
 		/// Sets the socket option specified by level and option
 		/// to the given time value.
 
-	virtual void setRawOption(int level, int option, const void* value, poco_socklen_t length);
+	virtual void setRawOption(int level, int option, const void * value, poco_socklen_t length);
 		/// Sets the socket option specified by level and option
 		/// to the given time value.
 
-	void getOption(int level, int option, int& value);
+	void getOption(int level, int option, int & value);
 		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, unsigned& value);
+	void getOption(int level, int option, unsigned & value);
 		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, unsigned char& value);
+	void getOption(int level, int option, unsigned char & value);
 		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, Poco::Timespan& value);
+	void getOption(int level, int option, Poco::Timespan & value);
 		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	void getOption(int level, int option, IPAddress& value);
+	void getOption(int level, int option, IPAddress & value);
 		/// Returns the value of the socket option
 		/// specified by level and option.
 
-	virtual void getRawOption(int level, int option, void* value, poco_socklen_t& length);
+	virtual void getRawOption(int level, int option, void * value, poco_socklen_t & length);
 		/// Returns the value of the socket option
 		/// specified by level and option.
 
 	void setLinger(bool on, int seconds);
 		/// Sets the value of the SO_LINGER socket option.
 
-	void getLinger(bool& on, int& seconds);
+	void getLinger(bool & on, int & seconds);
 		/// Returns the value of the SO_LINGER socket option.
 
 	void setNoDelay(bool flag);
@@ -380,10 +394,10 @@ public:
 		/// Returns the socket descriptor for the
 		/// underlying native socket.
 
-	void ioctl(poco_ioctl_request_t request, int& arg);
+	void ioctl(poco_ioctl_request_t request, int & arg);
 		/// A wrapper for the ioctl system call.
 
-	void ioctl(poco_ioctl_request_t request, void* arg);
+	void ioctl(poco_ioctl_request_t request, void * arg);
 		/// A wrapper for the ioctl system call.
 
 #if defined(POCO_OS_FAMILY_UNIX)
@@ -441,7 +455,7 @@ protected:
 	static void error();
 		/// Throws an appropriate exception for the last error.
 
-	static void error(const std::string& arg);
+	static void error(const std::string & arg);
 		/// Throws an appropriate exception for the last error.
 
 	static void error(int code);
@@ -449,16 +463,34 @@ protected:
 
 	static void error(int code, const std::string& arg);
 		/// Throws an appropriate exception for the given error code.
+		
+        void throttleSend(size_t length, bool blocking);
+        /// Properly throttles the send operation.
+
+        void throttleRecv(size_t length, bool blocking);
+        /// Properly throttles the recv operation.
+
+        void useSendThrottlerBudget(int rc);
+        /// Checks the return code `rc` and updates send throttler budget.
+
+        void useRecvThrottlerBudget(int rc);
+        /// Checks the return code `rc` and updates recv throttler budget.
 
 protected:
-	SocketImpl(const SocketImpl&);
-	SocketImpl& operator = (const SocketImpl&);
+	SocketImpl(const SocketImpl &);
+	SocketImpl & operator=(const SocketImpl &);
 
 	poco_socket_t _sockfd;
 	Poco::Timespan _recvTimeout;
 	Poco::Timespan _sndTimeout;
 	bool          _blocking;
 	bool          _isBrokenTimeout;
+
+	static constexpr size_t THROTTLER_QUANTUM = 32 * 1024;
+        size_t _recvThrottlerBudget;
+        size_t _sndThrottlerBudget;
+        ThrottlerPtr _recvThrottler;
+        ThrottlerPtr _sndThrottler;
 
 	friend class Socket;
 	friend class SecureSocketImpl;

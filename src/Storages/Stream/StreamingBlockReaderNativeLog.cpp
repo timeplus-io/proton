@@ -90,6 +90,21 @@ cluster::SchemaRecordPtrs StreamingBlockReaderNativeLog::read()
                 buildHistoricalQueryContext(default_fetch_range, fetch_result.result.log_start_sn, fetch_result.result.log_committed_sn);
                 return {}; /// Next read() will fallback to historical store
             }
+
+            if (!throw_if_sequence_has_hole)
+            {
+                LOG_WARNING(
+                    logger,
+                    "Fetching sequence number has been compacted away, error={}, fetched_sn={}, "
+                    "log_start_sn={}, log_committed_sn={}. Auto-advancing to log_start_sn and continuing the streaming fetch",
+                    fetch_result.errorString(),
+                    fetched_sn,
+                    log_start_sn,
+                    log_committed_sn);
+
+                resetSequenceNumber(log_start_sn);
+                return {};
+            }
         }
 
         throw Exception(fetch_result.error_code, "Failed to fetch for {}, {}", stream_shard.string(), fetch_result.errorString());

@@ -34,6 +34,11 @@ public:
 
     void processAfterUnmuted(Chunk & chunk);
 
+    /// Same as `process`, but an empty chunk under EMIT ON UPDATE still gets a
+    /// watermark — needed so a filtered-empty +1 partner of a (-1, +1) pair
+    /// still finalizes downstream.
+    void processWithConsecutiveData(Chunk & chunk);
+
     bool requiresPeriodicOrTimeoutEmit() const { return periodic_interval || timeout_interval; }
 
     VersionType getVersion() const;
@@ -53,6 +58,8 @@ private:
     void processPeriodic(Chunk & chunk);
 
     void processTimeout(Chunk & chunk);
+
+    void stampIfOnUpdate(Chunk & chunk);
 
     void logLateEvents();
 

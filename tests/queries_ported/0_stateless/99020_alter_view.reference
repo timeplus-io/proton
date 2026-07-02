@@ -1,3 +1,8 @@
+without target columns after alter:
+res	int64
+with target columns after alter:
+res	int64
+res2	int64
 3
 3
 3

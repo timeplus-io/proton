@@ -18,6 +18,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int CANNOT_READ_ALL_DATA;
 }
 
 namespace

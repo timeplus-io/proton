@@ -1,7 +1,10 @@
 #pragma once
 #include <Core/Block.h>
+#include <Core/ShuffleDescription.h>
 #include <Core/SortDescription.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+
+#include <optional>
 
 namespace DB
 {
@@ -46,7 +49,8 @@ public:
 
     /// proton: starts.
     bool is_streaming = false;
-    bool with_substream = false;
+    /// Carried on DataStream (not on the producing step) so it survives across CTE/subquery query-plan boundaries.
+    std::optional<ShuffleDescription> shuffle_description = std::nullopt;
     /// proton: ends.
 
     /// Things which may be added:
@@ -65,6 +69,21 @@ public:
     bool hasEqualHeaderWith(const DataStream & other) const
     {
         return blocksHaveEqualStructure(header, other.header);
+    }
+
+    /// True iff this stream is already partitioned by `consumer_keys` with at least
+    /// `required_kind`'s guarantee, letting downstream skip a re-shard. Substream subsumes Light,
+    /// so a substream-shuffled stream satisfies a Light requirement.
+    bool isShuffledBy(const Names & consumer_keys, ShuffleDescription::Kind required_kind) const
+    {
+        return shuffle_description
+            && shuffle_description->kind >= required_kind
+            && shuffle_description->keysCoveredBy(consumer_keys);
+    }
+
+    bool hasSubstream() const
+    {
+        return shuffle_description && shuffle_description->kind == ShuffleDescription::Kind::Substream;
     }
 };
 

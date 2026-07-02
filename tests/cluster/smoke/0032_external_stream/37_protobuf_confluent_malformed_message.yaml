@@ -1,0 +1,177 @@
+tags:
+- protobuf
+
+description: |
+  Test that the server does not crash when receiving malformed protobuf messages
+  in Confluent wire format via external stream with schema registry (issue #7788).
+
+  The Confluent protobuf wire format is:
+    [0x00 magic] [4-byte schema_id BE] [varint index_count] [varint indexes...] [protobuf payload]
+
+  This test produces:
+    1. Correct confluent protobuf messages (via rpk schema-registry encoding)
+    2. Malformed message with oversized index_count=129 (via raw binary command)
+    3. A query that must hit the new validation guard and return a specific error
+    4. More correct messages
+  Then verifies the server survives and correct messages are still readable with parsing-error skip.
+
+cluster:
+- p1k1
+- p3k1
+
+steps:
+  # --- Setup: topic + schema + external stream ---
+
+  - type: kafka
+    name: delete
+    topic: proto-malformed-7788
+
+  - type: kafka
+    name: create
+    topic: proto-malformed-7788
+    settings:
+      partitions: 1
+      replication: 1
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [k1]
+    shell: curl -X DELETE http://localhost:8081/subjects/proto-malformed-7788-value
+
+  - type: command
+    node: [k1]
+    shell: curl -X DELETE http://localhost:8081/subjects/proto-malformed-7788-value?permanent=true
+
+  - type: wait
+    time: 1
+
+  - type: command
+    node: [k1]
+    shell: |
+      curl -s \
+        -X POST \
+        "http://localhost:8081/subjects/proto-malformed-7788-value/versions" \
+        -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        -d '{"schemaType": "PROTOBUF",
+            "schema": "syntax = \"proto3\"; message User { string model = 1; int32 make = 2; }"}'
+  - type: wait
+    time: 1
+
+  - name: proto-malformed-7788-schema
+    type: command
+    node: [k1]
+    shell: curl -s http://localhost:8081/subjects/proto-malformed-7788-value/versions
+
+  - type: check
+    target_name: proto-malformed-7788-schema
+    expected_result: ['[1]']
+
+  - type: query
+    sql: DROP STREAM IF EXISTS proto_malformed_7788_ext;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM proto_malformed_7788_ext(
+        model string,
+        make int32
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'proto-malformed-7788',
+      data_format = 'ProtobufSingle',
+      kafka_schema_registry_url = 'http://k1:8081';
+
+  - type: wait
+    time: 2
+
+  # --- Step 1: Produce correct messages via schema-registry encoding ---
+  # Use rpk schema-aware produce to guarantee Confluent protobuf wire format.
+  - type: command
+    node: [k1]
+    shell: |
+      printf '%s\n' '{"model":"model1","make":1}' '{"model":"model2","make":2}' \
+      | rpk topic produce proto-malformed-7788 --schema-id topic --schema-type User -f '%v{json}\n' --compression none
+
+  - type: wait
+    time: 2
+
+  # --- Step 2: Start strict guard stream from latest offset ---
+  # This ensures the malformed message below is the first consumed record, so
+  # the stream deterministically surfaces parser failures as error_code rows.
+  - type: stream
+    name: proto-malformed-7788-guard-stream
+    query: select model, make from proto_malformed_7788_ext settings seek_to='latest', input_format_ignore_parsing_errors=0;
+    schema:
+      - name: model
+        type: string
+      - name: make
+        type: int32
+
+  - type: wait
+    time: 2
+
+  # --- Step 3: Produce malformed message via raw binary ---
+  # Construct wire payload with index_count=129 (> MAX_INDEXES_COUNT=128):
+  # [0x00 magic][schema_id][0x81 0x01][129 zero indexes][payload]
+  - type: command
+    node: [k1]
+    shell: |
+      SCHEMA_ID=$(curl -s http://localhost:8081/subjects/proto-malformed-7788-value/versions/latest | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+      B1=$(((SCHEMA_ID >> 24) & 255))
+      B2=$(((SCHEMA_ID >> 16) & 255))
+      B3=$(((SCHEMA_ID >> 8) & 255))
+      B4=$((SCHEMA_ID & 255))
+      MSG=$(printf '\\x00\\x%02x\\x%02x\\x%02x\\x%02x\\x81\\x01' "$B1" "$B2" "$B3" "$B4")
+      for ((i=0; i<129; i++)); do MSG+='\\x00'; done
+      MSG+='\\x10\\x2a'
+      printf '%b\n' "$MSG" | rpk topic produce proto-malformed-7788 -f '%v\n' --compression none
+
+  - type: wait
+    time: 2
+
+  - type: check
+    target_name: proto-malformed-7788-guard-stream
+    expected_result:
+      - ['error_code:2504']
+
+  # --- Step 4: Produce more correct messages after malformed one ---
+  - type: command
+    node: [k1]
+    shell: |
+      printf '%s\n' '{"model":"model3","make":3}' '{"model":"model4","make":4}' \
+      | rpk topic produce proto-malformed-7788 --schema-id topic --schema-type User -f '%v{json}\n' --compression none
+
+  - type: wait
+    time: 2
+
+  # --- Step 5: Query and verify the server reads correct messages ---
+  # If the server crashed on malformed messages, this query would fail.
+
+  - type: stream
+    name: proto-malformed-7788-result
+    query: select model, make from proto_malformed_7788_ext settings seek_to='earliest', input_format_ignore_parsing_errors=1;
+    schema:
+      - name: model
+        type: string
+      - name: make
+        type: int32
+
+  - type: wait
+    time: 5
+
+  - type: check
+    target_name: proto-malformed-7788-result
+    mode: random
+    expected_result:
+      - ['model1', 1]
+      - ['model2', 2]
+      - ['model3', 3]
+      - ['model4', 4]
+
+  # --- Cleanup ---
+  - type: query
+    sql: DROP STREAM IF EXISTS proto_malformed_7788_ext;

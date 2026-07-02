@@ -164,6 +164,7 @@ Chain buildPushingToViewsChain(
     const ASTPtr & query_ptr,
     bool no_destination,
     ThreadStatusesHolderPtr thread_status_holder,
+    ThreadGroupPtr running_group,
     std::atomic_uint64_t * elapsed_counter_ms,
     const Block & /*live_view_header*/)
 {
@@ -236,12 +237,6 @@ Chain buildPushingToViewsChain(
         ASTPtr query;
         Chain out;
 
-        ThreadGroupStatusPtr running_group;
-        if (current_thread && current_thread->getThreadGroup())
-            running_group = current_thread->getThreadGroup();
-        else
-            running_group = std::make_shared<ThreadGroupStatus>();
-
         /// We are creating a ThreadStatus per view to store its metrics individually
         /// Since calling ThreadStatus() changes current_thread we save it and restore it after the calls
         /// Later on, before doing any task related to a view, we'll switch to its ThreadStatus, do the work,
@@ -268,7 +263,14 @@ Chain buildPushingToViewsChain(
         auto * view_counter_ms = &runtime_stats->elapsed_ms;
 
         out = buildPushingToViewsChain(
-            dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr(), false, thread_status_holder, view_counter_ms);
+            dependent_table,
+            dependent_metadata_snapshot,
+            insert_context,
+            ASTPtr(),
+            false,
+            thread_status_holder,
+            running_group,
+            view_counter_ms);
 
         views_data->views.emplace_back(ViewRuntimeData{ //-V614
             std::move(query),
@@ -640,7 +642,7 @@ void FinalizingViewsTransform::work()
                 views_data->max_threads <= 1 ? "sequentially" : ("parallel " + std::to_string(views_data->max_threads)),
                 views_data->source_storage_id.getNameForLogs(),
                 view.table_id.getNameForLogs(),
-                view.runtime_stats->elapsed_ms);
+                view.runtime_stats->elapsed_ms.load());
         }
     }
 

@@ -108,6 +108,10 @@ public:
 
     UInt64 getStorageSize() const;
 
+    /// Metrics-only: historical-store size, TTL-cached, async-refreshed. First call returns 0
+    /// then triggers refresh. Pair with getLogStoreDiskSize(). Not for correctness.
+    UInt64 getHistoricalStorageSizeForMetrics() const;
+
     const auto & streamShard() const noexcept { return stream_shard; }
 
     auto shard() const noexcept { return stream_shard.shard(); }
@@ -231,6 +235,7 @@ private:
     std::optional<ThreadPool> poller;
 
     ThreadPool & part_commit_pool;
+    bool inline_historical_commit = true;
 
     mutable std::mutex sns_mutex;
     int64_t last_sn = -1; /// To be committed to logstore
@@ -246,6 +251,17 @@ private:
     std::unique_ptr<StreamCallbackData> callback_data;
 
     std::unique_ptr<StreamingStoreSourceMultiplexers> source_multiplexers;
+
+    /// Async TTL cache for getHistoricalStorageSizeForMetrics(); historical only; skipped
+    /// when no remote disk.
+    Int64 metrics_cache_ttl_seconds = 0;
+    bool has_remote_disk = false;
+    mutable std::mutex storage_size_cache_mutex;
+    mutable UInt64 cached_storage_size TSA_GUARDED_BY(storage_size_cache_mutex) = 0;
+    mutable Int64 last_storage_size_cached_ts TSA_GUARDED_BY(storage_size_cache_mutex) = 0;
+    mutable std::atomic_flag storage_size_refresh_scheduled;
+
+    void fetchAndCacheHistoricalStorageSizeAsync(Int64 ts_expected) const;
 
     LoggerPtr logger;
 };

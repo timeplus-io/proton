@@ -239,6 +239,10 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<std::
                         added_columns.appendFromBlock<jf.add_missing>(mapped.block_iter->block, mapped.row_num);
                         break;
                     }
+                    else if constexpr (jf.is_anti_join && jf.left)
+                    {
+                        right_row_found = true;
+                    }
                     else
                     {
                         /// FIXME
@@ -252,7 +256,9 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<std::
         {
             if (!right_row_found && null_element_found)
             {
-                addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
+                /// LEFT ANTI drops NULL-keyed rows; skipping addNotFoundRow keeps left/right row counts aligned.
+                if constexpr (!(jf.is_anti_join && jf.left))
+                    addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
 
                 if constexpr (jf.need_replication)
                 {
@@ -263,7 +269,11 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<std::
         }
 
         if (!right_row_found)
+        {
+            if constexpr (jf.is_anti_join && jf.left)
+                setUsed<need_filter>(filter, i);
             addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
+        }
 
         if constexpr (jf.need_replication)
             (*added_columns.offsets_to_replicate)[i] = current_offset;
@@ -278,9 +288,9 @@ IColumn::Filter joinColumnsSwitchMultipleDisjuncts(
     std::vector<KeyGetter> && key_getter_vector, const std::vector<std::vector<const Map *>> & map_vv, AddedColumns & added_columns)
 {
     return map_vv.size() > 1 ? joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, true>(
-                                 std::forward<std::vector<KeyGetter>>(key_getter_vector), map_vv, added_columns)
-                           : joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, false>(
-                                 std::forward<std::vector<KeyGetter>>(key_getter_vector), map_vv, added_columns);
+                                   std::forward<std::vector<KeyGetter>>(key_getter_vector), map_vv, added_columns)
+                             : joinColumns<KIND, STRICTNESS, KeyGetter, Map, need_filter, has_null_map, false>(
+                                   std::forward<std::vector<KeyGetter>>(key_getter_vector), map_vv, added_columns);
 }
 
 template <Kind KIND, Strictness STRICTNESS, typename KeyGetter, typename Map>
@@ -616,7 +626,7 @@ void MemoryHashJoin::initRightPrimaryKeyHashTable()
         return;
 
     if (streaming_strictness == Streaming::Strictness::Asof || streaming_strictness == Streaming::Strictness::Range
-        || streaming_strictness == Streaming::Strictness::Latest)
+        || streaming_strictness == Streaming::Strictness::Latest || streaming_strictness == Streaming::Strictness::Anti)
         return;
 
     /// versioned_kv join versioned_kv and chaneglog_kv join changelog_kv
@@ -1141,11 +1151,20 @@ void MemoryHashJoin::doJoinBlockWithHashTables(Block & block, HashBlocksPtrs tar
     if constexpr (!is_left_block)
         flipped_kind = flipKind(join_kind);
 
+    if constexpr (is_left_block)
+        join_metrics.left_joining_rows += block.rows();
+    else
+        join_metrics.right_joining_rows += block.rows();
+
     if (joinDispatch(flipped_kind, streaming_strictness, map_vv, [&](auto kind_, auto strictness_, auto & map_vv_) {
             joinBlockImpl<is_left_block, kind_, strictness_>(block, joined_data->join_ctx.sample_block_with_columns_to_add, map_vv_);
         }))
     {
         /// Joined
+        if constexpr (is_left_block)
+            join_metrics.left_joined_rows += block.rows();
+        else
+            join_metrics.right_joined_rows += block.rows();
     }
     else
     {
@@ -1675,7 +1694,7 @@ void MemoryHashJoin::eraseExistingKeys(Block & block, JoinData & join_data)
     /// One challenge to drop the ChangelogTransform for versioned-kv is we will need first
     /// evaluate the whole join semantic first in InterpreterSelectQuery. For multiple join,
     /// it would be a bit difficult
-    if (streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest)
+    if (streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest || streaming_strictness == Strictness::Anti)
         return;
 
     /// Find previous key / values on join columns

@@ -46,8 +46,10 @@ Strictness toJoinStrictness(JoinStrictness strictness, bool is_range_join)
             return Strictness::All;
         case JoinStrictness::Asof:
             return Strictness::Asof;
+        case JoinStrictness::Anti:
+            return Strictness::Anti;
         default:
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream join only supports latest/all/asof join");
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream join only supports latest/all/asof/anti join");
     }
 }
 }

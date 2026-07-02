@@ -10,6 +10,7 @@
 #include <base/sleep.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {

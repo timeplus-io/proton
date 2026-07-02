@@ -1,18 +1,23 @@
+#include <Checkpoint/CheckpointCoordinator.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnMap.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeDecimalBase.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/NestedUtils.h>
 #include <Functions/FunctionFactory.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/inplaceBlockConversions.h>
@@ -191,6 +196,28 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
                 tuple_columns[i] = fillColumnWithRandomData(elements[i], limit, rng, context);
 
             return ColumnTuple::create(std::move(tuple_columns)); /// NOLINT(performance-move-const-arg)
+        }
+        case TypeIndex::Map:
+        {
+            const auto & map_type = typeid_cast<const DataTypeMap &>(*type);
+            const auto & key_type = map_type.getKeyType();
+            const auto & value_type = map_type.getValueType();
+
+            auto offsets_column = ColumnVector<ColumnArray::Offset>::create();
+            auto & offsets = offsets_column->getData();
+
+            UInt64 offset = 0;
+            offsets.resize(limit);
+            for (UInt64 i = 0; i < limit; ++i)
+            {
+                offset += static_cast<UInt64>(rng()) % (max_array_length + 1);
+                offsets[i] = offset;
+            }
+
+            auto keys_column = fillColumnWithRandomData(key_type, offset, rng, context);
+            auto values_column = fillColumnWithRandomData(value_type, offset, rng, context);
+
+            return ColumnMap::create(std::move(keys_column), std::move(values_column), std::move(offsets_column));
         }
 
         case TypeIndex::Nullable:
@@ -407,7 +434,7 @@ fillColumnWithData(const DataTypePtr type, UInt64 limit, std::tuple<Int64, Int64
     else if (col_name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
     {
         auto & sn = std::get<1>(data);
-        return type->createColumnConst(limit, sn++)->convertToFullColumnIfConst();
+        return type->createColumnConst(limit, ++sn)->convertToFullColumnIfConst();
     }
     else
     {
@@ -446,7 +473,7 @@ public:
         , total_events(total_events_)
     {
         is_streaming = is_streaming_;
-        data_generate_helper = std::make_tuple(shard_num_, 1, pcg64(random_seed_));
+        data_generate_helper = std::make_tuple(shard_num_, 0, pcg64(random_seed_));
 
         /// the minimum support eps is EPSILON, about 1 piece of data per day, if eps is less than EPSILON, we assume it's 0.
         if (std::abs(events_per_second_) < EPSILON || !is_streaming)
@@ -610,8 +637,8 @@ protected:
         if (block_to_fill_as_result.has("_dummy"))
             block_to_fill_as_result.erase("_dummy");
 
+        /// Increment sn if the SELECT doesn't ask for _tp_sn, we will need manually increase it for checkpoint triggering
         if (need_increment_sn)
-            /// Increment sn
             ++std::get<1>(data_generate_helper);
 
         setLastProcessedSN(std::get<1>(data_generate_helper));
@@ -620,17 +647,29 @@ protected:
         return {block_to_fill_as_result.getColumns(), block_size_};
     }
 
-    /// Do nothing for checkpoint and recover
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx) override
+    /// Write a dummy checkpoint so the key is registered in checkpoint storage.
+    /// Without this, NativeLogCheckpointStorage reports missing keys and discards the commit.
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override
     {
-        IProcessor::checkpoint(ckpt_ctx);
-
-        auto result = header_chunk.clone();
-        result.setCheckpointContext(ckpt_ctx);
-        return result;
+        ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [&](WriteBuffer & wb) {
+            writeIntBinary(lastProcessedSN(), wb);
+        });
     }
-    void doRecover(CheckpointContextPtr) override { }
-    void doResetStartSN(Int64 /*sn*/) override { }
+
+    void doRecover(CheckpointContextPtr ckpt_ctx) override
+    {
+        ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [&](VersionType /*version*/, ReadBuffer & rb) {
+            Int64 recovered_sn = 0;
+            readIntBinary(recovered_sn, rb);
+            setLastCheckpointSN(recovered_sn);
+        });
+    }
+
+    void doResetStartSN(Int64 sn) override
+    {
+        if (sn >= 0)
+            std::get<1>(data_generate_helper) = sn;
+    }
 
 private:
     std::function<UInt64()> batch_size_getter;

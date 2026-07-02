@@ -77,7 +77,7 @@ cluster::EntryPtr createEntry(const DB::Block & block)
     auto approx_size = static_cast<size_t>(block.bytes() * 1.15);
     cluster::ByteVector buffer(approx_size);
     {
-        DB::WriteBufferFromVector wb(buffer);
+        DB::WriteBufferFromVector<cluster::ByteVector> wb(buffer);
 
         if constexpr (compress)
         {
@@ -86,6 +86,8 @@ cluster::EntryPtr createEntry(const DB::Block & block)
 
             DB::NativeWriter writer(compressed_wb, DBMS_TCP_PROTOCOL_VERSION, DB::Block{});
             writer.write(block);
+
+            compressed_wb.finalize();
         }
         else
         {

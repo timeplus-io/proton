@@ -130,7 +130,7 @@ void CustomSeparatedFormatReader::skipField()
     skipFieldByEscapingRule(*buf, format_settings.custom.escaping_rule, format_settings);
 }
 
-bool CustomSeparatedFormatReader::checkEndOfRow()
+bool CustomSeparatedFormatReader::checkForEndOfRow()
 {
     PeekableReadBufferCheckpoint checkpoint{*buf, true};
 
@@ -188,12 +188,12 @@ std::vector<String> CustomSeparatedFormatReader::readRowImpl()
     std::vector<String> values;
     skipRowStartDelimiter();
 
-    if (columns == 0)
+    if (columns == 0 || format_settings.custom.allow_variable_number_of_columns)
     {
         do
         {
             values.push_back(readFieldIntoString<mode>(values.empty(), false, true));
-        } while (!checkEndOfRow());
+        } while (!checkForEndOfRow());
         columns = values.size();
     }
     else
@@ -206,19 +206,34 @@ std::vector<String> CustomSeparatedFormatReader::readRowImpl()
     return values;
 }
 
-void CustomSeparatedFormatReader::skipHeaderRow()
+void CustomSeparatedFormatReader::skipRow()
 {
     skipRowStartDelimiter();
-    bool first = true;
-    do
-    {
-        if (!first)
-            skipFieldDelimiter();
-        first = false;
 
-        skipField();
+    /// If the number of columns in row is unknown,
+    /// we should check for end of row after each field.
+    if (columns == 0 || format_settings.custom.allow_variable_number_of_columns)
+    {
+        bool first = true;
+        do
+        {
+            if (!first)
+                skipFieldDelimiter();
+            first = false;
+
+            skipField();
+        }
+        while (!checkForEndOfRow());
     }
-    while (!checkEndOfRow());
+    else
+    {
+        for (size_t i = 0; i != columns; ++i)
+        {
+            if (i != 0)
+                skipFieldDelimiter();
+            skipField();
+        }
+    }
 
     skipRowEndDelimiter();
 }
@@ -271,6 +286,8 @@ bool CustomSeparatedFormatReader::checkForSuffixImpl(bool check_eof)
 
         /// Allow optional \n before eof.
         checkChar('\n', *buf);
+        if (format_settings.custom.skip_trailing_empty_lines)
+            while (checkChar('\n', *buf) || checkChar('\r', *buf));
         return buf->eof();
     }
 
@@ -282,6 +299,8 @@ bool CustomSeparatedFormatReader::checkForSuffixImpl(bool check_eof)
 
         /// Allow optional \n before eof.
         checkChar('\n', *buf);
+        if (format_settings.custom.skip_trailing_empty_lines)
+            while (checkChar('\n', *buf) || checkChar('\r', *buf));
         if (buf->eof())
             return true;
     }

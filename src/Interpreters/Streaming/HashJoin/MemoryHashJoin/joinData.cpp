@@ -2,6 +2,8 @@
 #include <Interpreters/Streaming/HashJoin/MemoryHashJoin/joinData.h>
 
 #include <Interpreters/JoinUtils.h>
+#include <Common/logger_useful.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

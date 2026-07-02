@@ -50,7 +50,7 @@ private:
     Chunk generateWithReader();
 
     /// Checkpointing
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
     void doRecover(CheckpointContextPtr ckpt_ctx_) override;
     void doResetStartSN(Int64) override
     {
@@ -58,9 +58,15 @@ private:
         /// we don't need to do anything special here.
     }
 
+    /// Parse messages in batch, returns number of rows parsed
+    size_t parseMessagesInBatch(const std::vector<StringRef> & message_refs);
+    /// Generate virtual columns for messages (assumes 1 message = 1 row)
+    MutableColumns generateVirtualColumns(const std::vector<pulsar::Message> & messages);
+
     /// Virutal columns' positions and their types, and value calculation functions.
     std::map<size_t, std::pair<DataTypePtr, std::function<Field(const pulsar::Message &)>>> virtual_header;
 
+    UInt64 generate_batch_count;
     Int64 generate_timeout_ms{100};
 
     std::shared_ptr<Pulsar> storage;
@@ -82,6 +88,15 @@ private:
     bool is_finished{false};
 
     ExternalStreamCounterPtr external_stream_counter;
+
+    std::shared_ptr<StreamingFormatExecutor> format_executor;
+    std::shared_ptr<StreamingFormatExecutor> format_batch_executor;
+
+    String data_format;
+    FormatSettings format_settings;
+
+    /// Buffer to concatenate messages for batch parse
+    std::string batch_buffer;
 };
 
 }

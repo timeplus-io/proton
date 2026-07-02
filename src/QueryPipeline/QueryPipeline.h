@@ -137,6 +137,9 @@ public:
 
     void reset();
 
+    /// Cancel all processors in the pipeline (used to abort in-flight merges cleanly).
+    void cancel() noexcept;
+
     /// proton : starts
     void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
 

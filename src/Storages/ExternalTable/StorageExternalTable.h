@@ -9,6 +9,8 @@
 
 #include <base/shared_ptr_helper.h>
 
+#include <atomic>
+
 namespace CurrentMetrics
 {
 extern const Metric LocalThread;
@@ -30,6 +32,10 @@ public:
     bool isExternalTable() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
     void startup() override;
+
+    /// Until the remote schema is fetched the in-memory columns are empty; gate MV builds on
+    /// real readiness instead of the default isReady()==true (which would build an empty header).
+    bool isReady() const override { return ready.load(); }
 
     void read(
         QueryPlan & query_plan,
@@ -93,6 +99,7 @@ private:
 
     const bool attach{false};
     std::unique_ptr<ThreadPool> background_jobs;
+    std::atomic<bool> ready = false;
 };
 
 }

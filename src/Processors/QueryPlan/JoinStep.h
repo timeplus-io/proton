@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Joins.h>
 #include <Processors/QueryPlan/IQueryPlanStep.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 
@@ -8,6 +9,13 @@ namespace DB
 
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
+
+/// proton: starts. Inner/Left/Cross/Comma anchor every output row to its left row's shuffle
+/// keys; Right/Full NULL-fill left keys on unmatched-right rows, breaking same-key-same-stream.
+/// Kind alone decides: strictness keeps rows left-anchored, and streaming/changelog joins (which
+/// could break this) route to Streaming::JoinStep, which never propagates.
+bool joinPreservesLeftShuffle(JoinKind kind);
+/// proton: ends.
 
 /// Join two data streams.
 class JoinStep : public IQueryPlanStep

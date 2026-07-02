@@ -8,10 +8,7 @@
 #include <Disks/ObjectStorages/IObjectStorage.h>
 #include <Common/getRandomASCIIString.h>
 #include <Common/MultiVersion.h>
-
-#if USE_AZURE_BLOB_STORAGE
 #include <azure/storage/blobs.hpp>
-#endif
 
 namespace Poco
 {
@@ -102,13 +99,13 @@ public:
 
     std::unique_ptr<ReadBufferFromFileBase> readObject( /// NOLINT
         const StoredObject & object,
-        const ReadSettings & read_settings = ReadSettings{},
+        const ReadSettings & read_settings,
         std::optional<size_t> read_hint = {},
         std::optional<size_t> file_size = {}) const override;
 
     std::unique_ptr<ReadBufferFromFileBase> readObjects( /// NOLINT
         const StoredObjects & objects,
-        const ReadSettings & read_settings = ReadSettings{},
+        const ReadSettings & read_settings,
         std::optional<size_t> read_hint = {},
         std::optional<size_t> file_size = {}) const override;
 
@@ -153,6 +150,8 @@ public:
     ObjectStorageKey generateObjectKeyForPath(const std::string & path) const override;
 
     bool isRemote() const override { return true; }
+
+    bool supportParallelWrite() const override { return true; }
 
     std::shared_ptr<const AzureObjectStorageSettings> getSettings() { return settings.get(); }
 

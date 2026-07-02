@@ -99,7 +99,7 @@ void Client::executeQuery(const String & query, const String & query_id, bool fa
                 e.rethrow();
 
             /// connection lost
-            if (!(*connection)->checkConnected())
+            if (!(*connection)->checkConnected(timeouts))
             {
                 if (!suppress_error_log)
                     LOG_ERROR(logger, "Connection lost");

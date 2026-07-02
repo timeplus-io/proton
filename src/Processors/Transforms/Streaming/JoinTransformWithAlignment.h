@@ -36,8 +36,8 @@ public:
     void work() override;
 
     bool hasState() const override { return true; }
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
-    void recover(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx) override;
 
     static Block transformHeader(Block header, const HashJoinPtr & join);
 
@@ -127,6 +127,7 @@ private:
     };
     AlignmentStats stats;
 
+    static constexpr Int64 log_metrics_interval_ms = 60'000;
     Int64 last_stats_log_ts;
     LoggerPtr logger;
 };

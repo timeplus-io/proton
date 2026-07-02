@@ -31,6 +31,8 @@ public:
     /// If the data is pre-sorted.
     void write(const Block & block) override;
 
+    void cancel() noexcept override;
+
     /** If the data is not sorted, but we have previously calculated the permutation, that will sort it.
       * This method is used to save RAM, since you do not need to keep two blocks at once - the original one and the sorted one.
       */
@@ -50,6 +52,7 @@ public:
         ~Finalizer();
 
         void finish();
+        void cancel() noexcept;
     };
 
     /// Finalize writing part and fill inner structures

@@ -21,7 +21,7 @@ public:
 
     UInt64 getSize() const override { return size; }
     std::optional<UInt128> getChecksum() const override { return checksum; }
-    std::unique_ptr<ReadBuffer> getReadBuffer() const override { return callback(); }
+    std::unique_ptr<ReadBuffer> getReadBuffer(const ReadSettings &) const override { return callback(); }
 
     String getFilePath() const override { return ""; }
 

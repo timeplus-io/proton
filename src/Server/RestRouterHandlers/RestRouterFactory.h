@@ -7,6 +7,7 @@
 #include <Server/RestRouterHandlers/ExternalStreamRestRouterHandler.h>
 #include <Server/RestRouterHandlers/IngestRawStoreHandler.h>
 #include <Server/RestRouterHandlers/IngestRestRouterHandler.h>
+#include <Server/RestRouterHandlers/InputRestRouterHandler.h>
 #include <Server/RestRouterHandlers/LogLevelHandler.h>
 #include <Server/RestRouterHandlers/PingHandler.h>
 #include <Server/RestRouterHandlers/PipelineMetricHandler.h>
@@ -23,7 +24,6 @@
 #include <Server/RestRouterHandlers/StorageInfoHandler.h>
 #include <Server/RestRouterHandlers/TabularTableRestRouterHandler.h>
 #include <Server/RestRouterHandlers/TabularTableV2RestRouterHandler.h>
-#include <Server/RestRouterHandlers/TelemetryHandler.h>
 #include <Server/RestRouterHandlers/UDFHandler.h>
 #include <Common/escapeForFileName.h>
 
@@ -149,6 +149,22 @@ public:
                     return std::make_shared<ExternalStreamRestRouterHandler>(query_context);
                 });
 
+            /// GET: /proton/v1/ddl/inputs [/{database}[/{input}]]
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/ddl/inputs(?:\\?[\\w\\-=&#]+)?$", prefix), "GET", [](ContextMutablePtr query_context) {
+                    return std::make_shared<InputRestRouterHandler>(query_context);
+                });
+
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/ddl/inputs/(?P<database>[%\\w]+)(?:\\?[\\w\\-=&#]+)?$", prefix),
+                "GET",
+                [](ContextMutablePtr query_context) { return std::make_shared<InputRestRouterHandler>(query_context); });
+
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/ddl/inputs/(?P<database>[%\\w]+)/(?P<input>[%\\-\\.\\w]+)(?:\\?[\\w\\-=&#]+)?$", prefix),
+                "GET",
+                [](ContextMutablePtr query_context) { return std::make_shared<InputRestRouterHandler>(query_context); });
+
             factory.registerRouterHandler(
                 fmt::format("/{}/v1/ddl/rawstores(\\?[\\w\\-=&#]+){{0,1}}", prefix),
                 "GET/POST",
@@ -250,14 +266,6 @@ public:
                     return std::make_shared<DependenciesHandler>(query_context);
                 });
 
-
-            /// GET/POST: /proton/v1/telemetry
-            factory.registerRouterHandler(
-                fmt::format("/{}/v1/telemetry", prefix),
-                "GET/POST",
-                [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
-                    return std::make_shared<DB::TelemetryHandler>(query_context);
-                });
 
             /// GET: /proton/v1/is_python_enabled
             factory.registerRouterHandler(

@@ -5,6 +5,7 @@
 #include <Cluster/Protocol/NamedCollectionDescriptor.h>
 #include <IO/WriteHelpers.h>
 #include "IO/ReadHelpers.h"
+#include <fmt/ranges.h>
 
 
 namespace cluster::protocol

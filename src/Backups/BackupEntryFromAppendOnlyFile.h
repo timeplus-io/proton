@@ -21,8 +21,8 @@ public:
         const std::optional<UInt128> & checksum_ = {},
         const std::shared_ptr<TemporaryFileOnDisk> & temporary_file_ = {});
 
+    std::unique_ptr<ReadBuffer> getReadBuffer(const ReadSettings & read_settings) const override;
     UInt64 getSize() const override { return limit; }
-    std::unique_ptr<ReadBuffer> getReadBuffer() const override;
 
 private:
     const UInt64 limit;

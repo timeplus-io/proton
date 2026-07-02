@@ -1,5 +1,3 @@
-include(${proton_SOURCE_DIR}/cmake/embed_binary.cmake)
-
 set(CLICKHOUSE_META_SOURCES
     meta.cpp
     meta_cli_parser.cpp

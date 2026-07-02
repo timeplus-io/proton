@@ -11,6 +11,7 @@
 #include <Access/ContextAccess.h>
 #include <Functions/UserDefined/UserDefinedSQLObjectType.h>
 #include <Interpreters/FunctionNameNormalizer.h>
+#include <Interpreters/InDepthNodeVisitor.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Common/NamedCollections/NamedCollectionsFactory.h>
@@ -390,5 +391,37 @@ cluster::CreateUserDefinedFunctionRequestPtr createUserDefinedFunctionRequest(
         timeout_ms,
         /*request_version=*/2);
 }
+
+bool hasUserDefinedFunction(const ASTPtr & query, ContextPtr context)
+{
+    struct UserDefinedFunctionMatcher
+    {
+        struct Data
+        {
+            ContextPtr context;
+            bool found = false;
+        };
+
+        static bool needChildVisit(const ASTPtr &, const ASTPtr &, Data & data) { return !data.found; }
+
+        static void visit(const ASTPtr & node, Data & data)
+        {
+            if (data.found)
+                return;
+
+            if (auto * func = node->as<ASTFunction>())
+            {
+                if (UserDefinedFunctionFactory::has(func->name, data.context))
+                    data.found = true;
+            }
+        }
+    };
+    using UserDefinedFunctionVisitor = ConstInDepthNodeVisitor<UserDefinedFunctionMatcher, true, true>;
+
+    UserDefinedFunctionVisitor::Data data{context};
+    UserDefinedFunctionVisitor(data).visit(query);
+    return data.found;
+}
+
 }
 }

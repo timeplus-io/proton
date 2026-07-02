@@ -64,6 +64,11 @@ void writeQueryMetrics(
     writeOutLine(wb, std::forward<T>(value));
 }
 
+void convertHelpToSingleLine(std::string & help)
+{
+    std::replace(help.begin(), help.end(), '\n', ' ');
+}
+
 void writeQueryInfo(DB::WriteBuffer & wb, const std::string & prefix, const DB::QueryStatusInfo & query_info)
 {
     const auto & query_id = query_info.client_info.current_query_id;
@@ -358,6 +363,8 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
             std::string metric_name{ProfileEvents::getName(static_cast<ProfileEvents::Event>(i))};
             std::string metric_doc{ProfileEvents::getDocumentation(static_cast<ProfileEvents::Event>(i))};
 
+            convertHelpToSingleLine(metric_doc);
+
             if (!replaceInvalidChars(metric_name))
                 continue;
             std::string key{profile_events_prefix + metric_name};
@@ -376,6 +383,8 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
 
             std::string metric_name{CurrentMetrics::getName(static_cast<CurrentMetrics::Metric>(i))};
             std::string metric_doc{CurrentMetrics::getDocumentation(static_cast<CurrentMetrics::Metric>(i))};
+
+            convertHelpToSingleLine(metric_doc);
 
             if (!replaceInvalidChars(metric_name))
                 continue;
@@ -396,11 +405,16 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
 
             if (!replaceInvalidChars(key))
                 continue;
+
             auto value = name_value.second;
 
+            std::string metric_doc{value.documentation};
+            convertHelpToSingleLine(metric_doc);
+
             // TODO: add HELP section? asynchronous_metrics contains only key and value
+            writeOutLine(wb, "# HELP", key, metric_doc);
             writeOutLine(wb, "# TYPE", key, "gauge");
-            writeOutLine(wb, key, value);
+            writeOutLine(wb, key, value.value);
         }
     }
 
@@ -411,6 +425,8 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
             std::lock_guard<std::mutex> lock(CurrentStatusInfo::locks[static_cast<CurrentStatusInfo::Status>(i)]);
             std::string metric_name{CurrentStatusInfo::getName(static_cast<CurrentStatusInfo::Status>(i))};
             std::string metric_doc{CurrentStatusInfo::getDocumentation(static_cast<CurrentStatusInfo::Status>(i))};
+
+            convertHelpToSingleLine(metric_doc);
 
             if (!replaceInvalidChars(metric_name))
                 continue;

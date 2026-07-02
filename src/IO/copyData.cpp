@@ -30,11 +30,11 @@ void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t 
         bytes -= count;
 
         if (throttler)
-            throttler->add(count);
+            throttler->throttle(count);
     }
 
     if (check_bytes && bytes > 0)
-        throw Exception(ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF, "Attempt to read after EOF.");
+        throw Exception(ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF, "Attempt to read after EOF, left to copy {} bytes.", bytes);
 }
 
 void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t bytes, std::function<void()> cancellation_hook, ThrottlerPtr throttler)
@@ -52,7 +52,7 @@ void copyDataImpl(ReadBuffer & from, WriteBuffer & to, bool check_bytes, size_t 
         bytes -= count;
 
         if (throttler)
-            throttler->add(count);
+            throttler->throttle(count);
     }
 
     if (check_bytes && bytes > 0)

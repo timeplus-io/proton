@@ -1,0 +1,125 @@
+tags:
+  - batch parsing
+  - virtual columns
+
+description: |
+  Test Pulsar external stream with batch parsing and virtual columns.
+  Verifies that virtual columns like _tp_message_key work correctly
+  with parse_messages_in_batch=1 enabled.
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_batch_vcol_20
+
+  - type: pulsar
+    name: create
+    topic: test_batch_vcol_20
+    partitions: 1
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_vcol_20
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_vcol_20(
+        id int32,
+        value string,
+        _tp_message_key string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_vcol_20',
+      data_format = 'JSONEachRow';
+
+  - type: wait
+    time: 2
+
+  # Test 1: Stream query with batch parsing and virtual columns
+  - type: stream
+    name: pulsar-batch-vcol-20-1
+    query: select id, value, _tp_message_key from ex_pulsar_batch_vcol_20 settings seek_to='earliest', parse_messages_in_batch=1;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  # Test 2: Non-batch parsing for comparison
+  - type: stream
+    name: pulsar-batch-vcol-20-2
+    query: select id, value, _tp_message_key from ex_pulsar_batch_vcol_20 settings seek_to='earliest', parse_messages_in_batch=0;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  - type: wait
+    time: 1
+
+  # Insert messages with message key set
+  - type: query
+    sql: insert into ex_pulsar_batch_vcol_20(id, value, _tp_message_key) values (1, 'alpha', 'key1')(2, 'beta', 'key1')(3, 'gamma', 'key1');
+
+  - type: wait
+    time: 1
+
+  # Insert more messages with different key
+  - type: query
+    sql: insert into ex_pulsar_batch_vcol_20(id, value, _tp_message_key) values (4, 'delta', 'key2')(5, 'epsilon', 'key2');
+
+  - type: wait
+    time: 2
+
+  # Both batch and non-batch should produce same results
+  - type: check
+    target_name: pulsar-batch-vcol-20-1
+    expected_result:
+      - [1, alpha, key1]
+      - [2, beta, key1]
+      - [3, gamma, key1]
+      - [4, delta, key2]
+      - [5, epsilon, key2]
+
+  - type: check
+    target_name: pulsar-batch-vcol-20-2
+    expected_result:
+      - [1, alpha, key1]
+      - [2, beta, key1]
+      - [3, gamma, key1]
+      - [4, delta, key2]
+      - [5, epsilon, key2]
+
+  # Test 3: Verify _tp_append_time virtual column with batch parsing
+  - type: stream
+    name: pulsar-batch-vcol-20-3
+    query: select id, to_type_name(_tp_append_time) as append_time_type from ex_pulsar_batch_vcol_20 settings seek_to='earliest', parse_messages_in_batch=1;
+    schema:
+      - name: id
+        type: int32
+      - name: append_time_type
+        type: string
+
+  - type: check
+    target_name: pulsar-batch-vcol-20-3
+    expected_result:
+      - [1, "datetime64(3, 'UTC')"]
+      - [2, "datetime64(3, 'UTC')"]
+      - [3, "datetime64(3, 'UTC')"]
+      - [4, "datetime64(3, 'UTC')"]
+      - [5, "datetime64(3, 'UTC')"]
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_vcol_20

@@ -65,17 +65,18 @@ IntrospectionStateLogElement makeIntrospectionStateLogElement(
 void addStreamLog(const StorageStream * stream, const AddElem & add_elem)
 {
     const auto & storage_id = stream->getStorageID();
-    auto logstore_disk_size = stream->getLogStoreDiskSize();
     add_elem(
         storage_id,
         "disk_size",
-        logstore_disk_size,
+        stream->getLogStoreDiskSize(),
         /*state_string_value=*/"stream",
         /*dimension=*/"log_store");
+
+    /// Cache only the historical component; subtracting live log-store from a stale total underflows.
     add_elem(
         storage_id,
         "disk_size",
-        stream->getStorageSize() > logstore_disk_size ? stream->getStorageSize() - logstore_disk_size : 0,
+        stream->getHistoricalStorageSizeForMetrics(),
         /*state_string_value=*/"stream",
         /*dimension=*/"historical_store");
 

@@ -32,7 +32,7 @@ IFileCachePriority::Iterator LRUFileCachePriority::add(
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
                 "Attempt to add duplicate queue entry to queue. (Key: {}, offset: {}, size: {})",
-                entry.key, entry.offset, entry.size);
+                entry.key, entry.offset, entry.size.load(std::memory_order_relaxed));
     }
 #endif
 
@@ -42,7 +42,7 @@ IFileCachePriority::Iterator LRUFileCachePriority::add(
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "Not enough space to add {}:{} with size {}: current size: {}/{}",
-            key, offset, size, current_size, getSizeLimit());
+            key, offset, size, current_size.load(), getSizeLimit());
     }
 
     current_size += size;
@@ -59,7 +59,7 @@ IFileCachePriority::Iterator LRUFileCachePriority::add(
 
 void LRUFileCachePriority::removeAll(const CacheGuard::Lock &)
 {
-    CurrentMetrics::sub(CurrentMetrics::FilesystemCacheSize, current_size);
+    CurrentMetrics::sub(CurrentMetrics::FilesystemCacheSize, current_size.load(std::memory_order_relaxed));
     CurrentMetrics::sub(CurrentMetrics::FilesystemCacheElements, queue.size());
 
     LOG_TEST(log, "Removed all entries from LRU queue");
@@ -75,9 +75,10 @@ void LRUFileCachePriority::pop(const CacheGuard::Lock &)
 
 LRUFileCachePriority::LRUQueueIterator LRUFileCachePriority::remove(LRUQueueIterator it)
 {
-    current_size -= it->size;
+    const auto entry_size = it->size.load(std::memory_order_relaxed);
+    current_size -= entry_size;
 
-    CurrentMetrics::sub(CurrentMetrics::FilesystemCacheSize, it->size);
+    CurrentMetrics::sub(CurrentMetrics::FilesystemCacheSize, entry_size);
     CurrentMetrics::sub(CurrentMetrics::FilesystemCacheElements);
 
     LOG_TEST(log, "Removed entry from LRU queue, key: {}, offset: {}", it->key, it->offset);
@@ -113,7 +114,7 @@ void LRUFileCachePriority::iterate(IterateFunc && func, const CacheGuard::Lock &
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
                 "Mismatch of file segment size in file segment metadata and priority queue: {} != {} ({})",
-                it->size, metadata->size(), metadata->file_segment->getInfoForLog());
+                it->size.load(), metadata->size(), metadata->file_segment->getInfoForLog());
         }
 
         auto result = func(*locked_key, metadata);

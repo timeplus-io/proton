@@ -2,6 +2,7 @@
 
 #include <IO/PrefixTreeEncode.h>
 #include <base/ClockUtils.h>
+#include <Common/ErrorCodes.h>
 #include <Common/HybridConfig.h>
 #include <Common/Rocks/RocksDBTTLCompactionFilter.h>
 #include <Common/logger_useful.h>
@@ -161,7 +162,7 @@ public:
             /// The data in batch can be moved to other thread when db->Write(...)
             /// which caused the tracking inaccuracy
             /// https://github.com/timeplus-io/proton-enterprise/issues/10675
-            CurrentMemoryTracker::free(batch.GetDataSize());
+            [[maybe_unused]] auto _trace = CurrentMemoryTracker::free(batch.GetDataSize());
 
             if (auto status = cf_handler->db->Write(write_options, &batch); !status.ok())
             {

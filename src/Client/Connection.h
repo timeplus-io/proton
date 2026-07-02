@@ -53,8 +53,7 @@ public:
         const String & cluster_secret_,
         const String & client_name_,
         Protocol::Compression compression_,
-        Protocol::Secure secure_,
-        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0));
+        Protocol::Secure secure_);
 
     ~Connection() override;
 
@@ -120,12 +119,11 @@ public:
 
     void forceConnected(const ConnectionTimeouts & timeouts) override;
 
-    bool isConnected() const override { return connected; }
+    bool isConnected() const override { return connected && in && out && !in->isCanceled() && !out->isCanceled(); }
 
-    bool checkConnected() override { return connected && ping(); }
+    bool checkConnected(const ConnectionTimeouts & timeouts) override { return isConnected() && ping(timeouts); }
 
     void disconnect() override;
-
 
     /// Send prepared block of data (serialized and, if need, compressed), that will be read from 'input'.
     /// You could pass size of serialized/compressed block.
@@ -208,8 +206,6 @@ private:
       */
     ThrottlerPtr throttler;
 
-    Poco::Timespan sync_request_timeout;
-
     /// From where to read query execution result.
     std::shared_ptr<ReadBuffer> maybe_compressed_in;
     std::unique_ptr<NativeReader> block_in;
@@ -250,13 +246,17 @@ private:
 
     void connect(const ConnectionTimeouts & timeouts);
     void sendHello();
+
+    void cancel() noexcept;
+    void reset() noexcept;
+
     void sendAddendum();
     void receiveHello(const Poco::Timespan & handshake_timeout);
 
 #if USE_SSL
     void sendClusterNameAndSalt();
 #endif
-    bool ping();
+    bool ping(const ConnectionTimeouts & timeouts);
 
     Block receiveData();
     Block receiveLogData();

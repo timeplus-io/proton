@@ -9,6 +9,7 @@
 #include <Interpreters/processColumnTransformers.h>
 
 #include <memory>
+#include <fmt/ranges.h>
 
 namespace DB
 {

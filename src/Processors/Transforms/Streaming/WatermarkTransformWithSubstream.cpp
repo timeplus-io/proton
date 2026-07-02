@@ -138,6 +138,12 @@ void WatermarkTransformWithSubstream::work()
 
     process_chunk.clearWatermark();
 
+    /// Snapshot the prev consecutive-begin substream id and refresh atomically,
+    /// so historical/mute/checkpoint branches still update state and never
+    /// leak a stale id to the next chunk.
+    const SubstreamID was_consecutive_id = std::exchange(
+        prev_consecutive_id, process_chunk.isConsecutiveData() ? process_chunk.getSubstreamID() : INVALID_SUBSTREAM_ID);
+
     if (process_chunk.isHistoricalDataStart() && skip_stamping_for_backfill_data) [[unlikely]]
     {
         mute_watermark = true;
@@ -180,8 +186,14 @@ void WatermarkTransformWithSubstream::work()
 
         if (!process_chunk.avoidWatermark())
         {
+            releaseConsecutivePartnerIfDifferent(was_consecutive_id, process_chunk.getSubstreamID());
+
+            /// Leading exited via avoidWatermark above (setConsecutiveDataFlag implies
+            /// setAvoidWatermark), so was_consecutive_id != INVALID identifies the trailing of a pair.
             if (mute_watermark)
                 watermark.processWithMutedWatermark(process_chunk);
+            else if (was_consecutive_id != INVALID_SUBSTREAM_ID)
+                watermark.processWithConsecutiveData(process_chunk);
             else
                 watermark.process(process_chunk);
         }
@@ -192,7 +204,10 @@ void WatermarkTransformWithSubstream::work()
     else
     {
         /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
-        bool propagated_heartbeat = false;
+        /// SubstreamShufflingTransform clears the substream id on heartbeats,
+        /// so a (-1, +1) pair whose +1 partner is filtered to empty can only be
+        /// released here.
+        bool propagated_heartbeat = releaseConsecutivePartnerIfDifferent(was_consecutive_id, INVALID_SUBSTREAM_ID);
 
         /// It's possible to generate periodic or timeout watermark for each substream via an empty chunk
         /// FIXME: This is a very ugly and inefficient implementation and needs to revisit.
@@ -252,6 +267,39 @@ WatermarkStamper & WatermarkTransformWithSubstream::getOrCreateSubstreamWatermar
 bool WatermarkTransformWithSubstream::removeSubstreamWatermark(const SubstreamID & id)
 {
     return substream_watermarks->removeKey(id);
+}
+
+/// EMIT ON UPDATE emits one update as a consecutive (-1, +1) pair; the +1
+/// normally releases the substream its -1 landed on.
+/// Input:  the +1 is filtered to an empty chunk (no substream id), or it lands
+///         on a different substream B than the -1's A (group key changed).
+/// Output: an empty watermark-stamped heartbeat on A, so A's pending update is
+///         flushed downstream instead of stalling and never emitting.
+/// Returns true when such a heartbeat is emitted.
+///
+/// e.g. SELECT k, min(v) FROM (SELECT * FROM s WHERE v > 0)
+///      PARTITION BY k GROUP BY k EMIT ON UPDATE;
+/// updating key A to v<=0 retracts A but filters its +1 to empty, so A never
+/// re-emits until this heartbeat releases it.
+bool WatermarkTransformWithSubstream::releaseConsecutivePartnerIfDifferent(
+    const SubstreamID & was_consecutive_id, const SubstreamID & current_id)
+{
+    if (mute_watermark || params->mode != EmitMode::OnUpdate)
+        return false;
+
+    if (was_consecutive_id == INVALID_SUBSTREAM_ID || was_consecutive_id == current_id)
+        return false;
+
+    auto & watermark = getOrCreateSubstreamWatermark(was_consecutive_id);
+    Chunk heartbeat{getOutputs().front().getHeader().getColumns(), 0};
+    heartbeat.setSubstreamID(was_consecutive_id);
+    watermark.processWithConsecutiveData(heartbeat);
+
+    if (!heartbeat.hasWatermark())
+        return false;
+
+    output_chunks.emplace_back(std::move(heartbeat));
+    return true;
 }
 
 String WatermarkTransformWithSubstream::getName() const

@@ -30,9 +30,10 @@
 #include <Common/CurrentThread.h>
 #include <Common/createHardLink.h>
 #include <Common/logger_useful.h>
+#include <Common/scope_guard_safe.h>
+
 #include <base/range.h>
 #include <base/scope_guard.h>
-#include <Common/scope_guard_safe.h>
 
 #include <filesystem>
 
@@ -822,10 +823,10 @@ void DistributedSink::writeToShard(const Cluster::ShardInfo & shard_info, const 
             /// And note that it is safe, because we have checksum and size for header.
 
             /// Write the header.
-            const StringRef header = header_buf.stringRef();
+            const std::string_view header = header_buf.stringView();
             writeVarUInt(DBMS_DISTRIBUTED_SIGNATURE_HEADER, out);
             writeStringBinary(header, out);
-            writePODBinary(CityHash_v1_0_2::CityHash128(header.data, header.size), out);
+            writePODBinary(CityHash_v1_0_2::CityHash128(header.data(), header.size()), out);
 
             stream.write(block);
 

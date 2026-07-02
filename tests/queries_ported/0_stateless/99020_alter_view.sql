@@ -38,6 +38,18 @@ ALTER VIEW 99020_mv_with_target MODIFY QUERY SELECT a-b as res FROM 99020_stream
 --- add expr query with with target stream
 ALTER VIEW 99020_mv_with_target MODIFY QUERY SELECT a+b as res, a-b as res2 FROM 99020_stream;
 
+SELECT 'without target columns after alter:';
+SELECT name, type
+FROM system.columns
+WHERE database = current_database() AND table = '99020_mv' AND name NOT IN ('_tp_time', '_tp_sn')
+ORDER BY name;
+
+SELECT 'with target columns after alter:';
+SELECT name, type
+FROM system.columns
+WHERE database = current_database() AND table = '99020_mv_with_target' AND name NOT IN ('_tp_time', '_tp_sn')
+ORDER BY name;
+
 --- modify stateful expr query with target stream
 ALTER VIEW 99020_mv_with_target MODIFY QUERY SELECT count() as res FROM 99020_stream; --- { serverError UNSUPPORTED }
 

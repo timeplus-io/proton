@@ -4,7 +4,6 @@
 namespace DB
 {
 
-
 void BlockIO::reset()
 {
     /** process_list_entry should be destroyed after in, after out and after pipeline,
@@ -47,5 +46,21 @@ BlockIO::~BlockIO()
     reset();
 }
 
+void BlockIO::onFinish()
+{
+    if (finish_callback)
+        finish_callback(pipeline);
+
+    pipeline.reset();
+}
+
+void BlockIO::onException()
+{
+    if (exception_callback)
+        exception_callback();
+
+    pipeline.cancel();
+    pipeline.reset();
+}
 }
 

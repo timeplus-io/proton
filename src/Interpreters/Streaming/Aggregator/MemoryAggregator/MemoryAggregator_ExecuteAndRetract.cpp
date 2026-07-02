@@ -1,6 +1,7 @@
 #include <Interpreters/Streaming/Aggregator/MemoryAggregator/MemoryAggregator.h>
 
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -36,8 +37,6 @@ std::pair<bool, bool> MemoryAggregator::executeAndRetractOnBlock(
     }
 
     Columns materialized_columns = materializeKeyColumns(columns, key_columns, result.isLowCardinality());
-
-    setupAggregatesPoolTimestamps(row_begin, row_end, key_columns, result.aggregates_pool);
 
     NestedColumnsHolder nested_columns_holder;
     AggregateFunctionInstructions aggregate_functions_instructions;
@@ -91,7 +90,7 @@ bool MemoryAggregator::executeAndRetractImpl(
 {
     typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
 
-    auto * aggregates_pool = result.aggregates_pool;
+    auto * aggregates_pool = result.aggregates_pool.get();
 
 #if USE_EMBEDDED_COMPILER
     auto use_compiled_functions = compiled_aggregate_functions_holder && !hasSparseArguments(aggregate_instructions);

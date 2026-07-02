@@ -1,5 +1,7 @@
 #include <Interpreters/Streaming/Aggregator/MemoryAggregator/MemoryAggregator.h>
 
+#include <Common/logger_useful.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -14,37 +16,76 @@ Block MemoryAggregator::executeAndFinalizeWithoutKeyPerRowImpl(
     size_t row_begin,
     size_t row_end,
     AggregateFunctionInstruction * aggregate_instructions,
-    Arena * arena,
-    Arenas & aggregates_pools) const
+    const ArenaPtr & aggregates_pool) const
 {
-    constexpr bool final = true;
-    OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(final), aggregates_pools, final, row_end - row_begin + 1);
+    OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(), aggregates_pool, row_end - row_begin + 1);
     for (size_t i = row_begin; i < row_end; ++i)
-        addAndInsertAggregatesIntoColumns(aggregate_data, aggregate_instructions, out_cols.final_aggregate_columns, i, arena);
+        addAndInsertAggregatesIntoColumns(
+            aggregate_data, aggregate_instructions, out_cols.final_aggregate_columns, i, aggregates_pool.get());
 
-    return finalizeBlock(getHeader(final), std::move(out_cols), final, row_end - row_begin);
+    return finalizeBlock(getHeader(), std::move(out_cols), row_end - row_begin);
 }
 
 template <typename Method>
 Block MemoryAggregator::executeAndFinalizePerRowImpl(
     Method & method,
+    MemoryAggregatedDataVariants & result,
     size_t row_begin,
     size_t row_end,
     ColumnRawPtrs & key_columns,
-    AggregateFunctionInstruction * aggregate_instructions,
-    Arena * arena,
-    Arenas & aggregates_pools) const
+    AggregateFunctionInstruction * aggregate_instructions) const
 {
     typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
 
-    constexpr bool final = true;
-    OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(final), aggregates_pools, final, row_end - row_begin + 1);
+    Arenas pools;
+    std::vector<Arena *> bucket_arenas;
+    bool is_time_bucket_two_level = result.isTimeBucketTwoLevel();
+    if (is_time_bucket_two_level)
+    {
+        bucket_arenas.resize(row_end - row_begin);
+        /// For two level time bucket aggregation, the first key column is the window_start or window_end bucket column
+        const auto & bucket_col = key_columns[0];
+        if (has_state_functions)
+        {
+            /// State functions (e.g. *_state/*_merge) keep AggregateFunction states alive
+            /// inside ColumnAggregateFunction. Those states MUST remain in their original arenas.
+            /// Therefore, we collect all bucket arenas of current batch into \pools, so
+            /// prepareOutputBlockColumns() can attach those arenas to the output block lifetime.
+            std::unordered_set<Int64> buckets;
+            for (size_t i = row_begin; i < row_end; ++i)
+            {
+                auto bucket = bucket_col->getInt(i);
+                auto arena = result.getOrCreateTimeBucketArena(bucket);
+                bucket_arenas[i - row_begin] = arena.get();
+
+                if (auto [_, inserted] = buckets.emplace(bucket); inserted)
+                    pools.emplace_back(std::move(arena));
+            }
+        }
+        else
+        {
+            for (size_t i = row_begin; i < row_end; ++i)
+                bucket_arenas[i - row_begin] = result.getOrCreateTimeBucketArena(bucket_col->getInt(i)).get();
+            
+            pools.emplace_back(result.aggregates_pool);
+        }
+    }
+    else
+    {
+        pools.emplace_back(result.aggregates_pool);
+    }
+
+    OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(), pools, row_end - row_begin + 1);
     auto shuffled_key_sizes = method.shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
+    Arena * arena = result.aggregates_pool.get();
     AggregateDataPtr aggregate_data = nullptr;
     for (size_t i = row_begin; i < row_end; ++i)
     {
+        if (is_time_bucket_two_level)
+            arena = bucket_arenas[i - row_begin];
+
         auto emplace_result = state.emplaceKey(method.data, i, *arena);
 
         /// If a new key is inserted, initialize the states of the aggregate functions, and possibly something related to the key.
@@ -72,7 +113,7 @@ Block MemoryAggregator::executeAndFinalizePerRowImpl(
         addAndInsertAggregatesIntoColumns(aggregate_data, aggregate_instructions, out_cols.final_aggregate_columns, i, arena);
     }
 
-    return finalizeBlock(getHeader(final), std::move(out_cols), final, row_end - row_begin);
+    return finalizeBlock(getHeader(), std::move(out_cols), row_end - row_begin);
 }
 
 Block MemoryAggregator::executeAndFinalizePerRow(
@@ -99,8 +140,6 @@ Block MemoryAggregator::executeAndFinalizePerRow(
 
     Columns materialized_columns = materializeKeyColumns(columns, key_columns, result.isLowCardinality());
 
-    setupAggregatesPoolTimestamps(row_begin, row_end, key_columns, result.aggregates_pool);
-
     NestedColumnsHolder nested_columns_holder;
     AggregateFunctionInstructions aggregate_functions_instructions;
 
@@ -111,24 +150,13 @@ Block MemoryAggregator::executeAndFinalizePerRow(
         case MemoryAggregatedDataVariants::Type::without_key:
         {
             return executeAndFinalizeWithoutKeyPerRowImpl(
-                result.without_key,
-                row_begin,
-                row_end,
-                aggregate_functions_instructions.data(),
-                result.aggregates_pool,
-                result.aggregates_pools);
+                result.without_key, row_begin, row_end, aggregate_functions_instructions.data(), result.aggregates_pool);
         }
 #define M(NAME, IS_TWO_LEVEL) \
     case MemoryAggregatedDataVariants::Type::NAME: \
     { \
         return executeAndFinalizePerRowImpl( \
-            *result.NAME, \
-            row_begin, \
-            row_end, \
-            key_columns, \
-            aggregate_functions_instructions.data(), \
-            result.aggregates_pool, \
-            result.aggregates_pools); \
+            *result.NAME, result, row_begin, row_end, key_columns, aggregate_functions_instructions.data()); \
     }
 
             APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)

@@ -4,7 +4,7 @@
 #include <memory>
 #include <base/types.h>
 #include <IO/ReadBuffer.h>
-#include "Core/Settings.h"
+#include <Core/Settings.h>
 
 
 namespace DB

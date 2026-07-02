@@ -21,8 +21,8 @@ UInt64 BackupEntryConcat::getSize() const
     return *size;
 }
 
-std::unique_ptr<ReadBuffer> BackupEntryConcat::getReadBuffer() const
+std::unique_ptr<ReadBuffer> BackupEntryConcat::getReadBuffer(const ReadSettings & read_settings) const
 {
-    return std::make_unique<ConcatReadBuffer>(*first_source->getReadBuffer(), *second_source->getReadBuffer());
+    return std::make_unique<ConcatReadBuffer>(*first_source->getReadBuffer(read_settings), *second_source->getReadBuffer(read_settings));
 }
 }

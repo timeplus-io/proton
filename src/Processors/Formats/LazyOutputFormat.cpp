@@ -1,3 +1,4 @@
+#include <IO/NullWriteBuffer.h>
 #include <Processors/Formats/LazyOutputFormat.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 
@@ -5,7 +6,12 @@
 namespace DB
 {
 
-WriteBufferFromPointer LazyOutputFormat::out(nullptr, 0);
+NullWriteBuffer LazyOutputFormat::out;
+
+LazyOutputFormat::LazyOutputFormat(const Block & header)
+    : IOutputFormat(header, out, ProcessorID::LazyOutputFormatID), queue(2)
+{
+}
 
 Chunk LazyOutputFormat::getChunk(UInt64 milliseconds)
 {

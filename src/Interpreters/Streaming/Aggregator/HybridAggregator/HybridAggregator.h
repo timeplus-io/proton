@@ -93,9 +93,9 @@ private:
         AggregateFunctionInstruction * aggregate_instructions,
         bool tracking_retracts) const;
 
-    BlocksList convertToBlocksWithoutKey(HybridAggregatedDataVariants & data_variants, bool final_) const;
-    BlocksList convertToBlocksWithoutKeyForRetracts(HybridAggregatedDataVariants & data_variants, bool final_) const;
-    Block doConvertOnePlace(AggregateDataPtr data, const Block & res_header, bool final_) const;
+    BlocksList convertToBlocksWithoutKey(HybridAggregatedDataVariants & data_variants) const;
+    BlocksList convertToBlocksWithoutKeyForRetracts(HybridAggregatedDataVariants & data_variants) const;
+    Block doConvertOnePlace(AggregateDataPtr data, const Block & res_header) const;
 
     template <typename Table, typename KeyGetter>
     Block executeAndFinalizePerRowImpl(

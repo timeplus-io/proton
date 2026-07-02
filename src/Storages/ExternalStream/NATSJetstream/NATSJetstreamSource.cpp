@@ -569,11 +569,8 @@ void NATSJetstreamSource::onCancel() noexcept
     }
 }
 
-Chunk NATSJetstreamSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+void NATSJetstreamSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
-    auto result = header_chunk.clone();
-    result.setCheckpointContext(ckpt_ctx_);
-
     ckpt_ctx_->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) {
         writeStringBinary(current_subject, wb);
         writeStringBinary(current_consumer_name, wb);
@@ -581,8 +578,6 @@ Chunk NATSJetstreamSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
     });
 
     LOG_INFO(logger, "Saved checkpoint subject='{}' consumer='{}' sn={}", current_subject, current_consumer_name, lastProcessedSN());
-
-    return result;
 }
 
 void NATSJetstreamSource::doRecover(CheckpointContextPtr ckpt_ctx_)

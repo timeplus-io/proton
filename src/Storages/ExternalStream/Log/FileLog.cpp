@@ -20,7 +20,7 @@
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 #include <Common/logger_useful.h>
 
 #include <boost/algorithm/string.hpp>
@@ -42,14 +42,18 @@ FileLog::FileLog(
 {
     chassert(settings->type.value == StreamTypes::LOG);
 
-    if (settings->log_files.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `log_files` setting for {} external stream", settings->type.value);
+    std::vector<String> file_paths;
+    boost::split(file_paths, settings->log_files.value, boost::is_any_of(","));
+    for (auto & file_path : file_paths)
+    {
+        if (!file_path.empty())
+            file_regexes.push_back(std::make_unique<re2::RE2>(file_path));
+    }
+}
 
-    if (settings->log_dir.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `log_dir` setting for {} external stream", settings->type.value);
-
-    if (settings->timestamp_regex.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `timestamp_regex` setting for {} external stream", settings->type.value);
+void FileLog::validate(const ContextPtr & context) const
+{
+    validateSettings(settings, false, context);
 
     if (!timestamp_regex->ok())
         throw Exception(
@@ -57,9 +61,6 @@ FileLog::FileLog(
             "Invalid `timestamp_regex` setting for {} external stream, error={}",
             settings->type.value,
             timestamp_regex->error());
-
-    if (settings->row_delimiter.value.empty())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `row_delimiter` setting for {} external stream", settings->type.value);
 
     if (!linebreaker_regex->ok())
         throw Exception(
@@ -75,24 +76,34 @@ FileLog::FileLog(
             settings->type.value,
             linebreaker_regex->NumberOfCapturingGroups());
 
-    std::vector<String> file_paths;
-    boost::split(file_paths, settings->log_files.value, boost::is_any_of(","));
-
-    for (auto & file_path : file_paths)
+    for (const auto & file_reg : file_regexes)
     {
-        if (!file_path.empty())
+        if (!file_reg->ok())
         {
-            file_regexes.push_back(std::make_unique<re2::RE2>(file_path));
-            if (!file_regexes.back()->ok())
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE,
-                    "regex `log_files` is invalid for {} external stream, error={}",
-                    settings->type.value,
-                    file_regexes.back()->error());
+            throw Exception(
+                ErrorCodes::INVALID_SETTING_VALUE,
+                "regex `log_files` is invalid for {} external stream, error={}",
+                settings->type.value,
+                file_reg->error());
         }
     }
 }
 
+void FileLog::validateSettings(
+    const ExternalStreamSettingsPtr & new_settings, bool /*change_settings*/, const ContextPtr & /*context*/) const
+{
+    if (new_settings->log_files.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `log_files` setting for {} external stream", new_settings->type.value);
+
+    if (new_settings->log_dir.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `log_dir` setting for {} external stream", new_settings->type.value);
+
+    if (new_settings->timestamp_regex.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `timestamp_regex` setting for {} external stream", new_settings->type.value);
+
+    if (new_settings->row_delimiter.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `row_delimiter` setting for {} external stream", new_settings->type.value);
+}
 QueryProcessingStage::Enum FileLog::getQueryProcessingStage(
     ContextPtr /*local_context*/,
     QueryProcessingStage::Enum /*to_stage*/,

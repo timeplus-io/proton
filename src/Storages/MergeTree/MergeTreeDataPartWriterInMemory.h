@@ -27,6 +27,8 @@ public:
     void fillChecksums(MergeTreeDataPartChecksums & checksums, NameSet & checksums_to_remove) override;
     void finish(bool /*sync*/) override {}
 
+    void cancel() noexcept override {}
+
 private:
     void calculateAndSerializePrimaryIndex(const Block & primary_index_block);
 

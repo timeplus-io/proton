@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <Common/AllocatorWithMemoryTracking.h>
 #include <set>
 
 #include <fmt/core.h>
@@ -31,9 +32,9 @@ struct MarkRange
     bool operator<(const MarkRange & rhs) const;
 };
 
-struct MarkRanges : public std::deque<MarkRange>
+struct MarkRanges : public std::deque<MarkRange, AllocatorWithMemoryTracking<MarkRange>>
 {
-    using std::deque<MarkRange>::deque;
+    using std::deque<MarkRange, AllocatorWithMemoryTracking<MarkRange>>::deque; /// NOLINT(modernize-type-traits)
 
     size_t getNumberOfMarks() const;
     bool isOneRangeForWholePart(size_t num_marks_in_part) const;

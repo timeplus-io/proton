@@ -32,6 +32,8 @@ public:
 private:
     void readAndProcess() override;
 
+    Int64 lastFetchedSN() const override;
+
     void doResetStartSN(Int64 sn) override;
 
 private:

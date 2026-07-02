@@ -1,0 +1,154 @@
+tags:
+  - batch parsing
+  - error handling
+
+description: |
+  Test Pulsar external stream with batch parsing and error handling.
+  Steps:
+    1. Create Pulsar topic
+    2. Create external stream with JSONEachRow format
+    3. Produce mix of valid and invalid JSON messages
+    4. Query with parse_messages_in_batch=1 and input_format_ignore_parsing_errors=1
+    5. Verify good messages are parsed correctly
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete
+    topic: test_batch_error_18
+
+  - type: pulsar
+    name: create
+    topic: test_batch_error_18
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_error_18
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_error_18_raw
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_error_18(
+        id int32,
+        value string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_error_18',
+      data_format = 'JSONEachRow';
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_error_18_raw(
+        _raw string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_error_18',
+      data_format = 'RawBLOB';
+
+  - type: wait
+    time: 2
+
+  # Start streaming query with batch parsing and error handling enabled
+  - type: stream
+    name: pulsar-batch-error-18-1
+    query: select id, value from ex_pulsar_batch_error_18 settings seek_to='earliest', parse_messages_in_batch=1, input_format_ignore_parsing_errors=1;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  # Query without batch parsing for comparison
+  - type: stream
+    name: pulsar-batch-error-18-2
+    query: select id, value from ex_pulsar_batch_error_18 settings seek_to='earliest', parse_messages_in_batch=0, input_format_ignore_parsing_errors=1;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  # Produce valid JSON
+  - type: pulsar
+    name: produce
+    topic: test_batch_error_18
+    messages:
+      - id: 1
+        value: valid1
+
+  - type: wait
+    time: 1
+
+  # Produce invalid JSON using raw format
+  - type: query
+    sql: |
+        insert into ex_pulsar_batch_error_18_raw(_raw) values ('"id": 2, "value": "bad"')
+
+  - type: wait
+    time: 1
+
+  # Produce more valid JSON
+  - type: pulsar
+    name: produce
+    topic: test_batch_error_18
+    messages:
+      - id: 3
+        value: valid3
+      - id: 4
+        value: valid4
+
+  - type: wait
+    time: 1
+
+  # Produce another invalid JSON
+  - type: query
+    sql: insert into ex_pulsar_batch_error_18_raw(_raw) values ('not json at all')
+
+  - type: wait
+    time: 1
+
+  # Produce final valid JSON
+  - type: pulsar
+    name: produce
+    topic: test_batch_error_18
+    messages:
+      - id: 5
+        value: valid5
+
+  - type: wait
+    time: 2
+
+  # Both batch and non-batch should produce same results (skipping bad messages)
+  - type: check
+    target_name: pulsar-batch-error-18-1
+    expected_result:
+      - [1, valid1]
+      - [3, valid3]
+      - [4, valid4]
+      - [5, valid5]
+
+  - type: check
+    target_name: pulsar-batch-error-18-2
+    expected_result:
+      - [1, valid1]
+      - [3, valid3]
+      - [4, valid4]
+      - [5, valid5]
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_error_18
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_error_18_raw

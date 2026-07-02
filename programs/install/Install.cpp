@@ -20,8 +20,22 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/OpenSSLHelpers.h>
 #include <Common/hex.h>
-#include <Common/getResource.h>
 #include <base/sleep.h>
+
+#include <string_view>
+
+/// Default configuration bundled with the binary via C23 `#embed` (from programs/server/).
+constexpr unsigned char resource_config_yaml[] = {
+#embed "../server/config.yaml"
+};
+constexpr unsigned char resource_users_yaml[] = {
+#embed "../server/users.yaml"
+};
+/// proton: starts.
+constexpr unsigned char resource_grok_patterns[] = {
+#embed "../server/grok-patterns"
+};
+/// proton: ends.
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/ReadBufferFromFile.h>
@@ -98,10 +112,14 @@ namespace fs = std::filesystem;
 static auto executeScript(const std::string & command, bool throw_on_error = false)
 {
     auto sh = ShellCommand::execute(command);
+
     WriteBufferFromFileDescriptor wb_stdout(STDOUT_FILENO);
-    WriteBufferFromFileDescriptor wb_stderr(STDERR_FILENO);
     copyData(sh->out, wb_stdout);
+    wb_stdout.finalize();
+
+    WriteBufferFromFileDescriptor wb_stderr(STDERR_FILENO);
     copyData(sh->err, wb_stderr);
+    wb_stderr.finalize();
 
     if (throw_on_error)
     {
@@ -500,7 +518,9 @@ int mainInstall(int argc, char ** argv)
 
         if (!fs::exists(main_config_file))
         {
-            std::string_view main_config_content = getResource("config.yaml");
+            std::string_view main_config_content(
+                reinterpret_cast<const char *>(resource_config_yaml),
+                std::size(resource_config_yaml));
             if (main_config_content.empty())
             {
                 fmt::print("There is no default config.yaml, you have to download it and place to {}.\n", main_config_file.string());
@@ -612,7 +632,9 @@ int mainInstall(int argc, char ** argv)
 
         if (!fs::exists(users_config_file))
         {
-            std::string_view users_config_content = getResource("users.yaml");
+            std::string_view users_config_content(
+                reinterpret_cast<const char *>(resource_users_yaml),
+                std::size(resource_users_yaml));
             if (users_config_content.empty())
             {
                 fmt::print("There is no default users.yaml, you have to download it and place to {}.\n", users_config_file.string());
@@ -677,7 +699,9 @@ int mainInstall(int argc, char ** argv)
         fs::path grok_patterns_file = config_dir / "grok-patterns";
         if (!fs::exists(grok_patterns_file))
         {
-            std::string_view grok_patterns_content = getResource("grok-patterns");
+            std::string_view grok_patterns_content(
+                reinterpret_cast<const char *>(resource_grok_patterns),
+                std::size(resource_grok_patterns));
             if (grok_patterns_content.empty())
             {
                 fmt::print("There is no default grok-patterns, you have to download it and place to {}.\n", grok_patterns_file.string());
@@ -1056,6 +1080,7 @@ namespace
 
             WriteBufferFromFileDescriptor std_err(STDERR_FILENO);
             copyData(sh->err, std_err);
+            std_err.finalize();
 
             sh->tryWait();
         }

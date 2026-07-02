@@ -12,6 +12,7 @@
 #include <base/scope_guard.h>
 #include <base/sleep.h>
 #include <Common/CurrentThread.h>
+#include <fmt/ranges.h>
 
 
 namespace DB::Task

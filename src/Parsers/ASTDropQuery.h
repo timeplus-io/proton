@@ -31,6 +31,11 @@ public:
     /// Same as above
     bool is_view{false};
 
+    /// proton: starts
+    /// `DROP INPUT ...` is a safe alias for dropping inputs.
+    bool is_input{false};
+    /// proton: ends
+
     bool no_delay{false};
 
     /// proton: starts

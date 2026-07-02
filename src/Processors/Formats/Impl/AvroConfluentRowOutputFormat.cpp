@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <Schema.hh>
 #include <Types.hh>
+#include <fmt/ranges.h>
 
 namespace DB
 {

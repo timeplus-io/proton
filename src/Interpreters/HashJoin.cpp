@@ -27,6 +27,7 @@
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Common/formatReadable.h>
 
 #include <Interpreters/castColumn.h>
 

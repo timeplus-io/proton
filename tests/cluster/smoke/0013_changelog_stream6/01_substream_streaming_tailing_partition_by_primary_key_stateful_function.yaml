@@ -32,31 +32,32 @@ steps:
     time: 2
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (1, 2, 'a');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (1, 2, 'a');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (3, 3, 'b');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (3, 3, 'b');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (5, 1, 'c');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (5, 1, 'c');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (8, 2, 'a');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (8, 2, 'a');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (9, 3, 'b');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (9, 3, 'b');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (11, 2, 'b');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (11, 2, 'b');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (10, 1, 'c');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (10, 1, 'c');
 
   - type: query
-    sql: insert into test14_substream_6(val, id, name) values (14, 2, 'b');
+    sql: insert into test14_substream_6(val, id, name) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (14, 2, 'b');
 
   - type: check
     target_name: "1425"
+    timeout: 60 # address build need more time
     expected_result:
       - [1, 2, 0, 1]
       - [3, 3, 0, 1]

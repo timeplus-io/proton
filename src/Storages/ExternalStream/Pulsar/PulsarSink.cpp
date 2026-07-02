@@ -172,7 +172,7 @@ void PulsarSink::waitForAcks() const
             throw Exception(
                 ErrorCodes::INVALID_DATA,
                 "Failed to send messages, error_count={} last_error={}",
-                state.error_count,
+                state.error_count.load(),
                 pulsar::strResult(last_result));
 
         auto acked = state.acked.load();
@@ -195,7 +195,7 @@ void PulsarSink::waitForAcks() const
         LOG_INFO(logger, "All message acked");
 }
 
-void PulsarSink::checkpoint(CheckpointContextPtr context)
+void PulsarSink::doCheckpoint(CheckpointContextPtr context)
 {
     /// Flush any pending messages in Pulsar's internal batch buffer before waiting for acks.
     /// Without this, messages may be stuck in the batch buffer waiting for the batch timer,
@@ -204,7 +204,7 @@ void PulsarSink::checkpoint(CheckpointContextPtr context)
     waitForAcks();
 
     state.reset();
-    IProcessor::checkpoint(context);
+    IProcessor::doCheckpoint(context);
 }
 
 void PulsarSink::State::reset()

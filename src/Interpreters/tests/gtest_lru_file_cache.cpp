@@ -29,6 +29,15 @@ using namespace DB;
 
 static constexpr auto TEST_LOG_LEVEL = "debug";
 
+namespace
+{
+struct RestoreCurrentThreadStatus
+{
+    DB::ThreadStatus * previous = DB::current_thread;
+    ~RestoreCurrentThreadStatus() { DB::current_thread = previous; }
+};
+}
+
 void printRanges(const auto & segments)
 {
     std::cerr << "\nHaving file segments: ";
@@ -188,6 +197,7 @@ public:
 
 TEST_F(FileCacheTest, get)
 {
+    RestoreCurrentThreadStatus restore_current_thread;
     DB::ThreadStatus thread_status;
 
     /// To work with cache need query_id and query context.

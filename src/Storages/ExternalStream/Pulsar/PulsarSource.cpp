@@ -55,8 +55,8 @@ PulsarSource::PulsarSource(
     const StorageSnapshotPtr & storage_snapshot_,
     std::map<size_t, std::pair<DataTypePtr, std::function<Field(const pulsar::Message &)>>> virtual_header_,
     bool is_streaming_,
-    const String & data_format,
-    const FormatSettings & format_settings,
+    const String & data_format_,
+    const FormatSettings & format_settings_,
     pulsar::Reader && reader_,
     const std::shared_ptr<Pulsar> & storage_,
     ExternalStreamCounterPtr counter,
@@ -65,11 +65,15 @@ PulsarSource::PulsarSource(
     : Streaming::ISource(header_, true, logger_, ProcessorID::PulsarSourceID)
     , ExternalStreamSource(header_, storage_snapshot_, context_->getSettingsRef().max_block_size.value, context_)
     , virtual_header(virtual_header_)
+    , generate_batch_count(std::min<UInt64>(
+          std::max<UInt64>(context_->getSettingsRef().record_consume_batch_count, 1), context_->getSettingsRef().max_block_size))
     , generate_timeout_ms(getGenerateTimeoutMs(context_))
     , storage(storage_)
     , reader(std::move(reader_))
-    , ignore_format_errors(format_settings.ignore_parsing_errors)
+    , ignore_format_errors(format_settings_.ignore_parsing_errors)
     , external_stream_counter(counter)
+    , data_format(data_format_)
+    , format_settings(format_settings_)
 {
     setStreaming(is_streaming_);
     if (!is_streaming_)
@@ -89,7 +93,9 @@ PulsarSource::PulsarSource(
             is_finished = true;
     }
 
-    initInputFormatExecutor(data_format, format_settings);
+    getPhysicalHeader();
+
+    std::tie(format_executor, format_batch_executor) = getInputFormatExecutor(data_format, format_settings);
 
     setDescription(fmt::format("topic={}", getTopic()));
 }
@@ -108,17 +114,19 @@ Chunk PulsarSource::generate()
     if (consume_exception)
         consume_exception->rethrow();
 
-    MutableColumns batch;
-    pulsar::Message msg;
-    size_t rows = 0;
+    /// Phase 1: Read messages from Pulsar
+    std::vector<pulsar::Message> messages;
+    messages.reserve(generate_batch_count);
+
     Int64 consumed_messages = 0;
+    pulsar::MessageId last_consumed_message_id;
 
     auto timeout_ms = generate_timeout_ms;
     Stopwatch stopwatch;
-    while (timeout_ms > 0 && rows < max_block_size && !isCancelled() && !is_finished)
+    while (timeout_ms > 0 && messages.size() < generate_batch_count && !isCancelled() && !is_finished)
     {
+        pulsar::Message msg;
         auto res = reader.readNext(msg, static_cast<int>(timeout_ms));
-
         if (res == pulsar::ResultTimeout || res == pulsar::ResultAlreadyClosed)
         {
             /// For non-streaming queries, if there is no message available, no needs to wait for more messages.
@@ -127,7 +135,6 @@ Chunk PulsarSource::generate()
                 LOG_WARNING(logger, "Finish non-streaming query read for no messages received from '{}' in {} ms (record_consume_timeout_ms)", getTopic(), timeout_ms);
                 is_finished = true;
             }
-
             break;
         }
 
@@ -139,6 +146,7 @@ Chunk PulsarSource::generate()
             is_finished = true;
 
         timeout_ms = generate_timeout_ms - static_cast<Int64>(stopwatch.elapsedMilliseconds());
+
         if (consumed_messages == 0)
         {
             /// reader.seek(msg_id) excludes the msg_id, thus, if latest_consumed_message_id is available, should use it
@@ -159,85 +167,163 @@ Chunk PulsarSource::generate()
         }
 
         external_stream_counter->addReadBytes(msg.getLength());
+        messages.push_back(std::move(msg));
+    }
 
-        ReadBufferFromMemory buf(static_cast<const char *>(msg.getData()), msg.getLength());
-        size_t new_rows = 0;
+    if (messages.empty())
+        return header_chunk.clone();
+
+    /// Phase 2: Parse messages
+    MutableColumns batch;
+    size_t rows = 0;
+    bool batch_parse_succeed = false;
+
+    /// Try batch parsing first if available
+    if (format_batch_executor)
+    {
+        std::vector<StringRef> message_refs;
+        message_refs.reserve(messages.size());
+        for (const auto & msg : messages)
+            message_refs.emplace_back(static_cast<const char *>(msg.getData()), msg.getLength());
+
         try
         {
-            new_rows = format_executor->execute(buf);
+            rows = parseMessagesInBatch(message_refs);
+            batch = format_batch_executor->getResultColumns();
+            batch_parse_succeed = true;
+            last_consumed_message_id = messages.back().getMessageId();
+
+            if (!virtual_header.empty())
+            {
+                /// Check if rows match message count (each message = one row assumption)
+                if (rows == messages.size())
+                {
+                    auto virtual_cols = generateVirtualColumns(messages);
+
+                    /// Merge physical and virtual columns
+                    MutableColumns result;
+                    result.reserve(header_chunk.getNumColumns());
+                    for (size_t pos = 0, physical_idx = 0, virtual_idx = 0; pos < header_chunk.getNumColumns(); ++pos)
+                    {
+                        if (!virtual_header.contains(pos))
+                            result.push_back(std::move(batch[physical_idx++]));
+                        else
+                            result.push_back(std::move(virtual_cols[virtual_idx++]));
+                    }
+                    batch = std::move(result);
+                }
+                else
+                {
+                    /// Rows don't match message count, fall back to parse one by one
+                    LOG_DEBUG(
+                        logger,
+                        "Batch parsing rows ({}) != message count ({}). Consider disable batch parsing by setting "
+                        "'parse_messages_in_batch=0'",
+                        rows,
+                        messages.size());
+
+                    rows = 0;
+                    batch.clear();
+                    batch_parse_succeed = false;
+                }
+            }
         }
-        catch (Exception & ex)
+        catch (...)
         {
-            if (ignore_format_errors)
+            /// Fall back to per-message parse
+            rows = 0;
+            batch.clear();
+            batch_parse_succeed = false;
+        }
+    }
+
+    if (!batch_parse_succeed)
+    {
+        /// Reset format executor
+        if (format_batch_executor)
+            format_batch_executor->getResultColumns();
+
+        /// Parse individually
+        for (const auto & msg : messages)
+        {
+            ReadBufferFromMemory buf(static_cast<const char *>(msg.getData()), msg.getLength());
+            size_t new_rows = 0;
+            try
             {
-                LOG_ERROR(
-                    logger,
-                    "Failed to parse message topic={} message_id={} error={}",
-                    getTopic(),
-                    formatMessageId(msg.getMessageId()),
-                    ex.message());
-                continue;
+                new_rows = format_executor->execute(buf);
+                last_consumed_message_id = msg.getMessageId();
             }
-            else
+            catch (Exception & ex)
             {
-                ex.addMessage("Failed to parse message topic={} message_id={}", getTopic(), formatMessageId(msg.getMessageId()));
-                consume_exception.emplace(std::move(ex));
-                /// Do not read more messages, instead move on and record the lastProcessedSN.
-                break;
+                if (ignore_format_errors)
+                {
+                    LOG_ERROR(
+                        logger,
+                        "Failed to parse message topic={} message_id={} error={}",
+                        getTopic(),
+                        formatMessageId(msg.getMessageId()),
+                        ex.message());
+                    continue;
+                }
+                else
+                {
+                    ex.addMessage("Failed to parse message topic={} message_id={}", getTopic(), formatMessageId(msg.getMessageId()));
+                    consume_exception.emplace(std::move(ex));
+                    break;
+                }
             }
+
+            /// Generate virtual columns
+            if (!virtual_header.empty())
+            {
+                if (!batch.empty())
+                {
+                    for (size_t pos = 0; pos < batch.size(); ++pos)
+                    {
+                        if (virtual_header.contains(pos))
+                            batch[pos]->insertMany(virtual_header[pos].second(msg), new_rows);
+                    }
+                }
+                else
+                {
+                    batch.resize(header_chunk.getNumColumns());
+                    for (size_t pos = 0; pos < header_chunk.getNumColumns(); ++pos)
+                    {
+                        if (virtual_header.contains(pos))
+                        {
+                            auto vheader = virtual_header[pos];
+                            batch[pos] = vheader.first->createColumn();
+                            batch[pos]->insertMany(vheader.second(msg), new_rows);
+                        }
+                    }
+                }
+            }
+            rows += new_rows;
         }
 
         auto new_data = format_executor->getResultColumns();
-
-        if (virtual_header.empty())
+        if (rows > 0)
         {
-            if (!batch.empty())
-                for (size_t pos = 0; pos < batch.size(); ++pos)
-                {
-                    batch[pos]->insertRangeFrom(*new_data[pos], 0, new_rows);
-                }
-            else
-                batch = std::move(new_data);
-        }
-        else
-        {
-            if (!batch.empty())
+            if (virtual_header.empty())
             {
-                for (size_t pos = 0, i = 0; pos < batch.size(); ++pos)
-                {
-                    if (!virtual_header.contains(pos))
-                        batch[pos]->insertRangeFrom(*new_data[i++], 0, new_rows);
-                    else
-                        batch[pos]->insertMany(virtual_header[pos].second(msg), new_rows);
-                }
+                batch = std::move(new_data);
             }
             else
             {
                 for (size_t pos = 0, i = 0; pos < header_chunk.getNumColumns(); ++pos)
                 {
                     if (!virtual_header.contains(pos))
-                    {
-                        batch.push_back(std::move(new_data[i++]));
-                    }
-                    else
-                    {
-                        auto vheader = virtual_header[pos];
-                        auto column = vheader.first->createColumn();
-                        column->insertMany(vheader.second(msg), new_rows);
-                        batch.push_back(std::move(column));
-                    }
+                        batch[pos] = std::move(new_data[i++]);
                 }
             }
         }
-
-        rows += new_rows;
     }
 
     if (consumed_messages > 0)
     {
         auto last_processed_sn = lastProcessedSN();
         setLastProcessedSNRange({.start = last_processed_sn + 1, .end = last_processed_sn + consumed_messages});
-        latest_consumed_message_id = msg.getMessageId();
+        latest_consumed_message_id = last_consumed_message_id;
     }
 
     if (rows != 0u)
@@ -247,6 +333,65 @@ Chunk PulsarSource::generate()
     }
     else
         return header_chunk.clone();
+}
+
+size_t PulsarSource::parseMessagesInBatch(const std::vector<StringRef> & message_refs)
+{
+    /// Calculate total bytes and reserve buffer
+    size_t total_bytes = 0;
+    for (const auto & msg : message_refs)
+        total_bytes += msg.size;
+
+    batch_buffer.clear();
+    batch_buffer.reserve(total_bytes + (data_format == "ProtobufSingle" ? message_refs.size() * 2 : 0) + 128);
+
+    SCOPE_EXIT({
+        /// Prevent buffer from keeping growing indefinitely
+        if (batch_buffer.capacity() > 64 * 1024 * 1024)
+        {
+            LOG_INFO(
+                logger,
+                "Messages buffer is cleared to release memory: topic={} capacity={}",
+                getTopic(),
+                batch_buffer.capacity());
+
+            std::string empty;
+            batch_buffer.swap(empty);
+        }
+    });
+
+    /// Write messages to buffer
+    WriteBufferFromString wb(batch_buffer);
+    for (const auto & message : message_refs)
+    {
+        /// Protobuf format should have varint message length as delimiter
+        if (data_format == "ProtobufSingle")
+            writeStringBinary(message, wb);
+        else
+            writeString(message, wb);
+    }
+    wb.finalize();
+
+    /// Execute parsing
+    ReadBufferFromMemory rb(batch_buffer);
+    return format_batch_executor->execute(rb);
+}
+
+MutableColumns PulsarSource::generateVirtualColumns(const std::vector<pulsar::Message> & messages)
+{
+    MutableColumns virtual_cols;
+    virtual_cols.reserve(virtual_header.size());
+
+    for (const auto & [pos, type_and_func] : virtual_header)
+    {
+        auto column = type_and_func.first->createColumn();
+        column->reserve(messages.size());
+        for (const auto & msg : messages)
+            column->insert(type_and_func.second(msg));
+        virtual_cols.push_back(std::move(column));
+    }
+
+    return virtual_cols;
 }
 
 void PulsarSource::onCancel() noexcept
@@ -263,12 +408,8 @@ void PulsarSource::onCancel() noexcept
     }
 }
 
-Chunk PulsarSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
+void PulsarSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
-    /// Prepare checkpoint barrier chunk
-    auto result = header_chunk.clone();
-    result.setCheckpointContext(ckpt_ctx_);
-
     ckpt_ctx_->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) {
         if (latest_consumed_message_id)
         {
@@ -292,9 +433,6 @@ Chunk PulsarSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
             LOG_INFO(logger, "No message consumed yet, skip doCheckpoint");
         }
     });
-
-    /// Popagate checkpoint barriers
-    return result;
 }
 
 void PulsarSource::doRecover(CheckpointContextPtr ckpt_ctx_)

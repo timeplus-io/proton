@@ -53,7 +53,6 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int ABORTED;
     extern const int LOGICAL_ERROR;
     extern const int TOO_MANY_PARTS;
 }
@@ -157,15 +156,14 @@ void updateTTL(
 
 void MergeTreeDataWriter::TemporaryPart::cancel()
 {
-    try
+    for (auto & stream : streams)
     {
-        /// An exception context is needed to proper delete write buffers without finalization
-        throw Exception(ErrorCodes::ABORTED, "Cancel temporary part.");
+        stream.stream->cancel();
+        stream.finalizer.cancel();
     }
-    catch (...)
-    {
-        *this = TemporaryPart{};
-    }
+
+    /// The part is trying to delete leftovers here
+    part.reset();
 }
 
 void MergeTreeDataWriter::TemporaryPart::finalize()
@@ -255,7 +253,7 @@ Block MergeTreeDataWriter::mergeBlock(
             /// There is nothing to merge in single block in ordinary MergeTree
             case MergeTreeData::MergingParams::Ordinary:
                 return nullptr;
-            case MergeTreeData::MergingParams::VersionedKV:
+            case MergeTreeData::MergingParams::Replacing:
                 return std::make_shared<ReplacingSortedAlgorithm>(
                     block, 1, sort_description, merging_params.version_column, block_size + 1, /*block_size_bytes=*/0);
             case MergeTreeData::MergingParams::Collapsing:
@@ -268,7 +266,7 @@ Block MergeTreeDataWriter::mergeBlock(
                     partition_key_columns, block_size + 1, /*block_size_bytes=*/0);
             case MergeTreeData::MergingParams::Aggregating:
                 return std::make_shared<AggregatingSortedAlgorithm>(block, 1, sort_description, block_size + 1, /*block_size_bytes=*/0);
-            case MergeTreeData::MergingParams::ChangelogKV:
+            case MergeTreeData::MergingParams::VersionedCollapsing:
                 return std::make_shared<VersionedCollapsingAlgorithm>(
                     block, 1, sort_description, merging_params.sign_column, merging_params.version_column, block_size + 1, /*block_size_bytes=*/0);
             case MergeTreeData::MergingParams::Graphite:

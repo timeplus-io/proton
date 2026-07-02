@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Names.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 /// #include <QueryPipeline/SizeLimits.h>
 
@@ -11,7 +12,7 @@ namespace Streaming
 class SubstreamShufflingStep final : public ITransformingStep
 {
 public:
-    SubstreamShufflingStep(const DataStream & input_stream_, std::vector<size_t> key_positions_, size_t max_thread_);
+    SubstreamShufflingStep(const DataStream & input_stream_, Names keys_, size_t max_thread_);
 
     String getName() const override { return "SubstreamShufflingStep"; }
 
@@ -20,7 +21,7 @@ public:
 private:
     void updateOutputStream() override;
 
-    std::vector<size_t> key_positions;
+    Names keys;
     size_t max_thread;
 };
 

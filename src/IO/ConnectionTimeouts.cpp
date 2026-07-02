@@ -9,8 +9,7 @@ Poco::Timespan ConnectionTimeouts::saturate(Poco::Timespan timespan, Poco::Times
 {
     if (limit.totalMicroseconds() == 0)
         return timespan;
-    else
-        return (timespan > limit) ? limit : timespan;
+    return (timespan > limit) ? limit : timespan;
 }
 
 /// Timeouts for the case when we have just single attempt to connect.
@@ -149,6 +148,26 @@ ConnectionTimeouts ConnectionTimeouts::getAdaptiveTimeouts(const String & method
     return ConnectionTimeouts(*this)
         .withSendTimeout(saturate(send, send_timeout))
         .withReceiveTimeout(saturate(recv, receive_timeout));
+}
+
+void setTimeouts(Poco::Net::HTTPClientSession & session, const ConnectionTimeouts & timeouts)
+{
+    session.setTimeout(timeouts.connection_timeout, timeouts.send_timeout, timeouts.receive_timeout);
+    /// we can not change keep alive timeout for already initiated connections
+    if (!session.connected())
+    {
+        session.setKeepAliveTimeout(timeouts.http_keep_alive_timeout);
+        session.setKeepAliveMaxRequests(int(timeouts.http_keep_alive_max_requests));
+    }
+}
+
+ConnectionTimeouts getTimeouts(const Poco::Net::HTTPClientSession & session)
+{
+    return ConnectionTimeouts()
+            .withConnectionTimeout(session.getConnectionTimeout())
+            .withSendTimeout(session.getSendTimeout())
+            .withReceiveTimeout(session.getReceiveTimeout())
+            .withHTTPKeepAliveTimeout(session.getKeepAliveTimeout());
 }
 
 }

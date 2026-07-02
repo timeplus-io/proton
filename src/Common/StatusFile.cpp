@@ -86,7 +86,17 @@ StatusFile::StatusFile(std::string path_, FillFunction fill_)
 
         /// Write information about current server instance to the file.
         WriteBufferFromFileDescriptor out(fd, 1024);
-        fill(out);
+        try
+        {
+            LOG_INFO(getLogger("StatusFile"), "Writing pid {} to {}", getpid(), path);
+            fill(out);
+            out.finalize();
+        }
+        catch (...)
+        {
+            out.cancel();
+            throw;
+        }
     }
     catch (...)
     {

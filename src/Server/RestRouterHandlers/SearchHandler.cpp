@@ -1,12 +1,16 @@
-#include <Server/RestRouterHandlers/SchemaValidator.h>
 #include <Server/RestRouterHandlers/SearchHandler.h>
 
+#include <Server/HTTP/WriteBufferFromHTTPServerResponse.h>
+#include <Server/RestRouterHandlers/SchemaValidator.h>
+
+#include <IO/CompressionMethod.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/executeQuery.h>
 
 #include <Common/re2.h>
+#include <fmt/ranges.h>
 
 
 namespace DB
@@ -27,7 +31,7 @@ void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload, HTTPServerR
 {
     auto send_error = [&response](const String && error_msg) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         response.setStatusAndReason(HTTPResponse::HTTP_BAD_REQUEST);
-        *response.send() << error_msg << std::endl;
+        *response.send() << error_msg << "\n";
     };
 
     String error;
@@ -62,9 +66,8 @@ void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload, HTTPServerR
 
         writeString(jsonErrorResponse(e.message(), e.code()), *out);
         writeChar('\n', *out);
-        out->next();
-        out->finalize();
     }
+    out->finalize();
 }
 
 String SearchHandler::getQuery(const Poco::JSON::Object::Ptr & payload) const
@@ -140,37 +143,22 @@ bool SearchHandler::validatePost(const Poco::JSON::Object::Ptr & payload, String
     return true;
 }
 
-std::shared_ptr<WriteBufferFromHTTPServerResponse> SearchHandler::getOutputBuffer(HTTPServerResponse & response) const
+std::unique_ptr<WriteBuffer> SearchHandler::getOutputBuffer(HTTPServerResponse & response) const
 {
+    std::unique_ptr<WriteBuffer> out = std::make_unique<WriteBufferFromHTTPServerResponse>(response, /*is_http_method_head_=*/false);
+
     const auto & settings = query_context->getSettingsRef();
     const auto & accept_encodings = getAcceptEncoding();
-    CompressionMethod http_response_compression_method = CompressionMethod::None;
-
-    if (!accept_encodings.empty())
-    {
-        /// If client supports brotli - it's preferred.
-        /// Both gzip and deflate are supported. If the client supports both, gzip is preferred.
-        /// NOTE parsing of the list of methods is slightly incorrect.
-        if (std::string::npos != accept_encodings.find("br"))
-            http_response_compression_method = CompressionMethod::Brotli;
-        else if (std::string::npos != accept_encodings.find("gzip"))
-            http_response_compression_method = CompressionMethod::Gzip;
-        else if (std::string::npos != accept_encodings.find("deflate"))
-            http_response_compression_method = CompressionMethod::Zlib;
-        else if (std::string::npos != accept_encodings.find("xz"))
-            http_response_compression_method = CompressionMethod::Xz;
-        else if (std::string::npos != accept_encodings.find("zstd"))
-            http_response_compression_method = CompressionMethod::Zstd;
-    }
-
-    bool client_supports_http_compression = http_response_compression_method != CompressionMethod::None;
-    unsigned keep_alive_timeout = 10;
-
-    auto out = std::make_shared<WriteBufferFromHTTPServerResponse>(
-        response, false, keep_alive_timeout, client_supports_http_compression, http_response_compression_method);
-
+    const CompressionMethod http_response_compression_method = chooseHTTPCompressionMethod(accept_encodings);
+    const bool client_supports_http_compression = http_response_compression_method != CompressionMethod::None;
     if (client_supports_http_compression)
-        out->setCompressionLevel(static_cast<int>(settings.http_zlib_compression_level.value));
+    {
+        out = wrapWriteBufferWithCompressionMethod(
+            std::move(out),
+            http_response_compression_method,
+            static_cast<int>(settings.http_zlib_compression_level),
+            static_cast<int>(settings.output_format_compression_zstd_window_log));
+    }
 
     return out;
 }

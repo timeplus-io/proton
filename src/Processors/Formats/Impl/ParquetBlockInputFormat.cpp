@@ -1,8 +1,8 @@
-#include "ParquetBlockInputFormat.h"
-#include <boost/algorithm/string/case_conv.hpp>
+#include <Processors/Formats/Impl/ParquetBlockInputFormat.h>
 
 #if USE_PARQUET
 
+#include <Common/logger_useful.h>
 #include <Common/ThreadPool.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/SchemaInferenceUtils.h>
@@ -14,14 +14,13 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/schema.h>
 #include <parquet/file_reader.h>
-#include "ArrowBufferedStreams.h"
-#include "ArrowColumnToCHColumn.h"
-#include "ArrowFieldIndexUtil.h"
+#include <Processors/Formats/Impl/ArrowBufferedStreams.h>
+#include <Processors/Formats/Impl/ArrowColumnToCHColumn.h>
+#include <Processors/Formats/Impl/ArrowFieldIndexUtil.h>
 #include <base/scope_guard.h>
 #include <DataTypes/NestedUtils.h>
 
-
-#include <Common/logger_useful.h>
+#include <boost/algorithm/string/case_conv.hpp>
 
 namespace CurrentMetrics
 {
@@ -62,8 +61,12 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
         pool = std::make_unique<ThreadPool>(CurrentMetrics::ParquetDecoderThreads, CurrentMetrics::ParquetDecoderThreadsActive, max_decoding_threads);
 }
 
-
-ParquetBlockInputFormat::~ParquetBlockInputFormat() = default;
+ParquetBlockInputFormat::~ParquetBlockInputFormat()
+{
+    is_stopped = true;
+    if (pool)
+        pool->wait();
+}
 
 void ParquetBlockInputFormat::initializeIfNeeded()
 {

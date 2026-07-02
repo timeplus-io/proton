@@ -8,11 +8,11 @@
 #if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
 
 #include <Common/RemoteHostFilter.h>
-#include <Common/Throttler_fwd.h>
+#include <Common/IThrottler.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/HTTPCommon.h>
 #include <IO/HTTPHeaderEntries.h>
-#include <IO/S3/SessionAwareIOStream.h>
+#include <IO/SessionAwareIOStream.h>
 
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/http/HttpClient.h>
@@ -36,17 +36,10 @@ namespace DB::S3
 
 class ClientFactory;
 
-struct ClientConfigurationPerRequest
-{
-    Aws::Http::Scheme proxy_scheme = Aws::Http::Scheme::HTTPS;
-    String proxy_host;
-    unsigned proxy_port = 0;
-};
-
 
 struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
 {
-    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = [] (const Aws::Http::HttpRequest &) { return ClientConfigurationPerRequest(); };
+    std::function<ProxyConfiguration()> per_request_configuration;
     String force_region;
     const RemoteHostFilter & remote_host_filter;
     unsigned int s3_max_redirects;
@@ -61,20 +54,18 @@ struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
     String metadata_service;
     String request_token_path;
 
-    /// Not a client parameter in terms of HTTP and we won't send it to the server. Used internally to determine when connection have to be re-established.
-    uint32_t http_keep_alive_timeout_ms = 0;
-    /// Zero means pooling will not be used.
-    size_t http_connection_pool_size = 0;
     /// See PoolBase::BehaviourOnLimit
-    bool wait_on_pool_size_limit = true;
     bool s3_use_adaptive_timeouts = true;
+    size_t http_keep_alive_timeout = DEFAULT_HTTP_KEEP_ALIVE_TIMEOUT;
+    size_t http_keep_alive_max_requests = DEFAULT_HTTP_KEEP_ALIVE_MAX_REQUEST;
+
+    std::function<void(const ProxyConfiguration &)> error_report;
 
     void updateSchemeAndRegion();
 
-    std::function<void(const ClientConfigurationPerRequest &)> error_report;
-
 private:
     PocoHTTPClientConfiguration(
+        std::function<ProxyConfiguration()> per_request_configuration_,
         const String & force_region_,
         const RemoteHostFilter & remote_host_filter_,
         unsigned int s3_max_redirects_,
@@ -82,8 +73,8 @@ private:
         bool for_disk_s3_,
         bool s3_use_adaptive_timeouts_,
         const ThrottlerPtr & get_request_throttler_,
-        const ThrottlerPtr & put_request_throttler_
-    );
+        const ThrottlerPtr & put_request_throttler_,
+        std::function<void(const ProxyConfiguration &)> error_report_);
 
     /// Constructor of Aws::Client::ClientConfiguration must be called after AWS SDK initialization.
     friend ClientFactory;
@@ -106,12 +97,6 @@ public:
         body_stream = Aws::Utils::Stream::ResponseStream(
             Aws::New<SessionAwareIOStream<SessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf())
         );
-    }
-
-    void SetResponseBody(Aws::IStream & incoming_stream, PooledHTTPSessionPtr & session_) /// NOLINT
-    {
-        body_stream = Aws::Utils::Stream::ResponseStream(
-            Aws::New<SessionAwareIOStream<PooledHTTPSessionPtr>>("http result streambuf", session_, incoming_stream.rdbuf()));
     }
 
     void SetResponseBody(std::string & response_body) /// NOLINT
@@ -171,10 +156,8 @@ private:
 
     ConnectionTimeouts getTimeouts(const String & method, bool first_attempt, bool first_byte) const;
 
-    template <bool pooled>
     void makeRequestInternalImpl(
         Aws::Http::HttpRequest & request,
-        const ClientConfigurationPerRequest & per_request_configuration,
         std::shared_ptr<PocoHTTPResponse> & response,
         Aws::Utils::RateLimits::RateLimiterInterface * readLimiter,
         Aws::Utils::RateLimits::RateLimiterInterface * writeLimiter) const;
@@ -189,8 +172,8 @@ protected:
     static S3MetricKind getMetricKind(const Aws::Http::HttpRequest & request);
     void addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount = 1) const;
 
-    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration;
-    std::function<void(const ClientConfigurationPerRequest &)> error_report;
+    std::function<ProxyConfiguration()> per_request_configuration;
+    std::function<void(const ProxyConfiguration &)> error_report;
     ConnectionTimeouts timeouts;
     const RemoteHostFilter & remote_host_filter;
     unsigned int s3_max_redirects = 0;
@@ -208,9 +191,6 @@ protected:
     ThrottlerPtr put_request_throttler;
 
     const HTTPHeaderEntries extra_headers;
-
-    size_t http_connection_pool_size = 0;
-    bool wait_on_pool_size_limit = true;
 };
 
 class PocoHTTPClientGCPOAuth : public PocoHTTPClient

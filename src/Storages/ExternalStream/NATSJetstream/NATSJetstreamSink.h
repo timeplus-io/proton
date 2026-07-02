@@ -33,7 +33,7 @@ public:
 
     void consume(Chunk chunk) override;
     void onFinish() override;
-    void checkpoint(CheckpointContextPtr) override;
+    void doCheckpoint(CheckpointContextPtr) override;
 
 private:
     void sendMessage(const String & message, ColumnPtr key_col, ColumnPtr headers_col, ColumnPtr ts_col);

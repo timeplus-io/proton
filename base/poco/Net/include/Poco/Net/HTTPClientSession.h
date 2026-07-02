@@ -18,13 +18,13 @@
 #define Net_HTTPClientSession_INCLUDED
 
 
-#include "Poco/Net/Net.h"
-#include "Poco/Net/HTTPSession.h"
-#include "Poco/Net/HTTPSessionFactory.h"
-#include "Poco/Net/SocketAddress.h"
-#include "Poco/SharedPtr.h"
 #include <istream>
 #include <ostream>
+#include "Poco/Net/HTTPSession.h"
+#include "Poco/Net/HTTPSessionFactory.h"
+#include "Poco/Net/Net.h"
+#include "Poco/Net/SocketAddress.h"
+#include "Poco/SharedPtr.h"
 
 
 namespace Poco
@@ -207,8 +207,21 @@ namespace Net
         void setKeepAliveTimeout(const Poco::Timespan & timeout);
         /// Sets the connection timeout for HTTP connections.
 
-        const Poco::Timespan & getKeepAliveTimeout() const;
+        Poco::Timespan getKeepAliveTimeout() const;
         /// Returns the connection timeout for HTTP connections.
+
+        void setKeepAliveMaxRequests(int max_requests);
+
+        int getKeepAliveMaxRequests() const;
+
+        int getKeepAliveRequest() const;
+
+        bool isKeepAliveExpired(double reliability = 1.0) const;
+        /// Returns if the connection is expired with some margin as fraction of timeout as reliability
+
+        double getKeepAliveReliability() const;
+        /// Returns the current fraction of keep alive timeout when connection is considered safe to use
+        /// It helps to avoid situation when a client uses nearly expired connection and receives NoMessageException
 
         virtual std::ostream & sendRequest(HTTPRequest & request);
         /// Sends the header for the given HTTP request to
@@ -272,7 +285,7 @@ namespace Net
         /// This method should only be called if the request contains
         /// a "Expect: 100-continue" header.
 
-        void flushRequest();
+        virtual void flushRequest();
         /// Flushes the request stream.
         ///
         /// Normally this method does not need to be called.
@@ -280,7 +293,7 @@ namespace Net
         /// fully sent if receiveResponse() is not called, e.g.,
         /// because the underlying socket will be detached.
 
-        void reset();
+        virtual void reset();
         /// Resets the session and closes the socket.
         ///
         /// The next request will initiate a new connection,
@@ -299,6 +312,9 @@ namespace Net
         bool bypassProxy() const;
         /// Returns true if the proxy should be bypassed
         /// for the current host.
+
+        const Poco::Timestamp & getLastRequest() const;
+        /// Returns time when connection has been used last time
 
     protected:
         enum
@@ -335,6 +351,15 @@ namespace Net
         /// Calls proxyConnect() and attaches the resulting StreamSocket
         /// to the HTTPClientSession.
 
+        void setLastRequest(Poco::Timestamp time);
+
+        void assign(HTTPClientSession & session);
+        /// Takes away socket and properties from another `session`, which is then reset.
+        /// This is helpful to organize connection pools.
+        /// NOTE: it does NOT take away throttlers and data hooks, keeps its own.
+
+        void setKeepAliveRequest(int request);
+
         HTTPSessionFactory _proxySessionFactory;
         /// Factory to create HTTPClientSession to proxy.
     private:
@@ -343,6 +368,8 @@ namespace Net
         Poco::UInt16 _port;
         ProxyConfig _proxyConfig;
         Poco::Timespan _keepAliveTimeout;
+        int _keepAliveCurrentRequest = 0;
+        int _keepAliveMaxRequests = 1000;
         Poco::Timestamp _lastRequest;
         bool _reconnect;
         bool _mustReconnect;
@@ -351,6 +378,7 @@ namespace Net
         Poco::SharedPtr<std::ostream> _pRequestStream;
         Poco::SharedPtr<std::istream> _pResponseStream;
 
+        static const double _defaultKeepAliveReliabilityLevel;
         static ProxyConfig _globalProxyConfig;
 
         HTTPClientSession(const HTTPClientSession &);
@@ -430,11 +458,30 @@ namespace Net
     }
 
 
-    inline const Poco::Timespan & HTTPClientSession::getKeepAliveTimeout() const
+    inline Poco::Timespan HTTPClientSession::getKeepAliveTimeout() const
     {
         return _keepAliveTimeout;
     }
 
+    inline const Poco::Timestamp & HTTPClientSession::getLastRequest() const
+    {
+        return _lastRequest;
+    }
+
+    inline double HTTPClientSession::getKeepAliveReliability() const
+    {
+        return _defaultKeepAliveReliabilityLevel;
+    }
+
+    inline int HTTPClientSession::getKeepAliveMaxRequests() const
+    {
+        return _keepAliveMaxRequests;
+    }
+
+    inline int HTTPClientSession::getKeepAliveRequest() const
+    {
+        return _keepAliveCurrentRequest;
+    }
 
 }
 } // namespace Poco::Net

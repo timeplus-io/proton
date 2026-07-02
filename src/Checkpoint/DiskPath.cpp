@@ -2,6 +2,8 @@
 
 #include <Disks/DiskLocal.h>
 
+#include <Common/logger_useful.h>
+
 namespace DB
 {
 bool copyDiskPathViaHardLinking(const DiskPath & from, const DiskPath & to)
@@ -160,7 +162,7 @@ size_t copyDiskPath(const DiskPath & from, const DiskPath & to, bool try_hard_li
     }
     else
     {
-        from.disk->copyFile(from.path, *to.disk, to.path);
+        from.disk->copyFile(from.path, *to.disk, to.path, ReadSettings{});
         return from.disk->getFileSize(from.path);
     }
 }

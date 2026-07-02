@@ -177,4 +177,14 @@ int OwnSplitChannel::getLevel(const std::string & name)
 }
 /// proton: ends.
 
+void OwnSplitChannel::setChannelProperty(const std::string& channel_name, const std::string& name, const std::string& value)
+{
+    auto it = channels.find(channel_name);
+    if (it != channels.end())
+    {
+        if (auto * channel = dynamic_cast<DB::OwnFormattingChannel *>(it->second.first.get()))
+            channel->setProperty(name, value);
+    }
+}
+
 }

@@ -34,7 +34,8 @@ public:
     /// proton: starts
     void setSequenceInfo(const SequenceInfoPtr & seq_info_) { seq_info = seq_info_; }
     void setMissingSequenceRanges(SequenceRanges missing_seq_ranges_) { missing_seq_ranges.swap(missing_seq_ranges_); }
-
+    /// When false, delayInsertOrThrowIfNeeded loops with 1s sleeps instead of throwing
+    /// TOO_MANY_PARTS. Set by background NativeLog commit paths (StreamShardStore, snapshots).
 private:
     bool ignorePartBlock(Int32 parts, Int32 part_index) const;
     /// proton: ends

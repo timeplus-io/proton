@@ -188,7 +188,7 @@ private:
     void executeMergeAggregated(QueryPlan & query_plan, bool overflow_row, bool final, bool has_grouping_sets);
     void executeTotalsAndHaving(QueryPlan & query_plan, bool has_having, const ActionsDAGPtr & expression, bool remove_filter, bool overflow_row, bool final);
     void executeHaving(QueryPlan & query_plan, const ActionsDAGPtr & expression, bool remove_filter);
-    void executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description, bool preserves_substream = true);
+    void executeExpression(QueryPlan & query_plan, const ActionsDAGPtr & expression, const std::string & description);
     /// FIXME should go through ActionsDAG to behave as a proper function
     void executeWindow(QueryPlan & query_plan);
     void executeOrder(QueryPlan & query_plan, InputOrderInfoPtr sorting_info);
@@ -276,8 +276,6 @@ private:
     bool current_select_has_aggregates = false;
     std::optional<std::pair<JoinKind, JoinStrictness>> current_select_join_kind_and_strictness; /// Which implies having join if have value
     mutable std::optional<bool> is_streaming_query;
-    bool substream_shuffled_before_join = false;
-    bool light_shuffled = false;
 
     std::shared_ptr<const Streaming::EmitParams> emit_params;
 

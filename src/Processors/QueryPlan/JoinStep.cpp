@@ -7,12 +7,19 @@
 #include <Common/JSONBuilder.h>
 #include <Common/typeid_cast.h>
 
+#include <algorithm>
+
 namespace DB
 {
 
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+}
+
+bool joinPreservesLeftShuffle(JoinKind kind)
+{
+    return isInner(kind) || isLeft(kind) || isCrossOrComma(kind);
 }
 
 namespace
@@ -36,6 +43,20 @@ std::vector<std::pair<String, String>> describeJoinActions(const JoinPtr & join)
     return description;
 }
 
+void preserveLeftShuffleDescriptionIfValid(DataStream & output_stream, const DataStream & left_stream, JoinKind kind)
+{
+    if (!left_stream.shuffle_description || !joinPreservesLeftShuffle(kind))
+        return;
+
+    /// Require each key to be a genuine left-input column that also survives in the output, so a
+    /// cross-boundary description can't latch onto a same-named right/join-added output column.
+    const auto & keys = left_stream.shuffle_description->keys;
+    if (!std::ranges::all_of(keys, [&](const auto & key) { return left_stream.header.has(key) && output_stream.header.has(key); }))
+        return;
+
+    output_stream.shuffle_description = left_stream.shuffle_description;
+}
+
 }
 
 JoinStep::JoinStep(
@@ -53,9 +74,9 @@ JoinStep::JoinStep(
         .header = JoiningTransform::transformHeader(left_stream_.header, join),
         /// proton: starts. Propagate streaming flag to output stream
         .is_streaming = left_stream_.is_streaming || right_stream_.is_streaming,
-        .with_substream = left_stream_.with_substream,
         /// proton: ends.
     };
+    preserveLeftShuffleDescriptionIfValid(*output_stream, left_stream_, join->getTableJoin().kind());
 }
 
 QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines, const BuildQueryPipelineSettings &)
@@ -116,9 +137,9 @@ void JoinStep::updateInputStream(const DataStream & new_input_stream_, size_t id
                 .header = JoiningTransform::transformHeader(new_input_stream_.header, join),
                 /// proton: starts. Propagate streaming flag to output stream
                 .is_streaming = new_input_stream_.is_streaming,
-                .with_substream = new_input_stream_.with_substream,
                 /// proton: ends.
             };
+        preserveLeftShuffleDescriptionIfValid(*output_stream, new_input_stream_, join->getTableJoin().kind());
     }
     else
     {
@@ -139,7 +160,7 @@ static ITransformingStep::Traits getStorageJoinTraits()
             .preserves_number_of_streams = true,
             .preserves_sorting = false,
             /// proton: starts.
-            .preserves_substream = false,
+            .preserves_shuffling = false,
             /// proton: ends.
         },
         {

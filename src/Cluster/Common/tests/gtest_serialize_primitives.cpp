@@ -29,7 +29,7 @@ TEST(Serde, VarUInt)
         v.reserve(sizeof(t.i));
 
         {
-            DB::WriteBufferFromVector wb(v);
+            DB::WriteBufferFromVector<std::vector<char>> wb(v);
             DB::writeVarUInt(t.i, wb);
         }
         {
@@ -62,7 +62,7 @@ TEST(Serde, VarInt)
         v.reserve(sizeof(t.i));
 
         {
-            DB::WriteBufferFromVector wb(v);
+            DB::WriteBufferFromVector<std::vector<char>> wb(v);
             DB::writeVarInt(t.i, wb);
         }
         {
@@ -94,7 +94,7 @@ TEST(Serde, IntBinary)
         v.reserve(sizeof(t.i));
 
         {
-            DB::WriteBufferFromVector wb(v);
+            DB::WriteBufferFromVector<std::vector<char>> wb(v);
             DB::writeIntBinary(t.i, wb);
         }
         {
@@ -126,7 +126,7 @@ TEST(Serde, UIntBinary)
         v.reserve(sizeof(t.i));
 
         {
-            DB::WriteBufferFromVector wb(v);
+            DB::WriteBufferFromVector<std::vector<char>> wb(v);
             DB::writeIntBinary(t.i, wb);
         }
         {

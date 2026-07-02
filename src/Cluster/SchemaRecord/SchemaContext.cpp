@@ -44,16 +44,15 @@ bool SchemaContext::serializableCompatible(uint16_t on_storage_schema_version) c
 
     const auto & on_storage_schema = getSchema(on_storage_schema_version);
     auto on_storage_schema_columns = on_storage_schema.columns();
-    if (on_storage_schema_columns < column_positions_requested.positions.size())
-        return false;
 
     const auto & query_schema = getRequestedSchema();
     chassert(query_schema.columns() >= column_positions_requested.positions.size());
 
     for (auto pos : column_positions_requested.positions)
     {
-        if (on_storage_schema_columns <= pos)
-            return false;
+        /// If requested schema is newer, still treat it is compatible since the missing (new) columns will be filled later with default
+        if (pos >= on_storage_schema_columns)
+            continue;
 
         const auto & on_storage_column = on_storage_schema.getByPosition(pos);
         const auto & query_column = query_schema.getByPosition(pos);

@@ -27,6 +27,7 @@
 #include <boost/algorithm/string/finder.hpp>
 #include <boost/range/adaptor/indexed.hpp>
 #include <filesystem>
+#include <fmt/ranges.h>
 
 
 namespace CurrentMetrics

@@ -1,0 +1,127 @@
+tags:
+  - parallel parsing
+  - batch parsing
+
+description: |
+  Test kafka external stream with parallel parsing combined with batch parsing.
+  Steps:
+    1.Create kafka topic with multiple partitions
+    2.Create external stream with JSONEachRow format
+    3.Query with parallel_parsing=1 and parse_messages_in_batch=1
+    4.Produce many JSON messages
+    5.Verify all messages received correctly
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: kafka
+    name: delete
+    topic: test_parallel_batch_39
+
+  - type: kafka
+    name: create
+    topic: test_parallel_batch_39
+    settings:
+      partitions: 3
+      replication: 1
+
+  - type: wait
+    time: 2
+
+  - type: query
+    sql: drop stream if exists ext_parallel_batch_39;
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ext_parallel_batch_39(
+        id int32,
+        value string
+      )
+      SETTINGS type = 'kafka',
+      brokers = 'k1:9092',
+      topic = 'test_parallel_batch_39',
+      data_format = 'JSONEachRow',
+      one_message_per_row = 1;
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: parallel-batch-39-1
+    query: select id, value from ext_parallel_batch_39 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=1, parse_messages_in_batch=1, record_consume_batch_count=5;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: stream
+    name: parallel-batch-39-2
+    query: select id, value from ext_parallel_batch_39 settings seek_to='earliest', parallel_parsing=1, parallel_parsing_threads=4, parse_messages_in_batch=1, record_consume_batch_count=5;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  - type: wait
+    time: 1
+
+  # Insert multiple batches to test parallel processing
+  - type: query
+    sql: insert into ext_parallel_batch_39(id, value) values (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ext_parallel_batch_39(id, value) values (6, 'f'), (7, 'g'), (8, 'h'), (9, 'i'), (10, 'j');
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: insert into ext_parallel_batch_39(id, value) values (11, 'k'), (12, 'l'), (13, 'm'), (14, 'n'), (15, 'o');
+
+  - type: check
+    target_name: parallel-batch-39-1
+    expected_result:
+      - [1, a]
+      - [2, b]
+      - [3, c]
+      - [4, d]
+      - [5, e]
+      - [6, f]
+      - [7, g]
+      - [8, h]
+      - [9, i]
+      - [10, j]
+      - [11, k]
+      - [12, l]
+      - [13, m]
+      - [14, n]
+      - [15, o]
+
+  - type: check
+    target_name: parallel-batch-39-2
+    expected_result:
+      - [1, a]
+      - [2, b]
+      - [3, c]
+      - [4, d]
+      - [5, e]
+      - [6, f]
+      - [7, g]
+      - [8, h]
+      - [9, i]
+      - [10, j]
+      - [11, k]
+      - [12, l]
+      - [13, m]
+      - [14, n]
+      - [15, o]

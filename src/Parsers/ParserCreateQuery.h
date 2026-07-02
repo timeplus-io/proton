@@ -522,6 +522,9 @@ protected:
   *
   * Or:
   * CREATE EXTERNAL STREAM [IF NOT EXISTS] ...
+  *
+  * Or:
+  * CREATE INPUT [IF NOT EXISTS] ...
   */
 class ParserCreateQuery : public IParserBase
 {

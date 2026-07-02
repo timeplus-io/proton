@@ -4,6 +4,7 @@
 #include <IO/Kafka/Handle_fwd.h>
 #include <Common/Logger.h>
 #include <Common/SharedMutex.h>
+#include <Common/Stopwatch.h>
 
 #include <librdkafka/rdkafka.h>
 
@@ -30,13 +31,15 @@ public:
     rd_kafka_topic_t * getTopicHandle() const;
 
     std::string name() const;
-    std::string topicName() const;
-    int32_t getPartitionCount(uint64_t timeout_ms = 5000) const;
-    WatermarkOffsets queryWatermarkOffsets(int32_t partition) const;
+    const std::string & topicName() const;
+    int32_t getPartitionCount(uint64_t timeout_ms) const;
+    WatermarkOffsets queryWatermarkOffsets(int32_t partition, uint64_t timeout_ms) const;
     WatermarkOffsets getWatermarkOffsets(int32_t partition) const;
 
 protected:
     using RdkTopicPtr = std::unique_ptr<rd_kafka_topic_t, decltype(rd_kafka_topic_destroy) *>;
+
+    const std::string topic_name;
 
     std::shared_ptr<Handle> handle;
     RdkTopicPtr topic_handle;
@@ -49,35 +52,41 @@ class Consumer final : public Client, public std::enable_shared_from_this<Consum
 public:
     Consumer(const ConnectionPtr &, const ConsumerHandlePtr &, const std::string & topic);
 
-    using Callback = std::function<void(const void * rkmessage, size_t total_count, void * data)>;
+    using Callback = std::function<void(void * rkmessage, size_t total_count, void * data)>;
     using ErrorCallback = std::function<void(rd_kafka_resp_err_t errcode, std::string_view errmsg)>;
-
-    using Version = size_t;
 
     /// Initialize the consumer for consuming data from the partitions.
     void initialize(const std::vector<uint64_t> & partitions);
 
     void startConsume(int32_t partition, int64_t offset);
     void stopConsume(int32_t partition);
+    /// Fetch messages from the specified partition and process them with the callback.
+    /// The error_callback will be called when receiving message fails.
+    /// The callback will be called when all messages are received successfully (RD_KAFKA_RESP_ERR_NO_ERROR).
     void consumeBatch(int32_t partition, uint32_t count, int32_t timeout_ms, Callback callback, ErrorCallback error_callback);
     WatermarkOffsets getLastBatchOffsets(int32_t partition) const;
     std::pair<int64_t /* last_consumed_offset */, int64_t /* latest_offset */> getProgress(int32_t partition) const;
 
+    /// Thread safe version of Client methods
+    std::string name() const;
+    int32_t getPartitionCount(uint64_t timeout_ms) const;
+    WatermarkOffsets queryWatermarkOffsets(int32_t partition, uint64_t timeout_ms) const;
+    WatermarkOffsets getWatermarkOffsets(int32_t partition) const;
+
     /// Recreates all the handles in the consumer.
     /// This is for solving the stall case: https://github.com/timeplus-io/proton-enterprise/issues/7519.
     ///
-    /// The version is used to protect `recreate` function calls.
+    /// The 'creation_time' is used to protect `recreate` function calls.
+    /// Do not create new handle when the old one was created within certain time.
     /// A consumer could be shared by multiple sources, especially, when consuming a multi-parition topic,
     /// a KafkaSource will be created for each partition, and a Consumer instance is shared by all those sources.
     /// If stall happens, it's likely that it happens to all the sources that use the same Consumer. In this caee,
     /// they wil all call `recreate` at the (about) same time. If we don't protect `recreate`,
     /// then the Consumer will be recreated again and again for each source, which is disruptive and wasteful.
-    /// With the version, we can make sure that only `recreate` called by the up-to-date version will actually recreate the Consumer.
-    Version recreate(Version);
-    Version getVersion() const { return ver; }
+    bool recreate(UInt64 cooldown_ms);
 
     /// For internal use
-    void updateFrom(Consumer && other);
+    void updateFromWithLockHeld(Consumer && other);
 
 private:
     void doStartConsume(int32_t partition, int64_t offset);
@@ -86,7 +95,7 @@ private:
     const ConnectionPtr owner;
 
     mutable SharedMutex mutex;
-    Version ver{0};
+    Stopwatch creation_time;
     std::unordered_map<int32_t, WatermarkOffsets> partitions_progress;
 };
 

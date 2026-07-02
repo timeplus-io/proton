@@ -100,7 +100,7 @@ void BackupInDirectory::removeAllFilesAfterFailure()
 std::unique_ptr<ReadBuffer> BackupInDirectory::readFileImpl(const String & file_name) const
 {
     String file_path = path + file_name;
-    return disk->readFile(file_path);
+    return disk->readFile(file_path, ReadSettings{});
 }
 
 std::unique_ptr<WriteBuffer> BackupInDirectory::addFileImpl(const String & file_name)

@@ -3,6 +3,9 @@
 #include <Core/Joins.h>
 #include <Parsers/IAST_fwd.h>
 
+#include <optional>
+
+
 namespace DB
 {
 class ASTSelectQuery;

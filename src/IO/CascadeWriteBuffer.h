@@ -1,4 +1,5 @@
 #pragma once
+
 #include <functional>
 #include <IO/WriteBuffer.h>
 
@@ -27,16 +28,16 @@ class CascadeWriteBuffer : public WriteBuffer
 {
 public:
 
-    using WriteBufferPtrs = std::vector<WriteBufferPtr>;
     using WriteBufferConstructor = std::function<WriteBufferPtr (const WriteBufferPtr & prev_buf)>;
     using WriteBufferConstructors = std::vector<WriteBufferConstructor>;
+    using WriteBufferPtrs = std::vector<WriteBufferPtr>;
 
-    CascadeWriteBuffer(WriteBufferPtrs && prepared_sources_, WriteBufferConstructors && lazy_sources_ = {});
+    explicit CascadeWriteBuffer(WriteBufferPtrs && prepared_sources_, WriteBufferConstructors && lazy_sources_ = {});
 
     void nextImpl() override;
 
     /// Should be called once
-    void getResultBuffers(WriteBufferPtrs & res);
+    WriteBufferPtrs getResultBuffers();
 
     const WriteBuffer * getCurrentBuffer() const
     {

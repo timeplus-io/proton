@@ -1,7 +1,7 @@
 #include <Processors/Formats/Impl/JSONRowInputFormat.h>
 #include <Formats/JSONUtils.h>
 #include <Formats/FormatFactory.h>
-#include "Processors/Formats/ISchemaReader.h"
+#include <Processors/Formats/ISchemaReader.h>
 
 namespace DB
 {

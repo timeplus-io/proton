@@ -294,6 +294,7 @@ void doBootstrap(ContextMutablePtr global_context, Poco::Logger * logger)
     /// Set global context and other singletons
     g_global_ctx = global_context.get();
     global_context->setMaxDiskUtil(config_ref.getDouble("max_local_disk_usage_ratio", 0.9));
+    global_context->setMaxQueryMemoryUsageToRamRatio(config_ref.getDouble("max_query_memory_usage_to_ram_ratio", 0.8));
 
     /// Load server metadata
     std::filesystem::path path = global_context->getPath();

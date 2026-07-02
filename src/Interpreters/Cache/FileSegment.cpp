@@ -465,7 +465,7 @@ bool FileSegment::reserve(size_t size_to_reserve)
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
                 "Attempt to reserve space too much space ({}) for file segment with range: {} (downloaded size: {})",
-                size_to_reserve, range().toString(), downloaded_size);
+                size_to_reserve, range().toString(), downloaded_size.load());
         }
 
         chassert(reserved_size >= expected_downloaded_size);
@@ -509,8 +509,9 @@ void FileSegment::setDownloadedUnlocked(const FileSegmentGuard::Lock &)
     {
         cache_writer->finalize();
         cache_writer.reset();
-        remote_file_reader.reset();
     }
+
+    remote_file_reader.reset();
 
     chassert(getDownloadedSize(false) > 0);
     chassert(fs::file_size(getPathInLocalCache()) > 0);
@@ -830,6 +831,10 @@ void FileSegment::setDetachedState(const FileSegmentGuard::Lock & lock)
     setDownloadState(State::DETACHED, lock);
     key_metadata.reset();
     cache = nullptr;
+    if (cache_writer)
+        cache_writer->cancel();
+    cache_writer.reset();
+    remote_file_reader.reset();
 }
 
 void FileSegment::detach(const FileSegmentGuard::Lock & lock, const LockedKey &)

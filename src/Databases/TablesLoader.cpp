@@ -9,6 +9,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/CurrentMetrics.h>
 #include <numeric>
+#include <fmt/ranges.h>
 
 namespace CurrentMetrics
 {

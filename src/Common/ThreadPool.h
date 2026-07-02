@@ -19,7 +19,11 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ThreadPool_fwd.h>
 #include <Common/Priority.h>
+#include <Common/StackTrace.h>
+#include <Common/Exception.h>
 #include <base/scope_guard.h>
+
+class JobWithPriority;
 
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
@@ -122,21 +126,6 @@ private:
     bool shutdown = false;
     bool threads_remove_themselves = true;
     const bool shutdown_on_exception = true;
-
-    struct JobWithPriority
-    {
-        Job job;
-        Priority priority;
-        DB::OpenTelemetry::TracingContextOnThread thread_trace_context;
-
-        JobWithPriority(Job job_, Priority priority_, const DB::OpenTelemetry::TracingContextOnThread & thread_trace_context_)
-            : job(job_), priority(priority_), thread_trace_context(thread_trace_context_) {}
-
-        bool operator<(const JobWithPriority & rhs) const
-        {
-            return priority > rhs.priority; // Reversed for `priority_queue` max-heap to yield minimum value (i.e. highest priority) first
-        }
-    };
 
     boost::heap::priority_queue<JobWithPriority> jobs;
     std::list<Thread> threads;

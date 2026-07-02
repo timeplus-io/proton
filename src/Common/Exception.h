@@ -9,6 +9,7 @@
 #include <Poco/Exception.h>
 
 #include <base/defines.h>
+#include <base/errnoToString.h>
 #include <Common/Logger.h>
 #include <Common/AtomicLogger.h>
 #include <Common/StackTrace.h>
@@ -22,24 +23,31 @@ namespace Poco { class Logger; }
 namespace DB
 {
 
-void abortOnFailedAssertion(const String & description);
-
 class Exception : public Poco::Exception
 {
 public:
     using FramePointers = std::vector<void *>;
 
-    Exception() = default;
+    Exception()
+    {
+        capture_thread_frame_pointers = thread_frame_pointers;
+    }
 
     Exception(const PreformattedMessage & msg, int code): Exception(msg.text, code)
     {
+        capture_thread_frame_pointers = thread_frame_pointers;
         message_format_string = msg.format_string;
     }
 
     Exception(PreformattedMessage && msg, int code): Exception(std::move(msg.text), code)
     {
+        capture_thread_frame_pointers = thread_frame_pointers;
         message_format_string = msg.format_string;
     }
+
+    /// Collect call stacks of all previous jobs' schedulings leading to this thread job's execution
+    static thread_local bool enable_job_stack_trace;
+    static thread_local std::vector<StackTrace::FramePointers> thread_frame_pointers;
 
 protected:
     // used to remove the sensitive information from exceptions if query_masking_rules is configured
@@ -70,6 +78,7 @@ public:
     Exception(int code, T && message)
         : Exception(message, code)
     {
+        capture_thread_frame_pointers = thread_frame_pointers;
         message_format_string = tryGetStaticFormatString(message);
     }
 
@@ -84,6 +93,7 @@ public:
     Exception(int code, FormatStringHelper<Args...> fmt, Args &&... args)
         : Exception(fmt::format(fmt.fmt_str, std::forward<Args>(args)...), code)
     {
+        capture_thread_frame_pointers = thread_frame_pointers;
         message_format_string = fmt.message_format_string;
     }
 
@@ -135,8 +145,12 @@ private:
 
 protected:
     std::string_view message_format_string;
+    /// Local copy of static per-thread thread_frame_pointers, should be mutable to be unpoisoned on printout
+    mutable std::vector<StackTrace::FramePointers> capture_thread_frame_pointers;
 };
 
+[[noreturn]] void abortOnFailedAssertion(const String & description, void * const * trace, size_t trace_offset, size_t trace_size);
+[[noreturn]] void abortOnFailedAssertion(const String & description);
 
 std::string getExceptionStackTraceString(const std::exception & e);
 std::string getExceptionStackTraceString(std::exception_ptr e);
@@ -147,7 +161,33 @@ class ErrnoException : public Exception
 {
 public:
     ErrnoException(const std::string & msg, int code, int saved_errno_, const std::optional<std::string> & path_ = {})
-        : Exception(msg, code), saved_errno(saved_errno_), path(path_) {}
+        : Exception(msg, code), saved_errno(saved_errno_), path(path_)
+        {
+            addMessage(", {}", errnoToString(saved_errno));
+        }
+
+    /// Message must be a compile-time constant
+    template <typename T>
+    requires std::is_convertible_v<T, String>
+    ErrnoException(int code, T && message) : Exception(message, code), saved_errno(errno)
+    {
+        addMessage(", {}", errnoToString(saved_errno));
+    }
+
+    // Format message with fmt::format, like the logging functions.
+    template <typename... Args>
+    ErrnoException(int code, FormatStringHelper<Args...> fmt, Args &&... args)
+        : Exception(fmt.format(std::forward<Args>(args)...), code), saved_errno(errno)
+    {
+        addMessage(", {}", errnoToString(saved_errno));
+    }
+
+    template <typename... Args>
+    ErrnoException(int code, int with_errno, FormatStringHelper<Args...> fmt, Args &&... args)
+        : Exception(fmt.format(std::forward<Args>(args)...), code), saved_errno(with_errno)
+    {
+        addMessage(", {}", errnoToString(saved_errno));
+    }
 
     ErrnoException * clone() const override { return new ErrnoException(*this); }
     void rethrow() const override { throw *this; }
@@ -255,7 +295,7 @@ struct ExecutionStatus
     explicit ExecutionStatus(int return_code, const std::string & exception_message = "")
     : code(return_code), message(exception_message) {}
 
-    static ExecutionStatus fromCurrentException(const std::string & start_of_message = "");
+    static ExecutionStatus fromCurrentException(const std::string & start_of_message = "", bool with_stacktrace = false);
 
     static ExecutionStatus fromText(const std::string & data);
 

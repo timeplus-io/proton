@@ -7,12 +7,11 @@ namespace DB::Streaming
 Block HybridAggregator::executeAndFinalizeWithoutKeyPerRowImpl(
     AggregateDataPtr aggregate_data, size_t row_begin, size_t row_end, AggregateFunctionInstruction * aggregate_instructions) const
 {
-    constexpr bool final = true;
-    OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(final), /*aggregates_pools=*/{}, final, row_end - row_begin + 1);
+    OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, row_end - row_begin + 1);
     for (size_t i = row_begin; i < row_end; ++i)
         addAndInsertAggregatesIntoColumns(aggregate_data, aggregate_instructions, out_cols.final_aggregate_columns, i, /*arena=*/nullptr);
 
-    return finalizeBlock(getHeader(final), std::move(out_cols), final, row_end - row_begin);
+    return finalizeBlock(getHeader(), std::move(out_cols), row_end - row_begin);
 }
 
 template <typename Table, typename KeyGetter>
@@ -24,9 +23,8 @@ Block NO_INLINE HybridAggregator::executeAndFinalizePerRowImpl(
     AggregateFunctionInstruction * aggregate_instructions,
     std::string_view variants_id) const
 {
-    constexpr bool final = true;
-    Block result_block_header = getHeader(final);
-    OutputBlockColumns out_cols = prepareOutputBlockColumns(result_block_header, /*aggregates_pools=*/{}, final, row_end - row_begin + 1);
+    Block result_block_header = getHeader();
+    OutputBlockColumns out_cols = prepareOutputBlockColumns(result_block_header, /*aggregates_pool=*/nullptr, row_end - row_begin + 1);
     auto shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
@@ -49,7 +47,7 @@ Block NO_INLINE HybridAggregator::executeAndFinalizePerRowImpl(
 
     table.logMetrics(/*throttling_sec=*/30, "aggr-per-row", variants_id);
 
-    return finalizeBlock(result_block_header, std::move(out_cols), final, row_end - row_begin);
+    return finalizeBlock(result_block_header, std::move(out_cols), row_end - row_begin);
 }
 
 Block HybridAggregator::executeAndFinalizePerRow(
@@ -309,8 +307,7 @@ template <typename Table, typename KeyList, typename KeyGetter>
 
         if (!max_duration_keys.empty())
         {
-            OutputBlockColumns out_cols
-                = prepareOutputBlockColumns(getHeader(/*final=*/true), /*aggregates_pools=*/{}, /*final=*/true, row_end - row_begin + 1);
+            OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, row_end - row_begin + 1);
             auto shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
             const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
@@ -428,8 +425,7 @@ Block HybridAggregator::finalizeExpiredSessions(
         PaddedPODArray<ConstAggregateDataPtr> expired_places;
         expired_places.reserve(expired_keys.size());
 
-        OutputBlockColumns out_cols
-            = prepareOutputBlockColumns(getHeader(/*final=*/true), /*aggregates_pools=*/{}, /*final=*/true, expired_keys.size());
+        OutputBlockColumns out_cols = prepareOutputBlockColumns(getHeader(), /*aggregates_pool=*/nullptr, expired_keys.size());
         auto shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
         const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
@@ -486,9 +482,8 @@ template <typename Table, typename KeyList, typename KeyGetter>
     AggregateFunctionInstruction * aggregate_instructions,
     [[maybe_unused]] std::string_view variants_id) const
 {
-    constexpr bool final = true;
-    Block result_block_header = getHeader(final);
-    OutputBlockColumns out_cols = prepareOutputBlockColumns(result_block_header, /*aggregates_pools=*/{}, final, row_end - row_begin + 1);
+    Block result_block_header = getHeader();
+    OutputBlockColumns out_cols = prepareOutputBlockColumns(result_block_header, /*aggregates_pool=*/nullptr, row_end - row_begin + 1);
     auto shuffled_key_sizes = KeyGetter::shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
@@ -731,7 +726,7 @@ template <typename Table, typename KeyList, typename KeyGetter>
 
     Block block;
     if (rows > 0)
-        block = finalizeBlock(result_block_header, std::move(out_cols), final, rows);
+        block = finalizeBlock(result_block_header, std::move(out_cols), rows);
 
     bool removed_expired_sessions = false;
     Block block2 = finalizeExpiredSessions(

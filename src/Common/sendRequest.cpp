@@ -26,6 +26,7 @@ namespace
 }
 
 std::pair<String, Int32> sendRequest(
+    HTTPConnectionGroupType group,
     const Poco::URI & uri,
     const String & method,
     const String & query_id,
@@ -38,10 +39,10 @@ std::pair<String, Int32> sendRequest(
     LoggerPtr log)
 {
 
-    PooledHTTPSessionPtr session;
+    HTTPSessionPtr session;
     try
     {
-        session = makePooledHTTPSession(uri, timeouts, 1);
+        session = makeHTTPSession(group, uri, timeouts);
         Poco::Net::HTTPRequest request{method, uri.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1};
         request.setHost(uri.getHost());
         request.setContentLength(payload.size());
@@ -96,7 +97,7 @@ std::pair<String, Int32> sendRequest(
     }
     catch (const Poco::Exception & e)
     {
-        if (!session.isNull())
+        if (session)
         {
             session->attachSessionData(e.message());
         }

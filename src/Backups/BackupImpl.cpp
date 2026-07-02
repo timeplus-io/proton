@@ -370,7 +370,7 @@ void BackupImpl::addFile(const String & file_name, BackupEntryPtr entry)
             /// if the entry's data has not been changed since the base backup.
             if (!checksum)
             {
-                read_buffer = entry->getReadBuffer();
+                read_buffer = entry->getReadBuffer(ReadSettings{});
                 HashingReadBuffer hashing_read_buffer{*read_buffer};
                 hashing_read_buffer.ignore(size);
                 read_pos = size;
@@ -383,7 +383,7 @@ void BackupImpl::addFile(const String & file_name, BackupEntryPtr entry)
         {
             /// The size has been increased, we need to calculate a partial checksum to find out
             /// if the entry's data has been only appended since the base backup.
-            read_buffer = entry->getReadBuffer();
+            read_buffer = entry->getReadBuffer(ReadSettings{});
             HashingReadBuffer hashing_read_buffer{*read_buffer};
             hashing_read_buffer.ignore(base_size);
             UInt128 partial_checksum = hashing_read_buffer.getHash();
@@ -435,7 +435,7 @@ void BackupImpl::addFile(const String & file_name, BackupEntryPtr entry)
             }
 
             if (!read_buffer)
-                read_buffer = entry->getReadBuffer();
+                read_buffer = entry->getReadBuffer(ReadSettings{});
 
             if (read_pos < copy_pos)
                 read_buffer->ignore(copy_pos - read_pos);

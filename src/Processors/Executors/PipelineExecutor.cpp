@@ -10,6 +10,8 @@
 #include <Common/MemoryTracker.h>
 #include <Common/logger_useful.h>
 #include <Common/setThreadName.h>
+#include <Common/Exception.h>
+#include <Common/OpenTelemetryTraceContext.h>
 
 #ifndef NDEBUG
 #    include <Common/Stopwatch.h>
@@ -99,6 +101,9 @@ void PipelineExecutor::execute(size_t num_threads, ExecuteMode exec_mode_)
     if (num_threads < 1)
         num_threads = 1;
 
+    OpenTelemetry::SpanHolder span("PipelineExecutor::execute()");
+    span.addAttribute("timeplus.thread_num", num_threads);
+
     try
     {
         executeImpl(num_threads, exec_mode_);
@@ -113,6 +118,8 @@ void PipelineExecutor::execute(size_t num_threads, ExecuteMode exec_mode_)
     }
     catch (...)
     {
+        span.addAttribute(ExecutionStatus::fromCurrentException());
+
 #ifndef NDEBUG
         LOG_TRACE(log, "Exception while executing query. Current state:\n{}", dumpPipeline());
 #endif
@@ -345,7 +352,7 @@ void PipelineExecutor::executeImpl(size_t num_threads, ExecuteMode exec_mode_)
     execute_threads = num_threads;
 
     /// Make sure to call Processor::recover() before Processor::prepare()
-    if (!checkpointRegistered())
+    if (!checkpointRegistered() && !cancelled)
         registerCheckpoint(exec_mode_);
     /// proton : ends
 

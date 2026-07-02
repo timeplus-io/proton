@@ -52,7 +52,7 @@ size_t tryMergeExpressions(QueryPlan::Node * parent_node, QueryPlan::Nodes &)
         /// per-SubstreamID cloning, so fusing a substream-aware stateful child (e.g.
         /// lag() OVER (PARTITION BY ...)) into it would share one stateful function
         /// across all partition keys. See #12110.
-        if (child_actions->hasStatefulFunctions() && child_expr->getInputStreams().front().with_substream)
+        if (child_actions->hasStatefulFunctions() && child_expr->getInputStreams().front().hasSubstream())
             return 0;
         /// proton: ends.
 

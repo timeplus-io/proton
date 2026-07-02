@@ -4,6 +4,7 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Processors/Executors/PushingPipelineExecutor.h>
 #include <Common/ErrorCodes.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

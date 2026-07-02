@@ -12,7 +12,7 @@ TEST(Native, ReadWrite)
     auto block = createBlockBig(10);
 
     std::vector<char> data;
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<std::vector<char>> wb{data};
 
     DB::NativeWriter writer(wb, 0, block.cloneEmpty());
 
@@ -35,7 +35,7 @@ TEST(Native, ReadWriteInfo)
     block.info.is_overflows = true;
 
     std::vector<char> data;
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<std::vector<char>> wb{data};
 
     DB::NativeWriter writer(wb, 1, block.cloneEmpty());
 

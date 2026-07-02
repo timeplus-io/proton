@@ -436,7 +436,7 @@ namespace
     ASTPtr readCreateQueryFromBackup(const DatabaseAndTableName & table_name, const BackupPtr & backup)
     {
         String create_query_path = getMetadataPathInBackup(table_name);
-        auto read_buffer = backup->readFile(create_query_path)->getReadBuffer();
+        auto read_buffer = backup->readFile(create_query_path)->getReadBuffer(ReadSettings{});
         String create_query_str;
         readStringUntilEOF(create_query_str, *read_buffer);
         read_buffer.reset();
@@ -447,7 +447,7 @@ namespace
     ASTPtr readCreateQueryFromBackup(const String & database_name, const BackupPtr & backup)
     {
         String create_query_path = getMetadataPathInBackup(database_name);
-        auto read_buffer = backup->readFile(create_query_path)->getReadBuffer();
+        auto read_buffer = backup->readFile(create_query_path)->getReadBuffer(ReadSettings{});
         String create_query_str;
         readStringUntilEOF(create_query_str, *read_buffer);
         read_buffer.reset();

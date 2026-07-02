@@ -31,6 +31,7 @@ public:
     using TaskResultCallback = std::function<void(bool)>;
     virtual bool executeStep() = 0;
     virtual void onCompleted() = 0;
+    virtual void cancel() noexcept = 0;
     virtual StorageID getStorageID() = 0;
     virtual UInt64 getPriority() = 0;
     virtual ~IExecutableTask() = default;
@@ -45,7 +46,6 @@ using ExecutableTaskPtr = std::shared_ptr<IExecutableTask>;
 class ExecutableLambdaAdapter : public shared_ptr_helper<ExecutableLambdaAdapter>, public IExecutableTask
 {
 public:
-
     template <typename Job, typename Callback>
     explicit ExecutableLambdaAdapter(
         Job && job_to_execute_,
@@ -61,6 +61,8 @@ public:
         job_to_execute = {};
         return false;
     }
+
+    void cancel() noexcept override { /* no op */ }
 
     void onCompleted() override { job_result_callback(!res); }
     StorageID getStorageID() override { return id; }

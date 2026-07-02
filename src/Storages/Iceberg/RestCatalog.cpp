@@ -1,9 +1,10 @@
 #include <Storages/Iceberg/RestCatalog.h>
 
-#if USE_AVRO
+#if USE_AVRO && USE_AWS_S3
 #include <Core/Settings.h>
 #include <base/find_symbols.h>
 #include <Common/Base64.h>
+#include <Common/HTTPConnectionPool.h>
 #include <Common/checkStackSize.h>
 #include <Common/escapeForFileName.h>
 #include <Common/sendRequest.h>
@@ -338,7 +339,7 @@ std::string RestCatalog::retrieveGCPOAuthAccessToken() const
     request.add("metadata-flavor", "Google");
     const auto timeouts = DB::ConnectionTimeouts::getHTTPTimeouts(
         getContext()->getSettingsRef(), /*http_keep_alive_timeout_=*/Poco::Timespan(/*seconds=*/30, /*microseconds=*/0));
-    auto session = makeHTTPSession(url, timeouts);
+    auto session = makeHTTPSession(DB::HTTPConnectionGroupType::HTTP, url, timeouts);
     session->sendRequest(request);
 
     String token_json_raw;
@@ -412,7 +413,7 @@ std::string RestCatalog::retrieveAccessToken() const
 
     const auto & context = getContext();
     auto wb = DB::BuilderRWBufferFromHTTP(url)
-        .withConnectionGroup(DB::HTTPConnectionGroupType::HTTP)
+        .withConnectionGroup(DB::HTTPConnectionGroupType::STORAGE)
         .withMethod(Poco::Net::HTTPRequest::HTTP_POST)
         .withSettings(context->getReadSettings())
         .withTimeouts(DB::ConnectionTimeouts::getHTTPTimeouts(context->getSettingsRef(), context->getServerSettings()))
@@ -464,19 +465,16 @@ std::unique_ptr<DB::ReadWriteBufferFromHTTP> RestCatalog::createReadBuffer(
         auto result_headers = getAuthHeaders(url.toString(), method, nullptr, update_token);
         std::move(headers.begin(), headers.end(), std::back_inserter(result_headers));
 
-        return std::make_unique<DB::ReadWriteBufferFromHTTP>(
-            url,
-            method,
-            /*out_stream_callback_=*/nullptr,
-            DB::ConnectionTimeouts::getHTTPTimeouts(
-                context->getSettingsRef(), /*http_keep_alive_timeout_=*/Poco::Timespan(/*seconds=*/30, /*microseconds=*/0)),
-            credentials,
-            /*max_redirects=*/0,
-            DBMS_DEFAULT_BUFFER_SIZE,
-            getContext()->getReadSettings(),
-            result_headers,
-            &getContext()->getRemoteHostFilter(),
-            /*delay_initialization_=*/false);
+        return DB::BuilderRWBufferFromHTTP(url)
+            .withConnectionGroup(DB::HTTPConnectionGroupType::HTTP)
+            .withMethod(method)
+            .withSettings(getContext()->getReadSettings())
+            .withTimeouts(DB::ConnectionTimeouts::getHTTPTimeouts(
+                context->getSettingsRef(), /*http_keep_alive_timeout_=*/Poco::Timespan(/*seconds=*/30, /*microseconds=*/0)))
+            .withHeaders(result_headers)
+            .withHostFilter(&getContext()->getRemoteHostFilter())
+            .withDelayInit(false)
+            .create(credentials);
     };
 
     LOG_TEST(log, "Requesting: {}", url.toString());
@@ -589,6 +587,7 @@ void RestCatalog::createTable(
         headers.emplace_back(header.name, header.value);
 
     auto resp = DB::sendRequest(
+        DB::HTTPConnectionGroupType::STORAGE,
         endpoint,
         Poco::Net::HTTPRequest::HTTP_POST,
         /*query_id=*/"",
@@ -661,6 +660,7 @@ void RestCatalog::deleteTable(const std::string & namespace_name, const std::str
         headers.emplace_back(header.name, header.value);
 
     auto resp = DB::sendRequest(
+        DB::HTTPConnectionGroupType::STORAGE,
         endpoint,
         Poco::Net::HTTPRequest::HTTP_DELETE,
         /*query_id=*/"",
@@ -867,6 +867,7 @@ void RestCatalog::commitTable(
     auto request_body = payload_json->str();
 
     auto resp = DB::sendRequest(
+        DB::HTTPConnectionGroupType::STORAGE,
         Poco::URI(endpoint),
         Poco::Net::HTTPRequest::HTTP_POST,
         /*query_id=*/"",

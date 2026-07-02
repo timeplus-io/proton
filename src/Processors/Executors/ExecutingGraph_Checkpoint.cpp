@@ -1,5 +1,6 @@
 #include <Processors/Executors/ExecutingGraph.h>
 
+#include <Checkpoint/CheckpointContext.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Processors/PlaceholdProcessor.h>
@@ -8,12 +9,15 @@
 #include <Processors/Streaming/ISource.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/ThreadPool.h>
+#include <Common/logger_useful.h>
+#include <Common/CurrentThread.h>
 #include <Common/scope_guard_safe.h>
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace CurrentMetrics
 {
@@ -106,17 +110,18 @@ void ExecutingGraph::deserialize(ReadBuffer & rb) const
 
 void ExecutingGraph::recover(CheckpointContextPtr ckpt_ctx)
 {
-    /// Recover processors in parallel
     ThreadPool pool{CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive};
     for (auto & processor : *processors)
     {
-        if (processor->isStreaming() && processor->hasState())
-            pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
-                SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachFromGroupIfNotDetached(););
-                if (thread_group)
-                    CurrentThread::attachToGroup(thread_group);
-                processor->recover(ckpt_ctx);
-            });
+        if (!processor->isStreaming() || !processor->hasState())
+            continue;
+
+        pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
+            SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachFromGroupIfNotDetached(););
+            if (thread_group)
+                CurrentThread::attachToGroup(thread_group);
+            processor->recover(ckpt_ctx);
+        });
     }
 
     pool.wait();
@@ -178,7 +183,8 @@ bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
     for (const auto * node : checkpoint_trigger_nodes)
     {
         const auto * streaming_source = dynamic_cast<const Streaming::ISource *>(node->processor);
-        if (streaming_source && streaming_source->hasProcessedNewDataSinceLastCheckpoint())
+        chassert(streaming_source);
+        if (streaming_source->hasProcessedNewDataSinceLastCheckpoint())
             return true;
     }
     return false;
@@ -187,7 +193,11 @@ bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
 void ExecutingGraph::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     for (auto * node : checkpoint_trigger_nodes)
-        node->processor->checkpoint(ckpt_ctx);
+    {
+        auto * streaming_source = dynamic_cast<Streaming::ISource *>(node->processor);
+        chassert(streaming_source);
+        streaming_source->triggerCheckpoint(ckpt_ctx);
+    }
 }
 
 String ExecutingGraph::getStats(const std::vector<UInt64> & thread_ids) const

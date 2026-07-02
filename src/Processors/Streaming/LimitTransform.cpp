@@ -434,7 +434,7 @@ void LimitTransform::work()
     metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns;
 }
 
-void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void LimitTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
@@ -459,7 +459,7 @@ void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     });
 }
 
-void LimitTransform::recover(CheckpointContextPtr ckpt_ctx)
+void LimitTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         bool has_previous_row_chunk;

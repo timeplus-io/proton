@@ -19,7 +19,7 @@
 /// proton: starts.
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 /// proton: ends.
 
 namespace DB
@@ -49,6 +49,8 @@ BlockIO InterpreterAlterQuery::execute()
     }
     else if (alter.alter_object == ASTAlterQuery::AlterObjectType::STREAM)
     {
+        if (alter.is_input)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "ALTER INPUT is not supported yet");
         return executeToTable(alter);
     }
 

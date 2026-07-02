@@ -135,7 +135,8 @@ public:
             const PocoHTTPClientConfiguration & client_configuration,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
             const ClientSettings & client_settings,
-            std::shared_ptr<RetryContext> retry_context_); /// proton: added retry_context_
+            std::shared_ptr<RetryContext> retry_context_,    /// proton: added retry_context_
+            const String & server_side_encryption_s3_ = "");    /// proton: SSE-S3 algorithm (e.g. "AES256")
 
     std::unique_ptr<Client> clone() const;
 
@@ -244,13 +245,15 @@ public:
     std::string getRegionForBucket(const std::string & bucket, bool force_detect = false) const;
 
     /// proton: starts
+    ThrottlerPtr getPutRequestThrottler() const { return client_configuration.put_request_throttler; }
+    ThrottlerPtr getGetRequestThrottler() const { return client_configuration.get_request_throttler; }
+
     void cancel() const
     {
-        if(retry_context)
+        if (retry_context)
             retry_context->cancel();
     }
     /// proton: ends
-
 protected:
     // visible for testing
     Client(size_t max_redirects_,
@@ -259,11 +262,11 @@ protected:
            const PocoHTTPClientConfiguration & client_configuration,
            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
            const ClientSettings & client_settings_,
-           std::shared_ptr<Client::RetryContext> retry_context_); /// proton: added retry_context_
+           std::shared_ptr<Client::RetryContext> retry_context_,    /// proton: added retry_context_
+           const String & server_side_encryption_s3_ = "");    /// proton: SSE-S3 algorithm (e.g. "AES256")
 
 private:
     friend struct ::MockS3::Client;
-
     Client(
         const Client & other, const PocoHTTPClientConfiguration & client_configuration);
 
@@ -332,6 +335,12 @@ private:
 
     const ServerSideEncryptionKMSConfig sse_kms_config;
 
+    /// proton: starts
+    /// SSE-S3 algorithm (e.g. "AES256") set on PUT/Copy/CreateMultipartUpload requests when SSE-KMS is not configured.
+    /// Empty disables SSE-S3. Applied only on PUT-type operations (see setKMSHeaders), never on GET/HEAD.
+    const String server_side_encryption_s3;
+    /// proton: ends
+
     std::shared_ptr<RetryContext> retry_context; /// proton: added
 
     LoggerPtr log;
@@ -353,7 +362,8 @@ public:
         ServerSideEncryptionKMSConfig sse_kms_config,
         HTTPHeaderEntries headers,
         CredentialsConfiguration credentials_configuration,
-        const String & session_token = "");
+        const String & session_token = "",
+        const String & server_side_encryption_s3 = "");    /// proton: SSE-S3 algorithm (e.g. "AES256")
 
     PocoHTTPClientConfiguration createClientConfiguration(
         const String & force_region,
@@ -362,7 +372,8 @@ public:
         bool enable_s3_requests_logging,
         bool for_disk_s3,
         const ThrottlerPtr & get_request_throttler,
-        const ThrottlerPtr & put_request_throttler);
+        const ThrottlerPtr & put_request_throttler,
+        const String & protocol = "https");
 
 private:
     ClientFactory();

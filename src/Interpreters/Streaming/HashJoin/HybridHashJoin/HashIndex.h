@@ -85,9 +85,10 @@ SERDE struct HashIndex
         return *current_hash_index;
     }
 
-    const CachedBlockMetrics & getJoinMetrics() const { return metrics; }
     size_t approximateCount() const;
     size_t getBufferSizeInBytes() const;
+
+    String metricsString() const;
 
     void serialize(WriteBuffer & wb, VersionType version) const;
     void deserialize(ReadBuffer & rb, VersionType version);

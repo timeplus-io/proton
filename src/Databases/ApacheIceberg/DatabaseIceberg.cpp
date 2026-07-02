@@ -1,7 +1,7 @@
 #include <Databases/ApacheIceberg/DatabaseIceberg.h>
 #include "Databases/ApacheIceberg/DatabaseIcebergSettings.h"
 
-#if USE_AVRO
+#if USE_AVRO && USE_AWS_S3
 #include <Core/Settings.h>
 #include <Common/LRUCache.h>
 

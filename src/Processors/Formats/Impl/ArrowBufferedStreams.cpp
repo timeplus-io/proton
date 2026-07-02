@@ -1,7 +1,6 @@
 #pragma clang diagnostic ignored "-Wreserved-identifier"
 
-#include "ArrowBufferedStreams.h"
-
+#include <Processors/Formats/Impl/ArrowBufferedStreams.h>
 #if USE_ARROW || USE_ORC || USE_PARQUET
 #include <Common/assert_cast.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
@@ -186,7 +185,6 @@ arrow::Result<int64_t> RandomAccessFileFromRandomAccessReadBuffer::Tell() const 
 arrow::Result<int64_t> RandomAccessFileFromRandomAccessReadBuffer::Read(int64_t, void*) { return arrow::Status::NotImplemented(""); }
 arrow::Result<std::shared_ptr<arrow::Buffer>> RandomAccessFileFromRandomAccessReadBuffer::Read(int64_t) { return arrow::Status::NotImplemented(""); }
 
-
 std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(
     ReadBuffer & in,
     const FormatSettings & settings,
@@ -224,9 +222,10 @@ std::shared_ptr<arrow::io::RandomAccessFile> asArrowFileLoadIntoMemory(
     if (bytes_read < magic_bytes.size() || file_data != magic_bytes)
         throw Exception(ErrorCodes::INCORRECT_DATA, "Not a {} file", format_name);
 
-    WriteBufferFromString file_buffer(file_data, AppendModeTag{});
-    copyData(in, file_buffer, is_cancelled);
-    file_buffer.finalize();
+    {
+        WriteBufferFromString file_buffer(file_data, AppendModeTag{});
+        copyData(in, file_buffer, is_cancelled);
+    }
 
     return std::make_shared<arrow::io::BufferReader>(arrow::Buffer::FromString(std::move(file_data)));
 }

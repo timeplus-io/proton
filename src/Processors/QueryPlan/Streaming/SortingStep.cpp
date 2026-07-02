@@ -30,7 +30,7 @@ static ITransformingStep::Traits getTraits(size_t limit)
             .returns_single_stream = true,
             .preserves_number_of_streams = false,
             .preserves_sorting = false,
-            .preserves_substream = true, /// only partial sorting
+            .preserves_shuffling = true, /// only partial sorting
         },
         {
             .preserves_number_of_rows = limit == 0,

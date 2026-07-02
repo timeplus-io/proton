@@ -16,8 +16,12 @@ execute_process(COMMAND ${CMAKE_CXX_COMPILER} --version
 )
 message (STATUS "Using compiler:\n${COMPILER_SELF_IDENTIFICATION}")
 
-# Require minimum compiler versions
-set (CLANG_MINIMUM_VERSION 15)
+# Require minimum compiler versions.
+# Clang 19 is the floor: we use C23 `#embed` (in contrib/cctz-cmake's generated
+# TimeZones.generated.cpp, FrequencyHolder.cpp, ConfigProcessor.cpp, etc.) to
+# inline resources into `.rodata`, and `#embed` first landed in clang 19.
+# Older clang will hard-fail with "invalid preprocessing directive".
+set (CLANG_MINIMUM_VERSION 19)
 set (XCODE_MINIMUM_VERSION 12.0)
 set (APPLE_CLANG_MINIMUM_VERSION 12.0.0)
 

@@ -6,6 +6,9 @@
 #include <Common/logger_useful.h>
 #include <Common/scope_guard_safe.h>
 
+#include <optional>
+
+
 namespace DB
 {
 
@@ -18,7 +21,8 @@ namespace Kafka
 {
 
 Client::Client(const std::shared_ptr<Handle> & handle_, const std::string & topic)
-    : handle(handle_)
+    : topic_name(topic)
+    , handle(handle_)
     , topic_handle({rd_kafka_topic_new(handle->get(), topic.c_str(), nullptr), rd_kafka_topic_destroy})
     , logger(getLogger(fmt::format("{}-{}", name(), topicName())))
 {
@@ -39,9 +43,9 @@ std::string Client::name() const
     return handle->getName();
 }
 
-std::string Client::topicName() const
+const std::string & Client::topicName() const
 {
-    return rd_kafka_topic_name(topic_handle.get());
+    return topic_name;
 }
 
 int32_t Client::getPartitionCount(uint64_t timeout_ms) const
@@ -52,8 +56,9 @@ int32_t Client::getPartitionCount(uint64_t timeout_ms) const
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
         throw Exception(
             mapErrorCode(err),
-            "Failed to get partition count of topic {}, error_code={}, error_msg={}",
+            "Failed to get partition count of topic {}, timeout_ms={}, error_code={}, error_msg={}",
             topicName(),
+            timeout_ms,
             err,
             rd_kafka_err2str(err));
 
@@ -72,19 +77,27 @@ int32_t Client::getPartitionCount(uint64_t timeout_ms) const
     return metadata->topics[0].partition_cnt;
 }
 
-WatermarkOffsets Client::queryWatermarkOffsets(int32_t partition) const
+WatermarkOffsets Client::queryWatermarkOffsets(int32_t partition, uint64_t timeout_ms) const
 {
-    int64_t low, high;
-    auto err = rd_kafka_query_watermark_offsets(handle->get(), topicName().c_str(), partition, &low, &high, /*timeout_ms=*/5000);
+    int64_t low = 0;
+    int64_t high = 0;
+    auto err = rd_kafka_query_watermark_offsets(handle->get(), topicName().c_str(), partition, &low, &high, static_cast<int>(timeout_ms));
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
-        LOG_INFO(logger, "Failed to query watermark offsets topic={} partition={} error={}", topicName(), partition, rd_kafka_err2str(err));
+        LOG_INFO(
+            logger,
+            "Failed to query watermark offsets topic={} partition={} timeout_ms={} error={}",
+            topicName(),
+            partition,
+            timeout_ms,
+            rd_kafka_err2str(err));
 
         throw Exception(
             mapErrorCode(err),
-            "Failed to query watermark offsets topic={} partition={} error={}",
+            "Failed to query watermark offsets topic={} partition={} timeout_ms={} error={}",
             topicName(),
             partition,
+            timeout_ms,
             rd_kafka_err2str(err));
     }
 
@@ -93,7 +106,8 @@ WatermarkOffsets Client::queryWatermarkOffsets(int32_t partition) const
 
 WatermarkOffsets Client::getWatermarkOffsets(int32_t partition) const
 {
-    int64_t low = 0, high = 0;
+    int64_t low = 0;
+    int64_t high = 0;
 
     /// rd_kafka_get_watermark_offsets returns cached start_offset and end_offset
     /// end_offset is the next offset to be assigned, so it is [start_offset, end_offset) range
@@ -176,14 +190,14 @@ void Consumer::doStopConsume(int32_t partition)
     }
 }
 
-Consumer::Version Consumer::recreate(Version version)
+bool Consumer::recreate(UInt64 cooldown_ms)
 {
     /// Make sure that no one can consume data (by calling consumeBatch) during recreation.
     std::unique_lock lock{mutex};
 
-    /// The request is out-of-date, ignore it.
-    if (version < ver)
-        return ver;
+    /// The last recreation was within cool down time, ignore it.
+    if (creation_time.elapsedMilliseconds() < cooldown_ms)
+        return false;
 
     for (const auto & p : partitions_progress)
         doStopConsume(p.first);
@@ -193,11 +207,15 @@ Consumer::Version Consumer::recreate(Version version)
     for (const auto & p : partitions_progress)
         doStartConsume(p.first, p.second.high + 1);
 
-    return ++ver;
+    creation_time.restart();
+
+    return true;
 }
 
-void Consumer::updateFrom(Consumer && other)
+void Consumer::updateFromWithLockHeld(Consumer && other)
 {
+    /// Lock is already held in Consumer::recreate()
+    ///   Consumer::recreate() -> Connection::updateConsumer() -> Consumer::updateFromWithLockHeld()
     handle.swap(other.handle);
     topic_handle.swap(other.topic_handle);
     logger = other.logger;
@@ -211,6 +229,8 @@ void Consumer::consumeBatch(int32_t partition, uint32_t count, int32_t timeout_m
     auto & progress = partitions_progress[partition];
 
     Int64 res{0};
+    std::optional<ssize_t> first_error_message_idx;
+
     {
         /// Allows all sources which use the same consumer can consume data at the same time.
         std::shared_lock lock{mutex};
@@ -224,27 +244,45 @@ void Consumer::consumeBatch(int32_t partition, uint32_t count, int32_t timeout_m
 
         if (res > 0)
         {
-            auto first_offset = rkmessages.get()[0]->offset;
-            progress.low = first_offset;
-            progress.high = first_offset;
+            std::optional<int64_t> first_offset;
+            std::optional<int64_t> last_offset;
+
+            for (ssize_t idx = 0; idx < res; ++idx)
+            {
+                auto * rkmessage = rkmessages.get()[idx];
+                if (unlikely(rkmessage->err != RD_KAFKA_RESP_ERR_NO_ERROR))
+                {
+                    first_error_message_idx = idx;
+                    break;
+                }
+
+                /// Properly record the progress so that it can skip posion data (in MV) properly.
+                if (likely(rkmessage->offset != RD_KAFKA_OFFSET_INVALID))
+                {
+                    if (!first_offset)
+                        first_offset = rkmessage->offset;
+                    last_offset = rkmessage->offset;
+                }
+            }
+
+            if (!first_error_message_idx && first_offset)
+            {
+                progress.low = first_offset.value();
+                progress.high = last_offset.value();
+            }
         }
     }
 
     SCOPE_EXIT_SAFE(for (ssize_t idx = 0; idx < res; ++idx) rd_kafka_message_destroy(rkmessages.get()[idx]););
 
-    for (ssize_t idx = 0; idx < res; ++idx)
+    if (first_error_message_idx)
     {
-        auto * rkmessage = rkmessages.get()[idx];
-
-        /// Properly record the progress so that it can skip posion data (in MV) properly.
-        if (likely(rkmessage->offset != RD_KAFKA_OFFSET_INVALID))
-            progress.high = rkmessage->offset;
-
-        if (rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR)
-            callback(rkmessage, res, nullptr);
-        else
-            error_callback(rkmessage->err, std::string_view{reinterpret_cast<const char *>(rkmessage->payload), rkmessage->len});
+        auto * rkmessage = rkmessages.get()[first_error_message_idx.value()];
+        error_callback(rkmessage->err, std::string_view{reinterpret_cast<const char *>(rkmessage->payload), rkmessage->len});
+        return;
     }
+
+    callback(rkmessages.get(), res, nullptr);
 }
 
 WatermarkOffsets Consumer::getLastBatchOffsets(int32_t partition) const
@@ -255,6 +293,30 @@ WatermarkOffsets Consumer::getLastBatchOffsets(int32_t partition) const
 std::pair<int64_t /* last_consumed_offset */, int64_t /* latest_offset */> Consumer::getProgress(int32_t partition) const
 {
     return {partitions_progress.at(partition).high, getWatermarkOffsets(partition).high};
+}
+
+std::string Consumer::name() const
+{
+    std::shared_lock lock{mutex};
+    return Client::name();
+}
+
+int32_t Consumer::getPartitionCount(uint64_t timeout_ms) const
+{
+    std::shared_lock lock{mutex};
+    return Client::getPartitionCount(timeout_ms);
+}
+
+WatermarkOffsets Consumer::queryWatermarkOffsets(int32_t partition, uint64_t timeout_ms) const
+{
+    std::shared_lock lock{mutex};
+    return Client::queryWatermarkOffsets(partition, timeout_ms);
+}
+
+WatermarkOffsets Consumer::getWatermarkOffsets(int32_t partition) const
+{
+    std::shared_lock lock{mutex};
+    return Client::getWatermarkOffsets(partition);
 }
 
 Producer::Producer(const ProducerHandlePtr & handle_, const std::string & topic) : Client(handle_, topic)

@@ -1,7 +1,7 @@
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Storages/IStorage.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 
 #include <unordered_set>
 

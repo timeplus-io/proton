@@ -5,6 +5,7 @@
 
 #include <numeric>
 #include <ranges>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -16,10 +17,19 @@ extern const int LOGICAL_ERROR;
 namespace Streaming
 {
 
-SubstreamShufflingTransform::SubstreamShufflingTransform(Block header_, size_t num_outputs_, std::vector<size_t> key_positions_)
+static std::vector<size_t> keyPositions(const Block & header, const Names & keys)
+{
+    std::vector<size_t> key_positions;
+    key_positions.reserve(keys.size());
+    for (const auto & key : keys)
+        key_positions.emplace_back(header.getPositionByName(key));
+    return key_positions;
+}
+
+SubstreamShufflingTransform::SubstreamShufflingTransform(Block header_, size_t num_outputs_, const Names & keys_)
     : IProcessor(InputPorts{1, header_}, OutputPorts(num_outputs_, header_), ProcessorID::SubstreamShufflingTransformID)
     , shuffled_output_chunks(num_outputs_)
-    , chunk_splitter(std::move(key_positions_))
+    , chunk_splitter(keyPositions(header_, keys_))
     , logger(getLogger("SubstreamShufflingTransform"))
     , last_log_ts(MonotonicMilliseconds::now())
 {

@@ -3,7 +3,6 @@
 #include <Server/HTTP/HTTPRequestHandler.h>
 #include <base/types.h>
 
-
 namespace DB
 {
 
@@ -29,7 +28,7 @@ public:
 
     void writeResponse(WriteBuffer & out);
 
-    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
+    void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response, const ProfileEvents::Event & write_event) override;
 };
 
 }

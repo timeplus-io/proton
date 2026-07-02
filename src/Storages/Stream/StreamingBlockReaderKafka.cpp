@@ -6,6 +6,7 @@
 #include <Cluster/KafkaLog/KafkaWALCommon.h>
 #include <Interpreters/StorageID.h>
 #include <Common/logger_useful.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

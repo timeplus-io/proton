@@ -3,6 +3,7 @@
 #include <Core/Defines.h>
 #include <Interpreters/Context_fwd.h>
 
+#include <Poco/Net/HTTPClientSession.h>
 #include <Poco/Timespan.h>
 
 namespace DB
@@ -33,6 +34,7 @@ struct ConnectionTimeouts
 
     Poco::Timespan tcp_keep_alive_timeout = Poco::Timespan(DEFAULT_TCP_KEEP_ALIVE_TIMEOUT, 0);
     Poco::Timespan http_keep_alive_timeout = Poco::Timespan(DEFAULT_HTTP_KEEP_ALIVE_TIMEOUT, 0);
+    size_t http_keep_alive_max_requests = DEFAULT_HTTP_KEEP_ALIVE_MAX_REQUEST;
 
     /// Timeouts for HedgedConnections
     Poco::Timespan hedged_connection_timeout = Poco::Timespan(DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC, 0);
@@ -114,5 +116,14 @@ inline ConnectionTimeouts & ConnectionTimeouts::withConnectionTimeout(Poco::Time
     secure_connection_timeout = span;
     return *this;
 }
+
+inline ConnectionTimeouts & ConnectionTimeouts::withHTTPKeepAliveMaxRequests(size_t requests)
+{
+    http_keep_alive_max_requests = requests;
+    return *this;
+}
+
+void setTimeouts(Poco::Net::HTTPClientSession & session, const ConnectionTimeouts & timeouts);
+ConnectionTimeouts getTimeouts(const Poco::Net::HTTPClientSession & session);
 
 }

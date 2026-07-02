@@ -7,6 +7,8 @@ namespace DB
 /// Writes data part in compact format.
 class MergeTreeDataPartWriterCompact : public MergeTreeDataPartWriterOnDisk
 {
+    using Base = MergeTreeDataPartWriterOnDisk;
+
 public:
     MergeTreeDataPartWriterCompact(
         const String & data_part_name_,
@@ -27,6 +29,7 @@ public:
 
     void fillChecksums(MergeTreeDataPartChecksums & checksums, NameSet & checksums_to_remove) override;
     void finish(bool sync) override;
+    void cancel() noexcept override;
 
 private:
     /// Finish serialization of the data. Flush rows in buffer to disk, compute checksums.

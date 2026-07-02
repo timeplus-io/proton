@@ -8,6 +8,7 @@
 #include <Interpreters/Context.h>
 #include <base/EnumReflection.h>
 #include <QueryPipeline/Pipe.h>
+#include <fmt/ranges.h>
 
 
 namespace DB

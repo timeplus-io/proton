@@ -18,12 +18,21 @@ String getFileNameFromReadBuffer(const ReadBuffer & in)
 {
     if (const auto * compressed = dynamic_cast<const CompressedReadBufferWrapper *>(&in))
         return getFileName(compressed->getWrappedReadBuffer());
-    else if (const auto * parallel = dynamic_cast<const ParallelReadBuffer *>(&in))
+    if (const auto * parallel = dynamic_cast<const ParallelReadBuffer *>(&in))
         return getFileName(parallel->getReadBuffer());
-    else if (const auto * peekable = dynamic_cast<const PeekableReadBuffer *>(&in))
+    if (const auto * peekable = dynamic_cast<const PeekableReadBuffer *>(&in))
         return getFileNameFromReadBuffer(peekable->getSubBuffer());
-    else
-        return getFileName(in);
+    return getFileName(in);
+}
+
+String getExceptionEntryWithFileName(const ReadBuffer & in)
+{
+    auto filename = getFileNameFromReadBuffer(in);
+
+    if (filename.empty())
+        return "";
+
+    return fmt::format(": While reading from: {}", filename);
 }
 
 }

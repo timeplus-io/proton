@@ -7,7 +7,6 @@
 #include <IO/Operators.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/JIT/compileFunction.h>
-#include <Interpreters/TemporaryDataOnDisk.h>
 #include <Common/CurrentThread.h>
 #include <Common/JSONBuilder.h>
 #include <Common/Stopwatch.h>
@@ -22,12 +21,6 @@
 #include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
 
-
-namespace CurrentMetrics
-{
-extern const Metric TemporaryFilesForAggregation;
-}
-
 namespace DB
 {
 
@@ -35,22 +28,14 @@ namespace ErrorCodes
 {
 extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
 extern const int TOO_MANY_ROWS;
-extern const int EMPTY_DATA_PASSED;
-extern const int CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS;
 extern const int LOGICAL_ERROR;
-extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
 extern const int NOT_IMPLEMENTED;
 }
 
 namespace Streaming
 {
 MemoryAggregator::MemoryAggregator(const Block & input_header_, const MemoryAggregatorParamsPtr & memory_params_)
-    : IAggregator(memory_params_, input_header_, "StreamingAggregator")
-    , memory_params(memory_params_)
-    , tmp_data(
-          memory_params->tmp_data_scope
-              ? std::make_unique<TemporaryDataOnDisk>(memory_params->tmp_data_scope, CurrentMetrics::TemporaryFilesForAggregation)
-              : nullptr)
+    : IAggregator(memory_params_, input_header_, "StreamingAggregator"), memory_params(memory_params_)
 {
     if (memory_params->overflow_row) [[unlikely]]
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in streaming aggregation");
@@ -62,7 +47,10 @@ MemoryAggregator::MemoryAggregator(const Block & input_header_, const MemoryAggr
 
     aggregate_functions.resize(params->aggregates_size);
     for (size_t i = 0; i < params->aggregates_size; ++i)
+    {
         aggregate_functions[i] = params->aggregates[i].function.get();
+        has_state_functions |= aggregate_functions[i]->isState();
+    }
 
     /// Initialize sizes of aggregation states and its offsets.
     offsets_of_aggregate_states.resize(params->aggregates_size);
@@ -416,28 +404,6 @@ bool MemoryAggregator::checkLimits(size_t result_size) const
     return true;
 }
 
-void MemoryAggregator::addSingleKeyToAggregateColumns(
-    const MemoryAggregatedDataVariants & data_variants, MutableColumns & aggregate_columns) const
-{
-    const auto & data = data_variants.without_key;
-    for (size_t i = 0; i < params->aggregates_size; ++i)
-    {
-        auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
-        column_aggregate_func.getData().push_back(data + offsets_of_aggregate_states[i]);
-    }
-}
-
-void MemoryAggregator::addArenasToAggregateColumns(
-    const MemoryAggregatedDataVariants & data_variants, MutableColumns & aggregate_columns) const
-{
-    for (size_t i = 0; i < params->aggregates_size; ++i)
-    {
-        auto & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
-        for (const auto & pool : data_variants.aggregates_pools)
-            column_aggregate_func.addArena(pool);
-    }
-}
-
 ManyMemoryAggregatedDataVariantsPtr
 MemoryAggregator::prepareVariantsToMerge(ManyIAggregatedDataVariants & many_data_variants, bool always_merge_into_empty) const
 {
@@ -461,7 +427,7 @@ MemoryAggregator::prepareVariantsToMerge(ManyIAggregatedDataVariants & many_data
         /// When do streaming merging, we shall not touch existing memory arenas and
         /// all memory arenas merge to the first empty one, so we need create a new resulting arena
         /// at position 0.
-        auto result_variants = std::make_shared<MemoryAggregatedDataVariants>(/*id_=*/"result", false);
+        auto result_variants = std::make_shared<MemoryAggregatedDataVariants>(/*id_=*/"result");
         result_variants->aggregator = this;
         initDataVariants(*result_variants);
         initStatesForWithoutKey(*result_variants);
@@ -481,176 +447,7 @@ MemoryAggregator::prepareVariantsToMerge(ManyIAggregatedDataVariants & many_data
                 variant->convertToTwoLevel();
     }
 
-    MemoryAggregatedDataVariantsPtr & first = non_empty_data->at(0);
-
-    for (size_t i = 1, size = non_empty_data->size(); i < size; ++i)
-    {
-        if (first->type != non_empty_data->at(i)->type)
-            throw Exception(
-                ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS, "Cannot merge different aggregated data variants.");
-
-        /** Elements from the remaining sets can be moved to the first data set.
-          * Therefore, it must own all the arenas of all other sets.
-          */
-        first->aggregates_pools.insert(
-            first->aggregates_pools.end(), non_empty_data->at(i)->aggregates_pools.begin(), non_empty_data->at(i)->aggregates_pools.end());
-    }
-
-    chassert(first->aggregates_pools.size() == non_empty_data->size());
-
     return non_empty_data;
-}
-
-template <typename Method>
-void NO_INLINE MemoryAggregator::convertBlockToTwoLevelImpl(
-    Method & method, Arena * pool, ColumnRawPtrs & key_columns, const Block & source, std::vector<Block> & destinations) const
-{
-    typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
-
-    size_t rows = source.rows();
-    size_t columns = source.columns();
-
-    /// Create a 'selector' that will contain bucket index for every row. It will be used to scatter rows to buckets.
-    IColumn::Selector selector(rows);
-
-    /// For every row.
-    for (size_t i = 0; i < rows; ++i)
-    {
-        if constexpr (Method::low_cardinality_optimization)
-        {
-            if (state.isNullAt(i))
-            {
-                selector[i] = 0;
-                continue;
-            }
-        }
-
-        /// Calculate bucket number from row hash.
-        auto hash = state.getHash(method.data, i, *pool);
-        auto bucket = method.data.getBucketFromHash(hash);
-
-        selector[i] = bucket;
-    }
-
-    size_t num_buckets = destinations.size();
-
-    for (size_t column_idx = 0; column_idx < columns; ++column_idx)
-    {
-        const ColumnWithTypeAndName & src_col = source.getByPosition(column_idx);
-        MutableColumns scattered_columns = src_col.column->scatter(num_buckets, selector);
-
-        for (size_t bucket = 0, size = num_buckets; bucket < size; ++bucket)
-        {
-            if (!scattered_columns[bucket]->empty())
-            {
-                Block & dst = destinations[bucket];
-                dst.info.bucket_num = static_cast<Int32>(bucket);
-                dst.insert({std::move(scattered_columns[bucket]), src_col.type, src_col.name});
-            }
-
-            /** Inserted columns of type ColumnAggregateFunction will own states of aggregate functions
-              *  by holding shared_ptr to source column. See ColumnAggregateFunction.h
-              */
-        }
-    }
-}
-
-std::vector<Block> MemoryAggregator::convertBlockToTwoLevel(const Block & block) const
-{
-    if (!block)
-        return {};
-
-    MemoryAggregatedDataVariants data{/*id_=*/"temp"};
-    data.aggregator = this;
-
-    ColumnRawPtrs key_columns(params->keys_size);
-
-    /// Remember the columns we will work with
-    for (size_t i = 0; i < params->keys_size; ++i)
-        key_columns[i] = block.safeGetByPosition(i).column.get();
-
-    MemoryAggregatedDataVariants::Type type = method_chosen;
-    data.keys_size = params->keys_size;
-    data.key_sizes = key_sizes;
-
-#define M(NAME) \
-    else if (type == MemoryAggregatedDataVariants::Type::NAME) \
-    { \
-        type = MemoryAggregatedDataVariants::Type::NAME##_two_level; \
-    }
-
-    if (false)
-    {
-    } // NOLINT
-    APPLY_FOR_VARIANTS_CONVERTIBLE_TO_STATIC_BUCKET_TWO_LEVEL(M)
-#undef M
-    else
-    {
-        throw Exception(ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT, "Unknown aggregated data variant.");
-    }
-
-    data.init(type);
-
-    size_t num_buckets = 0;
-
-#define M(NAME) \
-    else if (data.type == MemoryAggregatedDataVariants::Type::NAME) \
-    { \
-        num_buckets = data.NAME->data.buckets().size(); \
-    }
-
-    if (false)
-    {
-    } // NOLINT
-    APPLY_FOR_VARIANTS_STATIC_BUCKET_TWO_LEVEL(M)
-#undef M
-    else
-    {
-        throw Exception(ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT, "Unknown aggregated data variant.");
-    }
-
-    std::vector<Block> splitted_blocks(num_buckets);
-
-#define M(NAME) \
-    else if (data.type == MemoryAggregatedDataVariants::Type::NAME) \
-    { \
-        convertBlockToTwoLevelImpl(*data.NAME, data.aggregates_pool, key_columns, block, splitted_blocks); \
-    }
-
-    if (false)
-    {
-    } // NOLINT
-    APPLY_FOR_VARIANTS_STATIC_BUCKET_TWO_LEVEL(M)
-#undef M
-    else
-    {
-        throw Exception(ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT, "Unknown aggregated data variant.");
-    }
-
-    return splitted_blocks;
-}
-
-/// Loop the window column to find out the lower bound and set this lower bound to aggregates pool
-/// Any new memory allocation (MemoryChunk) will attach this lower bound timestamp which means
-/// the MemoryChunk contains states which is at and beyond this lower bound timestamp
-void MemoryAggregator::setupAggregatesPoolTimestamps(
-    size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const
-{
-    if (params->group_by != IAggregatorParams::GroupBy::WindowStart && params->group_by != IAggregatorParams::GroupBy::WindowEnd)
-        return;
-
-    Int64 max_timestamp = std::numeric_limits<Int64>::min();
-
-    /// FIXME, can we avoid this loop ?
-    auto & window_col = *key_columns[0];
-    for (size_t i = row_begin; i < row_end; ++i)
-    {
-        auto window = window_col.getInt(i);
-        if (window > max_timestamp)
-            max_timestamp = window;
-    }
-    aggregates_pool->setCurrentTimestamp(max_timestamp);
-    LOG_DEBUG(logger, "Set current pool timestamp watermark={}", max_timestamp);
 }
 
 void MemoryAggregator::removeBucketsBefore(IAggregatedDataVariants & variants_result, Int64 max_bucket, UInt64 transform_id) const
@@ -661,7 +458,11 @@ void MemoryAggregator::removeBucketsBefore(IAggregatedDataVariants & variants_re
     if (result.empty())
         return;
 
-    auto destroy = [&](AggregateDataPtr & data) { destroyAggregateStates(data); };
+    /// Execution orders:
+    /// 1) finalizing aggreagted state
+    /// 2) removing expired buckets
+    /// The state of state-func is owned by ColumnAggregateFunction after finalizing, and will be destroyed along with the ColumnAggregateFunction
+    auto destroy = [&](AggregateDataPtr & data) { destroyAggregateStates(data, /*skip_state_func=*/true); };
 
     size_t removed = 0;
     Int64 last_removed_time_bucket = 0;
@@ -682,18 +483,11 @@ void MemoryAggregator::removeBucketsBefore(IAggregatedDataVariants & variants_re
 
     auto [removed_arenas, removed_arena_bytes] = result.removeBucketsBefore(max_bucket);
 
-    Arena::Stats stats;
-
-    if (removed)
-        stats = result.aggregates_pool->free(last_removed_time_bucket);
-
     LOG_DEBUG(
         logger,
         "Removed {} windows less or equal to {}={} keeping window_count={} remaining_windows={}. "
-        "Bucket arenas: removed_arenas={} removed_arena_bytes={} remaining_arenas={} "
-        "Global arena: arena_chunks={} arena_size={} chunks_removed={} bytes_removed={}. chunks_reused={} bytes_reused={} "
-        "head_chunk_size={}, "
-        "free_list_hits={} free_list_missed={} chunks_in_free_lists={} size_in_bytes_in_free_lists={} transform_id={}",
+        "Bucket arenas: removed_arenas={} removed_arena_bytes={} remaining_arenas={}."
+        "Transform ID: {}",
         removed,
         params->group_by == IAggregatorParams::GroupBy::WindowEnd ? "window_end" : "window_start",
         max_bucket,
@@ -702,17 +496,6 @@ void MemoryAggregator::removeBucketsBefore(IAggregatedDataVariants & variants_re
         removed_arenas,
         removed_arena_bytes,
         result.remainingBucketArenas(),
-        stats.chunks,
-        stats.bytes,
-        stats.chunks_removed,
-        stats.bytes_removed,
-        stats.chunks_reused,
-        stats.bytes_reused,
-        stats.head_chunk_size,
-        stats.free_list_hits,
-        stats.free_list_misses,
-        stats.chunks_in_free_lists,
-        stats.size_in_bytes_in_free_lists,
         transform_id);
 }
 
@@ -795,6 +578,8 @@ void MemoryAggregator::initDataVariants(MemoryAggregatedDataVariants & result) c
     result.key_offset = bucket_key_offset;
 
     result.init(method_chosen);
+
+    result.resetAndCreateAggregatesPool();
 
     if (params->tracking_updates_type == TrackingUpdatesType::UpdatesWithRetract)
         result.resetAndCreateRetractPool();

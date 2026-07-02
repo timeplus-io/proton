@@ -32,6 +32,8 @@ private:
     bool allowSyncAfterError() const override;
     void syncAfterError() override;
 
+    bool supportsCountRows() const override { return true; }
+
     std::unique_ptr<PeekableReadBuffer> buf;
     bool ignore_spaces;
 };
@@ -47,9 +49,9 @@ public:
 
     void skipField(size_t /*file_column*/) override { skipField(); }
     void skipField();
-    void skipNames() override { skipHeaderRow(); }
-    void skipTypes() override { skipHeaderRow(); }
-    void skipHeaderRow();
+    void skipNames() override { skipRow(); }
+    void skipTypes() override { skipRow(); }
+    void skipRow() override;
 
     void skipPrefixBeforeHeader() override;
     void skipRowStartDelimiter() override;
@@ -73,9 +75,10 @@ public:
 
     std::vector<String> readRowForHeaderDetection() override { return readRowImpl<ReadFieldMode::AS_POSSIBLE_STRING>(); }
 
-    bool checkEndOfRow();
+    bool checkForEndOfRow();
+
     bool checkForSuffixImpl(bool check_eof);
-    inline void skipSpaces() { if (ignore_spaces) skipWhitespaceIfAny(*buf); }
+    void skipSpaces() { if (ignore_spaces) skipWhitespaceIfAny(*buf); }
 
     EscapingRule getEscapingRule() const override { return format_settings.custom.escaping_rule; }
 

@@ -78,8 +78,10 @@ bool checkIsBrokenTimeout()
 
 SocketImpl::SocketImpl():
 	_sockfd(POCO_INVALID_SOCKET),
-	_blocking(true), 
-	_isBrokenTimeout(checkIsBrokenTimeout())
+	_blocking(true),
+	_isBrokenTimeout(checkIsBrokenTimeout()),
+	_recvThrottlerBudget(0),
+	_sndThrottlerBudget(0)
 {
 }
 
@@ -87,7 +89,9 @@ SocketImpl::SocketImpl():
 SocketImpl::SocketImpl(poco_socket_t sockfd):
 	_sockfd(sockfd),
 	_blocking(true),
-	_isBrokenTimeout(checkIsBrokenTimeout())
+	_isBrokenTimeout(checkIsBrokenTimeout()),
+	_recvThrottlerBudget(0),
+	_sndThrottlerBudget(0)
 {
 }
 
@@ -97,7 +101,7 @@ SocketImpl::~SocketImpl()
 	close();
 }
 
-	
+
 SocketImpl* SocketImpl::acceptConnection(SocketAddress& clientAddr)
 {
 	if (_sockfd == POCO_INVALID_SOCKET) throw InvalidSocketException();
@@ -137,7 +141,7 @@ void SocketImpl::connect(const SocketAddress& address)
 #endif
 	}
 	while (rc != 0 && lastError() == POCO_EINTR);
-	if (rc != 0) 
+	if (rc != 0)
 	{
 		int err = lastError();
 		error(err, address.toString());
@@ -236,7 +240,7 @@ void SocketImpl::bind6(const SocketAddress& address, bool reuseAddress, bool reu
 #if defined(POCO_HAVE_IPv6)
 	if (address.family() != SocketAddress::IPv6)
 		throw Poco::InvalidArgumentException("SocketAddress must be an IPv6 address");
-		
+
 	if (_sockfd == POCO_INVALID_SOCKET)
 	{
 		init(address.af());
@@ -257,11 +261,11 @@ void SocketImpl::bind6(const SocketAddress& address, bool reuseAddress, bool reu
 #endif
 }
 
-	
+
 void SocketImpl::listen(int backlog)
 {
 	if (_sockfd == POCO_INVALID_SOCKET) throw InvalidSocketException();
-	
+
 	int rc = ::listen(_sockfd, backlog);
 	if (rc != 0) error();
 }
@@ -285,7 +289,7 @@ void SocketImpl::shutdownReceive()
 	if (rc != 0) error();
 }
 
-	
+
 void SocketImpl::shutdownSend()
 {
 	if (_sockfd == POCO_INVALID_SOCKET) throw InvalidSocketException();
@@ -294,7 +298,7 @@ void SocketImpl::shutdownSend()
 	if (rc != 0) error();
 }
 
-	
+
 void SocketImpl::shutdown()
 {
 	if (_sockfd == POCO_INVALID_SOCKET) throw InvalidSocketException();
@@ -306,7 +310,11 @@ void SocketImpl::shutdown()
 
 int SocketImpl::sendBytes(const void* buffer, int length, int flags)
 {
-	if (_isBrokenTimeout)
+	bool blocking = _blocking && (flags & MSG_DONTWAIT) == 0;
+
+	throttleSend(length, blocking);
+
+	if (_isBrokenTimeout && blocking)
 	{
 		if (_sndTimeout.totalMicroseconds() != 0)
 		{
@@ -321,15 +329,20 @@ int SocketImpl::sendBytes(const void* buffer, int length, int flags)
 		if (_sockfd == POCO_INVALID_SOCKET) throw InvalidSocketException();
 		rc = ::send(_sockfd, reinterpret_cast<const char*>(buffer), length, flags);
 	}
-	while (_blocking && rc < 0 && lastError() == POCO_EINTR);
+	while (blocking && rc < 0 && lastError() == POCO_EINTR);
 	if (rc < 0)
 	{
 		int err = lastError();
-		if (err == POCO_EAGAIN || err == POCO_ETIMEDOUT)
+		if ((err == POCO_EAGAIN || err == POCO_EWOULDBLOCK) && !blocking)
+			;
+		else if (err == POCO_EAGAIN || err == POCO_ETIMEDOUT)
 			throw TimeoutException();
 		else
 			error(err);
 	}
+
+	useSendThrottlerBudget(rc);
+
 	return rc;
 }
 
@@ -345,7 +358,9 @@ int SocketImpl::receiveBytes(void* buffer, int length, int flags)
 				throw TimeoutException();
 		}
 	}
-	
+
+	throttleRecv(length, blocking);
+
 	int rc;
 	do
 	{
@@ -353,7 +368,7 @@ int SocketImpl::receiveBytes(void* buffer, int length, int flags)
 		rc = ::recv(_sockfd, reinterpret_cast<char*>(buffer), length, flags);
 	}
 	while (blocking && rc < 0 && lastError() == POCO_EINTR);
-	if (rc < 0) 
+	if (rc < 0)
 	{
 		int err = lastError();
 		if ((err == POCO_EAGAIN || err == POCO_EWOULDBLOCK) && !blocking)
@@ -363,12 +378,17 @@ int SocketImpl::receiveBytes(void* buffer, int length, int flags)
 		else
 			error(err);
 	}
+
+	useRecvThrottlerBudget(rc);
+
 	return rc;
 }
 
 
 int SocketImpl::sendTo(const void* buffer, int length, const SocketAddress& address, int flags)
 {
+	throttleSend(length, _blocking);
+
 	int rc;
 	do
 	{
@@ -381,6 +401,9 @@ int SocketImpl::sendTo(const void* buffer, int length, const SocketAddress& addr
 	}
 	while (_blocking && rc < 0 && lastError() == POCO_EINTR);
 	if (rc < 0) error();
+
+	useSendThrottlerBudget(rc);
+
 	return rc;
 }
 
@@ -395,7 +418,7 @@ int SocketImpl::receiveFrom(void* buffer, int length, SocketAddress& address, in
 				throw TimeoutException();
 		}
 	}
-	
+
 	sockaddr_storage abuffer;
 	struct sockaddr* pSA = reinterpret_cast<struct sockaddr*>(&abuffer);
 	poco_socklen_t saLen = sizeof(abuffer);
@@ -486,7 +509,7 @@ bool SocketImpl::pollImpl(Poco::Timespan& remainingTime, int mode)
 	}
 	while (rc < 0 && lastError() == POCO_EINTR);
 	if (rc < 0) error();
-	return rc > 0; 
+	return rc > 0;
 
 #else
 
@@ -529,7 +552,7 @@ bool SocketImpl::pollImpl(Poco::Timespan& remainingTime, int mode)
 	}
 	while (rc < 0 && errorCode == POCO_EINTR);
 	if (rc < 0) error(errorCode);
-	return rc > 0; 
+	return rc > 0;
 
 #endif // POCO_HAVE_FD_POLL
 }
@@ -539,13 +562,13 @@ bool SocketImpl::poll(const Poco::Timespan& timeout, int mode)
 	Poco::Timespan remainingTime(timeout);
 	return pollImpl(remainingTime, mode);
 }
-	
+
 void SocketImpl::setSendBufferSize(int size)
 {
 	setOption(SOL_SOCKET, SO_SNDBUF, size);
 }
 
-	
+
 int SocketImpl::getSendBufferSize()
 {
 	int result;
@@ -559,7 +582,7 @@ void SocketImpl::setReceiveBufferSize(int size)
 	setOption(SOL_SOCKET, SO_RCVBUF, size);
 }
 
-	
+
 int SocketImpl::getReceiveBufferSize()
 {
 	int result;
@@ -623,7 +646,32 @@ Poco::Timespan SocketImpl::getReceiveTimeout()
 	return result;
 }
 
-	
+
+void SocketImpl::setSendThrottler(const Poco::Net::ThrottlerPtr & throttler)
+{
+	_sndThrottlerBudget = 0; // Reset budget when a new throttler is set
+	_sndThrottler = throttler;
+}
+
+Poco::Net::ThrottlerPtr SocketImpl::getSendThrottler()
+{
+	return _sndThrottler;
+}
+
+
+void SocketImpl::setReceiveThrottler(const Poco::Net::ThrottlerPtr & throttler)
+{
+	_recvThrottlerBudget = 0; // Reset budget when a new throttler is set
+	_recvThrottler = throttler;
+}
+
+
+Poco::Net::ThrottlerPtr SocketImpl::getReceiveThrottler()
+{
+	return _recvThrottler;
+}
+
+
 SocketAddress SocketImpl::address()
 {
 	if (_sockfd == POCO_INVALID_SOCKET) throw InvalidSocketException();
@@ -634,7 +682,7 @@ SocketAddress SocketImpl::address()
 	int rc = ::getsockname(_sockfd, pSA, &saLen);
 	if (rc == 0)
 		return SocketAddress(pSA, saLen);
-	else 
+	else
 		error();
 	return SocketAddress();
 }
@@ -1083,6 +1131,64 @@ void SocketImpl::error(int code, const std::string& arg)
 #endif
 	default:
 		throw IOException(NumberFormatter::format(code), arg, code);
+	}
+}
+
+
+void SocketImpl::throttleSend(size_t length, bool blocking)
+{
+	if (_sndThrottler && _sndThrottlerBudget < length)
+	{
+		size_t amount = length < THROTTLER_QUANTUM ? THROTTLER_QUANTUM : length;
+		if (blocking)
+		{
+			if (_sndTimeout.totalMicroseconds() != 0) // Avoid throttling over socket send timeout
+				_sndThrottler->throttle(amount, _sndTimeout.totalMicroseconds() * 1000 / 2);
+			else
+				_sndThrottler->throttle(amount);
+		}
+		else
+			_sndThrottler->throttle(amount, 0);
+		_sndThrottlerBudget += amount;
+	}
+}
+
+
+void SocketImpl::throttleRecv(size_t length, bool blocking)
+{
+	if (_recvThrottler && _recvThrottlerBudget < length)
+	{
+		size_t amount = length < THROTTLER_QUANTUM ? THROTTLER_QUANTUM : length;
+		if (blocking)
+		{
+			if (_recvTimeout.totalMicroseconds() != 0) // Avoid throttling over socket receive timeout
+				_recvThrottler->throttle(amount, _recvTimeout.totalMicroseconds() * 1000 / 2);
+			else
+				_recvThrottler->throttle(amount);
+		}
+		else
+			_recvThrottler->throttle(amount, 0);
+		_recvThrottlerBudget += amount;
+	}
+}
+
+
+void SocketImpl::useSendThrottlerBudget(int rc)
+{
+	if (_sndThrottler && rc > 0)
+	{
+		poco_assert(rc <= _sndThrottlerBudget);
+		_sndThrottlerBudget -= rc;
+	}
+}
+
+
+void SocketImpl::useRecvThrottlerBudget(int rc)
+{
+	if (_recvThrottler && rc > 0)
+	{
+		poco_assert(rc <= _recvThrottlerBudget);
+		_recvThrottlerBudget -= rc;
 	}
 }
 

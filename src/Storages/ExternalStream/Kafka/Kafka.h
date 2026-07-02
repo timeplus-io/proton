@@ -47,8 +47,6 @@ public:
     void startup() override;
     void shutdown(bool dropping) override;
 
-    void verifySettings(const ExternalStreamSettingsPtr & new_settings, bool change_settings, ContextPtr context_) const override;
-
     bool supportsAccurateSeekTo() const noexcept override { return true; }
     bool supportsSubcolumns() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
@@ -78,15 +76,16 @@ public:
     bool hasSslCaCertFile() const { return !settings->ssl_ca_cert_file.value.empty(); }
     bool hasSslCaPem() const { return !settings->ssl_ca_pem.value.empty(); }
 
-private:
-    void validateSettings(const ExternalStreamSettingsPtr & settings_, bool throw_on_error);
+    void validate(const ContextPtr & context) const override;
+    void validateSettings(const ExternalStreamSettingsPtr & new_settings, bool change_settings, const ContextPtr & context_) const override;
+    void validateColumns() const;
 
+private:
     DB::Kafka::Conf createConf(KafkaExternalStreamSettings settings_);
     void cacheVirtualColumnNamesAndTypes();
 
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<uint64_t> & shards_to_query) const;
 
-    void validate();
 
     Pipe read(
         const Names & /*column_names*/,
@@ -106,7 +105,20 @@ private:
     std::vector<Int32> shards_from_settings;
     fs::path broker_ca_file;
 
+    /// `client` is reset to nullptr in `shutdown()` to release the underlying
+    /// rdkafka resources promptly (the Kafka instance itself can outlive
+    /// shutdown by some time, see comment in shutdown()). Reads happen
+    /// concurrently from materialized-view pipelines that may be mid-flight
+    /// in `read()` etc. Always go through `getClient()` to load atomically
+    /// and reject calls after shutdown.
     DB::Kafka::ConnectionPtr client;
+
+    /// Atomically load `client` and throw ABORTED if the stream has been
+    /// shut down (i.e. `client` was reset). Returning the loaded shared_ptr
+    /// by value bumps the refcount so the Connection stays alive for the
+    /// duration of whatever the caller does with it, even if a concurrent
+    /// `shutdown()` resets the member.
+    DB::Kafka::ConnectionPtr getClient() const;
 
     UInt64 poll_timeout_ms = 0;
 

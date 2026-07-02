@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/Names.h>
 #include <Processors/QueryPlan/ITransformingStep.h>
 /// #include <QueryPipeline/SizeLimits.h>
 
@@ -9,7 +10,7 @@ namespace DB
 class LightShufflingStep final : public ITransformingStep
 {
 public:
-    LightShufflingStep(const DataStream & input_stream_, std::vector<size_t> key_positions_, size_t max_num_outputs_);
+    LightShufflingStep(const DataStream & input_stream_, Names keys_, size_t max_num_outputs_);
 
     String getName() const override { return "LightShufflingStep"; }
 
@@ -19,9 +20,10 @@ private:
     void updateOutputStream() override
     {
         output_stream = createOutputStream(input_streams.front(), input_streams.front().header, getDataStreamTraits());
+        output_stream->shuffle_description = ShuffleDescription{ShuffleDescription::Kind::Light, keys};
     }
 
-    std::vector<size_t> key_positions;
+    Names keys;
     size_t max_num_outputs;
 };
 

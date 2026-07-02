@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "IO/S3/Credentials.h"
+#include <IO/S3/Credentials.h>
 #include "config.h"
 
 
@@ -26,6 +26,7 @@
 #include <IO/S3Common.h>
 #include <IO/WriteBufferFromS3.h>
 #include <Storages/StorageS3Settings.h>
+#include <Poco/Util/ServerApplication.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/tests/gtest_global_context.h>
 
@@ -53,6 +54,24 @@ private:
 };
 
 }
+
+/*
+ * When all tests are executed together, `Context::getGlobalContextInstance()` is not null. Global context is used by
+ * ProxyResolvers to get proxy configuration (used by S3 clients). If global context does not have a valid ConfigRef, it relies on
+ * Poco::Util::Application::instance() to grab the config. However, at this point, the application is not yet initialized and
+ * `Poco::Util::Application::instance()` returns nullptr. This causes the test to fail. To fix this, we create a dummy application that takes
+ * care of initialization.
+ * */
+/// proton: starts
+/// Mute logs during unit tests so unit_tests_check.py will not fail in decoding unprintable characters from stdout.
+/// [[maybe_unused]] static Poco::Util::ServerApplication app;
+[[maybe_unused]] static class S3TestInitializer
+{
+public:
+    S3TestInitializer() { Poco::Logger::setChannel("", nullptr); }
+    Poco::Util::ServerApplication app;
+} s3_test_initializer;
+/// proton: ends
 
 class NoRetryStrategy : public Aws::Client::StandardRetryStrategy
 {
@@ -126,7 +145,8 @@ void testServerSideEncryption(
     String server_side_encryption_customer_key_base64,
     DB::S3::ServerSideEncryptionKMSConfig sse_kms_config,
     String expected_headers,
-    bool is_s3express_bucket = false)
+    bool is_s3express_bucket = false,
+    String server_side_encryption_s3 = "")    /// proton: SSE-S3 algorithm (e.g. "AES256")
 {
     [[maybe_unused]] const PrepareContextForS3Client & prepare_context = PrepareContextForS3Client::instance();
 
@@ -147,7 +167,8 @@ void testServerSideEncryption(
         enable_s3_requests_logging,
         /* for_disk_s3 = */ false,
         /* get_request_throttler = */ {},
-        /* put_request_throttler = */ {});
+        /* put_request_throttler = */ {},
+        uri.uri.getScheme());
 
     client_configuration.endpointOverride = uri.endpoint;
     client_configuration.retryStrategy = std::make_shared<NoRetryStrategy>();
@@ -175,7 +196,9 @@ void testServerSideEncryption(
         {
             .use_environment_credentials = use_environment_credentials,
             .use_insecure_imds_request = use_insecure_imds_request,
-        }
+        },
+        /* session_token */ "",
+        server_side_encryption_s3    /// proton: SSE-S3
     );
 
     ASSERT_TRUE(client);
@@ -311,6 +334,54 @@ TEST(IOTestAwsS3Client, AppendExtraSSEKMSHeadersWrite)
         "x-amz-server-side-encryption-bucket-key-enabled: true\n"
         "x-amz-server-side-encryption-context: arn:aws:s3:::bucket_ARN\n");
 }
+
+/// proton: starts
+/// SSE-S3 (e.g. AES256) must be set on writes (PutObject) so buckets that mandate server-side
+/// encryption accept the upload, but must NOT be sent on reads (GetObject) where S3 rejects the
+/// x-amz-server-side-encryption header with InvalidArgument.
+TEST(IOTestAwsS3Client, AppendExtraSSES3HeadersWrite)
+{
+    testServerSideEncryption(
+        doWriteRequest,
+        /* disable_checksum= */ false,
+        /* server_side_encryption_customer_key_base64= */ "",
+        /* sse_kms_config= */ {},
+        "authorization: ... SignedHeaders="
+        "amz-sdk-invocation-id;"
+        "amz-sdk-request;"
+        "content-length;"
+        "content-md5;"
+        "content-type;"
+        "host;"
+        "x-amz-content-sha256;"
+        "x-amz-date;"
+        "x-amz-server-side-encryption, ...\n"
+        "x-amz-server-side-encryption: AES256\n",
+        /* is_s3express_bucket= */ false,
+        /* server_side_encryption_s3= */ "AES256");
+}
+
+TEST(IOTestAwsS3Client, AppendExtraSSES3HeadersRead)
+{
+    // SSE-S3 header must not be set on a read request
+    testServerSideEncryption(
+        doReadRequest,
+        /* disable_checksum= */ false,
+        /* server_side_encryption_customer_key_base64= */ "",
+        /* sse_kms_config= */ {},
+        "authorization: ... SignedHeaders="
+        "amz-sdk-invocation-id;"
+        "amz-sdk-request;"
+        "content-type;"
+        "host;"
+        "timeplus-request;"
+        "x-amz-api-version;"
+        "x-amz-content-sha256;"
+        "x-amz-date, ...\n",
+        /* is_s3express_bucket= */ false,
+        /* server_side_encryption_s3= */ "AES256");
+}
+/// proton: ends
 
 
 TEST(IOTestAwsS3Client, ChecksumHeaderIsPresentForS3Express)

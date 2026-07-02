@@ -5,6 +5,7 @@
 #include <Common/LogLevels.h>
 #include <Common/Stopwatch.h>
 #include <Daemon/BaseDaemon.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {

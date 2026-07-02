@@ -66,7 +66,7 @@ StoragesInfo::getParts(MergeTreeData::DataPartStateVector & state, bool has_stat
             return data_->getAllDataPartsVector(&state_, require_projection_parts);
         }
 
-        return data->getDataPartsVectorForInternalUsage({State::Active}, &state_, require_projection_parts);
+        return data_->getDataPartsVectorForInternalUsage({State::Active}, &state_, require_projection_parts);
     };
 
     /// Specialization for multi-shards of stream

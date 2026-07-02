@@ -1,5 +1,6 @@
 #include "TaskStatsInfoGetter.h"
 #include <Common/Exception.h>
+#include <base/defines.h>
 #include <base/types.h>
 
 #include <unistd.h>

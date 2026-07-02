@@ -29,7 +29,7 @@ steps:
     <<else>>
     node: [p3]
     <<end>>
-    sql: insert into test15_versioned_kv_stream(i, s) values (1, 'a')
+    sql: insert into test15_versioned_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (1, 'a')
     schema:
       - name: i
         type: int64
@@ -41,7 +41,7 @@ steps:
   - type: query
     node:
       - p1
-    sql: insert into test15_versioned_kv_stream(i, s) values (2, 'b')
+    sql: insert into test15_versioned_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (2, 'b')
     schema:
       - name: i
         type: int64
@@ -56,7 +56,7 @@ steps:
     <<else>>
     node: [p2]
     <<end>>
-    sql: insert into test15_versioned_kv_stream(i, s) values (2, 'a'), (3, 'b'), (4, 'c')
+    sql: insert into test15_versioned_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (2, 'a'), (3, 'b'), (4, 'c')
     schema:
       - name: i
         type: int64
@@ -92,7 +92,7 @@ steps:
   - type: query
     node:
       - p1
-    sql: insert into test15_versioned_kv_stream(i, s) values (5, 'd'), (6, 'c')
+    sql: insert into test15_versioned_kv_stream(i, s) SETTINGS insert_timeout_ms=60000, insert_max_tries=10, insert_retry_initial_backoff_ms=200, insert_retry_max_backoff_ms=2000 values (5, 'd'), (6, 'c')
     schema:
       - name: i
         type: int64

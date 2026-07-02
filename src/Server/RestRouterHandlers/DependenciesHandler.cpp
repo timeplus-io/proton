@@ -49,7 +49,7 @@ std::pair<String, Int32> DependenciesHandler::executeGet(const Poco::JSON::Objec
 
         loadDependencies(database, stream);
 
-        return {buildResponse(), HTTPResponse::HTTP_OK};
+        return {buildResponse(database, stream), HTTPResponse::HTTP_OK};
     }
     catch (...)
     {
@@ -62,8 +62,18 @@ void DependenciesHandler::loadDependencies(const String & ns, const String & nam
 {
     dependencies = std::make_shared<Dependencies>();
 
-    loadStreams(ns, name);
-    loadTasks(ns, name);
+    /// When requesting dependencies for a specific stream, we still need to scan the whole database
+    /// to discover inbound relations (e.g. INPUT -> target stream).
+    if (!name.empty())
+    {
+        loadStreams(ns, /*name=*/"");
+        loadTasks(ns, /*name=*/"");
+    }
+    else
+    {
+        loadStreams(ns, name);
+        loadTasks(ns, name);
+    }
 
     /// Load streams dependencies in other databases
     while (!unvisited_streams.empty())
@@ -194,8 +204,11 @@ void DependenciesHandler::fillStreamsType() const
     }
 }
 
-String DependenciesHandler::buildResponse() const
+String DependenciesHandler::buildResponse(const String & filter_database, const String & filter_stream) const
 {
+    const String filter_fullname
+        = (!filter_database.empty() && !filter_stream.empty()) ? getFullName(filter_database, filter_stream) : String{};
+
     /// @FORMAT:
     /// {
     ///     "request_id": xxx,
@@ -231,12 +244,20 @@ String DependenciesHandler::buildResponse() const
 
         Poco::JSON::Array dependencies_info;
         for (const auto & dependency : dependencies->dependencies)
+        {
+            if (!filter_fullname.empty() && dependency->from != filter_fullname && dependency->to != filter_fullname)
+                continue;
             dependencies_info.add(dependency->toJSON());
+        }
         obj.set("dependencies", dependencies_info);
 
         Poco::JSON::Array data_flow_info;
         for (const auto & flow : dependencies->data_flow)
+        {
+            if (!filter_fullname.empty() && flow->from != filter_fullname && flow->to != filter_fullname)
+                continue;
             data_flow_info.add(flow->toJSON());
+        }
         obj.set("data_flow", data_flow_info);
 
         resp.set("data", obj);

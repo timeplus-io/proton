@@ -9,7 +9,7 @@
 /// proton: starts.
 #include <Storages/MatView/StorageMaterializedView.h>
 #include <Storages/Proxy/ProxyStream.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends.
 

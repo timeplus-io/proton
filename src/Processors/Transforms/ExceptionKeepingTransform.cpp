@@ -4,6 +4,10 @@
 #include <base/scope_guard.h>
 #include <iostream>
 
+/// proton: starts.
+#include <base/ClockUtils.h>
+/// proton: ends.
+
 namespace DB
 {
 

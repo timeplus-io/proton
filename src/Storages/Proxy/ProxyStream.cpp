@@ -188,7 +188,7 @@ void ProxyStream::doRead(
     size_t max_block_size,
     size_t num_streams)
 {
-    ASTPtr current_subquery = subquery ? subquery->children[0] : nullptr;
+    ASTPtr current_subquery = subquery ? subquery->children[0]->clone() : nullptr;
 
     if (query_info.optimized_proxy_stream_query)
     {
@@ -430,6 +430,7 @@ void ProxyStream::processChangelogStep(QueryPlan & query_plan, const Names & req
         std::move(output_header),
         std::move(key_column_names),
         std::move(version_column),
+        /*late_insert_overrides=*/true,
         settings_ref.default_hash_table.value,
         context_->getSpillDirForCurrentQuery("changelog"),
         settings_ref.max_hot_keys.value,

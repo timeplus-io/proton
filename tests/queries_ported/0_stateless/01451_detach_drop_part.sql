@@ -1,6 +1,6 @@
 DROP STREAM IF EXISTS mt_01451;
 
-CREATE STREAM mt_01451 (v uint8) ENGINE = MergeTree() order by v;
+CREATE STREAM mt_01451 (v uint8) ENGINE = MergeTree() order by v SETTINGS old_parts_lifetime=0;
 SYSTEM STOP MERGES mt_01451;
 
 INSERT INTO mt_01451 VALUES (0);

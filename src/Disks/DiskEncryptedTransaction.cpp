@@ -77,7 +77,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskEncryptedTransaction::writeFile( //
         if (old_file_size)
         {
             /// Append mode: we continue to use the same header.
-            auto read_buffer = delegate_disk->readFile(wrapped_path, ReadSettings().adjustBufferSize(FileEncryption::Header::kSize));
+            auto read_buffer = delegate_disk->readFile(wrapped_path, getReadSettings().adjustBufferSize(FileEncryption::Header::kSize));
             header = readHeader(*read_buffer);
             key = current_settings.findKeyByFingerprint(header.key_fingerprint, path);
         }
@@ -92,7 +92,6 @@ std::unique_ptr<WriteBufferFromFileBase> DiskEncryptedTransaction::writeFile( //
     }
     auto buffer = delegate_transaction->writeFile(wrapped_path, buf_size, mode, settings, autocommit);
     return std::make_unique<WriteBufferFromEncryptedFile>(buf_size, std::move(buffer), key, header, old_file_size);
-
 }
 
 }

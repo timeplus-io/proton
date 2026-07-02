@@ -20,6 +20,11 @@
 
 using namespace DB;
 
+namespace DB::ErrorCodes
+{
+    extern const int SYNTAX_ERROR;
+}
+
 TEST(ParserCreateRemoteFunctionQuery, UDFNoHeaderMethod)
 {
     String input = "CREATE REMOTE FUNCTION ip_lookup(ip string) RETURNS string "
@@ -153,6 +158,23 @@ TEST(ParserCreateRemoteFunctionQuery, UDFNoneButSetAUTHHEADER)
     EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
 }
 
+TEST(ParserCreateRemoteFunctionQuery, UDFRejectsSettingsClause)
+{
+    String input = "CREATE REMOTE FUNCTION chat(engine string, model string, input string, temperature float64) RETURNS string "
+                   "URL 'http://photon:5001/chat' "
+                   "SETTINGS EXECUTION_TIMEOUT 60000;";
+    ParserCreateFunctionQuery parser;
+    try
+    {
+        (void)parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+        FAIL() << "Expected parse error";
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_EQ(e.code(), ErrorCodes::SYNTAX_ERROR);
+    }
+}
+
 TEST(ParserCreateRemoteFunctionQuery, UDFAUTHHEADERButNotSetAUTHHEADER)
 {
     String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
@@ -226,4 +248,3 @@ TEST(ParserCreateRemoteFunctionQuery, UDFFormat3)
              "CREATE REMOTE FUNCTION ip_lookup(ip string) RETURNS string AUTH_METHOD 'auth_header' URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/' EXECUTION_TIMEOUT 2000 AUTH_KEY 'proton' AUTH_HEADER 'auth'"
     );
 }
-

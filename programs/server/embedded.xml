@@ -41,8 +41,6 @@
     </client>
   </openSSL>
 
-  <telemetry_enabled from_env="TELEMETRY_ENABLED" replace="true">true</telemetry_enabled>
-
   <prometheus>
       <endpoint>/metrics</endpoint>
       <port>9363</port>
@@ -60,8 +58,8 @@
       <engine>
         engine Stream(1, rand())
         order by (to_hour(_tp_time), database, name)
-        ttl to_datetime(_tp_time) + INTERVAL 1 YEAR DELETE
-        settings logstore_codec='zstd'
+        ttl to_datetime(_tp_time) + INTERVAL 14 DAY DELETE
+        settings logstore_codec='zstd', index_granularity=8192
       </engine>
       <database>system</database>
       <table>stream_metric_log</table>
@@ -426,7 +424,6 @@
 
   <asynchronous_metrics_update_period_s>2</asynchronous_metrics_update_period_s>
   <max_thread_pool_size>10000</max_thread_pool_size>
-  <telemetry_interval_ms>300000</telemetry_interval_ms>
   <max_local_disk_usage_ratio>0.9</max_local_disk_usage_ratio>
   <total_memory_profiler_step>4194304</total_memory_profiler_step>
   <total_memory_tracker_sample_probability>0</total_memory_tracker_sample_probability>
@@ -437,4 +434,11 @@
     <enabled>true</enabled>
     <privileges>SELECT,INSERT,CREATE TEMPORARY TABLE</privileges>
   </local_api_user>
+
+  <part_log>
+    <database>system</database>
+    <table>part_log</table>
+    <partition_by>to_YYYYMM(event_date)</partition_by>
+    <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+  </part_log>
 </proton>

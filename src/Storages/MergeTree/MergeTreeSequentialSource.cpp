@@ -11,6 +11,7 @@
 #include <Processors/QueryPlan/FilterStep.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Common/logger_useful.h>
+#include <Common/ThrottlerArray.h>
 
 namespace DB
 {
@@ -36,7 +37,8 @@ public:
         bool apply_deleted_mask,
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
-        bool quiet = false);
+        bool quiet = false,
+        bool prefetch = false);
 
     ~MergeTreeSequentialSource() override;
 
@@ -90,7 +92,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     bool apply_deleted_mask,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
-    bool quiet)
+    bool quiet,
+    bool prefetch)
     : ISource(storage_snapshot_->getSampleBlockForColumns(columns_to_read_), true, ProcessorID::MergeTreeSequentialSourceID)
     , storage(storage_)
     , storage_snapshot(storage_snapshot_)
@@ -163,6 +166,9 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
         reader_settings,
         /*avg_value_size_hints=*/ {},
         /*profile_callback=*/ {});
+
+    if (prefetch)
+        reader->prefetchBeginOfRange(Priority{});
 }
 
 Chunk MergeTreeSequentialSource::generate()
@@ -250,7 +256,8 @@ Pipe createMergeTreeSequentialSource(
     bool read_with_direct_io,
     bool take_column_types_from_storage,
     bool quiet,
-    std::shared_ptr<std::atomic<size_t>> filtered_rows_count)
+    std::shared_ptr<std::atomic<size_t>> filtered_rows_count,
+    bool prefetch)
 {
     /// The part might have some rows masked by lightweight deletes
     const bool need_to_filter_deleted_rows = data_part->hasLightweightDelete();
@@ -260,7 +267,7 @@ Pipe createMergeTreeSequentialSource(
 
     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
         storage, storage_snapshot, data_part, columns, std::optional<MarkRanges>{},
-        /*apply_deleted_mask=*/ false, read_with_direct_io, take_column_types_from_storage, quiet);
+        /*apply_deleted_mask=*/ false, read_with_direct_io, take_column_types_from_storage, quiet, prefetch);
 
     Pipe pipe(std::move(column_part_source));
 

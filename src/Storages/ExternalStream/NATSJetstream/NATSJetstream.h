@@ -83,6 +83,8 @@ private:
     void disconnect();
 
     void validateSettings(bool attach);
+    /// NATS validates its settings during construction; the create-time validation hook is a no-op.
+    void validateSettings(const ExternalStreamSettingsPtr &, bool, const ContextPtr &) const override { }
     void cacheVirtualColumnNamesAndTypes();
 
     static ExternalStreamSettingsPtr validateAndMoveSettings(ExternalStreamSettingsPtr && settings_);

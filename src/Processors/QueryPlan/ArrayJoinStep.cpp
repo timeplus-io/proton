@@ -6,6 +6,9 @@
 #include <Interpreters/ExpressionActions.h>
 #include <IO/Operators.h>
 #include <Common/JSONBuilder.h>
+
+#include <algorithm>
+
 namespace DB
 {
 
@@ -18,8 +21,8 @@ static ITransformingStep::Traits getTraits()
             .returns_single_stream = false,
             .preserves_number_of_streams = true,
             .preserves_sorting = false,
-            /// proton: starts.
-            .preserves_substream = true,
+            /// proton: starts. Decided per-key in preserveShuffleDescriptionIfValid, not by this flag.
+            .preserves_shuffling = false,
             /// proton: ends.
         },
         {
@@ -35,12 +38,26 @@ ArrayJoinStep::ArrayJoinStep(const DataStream & input_stream_, ArrayJoinActionPt
         getTraits())
     , array_join(std::move(array_join_))
 {
+    preserveShuffleDescriptionIfValid(input_stream_);
 }
 
 void ArrayJoinStep::updateOutputStream()
 {
     output_stream = createOutputStream(
         input_streams.front(), ArrayJoinTransform::transformHeader(input_streams.front().header, array_join), getDataStreamTraits());
+    preserveShuffleDescriptionIfValid(input_streams.front());
+}
+
+void ArrayJoinStep::preserveShuffleDescriptionIfValid(const DataStream & input_stream)
+{
+    if (!input_stream.shuffle_description)
+        return;
+
+    const auto & keys = input_stream.shuffle_description->keys;
+    if (std::ranges::any_of(keys, [&](const auto & key) { return array_join->columns.count(key); }))
+        return;
+
+    output_stream->shuffle_description = input_stream.shuffle_description;
 }
 
 void ArrayJoinStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)

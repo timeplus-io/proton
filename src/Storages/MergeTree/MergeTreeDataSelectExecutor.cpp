@@ -44,6 +44,7 @@
 
 /// proton: starts.
 #include <Common/ProtonCommon.h>
+#include <fmt/ranges.h>
 /// proton: ends.
 
 namespace CurrentMetrics
@@ -1127,12 +1128,16 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
         const auto & index_and_condition = skip_indexes.useful_indices[idx];
         const auto & stat = useful_indices_stat[idx];
         const auto & index_name = index_and_condition.index->index.name;
+        const auto granules_dropped = stat.granules_dropped.load(std::memory_order_relaxed);
+        const auto total_granules = stat.total_granules.load(std::memory_order_relaxed);
+        const auto total_parts = stat.total_parts.load(std::memory_order_relaxed);
+        const auto parts_dropped = stat.parts_dropped.load(std::memory_order_relaxed);
         LOG_DEBUG(
             log,
             "Index {} has dropped {}/{} granules.",
             backQuote(index_name),
-            stat.granules_dropped,
-            stat.total_granules);
+            granules_dropped,
+            total_granules);
 
         std::string description
             = index_and_condition.index->index.type + " GRANULARITY " + std::to_string(index_and_condition.index->index.granularity);
@@ -1141,8 +1146,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             .type = ReadFromMergeTree::IndexType::Skip,
             .name = index_name,
             .description = std::move(description), //-V1030
-            .num_parts_after = stat.total_parts - stat.parts_dropped,
-            .num_granules_after = stat.total_granules - stat.granules_dropped});
+            .num_parts_after = total_parts - parts_dropped,
+            .num_granules_after = total_granules - granules_dropped});
     }
 
     for (size_t idx = 0; idx < skip_indexes.merged_indices.size(); ++idx)
@@ -1150,9 +1155,13 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
         const auto & index_and_condition = skip_indexes.merged_indices[idx];
         const auto & stat = merged_indices_stat[idx];
         const auto & index_name = "Merged";
+        const auto granules_dropped = stat.granules_dropped.load(std::memory_order_relaxed);
+        const auto total_granules = stat.total_granules.load(std::memory_order_relaxed);
+        const auto total_parts = stat.total_parts.load(std::memory_order_relaxed);
+        const auto parts_dropped = stat.parts_dropped.load(std::memory_order_relaxed);
         LOG_DEBUG(log, "Index {} has dropped {}/{} granules.",
                     backQuote(index_name),
-                    stat.granules_dropped, stat.total_granules);
+                    granules_dropped, total_granules);
 
         std::string description = "MERGED GRANULARITY " + std::to_string(index_and_condition.indices.at(0)->index.granularity);
 
@@ -1160,8 +1169,8 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             .type = ReadFromMergeTree::IndexType::Skip,
             .name = index_name,
             .description = std::move(description), //-V1030
-            .num_parts_after = stat.total_parts - stat.parts_dropped,
-            .num_granules_after = stat.total_granules - stat.granules_dropped});
+            .num_parts_after = total_parts - parts_dropped,
+            .num_granules_after = total_granules - granules_dropped});
     }
 
     return parts_with_ranges;
@@ -1186,7 +1195,7 @@ std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
                 ErrorCodes::TOO_MANY_PARTITIONS,
                 "Too many partitions to read. Current {}, max {}",
                 partitions.size(),
-                max_partitions_to_read);
+                max_partitions_to_read.value);
     }
 
     if (data_settings->max_concurrent_queries > 0 && data_settings->min_marks_to_honor_max_concurrent_queries > 0

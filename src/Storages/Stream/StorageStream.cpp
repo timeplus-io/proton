@@ -208,6 +208,7 @@ NamesAndTypesList StorageStream::getVirtualsOfAppendOnly()
         NameAndTypePair(ProtonConsts::RESERVED_INGEST_TIME, std::make_shared<DataTypeInt64>()),
         NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeInt64>()),
         NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()),
+        NameAndTypePair(ProtonConsts::RESERVED_SCHEMA_VERSION, std::make_shared<DataTypeUInt16>()),
         LightweightDeleteDescription::FILTER_COLUMN,
     };
 }
@@ -459,6 +460,7 @@ void StorageStream::doReadChangelog(
             std::move(output_header),
             storage_snapshot->metadata->getPrimaryKeyColumns(),
             (query_info.changelog_query_drop_late_rows && *query_info.changelog_query_drop_late_rows) ? merging_params.version_column : "",
+            /*late_insert_overrides=*/true,
             settings_ref.default_hash_table.value,
             context_->getSpillDirForCurrentQuery("changelog"),
             settings_ref.max_hot_keys.value,
@@ -508,13 +510,13 @@ StorageStream::~StorageStream()
         tryLogCurrentException(log, "Failed to shutdown");
     }
 
-    LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks);
+    LOG_INFO(log, "Stopped with outstanding_blocks={}", outstanding_blocks.load());
 
     /// Wait for outstanding ingested blocks
     while (outstanding_blocks != 0)
     {
         sleepForMilliseconds(1000);
-        LOG_INFO(log, "Waiting for outstanding_blocks={}", outstanding_blocks);
+        LOG_INFO(log, "Waiting for outstanding_blocks={}", outstanding_blocks.load());
     }
 
     LOG_INFO(log, "Completely dtored");
@@ -1473,6 +1475,7 @@ void StorageStream::cacheVirtualColumnNamesAndTypes()
         virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, type_factory.get("int64")));
 
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, type_factory.get("int32")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SCHEMA_VERSION, type_factory.get("uint16")));
 
     /// We may emit _tp_delta on the fly
     if (Streaming::isKeyValueStorage(dataStreamSemantic()))
@@ -1546,6 +1549,18 @@ UInt64 StorageStream::getStorageSize() const
     return std::accumulate(
         stream_shards_snapshot.begin(), stream_shards_snapshot.end(), static_cast<uint64_t>(0), [](uint64_t sum, const auto & shard) {
             return sum + shard->getStorageSize();
+        });
+}
+
+UInt64 StorageStream::getHistoricalStorageSizeForMetrics() const
+{
+    if (!isReady())
+        return 0;
+
+    auto stream_shards_snapshot = stream_shards;
+    return std::accumulate(
+        stream_shards_snapshot.begin(), stream_shards_snapshot.end(), static_cast<uint64_t>(0), [](uint64_t sum, const auto & shard) {
+            return sum + shard->getHistoricalStorageSizeForMetrics();
         });
 }
 

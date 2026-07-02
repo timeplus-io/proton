@@ -15,6 +15,7 @@ public:
         Block output_header_,
         std::vector<std::string> key_column_names_,
         const std::string & version_column_name_,
+        bool late_insert_overrides_,
         HashTableType hash_table_type_,
         const std::string & spill_dir_,
         size_t max_hot_keys_,
@@ -30,6 +31,8 @@ private:
 
     std::vector<std::string> key_column_names;
     std::string version_column_name;
+    bool late_insert_overrides;
+
     HashTableType hash_table_type;
     std::string spill_dir;
     std::string kv_options;

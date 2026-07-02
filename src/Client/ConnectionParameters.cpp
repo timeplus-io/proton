@@ -13,7 +13,6 @@
 
 #include <readpassphrase/readpassphrase.h>
 
-
 namespace DB
 {
 

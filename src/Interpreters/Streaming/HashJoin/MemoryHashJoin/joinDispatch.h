@@ -109,8 +109,15 @@ struct MapGetter<kind, Strictness::Range>
     static constexpr bool flagged = false;
 };
 
-static constexpr std::array<Strictness, 5> STRICTNESSES
-    = {Strictness::All, Strictness::Range, Strictness::Asof, Strictness::Latest, Strictness::Multiple};
+template <Kind kind>
+struct MapGetter<kind, Strictness::Anti>
+{
+    using Map = MemoryHashJoin::MapsOne;
+    static constexpr bool flagged = false;
+};
+
+static constexpr std::array<Strictness, 6> STRICTNESSES
+    = {Strictness::All, Strictness::Range, Strictness::Asof, Strictness::Latest, Strictness::Multiple, Strictness::Anti};
 
 static constexpr std::array<Kind, 4> KINDS = {Kind::Left, Kind::Inner, Kind::Right, Kind::Full};
 

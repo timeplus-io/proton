@@ -1,16 +1,16 @@
 #include <Common/Exception.h>
 #include <Common/ThreadProfileEvents.h>
-#include <Common/ConcurrentBoundedQueue.h>
 #include <Common/QueryProfiler.h>
 #include <Common/ThreadStatus.h>
 #include <Common/CurrentThread.h>
 #include <Common/logger_useful.h>
-#include <base/errnoToString.h>
+#include <Common/memory.h>
+#include <Common/MemoryTrackerBlockerInThread.h>
+#include <base/getPageSize.h>
 #include <Interpreters/Context.h>
 
 #include <Poco/Logger.h>
 #include <base/getThreadId.h>
-#include <base/getPageSize.h>
 
 #include <csignal>
 #include <sys/mman.h>
@@ -44,28 +44,33 @@ static constexpr size_t UNWIND_MINSIGSTKSZ = 16 << 10;
 ///
 /// Also we should not use getStackSize() (pthread_attr_getstack()) since it
 /// will return 8MB, and this is too huge for signal stack.
-struct ThreadStack
-{
-    ThreadStack()
-        : data(aligned_alloc(getPageSize(), getSize()))
-    {
-        /// Add a guard page
-        /// (and since the stack grows downward, we need to protect the first page).
-        mprotect(data, getPageSize(), PROT_NONE);
-    }
+	struct ThreadStack
+	{
+	    ThreadStack()
+	        : data(aligned_alloc(getPageSize(), getSize()))
+	    {
+	        /// Add a guard page
+	        /// (and since the stack grows downward, we need to protect the first page).
+	        mprotect(data, getPageSize(), PROT_NONE);
+	    }
 	    ~ThreadStack()
 	    {
-	        mprotect(data, getPageSize(), PROT_WRITE|PROT_READ);
+	        mprotect(data, getPageSize(), PROT_WRITE | PROT_READ);
 	        free(data);
 	    }
 
-	    static size_t getSize() { return std::max<size_t>(UNWIND_MINSIGSTKSZ, MINSIGSTKSZ); }
+	    static size_t getSize()
+	    {
+	        /// Account for the guard page we protect with mprotect().
+	        return std::max<size_t>(UNWIND_MINSIGSTKSZ, MINSIGSTKSZ) + getPageSize();
+	    }
+
 	    void * getData() const { return data; }
 
 	private:
 	    /// 16 KiB - not too big but enough to handle error.
-    void * data;
-};
+	    void * data = nullptr;
+	};
 
 }
 
@@ -73,7 +78,7 @@ static thread_local ThreadStack alt_stack;
 static thread_local bool has_alt_stack = false;
 #endif
 
-ThreadGroupStatus::ThreadGroupStatus()
+ThreadGroup::ThreadGroup()
     : master_thread_id(CurrentThread::get().thread_id)
 {}
 
@@ -82,7 +87,7 @@ ThreadStatus::ThreadStatus()
 {
     last_rusage = std::make_unique<RUsageCounters>();
 
-    memory_tracker.setDescription("(for thread)");
+    memory_tracker.setDescription("Thread");
     log = getLogger("ThreadStatus");
 
     current_thread = this;
@@ -131,7 +136,7 @@ ThreadStatus::ThreadStatus()
 #endif
 }
 
-ThreadGroupStatusPtr ThreadStatus::getThreadGroup() const
+ThreadGroupPtr ThreadStatus::getThreadGroup() const
 {
     return thread_group;
 }
@@ -151,7 +156,7 @@ ContextPtr ThreadStatus::getGlobalContext() const
     return global_context.lock();
 }
 
-void ThreadGroupStatus::attachInternalTextLogsQueue(const InternalTextLogsQueuePtr & logs_queue, LogsLevel logs_level)
+void ThreadGroup::attachInternalTextLogsQueue(const InternalTextLogsQueuePtr & logs_queue, LogsLevel logs_level)
 {
     std::lock_guard lock(mutex);
     shared_data.logs_queue_ptr = logs_queue;
@@ -193,14 +198,14 @@ void ThreadStatus::flushUntrackedMemory()
     if (untracked_memory == 0)
         return;
 
-    memory_tracker.adjustWithUntrackedMemory(untracked_memory);
+    MemoryTrackerBlockerInThread blocker(untracked_memory_blocker_level);
+    Int64 current_untracked_memory = current_thread->untracked_memory;
     untracked_memory = 0;
+    memory_tracker.adjustWithUntrackedMemory(current_untracked_memory);
 }
 
 ThreadStatus::~ThreadStatus()
 {
-    flushUntrackedMemory();
-
     /// It may cause segfault if query_context was destroyed, but was not detached
     auto query_context_ptr = query_context.lock();
     assert((!query_context_ptr && getQueryId().empty()) || (query_context_ptr && getQueryId() == query_context_ptr->getCurrentQueryId()));
@@ -209,6 +214,7 @@ ThreadStatus::~ThreadStatus()
     if (deleter)
         deleter();
 
+    flushUntrackedMemory();
     /// Only change current_thread if it's currently being used by this ThreadStatus
     /// For example, PushingToViews chain creates and deletes ThreadStatus instances while running in the main query thread
     if (current_thread == this)
@@ -250,6 +256,7 @@ void ThreadStatus::onFatalError()
 }
 
 ThreadStatus * MainThreadStatus::main_thread = nullptr;
+std::atomic_flag MainThreadStatus::is_initialized;
 
 MainThreadStatus & MainThreadStatus::getInstance()
 {
@@ -260,10 +267,20 @@ MainThreadStatus & MainThreadStatus::getInstance()
 MainThreadStatus::MainThreadStatus()
 {
     main_thread = current_thread;
+    is_initialized.test_and_set(std::memory_order_relaxed);
 }
 
 MainThreadStatus::~MainThreadStatus()
 {
+    reset();
+    /// Stop gathering task stats. We do this to avoid issues due to static object destruction order
+    /// `MainThreadStatus thread_status` inside MainThreadStatus::getInstance might call detachFromGroup which calls taskstats->updateCounters
+    /// `thread_local auto metrics_provider` inside TasksStatsCounters::TasksStatsCounters holds the file descriptors open
+    /// If the `metrics_provider` static object is destroyed first then by the time when the destructor of `thread_status` is called
+    /// the file descriptors are closed, which will throw errors.
+    /// As we don't really care about stats of the main thread (they won't be used) it's simpler to just disable them before the
+    /// implicit ~ThreadStatus is called here
+    taskstats.reset();
     main_thread = nullptr;
 }
 

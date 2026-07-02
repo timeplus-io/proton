@@ -36,7 +36,7 @@ public:
 
     void consume(Chunk chunk) override;
     void onFinish() override;
-    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void doCheckpoint(CheckpointContextPtr ckpt_ctx) override;
 
 protected:
     static UInt64 getMaxInsertBlockRows(const Settings & settings);

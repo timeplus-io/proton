@@ -4,6 +4,7 @@
 #include <Cluster/Common/AckSemantic.h>
 #include <Cluster/Common/StreamShard.h>
 #include <IO/WriteBuffer.h>
+#include <Common/logger_useful.h>
 
 #include <memory>
 

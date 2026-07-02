@@ -2,6 +2,7 @@
 
 #include <Common/Exception.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <fmt/ranges.h>
 
 namespace DB::ErrorCodes
 {

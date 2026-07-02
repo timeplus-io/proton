@@ -1,7 +1,11 @@
+#include <base/defines.h>
 #if defined(__ELF__) && !defined(OS_FREEBSD)
 
-#include <Common/SymbolIndex.h>
+#include <Common/MemorySanitizer.h>
 #include <Common/hex.h>
+#include <base/sort.h>
+#include <Common/MemoryTrackerDebugBlockerInThread.h>
+#include <Common/SymbolIndex.h>
 
 #include <algorithm>
 #include <optional>
@@ -9,7 +13,6 @@
 
 #include <link.h>
 
-//#include <iostream>
 #include <filesystem>
 
 #include <base/sort.h>
@@ -88,48 +91,13 @@ namespace
 /// https://stackoverflow.com/questions/32088140/multiple-string-tables-in-elf-object
 
 
-void updateResources(ElfW(Addr) base_address, std::string_view object_name, std::string_view name, const void * address, SymbolIndex::Resources & resources)
-{
-    const char * char_address = static_cast<const char *>(address);
-
-    if (name.starts_with("_binary_") || name.starts_with("binary_"))
-    {
-        if (name.ends_with("_start"))
-        {
-            name = name.substr((name[0] == '_') + strlen("binary_"));
-            name = name.substr(0, name.size() - strlen("_start"));
-
-            resources.emplace(name, SymbolIndex::ResourcesBlob{
-                base_address,
-                object_name,
-                std::string_view{char_address, 0}, // NOLINT
-            });
-        }
-        else if (name.ends_with("_end"))
-        {
-            name = name.substr((name[0] == '_') + strlen("binary_"));
-            name = name.substr(0, name.size() - strlen("_end"));
-
-            auto it = resources.find(name);
-            if (it != resources.end() && it->second.base_address == base_address && it->second.data.empty())
-            {
-                const char * start = it->second.data.data();
-                assert(char_address >= start);
-                it->second.data = std::string_view{start, static_cast<size_t>(char_address - start)};
-            }
-        }
-    }
-}
-
-
 /// Based on the code of musl-libc and the answer of Kanalpiroge on
 /// https://stackoverflow.com/questions/15779185/list-all-the-functions-symbols-on-the-fly-in-c-code-on-a-linux-architecture
 /// It does not extract all the symbols (but only public - exported and used for dynamic linking),
 /// but will work if we cannot find or parse ELF files.
 void collectSymbolsFromProgramHeaders(
     dl_phdr_info * info,
-    std::vector<SymbolIndex::Symbol> & symbols,
-    SymbolIndex::Resources & resources)
+    std::vector<SymbolIndex::Symbol> & symbols)
 {
     /* Iterate over all headers of the current shared lib
      * (first call is for the executable itself)
@@ -247,9 +215,6 @@ void collectSymbolsFromProgramHeaders(
                     /// We are not interested in empty symbols.
                     if (elf_sym[sym_index].st_size)
                         symbols.push_back(symbol);
-
-                    /// But resources can be represented by a pair of empty symbols (indicating their boundaries).
-                    updateResources(base_address, info->dlpi_name, symbol.name, symbol.address_begin, resources);
                 }
 
                 break;
@@ -268,7 +233,9 @@ String getBuildIDFromProgramHeaders(dl_phdr_info * info)
         if (phdr.p_type != PT_NOTE)
             continue;
 
-        return Elf::getBuildID(reinterpret_cast<const char *>(info->dlpi_addr + phdr.p_vaddr), phdr.p_memsz);
+        String build_id = Elf::getBuildID(reinterpret_cast<const char *>(info->dlpi_addr + phdr.p_vaddr), phdr.p_memsz);
+        if (!build_id.empty()) // there may be multiple PT_NOTE segments
+            return build_id;
     }
     return {};
 }
@@ -280,8 +247,7 @@ void collectSymbolsFromELFSymbolTable(
     const Elf & elf,
     const Elf::Section & symbol_table,
     const Elf::Section & string_table,
-    std::vector<SymbolIndex::Symbol> & symbols,
-    SymbolIndex::Resources & resources)
+    std::vector<SymbolIndex::Symbol> & symbols)
 {
     /// Iterate symbol table.
     const ElfSym * symbol_table_entry = reinterpret_cast<const ElfSym *>(symbol_table.begin());
@@ -311,8 +277,6 @@ void collectSymbolsFromELFSymbolTable(
 
         if (symbol_table_entry->st_size)
             symbols.push_back(symbol);
-
-        updateResources(info->dlpi_addr, info->dlpi_name, symbol.name, symbol.address_begin, resources);
     }
 }
 
@@ -322,8 +286,7 @@ bool searchAndCollectSymbolsFromELFSymbolTable(
     const Elf & elf,
     unsigned section_header_type,
     const char * string_table_name,
-    std::vector<SymbolIndex::Symbol> & symbols,
-    SymbolIndex::Resources & resources)
+    std::vector<SymbolIndex::Symbol> & symbols)
 {
     std::optional<Elf::Section> symbol_table;
     std::optional<Elf::Section> string_table;
@@ -341,7 +304,7 @@ bool searchAndCollectSymbolsFromELFSymbolTable(
         return false;
     }
 
-    collectSymbolsFromELFSymbolTable(info, elf, *symbol_table, *string_table, symbols, resources);
+    collectSymbolsFromELFSymbolTable(info, elf, *symbol_table, *string_table, symbols);
     return true;
 }
 
@@ -350,22 +313,21 @@ void collectSymbolsFromELF(
     dl_phdr_info * info,
     std::vector<SymbolIndex::Symbol> & symbols,
     std::vector<SymbolIndex::Object> & objects,
-    SymbolIndex::Resources & resources,
-    String & build_id)
+    String & self_build_id)
 {
     String object_name;
-    String our_build_id;
+    String build_id;
 
 #if defined (USE_MUSL)
     object_name = "/proc/self/exe";
-    our_build_id = Elf(object_name).getBuildID();
-    build_id = our_build_id;
+    build_id = Elf(object_name).getBuildID();
+    self_build_id = build_id;
 #else
     /// MSan does not know that the program segments in memory are initialized.
     __msan_unpoison_string(info->dlpi_name);
 
     object_name = info->dlpi_name;
-    our_build_id = getBuildIDFromProgramHeaders(info);
+    build_id = getBuildIDFromProgramHeaders(info);
 
     /// If the name is empty and there is a non-empty build-id - it's main executable.
     /// Find a elf file for the main executable and set the build-id.
@@ -373,14 +335,15 @@ void collectSymbolsFromELF(
     {
         object_name = "/proc/self/exe";
 
-        if (our_build_id.empty())
-            our_build_id = Elf(object_name).getBuildID();
-
         if (build_id.empty())
-            build_id = our_build_id;
+            build_id = Elf(object_name).getBuildID();
+
+        if (self_build_id.empty())
+            self_build_id = build_id;
     }
 #endif
 
+    /// Note: we load ELF from file; this doesn't work for vdso because it's only present in memory.
     std::error_code ec;
     std::filesystem::path canonical_path = std::filesystem::canonical(object_name, ec);
 
@@ -439,9 +402,10 @@ void collectSymbolsFromELF(
 
     String file_build_id = object.elf->getBuildID();
 
-    if (our_build_id != file_build_id)
+    if (build_id != file_build_id)
     {
-        /// If debug info doesn't correspond to our binary, fallback to the info in our binary.
+        /// If the separate debuginfo binary doesn't correspond to the loaded binary, fallback to
+        /// the info in the loaded binary.
         if (object_name != canonical_path)
         {
             object_name = canonical_path;
@@ -449,7 +413,7 @@ void collectSymbolsFromELF(
 
             /// But it can still be outdated, for example, if executable file was deleted from filesystem and replaced by another file.
             file_build_id = object.elf->getBuildID();
-            if (our_build_id != file_build_id)
+            if (build_id != file_build_id)
                 return;
         }
         else
@@ -461,11 +425,11 @@ void collectSymbolsFromELF(
     object.name = object_name;
     objects.push_back(std::move(object));
 
-    searchAndCollectSymbolsFromELFSymbolTable(info, *objects.back().elf, SHT_SYMTAB, ".strtab", symbols, resources);
+    searchAndCollectSymbolsFromELFSymbolTable(info, *objects.back().elf, SHT_SYMTAB, ".strtab", symbols);
 
     /// Unneeded if they were parsed from "program headers" of loaded objects.
 #if defined USE_MUSL
-    searchAndCollectSymbolsFromELFSymbolTable(info, *objects.back().elf, SHT_DYNSYM, ".dynstr", symbols, resources);
+    searchAndCollectSymbolsFromELFSymbolTable(info, *objects.back().elf, SHT_DYNSYM, ".dynstr", symbols);
 #endif
 }
 
@@ -478,8 +442,8 @@ int collectSymbols(dl_phdr_info * info, size_t, void * data_ptr)
 {
     SymbolIndex::Data & data = *reinterpret_cast<SymbolIndex::Data *>(data_ptr);
 
-    collectSymbolsFromProgramHeaders(info, data.symbols, data.resources);
-    collectSymbolsFromELF(info, data.symbols, data.objects, data.resources, data.build_id);
+    collectSymbolsFromProgramHeaders(info, data.symbols);
+    collectSymbolsFromELF(info, data.symbols, data.objects, data.self_build_id);
 
     /* Continue iterations */
     return 0;
@@ -508,7 +472,7 @@ const T * find(const void * address, const std::vector<T> & vec)
 }
 
 
-void SymbolIndex::update()
+void SymbolIndex::load()
 {
     dl_iterate_phdr(collectSymbols, &data);
 
@@ -534,12 +498,11 @@ const SymbolIndex::Object * SymbolIndex::findObject(const void * address) const
 
 String SymbolIndex::getBuildIDHex() const
 {
-    String build_id_binary = getBuildID();
     String build_id_hex;
-    build_id_hex.resize(build_id_binary.size() * 2);
+    build_id_hex.resize(data.self_build_id.size() * 2);
 
     char * pos = build_id_hex.data();
-    for (auto c : build_id_binary)
+    for (auto c : data.self_build_id)
     {
         writeHexByteUppercase(c, pos);
         pos += 2;
@@ -548,22 +511,25 @@ String SymbolIndex::getBuildIDHex() const
     return build_id_hex;
 }
 
-MultiVersion<SymbolIndex> & SymbolIndex::instanceImpl()
+const SymbolIndex & SymbolIndex::instance()
 {
-    static MultiVersion<SymbolIndex> instance(std::unique_ptr<SymbolIndex>(new SymbolIndex));
+    /// To avoid recursive initialization of SymbolIndex we need to block debug
+    /// checks in MemoryTracker.
+    ///
+    /// Those debug checks capture the stacktrace for the log if big enough
+    /// allocation is done (big enough > 16MiB), while SymbolIndex will do
+    /// ~25MiB, and so if exception will be thrown before SymbolIndex
+    /// initialized (this is the case for client/local, and no, we do not want
+    /// to initialize it explicitly, since this will increase startup time for
+    /// the client) and later during SymbolIndex initialization it will try to
+    /// initialize it one more time, and in debug build you will get pretty
+    /// nice error:
+    ///
+    ///   __cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function
+    ///
+    [[maybe_unused]] MemoryTrackerDebugBlockerInThread blocker;
+    static SymbolIndex instance;
     return instance;
-}
-
-MultiVersion<SymbolIndex>::Version SymbolIndex::instance()
-{
-    return instanceImpl().get();
-}
-
-void SymbolIndex::reload()
-{
-    instanceImpl().set(std::unique_ptr<SymbolIndex>(new SymbolIndex));
-    /// Also drop stacktrace cache.
-    StackTrace::dropCache();
 }
 
 }

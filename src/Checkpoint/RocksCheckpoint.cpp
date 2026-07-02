@@ -8,6 +8,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
 #include <Common/ThreadPool.h>
+#include <Common/logger_useful.h>
 #include <Common/scope_guard_safe.h>
 #include <Common/setThreadName.h>
 
@@ -72,7 +73,7 @@ RocksCheckpoint::RocksCheckpoint(VersionType version_, std::unique_ptr<ReadBuffe
 
 RocksCheckpoint::RocksCheckpoint(const DiskPath & ckpt_path)
 {
-    auto rb = ckpt_path.disk->readFile(fs::path(ckpt_path.path) / "VERSION");
+    auto rb = ckpt_path.disk->readFile(fs::path(ckpt_path.path) / "VERSION", ReadSettings{});
     readVarUInt(version, *rb);
     data.emplace<MaterializedEntity>(ckpt_path);
 }
@@ -225,7 +226,7 @@ void RocksCheckpoint::serializeEntity(WriteBuffer & wb, bool compress)
 
             writeVarUInt(file_size, *out);
 
-            auto file_buf = materialized_path->disk->readFile(path);
+            auto file_buf = materialized_path->disk->readFile(path, ReadSettings{});
             copyData(*file_buf, *out);
 
             ++serialized_files_count;
@@ -366,7 +367,7 @@ size_t RocksCheckpoint::deserializeEntity(SerializedEntity & serialized_entity, 
                         CurrentThread::attachToGroupIfDetached(thread_group);
 
                     setThreadName("CkptCopier");
-                    from.disk->copyFile(from.path, *to.disk, to.path);
+                    from.disk->copyFile(from.path, *to.disk, to.path, ReadSettings{});
                     copied_files_count.fetch_add(1, std::memory_order_relaxed);
                     copied_files_bytes.fetch_add(from.disk->getFileSize(from.path), std::memory_order_relaxed);
                 });
@@ -473,7 +474,7 @@ size_t RocksCheckpoint::copyRocks(const DiskPath & from, const DiskPath & to) co
             });
 
             setThreadName("CkptCopier");
-            from.disk->copyFile(file_path, *to.disk, to.path / file_path.filename());
+            from.disk->copyFile(file_path, *to.disk, to.path / file_path.filename(), ReadSettings{});
             copied_files_count.fetch_add(1, std::memory_order_relaxed);
             copied_files_bytes.fetch_add(from.disk->getFileSize(file_path), std::memory_order_relaxed);
         });

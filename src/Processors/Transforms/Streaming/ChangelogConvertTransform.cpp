@@ -9,6 +9,7 @@
 #include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
+#include <fmt/ranges.h>
 
 namespace DB
 {
@@ -25,8 +26,10 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     const DB::Block & output_header,
     std::vector<std::string> key_column_names,
     const std::string & version_column_name,
+    bool late_insert_overrides_,
     bool backfill_key_unique_)
     : IProcessor({input_header}, {output_header}, ProcessorID::ChangelogConvertTransformID)
+    , late_insert_overrides(late_insert_overrides_)
     , backfill_key_unique(backfill_key_unique_)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
     , source_chunks(cached_block_metrics)
@@ -320,7 +323,8 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
                 /// Check `version` column
                 /// If the current row has smaller version, just drop it on the floor (out of order / late row)
                 /// If they have same version, row arrives at later time is treated having higher version
-                if (current_version_column->compareAt(row, mapped->row_num, *prev_version_column, -1) >= 0)
+                auto compared = current_version_column->compareAt(row, mapped->row_num, *prev_version_column, -1);
+                if (compared > 0 || (late_insert_overrides && compared == 0))
                 {
                     /// SerializedKeyHolder was discard after insert failed
                     if constexpr (std::is_same_v<std::decay_t<decltype(key_holder)>, SerializedKeyHolder>)
@@ -457,7 +461,7 @@ void ChangelogConvertTransform::transformEmptyChunk()
 }
 
 
-void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
+void ChangelogConvertTransform::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     chassert(hasState());
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
@@ -478,7 +482,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
     });
 }
 
-void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
+void ChangelogConvertTransform::doRecover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         DeserializedIndicesToBlocks<LightChunk> deserialized_indices_to_blocks;

@@ -8,9 +8,11 @@
 #include <Cluster/NativeLog/NativeLog.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <base/getFileSystemSpace.h>
 #include <Common/assert_cast.h>
 #include <Common/formatReadable.h>
+#include <Common/scope_guard_safe.h>
 #include <Common/setThreadName.h>
 
 #include <base/sleep.h>
@@ -32,7 +34,8 @@ extern const int INVALID_DISK;
 }
 
 CheckpointCoordinator::CheckpointCoordinator(CheckpointConfig config_)
-    : config(std::move(config_)), logger(getLogger("CheckpointCoordinator"))
+    : config(std::move(config_))
+    , logger(getLogger("CheckpointCoordinator"))
 {
     local_ckpt_storage
         = assert_cast<const LocalFileSystemCheckpointStorage *>(&getCheckpointStorage(CheckpointReplicationType::LocalFileSystem));
@@ -160,7 +163,7 @@ void CheckpointCoordinator::registerQuery(
     if (ckpt_settings->interval == 0)
         ckpt_settings->interval = config.interval_sec;
 
-    auto ckpt_query = std::make_unique<CheckpointableQuery>(ckpt_storage, ckpt_settings, executor, recovered_ckpt_epoch, ckpt_ctx);
+    auto ckpt_query = std::make_shared<CheckpointableQuery>(ckpt_storage, ckpt_settings, executor, recovered_ckpt_epoch, ckpt_ctx);
     auto ack_node_descs = ckpt_query->checkpointAckNodeDescriptions();
     auto ckpt_interval = ckpt_query->checkpointInterval(config);
 
@@ -390,30 +393,34 @@ UInt64 CheckpointCoordinator::getStorageSize(CheckpointContextPtr ckpt_ctx) cons
     if (!ckpt_ctx)
         return 0;
 
-    /// Return cached storage size if exists and not expired (30 mins)
+    if (ckpt_ctx->storage.isLocal())
+        return ckpt_ctx->storage.getStorageSize(ckpt_ctx);
+
+    /// Hold the shared_ptr so cache state survives deregister/re-register churn.
+    CheckpointableQueryPtr query;
     {
         std::scoped_lock lock(mutex);
-        auto iter = queries.find(ckpt_ctx->qid);
-        if (iter == queries.end())
-            return 0;
-
-        if (DB::MonotonicSeconds::now() - iter->second->last_cached_ts <= 30 * 60) /// 30 mins
-            return iter->second->cached_storage_size;
+        if (auto iter = queries.find(ckpt_ctx->qid); iter != queries.end())
+            query = iter->second;
     }
 
-    auto storage_size = ckpt_ctx->storage.getStorageSize(ckpt_ctx);
+    if (!query)
+        return 0;
 
-    /// Update cached storage size
+    UInt64 cached;
+    Int64 last_ts;
     {
-        std::scoped_lock lock(mutex);
-        auto iter = queries.find(ckpt_ctx->qid);
-        if (iter != queries.end())
-        {
-            iter->second->cached_storage_size = storage_size;
-            iter->second->last_cached_ts = DB::MonotonicSeconds::now();
-        }
+        std::scoped_lock cache_lock(query->metrics_cache_mutex);
+        cached = query->cached_storage_size;
+        last_ts = query->last_cached_ts;
     }
-    return storage_size;
+
+    /// Cold cache (last_ts == 0): on fresh boot, `now - 0 > ttl` may not fire.
+    if ((last_ts == 0 || DB::MonotonicSeconds::now() - last_ts > Globals::getGlobalContext().getMetricsCacheTTLSeconds())
+        && !query->size_refresh_scheduled.test_and_set())
+        fetchAndCacheStorageSizeAsync(query, last_ts);
+
+    return cached;
 }
 
 PathSizes CheckpointCoordinator::getStorageStat(CheckpointContextPtr ckpt_ctx) const
@@ -421,7 +428,102 @@ PathSizes CheckpointCoordinator::getStorageStat(CheckpointContextPtr ckpt_ctx) c
     if (!ckpt_ctx)
         return {};
 
-    return ckpt_ctx->storage.getStorageStat(ckpt_ctx);
+    if (ckpt_ctx->storage.isLocal())
+        return ckpt_ctx->storage.getStorageStat(ckpt_ctx);
+
+    CheckpointableQueryPtr query;
+    {
+        std::scoped_lock lock(mutex);
+        if (auto iter = queries.find(ckpt_ctx->qid); iter != queries.end())
+            query = iter->second;
+    }
+
+    if (!query)
+        return {};
+
+    PathSizes cached;
+    Int64 last_ts;
+    {
+        std::scoped_lock cache_lock(query->metrics_cache_mutex);
+        cached = query->cached_storage_stat;
+        last_ts = query->last_stat_cached_ts;
+    }
+
+    if ((last_ts == 0 || DB::MonotonicSeconds::now() - last_ts > Globals::getGlobalContext().getMetricsCacheTTLSeconds())
+        && !query->stat_refresh_scheduled.test_and_set())
+        fetchAndCacheStorageStatAsync(query, last_ts);
+
+    return cached;
+}
+
+void CheckpointCoordinator::fetchAndCacheStorageSizeAsync(CheckpointableQueryPtr query, Int64 ts_expected) const
+{
+    /// Use the coordinator's pool: shutdown's pool->wait() drains the in-flight refresh before
+    /// ckpt_storages dies.
+    auto scheduled = pool->trySchedule([query, ts_expected, log = logger] {
+        SCOPE_EXIT_SAFE({ query->size_refresh_scheduled.clear(); });
+        setThreadName("CkptSizeRefresh");
+
+        try
+        {
+            /// Skip if a competing refresh already advanced last_cached_ts.
+            {
+                std::scoped_lock cache_lock(query->metrics_cache_mutex);
+                if (query->last_cached_ts != ts_expected)
+                    return;
+            }
+
+            auto storage_size = query->ctx->storage.getStorageSize(query->ctx);
+
+            std::scoped_lock cache_lock(query->metrics_cache_mutex);
+            if (query->last_cached_ts == ts_expected)
+            {
+                query->cached_storage_size = storage_size;
+                query->last_cached_ts = DB::MonotonicSeconds::now();
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to refresh checkpoint storage size");
+        }
+    });
+
+    /// Schedule failed: clear flag so a future tick retries.
+    if (!scheduled)
+        query->size_refresh_scheduled.clear();
+}
+
+void CheckpointCoordinator::fetchAndCacheStorageStatAsync(CheckpointableQueryPtr query, Int64 ts_expected) const
+{
+    auto scheduled = pool->trySchedule([query, ts_expected, log = logger] {
+        SCOPE_EXIT_SAFE({ query->stat_refresh_scheduled.clear(); });
+        setThreadName("CkptStatRefresh");
+
+        try
+        {
+            {
+                std::scoped_lock cache_lock(query->metrics_cache_mutex);
+                if (query->last_stat_cached_ts != ts_expected)
+                    return;
+            }
+
+            auto storage_stat = query->ctx->storage.getStorageStat(query->ctx);
+
+            std::scoped_lock cache_lock(query->metrics_cache_mutex);
+            if (query->last_stat_cached_ts == ts_expected)
+            {
+                query->cached_storage_stat = std::move(storage_stat);
+                query->last_stat_cached_ts = DB::MonotonicSeconds::now();
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Failed to refresh checkpoint storage stat");
+        }
+    });
+
+    if (!scheduled)
+        query->stat_refresh_scheduled.clear();
 }
 
 CheckpointRequestMetricsPtr CheckpointCoordinator::getCheckpointRequestMetrics(CheckpointContextPtr ckpt_ctx) const

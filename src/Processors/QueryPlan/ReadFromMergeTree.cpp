@@ -49,6 +49,7 @@
 #include <queue>
 #include <stdexcept>
 #include <unordered_map>
+#include <fmt/ranges.h>
 
 using namespace DB;
 
@@ -276,7 +277,7 @@ ReadFromMergeTree::ReadFromMergeTree(
 
     /// Add explicit description.
     setStepDescription(data.getStorageID().getFullNameNotQuoted());
-    enable_vertical_final = query_info.isFinal() && context->getSettingsRef().enable_vertical_final && data.merging_params.mode == MergeTreeData::MergingParams::VersionedKV;
+    enable_vertical_final = query_info.isFinal() && context->getSettingsRef().enable_vertical_final && data.merging_params.mode == MergeTreeData::MergingParams::Replacing;
 
     updateSortDescriptionForOutputStream(
         *output_stream,
@@ -983,11 +984,11 @@ static void addMergingFinal(
                 return std::make_shared<AggregatingSortedTransform>(header, num_outputs,
                             sort_description, max_block_size_rows, /*max_block_size_bytes=*/0);
 
-            case MergeTreeData::MergingParams::VersionedKV:
+            case MergeTreeData::MergingParams::Replacing:
                 return std::make_shared<ReplacingSortedTransform>(header, num_outputs,
                             sort_description, merging_params.version_column, max_block_size_rows, /*max_block_size_bytes=*/0, /*out_row_sources_buf_*/ nullptr, /*use_average_block_sizes*/ false, /*cleanup=!merging_params.is_deleted_column.empty()*/false, enable_vertical_final);
 
-            case MergeTreeData::MergingParams::ChangelogKV:
+            case MergeTreeData::MergingParams::VersionedCollapsing:
                 return std::make_shared<VersionedCollapsingTransform>(header, num_outputs,
                             sort_description, merging_params.sign_column, merging_params.version_column, max_block_size_rows, /*max_block_size_bytes=*/0, /*out_row_sources_buf_*/ nullptr, /*use_average_block_sizes*/ false);
 
@@ -1679,7 +1680,7 @@ bool ReadFromMergeTree::requestOutputEachPartitionThroughSeparatePort()
             "max_number_of_partitions_for_independent_aggregation (current value is {}) or set "
             "force_aggregate_partitions_independently to suppress this check",
             partitions_cnt,
-            settings.max_number_of_partitions_for_independent_aggregation);
+            settings.max_number_of_partitions_for_independent_aggregation.value);
         return false;
     }
 

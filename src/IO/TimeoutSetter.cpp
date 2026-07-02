@@ -44,7 +44,13 @@ TimeoutSetter::~TimeoutSetter()
 
 void TimeoutSetter::reset()
 {
-    bool connected = socket.impl()->initialized();
+    /// Poco sockets can be moved-from (impl() becomes null). Also, when the socket is already
+    /// disconnected, there is no need to restore timeouts.
+    auto * impl = socket.impl();
+    if (!impl)
+        return;
+
+    bool connected = impl->initialized();
     if (!connected)
         return;
 

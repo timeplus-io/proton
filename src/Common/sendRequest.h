@@ -3,6 +3,7 @@
 #include <base/types.h>
 
 #include <IO/ConnectionTimeouts.h>
+#include <Common/HTTPConnectionPool.h>
 
 #include <Poco/URI.h>
 
@@ -18,6 +19,7 @@ namespace DB
 /// Return response and http status code. Note it returns `-1` as
 /// a speicial HTTP code which indicates if it is not a retriable failure
 std::pair<String, Int32> sendRequest(
+    HTTPConnectionGroupType group,
     const Poco::URI & uri,
     const String & method,
     const String & query_id,

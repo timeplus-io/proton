@@ -16,7 +16,7 @@
 #include <Storages/ExternalStream/Python/StoragePythonTable.h>
 #include <Storages/SeekToInfo.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Storages/Stream/storageUtil.h>
+#include <Storages/storageUtil.h>
 
 namespace DB
 {

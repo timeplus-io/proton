@@ -1,7 +1,8 @@
 #pragma once
 #include <IO/WriteBuffer.h>
 #include <IO/BufferWithOwnMemory.h>
-#include <stack>
+
+#include <cassert>
 
 namespace DB
 {

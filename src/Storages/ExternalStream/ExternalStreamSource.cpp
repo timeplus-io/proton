@@ -12,7 +12,7 @@ ExternalStreamSource::ExternalStreamSource(
     , storage_snapshot(std::move(storage_snapshot_))
     , header_chunk(Chunk(header_.getColumns(), 0))
     , max_block_size(max_block_size_)
-    , read_buffer("", 0)
+    , parse_in_batch(query_context_->getSettingsRef().parse_messages_in_batch)
     , query_context(query_context_)
 {
 }
@@ -21,8 +21,7 @@ void ExternalStreamSource::getPhysicalHeader()
 {
     auto non_virtual_header = storage_snapshot->metadata->getSampleBlockNonMaterialized();
 
-    auto is_reserved_virtual = [&](const String & name) -> bool
-    {
+    auto is_reserved_virtual = [&](const String & name) -> bool {
         /// Reserved columns are populated from transport metadata, not payload.
         return name == ProtonConsts::RESERVED_EVENT_TIME || name == ProtonConsts::RESERVED_MESSAGE_KEY
             || name == ProtonConsts::RESERVED_MESSAGE_HEADERS;
@@ -47,17 +46,16 @@ void ExternalStreamSource::getPhysicalHeader()
     }
 }
 
-void ExternalStreamSource::initInputFormatExecutor(const String & data_format, const FormatSettings & format_settings)
+std::pair<std::shared_ptr<StreamingFormatExecutor>, std::shared_ptr<StreamingFormatExecutor>>
+ExternalStreamSource::getInputFormatExecutor(const String & data_format, const FormatSettings & format_settings)
 {
-    getPhysicalHeader();
-
     auto new_context = Context::createCopy(query_context);
     /// StreamingFormatExecutor cannot work with parallel parsing.
     new_context->setSetting("input_format_parallel_parsing", false);
 
     /// The buffer is only for initializing the input format, it won't be actually used, because the executor will keep setting new buffers.
     auto input_format
-        = FormatFactory::instance().getInput(data_format, read_buffer, physical_header, new_context, max_block_size, format_settings);
+        = FormatFactory::instance().getInput(data_format, empty_read_buffer, physical_header, new_context, max_block_size, format_settings);
 
     /// Formats of `RowInputFormatWithNamesAndTypes` (e.g. CSV, TSV, etc.) get the column list from either:
     /// 1) the first line of the data (i.e. the header), or
@@ -94,8 +92,36 @@ void ExternalStreamSource::initInputFormatExecutor(const String & data_format, c
         }
     }
 
-    format_executor = std::make_unique<StreamingFormatExecutor>(
+    auto format_executor = std::make_shared<StreamingFormatExecutor>(
         physical_header, std::move(input_format), [](const MutableColumns &, Exception & ex) -> size_t { throw std::move(ex); });
+
+    std::shared_ptr<StreamingFormatExecutor> format_batch_executor;
+
+    if (parse_in_batch)
+    {
+        if (data_format == "ProtobufSingle")
+        {
+            if (format_settings.kafka_schema_registry.url.empty())
+            {
+                /// When batch parsing is enabled for `ProtobufSingle` format, we need emulate `Protobuf` format
+                /// by concatenating `ProtobufSingle` records with varuint length delimiter since `ProtobufSingle`
+                /// itself doesn't support batch parsing. So here switch to `Protobuf` format executor.
+                auto protobuf_input_format = FormatFactory::instance().getInput(
+                    "Protobuf", empty_read_buffer, physical_header, new_context, max_block_size, format_settings);
+                format_batch_executor = std::make_shared<StreamingFormatExecutor>(
+                    physical_header, std::move(protobuf_input_format), [](const MutableColumns &, Exception & ex) -> size_t {
+                        throw std::move(ex);
+                    });
+            }
+        }
+        else if (data_format == "JSONEachRow")
+        {
+            /// For JSONEachRow, batch executor is the same as regular executor
+            format_batch_executor = format_executor;
+        }
+    }
+
+    return {std::move(format_executor), std::move(format_batch_executor)};
 }
 
 }

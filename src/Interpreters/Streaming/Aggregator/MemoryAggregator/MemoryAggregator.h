@@ -143,35 +143,29 @@ private:
         size_t row_begin,
         size_t row_end,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena) const;
+        const ArenaPtr & pool) const;
 
     template <typename Method>
     Block executeAndFinalizePerRowImpl(
         Method & method,
+        MemoryAggregatedDataVariants & result,
         size_t row_begin,
         size_t row_end,
         ColumnRawPtrs & key_columns,
-        AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena,
-        Arenas & aggregates_pools) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
     Block executeAndFinalizeWithoutKeyPerRowImpl(
         AggregateDataPtr aggregate_data,
         size_t row_begin,
         size_t row_end,
         AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena,
-        Arenas & aggregates_pools) const;
+        const ArenaPtr & pool) const;
 
-    Block
-    prepareBlockAndFillWithoutKey(MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const;
-    Block prepareBlockAndFillWithoutKeyNormal(
-        MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const;
+    Block prepareBlockAndFillWithoutKey(MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const;
+    Block prepareBlockAndFillWithoutKeyNormal(MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const;
     template <typename TrackingUpdatesStruct>
-    Block prepareBlockAndFillWithoutKeyForUpdates(
-        MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const;
-    Block prepareBlockAndFillWithoutKeyForRetract(
-        MemoryAggregatedDataVariants & data_variants, bool final_, AggregatingConvertParams & cparams) const;
+    Block prepareBlockAndFillWithoutKeyForUpdates(MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const;
+    Block prepareBlockAndFillWithoutKeyForRetract(MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const;
 
     /// If \param always_merge_into_empty is true, always add an empty variants at front even if there is only one
     ManyMemoryAggregatedDataVariantsPtr
@@ -180,24 +174,11 @@ private:
     /// \return: merged data, when there is no data, return nullptr
     IAggregatedDataVariantsPtr mergeGroups(ManyIAggregatedDataVariants & many_data_variants, AggregatingConvertParams & cparams) const;
 
-    BlocksList
-    doConvertToBlocks(IAggregatedDataVariants & variants, bool final_, size_t max_threads, AggregatingConvertParams & cparams) const;
+    BlocksList doConvertToBlocks(IAggregatedDataVariants & variants, size_t max_threads, AggregatingConvertParams & cparams) const;
 
-    /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
-      * This is needed to simplify merging of that data with other results, that are already two-level.
-      */
-    std::vector<Block> convertBlockToTwoLevel(const Block & block) const;
-
-    BlocksList mergeAndConvertTwoLevelToBlocks(ManyMemoryAggregatedDataVariantsPtr prepared_data_ptr, bool final, size_t max_threads) const;
+    BlocksList mergeAndConvertTwoLevelToBlocks(ManyMemoryAggregatedDataVariantsPtr prepared_data_ptr, size_t max_threads) const;
 
     void initStatesForWithoutKey(MemoryAggregatedDataVariants & data_variants) const;
-
-    /// For external aggregation.
-    void writeToTemporaryFile(MemoryAggregatedDataVariants & data_variants, size_t max_temp_file_size = 0) const;
-
-    bool hasTemporaryData() const { return tmp_data && !tmp_data->empty(); }
-
-    const TemporaryDataOnDisk & getTemporaryData() const { return *tmp_data; }
 
     /// Select the aggregation method based on the number and types of keys.
     MemoryAggregatedDataVariants::Type chooseAggregationMethod();
@@ -249,48 +230,26 @@ private:
     using ConvertToBlockRes = std::conditional_t<return_single_block, Block, BlocksList>;
 
     template <bool return_single_block, typename Method, typename Table>
-    ConvertToBlockRes<return_single_block> convertToBlockImpl(
-        Method & method,
-        Table & data,
-        Arena * arena,
-        Arenas & aggregates_pools,
-        bool final,
-        size_t rows,
-        AggregatingConvertParams & cparams) const;
+    ConvertToBlockRes<return_single_block>
+    convertToBlockImpl(Method & method, Table & data, const ArenaPtr & pool, size_t rows, AggregatingConvertParams & cparams) const;
 
     template <typename Method, typename Table, typename ConvertCallback>
     void convertState(Table & data, AggregatingConvertParams & cparams, ConvertCallback && callback) const;
 
     template <bool return_single_block, typename Method, typename Table>
     ConvertToBlockRes<return_single_block> convertToBlockImplFinal(
-        Method & method,
-        Table & data,
-        Arena * arena,
-        Arenas & aggregates_pools,
-        size_t rows,
-        AggregatingConvertParams & cparams,
-        bool use_compiled_functions) const;
-
-    template <bool return_single_block, typename Method, typename Table>
-    ConvertToBlockRes<return_single_block>
-    convertToBlockImplNotFinal(Method & method, Table & data, Arenas & aggregates_pools, size_t rows) const;
+        Method & method, Table & data, const ArenaPtr & pool, size_t rows, AggregatingConvertParams & cparams, bool use_compiled_functions)
+        const;
 
     template <typename Method>
-    Block convertOneBucketToBlockImpl(
-        MemoryAggregatedDataVariants & data_variants,
-        Method & method,
-        Arena * arena,
-        bool final_,
-        Int64 bucket,
-        AggregatingConvertParams & cparams) const;
+    Block convertOneBucketToBlockImpl(Method & method, const ArenaPtr & pool, Int64 bucket, AggregatingConvertParams & cparams) const;
 
-    auto getZeroOutWindowKeysFunc(Arena * arena) const;
+    auto getZeroOutWindowKeysFunc(const ArenaPtr & pool) const;
 
     template <typename Method>
-    BlocksList
-    mergeAndConvertTwoLevelToBlocksImpl(ManyMemoryAggregatedDataVariants & non_empty_data, bool final, ThreadPool * thread_pool) const;
+    BlocksList mergeAndConvertTwoLevelToBlocksImpl(ManyMemoryAggregatedDataVariants & non_empty_data, ThreadPool * thread_pool) const;
 
-    void destroyAggregateStates(AggregateDataPtr & place) const;
+    void destroyAggregateStates(AggregateDataPtr & place, bool skip_state_func = false) const;
 
     void serializeAggregateStates(const AggregateDataPtr & place, WriteBuffer & wb) const;
     /// \param old_aggregates_size is used for deserialization of old aggregate states
@@ -312,7 +271,7 @@ private:
     template <bool is_two_level, typename Method, typename Table, typename KeyHandler = EmptyKeyHandler>
     void mergeUpdatesDataImpl(
         std::vector<Table *> & tables,
-        Arena * arena,
+        const ArenaPtr & pool,
         bool use_compiled_functions,
         bool reset_updated,
         AggregatingConvertParams & cparams,
@@ -325,27 +284,18 @@ private:
 
     void mergeRetractGroups(ManyMemoryAggregatedDataVariants & non_empty_data, AggregatingConvertParams & cparams) const;
 
-    BlocksList
-    prepareBlockAndFillSingleLevel(MemoryAggregatedDataVariants & data_variants, bool final, AggregatingConvertParams & cparams) const;
+    BlocksList prepareBlockAndFillSingleLevel(MemoryAggregatedDataVariants & data_variants, AggregatingConvertParams & cparams) const;
 
     BlocksList prepareBlocksAndFillTwoLevel(
-        MemoryAggregatedDataVariants & data_variants, bool final, size_t max_threads, AggregatingConvertParams & cparams) const;
+        MemoryAggregatedDataVariants & data_variants, size_t max_threads, AggregatingConvertParams & cparams) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
-        MemoryAggregatedDataVariants & data_variants,
-        Method & method,
-        bool final,
-        ThreadPool * thread_pool,
-        AggregatingConvertParams & cparams) const;
+        MemoryAggregatedDataVariants & data_variants, Method & method, ThreadPool * thread_pool, AggregatingConvertParams & cparams) const;
 
     template <typename Method>
-    void
-    mergeBucketImpl(ManyMemoryAggregatedDataVariants & data, Int64 bucket, Arena * arena, std::atomic<bool> * is_cancelled = nullptr) const;
-
-    template <typename Method>
-    void convertBlockToTwoLevelImpl(
-        Method & method, Arena * pool, ColumnRawPtrs & key_columns, const Block & source, std::vector<Block> & destinations) const;
+    void mergeBucketImpl(
+        ManyMemoryAggregatedDataVariants & data, Int64 bucket, const ArenaPtr & pool, std::atomic<bool> * is_cancelled = nullptr) const;
 
     template <typename Method, typename Table>
     void destroyImpl(Table & table) const;
@@ -358,12 +308,6 @@ private:
       * - returns false, which means that execution must be aborted;
       */
     bool checkLimits(size_t result_size) const;
-
-    void addSingleKeyToAggregateColumns(const MemoryAggregatedDataVariants & data_variants, MutableColumns & aggregate_columns) const;
-
-    void addArenasToAggregateColumns(const MemoryAggregatedDataVariants & data_variants, MutableColumns & aggregate_columns) const;
-
-    void setupAggregatesPoolTimestamps(size_t row_begin, size_t row_end, const ColumnRawPtrs & key_columns, Arena * aggregates_pool) const;
 
     void initDataVariants(MemoryAggregatedDataVariants & result) const;
 
@@ -393,8 +337,9 @@ private:
 
     template <typename Method, typename Table, typename KeyHandler = EmptyKeyHandler>
     void mergeDataImpl(
-        Table & table_dst, Table & table_src, Arena * arena, bool use_compiled_functions, KeyHandler && key_handler = nullptr) const
+        Table & table_dst, Table & table_src, const ArenaPtr & pool, bool use_compiled_functions, KeyHandler && key_handler = nullptr) const
     {
+        Arena * arena = pool.get();
         if constexpr (Method::low_cardinality_optimization)
             mergeDataNullKey<Method, Table>(table_dst, table_src, arena);
 
@@ -470,8 +415,7 @@ private:
 
     HashMethodContextPtr aggregation_state_cache;
 
-    /// For external aggregation.
-    TemporaryDataOnDiskPtr tmp_data;
+    bool has_state_functions = false;
 };
 
 }

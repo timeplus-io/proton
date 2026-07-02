@@ -4,14 +4,14 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <IO/ISchedulerNode.h>
-#include <IO/IResourceManager.h>
-#include <IO/Resource/FairPolicy.h>
-#include <IO/Resource/PriorityPolicy.h>
-#include <IO/Resource/SemaphoreConstraint.h>
-#include <IO/Resource/FifoQueue.h>
+#include <Common/Scheduler/ISchedulerNode.h>
+#include <Common/Scheduler/IResourceManager.h>
+#include <Common/Scheduler/Nodes/FairPolicy.h>
+#include <Common/Scheduler/Nodes/PriorityPolicy.h>
+#include <Common/Scheduler/Nodes/SemaphoreConstraint.h>
+#include <Common/Scheduler/Nodes/FifoQueue.h>
 #include <Interpreters/Context.h>
-#include "IO/ResourceRequest.h"
+#include <Common/Scheduler/ResourceRequest.h>
 
 
 namespace DB
@@ -28,7 +28,9 @@ NamesAndTypesList StorageSystemScheduler::getNamesAndTypes()
         {"is_active", std::make_shared<DataTypeUInt8>()},
         {"active_children", std::make_shared<DataTypeUInt64>()},
         {"dequeued_requests", std::make_shared<DataTypeUInt64>()},
+        {"canceled_requests", std::make_shared<DataTypeUInt64>()},
         {"dequeued_cost", std::make_shared<DataTypeInt64>()},
+        {"canceled_cost", std::make_shared<DataTypeInt64>()},
         {"busy_periods", std::make_shared<DataTypeUInt64>()},
         {"vruntime", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFloat64>())},
         {"system_vruntime", std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFloat64>())},
@@ -58,7 +60,9 @@ void StorageSystemScheduler::fillData(MutableColumns & res_columns, ContextPtr c
                                                    res_columns[i++]->insert(node->isActive());
                                                    res_columns[i++]->insert(node->activeChildren());
                                                    res_columns[i++]->insert(node->dequeued_requests.load());
+                                                   res_columns[i++]->insert(node->canceled_requests.load());
                                                    res_columns[i++]->insert(node->dequeued_cost.load());
+                                                   res_columns[i++]->insert(node->canceled_cost.load());
                                                    res_columns[i++]->insert(node->busy_periods.load());
 
                                                    Field vruntime;

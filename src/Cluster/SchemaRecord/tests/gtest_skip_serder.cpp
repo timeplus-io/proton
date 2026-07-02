@@ -663,7 +663,7 @@ TEST(RecordSerde, Skip)
 
     /// Serialize everything
     cluster::ByteVector data{static_cast<size_t>((block.bytes() + 2) * 1.5)};
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<cluster::ByteVector> wb{data};
     /// write all columns
     std::vector<uint16_t> column_position_all(block.columns());
     for (size_t i = 0; i < block.columns(); ++i)
@@ -699,10 +699,10 @@ TEST(RecordSerde, Skip)
         schema_ctx.column_positions_requested = {static_cast<uint16_t>(pos)};
         schema_ctx.schema_version_requested = schema_version;
 
-        cluster::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
+        cluster::SchemaNativeReader reader{schema_version, schema_ctx};
 
         DB::Block new_block;
-        reader.read(new_block);
+        reader.read(new_block, rb, true);
         checkBlock(block, new_block, schema_ctx.column_positions_requested);
     }
 
@@ -727,13 +727,13 @@ TEST(RecordSerde, Skip)
         schema_ctx.column_positions_requested = column_positions;
         schema_ctx.schema_version_requested = schema_version;
 
-        cluster::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
+        cluster::SchemaNativeReader reader{schema_version, schema_ctx};
 
         /// Skip current pos
         if (!column_positions.positions.empty())
         {
             DB::Block new_block;
-            reader.read(new_block);
+            reader.read(new_block, rb, true);
             checkBlock(block, new_block, column_positions);
         }
     }
@@ -746,7 +746,7 @@ TEST(RecordSerde, SkipPartialJsonSubcolumns)
 
     /// Serialize everything
     cluster::ByteVector data{static_cast<size_t>((block.bytes() + 2) * 1.5)};
-    DB::WriteBufferFromVector wb{data};
+    DB::WriteBufferFromVector<cluster::ByteVector> wb{data};
     /// write all columns
     std::vector<uint16_t> column_position_all(block.columns());
     for (size_t i = 0; i < block.columns(); ++i)
@@ -781,10 +781,10 @@ TEST(RecordSerde, SkipPartialJsonSubcolumns)
         schema_ctx.column_positions_requested.subcolumns = {{0, {"data"}}};
         schema_ctx.schema_version_requested = schema_version;
 
-        cluster::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
+        cluster::SchemaNativeReader reader{schema_version, schema_ctx};
 
         DB::Block new_block;
-        reader.read(new_block);
+        reader.read(new_block, rb, true);
         checkBlock(block, new_block, schema_ctx.column_positions_requested);
     }
 
@@ -801,10 +801,10 @@ TEST(RecordSerde, SkipPartialJsonSubcolumns)
         schema_ctx.column_positions_requested.subcolumns = {{0, {"data", "obj.data", "obj.array", "array", "id"}}};
         schema_ctx.schema_version_requested = schema_version;
 
-        cluster::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
+        cluster::SchemaNativeReader reader{schema_version, schema_ctx};
 
         DB::Block new_block;
-        reader.read(new_block);
+        reader.read(new_block, rb, true);
         checkBlock(block, new_block, schema_ctx.column_positions_requested);
     }
 
@@ -821,10 +821,10 @@ TEST(RecordSerde, SkipPartialJsonSubcolumns)
         schema_ctx.schema_version_requested = schema_version;
 
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        cluster::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
+        cluster::SchemaNativeReader reader{schema_version, schema_ctx};
 
         DB::Block new_block;
-        reader.read(new_block);
+        reader.read(new_block, rb, true);
         checkBlock(block, new_block, schema_ctx.column_positions_requested);
     }
 
@@ -842,10 +842,10 @@ TEST(RecordSerde, SkipPartialJsonSubcolumns)
         schema_ctx.schema_version_requested = schema_version;
 
         DB::ReadBufferFromMemory rb{data.data(), data.size()};
-        cluster::SchemaNativeReader reader{rb, true, schema_version, schema_ctx};
+        cluster::SchemaNativeReader reader{schema_version, schema_ctx};
 
         DB::Block new_block;
-        reader.read(new_block);
+        reader.read(new_block, rb, true);
         checkBlock(block, new_block, schema_ctx.column_positions_requested);
     }
 }

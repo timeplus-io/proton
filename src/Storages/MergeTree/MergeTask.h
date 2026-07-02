@@ -10,10 +10,12 @@
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 #include <Processors/Transforms/ColumnGathererTransform.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
+#include <QueryPipeline/Pipe.h>
 #include <QueryPipeline/QueryPipeline.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Common/filesystemHelpers.h>
 
+#include <deque>
 #include <memory>
 #include <list>
 
@@ -83,6 +85,12 @@ public:
             global_ctx->deduplicate_by_columns = std::move(deduplicate_by_columns_);
             global_ctx->parent_part = std::move(parent_part_);
             global_ctx->data = std::move(data_);
+            /// Capture settings once at construction so per-stage / per-column callbacks
+            /// don't race with storage teardown later. Matches upstream ClickHouse:
+            /// global_ctx->data_settings is the single point of truth for settings during
+            /// this merge (see GlobalRuntimeContext::data_settings below and 40+ usages
+            /// in upstream MergeTask.cpp).
+            global_ctx->data_settings = global_ctx->data->getSettings();
             global_ctx->mutator = std::move(mutator_);
             global_ctx->merges_blocker = std::move(merges_blocker_);
             global_ctx->ttl_merges_blocker = std::move(ttl_merges_blocker_);
@@ -104,6 +112,8 @@ public:
 
     bool execute();
 
+    void cancel() noexcept;
+
 private:
     struct IStage;
     using StagePtr = std::shared_ptr<IStage>;
@@ -116,6 +126,7 @@ private:
         virtual void setRuntimeContext(StageRuntimeContextPtr local, StageRuntimeContextPtr global) = 0;
         virtual StageRuntimeContextPtr getContextForNextStage() = 0;
         virtual bool execute() = 0;
+        virtual void cancel() noexcept = 0;
         virtual ~IStage() = default;
     };
 
@@ -129,6 +140,11 @@ private:
         std::unique_ptr<MergeListElement> projection_merge_list_element;
         MergeListElement * merge_list_element_ptr{nullptr};
         MergeTreeData * data{nullptr};
+        /// Captured at MergeTask construction (see ctor body). Stable for the merge's lifetime;
+        /// per-stage callbacks should read this instead of calling data->getSettings() — the
+        /// latter races with storage teardown and crashes in pthread_mutex_lock at offset 0x50
+        /// of a freed MergeTreeData on shutdown. Matches upstream ClickHouse pattern.
+        MergeTreeSettingsPtr data_settings;
         MergeTreeDataMergerMutator * mutator{nullptr};
         ActionBlocker * merges_blocker{nullptr};
         ActionBlocker * ttl_merges_blocker{nullptr};
@@ -220,10 +236,10 @@ private:
 
     using ExecuteAndFinalizeHorizontalPartRuntimeContextPtr = std::shared_ptr<ExecuteAndFinalizeHorizontalPartRuntimeContext>;
 
-
     struct ExecuteAndFinalizeHorizontalPart : public IStage
     {
         bool execute() override;
+        void cancel() noexcept override;
 
         bool prepare();
         bool executeImpl();
@@ -259,9 +275,13 @@ private:
     struct VerticalMergeRuntimeContext : public IStageRuntimeContext //-V730
     {
         /// Begin dependencies from previous stage
-        std::unique_ptr<WriteBuffer> rows_sources_write_buf{nullptr};
-        std::unique_ptr<WriteBufferFromFileBase> rows_sources_uncompressed_write_buf{nullptr};
+        /// Order matters — members destruct in reverse declaration order. The compressed
+        /// `rows_sources_write_buf` flushes into `rows_sources_uncompressed_write_buf` on
+        /// destruction, which writes into `rows_sources_file`. So the file must outlive the
+        /// uncompressed buf, which must outlive the compressed wrapper. (upstream PR #46205)
         std::unique_ptr<PocoTemporaryFile> rows_sources_file;
+        std::unique_ptr<WriteBufferFromFileBase> rows_sources_uncompressed_write_buf{nullptr};
+        std::unique_ptr<WriteBuffer> rows_sources_write_buf{nullptr};
         std::optional<ColumnSizeEstimator> column_sizes;
         CompressionCodecPtr compression_codec;
         DiskPtr tmp_disk{nullptr};
@@ -281,7 +301,14 @@ private:
 
         Float64 progress_before = 0;
         std::unique_ptr<MergedColumnOnlyOutputStream> column_to{nullptr};
-        std::vector<std::unique_ptr<MergedColumnOnlyOutputStream>> delayed_streams;
+        std::optional<Pipe> prepared_pipe;
+        bool use_prefetch{false};
+        /// Bounded by `max_delayed_streams`; the oldest stream is finished and popped when the
+        /// deque exceeds the cap so memory held by in-flight `MergedColumnOnlyOutputStream`s does
+        /// not scale with column count (significant for object-storage backed parts where each
+        /// stream owns a multi-MiB upload buffer). Mirrors upstream MergeTask.cpp behavior.
+        std::deque<std::unique_ptr<MergedColumnOnlyOutputStream>> delayed_streams;
+        size_t max_delayed_streams{0};
         size_t column_elems_written{0};
         QueryPipeline column_parts_pipeline;
         std::unique_ptr<PullingPipelineExecutor> executor;
@@ -290,10 +317,11 @@ private:
 
     using VerticalMergeRuntimeContextPtr = std::shared_ptr<VerticalMergeRuntimeContext>;
 
-
     struct VerticalMergeStage : public IStage
     {
         bool execute() override;
+        void cancel() noexcept override;
+
         void setRuntimeContext(StageRuntimeContextPtr local, StageRuntimeContextPtr global) override
         {
             ctx = static_pointer_cast<VerticalMergeRuntimeContext>(local);
@@ -320,6 +348,8 @@ private:
         bool executeVerticalMergeForOneColumn() const;
         void finalizeVerticalMergeForOneColumn() const;
 
+        Pipe createPipeForReadingOneColumn(const String & column_name) const;
+
         VerticalMergeRuntimeContextPtr ctx;
         GlobalRuntimeContextPtr global_ctx;
     };
@@ -344,6 +374,9 @@ private:
     struct MergeProjectionsStage : public IStage
     {
         bool execute() override;
+
+        void cancel() noexcept override;
+
         void setRuntimeContext(StageRuntimeContextPtr local, StageRuntimeContextPtr global) override
         {
             ctx = static_pointer_cast<MergeProjectionsRuntimeContext>(local);

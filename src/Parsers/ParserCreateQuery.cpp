@@ -492,6 +492,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     /// proton: starts
     ParserKeyword s_external("EXTERNAL");
     ParserKeyword s_stream("STREAM");
+    ParserKeyword s_input("INPUT");
     ParserKeyword s_random("RANDOM");
     ParserKeyword s_null("NULL");
     /// proton: ends
@@ -533,6 +534,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     /// proton: starts
     ASTCreateQuery::Type type = ASTCreateQuery::Type::Stream;
+    bool is_input = false;
     /// proton: ends
 
     if (s_create.ignore(pos, expected))
@@ -565,7 +567,13 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         type = ASTCreateQuery::Type::NullStream;
     /// proton: ends
 
-    if (!s_stream.ignore(pos, expected))
+    if (type == ASTCreateQuery::Type::Stream && s_input.ignore(pos, expected))
+    {
+        type = ASTCreateQuery::Type::ExternalStream;
+        is_input = true;
+        s_stream.ignore(pos, expected);
+    }
+    else if (!s_stream.ignore(pos, expected))
         return false;
 
     if (!replace && !or_replace && s_if_not_exists.ignore(pos, expected))
@@ -718,6 +726,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     /// proton: starts
     query->type = type;
+    query->is_input = is_input;
     /// proton: ends
 
     query->database = table_id->getDatabase();

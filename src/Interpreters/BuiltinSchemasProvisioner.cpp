@@ -13,7 +13,6 @@
 #include <Parsers/parseQuery.h>
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>
-#include <Common/getResource.h>
 #include <Common/logger_useful.h>
 #include <Common/setThreadName.h>
 
@@ -23,7 +22,36 @@
 
 #include <filesystem>
 #include <memory>
+#include <string_view>
 #include <vector>
+#include <fmt/ranges.h>
+
+/// Embedded cluster-view DDL — shipped with the binary via C23 `#embed`.
+constexpr unsigned char resource_v_failed_mat_views_sql[] = {
+#embed "../Storages/System/Cluster/v_failed_mat_views.sql"
+};
+constexpr unsigned char resource_v_mat_view_lags_sql[] = {
+#embed "../Storages/System/Cluster/v_mat_view_lags.sql"
+};
+constexpr unsigned char resource_v_storages_sql[] = {
+#embed "../Storages/System/Cluster/v_storages.sql"
+};
+
+namespace
+{
+
+std::string_view getBuiltinSchemaResource(std::string_view name)
+{
+    if (name == "v_failed_mat_views.sql")
+        return {reinterpret_cast<const char *>(resource_v_failed_mat_views_sql), std::size(resource_v_failed_mat_views_sql)};
+    if (name == "v_mat_view_lags.sql")
+        return {reinterpret_cast<const char *>(resource_v_mat_view_lags_sql), std::size(resource_v_mat_view_lags_sql)};
+    if (name == "v_storages.sql")
+        return {reinterpret_cast<const char *>(resource_v_storages_sql), std::size(resource_v_storages_sql)};
+    return {};
+}
+
+}
 
 namespace DB
 {
@@ -275,7 +303,7 @@ void BuiltinSchemasProvisioner::loadFromResource()
     for (const auto & schema_name : schema_names_in_resource)
     {
         String resource_name = schema_name + ".sql";
-        auto query = getResource(resource_name);
+        auto query = getBuiltinSchemaResource(resource_name);
         if (query.empty())
         {
             LOG_WARNING(logger, "Builtin schema is not found in resource: name={}", schema_name);

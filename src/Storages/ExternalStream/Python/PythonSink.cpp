@@ -28,13 +28,13 @@ void PythonSink::onFinish()
     finishPython(/*ignore_exceptions=*/false);
 }
 
-void PythonSink::checkpoint(CheckpointContextPtr ckpt_ctx)
+void PythonSink::doCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     /// Periodically give the Python code a chance to flush data it has buffered so far.
     if (session)
         session->flush();
 
-    IProcessor::checkpoint(std::move(ckpt_ctx));
+    IProcessor::doCheckpoint(std::move(ckpt_ctx));
 }
 
 void PythonSink::consume(Chunk chunk)

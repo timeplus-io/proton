@@ -13,7 +13,9 @@ void registerAggregateFunctionAvg(AggregateFunctionFactory &);
 void registerAggregateFunctionAvgWeighted(AggregateFunctionFactory &);
 void registerAggregateFunctionCount(AggregateFunctionFactory &);
 void registerAggregateFunctionDeltaSum(AggregateFunctionFactory &);
+#if USE_AGGREGATES_EXTENDED
 void registerAggregateFunctionDeltaSumTimestamp(AggregateFunctionFactory &);
+#endif
 void registerAggregateFunctionGroupArray(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupArraySorted(AggregateFunctionFactory & factory);
 void registerAggregateFunctionGroupUniqArray(AggregateFunctionFactory &);
@@ -43,8 +45,10 @@ void registerAggregateFunctionsStatisticsStable(AggregateFunctionFactory &);
 void registerAggregateFunctionsStatisticsSecondMoment(AggregateFunctionFactory &);
 void registerAggregateFunctionsStatisticsThirdMoment(AggregateFunctionFactory &);
 void registerAggregateFunctionsStatisticsFourthMoment(AggregateFunctionFactory &);
+#if USE_AGGREGATES_EXTENDED
 void registerAggregateFunctionsStatisticsCovar(AggregateFunctionFactory &);
 void registerAggregateFunctionsStatisticsCorr(AggregateFunctionFactory &);
+#endif
 void registerAggregateFunctionSum(AggregateFunctionFactory &);
 void registerAggregateFunctionSumCount(AggregateFunctionFactory &);
 void registerAggregateFunctionSumMap(AggregateFunctionFactory &);
@@ -60,8 +64,10 @@ void registerAggregateFunctionHistogram(AggregateFunctionFactory &);
 void registerAggregateFunctionRetention(AggregateFunctionFactory &);
 void registerAggregateFunctionMLMethod(AggregateFunctionFactory &);
 void registerAggregateFunctionEntropy(AggregateFunctionFactory &);
+#if USE_AGGREGATES_EXTENDED
 void registerAggregateFunctionSimpleLinearRegression(AggregateFunctionFactory &);
 void registerAggregateFunctionMoving(AggregateFunctionFactory &);
+#endif
 void registerAggregateFunctionCategoricalIV(AggregateFunctionFactory &);
 void registerAggregateFunctionAggThrow(AggregateFunctionFactory &);
 void registerAggregateFunctionRankCorrelation(AggregateFunctionFactory &);
@@ -77,12 +83,15 @@ void registerAggregateFunctionSingleValueOrNull(AggregateFunctionFactory &);
 void registerAggregateFunctionSequenceNextNode(AggregateFunctionFactory &);
 void registerAggregateFunctionNothing(AggregateFunctionFactory &);
 void registerAggregateFunctionExponentialMovingAverage(AggregateFunctionFactory &);
+#if USE_AGGREGATES_EXTENDED
 void registerAggregateFunctionSparkbar(AggregateFunctionFactory &);
+#endif
 void registerAggregateFunctionIntervalLengthSum(AggregateFunctionFactory &);
 void registerAggregateFunctionAnalysisOfVariance(AggregateFunctionFactory &);
 void registerAggregateFunctionLargestTriangleThreeBuckets(AggregateFunctionFactory & factory);
 void registerAggregateFunctionDistinctDynamicTypes(AggregateFunctionFactory & factory);
 void registerAggregateFunctionDistinctJSONPathsAndTypes(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFlameGraph(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -102,7 +111,9 @@ void registerWindowFunctions(AggregateFunctionFactory & factory);
 /// proton: starts.
 void registerAggregateFunctionMinMaxK(AggregateFunctionFactory &);
 void registerAggregateFunctionsAlias(AggregateFunctionFactory &);
+#if USE_AGGREGATES_EXTENDED
 void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
+#endif
 void registerAggregateFunctionCombinatorTimeWeighted(AggregateFunctionCombinatorFactory &);
 
 /// changelog retract aggr
@@ -137,7 +148,9 @@ void registerAggregateFunctions()
         registerAggregateFunctionAvgWeighted(factory);
         registerAggregateFunctionCount(factory);
         registerAggregateFunctionDeltaSum(factory);
+#if USE_AGGREGATES_EXTENDED
         registerAggregateFunctionDeltaSumTimestamp(factory);
+#endif
         registerAggregateFunctionGroupArray(factory);
         registerAggregateFunctionGroupArraySorted(factory);
         registerAggregateFunctionGroupUniqArray(factory);
@@ -167,8 +180,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionsStatisticsSecondMoment(factory);
         registerAggregateFunctionsStatisticsThirdMoment(factory);
         registerAggregateFunctionsStatisticsFourthMoment(factory);
+#if USE_AGGREGATES_EXTENDED
         registerAggregateFunctionsStatisticsCovar(factory);
         registerAggregateFunctionsStatisticsCorr(factory);
+#endif
         registerAggregateFunctionSum(factory);
         registerAggregateFunctionSumCount(factory);
         registerAggregateFunctionSumMap(factory);
@@ -188,8 +203,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionRetention(factory);
         registerAggregateFunctionMLMethod(factory);
         registerAggregateFunctionEntropy(factory);
+#if USE_AGGREGATES_EXTENDED
         registerAggregateFunctionSimpleLinearRegression(factory);
         registerAggregateFunctionMoving(factory);
+#endif
         registerAggregateFunctionCategoricalIV(factory);
         registerAggregateFunctionAggThrow(factory);
         registerAggregateFunctionRankCorrelation(factory);
@@ -202,18 +219,23 @@ void registerAggregateFunctions()
         registerAggregateFunctionSingleValueOrNull(factory);
         registerAggregateFunctionIntervalLengthSum(factory);
         registerAggregateFunctionExponentialMovingAverage(factory);
+#if USE_AGGREGATES_EXTENDED
         registerAggregateFunctionSparkbar(factory);
+#endif
         registerAggregateFunctionAnalysisOfVariance(factory);
         registerAggregateFunctionLargestTriangleThreeBuckets(factory);
         registerAggregateFunctionDistinctDynamicTypes(factory);
         registerAggregateFunctionDistinctJSONPathsAndTypes(factory);
+        registerAggregateFunctionFlameGraph(factory);
 
         registerWindowFunctions(factory);
 
         /// proton: starts.
         registerAggregateFunctionMinMaxK(factory);
         registerAggregateFunctionsAlias(factory);
+#if USE_AGGREGATES_EXTENDED
         registerAggregateFunctionXirr(factory);
+#endif
         Streaming::registerAggregateFunctionCountRetract(factory);
         Streaming::registerAggregateFunctionSumRetract(factory);
         Streaming::registerAggregateFunctionAvgRetract(factory);

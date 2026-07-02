@@ -57,11 +57,22 @@ private:
 
     ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
+    static auto formatTimeArgument(TimeType time)
+    {
+        if constexpr (requires { time.value; })
+            return time.value;
+        else
+            return time;
+    }
+
     static UInt64 checkedDuration(TimeType start_time, TimeType end_time)
     {
         if (end_time < start_time)
             throw Exception(
-                ErrorCodes::INVALID_DATA, "Illegal time argument, should be in ascending order, {} then {}", start_time, end_time);
+                ErrorCodes::INVALID_DATA,
+                "Illegal time argument, should be in ascending order, {} then {}",
+                formatTimeArgument(start_time),
+                formatTimeArgument(end_time));
 
         return static_cast<UInt64>(end_time - start_time);
     }

@@ -340,7 +340,7 @@ void ReadFromParallelRemoteReplicasStep::initializePipeline(QueryPipelineBuilder
     {
         LOG_INFO(getLogger("ReadFromParallelRemoteReplicasStep"),
                  "The number of replicas requested ({}) is bigger than the real number available in the cluster ({}). "\
-                 "Will use the latter number to execute the query.", current_settings.max_parallel_replicas, shard_info.all_addresses.size());
+                 "Will use the latter number to execute the query.", current_settings.max_parallel_replicas.value, shard_info.all_addresses.size());
         all_replicas_count = shard_info.all_addresses.size();
     }
 

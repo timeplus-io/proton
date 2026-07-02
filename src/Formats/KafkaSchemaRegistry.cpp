@@ -6,6 +6,7 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPBasicCredentials.h>
+#include "Common/HTTPConnectionPool.h"
 #include <boost/algorithm/string/predicate.hpp>
 
 namespace DB
@@ -13,6 +14,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int CANNOT_READ_ALL_DATA;
 extern const int INCORRECT_DATA;
 }
 
@@ -62,7 +64,15 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id) const
             if (!credentials.empty())
                 credentials.authenticate(request);
 
-            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            auto session = makeHTTPSession(
+                HTTPConnectionGroupType::HTTP,
+                url,
+                private_key_file,
+                certificate_file,
+                ca_location,
+                Verification_mode,
+                timeouts,
+                ProxyConfiguration{});
             std::istream * response_body{};
             try
             {
@@ -121,7 +131,15 @@ std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForSubject(const
             if (!credentials.empty())
                 credentials.authenticate(request);
 
-            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            auto session = makeHTTPSession(
+                HTTPConnectionGroupType::HTTP,
+                url,
+                private_key_file,
+                certificate_file,
+                ca_location,
+                Verification_mode,
+                timeouts,
+                ProxyConfiguration{});
             std::istream * response_body{};
             try
             {
@@ -180,7 +198,15 @@ UInt32 KafkaSchemaRegistry::fetchLatestSubjectVersion(const String & subject_nam
             if (!credentials.empty())
                 credentials.authenticate(request);
 
-            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            auto session = makeHTTPSession(
+                HTTPConnectionGroupType::HTTP,
+                url,
+                private_key_file,
+                certificate_file,
+                ca_location,
+                Verification_mode,
+                timeouts,
+                ProxyConfiguration{});
             std::istream * response_body{};
             try
             {

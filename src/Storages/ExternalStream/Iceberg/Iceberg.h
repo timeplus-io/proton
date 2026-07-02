@@ -21,6 +21,8 @@ public:
     Iceberg(StorageID, StorageInMemoryMetadata, ExternalStreamSettingsPtr, ExternalStreamCounterPtr, ContextPtr);
     ~Iceberg() override = default;
 
+    void validateSettings(const ExternalStreamSettingsPtr &, bool, const ContextPtr &) const override { }
+
     String getName() const override { return "IcebergExternalStream"; }
 
     /// For now, we only support Parquet format and it supports subset of columns.
@@ -65,7 +67,6 @@ private:
 
     IcebergS3Configuration s3_configuration;
     std::optional<FormatFactorySettings> format_factory_settings;
-
     std::string iceberg_schema_json;
 };
 

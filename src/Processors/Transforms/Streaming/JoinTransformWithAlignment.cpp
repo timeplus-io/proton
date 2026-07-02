@@ -2,6 +2,7 @@
 
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/FunctionHelpers.h>
+#include <base/scope_guard.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -33,7 +34,7 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , left_input{&inputs.front()}
     , right_input{&inputs.back()}
-    , last_stats_log_ts(DB::MonotonicSeconds::now())
+    , last_stats_log_ts(DB::MonotonicMilliseconds::now())
     , logger(getLogger("StreamingJoinTransformWithAlignment"))
 {
     assert(join);
@@ -241,6 +242,9 @@ IProcessor::Status JoinTransformWithAlignment::prepare()
 
 void JoinTransformWithAlignment::work()
 {
+    auto start_ns = MonotonicNanoseconds::now();
+    SCOPE_EXIT({ metrics.processed_time_ns += MonotonicNanoseconds::now() - start_ns; });
+
     bool left_input_in_quiesce = isInputInQuiesce(left_input);
     bool right_input_in_quiesce = isInputInQuiesce(right_input);
 
@@ -261,6 +265,9 @@ void JoinTransformWithAlignment::work()
 
                 auto & chunk = right_input.input_chunks.front();
                 assert(chunk.rows());
+                metrics.processed_bytes += chunk.chunk.byteSize();
+                metrics.processed_rows += chunk.chunk.rows();
+
                 processRightInputData(chunk.chunk);
 
                 right_input.input_chunks.pop_front();
@@ -294,6 +301,9 @@ void JoinTransformWithAlignment::work()
 
                 auto & chunk = left_input.input_chunks.front();
                 assert(chunk.rows());
+                metrics.processed_bytes += chunk.chunk.byteSize();
+                metrics.processed_rows += chunk.chunk.rows();
+
                 processLeftInputData(chunk.chunk);
 
                 left_input.input_chunks.pop_front();
@@ -354,7 +364,7 @@ void JoinTransformWithAlignment::work()
 
     need_propagate_heartbeat = false;
 
-    if (auto now = MonotonicSeconds::now(); now - last_stats_log_ts >= 60)
+    if (auto now = MonotonicMilliseconds::now(); now - last_stats_log_ts >= log_metrics_interval_ms)
     {
         LOG_INFO(
             logger,

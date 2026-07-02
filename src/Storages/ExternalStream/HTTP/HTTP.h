@@ -22,6 +22,11 @@ public:
 
     ~HTTP() override = default;
 
+    void validate(const ContextPtr & context) const override;
+    void validateSettings(const ExternalStreamSettingsPtr & new_settings, bool change_settings, const ContextPtr & context) const override;
+
+    void startup() override;
+
     String getName() const override { return "HTTPExternalStream"; }
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr &, ContextPtr context) override;
@@ -38,6 +43,8 @@ private:
 
     String getReadMethod() const;
 
+    SettingsChanges storage_settings;
+
     String write_url;
     String write_method;
     HTTPHeaderEntries headers;
@@ -45,13 +52,14 @@ private:
 
     String ca_file;
     String key_file;
-    bool skip_ssl_verification{false};
 
     /// Stream level settings, can be overrided on queries
     const ConnectionTimeouts timeouts;
     BatchConfiguration batch_config;
 
     ASTPtr partition_by;
+
+    std::atomic_bool started{false};
 };
 
 }

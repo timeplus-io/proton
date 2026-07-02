@@ -1,0 +1,12 @@
+--- src/rdkafka_offset.c
++++ src/rdkafka_offset.c
+@@ -799,6 +799,9 @@ void rd_kafka_offset_reset(rd_kafka_toppar_t *rktp,
+         const char *extra        = "";
+         char reason[512];
+         va_list ap;
++
++        if (err == RD_KAFKA_RESP_ERR__DESTROY)
++                return;
+
+         va_start(ap, fmt);
+         rd_vsnprintf(reason, sizeof(reason), fmt, ap);

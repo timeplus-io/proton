@@ -1,0 +1,231 @@
+tags:
+  - batch parsing
+  - row count mismatch
+  - fallback
+
+description: |
+  Test Pulsar external stream with batch parsing when row count doesn't match message count.
+  When batch parsing produces a different number of rows than the message count,
+  the system should fall back to individual message parsing.
+  This can happen when a format like JSONEachRow allows multiple rows per message.
+
+cluster:
+  - p1k1
+  - p3k1
+
+steps:
+  - type: pulsar
+    name: delete-partitioned
+    topic: test_batch_mismatch_22
+
+  - type: pulsar
+    name: create
+    topic: test_batch_mismatch_22
+    partitions: 1
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_mismatch_22
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_mismatch_22_raw
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_mismatch_22(
+        id int32,
+        value string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_mismatch_22',
+      data_format = 'JSONEachRow';
+
+  # Raw stream to send multi-row JSON messages
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_mismatch_22_raw(
+        _raw string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_mismatch_22',
+      data_format = 'RawBLOB';
+
+  - type: wait
+    time: 2
+
+  # Test 1: Batch parsing with normal 1:1 messages should work
+  - type: stream
+    name: pulsar-batch-mismatch-22-1
+    query: select id, value from ex_pulsar_batch_mismatch_22 settings seek_to='earliest', parse_messages_in_batch=1;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  # Test 2: Non-batch parsing for comparison
+  - type: stream
+    name: pulsar-batch-mismatch-22-2
+    query: select id, value from ex_pulsar_batch_mismatch_22 settings seek_to='earliest', parse_messages_in_batch=0;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+
+  # Insert normal single-row messages first
+  - type: query
+    sql: insert into ex_pulsar_batch_mismatch_22(id, value) values (1, 'one')(2, 'two');
+
+  - type: wait
+    time: 1
+
+  # Insert a multi-row JSON message via raw format
+  # This single message contains 3 rows
+  - type: query
+    sql: insert into ex_pulsar_batch_mismatch_22_raw(_raw) values ('{"id":10,"value":"ten"}\n{"id":11,"value":"eleven"}\n{"id":12,"value":"twelve"}')
+
+  - type: wait
+    time: 1
+
+  # Insert more single-row messages
+  - type: query
+    sql: insert into ex_pulsar_batch_mismatch_22(id, value) values (3, 'three')(4, 'four');
+
+  - type: wait
+    time: 2
+
+  # Both should produce same results (batch falls back to individual parsing for multi-row message)
+  # Expected: 2 single-row + 3 rows from multi-row + 2 single-row = 7 rows
+  - type: check
+    target_name: pulsar-batch-mismatch-22-1
+    expected_result:
+      - [1, one]
+      - [2, two]
+      - [10, ten]
+      - [11, eleven]
+      - [12, twelve]
+      - [3, three]
+      - [4, four]
+
+  - type: check
+    target_name: pulsar-batch-mismatch-22-2
+    expected_result:
+      - [1, one]
+      - [2, two]
+      - [10, ten]
+      - [11, eleven]
+      - [12, twelve]
+      - [3, three]
+      - [4, four]
+
+  # Test 3: Count verification
+  - type: stream
+    name: pulsar-batch-mismatch-22-count
+    query: select count() as cnt from table(ex_pulsar_batch_mismatch_22);
+    schema:
+      - name: cnt
+        type: uint64
+
+  - type: check
+    target_name: pulsar-batch-mismatch-22-count
+    expected_result:
+      - [7]
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_mismatch_22
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_mismatch_22_raw
+
+  # Test 4: Verify behavior with virtual columns when row count mismatch occurs
+  - type: pulsar
+    name: delete
+    topic: test_batch_mismatch_22_vcol
+
+  - type: pulsar
+    name: create
+    topic: test_batch_mismatch_22_vcol
+    partitions: 1
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_mismatch_22_vcol
+
+  - type: query
+    sql: drop stream if exists ex_pulsar_batch_mismatch_22_vcol_raw
+
+  - type: wait
+    time: 1
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_mismatch_22_vcol(
+        id int32,
+        value string,
+        _tp_message_key string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_mismatch_22_vcol',
+      data_format = 'JSONEachRow';
+
+  - type: query
+    sql: |
+      CREATE EXTERNAL STREAM ex_pulsar_batch_mismatch_22_vcol_raw(
+        _raw string
+      )
+      SETTINGS type = 'pulsar',
+      service_url = 'pulsar://pulsar:6650',
+      topic = 'test_batch_mismatch_22_vcol',
+      data_format = 'RawBLOB';
+
+  - type: wait
+    time: 2
+
+  - type: stream
+    name: pulsar-batch-mismatch-22-vcol
+    query: select id, value, _tp_message_key from ex_pulsar_batch_mismatch_22_vcol settings seek_to='earliest', parse_messages_in_batch=1;
+    schema:
+      - name: id
+        type: int32
+      - name: value
+        type: string
+      - name: _tp_message_key
+        type: string
+
+  - type: wait
+    time: 1
+
+  # Insert single-row messages with message key
+  - type: query
+    sql: insert into ex_pulsar_batch_mismatch_22_vcol(id, value, _tp_message_key) values (1, 'a', 'key_a')(2, 'b', 'key_b');
+
+  - type: wait
+    time: 1
+
+  # Insert multi-row message (virtual columns should still work correctly after fallback)
+  - type: query
+    sql: insert into ex_pulsar_batch_mismatch_22_vcol_raw(_raw) values ('{"id":100,"value":"multi1"}\n{"id":101,"value":"multi2"}')
+
+  # Virtual column _tp_message_key will be empty for raw messages since we can't set it
+  # The important thing is the rows are parsed correctly
+  - type: check
+    target_name: pulsar-batch-mismatch-22-vcol
+    expected_result:
+      - [1, a, key_a]
+      - [2, b, key_b]
+      - [100, multi1, '']
+      - [101, multi2, '']
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_mismatch_22_vcol
+
+  - type: query
+    sql: drop stream ex_pulsar_batch_mismatch_22_vcol_raw

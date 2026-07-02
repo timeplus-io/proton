@@ -40,8 +40,6 @@ public:
 
     bool isStoredOnRemoteDiskWithZeroCopySupport() const override;
 
-    bool supportsVerticalMerge() const override { return true; }
-
     std::optional<String> getFileNameForColumn(const NameAndTypePair & column) const override;
 
     ~MergeTreeDataPartWide() override;

@@ -3,6 +3,7 @@
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/convertToChunk.h>
 #include <base/scope_guard.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

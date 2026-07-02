@@ -3,6 +3,7 @@
 #include "config.h"
 
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 #include <memory>
@@ -92,6 +93,13 @@ public:
 
     /// Is the file named as result of config preprocessing, not as original files.
     static bool isPreprocessedFile(const std::string & config_path);
+
+    /// Register a default config document that can be used as the fallback when the
+    /// real configuration file (identified by `name`, e.g. "config.xml") is absent on
+    /// disk. Each consumer binary owns its own embedded fallback and calls this early
+    /// in main(); the ConfigProcessor then queries the registry rather than knowing
+    /// which TU the bytes live in.
+    static void registerEmbeddedConfig(std::string name, std::string_view content);
 
     static inline const auto SUBSTITUTION_ATTRS = {"incl", "from_env"};
 

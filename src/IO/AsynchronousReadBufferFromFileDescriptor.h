@@ -3,8 +3,8 @@
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/AsynchronousReader.h>
 #include <Interpreters/Context.h>
+#include <Common/IThrottler.h>
 #include <Common/Priority.h>
-#include <Common/Throttler_fwd.h>
 
 #include <optional>
 #include <unistd.h>
