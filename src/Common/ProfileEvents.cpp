@@ -585,7 +585,7 @@ The server successfully detected this situation and will download merged part fr
     M(PythonGILAcquired, "Number of times a Python runtime scope was entered (GIL acquire or thread-state attach)") \
     M(PythonGILWaitMicroseconds, "Total time spent entering the Python runtime scope in microseconds") \
     M(PythonPackagesInstalled, "Total number of Python package install operations completed via the embedded package manager (pip install). Cold-path counter; increments once per install, not per dependency.") \
-
+    \
     M(StorageConnectionsCreated, "Number of created connections for storages") \
     M(StorageConnectionsReused, "Number of reused connections for storages") \
     M(StorageConnectionsReset, "Number of reset connections for storages") \
