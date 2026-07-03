@@ -20,7 +20,10 @@ INSERT INTO test_nonjson_stream (id, name) VALUES (10, 'alpha'), (11, 'beta'), (
 INSERT INTO test_json_stream (id, payload)
 VALUES (20, '{"x":1}'), (21, '{"x":2}'), (22, '{"x":3}');
 
-SELECT sleep(1) FORMAT Null;
+-- Give both inserts time to flush to a queryable historical part before the
+-- table() reads below; the JSON/dynamic stream can flush slightly later, so a
+-- 1s wait was occasionally too short under load (JSON rows missed).
+SELECT sleep(3) FORMAT Null;
 
 -- Non-JSON historical read
 SELECT id, name FROM table(test_nonjson_stream) ORDER BY id;
