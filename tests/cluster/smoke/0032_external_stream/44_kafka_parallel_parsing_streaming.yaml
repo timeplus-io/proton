@@ -74,15 +74,17 @@ steps:
         type: string
     node: [p1]
 
+  # Give both streaming consumers time to subscribe and position at latest
+  # before producing, otherwise messages can be missed (default seek=latest).
   - type: wait
-    time: 1
+    time: 5
 
   # Produce first batch
   - type: query
     sql: insert into ext_parallel_streaming_44(id, value) values (1, 'first') (2, 'second') (3, 'third');
 
   - type: wait
-    time: 1
+    time: 3
 
   - type: check
     target_name: parallel-streaming-44-1
@@ -103,7 +105,7 @@ steps:
     sql: insert into ext_parallel_streaming_44(id, value) values (4, 'fourth') (5, 'fifth');
 
   - type: wait
-    time: 1
+    time: 3
 
   - type: check
     target_name: parallel-streaming-44-1
@@ -122,7 +124,7 @@ steps:
     sql: insert into ext_parallel_streaming_44(id, value) values (6, 'sixth'), (7, 'seventh'), (8, 'eighth'), (9, 'ninth'), (10, 'tenth');
 
   - type: wait
-    time: 1
+    time: 3
 
   - type: check
     target_name: parallel-streaming-44-1
@@ -159,7 +161,7 @@ steps:
     sql: insert into ext_parallel_streaming_44(id, value, _tp_message_key) values (11, 'eleventh', 'key11')(12, 'twelfth', 'key12');
 
   - type: wait
-    time: 1
+    time: 3
 
   - type: check
     target_name: parallel-streaming-44-vcol
