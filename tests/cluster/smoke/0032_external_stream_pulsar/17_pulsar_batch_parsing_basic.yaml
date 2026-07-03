@@ -79,7 +79,7 @@ steps:
 
   # Test with larger batch
   - type: query
-    sql: insert into ex_pulsar_batch_17(id, value) select number, 'val' || toString(number) from numbers(10);
+    sql: insert into ex_pulsar_batch_17(id, value) select number, 'val' || to_string(number) from numbers(10);
 
   - type: wait
     time: 2
