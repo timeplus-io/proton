@@ -156,6 +156,11 @@ steps:
       - name: _tp_message_key
         type: string
 
+  # Give this later streaming consumer time to subscribe and position at latest
+  # before producing, otherwise the messages can be missed (default seek=latest).
+  - type: wait
+    time: 5
+
   # Insert with message key
   - type: query
     sql: insert into ext_parallel_streaming_44(id, value, _tp_message_key) values (11, 'eleventh', 'key11')(12, 'twelfth', 'key12');
