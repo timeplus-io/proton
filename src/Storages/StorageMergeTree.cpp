@@ -2322,8 +2322,29 @@ void StorageMergeTree::populateCommittedSNFromParts()
             continue;
 
         for (const auto & seq_range : part->seq_info->sequence_ranges)
-            if (seq_range.end_sn > committed)
-                sequence_ranges.push_back(seq_range);
+        {
+            if (seq_range.end_sn <= committed)
+                continue;
+
+            /// A torn sn.txt can yield an inverted/inconsistent range that would propagate into recovery.
+            /// Drop it and name the part so the corrupt checkpoint can be located; recovery then re-reads
+            /// it from the log and dedups by idempotent key rather than trusting the untrustworthy range.
+            if (!seq_range.valid())
+            {
+                LOG_ERROR(
+                    log,
+                    "Skipping corrupt sequence range=({}, {}, {}, {}) in part={} during committed_sn reconciliation",
+                    seq_range.start_sn,
+                    seq_range.end_sn,
+                    seq_range.part_index,
+                    seq_range.parts,
+                    part->name);
+
+                continue;
+            }
+
+            sequence_ranges.push_back(seq_range);
+        }
 
         if (part->seq_info->idempotent_keys)
         {
@@ -2346,7 +2367,9 @@ void StorageMergeTree::populateCommittedSNFromParts()
     max_committed_sn = max_expecting_sn - 1;
     missing_sequence_ranges.swap(missing_ranges);
 
-    /// Collect last N idempotent keys
+    /// Rebuilt from scratch so a re-run (e.g. a consume-retry reconciliation) replaces the deque
+    /// rather than appending to it.
+    last_idempotent_keys.clear();
     auto max_keys = getContext()->getSettingsRef().max_idempotent_ids;
     auto keys_iter = idempotent_keys.begin();
 

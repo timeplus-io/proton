@@ -659,7 +659,36 @@ void StreamShardStore::backgroundPollNativeLog()
     /// Use the latest in-memory historical offset here rather than committedSN(), because
     /// committed_sn.txt lags behind successful part commits. After a read failure or compaction
     /// we need to rebuild the fetch session from the last applied sn seen by this process.
-    auto resetBlockReaderToInMemoryCommittedSN = [this, &block_reader](const char * reason) noexcept {
+    auto resetBlockReaderToInMemoryCommittedSN = [this, &block_reader, &stream_commit](const char * reason) noexcept {
+        /// Re-reconcile committed_sn / missing ranges from durable parts so re-consumption dedups
+        /// already-written parts via the recovery path (ignorePartBlock) instead of re-writing them as
+        /// overlapping same-sn parts.
+        try
+        {
+            storage->populateCommittedSNFromParts();
+            stream_commit.resetMissingSequenceRanges(storage->missingSequenceRanges());
+        }
+        catch (...)
+        {
+            /// Reconciliation failed (e.g. OOM). Leave the sn tracking and the reader untouched and
+            /// retry on the next loop: clearing/rewinding now would re-consume durable parts without
+            /// the refreshed dedup state, recreating the very overlaps this path exists to prevent.
+            tryLogCurrentException(logger, "Failed to reconcile committed_sn from parts; will retry reset");
+            return;
+        }
+
+        /// Reconciliation succeeded. Re-consumption restarts after the reconciled floor, so drop the
+        /// now-stale in-flight sn tracking: a leftover outstanding / out-of-order sn would collide with
+        /// its re-consumed twin and wedge progressSequences (last_sn stuck, local_committed_sns
+        /// unbounded). Only last_sn moves to the floor; local_sn/prev_sn track on-disk/announced state
+        /// this reset doesn't write.
+        {
+            std::lock_guard lock(sns_mutex);
+            outstanding_sns.clear();
+            local_committed_sns.clear();
+            last_sn = storage->inMemoryCommittedSN();
+        }
+
         auto next_sn = storage->inMemoryCommittedSN() + 1;
         try
         {
@@ -731,25 +760,26 @@ void StreamShardStore::backgroundPollNativeLog()
         }
         catch (const Exception & e)
         {
+            const char * reason = "read failure";
             if (e.code() == ErrorCodes::SEQUENCE_COMPACTED_AWAY)
-            {
                 /// The only case for now we will run into this case is snapshot case, in which scenario the current
                 /// shard replica receives historical snapshot from its peer and the data in local log gets truncated
                 /// to the snapshot sn which is already applied in the local historical store.
-                resetBlockReaderToInMemoryCommittedSN("SEQUENCE_COMPACTED_AWAY");
-            }
+                reason = "SEQUENCE_COMPACTED_AWAY";
             else
-            {
                 tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->inMemoryCommittedSN() + 1));
-                resetBlockReaderToInMemoryCommittedSN("read failure");
-            }
+
+            /// Back off before re-reconciling: a transient failure (e.g. memory pressure) is likelier to
+            /// have eased, so the reset's populate/reconcile succeeds instead of thrashing under it.
             sleepForMilliseconds(2000);
+            resetBlockReaderToInMemoryCommittedSN(reason);
         }
         catch (...)
         {
             tryLogCurrentException(logger, fmt::format("Failed to consume data next_sn={}", storage->inMemoryCommittedSN() + 1));
-            resetBlockReaderToInMemoryCommittedSN("read failure");
+
             sleepForMilliseconds(2000);
+            resetBlockReaderToInMemoryCommittedSN("read failure");
         }
     }
 }

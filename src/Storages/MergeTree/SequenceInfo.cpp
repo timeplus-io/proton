@@ -19,6 +19,10 @@ namespace ErrorCodes
 
 namespace
 {
+/// A real write makes at most one part per partition (max_partitions_per_insert_block caps it at 100
+/// by default); anything past this headroom is torn sequence info. Bounds enumeration against OOM.
+constexpr Int32 max_parts_per_write = 1 << 16;
+
 inline SequenceRange parseSequenceRange(const String & s, String::size_type lpos, String::size_type rpos)
 {
     SequenceRange seq_range;
@@ -149,15 +153,27 @@ SequenceRanges mergeSequenceRanges(SequenceRanges & sequence_ranges, Int64 commi
 
     for (size_t pos = 0; const auto & next_seq_range : sequence_ranges)
     {
-        /// Merge ranges
-        assert(next_seq_range.valid());
+        /// Ranges come from sn.txt without validation, so torn/corrupt on-disk data can reach here.
+        /// Skip rather than assert, to keep recovery going instead of aborting under a sanitizer build.
+        if (!next_seq_range.valid())
+        {
+            if (log)
+                LOG_ERROR(
+                    log,
+                    "Skipping invalid sequence range=({}, {}, {}, {})",
+                    next_seq_range.start_sn,
+                    next_seq_range.end_sn,
+                    next_seq_range.part_index,
+                    next_seq_range.parts);
+
+            continue;
+        }
 
         /// There shall be no cases where there is sequence overlapping in a partition
         if (pos != 0)
         {
             const auto & last_seq_range = sequence_ranges[pos - 1];
 
-            assert(last_seq_range.end_sn < next_seq_range.start_sn);
             if (last_seq_range.end_sn >= next_seq_range.start_sn)
             {
                 LOG_ERROR(
@@ -240,26 +256,31 @@ inline void collectMissingSequenceRangeBefore(
     if (prev_index != 0)
         return;
 
-    if (prev.start_sn != next_expecting_sn)
+    if (next_expecting_sn < prev.start_sn)
     {
         /// There are sequence range missing before prev_range
-        missing_ranges.emplace_back(next_expecting_sn, prev.start_sn - 1);
-        assert(next_expecting_sn <= prev.start_sn - 1);
-
         if (log)
             LOG_INFO(log, "Missing sn range=({}, {})", next_expecting_sn, prev.start_sn - 1);
+
+        missing_ranges.emplace_back(next_expecting_sn, prev.start_sn - 1);
+    }
+    else if (next_expecting_sn > prev.start_sn && log)
+    {
+        /// committed_sn straddles into prev_range (torn/rolled-back sequence info); not a gap, so
+        /// do not enqueue an inverted (start > end) range.
+        LOG_WARNING(
+            log, "committed_sn straddles sequence range: next_expecting_sn={} > start_sn={}", next_expecting_sn, prev.start_sn);
     }
 }
 
 inline void collectMissingSequenceRangeBetween(
     const SequenceRange & prev, const SequenceRange & cur, LoggerPtr log, SequenceRanges & missing_ranges)
 {
-    if (prev.start_sn != cur.start_sn && prev.end_sn + 1 != cur.start_sn)
+    if (prev.end_sn + 1 < cur.start_sn)
     {
         if (log)
             LOG_INFO(log, "Missing sn range({}, {})", prev.end_sn + 1, cur.start_sn - 1);
 
-        assert(prev.end_sn + 1 <= cur.start_sn - 1);
         missing_ranges.emplace_back(prev.end_sn + 1, cur.start_sn - 1);
     }
 }
@@ -267,6 +288,50 @@ inline void collectMissingSequenceRangeBetween(
 inline void collectMissingPartsSequenceRange(
     const SequenceRanges & sequence_ranges, size_t prev_index, size_t cur_index, LoggerPtr log, SequenceRanges & missing_ranges)
 {
+    const auto & prev_range = sequence_ranges[prev_index];
+    const auto total_parts = prev_range.parts;
+
+    /// parts == 0 is the legacy single-part encoding: no siblings, so nothing to enumerate.
+    if (total_parts == 0)
+        return;
+
+    /// Torn parts/part_index: re-persist the whole range (parts<0 => persist-all, deduped by
+    /// idempotent keys) rather than drop it (data loss) or OOM enumerating a bogus part_index.
+    if (total_parts < 0 || total_parts > max_parts_per_write)
+    {
+        if (log)
+            LOG_ERROR(
+                log,
+                "Implausible parts={} for sequence range=({}, {}); re-persisting the whole range",
+                total_parts,
+                prev_range.start_sn,
+                prev_range.end_sn);
+
+        missing_ranges.emplace_back(prev_range.start_sn, prev_range.end_sn);
+        return;
+    }
+
+    for (size_t i = prev_index; i < cur_index; ++i)
+    {
+        const auto & r = sequence_ranges[i];
+        if (r.parts != total_parts || r.part_index < 0 || r.part_index >= total_parts || r.end_sn != prev_range.end_sn)
+        {
+            if (log)
+                LOG_ERROR(
+                    log,
+                    "Inconsistent part_index={}, parts={} (expected total parts={}) for sequence range=({}, {}); re-persisting "
+                    "the whole range",
+                    r.part_index,
+                    r.parts,
+                    total_parts,
+                    r.start_sn,
+                    r.end_sn);
+
+            missing_ranges.emplace_back(prev_range.start_sn, prev_range.end_sn);
+            return;
+        }
+    }
+
     Int32 next_expecting_part_index = 0;
     std::vector<String> missed_parts;
 
@@ -275,7 +340,7 @@ inline void collectMissingPartsSequenceRange(
         if (sequence_ranges[i].part_index != next_expecting_part_index)
         {
             /// Collect the missing parts
-            for (auto j = next_expecting_part_index; j != sequence_ranges[i].part_index; ++j)
+            for (auto j = next_expecting_part_index; j < sequence_ranges[i].part_index; ++j)
             {
                 SequenceRange range_copy = sequence_ranges[prev_index];
                 range_copy.part_index = j;
@@ -290,7 +355,7 @@ inline void collectMissingPartsSequenceRange(
         }
     }
 
-    for (;next_expecting_part_index < sequence_ranges[prev_index].parts; ++next_expecting_part_index)
+    for (; next_expecting_part_index < total_parts; ++next_expecting_part_index)
     {
         SequenceRange range_copy = sequence_ranges[prev_index];
         range_copy.part_index = next_expecting_part_index;
@@ -315,6 +380,7 @@ inline void collectMissingSequenceRanges(
     size_t prev_index,
     size_t cur_index,
     Int32 parts,
+    bool group_torn,
     LoggerPtr log,
     Int64 & next_expecting_sn,
     SequenceRanges & missing_ranges)
@@ -331,11 +397,13 @@ inline void collectMissingSequenceRanges(
     /// 1. There are sequence gaps before prev_range
     /// 2. There are part missing in current prev_range
     /// 3. There are sequence gaps between prev_range and current range
-    if (prev_range.parts == parts)
+    /// A torn group (siblings disagree on end_sn/parts) can't prove the whole range is durable even
+    /// when the distinct count matches, so it takes the missing-parts path rather than advancing.
+    if (!group_torn && prev_range.parts == parts)
     {
-        /// All parts in this prev_range are committed
-        assert (prev_range.start_sn >= next_expecting_sn);
-
+        /// Advance only when the cursor sits exactly at this range's start. A straddle
+        /// (start_sn < next_expecting_sn) means committed_sn regressed into an on-disk range, but
+        /// "file present" isn't "cluster-committed": let the else branch re-consult the log instead.
         if (prev_range.start_sn == next_expecting_sn)
         {
             /// If we can progress sn, it means there are no sequence missing
@@ -343,16 +411,13 @@ inline void collectMissingSequenceRanges(
             next_expecting_sn = prev_range.end_sn + 1;
 
             if (log)
-            {
                 LOG_INFO(
                     log,
-                    "Parts in sn range=({}, {}) having total parts={} are all committed. Progressing next expecting sn to "
-                    "{}",
+                    "Parts in sn range=({}, {}) having total parts={} are all committed. Progressing next expecting sn to {}",
                     prev_range.start_sn,
                     prev_range.end_sn,
                     prev_range.parts,
                     prev_range.end_sn + 1);
-            }
         }
         else
         {
@@ -537,6 +602,7 @@ std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & 
     auto next_expecting_sn = committed + 1;
     size_t prev_index = 0;
     Int32 parts = 1;
+    bool group_torn = false;
 
     for (size_t cur_index = 1, siz = sequence_ranges.size(); cur_index < siz; ++cur_index)
     {
@@ -545,22 +611,31 @@ std::tuple<SequenceRanges, Int64, Int64> missingSequenceRanges(SequenceRanges & 
 
         if (prev_range.start_sn == cur_range.start_sn)
         {
-            assert(prev_range.end_sn == cur_range.end_sn);
-            assert(prev_range.part_index < cur_range.part_index);
-            ++parts;
+            /// Count distinct part indexes, not entries, so a duplicated part_index (torn data) can't
+            /// inflate the count and make a range look complete, skipping a genuinely-missing part.
+            /// Sorted by (start_sn, part_index), so duplicates are adjacent.
+            if (cur_range.part_index != sequence_ranges[cur_index - 1].part_index)
+                ++parts;
+
+            /// Siblings of one write share end_sn and parts; a mismatch is torn metadata that can't
+            /// prove the whole range durable, so don't let it reach the advance path.
+            if (cur_range.end_sn != prev_range.end_sn || cur_range.parts != prev_range.parts)
+                group_torn = true;
 
             continue;
         }
 
-        collectMissingSequenceRanges(sequence_ranges, prev_index, cur_index, parts, log, next_expecting_sn, missing_ranges);
+        collectMissingSequenceRanges(sequence_ranges, prev_index, cur_index, parts, group_torn, log, next_expecting_sn, missing_ranges);
 
         /// Since here it starts a new start_sn, update prev_index and parts
         prev_index = cur_index;
         parts = 1;
+        group_torn = false;
     }
 
     /// The last range
-    collectMissingSequenceRanges(sequence_ranges, prev_index, sequence_ranges.size(), parts, log, next_expecting_sn, missing_ranges);
+    collectMissingSequenceRanges(
+        sequence_ranges, prev_index, sequence_ranges.size(), parts, group_torn, log, next_expecting_sn, missing_ranges);
 
     return {std::move(missing_ranges), next_expecting_sn, sequence_ranges.back().end_sn + 1};
 }

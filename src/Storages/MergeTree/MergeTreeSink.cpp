@@ -8,6 +8,7 @@
 
 /// proton : starts
 #include <Storages/MergeTree/SequenceInfo.h>
+#include <Common/Exception.h>
 /// proton : ends
 
 namespace ProfileEvents
@@ -211,12 +212,24 @@ void MergeTreeSink::finishDelayedChunk()
         /// Part can be deduplicated, so increment counters and add to part log only if it's really added
         if (added)
         {
-            auto counters_snapshot = std::make_shared<ProfileEvents::Counters::Snapshot>(partition.part_counters.getPartiallyAtomicSnapshot());
-            PartLog::addNewPart(storage.getContext(), PartLog::PartLogEntry(part, partition.elapsed_ns, counters_snapshot));
-            StorageMergeTree::incrementInsertedPartsProfileEvent(part->getType());
+            /// proton: starts
+            /// The part is already durable above; this bookkeeping is best-effort. A throw here (e.g.
+            /// MEMORY_LIMIT_EXCEEDED) must not propagate, or the commit path skips advancing the
+            /// committed sn for a persisted part and re-consumes that sn, writing a duplicate part.
+            try
+            {
+                auto counters_snapshot = std::make_shared<ProfileEvents::Counters::Snapshot>(partition.part_counters.getPartiallyAtomicSnapshot());
+                PartLog::addNewPart(storage.getContext(), PartLog::PartLogEntry(part, partition.elapsed_ns, counters_snapshot));
+                StorageMergeTree::incrementInsertedPartsProfileEvent(part->getType());
 
-            /// Initiate async merge - it will be done if it's good time for merge and if there are space in 'background_pool'.
-            storage.background_operations_assignee->trigger();
+                /// Initiate async merge - it will be done if it's good time for merge and if there are space in 'background_pool'.
+                storage.background_operations_assignee->trigger();
+            }
+            catch (...)
+            {
+                tryLogCurrentException(storage.log, "Best-effort post-commit bookkeeping failed for an already-durable part");
+            }
+            /// proton: ends
         }
     }
 
