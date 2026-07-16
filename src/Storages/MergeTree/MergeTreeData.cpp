@@ -1419,6 +1419,10 @@ std::vector<MergeTreeData::LoadPartResult> MergeTreeData::loadDataPartsFromDisk(
 
     std::vector<LoadPartResult> loaded_parts;
 
+    /// proton: starts.
+    std::atomic_size_t parts_loaded = 0;
+    /// proton: ends.
+
     try
     {
         for (size_t thread = 0; thread < num_threads; ++thread)
@@ -1480,6 +1484,11 @@ std::vector<MergeTreeData::LoadPartResult> MergeTreeData::loadDataPartsFromDisk(
                         std::lock_guard lock(part_loading_mutex);
                         loaded_parts.push_back(std::move(res));
                     }
+
+                    /// proton: starts.
+                    if (auto n = parts_loaded.fetch_add(1) + 1; n % 100 == 0)
+                        LOG_INFO(log, "Loaded {}/{} parts", n, num_parts);
+                    /// proton: ends.
                 }
             });
         }
