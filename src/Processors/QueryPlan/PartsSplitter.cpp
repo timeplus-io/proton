@@ -92,11 +92,19 @@ bool isSafePrimaryDataKeyType(const IDataType & data_type)
 class IndexAccess
 {
 public:
-    explicit IndexAccess(const RangesInDataParts & parts_) : parts(parts_) { }
+    explicit IndexAccess(const RangesInDataParts & parts_) : parts(parts_)
+    {
+        /// Trigger lazy loading of every part's primary index once, and copy the Columns
+        /// (cheap: shared_ptrs) so getValue() neither re-acquires the per-part index mutex
+        /// nor dangles if the index is unloaded while this splitter is alive.
+        indices.reserve(parts.size());
+        for (const auto & part : parts)
+            indices.push_back(part.data_part->getIndex());
+    }
 
     Values getValue(size_t part_idx, size_t mark) const
     {
-        const auto & index = parts[part_idx].data_part->index;
+        const auto & index = indices[part_idx];
         Values values(index.size());
         for (size_t i = 0; i < values.size(); ++i)
             index[i]->get(mark, values[i]);
@@ -115,6 +123,7 @@ public:
 
 private:
     const RangesInDataParts & parts;
+    std::vector<IMergeTreeDataPart::Index> indices;
 };
 
 

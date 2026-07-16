@@ -3,6 +3,7 @@
 #include <IO/WriteSettings.h>
 #include <Core/Block.h>
 #include <base/types.h>
+#include <base/defines.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/LightweightDeleteDescription.h>
@@ -258,15 +259,25 @@ public:
     void assertState(const std::initializer_list<MergeTreeDataPartState> & affordable_states) const;
 
     /// Primary key (correspond to primary.idx file).
-    /// Always loaded in RAM. Contains each index_granularity-th value of primary key tuple.
+    /// Contains each index_granularity-th value of primary key tuple.
     /// Note that marks (also correspond to primary key) is not always in RAM, but cached. See MarkCache.h.
     using Index = Columns;
-    Index index;
+
+    /// Returns the primary index, loading it lazily on first use to bound startup memory.
+    const Index & getIndex() const;
+
+    /// Sets the primary index. Can be called only once, when the index is not yet loaded.
+    void setIndex(Columns index_columns);
+
+    /// Frees the primary index from RAM. It will be reloaded lazily on next use.
+    /// Invalidates references returned by getIndex(): must not run concurrently with
+    /// readers still holding them (they must copy the Columns instead).
+    void unloadIndex();
 
     MergeTreePartition partition;
 
-    /// Amount of rows between marks
-    /// As index always loaded into memory
+    /// Amount of rows between marks. Always in memory,
+    /// unlike the primary key index columns which may be lazy-loaded.
     MergeTreeIndexGranularity index_granularity;
 
     /// Index that for each part stores min and max values of a set of columns. This allows quickly excluding
@@ -505,6 +516,11 @@ public:
 
 protected:
 
+    /// Primary key columns, lazily loaded in RAM on first use. Guarded by index_mutex.
+    mutable std::mutex index_mutex;
+    mutable Index index TSA_GUARDED_BY(index_mutex);
+    mutable bool index_loaded TSA_GUARDED_BY(index_mutex) = false;
+
     /// Total size of all columns, calculated once in calcuateColumnSizesOnDisk
     ColumnSize total_columns_size;
 
@@ -599,8 +615,8 @@ private:
 
     virtual void appendFilesOfIndexGranularity(Strings & files) const;
 
-    /// Loads index file.
-    void loadIndex();
+    /// Loads index file. Requires index_mutex to be held.
+    void loadIndex() const TSA_REQUIRES(index_mutex);
 
     void appendFilesOfIndex(Strings & files) const;
 

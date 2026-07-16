@@ -1,0 +1,4 @@
+lazy=1 after attach, resident>0	false
+5
+lazy=1 after pk query, resident>0	true
+lazy=0 after attach, resident>0	true
