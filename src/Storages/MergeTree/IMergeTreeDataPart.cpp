@@ -23,6 +23,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <Common/MemoryTrackerBlockerInThread.h>
+#include <Common/Stopwatch.h>
 #include <base/JSON.h>
 #include <Common/logger_useful.h>
 #include <Compression/getCompressionCodecForFile.h>
@@ -587,7 +588,15 @@ const IMergeTreeDataPart::Index & IMergeTreeDataPart::getIndex() const
 {
     std::scoped_lock lock(index_mutex);
     if (!index_loaded)
+    {
+        /// proton: starts.
+        Stopwatch watch;
         loadIndex();
+        if (storage.getSettings()->primary_key_lazy_load)
+            LOG_INFO(storage.log, "Lazily loaded primary index for part {} in {} ms", name, watch.elapsedMilliseconds());
+        /// proton: ends.
+    }
+
     index_loaded = true;
     /// Once loaded, the index stays resident for the lifetime of the part unless explicitly unloaded,
     /// so returning a reference to the guarded storage is safe for concurrent readers.

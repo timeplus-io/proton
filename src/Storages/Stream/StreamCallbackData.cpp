@@ -65,6 +65,13 @@ StreamCallbackData::StreamCallbackData(
     , recovery_finished(missing_sequence_ranges.empty())
 {
     chassert(max_committed_sn_provider && commit_sink && logger);
+
+    if (!recovery_finished)
+        LOG_INFO(
+            logger,
+            "Recovery started: missing_ranges={} ranges={}",
+            missing_sequence_ranges.size(),
+            sequenceRangesToString(missing_sequence_ranges));
 }
 
 void StreamCallbackData::resetMissingSequenceRanges(SequenceRanges missing_sequence_ranges_)
@@ -79,6 +86,13 @@ void StreamCallbackData::resetMissingSequenceRanges(SequenceRanges missing_seque
     highest_seen_sn = -1;
     last_recovery_flush_ms = MonotonicMilliseconds::now();
     recovery_finished = missing_sequence_ranges.empty();
+
+    if (!recovery_finished)
+        LOG_INFO(
+            logger,
+            "Recovery restarted after reconcile: missing_ranges={} ranges={}",
+            missing_sequence_ranges.size(),
+            sequenceRangesToString(missing_sequence_ranges));
 }
 
 void StreamCallbackData::wait() const
@@ -194,8 +208,25 @@ void StreamCallbackData::flushRecoveryBuffer(int64_t max_committed_sn)
     {
         /// Nothing safe to flush yet: the buffer is entirely one still-incomplete multi-part range.
         /// It is bounded by that range's original write size, so memory is still bounded.
+        LOG_DEBUG(
+            logger,
+            "Recovery flush deferred by incomplete multi-part range at sn={}: buffered_rows={} buffered_bytes={} highest_seen_sn={}",
+            boundary_sn,
+            recovery_buffer_rows,
+            recovery_buffer_bytes,
+            highest_seen_sn);
         return;
     }
+
+    LOG_INFO(
+        logger,
+        "Recovery flush: buffered_rows={} buffered_bytes={} highest_seen_sn={} max_committed_sn={} boundary_sn={} missing_ranges={}",
+        recovery_buffer_rows,
+        recovery_buffer_bytes,
+        highest_seen_sn,
+        max_committed_sn,
+        boundary_sn,
+        missing_sequence_ranges.size());
 
     cluster::SchemaRecordPtrs flushable(std::make_move_iterator(recovery_records.begin()), std::make_move_iterator(split));
 
@@ -241,6 +272,13 @@ void StreamCallbackData::flushRecoveryBuffer(int64_t max_committed_sn)
     /// start re-runs populateCommittedSNFromParts / resetMissingSequenceRanges and recomputes the
     /// now-smaller hole set, so already-filled records dedup on re-consume.
     std::erase_if(missing_sequence_ranges, [this](const auto & r) { return r.end_sn <= highest_seen_sn; });
+
+    LOG_INFO(
+        logger,
+        "Recovery flush done: remaining buffered_rows={} buffered_bytes={} missing_ranges={}",
+        recovery_buffer_rows,
+        recovery_buffer_bytes,
+        missing_sequence_ranges.size());
 
     last_recovery_flush_ms = MonotonicMilliseconds::now();
 }
