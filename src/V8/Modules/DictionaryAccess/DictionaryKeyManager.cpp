@@ -78,7 +78,9 @@ ColumnsWithTypeAndName DictionaryKeyManager::extractBatchKeyColumns(v8::Isolate 
         return {};
 
     /// Check first key to determine strategy(TODO: find a more robust way?)
-    v8::Local<v8::Value> first_key = js_keys->Get(context, 0).ToLocalChecked();
+    v8::Local<v8::Value> first_key;
+    if (!js_keys->Get(context, 0).ToLocal(&first_key))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Failed to read key at index 0 (a property getter threw)");
     bool using_string_keys = first_key->IsString();
     bool using_object_keys = first_key->IsObject() && !first_key->IsArray();
 
@@ -88,7 +90,9 @@ ColumnsWithTypeAndName DictionaryKeyManager::extractBatchKeyColumns(v8::Isolate 
 
         for (uint32_t i = 0; i < num_keys; ++i)
         {
-            v8::Local<v8::Value> key = js_keys->Get(context, i).ToLocalChecked();
+            v8::Local<v8::Value> key;
+            if (!js_keys->Get(context, i).ToLocal(&key))
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Failed to read key at index {} (a property getter threw)", i);
             if (!key->IsString())
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "All keys must be of the same type (string)");
 
@@ -113,7 +117,9 @@ ColumnsWithTypeAndName DictionaryKeyManager::extractBatchKeyColumns(v8::Isolate 
 
         for (uint32_t row = 0; row < num_keys; ++row)
         {
-            v8::Local<v8::Value> key = js_keys->Get(context, row).ToLocalChecked();
+            v8::Local<v8::Value> key;
+            if (!js_keys->Get(context, row).ToLocal(&key))
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Failed to read key at index {} (a property getter threw)", row);
             if (!key->IsObject() || key->IsArray())
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "All keys must be of the same type (object)");
 
@@ -126,7 +132,10 @@ ColumnsWithTypeAndName DictionaryKeyManager::extractBatchKeyColumns(v8::Isolate 
                 if (!key_obj->Has(context, prop_name).FromMaybe(false))
                     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Key object missing required property: {}", key_column_names[i]);
 
-                v8::Local<v8::Value> prop_value = key_obj->Get(context, prop_name).ToLocalChecked();
+                v8::Local<v8::Value> prop_value;
+                if (!key_obj->Get(context, prop_name).ToLocal(&prop_value))
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS, "Failed to read key property '{}' (a property getter threw)", key_column_names[i]);
 
                 try
                 {
@@ -211,7 +220,9 @@ ColumnsWithTypeAndName DictionaryKeyManager::objectToKeyColumns(v8::Isolate * is
         if (!js_obj->Has(context, prop_name).FromMaybe(false))
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Key object missing required property: {}", key_column_names[i]);
 
-        v8::Local<v8::Value> prop_value = js_obj->Get(context, prop_name).ToLocalChecked();
+        v8::Local<v8::Value> prop_value;
+        if (!js_obj->Get(context, prop_name).ToLocal(&prop_value))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Failed to read key property '{}' (a property getter threw)", key_column_names[i]);
 
         try
         {

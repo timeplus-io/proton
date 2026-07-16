@@ -1,0 +1,1 @@
+set null element: caught; set undefined element: caught; set primitive element: caught; set sparse values: caught; set proxy throwing ownKeys: caught; get NaN key: caught; get negative key: caught; get Infinity key: caught; get bad string key: caught; symbol projection: caught; throwing getter in keys: caught; valid lookup after abuse: ok {"score":10}

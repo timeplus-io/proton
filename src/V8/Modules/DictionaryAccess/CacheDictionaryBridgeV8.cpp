@@ -1,10 +1,39 @@
 #include <V8/Modules/DictionaryAccess/CacheDictionaryBridge.h>
 
+#include <V8/ExecutionSettings.h>
 #include <Common/logger_useful.h>
+
+#include <algorithm>
+#include <optional>
 
 
 namespace DB::V8
 {
+namespace
+{
+/// The chunk returned by IDictionary::getByKeys consists of the key columns
+/// (in key_index_map order) followed by the attributes from required_columns
+/// (key names are skipped there). Rebuild that layout so result columns can be
+/// matched by name instead of assuming required_columns is position-aligned.
+Names buildChunkColumnNames(
+    const ColumnsWithTypeAndName & key_columns,
+    const std::vector<size_t> & key_index_map,
+    const Names & required_columns,
+    const DictionaryStructure & dict_struct)
+{
+    Names chunk_names;
+    chunk_names.reserve(key_index_map.size() + required_columns.size());
+
+    for (auto idx : key_index_map)
+        chunk_names.push_back(key_columns[idx].name);
+
+    for (const auto & name : required_columns)
+        if (dict_struct.hasAttribute(name))
+            chunk_names.push_back(name);
+
+    return chunk_names;
+}
+}
 void CacheDictionaryBridge::getCardinality(const v8::FunctionCallbackInfo<v8::Value> & args)
 {
     v8::Isolate * isolate = args.GetIsolate();
@@ -69,21 +98,21 @@ void CacheDictionaryBridge::getValue(const v8::FunctionCallbackInfo<v8::Value> &
             return;
         }
 
-        auto key_manager = bridge.getKeyManager(*dict_name);
-        auto value_converter = bridge.getValueConverter(*dict_name);
-        bool is_simple_key = bridge.isDictionarySimpleKey(*dict_name);
+        auto snapshot = bridge.getDictionarySnapshot(*dict_name);
+        const auto & key_manager = snapshot.key_manager;
+        const auto & value_converter = snapshot.value_converter;
+        const auto & dict_ptr = snapshot.dictionary;
+        bool is_simple_key = snapshot.is_simple_key;
 
         DB::Names required_columns;
         if (args.Length() >= 3 && args[2]->IsArray())
         {
-            v8::Local<v8::Array> columns_array = v8::Local<v8::Array>::Cast(args[2]);
-            uint32_t columns_length = columns_array->Length();
-            required_columns.reserve(columns_length);
-
-            for (uint32_t i = 0; i < columns_length; ++i)
+            std::string projection_error;
+            if (!readProjectionColumns(isolate, context, v8::Local<v8::Array>::Cast(args[2]), required_columns, projection_error))
             {
-                v8::String::Utf8Value column_name(isolate, columns_array->Get(context, i).ToLocalChecked());
-                required_columns.push_back(*column_name);
+                if (!projection_error.empty())
+                    isolate->ThrowException(v8::String::NewFromUtf8(isolate, projection_error.c_str()).ToLocalChecked());
+                return;
             }
         }
         else
@@ -97,12 +126,9 @@ void CacheDictionaryBridge::getValue(const v8::FunctionCallbackInfo<v8::Value> &
             }
             else
             {
-                const Block & sample_block = bridge.getSampleBlock(*dict_name);
-                required_columns.insert(required_columns.begin(), sample_block.getByPosition(0).name);
+                required_columns.insert(required_columns.begin(), snapshot.sample_block.getByPosition(0).name);
             }
         }
-
-        auto dict_ptr = bridge.getDictionary(*dict_name);
 
         ColumnsWithTypeAndName key_columns;
         std::vector<size_t> key_index_map;
@@ -124,22 +150,11 @@ void CacheDictionaryBridge::getValue(const v8::FunctionCallbackInfo<v8::Value> &
 
             MutableColumnPtr id_column = id_type->createColumn();
             UInt64 key_value = 0;
+            std::string key_error;
 
-            if (key->IsNumber())
+            if (!jsSimpleKeyToUInt64(isolate, key, key_value, key_error))
             {
-                double num_value = key->NumberValue(context).FromJust();
-                key_value = static_cast<UInt64>(num_value);
-            }
-            else if (key->IsString())
-            {
-                v8::String::Utf8Value str_key(isolate, key);
-                key_value = std::stoull(*str_key);
-            }
-            else
-            {
-                isolate->ThrowException(
-                    v8::String::NewFromUtf8(isolate, "Simple key dictionary requires numeric or string representation of numeric key")
-                        .ToLocalChecked());
+                isolate->ThrowException(v8::String::NewFromUtf8(isolate, key_error.c_str()).ToLocalChecked());
                 return;
             }
 
@@ -166,7 +181,11 @@ void CacheDictionaryBridge::getValue(const v8::FunctionCallbackInfo<v8::Value> &
 
         auto chunk = dict_ptr->getByKeys(key_columns, null_map, required_columns, key_index_map, true);
 
-        if (chunk.getNumRows() == 0)
+        /// With add_defaults_if_missing=true the chunk contains a default-filled
+        /// row even for a missing key. Preserve that legacy row by default, and
+        /// return null only when the UDF isolate opted into strict miss handling.
+        bool found = !null_map.empty() && null_map[0];
+        if (chunk.getNumRows() == 0 || (DB::V8::dictionaryGetValueNullOnMissingKey(isolate) && !found))
         {
             args.GetReturnValue().SetNull();
             LOG_TRACE(bridge.logger, "Dictionary lookup for '{}' key not found", *dict_name);
@@ -174,14 +193,17 @@ void CacheDictionaryBridge::getValue(const v8::FunctionCallbackInfo<v8::Value> &
         }
 
         const auto & columns = chunk.getColumns();
+        Names chunk_names = buildChunkColumnNames(key_columns, key_index_map, required_columns, dict_ptr->getStructure());
 
         v8::Local<v8::Object> result = v8::Object::New(isolate);
 
-        for (size_t i = 0; i < required_columns.size(); ++i)
+        for (const auto & col_name : required_columns)
         {
-            const auto & col_name = required_columns[i];
-            size_t col_index = i;
+            auto it = std::find(chunk_names.begin(), chunk_names.end(), col_name);
+            if (it == chunk_names.end())
+                continue;
 
+            size_t col_index = static_cast<size_t>(it - chunk_names.begin());
             if (col_index >= columns.size())
                 continue;
 
@@ -246,24 +268,22 @@ void CacheDictionaryBridge::batchGetValues(const v8::FunctionCallbackInfo<v8::Va
             return;
         }
 
-        auto dict_ptr = bridge.getDictionary(*dict_name);
-        auto key_manager = bridge.getKeyManager(*dict_name);
-        auto value_converter = bridge.getValueConverter(*dict_name);
-        bool is_simple_key = bridge.isDictionarySimpleKey(*dict_name);
+        auto snapshot = bridge.getDictionarySnapshot(*dict_name);
+        const auto & dict_ptr = snapshot.dictionary;
+        const auto & key_manager = snapshot.key_manager;
+        const auto & value_converter = snapshot.value_converter;
+        bool is_simple_key = snapshot.is_simple_key;
 
-        const Block & sample_block = bridge.getSampleBlock(*dict_name);
         DB::Names required_columns;
 
         if (args.Length() >= 3 && args[2]->IsArray())
         {
-            v8::Local<v8::Array> columns_array = v8::Local<v8::Array>::Cast(args[2]);
-            uint32_t columns_length = columns_array->Length();
-            required_columns.reserve(columns_length);
-
-            for (uint32_t i = 0; i < columns_length; ++i)
+            std::string projection_error;
+            if (!readProjectionColumns(isolate, context, v8::Local<v8::Array>::Cast(args[2]), required_columns, projection_error))
             {
-                v8::String::Utf8Value column_name(isolate, columns_array->Get(context, i).ToLocalChecked());
-                required_columns.push_back(*column_name);
+                if (!projection_error.empty())
+                    isolate->ThrowException(v8::String::NewFromUtf8(isolate, projection_error.c_str()).ToLocalChecked());
+                return;
             }
         }
         else
@@ -277,7 +297,7 @@ void CacheDictionaryBridge::batchGetValues(const v8::FunctionCallbackInfo<v8::Va
             else
             {
                 /// assuming key is at position 0
-                required_columns.insert(required_columns.begin(), sample_block.getByPosition(0).name);
+                required_columns.insert(required_columns.begin(), snapshot.sample_block.getByPosition(0).name);
             }
         }
 
@@ -304,24 +324,16 @@ void CacheDictionaryBridge::batchGetValues(const v8::FunctionCallbackInfo<v8::Va
 
             for (uint32_t i = 0; i < keys_count; ++i)
             {
-                v8::Local<v8::Value> key = keys_array->Get(context, i).ToLocalChecked();
-                UInt64 key_value = 0;
+                v8::Local<v8::Value> key;
+                if (!keys_array->Get(context, i).ToLocal(&key))
+                    return; /// a property getter threw; the JS exception is pending
 
-                if (key->IsNumber())
+                UInt64 key_value = 0;
+                std::string key_error;
+
+                if (!jsSimpleKeyToUInt64(isolate, key, key_value, key_error))
                 {
-                    double num_value = key->NumberValue(context).FromJust();
-                    key_value = static_cast<UInt64>(num_value);
-                }
-                else if (key->IsString())
-                {
-                    v8::String::Utf8Value str_key(isolate, key);
-                    key_value = std::stoull(*str_key);
-                }
-                else
-                {
-                    isolate->ThrowException(
-                        v8::String::NewFromUtf8(isolate, "Simple key dictionary requires numeric or string representation of numeric keys")
-                            .ToLocalChecked());
+                    isolate->ThrowException(v8::String::NewFromUtf8(isolate, key_error.c_str()).ToLocalChecked());
                     return;
                 }
 
@@ -350,30 +362,48 @@ void CacheDictionaryBridge::batchGetValues(const v8::FunctionCallbackInfo<v8::Va
         auto chunk = dict_ptr->getByKeys(key_columns, null_map, required_columns, key_index_map, true);
 
         const auto & columns = chunk.getColumns();
+        Names chunk_names = buildChunkColumnNames(key_columns, key_index_map, required_columns, dict_ptr->getStructure());
+
+        /// Pre-resolve the chunk column index for each required column
+        std::vector<std::optional<size_t>> column_indexes;
+        column_indexes.reserve(required_columns.size());
+        for (const auto & col_name : required_columns)
+        {
+            auto it = std::find(chunk_names.begin(), chunk_names.end(), col_name);
+            if (it != chunk_names.end() && static_cast<size_t>(it - chunk_names.begin()) < columns.size())
+                column_indexes.emplace_back(static_cast<size_t>(it - chunk_names.begin()));
+            else
+                column_indexes.emplace_back(std::nullopt);
+        }
 
         v8::Local<v8::Array> results = v8::Array::New(isolate, keys_count);
+        bool null_on_missing_key = DB::V8::dictionaryGetValueNullOnMissingKey(isolate);
 
-        size_t row_index = 0;
+        /// With add_defaults_if_missing=true the chunk contains one row per input
+        /// key (default-filled for missing keys), so row i corresponds to key i.
         for (uint32_t i = 0; i < keys_count; ++i)
         {
-            if (i < null_map.size() && null_map[i])
+            bool has_row = i < chunk.getNumRows();
+            bool found = i < null_map.size() && null_map[i];
+            if (has_row && (!null_on_missing_key || found))
             {
                 v8::Local<v8::Object> row_obj = v8::Object::New(isolate);
 
-                for (size_t col_idx = 0; col_idx < required_columns.size(); ++col_idx)
+                for (size_t j = 0; j < required_columns.size(); ++j)
                 {
-                    if (col_idx >= columns.size() || row_index >= columns[col_idx]->size())
+                    if (!column_indexes[j].has_value())
                         continue;
 
-                    const auto & col_name = required_columns[col_idx];
-                    const auto & column = columns[col_idx];
+                    const auto & column = columns[*column_indexes[j]];
+                    if (i >= column->size())
+                        continue;
 
-                    v8::Local<v8::Value> js_value = bridge.columnValueToV8(isolate, *column, row_index);
+                    const auto & col_name = required_columns[j];
+                    v8::Local<v8::Value> js_value = bridge.columnValueToV8(isolate, *column, i);
                     row_obj->Set(context, v8::String::NewFromUtf8(isolate, col_name.c_str()).ToLocalChecked(), js_value).Check();
                 }
 
                 results->Set(context, i, row_obj).Check();
-                row_index++;
             }
             else
             {

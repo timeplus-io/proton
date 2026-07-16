@@ -119,7 +119,14 @@ Block DictionaryValueConverter::jsBatchToBlock(v8::Isolate * isolate, v8::Local<
 
     for (uint32_t row = 0; row < num_rows; ++row)
     {
-        v8::Local<v8::Value> row_value = values_array->Get(context, row).ToLocalChecked();
+        v8::Local<v8::Value> row_value;
+        if (!values_array->Get(context, row).ToLocal(&row_value))
+        {
+            LOG_WARNING(logger, "Failed to read row {} (a property getter threw), inserting defaults", row);
+            for (auto & column : mutable_columns)
+                column->insertDefault();
+            continue;
+        }
         if (!row_value->IsObject() || row_value->IsArray())
         {
             LOG_WARNING(logger, "Row {} is not a valid object, inserting defaults", row);

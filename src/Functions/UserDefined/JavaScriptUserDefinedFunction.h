@@ -7,6 +7,7 @@
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 #include <Functions/UserDefined/UserDefinedFunctionBase.h>
 
+#include <V8/ExecutionSettings.h>
 #include <V8/PkuSupport.h>
 #include <V8/V8Includes.h>
 
@@ -33,9 +34,13 @@ public:
     std::unique_ptr<v8::Isolate, JavaScriptExecutionContext::IsolateDeleter> isolate;
     v8::Persistent<v8::Context> context;
     v8::Persistent<v8::Function> func;
+    V8::ExecutionSettings execution_settings;
 
     ~JavaScriptExecutionContext()
     {
+        if (isolate)
+            V8::setExecutionSettings(isolate.get(), nullptr);
+
         func.Reset();
         context.Reset();
     }

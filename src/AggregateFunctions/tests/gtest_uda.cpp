@@ -209,7 +209,7 @@ TEST_F(UDATestCase, add)
     DataTypes types = getDataTypes(ARGS_CEP1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000, false);
 
     ASSERT_TRUE(aggr_function.hasUserDefinedEmit());
 
@@ -249,7 +249,7 @@ TEST_F(UDATestCase, CheckPoint)
     DataTypes types = getDataTypes(ARGS_UDA1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000, false);
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(aggr_function.sizeOfData())),
@@ -291,7 +291,7 @@ TEST_F(UDATestCase, Merge)
     DataTypes types = getDataTypes(ARGS_UDA1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(std::move(udf_desc), types, params, false, max_heap_size, 1000, false);
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(2 * aggr_function.sizeOfData())),

@@ -7,6 +7,8 @@
 #include <Common/ErrorCodes.h>
 #include <Common/logger_useful.h>
 
+#include <cmath>
+
 namespace DB::V8
 {
 namespace
@@ -273,22 +275,30 @@ std::shared_ptr<DB::IDictionary> CacheDictionaryBridge::getDictionary(const std:
     return it->second;
 }
 
-const Block & CacheDictionaryBridge::getSampleBlock(const std::string & dict_name) const
+CacheDictionaryBridge::DictionarySnapshot CacheDictionaryBridge::getDictionarySnapshot(const std::string & dict_name) const
 {
     std::shared_lock lock(dict_map_rw_mutex);
-    auto it = cached_sample_blocks.find(dict_name);
-    if (it == cached_sample_blocks.end())
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Sample block for dictionary '{}' not cached", dict_name);
-    return it->second;
-}
 
-const DB::StorageID & CacheDictionaryBridge::getSourceDbAndTable(const std::string & dict_name) const
-{
-    std::shared_lock lock(dict_map_rw_mutex);
-    auto it = cached_source_db_and_table.find(dict_name);
-    if (it == cached_source_db_and_table.end())
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Source DB and table for dictionary '{}' not cached", dict_name);
-    return it->second;
+    auto dict_it = dictionaries.find(dict_name);
+    auto key_manager_it = key_managers.find(dict_name);
+    auto value_converter_it = value_converters.find(dict_name);
+    auto sample_block_it = cached_sample_blocks.find(dict_name);
+    auto source_it = cached_source_db_and_table.find(dict_name);
+    auto is_simple_it = is_simple_key_dict.find(dict_name);
+
+    if (dict_it == dictionaries.end() || key_manager_it == key_managers.end() || value_converter_it == value_converters.end()
+        || sample_block_it == cached_sample_blocks.end() || source_it == cached_source_db_and_table.end()
+        || is_simple_it == is_simple_key_dict.end())
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Dictionary '{}' not fully cached", dict_name);
+
+    DictionarySnapshot snapshot;
+    snapshot.dictionary = dict_it->second;
+    snapshot.key_manager = key_manager_it->second;
+    snapshot.value_converter = value_converter_it->second;
+    snapshot.sample_block = sample_block_it->second;
+    snapshot.source_db_and_table = source_it->second;
+    snapshot.is_simple_key = is_simple_it->second;
+    return snapshot;
 }
 
 bool CacheDictionaryBridge::hasDictionary(const std::string & dict_name) const
@@ -297,31 +307,69 @@ bool CacheDictionaryBridge::hasDictionary(const std::string & dict_name) const
     return dictionaries.find(dict_name) != dictionaries.end();
 }
 
-bool CacheDictionaryBridge::isDictionarySimpleKey(const std::string & dict_name) const
+bool CacheDictionaryBridge::jsSimpleKeyToUInt64(v8::Isolate * isolate, v8::Local<v8::Value> key, UInt64 & out, std::string & error)
 {
-    std::shared_lock lock(dict_map_rw_mutex);
-    auto it = is_simple_key_dict.find(dict_name);
-    if (it == is_simple_key_dict.end())
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Dictionary type for '{}' not cached", dict_name);
-    return it->second;
+    if (key->IsNumber())
+    {
+        double num_value = key.As<v8::Number>()->Value();
+        /// Reject values whose conversion to UInt64 is undefined behavior. 2^64 is the
+        /// smallest double not representable in UInt64.
+        if (!std::isfinite(num_value) || num_value < 0 || num_value >= 18446744073709551616.0)
+        {
+            error = "Simple dictionary key must be a non-negative finite number within uint64 range";
+            return false;
+        }
+        out = static_cast<UInt64>(num_value);
+        return true;
+    }
+
+    if (key->IsString())
+    {
+        v8::String::Utf8Value str_key(isolate, key);
+        if (*str_key == nullptr)
+        {
+            error = "Failed to read string dictionary key";
+            return false;
+        }
+        try
+        {
+            out = std::stoull(*str_key);
+            return true;
+        }
+        catch (const std::exception &)
+        {
+            error = "String dictionary key is not a valid unsigned integer";
+            return false;
+        }
+    }
+
+    error = "Simple key dictionary requires numeric or string representation of numeric key";
+    return false;
 }
 
-std::shared_ptr<DictionaryKeyManager> CacheDictionaryBridge::getKeyManager(const std::string & dict_name)
+bool CacheDictionaryBridge::readProjectionColumns(
+    v8::Isolate * isolate, v8::Local<v8::Context> context, v8::Local<v8::Array> columns_array, Names & out, std::string & error)
 {
-    std::shared_lock lock(dict_map_rw_mutex);
-    auto it = key_managers.find(dict_name);
-    if (it == key_managers.end())
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Key manager for dictionary '{}' not initialized", dict_name);
-    return it->second;
-}
+    uint32_t columns_length = columns_array->Length();
+    out.reserve(columns_length);
 
-std::shared_ptr<DictionaryValueConverter> CacheDictionaryBridge::getValueConverter(const std::string & dict_name)
-{
-    std::shared_lock lock(dict_map_rw_mutex);
-    auto it = value_converters.find(dict_name);
-    if (it == value_converters.end())
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Value converter for dictionary '{}' not initialized", dict_name);
-    return it->second;
+    for (uint32_t i = 0; i < columns_length; ++i)
+    {
+        v8::Local<v8::Value> element;
+        if (!columns_array->Get(context, i).ToLocal(&element))
+            return false; /// a property getter threw; the JS exception is pending
+
+        v8::String::Utf8Value column_name(isolate, element);
+        if (*column_name == nullptr)
+        {
+            error = "Projection column names must be strings";
+            return false;
+        }
+
+        out.emplace_back(*column_name, column_name.length());
+    }
+
+    return true;
 }
 
 }

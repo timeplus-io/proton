@@ -840,6 +840,7 @@ Possible values: non-negative numbers. Note that if the value is too small or to
     M(Bool, is_clickhouse_compatible, false, "When this setting is set to true, timeplus can run ClickHouse SQL", 0)  \
     M(Bool, force, false, "Force to execute the query without checking", 0) \
     M(UInt64, javascript_vms, 1, "Number of JavaScript VMs to use in one query", 0) \
+    M(Bool, javascript_udf_getvalue_null_on_missing_key, false, "When enabled, JavaScript UDF dictionary getValue and batchGetValues return null for missing keys. The default preserves the legacy default-filled-row contract.", 0) \
     M(Bool, show_multi_versions, false, "For tables / views / UDF / schemas etc which supports multi-versions, show all recent versions of  them", 0) \
     M(Bool, verbose, false, "Set to true to make SHOW command to return more information if the target resource supports this feature", 0) \
     \
