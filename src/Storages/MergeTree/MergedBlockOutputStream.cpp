@@ -225,7 +225,7 @@ MergedBlockOutputStream::Finalizer MergedBlockOutputStream::finalizePartAsync(
 
     new_part->rows_count = rows_count;
     new_part->modification_time = time(nullptr);
-    new_part->index = writer->releaseIndexColumns();
+    new_part->setIndex(writer->releaseIndexColumns());
     new_part->checksums = checksums;
     new_part->setBytesOnDisk(checksums.getTotalSizeOnDisk());
     new_part->index_granularity = writer->getIndexGranularity();

@@ -6168,7 +6168,7 @@ Block MergeTreeData::getMinMaxCountProjectionBlock(
 
         if (!primary_key_max_column_name.empty())
         {
-            const auto & primary_key_column = *part->index[0];
+            const auto & primary_key_column = *part->getIndex()[0];
             auto & min_column = assert_cast<ColumnAggregateFunction &>(*partition_minmax_count_columns[pos++]);
             auto & max_column = assert_cast<ColumnAggregateFunction &>(*partition_minmax_count_columns[pos++]);
             insert(min_column, primary_key_column[0]);

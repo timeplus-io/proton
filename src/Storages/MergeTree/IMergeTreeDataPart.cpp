@@ -583,8 +583,37 @@ void IMergeTreeDataPart::removeIfNeeded()
 }
 
 
+const IMergeTreeDataPart::Index & IMergeTreeDataPart::getIndex() const
+{
+    std::scoped_lock lock(index_mutex);
+    if (!index_loaded)
+        loadIndex();
+    index_loaded = true;
+    /// Once loaded, the index stays resident for the lifetime of the part unless explicitly unloaded,
+    /// so returning a reference to the guarded storage is safe for concurrent readers.
+    return TSA_SUPPRESS_WARNING_FOR_READ(index);
+}
+
+void IMergeTreeDataPart::setIndex(Columns index_columns)
+{
+    std::scoped_lock lock(index_mutex);
+    /// Check the flag, not index.empty(): an empty index is a valid loaded state.
+    if (index_loaded)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "The index of data part can be set only once");
+    index = std::move(index_columns);
+    index_loaded = true;
+}
+
+void IMergeTreeDataPart::unloadIndex()
+{
+    std::scoped_lock lock(index_mutex);
+    index.clear();
+    index_loaded = false;
+}
+
 UInt64 IMergeTreeDataPart::getIndexSizeInBytes() const
 {
+    std::scoped_lock lock(index_mutex);
     UInt64 res = 0;
     for (const ColumnPtr & column : index)
         res += column->byteSize();
@@ -593,6 +622,7 @@ UInt64 IMergeTreeDataPart::getIndexSizeInBytes() const
 
 UInt64 IMergeTreeDataPart::getIndexSizeInAllocatedBytes() const
 {
+    std::scoped_lock lock(index_mutex);
     UInt64 res = 0;
     for (const ColumnPtr & column : index)
         res += column->allocatedBytes();
@@ -679,7 +709,13 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
         loadChecksums(require_columns_checksums);
         loadIndexGranularity();
         calculateColumnsAndSecondaryIndicesSizesOnDisk();
-        loadIndex(); /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
+
+        /// Build the primary index eagerly only when lazy loading is disabled.
+        /// Otherwise it is loaded on first use via getIndex() to bound startup memory.
+        /// getIndex() must be called after loadIndexGranularity() as it uses the value of `index_granularity`.
+        if (!storage.getSettings()->primary_key_lazy_load)
+            getIndex();
+
         loadRowsCount(); /// Must be called after loadIndexGranularity() as it uses the value of `index_granularity`.
         loadPartitionAndMinMaxIndex();
         if (!parent_part)
@@ -788,8 +824,11 @@ void IMergeTreeDataPart::appendFilesOfIndexGranularity(Strings & /* files */) co
 {
 }
 
-void IMergeTreeDataPart::loadIndex()
+void IMergeTreeDataPart::loadIndex() const
 {
+    /// Memory for index must not be accounted as memory usage for query, because it belongs to a table.
+    MemoryTrackerBlockerInThread temporarily_disable_memory_tracker;
+
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Index granularity is not loaded before index loading");
