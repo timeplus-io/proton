@@ -47,20 +47,21 @@ void CacheDictionaryBridge::InsertToBackendStorage(Block && block, const DB::Sto
             || e.code() == ErrorCodes::RESOURCE_NOT_FOUND)
         {
             std::unique_lock lock(dict_map_rw_mutex);
-            for (auto it = cached_source_db_and_table.begin(); it != cached_source_db_and_table.end(); ++it)
+            /// Several dictionaries can share one source table; invalidate all of them
+            std::vector<std::string> stale_dicts;
+            for (const auto & [name, id] : cached_source_db_and_table)
+                if (id == table_id)
+                    stale_dicts.push_back(name);
+
+            for (const auto & dict_name : stale_dicts)
             {
-                if (it->second == table_id)
-                {
-                    const std::string dict_name = it->first;
-                    LOG_WARNING(logger, "Source missing (code={}), clearing cache for dictionary '{}'", e.code(), dict_name);
-                    dictionaries.erase(dict_name);
-                    cached_sample_blocks.erase(dict_name);
-                    cached_source_db_and_table.erase(it);
-                    is_simple_key_dict.erase(dict_name);
-                    key_managers.erase(dict_name);
-                    value_converters.erase(dict_name);
-                    break;
-                }
+                LOG_WARNING(logger, "Source missing (code={}), clearing cache for dictionary '{}'", e.code(), dict_name);
+                dictionaries.erase(dict_name);
+                cached_sample_blocks.erase(dict_name);
+                cached_source_db_and_table.erase(dict_name);
+                is_simple_key_dict.erase(dict_name);
+                key_managers.erase(dict_name);
+                value_converters.erase(dict_name);
             }
         }
         throw;

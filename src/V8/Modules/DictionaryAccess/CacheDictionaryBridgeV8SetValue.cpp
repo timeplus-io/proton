@@ -31,20 +31,25 @@ void CacheDictionaryBridge::setValue(const v8::FunctionCallbackInfo<v8::Value> &
             return;
         }
 
-        auto key_manager = bridge.getKeyManager(*dict_name);
-        auto value_converter = bridge.getValueConverter(*dict_name);
-        bool is_simple_key = bridge.isDictionarySimpleKey(*dict_name);
+        auto snapshot = bridge.getDictionarySnapshot(*dict_name);
+        const auto & key_manager = snapshot.key_manager;
+        const auto & value_converter = snapshot.value_converter;
+        bool is_simple_key = snapshot.is_simple_key;
 
         /// Create a copy of the value object to avoid modifying the original
         v8::Local<v8::Object> complete_obj = v8::Object::New(isolate);
-        v8::Local<v8::Array> props = value_obj->GetOwnPropertyNames(context).ToLocalChecked();
+        v8::Local<v8::Array> props;
+        if (!value_obj->GetOwnPropertyNames(context).ToLocal(&props))
+            return; /// a proxy trap threw; the JS exception is pending
         uint32_t props_length = props->Length();
 
         /// Copy all properties from value_obj to complete_obj
         for (uint32_t i = 0; i < props_length; ++i)
         {
-            v8::Local<v8::Value> prop_name = props->Get(context, i).ToLocalChecked();
-            v8::Local<v8::Value> prop_value = value_obj->Get(context, prop_name).ToLocalChecked();
+            v8::Local<v8::Value> prop_name;
+            v8::Local<v8::Value> prop_value;
+            if (!props->Get(context, i).ToLocal(&prop_name) || !value_obj->Get(context, prop_name).ToLocal(&prop_value))
+                return; /// a property getter threw; the JS exception is pending
             complete_obj->Set(context, prop_name, prop_value).Check();
         }
 
@@ -71,7 +76,9 @@ void CacheDictionaryBridge::setValue(const v8::FunctionCallbackInfo<v8::Value> &
                 {
                     if (key_obj->Has(context, prop_name).FromMaybe(false))
                     {
-                        v8::Local<v8::Value> key_value = key_obj->Get(context, prop_name).ToLocalChecked();
+                        v8::Local<v8::Value> key_value;
+                        if (!key_obj->Get(context, prop_name).ToLocal(&key_value))
+                            return; /// a property getter threw; the JS exception is pending
                         complete_obj->Set(context, prop_name, key_value).Check();
                     }
                     else
@@ -86,8 +93,7 @@ void CacheDictionaryBridge::setValue(const v8::FunctionCallbackInfo<v8::Value> &
         else
         {
             /// For simple key, set the key field in value_obj if not already present
-            const auto & dict_ptr = bridge.getDictionary(*dict_name);
-            const auto & dict_struct = dict_ptr->getStructure();
+            const auto & dict_struct = snapshot.dictionary->getStructure();
             Names id_names = dict_struct.getKeysNames();
 
             if (id_names.empty())
@@ -102,35 +108,23 @@ void CacheDictionaryBridge::setValue(const v8::FunctionCallbackInfo<v8::Value> &
             if (!complete_obj->Has(context, prop_name).FromMaybe(false))
             {
                 UInt64 key_value = 0;
+                std::string key_error;
 
-                if (key->IsNumber())
+                if (!jsSimpleKeyToUInt64(isolate, key, key_value, key_error))
                 {
-                    double num_value = key->NumberValue(context).FromJust();
-                    key_value = static_cast<UInt64>(num_value);
-                }
-                else if (key->IsString())
-                {
-                    v8::String::Utf8Value str_key(isolate, key);
-                    key_value = std::stoull(*str_key);
-                }
-                else
-                {
-                    isolate->ThrowException(
-                        v8::String::NewFromUtf8(isolate, "Simple key dictionary requires numeric or string representation of numeric key")
-                            .ToLocalChecked());
+                    isolate->ThrowException(v8::String::NewFromUtf8(isolate, key_error.c_str()).ToLocalChecked());
                     return;
                 }
 
-                complete_obj->Set(context, prop_name, v8::Number::New(isolate, key_value)).Check();
+                complete_obj->Set(context, prop_name, v8::Number::New(isolate, static_cast<double>(key_value))).Check();
             }
         }
 
         /// Convert JS object to block
-        const Block & sample_block = bridge.getSampleBlock(*dict_name);
         Block block;
         try
         {
-            block = value_converter->jsObjectToBlock(isolate, complete_obj, sample_block);
+            block = value_converter->jsObjectToBlock(isolate, complete_obj, snapshot.sample_block);
         }
         catch (const DB::Exception & e)
         {
@@ -140,11 +134,10 @@ void CacheDictionaryBridge::setValue(const v8::FunctionCallbackInfo<v8::Value> &
         }
 
         /// Insert into backend storage - use move semantics
-        DB::StorageID source_table_id = bridge.getSourceDbAndTable(*dict_name);
         bool insert_success = true;
         try
         {
-            bridge.InsertToBackendStorage(std::move(block), source_table_id);
+            bridge.InsertToBackendStorage(std::move(block), snapshot.source_db_and_table);
         }
         catch (const DB::Exception & e)
         {
@@ -212,35 +205,50 @@ void CacheDictionaryBridge::batchSetValues(const v8::FunctionCallbackInfo<v8::Va
             return;
         }
 
-        auto key_manager = bridge.getKeyManager(*dict_name);
-        auto value_converter = bridge.getValueConverter(*dict_name);
-        bool is_simple_key = bridge.isDictionarySimpleKey(*dict_name);
+        auto snapshot = bridge.getDictionarySnapshot(*dict_name);
+        const auto & key_manager = snapshot.key_manager;
+        const auto & value_converter = snapshot.value_converter;
+        bool is_simple_key = snapshot.is_simple_key;
 
         /// Prepare a modified array of value objects with keys added
         v8::Local<v8::Array> complete_values = v8::Array::New(isolate, batch_size);
 
-        /// Get sample block and attribute names for validation
-        const Block & sample_block = bridge.getSampleBlock(*dict_name);
-        const auto & attribute_names = value_converter->getAttributeNames();
-        const auto & dict_ptr = bridge.getDictionary(*dict_name);
-        const auto & dict_struct = dict_ptr->getStructure();
+        const auto & dict_struct = snapshot.dictionary->getStructure();
 
         /// Process each key/value pair
         for (uint32_t i = 0; i < batch_size; ++i)
         {
-            v8::Local<v8::Value> key = keys_array->Get(context, i).ToLocalChecked();
-            v8::Local<v8::Object> value_obj = values_array->Get(context, i).ToLocalChecked()->ToObject(context).ToLocalChecked();
+            v8::Local<v8::Value> key;
+            v8::Local<v8::Value> value_element;
+            if (!keys_array->Get(context, i).ToLocal(&key) || !values_array->Get(context, i).ToLocal(&value_element))
+                return; /// a property getter threw; the JS exception is pending
+
+            /// Reject null/undefined/primitive elements: ToObject on them has no result
+            /// and ToLocalChecked would abort the whole process.
+            if (!value_element->IsObject())
+            {
+                isolate->ThrowException(
+                    v8::String::NewFromUtf8(isolate, ("batchSetValues values[" + std::to_string(i) + "] must be an object").c_str())
+                        .ToLocalChecked());
+                return;
+            }
+
+            v8::Local<v8::Object> value_obj = value_element.As<v8::Object>();
 
             /// Create a copy of the value object with key fields added
             v8::Local<v8::Object> complete_obj = v8::Object::New(isolate);
-            v8::Local<v8::Array> props = value_obj->GetOwnPropertyNames(context).ToLocalChecked();
+            v8::Local<v8::Array> props;
+            if (!value_obj->GetOwnPropertyNames(context).ToLocal(&props))
+                return; /// a proxy trap threw; the JS exception is pending
             uint32_t props_length = props->Length();
 
             /// Copy all properties from value_obj to complete_obj
             for (uint32_t j = 0; j < props_length; ++j)
             {
-                v8::Local<v8::Value> prop_name = props->Get(context, j).ToLocalChecked();
-                v8::Local<v8::Value> prop_value = value_obj->Get(context, prop_name).ToLocalChecked();
+                v8::Local<v8::Value> prop_name;
+                v8::Local<v8::Value> prop_value;
+                if (!props->Get(context, j).ToLocal(&prop_name) || !value_obj->Get(context, prop_name).ToLocal(&prop_value))
+                    return; /// a property getter threw; the JS exception is pending
                 complete_obj->Set(context, prop_name, prop_value).Check();
             }
 
@@ -265,7 +273,9 @@ void CacheDictionaryBridge::batchSetValues(const v8::FunctionCallbackInfo<v8::Va
                     {
                         if (key_obj->Has(context, prop_name).FromMaybe(false))
                         {
-                            v8::Local<v8::Value> key_value = key_obj->Get(context, prop_name).ToLocalChecked();
+                            v8::Local<v8::Value> key_value;
+                            if (!key_obj->Get(context, prop_name).ToLocal(&key_value))
+                                return; /// a property getter threw; the JS exception is pending
                             complete_obj->Set(context, prop_name, key_value).Check();
                         }
                         else
@@ -296,27 +306,15 @@ void CacheDictionaryBridge::batchSetValues(const v8::FunctionCallbackInfo<v8::Va
                 if (!complete_obj->Has(context, prop_name).FromMaybe(false))
                 {
                     UInt64 key_value = 0;
+                    std::string key_error;
 
-                    if (key->IsNumber())
+                    if (!jsSimpleKeyToUInt64(isolate, key, key_value, key_error))
                     {
-                        double num_value = key->NumberValue(context).FromJust();
-                        key_value = static_cast<UInt64>(num_value);
-                    }
-                    else if (key->IsString())
-                    {
-                        v8::String::Utf8Value str_key(isolate, key);
-                        key_value = std::stoull(*str_key);
-                    }
-                    else
-                    {
-                        isolate->ThrowException(
-                            v8::String::NewFromUtf8(
-                                isolate, "Simple key dictionary requires numeric or string representation of numeric key")
-                                .ToLocalChecked());
+                        isolate->ThrowException(v8::String::NewFromUtf8(isolate, key_error.c_str()).ToLocalChecked());
                         return;
                     }
 
-                    complete_obj->Set(context, prop_name, v8::Number::New(isolate, key_value)).Check();
+                    complete_obj->Set(context, prop_name, v8::Number::New(isolate, static_cast<double>(key_value))).Check();
                 }
             }
 
@@ -325,15 +323,14 @@ void CacheDictionaryBridge::batchSetValues(const v8::FunctionCallbackInfo<v8::Va
         }
 
         /// Convert batch to block
-        Block block = value_converter->jsBatchToBlock(isolate, complete_values, sample_block);
+        Block block = value_converter->jsBatchToBlock(isolate, complete_values, snapshot.sample_block);
 
         /// Insert to backend storage - use move semantics
-        DB::StorageID source_table_id = bridge.getSourceDbAndTable(*dict_name);
         bool insert_success = true;
 
         try
         {
-            bridge.InsertToBackendStorage(std::move(block), source_table_id);
+            bridge.InsertToBackendStorage(std::move(block), snapshot.source_db_and_table);
         }
         catch (const DB::Exception & e)
         {

@@ -35,11 +35,16 @@ JavaScriptExecutionContext::JavaScriptExecutionContext(const String & name, cons
 
     isolate.get()->AddNearHeapLimitCallback(V8::nearHeapLimitCallback, isolate.get());
     isolate.get()->SetFatalErrorHandler(V8::fatalErrorHandle);
+    execution_settings.dictionary_getvalue_null_on_missing_key = ctx->getSettingsRef().javascript_udf_getvalue_null_on_missing_key;
+    V8::setExecutionSettings(isolate.get(), &execution_settings);
 
     /// check heap limit
     V8::checkHeapLimit(isolate.get(), ctx->getSettingsRef().javascript_max_memory_bytes, ctx->getSettingsRef().v8_log_interval_ms, logger);
 
-    auto init_functions = [&](v8::Isolate * isolate_, v8::Local<v8::Context> & ctx_, [[maybe_unused]] v8::TryCatch & try_catch, [[maybe_unused]] v8::Local<v8::Value> &) {
+    auto init_functions = [&](v8::Isolate * isolate_,
+                              v8::Local<v8::Context> & ctx_,
+                              [[maybe_unused]] v8::TryCatch & try_catch,
+                              [[maybe_unused]] v8::Local<v8::Value> &) {
         v8::Local<v8::Value> function_val;
         if (!ctx_->Global()->Get(ctx_, V8::to_v8(isolate_, name)).ToLocal(&function_val) || !function_val->IsFunction())
             throw Exception(ErrorCodes::UDF_COMPILE_ERROR, "the JavaScript UDF {} is invalid", name);

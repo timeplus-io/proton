@@ -7,6 +7,7 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Cluster/Protocol/UserDefinedFunctionDescriptor.h>
 
+#include <V8/ExecutionSettings.h>
 #include <V8/PkuSupport.h>
 #include <V8/V8Includes.h>
 
@@ -26,10 +27,11 @@ struct JavaScriptBlueprint
         }
     };
 
-    JavaScriptBlueprint(const String & name, const String & source);
+    JavaScriptBlueprint(const String & name, const String & source, bool dictionary_getvalue_null_on_missing_key);
     ~JavaScriptBlueprint() noexcept;
 
     std::unique_ptr<v8::Isolate, IsolateDeleter> isolate;
+    V8::ExecutionSettings execution_settings;
 
     v8::Persistent<v8::Context> global_context; /// shared across all UDA objects
     v8::Persistent<v8::Object> uda_object_blueprint; /// UDA blueprint object which is used to create UDA object instance
@@ -105,6 +107,7 @@ private:
     mutable std::atomic<Int64> last_log_time = 0;
     JavaScriptBlueprint blueprint;
     LoggerPtr logger;
+
 public:
     AggregateFunctionJavaScriptAdapter(
         cluster::protocol::UserDefinedFunctionDescriptorPtr && udf_desc_,
@@ -113,7 +116,8 @@ public:
         /// If the input stream is changelog, aggregate function will pass _tp_delta column to JavaScript function
         bool is_changelog_input_,
         size_t max_v8_heap_size_in_bytes_,
-        int64_t log_interval_ms_);
+        int64_t log_interval_ms_,
+        bool dictionary_getvalue_null_on_missing_key_);
 
     String getName() const override;
 

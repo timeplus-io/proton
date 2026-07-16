@@ -21,6 +21,20 @@ namespace DB::V8
 class CacheDictionaryBridge
 {
 public:
+    /// Mutually consistent copy of all cached state for one dictionary, taken under a
+    /// single lock. Never hold references into the bridge's maps across the lock: the
+    /// maps are flat_hash_maps shared by every query thread, and a concurrent load or
+    /// invalidation of any dictionary can rehash/erase and invalidate them in place.
+    struct DictionarySnapshot
+    {
+        std::shared_ptr<DB::IDictionary> dictionary;
+        std::shared_ptr<DictionaryKeyManager> key_manager;
+        std::shared_ptr<DictionaryValueConverter> value_converter;
+        Block sample_block;
+        DB::StorageID source_db_and_table = DB::StorageID::createEmpty();
+        bool is_simple_key = false;
+    };
+
     static CacheDictionaryBridge & instance();
 
     /// Initialize the bridge with a context
@@ -36,10 +50,8 @@ public:
     /// Dictionary loading and access
     bool loadDictionary(const std::string & dict_name);
     std::shared_ptr<DB::IDictionary> getDictionary(const std::string & dict_name) const;
-    const Block & getSampleBlock(const std::string & dict_name) const;
-    const DB::StorageID & getSourceDbAndTable(const std::string & dict_name) const;
+    DictionarySnapshot getDictionarySnapshot(const std::string & dict_name) const;
     bool hasDictionary(const std::string & dict_name) const;
-    bool isDictionarySimpleKey(const std::string & dict_name) const;
 
     /// Ensure cached dictionary and its metadata are fresh against current table (detect table recreate/UUID change)
     /// Returns true if dictionary is available and fresh after this call (may reload), false if load failed
@@ -53,15 +65,20 @@ public:
 private:
     CacheDictionaryBridge() = default;
 
+    /// Convert a JS number/string simple key to UInt64. Rejects NaN, Infinity, negative
+    /// and out-of-uint64-range numbers (whose static_cast would be UB) and unparsable
+    /// strings. Returns false with `error` filled; does not throw a JS exception itself.
+    static bool jsSimpleKeyToUInt64(v8::Isolate * isolate, v8::Local<v8::Value> key, UInt64 & out, std::string & error);
+
+    /// Read a JS array of projection column names. Returns false if an element access
+    /// throws in JS (`error` stays empty, a JS exception is pending) or an element is
+    /// not convertible to a string (`error` filled).
+    static bool readProjectionColumns(
+        v8::Isolate * isolate, v8::Local<v8::Context> context, v8::Local<v8::Array> columns_array, Names & out, std::string & error);
+
     /// Dictionary and block initialization
     bool initializeSampleBlock(const std::string & dict_name, const std::shared_ptr<DB::IDictionary> & dict_ptr);
     bool initializeDictionaryHelpers(const std::string & dict_name, const std::shared_ptr<DB::IDictionary> & dict_ptr);
-
-    /// Key management
-    std::shared_ptr<DictionaryKeyManager> getKeyManager(const std::string & dict_name);
-
-    /// Value conversion
-    std::shared_ptr<DictionaryValueConverter> getValueConverter(const std::string & dict_name);
 
     void InsertToBackendStorage(Block && block, const DB::StorageID & table_id);
 

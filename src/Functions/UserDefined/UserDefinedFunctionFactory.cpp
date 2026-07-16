@@ -223,7 +223,8 @@ AggregateFunctionPtr UserDefinedFunctionFactory::tryGetAggregateFunction(
                 parameters,
                 is_changelog_input,
                 context->getSettingsRef().javascript_max_memory_bytes,
-                context->getSettingsRef().v8_log_interval_ms);
+                context->getSettingsRef().v8_log_interval_ms,
+                context->getSettingsRef().javascript_udf_getvalue_null_on_missing_key);
 #else
             throw Exception(ErrorCodes::UNSUPPORTED, "JavaScript UDF is not enabled");
 #endif

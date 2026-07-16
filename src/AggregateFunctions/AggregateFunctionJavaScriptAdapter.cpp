@@ -8,6 +8,7 @@
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
 #include <V8/ConvertDataTypes.h>
+#include <V8/ExecutionSettings.h>
 #include <V8/Utils.h>
 #include <base/getMemoryAmount.h>
 #include <Common/logger_useful.h>
@@ -25,7 +26,7 @@ extern const int UDF_COMPILE_ERROR;
 extern const int UDF_INTERNAL_ERROR;
 }
 
-JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source)
+JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source, bool dictionary_getvalue_null_on_missing_key)
 {
     [[maybe_unused]] V8::PkuSupport::ThreadPkruGuard pkru_guard;
 
@@ -39,7 +40,11 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
     isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
     isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
 
-    LOG_INFO(logger, "JavaScript User Defined Aggregate Function '{}' memory usage details: hard limit {} bytes.", name, isolate_params.constraints.max_old_generation_size_in_bytes());
+    LOG_INFO(
+        logger,
+        "JavaScript User Defined Aggregate Function '{}' memory usage details: hard limit {} bytes.",
+        name,
+        isolate_params.constraints.max_old_generation_size_in_bytes());
 
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
@@ -47,6 +52,8 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
     isolate.get()->AddNearHeapLimitCallback(V8::nearHeapLimitCallback, isolate.get());
     isolate.get()->SetFatalErrorHandler(V8::fatalErrorHandle);
+    execution_settings.dictionary_getvalue_null_on_missing_key = dictionary_getvalue_null_on_missing_key;
+    V8::setExecutionSettings(isolate.get(), &execution_settings);
 
     /// Analyze if this UDA's definition to initialize the blueprint
     auto init_and_validate = [&](v8::Isolate * isolate_,
@@ -109,8 +116,7 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
             {
                 has_user_defined_emit_strategy = V8::from_v8<bool>(isolate_, val);
                 if (has_user_defined_emit_strategy)
-                    LOG_INFO(
-                        getLogger("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
+                    LOG_INFO(getLogger("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
             }
         }
 
@@ -126,6 +132,9 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
 JavaScriptBlueprint::~JavaScriptBlueprint() noexcept
 {
+    if (isolate)
+        V8::setExecutionSettings(isolate.get(), nullptr);
+
     uda_object_blueprint.Reset();
     global_context.Reset();
 }
@@ -287,7 +296,8 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     const Array & params_,
     bool is_changelog_input_,
     size_t max_v8_heap_size_in_bytes_,
-    int64_t log_interval_ms_)
+    int64_t log_interval_ms_,
+    bool dictionary_getvalue_null_on_missing_key_)
     : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_, DataTypeFactory::instance().get(udf_desc_->return_type))
     , udf_desc(std::move(udf_desc_))
     , num_arguments(types.size())
@@ -295,7 +305,9 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
     , log_interval_ms(log_interval_ms_)
     , blueprint(
-          udf_desc->name, std::dynamic_pointer_cast<cluster::protocol::JavaScriptUserDefinedFunctionPayload>(udf_desc->payload)->source)
+          udf_desc->name,
+          std::dynamic_pointer_cast<cluster::protocol::JavaScriptUserDefinedFunctionPayload>(udf_desc->payload)->source,
+          dictionary_getvalue_null_on_missing_key_)
     , logger(getLogger("JavaScriptAggregateFunction"))
 {
     LOG_INFO(logger, "udf name={}, javascript_max_memory_bytes={}", udf_desc->name, max_v8_heap_size_in_bytes);
