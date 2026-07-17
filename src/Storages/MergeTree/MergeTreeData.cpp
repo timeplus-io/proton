@@ -317,6 +317,18 @@ void MergeTreeData::initializeDirectoriesAndFormatVersion(const std::string & re
     }
 }
 
+/// proton: starts
+static String shardLoggerName(const StorageID & table_id, UInt32 shard)
+{
+    return fmt::format(
+        "{}.{}.{}{}",
+        table_id.database_name,
+        table_id.table_name,
+        shard,
+        table_id.hasUUID() ? fmt::format(" ({})", table_id.uuid) : "");
+}
+/// proton: ends
+
 MergeTreeData::MergeTreeData(
     const StorageID & table_id_,
     const StorageInMemoryMetadata & metadata_,
@@ -334,7 +346,7 @@ MergeTreeData::MergeTreeData(
     , merging_params(merging_params_)
     , require_part_metadata(require_part_metadata_)
     , broken_part_callback(broken_part_callback_)
-    , log(table_id_.getNameForLogs())
+    , log(shardLoggerName(table_id_, shard_)) /// proton: modified
     , storage_settings(std::move(storage_settings_))
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
@@ -1545,6 +1557,8 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 {
     LOG_DEBUG(log, "Loading data parts");
 
+    Stopwatch watch; /// proton: added
+
     auto metadata_snapshot = getInMemoryMetadataPtr();
     const auto settings = getSettings();
     Strings part_file_names;
@@ -1819,7 +1833,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             [this] { loadOutdatedDataParts(/*is_async=*/ true); });
     }
 
-    LOG_DEBUG(log, "Loaded data parts ({} items)", data_parts_indexes.size());
+    LOG_INFO(log, "Loaded data parts ({} items) in {} ms", data_parts_indexes.size(), watch.elapsedMilliseconds()); /// proton: modified
     data_parts_loading_finished = true;
 }
 
@@ -2658,7 +2672,7 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
 void MergeTreeData::renameInMemory(const StorageID & new_table_id)
 {
     IStorage::renameInMemory(new_table_id);
-    log.store(new_table_id.getNameForLogs());
+    log.store(shardLoggerName(new_table_id, shard)); /// proton: modified
 }
 
 void MergeTreeData::dropAllData()

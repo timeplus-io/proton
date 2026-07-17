@@ -319,7 +319,18 @@ void DatabaseOrdinary::startupTables(ThreadPool & thread_pool, bool /*force_rest
 
     auto startup_one_table = [&](const StoragePtr & table)
     {
-        table->startup();
+        /// proton: starts - contain a single table's startup failure to that table,
+        /// it stays attached but not ready instead of aborting the whole server
+        try
+        {
+            table->startup();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, fmt::format("Failed to start up {}", table->getStorageID().getNameForLogs()));
+        }
+        /// proton: ends
+
         logAboutProgress(log, ++tables_processed, total_tables, watch);
     };
 
