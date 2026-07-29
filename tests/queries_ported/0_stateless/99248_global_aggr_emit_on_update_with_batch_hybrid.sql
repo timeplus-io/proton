@@ -22,13 +22,18 @@ select sleep(3) format Null;
 
 system pause materialized view ga_mv_99248;
 system resume materialized view ga_mv_99248;
-select sleep(2) format Null;
+-- Let recovery from the RocksDB hybrid checkpoint fully settle before new inserts.
+select sleep(3) format Null;
 
 -- Only one existing group changes after recovery. Unchanged groups must not be
 -- re-emitted from recovered updates state.
 insert into ga_s_99248(grp, val) values('b', 5);
 insert into ga_s_99248(grp, val) values('d', 40);
-select sleep(2) format Null;
+-- `emit on update with batch 1s` defers emission up to the 1s batch window, so the
+-- wait must comfortably exceed it plus processing/sanitizer headroom — otherwise the
+-- b/d emissions land after the read (flaky under ASan). sleep() caps at 3s, so chain two.
+select sleep(3) format Null;
+select sleep(3) format Null;
 
 select grp, count() as emits, max(cnt) as max_cnt, max(total) as max_total
 from table(ga_mv_99248)

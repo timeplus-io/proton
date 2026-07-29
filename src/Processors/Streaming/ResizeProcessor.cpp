@@ -59,7 +59,11 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
             if (input.status != InputStatus::HasData)
             {
                 input.status = InputStatus::HasData;
-                inputs_with_data.push(input_number);
+                /// The pinned input is pulled directly via the exclusive path (by status, not the
+                /// queue). Queueing it too would leave an entry the exclusive pull never pops —
+                /// an unbounded leak under a hot input's steady (-1, +1) traffic.
+                if (exclusive_input != input_number)
+                    inputs_with_data.push(input_number);
             }
         }
     }
@@ -94,13 +98,42 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
 
     checkAndLogSlowCheckpointAligning();
 
-    if (!inputs_with_data.empty())
+    /// Pick the input to service. While pinned mid-pair, take the pin's +1 partner before
+    /// any other input. The pinned input is setNeeded above and kept out of inputs_with_data,
+    /// so returning NeedData here cannot stall (the executor re-runs us once the +1 arrives)
+    /// and every queued entry is a live HasData input (no staleness filter needed below).
+    std::optional<UInt64> pull_input;
+    if (exclusive_input.has_value())
     {
-        auto & input_with_data = input_ports[inputs_with_data.front()];
+        const auto ex = *exclusive_input;
+        if (input_ports[ex].status == InputStatus::HasData)
+            pull_input = ex; /// the +1 partner arrived
+        else if (input_ports[ex].status != InputStatus::Finished)
+            return Status::NeedData; /// wait for the +1 partner; do not service other inputs
+        else
+            exclusive_input.reset(); /// pinned input finished without a +1 — release and fall through
+    }
+
+    if (!pull_input.has_value() && !inputs_with_data.empty())
+    {
+        pull_input = inputs_with_data.front();
         inputs_with_data.pop();
+        chassert(input_ports[*pull_input].status == InputStatus::HasData);
+    }
+
+    if (pull_input.has_value())
+    {
+        auto & input_with_data = input_ports[*pull_input];
 
         auto start_ns = MonotonicNanoseconds::now();
         auto data = input_with_data.port->pullData(/*set_not_needed=*/true);
+
+        /// A consecutive (-1) chunk opens a pair; pin this input until its partner is pulled.
+        if (data.chunk.isConsecutiveData())
+            exclusive_input = *pull_input;
+        else
+            exclusive_input.reset();
+
         if (updateAndAlignWatermark(input_with_data, data.chunk) || updateAndRequestCheckpoint(input_with_data, data.chunk))
         {
             /// Do nothing
@@ -116,6 +149,8 @@ IProcessor::Status ShrinkResizeProcessor::prepare(const PortNumbers & updated_in
         {
             input_with_data.status = InputStatus::Finished;
             ++num_finished_inputs;
+            if (exclusive_input == pull_input)
+                exclusive_input.reset();
         }
 
         /// metrics

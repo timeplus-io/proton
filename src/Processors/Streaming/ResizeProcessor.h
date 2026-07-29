@@ -3,6 +3,7 @@
 #include <Processors/IProcessor.h>
 #include <Common/Logger.h>
 
+#include <optional>
 #include <queue>
 
 namespace DB
@@ -53,6 +54,11 @@ public:
     Status prepare(const PortNumbers &, const PortNumbers &) override;
 
 private:
+    /// Test-only access to the internal queue depth; guards the exclusive-path leak fix
+    /// without widening the public surface.
+    friend class ShrinkResizeConsecutive_QueueDoesNotLeakOnHotConsecutivePairs_Test;
+    size_t numQueuedInputsForTest() const { return inputs_with_data.size(); }
+
     size_t num_finished_inputs = 0;
     std::queue<UInt64> inputs_with_data;
     bool initialized = false;
@@ -74,6 +80,13 @@ private:
     };
 
     std::vector<InputPortWithStatus> input_ports;
+
+    /// A consecutive (-1) chunk and its partner (+1) are produced back-to-back on one
+    /// upstream input. When we pull the -1, pin that input until its partner is pulled,
+    /// so no chunk from another input (e.g. an idle shard's heartbeat) is interleaved
+    /// between the pair — otherwise downstream EMIT ON UPDATE finalizes the half-applied
+    /// retract and leaks a spurious intermediate row.
+    std::optional<UInt64> exclusive_input;
 
     /// @returns true if has watermark handling.
     bool updateAndAlignWatermark(InputPortWithStatus & input_with_data, Chunk & chunk);
