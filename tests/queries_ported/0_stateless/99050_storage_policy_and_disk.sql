@@ -70,8 +70,5 @@ DROP DISK 99050_d1;
 DROP DISK 99050_d3;
 DROP DISK 99050_d2; -- { serverError UNKNOWN_DISK }
 
--- NOTE: a `SHOW CREATE DISK 99050_d3; -- { serverError UNKNOWN_DISK }` case is
--- deliberately NOT asserted here. After DROP DISK the disk is correctly gone from
--- system.disks and a second DROP does throw UNKNOWN_DISK, but SHOW CREATE DISK still
--- returns the definition: it reads Globals::getMetaStore().getMetaDB().getDisk(),
--- which retains the record. Re-add this case once that is fixed.
+-- Test SHOW CREATE DISK after dropping disk
+SHOW CREATE DISK 99050_d3; -- { serverError UNKNOWN_DISK }

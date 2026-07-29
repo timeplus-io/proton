@@ -82,9 +82,13 @@ void MetadataUpdater::handleDeleteDisk(
         /// Drop from memory
         global_context->deleteDisk(name);
 
-        /// Drop from metastore
-        Globals::getGlobalContext().deleteDisk(name);
-        meta_store->ackProposal(request_header.correlationID(), sn, ErrorCodes::OK, /*error_message=*/"");
+        /// Drop from metastore, otherwise the disk is reloaded on the next startup and the
+        /// drop silently does not survive a restart.
+        auto res = meta_store->getMetaDB().deleteDisk(name, cluster::AppliedSequence(sn));
+        if (res.hasError())
+            LOG_ERROR(logger, "Failed to delete disk: {}", res.error_message);
+
+        meta_store->ackProposal(request_header.correlationID(), sn, res.error_code, std::move(res.error_message));
         LOG_INFO(logger, "Delete disk: {} successfully", name);
     }
     catch (const Exception & ex)
