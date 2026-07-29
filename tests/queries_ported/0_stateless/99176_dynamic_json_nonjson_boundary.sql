@@ -20,7 +20,7 @@ INSERT INTO test_nonjson_stream (id, name) VALUES (10, 'alpha'), (11, 'beta'), (
 INSERT INTO test_json_stream (id, payload)
 VALUES (20, '{"x":1}'), (21, '{"x":2}'), (22, '{"x":3}');
 
-SELECT sleep(1) FORMAT Null;
+SELECT sleep(3) FORMAT Null;
 
 -- Non-JSON historical read
 SELECT id, name FROM table(test_nonjson_stream) ORDER BY id;
