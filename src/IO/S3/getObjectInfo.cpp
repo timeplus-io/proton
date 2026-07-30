@@ -71,16 +71,13 @@ bool isNotFoundError(Aws::S3::S3Errors error)
         || error == Aws::S3::S3Errors::NO_SUCH_BUCKET;
 }
 
-/// AWS CRT S3 client may return a generic SDK error with "No response body"
-/// when the server returns HTTP 404 with no body (e.g. MinIO HeadObject).
-static bool isNotFoundByHttpCode(const Aws::S3::S3Error & s3err)
+/// Some S3-compatible services return an empty body for HeadObject 404.
+/// Treat the object as missing only when the SDK error type or HTTP status
+/// proves a not-found response; empty error messages are not enough.
+static bool isHeadObjectNotFound(const Aws::S3::S3Error & error)
 {
-    /// Check HTTP status code (CRT path)
-    if (static_cast<int>(s3err.GetResponseCode()) == 404)
-        return true;
-    /// Fallback: CRT returns empty-body 404 as a generic error with this message
-    const auto & msg = s3err.GetMessage();
-    return msg == "No response body." || msg == "No response body";
+    return isNotFoundError(error.GetErrorType())
+        || error.GetResponseCode() == Aws::Http::HttpResponseCode::NOT_FOUND;
 }
 
 ObjectInfo getObjectInfo(
@@ -134,7 +131,7 @@ bool objectExists(
     if (object_info)
         return true;
 
-    if (isNotFoundError(error.GetErrorType()) || isNotFoundByHttpCode(error))
+    if (isHeadObjectNotFound(error))
         return false;
 
     throw S3Exception(error.GetErrorType(),
