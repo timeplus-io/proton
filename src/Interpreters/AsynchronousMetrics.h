@@ -258,6 +258,22 @@ private:
 
 #endif
 
+/// proton: starts
+#if defined(OS_DARWIN)
+    struct MacDiskStatValues
+    {
+        uint64_t read_ops = 0;
+        uint64_t write_ops = 0;
+        uint64_t read_bytes = 0;
+        uint64_t write_bytes = 0;
+    };
+
+    std::unordered_map<String /* device name */, MacDiskStatValues> mac_disk_stats;
+
+    static std::unordered_map<String, MacDiskStatValues> collectMacDiskStats();
+#endif
+/// proton: ends
+
     std::unique_ptr<ThreadFromGlobalPool> thread;
 
     void run();

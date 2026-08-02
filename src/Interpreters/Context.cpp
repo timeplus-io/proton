@@ -4446,6 +4446,14 @@ void Context::updateDiskUsage(const String & name, UInt64 total_bytes, UInt64 av
     }
 }
 
+void Context::updateDiskIOStats(const String & name, const ServerDescriptor::DiskIOStats & stats, UInt64 updated_ms) noexcept
+{
+    /// No lock needed - same reasoning as `updateDiskUsage` above
+    auto & server = Globals::getServerDescriptor();
+    server.disk_io_stats[name] = stats;
+    server.disk_io_stats_updated_ms.store(updated_ms, std::memory_order_relaxed);
+}
+
 void Context::setNodeID(cluster::NodeID node_id_) noexcept
 {
     shared->this_node_id = node_id_;

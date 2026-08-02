@@ -1,5 +1,6 @@
 #include <Common/formatReadable.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Bootstrap/ServerDescriptor.h>
 #include <Common/Exception.h>
 #include <Common/setThreadName.h>
 #include <Common/filesystemHelpers.h>
@@ -43,6 +44,16 @@
 /// proton: starts
 
 #if defined(OS_DARWIN)
+/// Work around Apple headers defining UInt8 and wide.
+#define UInt8 MacTypesUInt8
+#define wide MacTypesWide
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOBSD.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/storage/IOBlockStorageDriver.h>
+#include <IOKit/storage/IOMedia.h>
+#undef wide
+#undef UInt8
 #include <mach/mach.h>
 #endif
 
@@ -61,6 +72,34 @@ uint64_t getAvailableMemoryAmountOrZeroOSX()
 
     return vm_stats.free_count * page_size;
 }
+
+uint64_t getUInt64FromCFDictionary(CFDictionaryRef dict, CFStringRef key)
+{
+    if (!dict)
+        return 0;
+
+    auto value = static_cast<CFNumberRef>(CFDictionaryGetValue(dict, key));
+    if (!value)
+        return 0;
+
+    uint64_t out = 0;
+    if (!CFNumberGetValue(value, kCFNumberSInt64Type, &out))
+        return 0;
+
+    return out;
+}
+
+std::optional<std::string> cfStringToStdString(CFStringRef str)
+{
+    if (!str)
+        return std::nullopt;
+
+    char buffer[256];
+    if (!CFStringGetCString(str, buffer, sizeof(buffer), kCFStringEncodingUTF8))
+        return std::nullopt;
+
+    return std::string(buffer);
+}
 #endif
 }
 /// proton: ends
@@ -75,6 +114,70 @@ namespace ErrorCodes
     extern const int CANNOT_OPEN_FILE;
     extern const int FILE_DOESNT_EXIST;
 }
+
+/// proton: starts
+#if defined(OS_DARWIN)
+std::unordered_map<String, AsynchronousMetrics::MacDiskStatValues> AsynchronousMetrics::collectMacDiskStats()
+{
+    std::unordered_map<String, AsynchronousMetrics::MacDiskStatValues> stats;
+
+    CFMutableDictionaryRef match = IOServiceMatching(kIOMediaClass);
+    if (!match)
+        return stats;
+
+    /// Only whole media (e.g. disk0), not partitions (disk0s1).
+    CFDictionarySetValue(match, CFSTR(kIOMediaWholeKey), kCFBooleanTrue);
+
+    io_iterator_t iter = IO_OBJECT_NULL;
+    if (IOServiceGetMatchingServices(kIOMasterPortDefault, match, &iter) != KERN_SUCCESS)
+        return stats;
+
+    io_object_t media = IO_OBJECT_NULL;
+    while ((media = IOIteratorNext(iter)))
+    {
+        CFTypeRef bsd_name_ref = IORegistryEntryCreateCFProperty(media, CFSTR(kIOBSDNameKey), kCFAllocatorDefault, 0);
+        std::optional<std::string> name;
+        if (bsd_name_ref && CFGetTypeID(bsd_name_ref) == CFStringGetTypeID())
+            name = cfStringToStdString(static_cast<CFStringRef>(bsd_name_ref));
+        if (bsd_name_ref)
+            CFRelease(bsd_name_ref);
+
+        if (!name || name->empty())
+        {
+            IOObjectRelease(media);
+            continue;
+        }
+
+        /// The statistics live on the block storage driver, which is a parent of the media object.
+        CFTypeRef stats_ref = IORegistryEntrySearchCFProperty(
+            media,
+            kIOServicePlane,
+            CFSTR(kIOBlockStorageDriverStatisticsKey),
+            kCFAllocatorDefault,
+            kIORegistryIterateParents | kIORegistryIterateRecursively);
+
+        if (stats_ref && CFGetTypeID(stats_ref) == CFDictionaryGetTypeID())
+        {
+            auto dict = static_cast<CFDictionaryRef>(stats_ref);
+            AsynchronousMetrics::MacDiskStatValues values{};
+            values.read_ops = getUInt64FromCFDictionary(dict, CFSTR(kIOBlockStorageDriverStatisticsReadsKey));
+            values.write_ops = getUInt64FromCFDictionary(dict, CFSTR(kIOBlockStorageDriverStatisticsWritesKey));
+            values.read_bytes = getUInt64FromCFDictionary(dict, CFSTR(kIOBlockStorageDriverStatisticsBytesReadKey));
+            values.write_bytes = getUInt64FromCFDictionary(dict, CFSTR(kIOBlockStorageDriverStatisticsBytesWrittenKey));
+            stats.emplace(*name, values);
+        }
+
+        if (stats_ref)
+            CFRelease(stats_ref);
+
+        IOObjectRelease(media);
+    }
+
+    IOObjectRelease(iter);
+    return stats;
+}
+#endif
+/// proton: ends
 
 
 #if defined(OS_LINUX)
@@ -1932,6 +2035,29 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             BlockDeviceStatValues delta_values = current_values - prev_values;
             prev_values = current_values;
 
+            /// proton: starts. Feed system.server.disk_io_stats.
+            /// Must run before the `first_run` check below, so the device names are registered
+            /// on the first collection even though there is no rate to report yet.
+            {
+                /// /proc/diskstats reports sectors in 512 byte units.
+                static constexpr size_t sector_size_for_io = 512;
+                const double elapsed_seconds = std::chrono::duration<double>(time_since_previous_update).count();
+                const auto now_ms
+                    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+                ServerDescriptor::DiskIOStats io_stats;
+                if (!first_run && elapsed_seconds > 0)
+                {
+                    io_stats.read_iops = delta_values.read_ios / elapsed_seconds;
+                    io_stats.write_iops = delta_values.write_ios / elapsed_seconds;
+                    io_stats.read_throughput = (delta_values.read_sectors * sector_size_for_io) / elapsed_seconds;
+                    io_stats.write_throughput = (delta_values.write_sectors * sector_size_for_io) / elapsed_seconds;
+                }
+
+                mutable_context->updateDiskIOStats(name, io_stats, now_ms);
+            }
+            /// proton: ends
+
             if (first_run)
                 continue;
 
@@ -2261,6 +2387,56 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         }
     }
 #endif
+
+/// proton: starts
+#if defined(OS_DARWIN)
+    /// macOS has no /proc/diskstats, so per-device IO counters come from the IOKit registry.
+    /// Feeds system.server.disk_io_stats, the same way the Linux path above does.
+    try
+    {
+        const auto current_stats = collectMacDiskStats();
+        const double elapsed_seconds = std::chrono::duration<double>(time_since_previous_update).count();
+        const auto now_ms
+            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+        auto delta_value = [](uint64_t current, uint64_t prev) -> uint64_t { return current >= prev ? current - prev : 0; };
+
+        for (const auto & [name, current_values] : current_stats)
+        {
+            auto prev_iter = mac_disk_stats.find(name);
+            bool has_prev = prev_iter != mac_disk_stats.end();
+
+            MacDiskStatValues delta{};
+            if (has_prev)
+            {
+                delta.read_ops = delta_value(current_values.read_ops, prev_iter->second.read_ops);
+                delta.write_ops = delta_value(current_values.write_ops, prev_iter->second.write_ops);
+                delta.read_bytes = delta_value(current_values.read_bytes, prev_iter->second.read_bytes);
+                delta.write_bytes = delta_value(current_values.write_bytes, prev_iter->second.write_bytes);
+            }
+
+            mac_disk_stats[name] = current_values;
+
+            /// The IOKit counters are cumulative since boot, so the first sample carries no rate.
+            /// Still register the device, so the disk names show up before the second collection.
+            ServerDescriptor::DiskIOStats io_stats;
+            if (!first_run && has_prev && elapsed_seconds > 0)
+            {
+                io_stats.read_iops = static_cast<double>(delta.read_ops) / elapsed_seconds;
+                io_stats.write_iops = static_cast<double>(delta.write_ops) / elapsed_seconds;
+                io_stats.read_throughput = static_cast<double>(delta.read_bytes) / elapsed_seconds;
+                io_stats.write_throughput = static_cast<double>(delta.write_bytes) / elapsed_seconds;
+            }
+
+            mutable_context->updateDiskIOStats(name, io_stats, now_ms);
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+#endif
+/// proton: ends
 
     /// proton: starts.
     auto addFilesystemMetrics = [&](const String & name, const String & path) {

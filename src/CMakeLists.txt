@@ -356,6 +356,11 @@ if (USE_V8)
     dbms_target_link_libraries(PUBLIC ${CMAKE_DL_LIBS})
 endif()
 
+# AsynchronousMetrics reads per-disk IO counters from the IOKit registry on macOS
+if (OS_DARWIN)
+    dbms_target_link_libraries(PUBLIC "-framework IOKit" "-framework CoreFoundation")
+endif()
+
 if (TARGET ch_contrib::pulsar)
     dbms_target_link_libraries(PUBLIC ch_contrib::pulsar)
 endif()

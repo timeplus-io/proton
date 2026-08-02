@@ -1,10 +1,18 @@
 #include <Bootstrap/Globals.h>
 #include <Bootstrap/ServerDescriptor.h>
 
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Common/assert_cast.h>
+#include <Common/typeid_cast.h>
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemServer.h>
 
@@ -36,6 +44,14 @@ NamesAndTypesList StorageSystemServer::getNamesAndTypes()
         {"disk_usage_percent", std::make_shared<DataTypeFloat64>()},
         {"total_materialized_views", std::make_shared<DataTypeUInt32>()},
         {"total_shards", std::make_shared<DataTypeUInt32>()},
+
+        /// Per block device IO rates, keyed by device name.
+        /// Values are ordered: read_iops, write_iops, read_throughput, write_throughput.
+        {"disk_io_stats",
+         std::make_shared<DataTypeMap>(
+             std::make_shared<DataTypeString>(),
+             std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>()))},
+        {"disk_io_stats_updated", std::make_shared<DataTypeDateTime64>(3)},
 
         /// Status
         {"status", std::make_shared<DataTypeString>()},
@@ -77,12 +93,43 @@ void StorageSystemServer::fillData(MutableColumns & res_columns, ContextPtr, con
     /// Total shards count
     res_columns[16]->insert(server.total_shards.load(std::memory_order_relaxed));
 
+    /// disk_io_stats map(string, array(float64)), values ordered:
+    /// read_iops, write_iops, read_throughput, write_throughput
+    {
+        auto * column_map = typeid_cast<ColumnMap *>(res_columns[17].get());
+        auto & offsets = column_map->getNestedColumn().getOffsets();
+        auto & tuple_column = column_map->getNestedData();
+        auto & key_column = tuple_column.getColumn(0);
+        auto & value_array_column = assert_cast<ColumnArray &>(tuple_column.getColumn(1));
+        auto & value_offsets = value_array_column.getOffsets();
+        auto & value_data_column = value_array_column.getData();
+
+        size_t map_size = 0;
+        for (const auto & [disk_name, stats] : server.disk_io_stats)
+        {
+            key_column.insertData(disk_name.data(), disk_name.size());
+            value_data_column.insert(stats.read_iops);
+            value_data_column.insert(stats.write_iops);
+            value_data_column.insert(stats.read_throughput);
+            value_data_column.insert(stats.write_throughput);
+
+            const auto prev_value_offset = value_offsets.empty() ? 0 : value_offsets.back();
+            value_offsets.push_back(prev_value_offset + 4);
+            ++map_size;
+        }
+
+        const auto prev_offset = offsets.empty() ? 0 : offsets.back();
+        offsets.push_back(prev_offset + map_size);
+    }
+
+    res_columns[18]->insert(DateTime64(server.disk_io_stats_updated_ms.load(std::memory_order_relaxed)));
+
     /// Status
-    res_columns[17]->insert("active"); /// Always active if we're querying it
+    res_columns[19]->insert("active"); /// Always active if we're querying it
 
     /// Calculate uptime from boot timestamp
     auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     uint64_t uptime_seconds = (now_ms - server.boot_timestamp) / 1000;
-    res_columns[18]->insert(uptime_seconds);
+    res_columns[20]->insert(uptime_seconds);
 }
 }

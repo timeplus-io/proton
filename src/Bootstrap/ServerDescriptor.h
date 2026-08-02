@@ -62,6 +62,23 @@ struct ServerDescriptor
     /// Minor race conditions are intentional to avoid collection slowing the system.
     std::unordered_map<String, DiskStats> disk_utils;
 
+    /// Per block device IO rates (updated by AsynchronousMetrics)
+    struct DiskIOStats
+    {
+        double read_iops = 0; /// Read operations per second
+        double write_iops = 0; /// Write operations per second
+        double read_throughput = 0; /// Read bytes per second
+        double write_throughput = 0; /// Write bytes per second
+    };
+
+    /// Block device name to DiskIOStats map. The same no-lock reasoning as `disk_utils` applies:
+    /// the device set is discovered on the first collection and does not change afterwards.
+    std::unordered_map<String, DiskIOStats> disk_io_stats;
+
+    /// When `disk_io_stats` was last refreshed, in milliseconds since epoch. Zero until the first
+    /// pair of samples is available, since a rate needs two.
+    std::atomic<UInt64> disk_io_stats_updated_ms{0};
+
     /// Status
     UInt64 boot_timestamp = 0;
 
