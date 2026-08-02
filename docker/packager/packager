@@ -49,13 +49,18 @@ def run_docker_image_with_env(image_name, output, env_variables, ch_root, ccache
     else:
         interactive = ""
 
-    cmd = "docker run --network=host --rm --volume={output_path}:/output --volume={ch_root}:/build --volume={ccache_dir}:/ccache {env} {interactive} {img_name}".format(
+    docker_run_args = os.environ.get("PACKAGER_DOCKER_RUN_ARGS", "").strip()
+    if docker_run_args:
+        docker_run_args = " " + docker_run_args
+
+    cmd = "docker run{docker_run_args} --network=host --rm --volume={output_path}:/output --volume={ch_root}:/build --volume={ccache_dir}:/ccache {env} {interactive} {img_name}".format(
         output_path=output,
         ch_root=ch_root,
         ccache_dir=ccache_dir,
         env=env_part,
         img_name=image_name + ":" + docker_image_version,
-        interactive=interactive
+        interactive=interactive,
+        docker_run_args=docker_run_args,
     )
 
     logging.info("Will build ClickHouse pkg with cmd: '{}'".format(cmd))

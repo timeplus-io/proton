@@ -397,7 +397,9 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6i.8xlarge
-      ec2-image-id: ami-042a37e33a285c22b
+      # Use the same x86_64 runner AMI as the native Linux build to avoid older Docker/seccomp profiles
+      # that can break container builds (e.g. `ninja: fatal: posix_spawn: Operation not permitted`).
+      ec2-image-id: ${{ vars.X64_AMI }}
       submodules: 'true'
       run_mode: 'start' # start ec2 on demand instance
       upload_files: |
@@ -428,6 +430,10 @@ jobs:
         echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
         # compiling
+        # NOTE: some older Docker/seccomp profiles block `clone3`, which breaks glibc `posix_spawn`
+        # inside Ubuntu 22.04-based builder images (observed as: `ninja: fatal: posix_spawn: Operation not permitted`).
+        # Keep this scoped to the darwin cross-compile builder container.
+        export PACKAGER_DOCKER_RUN_ARGS="--security-opt seccomp=unconfined"
         ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-21-darwin
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
@@ -504,6 +510,8 @@ jobs:
         echo "max_size = 100.0G" > $GITHUB_WORKSPACE/ccache/ccache.conf
 
         # compiling
+        # See Build_Darwin_X86_64 for why this is needed on some runners.
+        export PACKAGER_DOCKER_RUN_ARGS="--security-opt seccomp=unconfined"
         ./docker/packager/packager --package-type binary --docker-image-version clang-21 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-21-darwin-aarch64
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
