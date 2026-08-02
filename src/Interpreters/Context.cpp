@@ -1,6 +1,7 @@
 #include <map>
 #include <optional>
 #include <memory>
+#include <base/defines.h>
 #include <Poco/Base64Encoder.h>
 #include <Poco/Base64Decoder.h>
 #include <Poco/UUID.h>
@@ -4446,10 +4447,18 @@ void Context::updateDiskUsage(const String & name, UInt64 total_bytes, UInt64 av
     }
 }
 
-void Context::updateDiskIOStats(const String & name, const ServerDescriptor::DiskIOStats & stats, UInt64 updated_ms) noexcept
+void NO_SANITIZE_THREAD
+Context::updateDiskIOStats(const String & name, const ServerDescriptor::DiskIOStats & stats, bool first_run, UInt64 updated_ms) noexcept
 {
-    /// No lock needed - same reasoning as `updateDiskUsage` above
+    /// No lock needed, but only because the key set is frozen after the first collection.
+    /// The block device list is rescanned periodically, so inserting a device discovered later
+    /// could rehash the map while system.server is iterating it on a query thread. Registering
+    /// every name on the first run and updating in place afterwards keeps readers safe; the
+    /// races left on the values themselves are intentional, to keep collection cheap.
     auto & server = Globals::getServerDescriptor();
+    if (!first_run && !server.disk_io_stats.contains(name))
+        return;
+
     server.disk_io_stats[name] = stats;
     server.disk_io_stats_updated_ms.store(updated_ms, std::memory_order_relaxed);
 }

@@ -766,7 +766,7 @@ public:
     void setOSCPUUsage(double os_cpu_usage) noexcept;
     void setCPUUsage(double cpu_usage) noexcept;
     void updateDiskUsage(const String & name, UInt64 total_bytes, UInt64 available_bytes, bool first_run) noexcept;
-    void updateDiskIOStats(const String & name, const ServerDescriptor::DiskIOStats & stats, UInt64 updated_ms) noexcept;
+    void updateDiskIOStats(const String & name, const ServerDescriptor::DiskIOStats & stats, bool first_run, UInt64 updated_ms) noexcept;
 
     /// Single-instance: Set node ID (always 1 for single-instance)
     void setNodeID(cluster::NodeID node_id_) noexcept;

@@ -2054,7 +2054,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                     io_stats.write_throughput = (delta_values.write_sectors * sector_size_for_io) / elapsed_seconds;
                 }
 
-                mutable_context->updateDiskIOStats(name, io_stats, now_ms);
+                mutable_context->updateDiskIOStats(name, io_stats, first_run, now_ms);
             }
             /// proton: ends
 
@@ -2428,7 +2428,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                 io_stats.write_throughput = static_cast<double>(delta.write_bytes) / elapsed_seconds;
             }
 
-            mutable_context->updateDiskIOStats(name, io_stats, now_ms);
+            mutable_context->updateDiskIOStats(name, io_stats, first_run, now_ms);
         }
     }
     catch (...)
