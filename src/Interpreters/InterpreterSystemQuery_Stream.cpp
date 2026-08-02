@@ -305,7 +305,8 @@ void InterpreterSystemQuery::executeJemallocControl(const ASTSystemQuery & syste
             setJemallocProfileActive(false);
             break;
         case ASTSystemQuery::Type::JEMALLOC_FLUSH_PROFILE:
-            flushJemallocProfile("/tmp/jemalloc_proton");
+            /// Explicitly requested by the user, so the dump location is worth logging.
+            flushJemallocProfile("/tmp/jemalloc_proton", /*log=*/ true);
             break;
         default:
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported jemalloc operation type {}", ASTSystemQuery::typeToString(type));
