@@ -4432,19 +4432,25 @@ void Context::setCPUUsage(double cpu_usage) noexcept
     Globals::getServerDescriptor().cpu_usage.store(cpu_usage, std::memory_order_relaxed);
 }
 
-void Context::updateDiskUsage(const String & name, UInt64 total_bytes, UInt64 available_bytes, bool) noexcept
+void NO_SANITIZE_THREAD
+Context::updateDiskUsage(const String & name, UInt64 total_bytes, UInt64 available_bytes, bool first_run) noexcept
 {
-    if (total_bytes > 0)
-    {
-        /// No lock needed - intentional design to avoid slowing the system
-        /// The disk volumes are populated at startup and keys don't change
-        ServerDescriptor::DiskStats stats;
-        stats.total_mb = total_bytes / (1024 * 1024);
-        stats.free_mb = available_bytes / (1024 * 1024);
-        stats.util = 1.0 - (static_cast<double>(available_bytes) / total_bytes);
+    if (total_bytes == 0)
+        return;
 
-        Globals::getServerDescriptor().disk_utils[name] = stats;
-    }
+    /// Only update on the first run, or for a disk name already seen on the first run.
+    /// A disk added later (CREATE DISK) would insert a key and could rehash disk_utils while
+    /// checkDiskUtil() walks it on an ingest thread, so we don't report it until a restart.
+    auto & server = Globals::getServerDescriptor();
+    if (!first_run && !server.disk_utils.contains(name))
+        return;
+
+    ServerDescriptor::DiskStats stats;
+    stats.total_mb = total_bytes / (1024 * 1024);
+    stats.free_mb = available_bytes / (1024 * 1024);
+    stats.util = 1.0 - (static_cast<double>(available_bytes) / total_bytes);
+
+    server.disk_utils[name] = stats;
 }
 
 void NO_SANITIZE_THREAD
