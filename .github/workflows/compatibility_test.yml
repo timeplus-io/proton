@@ -120,7 +120,7 @@ jobs:
 
         # upload data
         cd $GITHUB_WORKSPACE
-        aws s3 cp --no-progress ${PROTON_VERSION}.tar.gz s3://tp-internal2/proton-oss/compatibility/enterprise/$ARCH/
+        aws s3 cp --no-progress ${PROTON_VERSION}.tar.gz s3://timeplus-ci-internal/proton-oss/compatibility/enterprise/$ARCH/
     steps:
       - name: display command
         run: |
@@ -146,7 +146,7 @@ jobs:
 
         # prepare data
         cd $GITHUB_WORKSPACE
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/compatibility/enterprise/$ARCH/${SOURCE_VERSION}.tar.gz .
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/compatibility/enterprise/$ARCH/${SOURCE_VERSION}.tar.gz .
         tar -zxvf ${SOURCE_VERSION}.tar.gz
 
         # run tests

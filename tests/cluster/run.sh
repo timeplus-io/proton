@@ -285,7 +285,7 @@ done
 
 wait 
 
-aws s3 cp --no-progress --recursive ./log s3://tp-internal2/proton-oss/cluster/enterprise
+aws s3 cp --no-progress --recursive ./log s3://timeplus-ci-internal/proton-oss/cluster/enterprise
 
 bash ./ssh.sh clean
 

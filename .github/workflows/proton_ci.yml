@@ -77,7 +77,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
         
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
@@ -87,7 +87,7 @@ jobs:
 
         # upload ccache back to S3
         tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
+        aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://timeplus-ci-internal/proton-oss/
 
         # clear compiling footprint
         rm -rf $GITHUB_WORKSPACE/ccache

@@ -15,7 +15,7 @@ import botocore  # type: ignore
 from env_helper import RUNNER_TEMP, CI
 from compress_files import compress_file_fast
 
-S3_BUCKET = "tp-internal2"
+S3_BUCKET = "timeplus-ci-internal"
 
 def _md5(fname):
     hash_md5 = hashlib.md5()

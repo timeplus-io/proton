@@ -106,7 +106,7 @@ jobs:
         ./release --test --version dev
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
@@ -187,7 +187,7 @@ jobs:
         ./release --test --version dev
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache${ARCH:+_}$ARCH.tar.gz .
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cache${ARCH:+_}$ARCH.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache${ARCH:+_}$ARCH.tar.gz
@@ -365,7 +365,7 @@ jobs:
 
         mkdir -p $GITHUB_WORKSPACE/ccache    
         # Download pre-built v8 binary for cross-compilation
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
         chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
@@ -493,7 +493,7 @@ jobs:
                --cli-connect-timeout 30 \
                --cli-read-timeout 600 \
                "${{ env.TARBALL_PATH }}" \
-               "s3://tp-internal2/proton-oss/native_build_macOS/${{ env.TARBALL_NAME }}"; then
+               "s3://timeplus-ci-internal/proton-oss/native_build_macOS/${{ env.TARBALL_NAME }}"; then
               echo "Upload successful"
               break
             else

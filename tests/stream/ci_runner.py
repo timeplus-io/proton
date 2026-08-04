@@ -13,7 +13,7 @@ formatter = logging.Formatter(
     "%(asctime)s [%(levelname)8s] [%(processName)s] [%(module)s] [%(funcName)s] %(message)s (%(filename)s:%(lineno)s)"
 )
 
-PROTON_PYTHON_DRIVER_S3_BUCKET_NAME = "tp-internal2"
+PROTON_PYTHON_DRIVER_S3_BUCKET_NAME = "timeplus-ci-internal"
 PROTON_PYTHON_DRIVER_NANME = "proton-driver"
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))

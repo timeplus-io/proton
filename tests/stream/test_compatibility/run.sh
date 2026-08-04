@@ -37,7 +37,7 @@ function prepare_test_input() {
 
     # download data
     if [ "$CI" == "true" ]; then
-        aws s3 cp --no-progress --recursive s3://tp-internal2/proton-oss/compatibility/enterprise/data ${GITHUB_WORKSPACE}/data/dataset
+        aws s3 cp --no-progress --recursive s3://timeplus-ci-internal/proton-oss/compatibility/enterprise/data ${GITHUB_WORKSPACE}/data/dataset
     fi
 }
 

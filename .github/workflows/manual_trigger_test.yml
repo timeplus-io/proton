@@ -169,7 +169,7 @@ jobs:
 
         pip install -r helpers/requirements.txt
 
-        aws s3 cp s3://tp-internal2/proton-oss/proton-python-driver/clickhouse-driver-0.2.4.tar.gz ./
+        aws s3 cp s3://timeplus-ci-internal/proton-oss/proton-python-driver/clickhouse-driver-0.2.4.tar.gz ./
         pip install ./clickhouse-driver-0.2.4.tar.gz
 
         #python ci_runner.py --debug --settings=default --test_folders=test_production_compatibility

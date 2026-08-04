@@ -38,7 +38,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.large
-      ec2-image-id: ami-042a37e33a285c22b
+      ec2-image-id: ami-04f1218570c6b2ec6
       submodules: 'false'
       run_mode: 'start' # start ec2 on demand instance
       upjob: update_version
@@ -94,7 +94,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache.tar.gz .
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache.tar.gz
@@ -171,7 +171,7 @@ jobs:
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal2/proton-oss/
+        aws s3 cp --no-progress ./cache.tar.gz s3://timeplus-ci-internal/proton-oss/
 
         # prepare python package (free-threaded cp314t, to match the FT release binary)
         # Source: deadsnakes python3.14-nogil, same as docker/server/Dockerfile. Stock
@@ -233,7 +233,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cache-arm.tar.gz .
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cache-arm.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache-arm.tar.gz
@@ -280,7 +280,7 @@ jobs:
 
         # upload build cache
         tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        aws s3 cp --no-progress ./cache-arm.tar.gz s3://tp-internal2/proton-oss/
+        aws s3 cp --no-progress ./cache-arm.tar.gz s3://timeplus-ci-internal/proton-oss/
         
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
 
@@ -302,7 +302,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.large
-      ec2-image-id: ami-042a37e33a285c22b
+      ec2-image-id: ami-04f1218570c6b2ec6
       submodules: false
       upjob: CommitTag
       command: |
@@ -418,7 +418,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # download the pre-built binary of v8 (this is only for cross-compile)
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
         chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
@@ -498,7 +498,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         # download the pre-built binary of v8 (this is only for cross-compile)
-        aws s3 cp --no-progress s3://tp-internal2/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        aws s3 cp --no-progress s3://timeplus-ci-internal/proton-oss/cross-compile-prebuilt-binary/138/v8-cmake-arm64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
         tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
         rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-arm64.tar.gz
         chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
@@ -604,7 +604,7 @@ jobs:
       - name: Upload Artifact To S3
         run: |
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
-          S3_PATH="s3://tp-internal2/proton-oss/native_build_macOS/"
+          S3_PATH="s3://timeplus-ci-internal/proton-oss/native_build_macOS/"
 
           # Function to upload with retry
           upload_with_retry() {

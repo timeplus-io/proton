@@ -120,8 +120,8 @@ function download_data_benchmark_from_s3() {
     if [ "$CI" == "true" ]; then
         sudo rm -rf ./log $DATA_DIR $BENCHMARK_DIR $RESULT_DIR $SUMMARY_DIR
         mkdir -p $DATA_DIR $BENCHMARK_DIR $RESULT_DIR $SUMMARY_DIR
-        aws s3 cp --no-progress --recursive s3://tp-internal2/proton-oss/cluster/enterprise/performance/data $DATA_DIR
-        aws s3 cp --no-progress --recursive s3://tp-internal2/proton-oss/cluster/enterprise/performance/benchmark $BENCHMARK_DIR
+        aws s3 cp --no-progress --recursive s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/data $DATA_DIR
+        aws s3 cp --no-progress --recursive s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/benchmark $BENCHMARK_DIR
     fi
 
     if [ -d "$DATA_DIR" ] && [ -z "$(find "$DATA_DIR" -mindepth 1 -print -quit)" ]; then
@@ -172,14 +172,14 @@ function compare_performance_result() {
 function upload_result_to_s3() {
     if [ "$CI" == "true" ]; then
         echo "Upload result to S3"
-        aws s3 cp --no-progress --recursive ./log s3://tp-internal2/proton-oss/cluster/enterprise/performance/log
-        aws s3 cp --no-progress --recursive $RESULT_DIR s3://tp-internal2/proton-oss/cluster/enterprise/performance/result
+        aws s3 cp --no-progress --recursive ./log s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/log
+        aws s3 cp --no-progress --recursive $RESULT_DIR s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/result
         if [ -d "$BENCHMARK_DIR/new" ]; then
-            aws s3 cp --no-progress --recursive ${BENCHMARK_DIR}/new s3://tp-internal2/proton-oss/cluster/enterprise/performance/benchmark
+            aws s3 cp --no-progress --recursive ${BENCHMARK_DIR}/new s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/benchmark
         fi
         if [ "$(ls -A $SUMMARY_DIR)" ]; then
             cp -r $SUMMARY_DIR/* /artifacts # upload summary result to artifacts in Github
-            aws s3 cp --no-progress --recursive $SUMMARY_DIR s3://tp-internal2/proton-oss/cluster/enterprise/performance/summary
+            aws s3 cp --no-progress --recursive $SUMMARY_DIR s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/summary
         else
             echo "No summary found, skip upload"
         fi

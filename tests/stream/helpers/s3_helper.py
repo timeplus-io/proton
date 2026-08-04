@@ -107,10 +107,10 @@ class S3Helper:
         self.client.download_file(bucket_name, s3_path, file_path)
 
     def upload_test_report_to_s3(self, file_path, s3_path):
-        return self._upload_file_to_s3("tp-internal2", file_path, s3_path)
+        return self._upload_file_to_s3("timeplus-ci-internal", file_path, s3_path)
 
     def upload_build_file_to_s3(self, file_path, s3_path):
-        return self._upload_file_to_s3("tp-internal2", file_path, s3_path)
+        return self._upload_file_to_s3("timeplus-ci-internal", file_path, s3_path)
 
     def _upload_folder_to_s3(
         self,
@@ -173,17 +173,17 @@ class S3Helper:
         return self._upload_folder_to_s3(
             folder_path,
             s3_folder_path,
-            "tp-internal2",
+            "timeplus-ci-internal",
             keep_dirs_in_s3_path,
             upload_symlinks,
         )
 
     def upload_test_folder_to_s3(self, folder_path, s3_folder_path):
         return self._upload_folder_to_s3(
-            folder_path, s3_folder_path, "tp-internal2", True, True
+            folder_path, s3_folder_path, "timeplus-ci-internal", True, True
         )
 
-    def list_prefix(self, s3_prefix_path, bucket="tp-internal2"):
+    def list_prefix(self, s3_prefix_path, bucket="timeplus-ci-internal"):
         objects = self.client.list_objects_v2(Bucket=bucket, Prefix=s3_prefix_path)
         result = []
         if "Contents" in objects:

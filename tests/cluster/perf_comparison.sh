@@ -92,7 +92,7 @@ function download_data_benchmark_from_s3() {
     if [ "$CI" == "true" ]; then
         sudo rm -rf ./log $DATA_DIR $SOURCE_DATA_DIR $TARGET_DATA_DIR $SOURCE_RESULT_DIR $TARGET_RESULT_DIR $SUMMARY_DIR
         mkdir -p $DATA_DIR $SOURCE_DATA_DIR $TARGET_DATA_DIR $SOURCE_RESULT_DIR $TARGET_RESULT_DIR $SUMMARY_DIR
-        aws s3 cp --no-progress --recursive s3://tp-internal2/proton-oss/cluster/enterprise/performance/data $DATA_DIR
+        aws s3 cp --no-progress --recursive s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/data $DATA_DIR
     fi
 
     if [ -d "$DATA_DIR" ] && [ -z "$(find "$DATA_DIR" -mindepth 1 -print -quit)" ]; then
@@ -159,10 +159,10 @@ python3 ../proton_ci/run_performance_comparison.py --dir $PERFORMANCE_RESOURCE_F
 exit_code=$?
 
 cp -r $SUMMARY_DIR/* /artifacts # upload summary result to artifacts in Github
-aws s3 cp --no-progress --recursive $SUMMARY_DIR s3://tp-internal2/proton-oss/cluster/enterprise/performance/summary
-aws s3 cp --no-progress --recursive $SOURCE_RESULT_DIR s3://tp-internal2/proton-oss/cluster/enterprise/performance/source_result
-aws s3 cp --no-progress --recursive $TARGET_RESULT_DIR s3://tp-internal2/proton-oss/cluster/enterprise/performance/target_result
-aws s3 cp --no-progress --recursive ./log s3://tp-internal2/proton-oss/cluster/enterprise/performance/log
+aws s3 cp --no-progress --recursive $SUMMARY_DIR s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/summary
+aws s3 cp --no-progress --recursive $SOURCE_RESULT_DIR s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/source_result
+aws s3 cp --no-progress --recursive $TARGET_RESULT_DIR s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/target_result
+aws s3 cp --no-progress --recursive ./log s3://timeplus-ci-internal/proton-oss/cluster/enterprise/performance/log
 
 generate_github_summary
 

@@ -58,7 +58,7 @@ jobs:
 
             # Don't need to upload ccache to S3 at the moment
             tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
+            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://timeplus-ci-internal/proton-oss/
 
             # clean ccache and build footprint
             rm -rf $GITHUB_WORKSPACE/ccache
@@ -268,7 +268,7 @@ jobs:
 
             # Don't need to upload ccache to S3 at the moment
             tar -zcf ./cache${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
+            aws s3 cp --no-progress ./cache${ARCH:+_}$ARCH.tar.gz s3://timeplus-ci-internal/proton-oss/
 
             # clean ccache and build footprint
             rm -rf $GITHUB_WORKSPACE/ccache
@@ -440,7 +440,7 @@ jobs:
             fi
 
             tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
-            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal2/proton-oss/
+            aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://timeplus-ci-internal/proton-oss/
 
             # clean ccache and build footprint
             rm -rf $GITHUB_WORKSPACE/ccache
@@ -518,7 +518,7 @@ jobs:
         git config user.email "proton_robot@timeplus.io"
 
         CACHE_TARBALL="cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz"
-        CACHE_S3_URI="s3://tp-internal2/proton-oss/$CACHE_TARBALL"
+        CACHE_S3_URI="s3://timeplus-ci-internal/proton-oss/$CACHE_TARBALL"
 
         mkdir -p "$GITHUB_WORKSPACE/ccache"
         echo "max_size = 100.0G" > "$GITHUB_WORKSPACE/ccache/ccache.conf"
@@ -548,7 +548,7 @@ jobs:
         fi
 
         tar -zcf "$CACHE_TARBALL" -C "$GITHUB_WORKSPACE/ccache" .
-        aws s3 cp --no-progress "$CACHE_TARBALL" "s3://tp-internal2/proton-oss/"
+        aws s3 cp --no-progress "$CACHE_TARBALL" "s3://timeplus-ci-internal/proton-oss/"
 
         rm -rf "$GITHUB_WORKSPACE/ccache"
         rm -rf "$GITHUB_WORKSPACE/output"
