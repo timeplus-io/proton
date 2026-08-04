@@ -16,7 +16,7 @@ on:
       ec2-subnet-id:
         type: string
         required: false
-        default: subnet-0154cd4c9c48527f2
+        default: subnet-027f098f48bf5a452
       ec2-security-group-id:
         type: string
         required: false
