@@ -408,10 +408,32 @@ jobs:
 
   Build_macOS_arm:
     if: github.event.inputs.OS == 'macos' && github.event.inputs.arch == 'arm'
-    runs-on: [self-hosted, macOS, ARM64]
+    # GitHub-hosted Apple Silicon larger runner (M2 Pro, 5 vCPU, 14 GB RAM).
+    # Largest arm64 tier GitHub offers; the 12-core "large" tier is Intel-only,
+    # so it cannot native-compile arm64.
+    runs-on: macos-26-xlarge
+    # GitHub-hosted jobs hard-stop at 360 min; 350 leaves margin for the
+    # always()-guarded ccache upload below the 300-min build guard.
+    timeout-minutes: 350
+    # The cache object below is a single shared key, so concurrent runs would
+    # race on save and the loser's work would be discarded. Queue instead of
+    # cancelling: a run that reaches the save step is what warms the next one.
+    concurrency:
+      group: build-macos-arm-ccache
+      cancel-in-progress: false
     env:
       build_directory: ${{ github.workspace }}/build
       build_type: RelWithDebInfo
+      # Hosted runners are ephemeral and this job previously had no ccache at
+      # all, which only worked because a persistent machine kept its build tree
+      # between runs. The cache now round-trips through S3. Uncompressed .tar on
+      # purpose: ccache 4.x already compresses its entries, so gzip would only
+      # cost single-threaded CPU on both ends.
+      CCACHE_DIR: ${{ github.workspace }}/ccache
+      CCACHE_MAXSIZE: 10G
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      MACOS_CCACHE_S3: s3://timeplus-ci-internal/proton-oss/cache-macos-arm-native.tar
     steps:
       - name: Checkout
         uses: actions/checkout@v5.0.1
@@ -423,16 +445,111 @@ jobs:
       - name: Get MacOS version
         run: sw_vers
 
+      # GitHub documents this runner as having 14 GB of free SSD; in practice
+      # the image is a 320 GB volume with ~87 GB free, and this cleanup takes it
+      # to ~116 GB. Keep both the cleanup and the assertion: the documented
+      # figure is what GitHub is entitled to shrink to, and failing here costs
+      # two minutes instead of hitting ENOSPC hours into the build.
+      - name: Free disk space
+        run: |
+          echo "Disk before cleanup:"
+          df -h /
+          DEFAULT_XCODE="$(dirname "$(dirname "$(xcode-select -p)")")"
+          echo "Keeping default Xcode: $DEFAULT_XCODE"
+          for x in /Applications/Xcode*.app; do
+            if [ "$(readlink -f "$x")" = "$(readlink -f "$DEFAULT_XCODE")" ]; then
+              continue
+            fi
+            echo "Removing $x"
+            sudo rm -rf "$x" &
+          done
+          wait
+          sudo xcrun simctl runtime delete all 2>/dev/null || true
+          echo "Disk after cleanup:"
+          df -h /
+
+          REQUIRED_GB=40
+          AVAIL_GB=$(df -k "$GITHUB_WORKSPACE" | awk 'NR==2 {print int($4/1024/1024)}')
+          echo "Available after cleanup: ${AVAIL_GB} GB (need ${REQUIRED_GB} GB)"
+          if [ "$AVAIL_GB" -lt "$REQUIRED_GB" ]; then
+            echo "::error::Only ${AVAIL_GB} GB free after cleanup, need ${REQUIRED_GB} GB. The runner image likely changed what it preinstalls; extend this step or move the job to a runner with more disk."
+            exit 1
+          fi
+
+      # The image already ships CMake, Ninja, gh and AWS CLI. llvm@21 is pinned
+      # as a versioned formula so `brew --prefix llvm@21` stays valid when the
+      # image's unversioned llvm moves past 21. coreutils provides gtimeout for
+      # the build guard; findutils and grep provide the gfind/ggrep that
+      # cmake/tools.cmake hard-requires on Darwin and that the macOS userland
+      # does not include.
+      - name: Install toolchain
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: |
+          brew install llvm@21 ccache coreutils findutils grep
+          "$(brew --prefix llvm@21)/bin/clang" --version
+          ccache --version | head -1
+          gtimeout --version | head -1
+          gfind --version | head -1
+          ggrep --version | head -1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.0.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Streamed rather than downloaded-then-extracted, which keeps the archive
+      # off the disk budget entirely.
+      - name: Restore ccache from S3
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          if aws s3 cp --no-progress "$MACOS_CCACHE_S3" - | tar -xf - -C "$CCACHE_DIR"; then
+            echo "Restored ccache from S3"
+            du -sh "$CCACHE_DIR"
+          else
+            echo "No ccache archive in S3 yet - cold build"
+          fi
+
       - name: Create and Configure Build
         run: |
           mkdir -p ${{ env.build_directory }}
           export CC=$(brew --prefix llvm@21)/bin/clang
           export CXX=$(brew --prefix llvm@21)/bin/clang++
           export PATH=$(brew --prefix llvm@21)/bin:$PATH
-          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PULSAR=ON
+          # CMAKE_OSX_DEPLOYMENT_TARGET pins the binary's minimum macOS at
+          # 11.0, which is what the previous builder produced: `vtool
+          # -show-build` on the released Darwin-arm64 binary reports minos 11.0.
+          # Left unset it would follow the runner image's much newer SDK and
+          # silently drop users on macOS 11-14.
+          #
+          # CMAKE_*_FLAGS_ADD is appended after DEBUG_INFO_FLAGS in the root
+          # CMakeLists.txt, so -g0 wins and turns debug info off. Debug info is
+          # ~89% of object bytes in this configuration, so this is the
+          # difference between a ~45 GB and an ~8 GB build tree, and it shrinks
+          # the cache by the same factor. Nothing is lost: this job publishes
+          # only the stripped binary, so the DWARF was already discarded.
+          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_CXX_FLAGS_ADD=-g0 -DCMAKE_C_FLAGS_ADD=-g0 -DCMAKE_ASM_FLAGS_ADD=-g0 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PULSAR=ON
 
+      # A fully cold build can outlive the 6h job limit, and a killed job
+      # uploads nothing, so it would never converge. The guard turns "would
+      # have been killed" into a controlled failure that still reaches the
+      # always()-guarded cache save, so one or two re-runs bootstrap a warm
+      # cache from nothing.
       - name: Build with Ninja
-        run: cmake --build ${{ env.build_directory }}
+        run: |
+          rc=0
+          gtimeout 300m cmake --build ${{ env.build_directory }} || rc=$?
+          if [ "$rc" = "124" ]; then
+            echo "::warning::Build exceeded the 300-minute guard. The ccache accumulated so far is uploaded by the 'Save ccache to S3' step - re-run to continue from it."
+          fi
+          exit $rc
+
+      # Surface hit rate so cold-vs-warm builds are visible at a glance.
+      - name: ccache stats
+        if: always()
+        run: ccache -sv || true
 
       - name: Process Binary
         run: |
@@ -446,7 +563,7 @@ jobs:
 
           if [ "${{ github.event.inputs.strip_binary }}" == "true" ]; then
             echo "Stripping the binary..."
-            /opt/homebrew/opt/llvm@21/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
+            "$(brew --prefix llvm@21)/bin/llvm-strip" $ORIGINAL_BINARY -o $STRIPPED_BINARY
             echo "Stripped binary size:"
             ls -lh $STRIPPED_BINARY
           else
@@ -469,12 +586,17 @@ jobs:
           echo "TARBALL_NAME=$TARBALL_NAME" >> $GITHUB_ENV
           echo "TARBALL_PATH=$TARBALL_PATH" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.0.0
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+      # The minimum supported macOS lives in a Mach-O load command and shows up
+      # in no build output anyone reads, so raising it is silent. Assert it.
+      - name: Verify deployment target
+        run: |
+          EXPECTED=11.0
+          ACTUAL=$(vtool -show-build "$BINARY_PATH" | awk '/^ *minos/ {print $2; exit}')
+          echo "minos=$ACTUAL (expected $EXPECTED)"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Binary's minimum macOS is $ACTUAL, expected $EXPECTED. Changing the floor is a product decision -- update CMAKE_OSX_DEPLOYMENT_TARGET and this check together."
+            exit 1
+          fi
 
       - name: Upload Artifact To S3 (tar.gz)
         run: |
@@ -516,3 +638,17 @@ jobs:
         run: |
           TARBALL=${{ env.TARBALL_PATH }}
           shasum -a 256 "$TARBALL"
+
+      # Runs on success, build failure and the build guard alike, so even a
+      # partial compile warms the next run. Placed last so a failed upload
+      # cannot block the artifact steps above.
+      - name: Save ccache to S3
+        if: always()
+        run: |
+          if [ -d "$CCACHE_DIR" ] && [ -n "$(ls -A "$CCACHE_DIR" 2>/dev/null)" ]; then
+            ccache -sv || true
+            du -sh "$CCACHE_DIR"
+            tar -cf - -C "$CCACHE_DIR" . | aws s3 cp --no-progress - "$MACOS_CCACHE_S3"
+          else
+            echo "ccache dir empty - nothing to save"
+          fi

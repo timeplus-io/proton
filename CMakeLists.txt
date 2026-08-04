@@ -187,6 +187,46 @@ else ()
 endif ()
 # proton: ends
 
+# proton: starts
+if (OS_DARWIN)
+    # Imported targets for macOS system libraries (LibEdit, FFI, LibXml2, ZLIB)
+    # carry <SDK>/usr/include as an interface include directory and propagate
+    # it to anything that links them. CMake normally drops include directories
+    # that are already implicit for the compiler, which is why this stays
+    # invisible in most builds -- but the compiler-detected implicit list does
+    # not always spell the SDK the same way find_package() resolved it, and
+    # then the SDK's /usr/include lands in the -isystem list ahead of clang's
+    # own resource directory. libcxx's stddef.h include_next's into Apple's
+    # stddef.h instead of clang's, size_t and ptrdiff_t are never defined, and
+    # the build fails in whatever target happened to link one of those
+    # libraries -- nowhere near the actual cause.
+    #
+    # Declaring the directory implicit makes CMake filter it out everywhere.
+    # Nothing is lost: clang already searches the SDK's /usr/include by
+    # default, in the correct order.
+    #
+    # CMAKE_OSX_SYSROOT is not a reliable source for the path -- CMake leaves
+    # it empty when building against the host's default SDK, which is the case
+    # on GitHub's macOS runner images -- so fall back to asking the toolchain.
+    set (_proton_macos_sdk "${CMAKE_OSX_SYSROOT}")
+    if (NOT _proton_macos_sdk)
+        execute_process (
+            COMMAND xcrun --show-sdk-path
+            OUTPUT_VARIABLE _proton_macos_sdk
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+    endif ()
+    if (IS_DIRECTORY "${_proton_macos_sdk}/usr/include")
+        message (STATUS "Filtering ${_proton_macos_sdk}/usr/include out of generated include flags")
+        foreach (_lang C CXX ASM)
+            list (APPEND CMAKE_${_lang}_IMPLICIT_INCLUDE_DIRECTORIES "${_proton_macos_sdk}/usr/include")
+        endforeach ()
+    else ()
+        message (WARNING "Could not locate the macOS SDK; its /usr/include may leak into include flags")
+    endif ()
+endif ()
+# proton: ends
+
 if (OS_DARWIN)
     # The `-all_load` flag forces loading of all symbols from all libraries,
     # and leads to multiply-defined symbols. This flag allows force loading
