@@ -402,3 +402,5 @@ jobs:
           SANITIZER: "address"
           ARCH: ${{ vars.X64_ARCH }}
           GITHUB_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || github.sha }}
+
+# CI validation marker: first full pipeline run on the new AWS account with synced proton-oss ccache (2026-08-05).
