@@ -115,8 +115,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: Stop EC2 runner
-        # Temporary pin to the Node 24-compatible fork until the companion ec2-github-runner PR merges.
-        uses: yokofly/ec2-github-runner@522cb941f0d76565385ce7aeb6771bf58451ba1b
+        # Pinned to timeplus-io/ec2-github-runner main (Node 24 compatible, PR #3).
+        uses: timeplus-io/ec2-github-runner@d962b847c8b500e9bc25e4a1df62c9237c5c7e6a
         with:
           mode: stop
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
