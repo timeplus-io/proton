@@ -954,8 +954,9 @@ AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     , input_stream(std::make_unique<AvroInputStreamReadBufferAdapter>(*in))
     , decoder(avro::binaryDecoder())
     , format_settings(format_settings_)
-
 {
+    decoder->init(*input_stream);
+
     if (format_settings.kafka_schema_registry.consume_single_schema)
     {
         auto schema = schema_registry->getSchemaForSubject(format_settings.kafka_schema_registry.subject_name);
@@ -1035,6 +1036,7 @@ AvroSchemaRowInputFormat::AvroSchemaRowInputFormat(
     , deserializer(output.getHeader(), Avro::compileSchemaFromSchemaInfo(schema_info), format_settings.avro.allow_missing_fields, format_settings.avro.null_as_default, format_settings)
     , decoder(avro::binaryDecoder())
 {
+    decoder->init(*input_stream);
 }
 
 void AvroSchemaRowInputFormat::resetParser()
