@@ -1,0 +1,17 @@
+{
+ "type": "record",
+ "name": "r",
+ "fields": [
+  {
+   "name": "id",
+   "type": "long"
+  },
+  {
+   "name": "tags",
+   "type": {
+    "type": "array",
+    "items": "string"
+   }
+  }
+ ]
+}

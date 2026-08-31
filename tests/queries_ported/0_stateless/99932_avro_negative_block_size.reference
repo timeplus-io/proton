@@ -1,0 +1,7 @@
+=== container file
+0	150	t0_0	t0_149
+1	7	t1_0	t1_6
+2	0		
+3	301	t3_0	t3_300
+=== raw datum with format_schema
+3	301	t3_0	t3_300
