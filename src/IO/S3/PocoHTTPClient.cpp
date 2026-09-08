@@ -450,6 +450,11 @@ void PocoHTTPClient::makeRequestInternalImpl(
 
             Poco::Net::HTTPRequest poco_request(Poco::Net::HTTPRequest::HTTP_1_1);
 
+            /// proton: starts. Amazon S3 Tables rejects any request carrying the hop-by-hop
+            /// `Keep-Alive` header (S3TablesUnsupportedHeader); plain S3 ignores it.
+            poco_request.setSuppressKeepAliveHeader(true);
+            /// proton: ends
+
             /** According to RFC-2616, Request-URI is allowed to be encoded.
               * However, there is no clear agreement on which exact symbols must be encoded.
               * Effectively, `Poco::URI` chooses smaller subset of characters to encode,
