@@ -5,6 +5,11 @@
 #include <base/types.h>
 #include <base/unit.h>
 
+/// proton: starts
+#include <optional>
+#include <unordered_map>
+/// proton: ends
+
 namespace DB
 {
 
@@ -274,6 +279,11 @@ struct FormatSettings
         uint64_t output_compression_level;
         size_t data_page_size = 1024 * 1024;
         size_t write_batch_size = 1024;
+        /// proton: starts
+        /// Iceberg field ids keyed by dotted field path (t.x, arr.element, m.key, m.value).
+        /// Set by the Iceberg sink; honoured by the custom encoder only.
+        std::optional<std::unordered_map<String, Int64>> field_ids;
+        /// proton: ends
     } parquet{};
 
     struct Pretty

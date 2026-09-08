@@ -6,6 +6,11 @@
 #include <Common/PODArray.h>
 #include <IO/CompressionMethod.h>
 
+/// proton: starts
+#include <optional>
+#include <unordered_map>
+/// proton: ends
+
 namespace DB::Parquet
 {
 
@@ -105,14 +110,26 @@ using ColumnChunkWriteStates = std::vector<ColumnChunkWriteState>;
 ///
 /// Steps (4) and (6) can be parallelized, both within and across row groups.
 
+/// proton: starts
+/// Iceberg field ids keyed by dotted field path (t.x, arr.element, m.key, m.value). They end up in
+/// SchemaElement::field_id, which Iceberg readers use to resolve columns instead of names.
+using ColumnFieldIds = std::optional<std::unordered_map<String, Int64>>;
+/// proton: ends
+
 /// Parquet schema is a tree of SchemaElements, flattened into a list in depth-first order.
 /// Leaf nodes correspond to physical columns of primitive types. Inner nodes describe logical
 /// groupings of those columns, e.g. tuples or structs.
-SchemaElements convertSchema(const Block & sample, const WriteOptions & options);
+SchemaElements convertSchema(
+    const Block & sample, const WriteOptions & options, const ColumnFieldIds & column_field_ids = std::nullopt); /// proton: updates
 
 void prepareColumnForWrite(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates * out_columns_to_write, SchemaElements * out_schema = nullptr);
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates * out_columns_to_write,
+    SchemaElements * out_schema = nullptr,
+    const ColumnFieldIds & column_field_ids = std::nullopt); /// proton: updates
 
 void writeFileHeader(WriteBuffer & out);
 

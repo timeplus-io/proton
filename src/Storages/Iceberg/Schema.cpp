@@ -8,12 +8,14 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/IDataType.h>
+#include <DataTypes/NestedUtils.h>
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 
 namespace DB::ErrorCodes
 {
+extern const int BAD_ARGUMENTS;
 extern const int CANNOT_CONVERT_TYPE;
 }
 
@@ -254,6 +256,52 @@ void setFieldType(Poco::JSON::Object & field, const DataTypePtr & proton_type, i
     }
 }
 
+void collectFieldIds(const Poco::JSON::Object & type, const std::string & path, Apache::Iceberg::FieldIdsByPath & result);
+
+void collectStructFieldIds(const Poco::JSON::Array & fields, const std::string & path, Apache::Iceberg::FieldIdsByPath & result)
+{
+    for (unsigned i = 0; i < fields.size(); ++i)
+    {
+        auto field = fields.getObject(i);
+        auto field_path = Nested::concatenateName(path, field->getValue<std::string>("name"));
+        result[field_path] = field->getValue<int64_t>("id");
+        if (field->isObject("type"))
+            collectFieldIds(*field->getObject("type"), field_path, result);
+    }
+}
+
+/// Mirrors the path naming of the Iceberg spec: struct members by name, list elements as `element`,
+/// map entries as `key` and `value`. Nullability does not appear in the path.
+void collectFieldIds(const Poco::JSON::Object & type, const std::string & path, Apache::Iceberg::FieldIdsByPath & result)
+{
+    auto type_name = type.getValue<std::string>("type");
+    if (type_name == "struct")
+    {
+        collectStructFieldIds(*type.getArray("fields"), path, result);
+    }
+    else if (type_name == "list")
+    {
+        auto element_path = Nested::concatenateName(path, "element");
+        result[element_path] = type.getValue<int64_t>("element-id");
+        if (type.isObject("element"))
+            collectFieldIds(*type.getObject("element"), element_path, result);
+    }
+    else if (type_name == "map")
+    {
+        auto key_path = Nested::concatenateName(path, "key");
+        result[key_path] = type.getValue<int64_t>("key-id");
+        if (type.isObject("key"))
+            collectFieldIds(*type.getObject("key"), key_path, result);
+
+        auto value_path = Nested::concatenateName(path, "value");
+        result[value_path] = type.getValue<int64_t>("value-id");
+        if (type.isObject("value"))
+            collectFieldIds(*type.getObject("value"), value_path, result);
+    }
+    else
+        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Unknown Iceberg complex type: {}", type_name);
+}
+
 } // namespace
 
 namespace Apache::Iceberg
@@ -264,6 +312,13 @@ Poco::JSON::Object generateIcebergSchema(const NamesAndTypesList & proton_schema
     int next_field_id = 1;
     auto schema_json = newStructType(proton_schema, next_field_id);
     return schema_json;
+}
+
+FieldIdsByPath getFieldIdsByPath(const Poco::JSON::Object & iceberg_schema)
+{
+    FieldIdsByPath result;
+    collectStructFieldIds(*iceberg_schema.getArray("fields"), /*path=*/"", result);
+    return result;
 }
 
 }

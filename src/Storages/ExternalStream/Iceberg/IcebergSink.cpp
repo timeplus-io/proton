@@ -18,6 +18,7 @@
 #include <Storages/Iceberg/Manifest.h>
 #include <Storages/Iceberg/ManifestList.h>
 #include <Storages/Iceberg/Requirement.h>
+#include <Storages/Iceberg/Schema.h>
 #include <Storages/Iceberg/Update.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
@@ -28,6 +29,9 @@
 #include <parquet/metadata.h>
 #include <Compiler.hh>
 #include <ValidSchema.hh>
+
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB
 {
@@ -150,7 +154,16 @@ void IcebergSink::consume(Chunk chunk)
             std::nullopt,
             threadPoolCallbackRunner<void>(IOThreadPool::get(), "S3ParallelWrite"),
             context->getWriteSettings());
-        writer = FormatFactory::instance().getOutputFormatParallelIfPossible(format, *write_buf, sample_block, context, format_settings);
+
+        /// Iceberg readers resolve columns by field id rather than by name, so the Parquet schema has to
+        /// carry the ids of the table schema. Only the custom Parquet encoder writes them.
+        auto writer_settings = format_settings ? *format_settings : getFormatSettings(context);
+        Poco::JSON::Parser parser;
+        auto iceberg_schema = parser.parse(metadata.getSchemaJSON()).extract<Poco::JSON::Object::Ptr>();
+        writer_settings.parquet.field_ids = Apache::Iceberg::getFieldIdsByPath(*iceberg_schema);
+        writer_settings.parquet.use_custom_encoder = true;
+
+        writer = FormatFactory::instance().getOutputFormatParallelIfPossible(format, *write_buf, sample_block, context, writer_settings);
         writer->setAutoFlush();
     }
 
