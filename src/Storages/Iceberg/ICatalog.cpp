@@ -77,8 +77,17 @@ std::string TableMetadata::getLocation(bool path_only) const
 
     if (path_only)
         return path;
-    else
-        return std::filesystem::path(location_without_path) / path;
+
+    /// A table whose location is a bare bucket root (every Amazon S3 Tables table is one,
+    /// `s3://<bucket>` with no path) has an empty path. Appending it through
+    /// std::filesystem::path would leave a trailing separator, and every path derived from
+    /// this one (`{}/metadata/...`, `{}/data/...`) would then carry `//`. The objects are
+    /// written at the single-slash key, so the committed metadata would point at paths
+    /// PyArrow and DuckDB refuse to read.
+    if (path.empty())
+        return location_without_path;
+
+    return std::filesystem::path(location_without_path) / path;
 }
 
 void TableMetadata::setSchema(const DB::NamesAndTypesList & schema_)
