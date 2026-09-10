@@ -281,11 +281,9 @@ std::ostream& HTTPClientSession::sendRequest(HTTPRequest& request)
 		    reconnect();
 		if (!request.has(HTTPMessage::CONNECTION))
                     request.setKeepAlive(keepAlive);
-                /// proton: starts. Skip the header for requests that asked for it.
                 if (keepAlive && !request.getSuppressKeepAliveHeader() && !request.has(HTTPMessage::CONNECTION_KEEP_ALIVE)
                     && _keepAliveTimeout.totalSeconds() > 0)
                     request.setKeepAliveTimeout(_keepAliveTimeout.totalSeconds(), _keepAliveMaxRequests);
-                /// proton: ends
 		if (!request.has(HTTPRequest::HOST) && !_host.empty())
 			request.setHost(_host, _port);
 		if (!_proxyConfig.host.empty() && !bypassProxy())

@@ -57,10 +57,11 @@ std::pair<String, Int32> sendRequest(
         /// Host line next to the one setHost() wrote above. Amazon S3 Tables answers that
         /// with HTTP 400 and an empty body. ReadWriteBufferFromHTTP applies headers with
         /// set() for the same reason.
-        if (!headers.empty())
-            for (const auto & [k, v] : headers)
-                if (!k.empty())
-                    request.set(k, v);
+        for (const auto & [k, v] : headers)
+        {
+            if (!k.empty())
+                request.set(k, v);
+        }
 
         if (!password.empty())
         {

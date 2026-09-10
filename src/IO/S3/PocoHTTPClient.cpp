@@ -1,5 +1,5 @@
 #include <Poco/Timespan.h>
-#include "Common/DNSResolver.h"
+#include <Common/DNSResolver.h>
 #include <Common/NetException.h>
 #include <Common/config_version.h>
 #include "config.h"
@@ -66,11 +66,6 @@ namespace ProfileEvents
     extern const Event DiskS3WriteRequestsErrors;
     extern const Event DiskS3WriteRequestsThrottling;
     extern const Event DiskS3WriteRequestsRedirects;
-
-    extern const Event S3GetRequestThrottlerCount;
-    extern const Event S3GetRequestThrottlerSleepMicroseconds;
-    extern const Event S3PutRequestThrottlerCount;
-    extern const Event S3PutRequestThrottlerSleepMicroseconds;
 
     extern const Event DiskS3GetRequestThrottlerCount;
     extern const Event DiskS3GetRequestThrottlerSleepMicroseconds;
@@ -450,11 +445,7 @@ void PocoHTTPClient::makeRequestInternalImpl(
 
             Poco::Net::HTTPRequest poco_request(Poco::Net::HTTPRequest::HTTP_1_1);
 
-            /// proton: starts. Amazon S3 Tables rejects any request carrying the hop-by-hop
-            /// `Keep-Alive` header (S3TablesUnsupportedHeader); plain S3 ignores it.
             poco_request.setSuppressKeepAliveHeader(true);
-            /// proton: ends
-
             /** According to RFC-2616, Request-URI is allowed to be encoded.
               * However, there is no clear agreement on which exact symbols must be encoded.
               * Effectively, `Poco::URI` chooses smaller subset of characters to encode,
