@@ -52,11 +52,16 @@ std::pair<String, Int32> sendRequest(
         if (!user.empty())
             request.add("x-timeplus-user", user);
 
-        /// add other headers
-        if (!headers.empty())
-            for(const auto & [k, v]: headers)
-                if (!k.empty())
-                    request.add(k, v);
+        /// Set, not add: a caller that signed the request (the Iceberg REST catalog with
+        /// SigV4) forwards `host` among its signed headers, and add() would send a second
+        /// Host line next to the one setHost() wrote above. Amazon S3 Tables answers that
+        /// with HTTP 400 and an empty body. ReadWriteBufferFromHTTP applies headers with
+        /// set() for the same reason.
+        for (const auto & [k, v] : headers)
+        {
+            if (!k.empty())
+                request.set(k, v);
+        }
 
         if (!password.empty())
         {
