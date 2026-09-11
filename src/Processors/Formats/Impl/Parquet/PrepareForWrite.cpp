@@ -229,11 +229,22 @@ parq::CompressionCodec::type compressionMethodToParquet(CompressionMethod c)
 /// Depth-first traversal of the schema tree for this column.
 /// column_field_ids: Iceberg field ids by path relative to this node (x, arr.element, m.value); Iceberg write path only.
 void prepareColumnRecursive(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas, const std::optional<std::unordered_map<String, Int64>> & column_field_ids); /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids); /// proton: updates
 
-void preparePrimitiveColumn(ColumnPtr column, DataTypePtr type, const std::string & name,
-    const WriteOptions & options, ColumnChunkWriteStates & states, SchemaElements & schemas, std::optional<Int64> field_id) /// proton: updates
+void preparePrimitiveColumn(
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    std::optional<Int64> field_id) /// proton: updates
 {
     /// Add physical column info.
     auto & state = states.emplace_back();
@@ -415,8 +426,13 @@ void preparePrimitiveColumn(ColumnPtr column, DataTypePtr type, const std::strin
 }
 
 void prepareColumnNullable(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const ColumnNullable * column_nullable = assert_cast<const ColumnNullable *>(column.get());
     ColumnPtr nested_column = column_nullable->getNestedColumnPtr();
@@ -457,9 +473,8 @@ void prepareColumnNullable(
 
 /// proton: starts
 /// Narrows the field-id map to the children of `prefix` (t.x -> x). Ported from ClickHouse.
-std::optional<std::unordered_map<String, Int64>> buildSubFieldIds(
-    const std::optional<std::unordered_map<String, Int64>> & column_field_ids,
-    const String & prefix)
+std::optional<std::unordered_map<String, Int64>>
+buildSubFieldIds(const std::optional<std::unordered_map<String, Int64>> & column_field_ids, const String & prefix)
 {
     if (!column_field_ids)
         return std::nullopt;
@@ -476,8 +491,13 @@ std::optional<std::unordered_map<String, Int64>> buildSubFieldIds(
 /// proton: ends
 
 void prepareColumnTuple(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const auto * column_tuple = assert_cast<const ColumnTuple *>(column.get());
     const auto * type_tuple = assert_cast<const DataTypeTuple *>(type.get());
@@ -500,7 +520,14 @@ void prepareColumnTuple(
     /// proton: starts
     auto sub_field_ids = buildSubFieldIds(column_field_ids, name);
     for (size_t i = 0; i < type_tuple->getElements().size(); ++i)
-        prepareColumnRecursive(column_tuple->getColumnPtr(i), type_tuple->getElement(i), type_tuple->getNameByPosition(i + 1), options, states, schemas, sub_field_ids);
+        prepareColumnRecursive(
+            column_tuple->getColumnPtr(i),
+            type_tuple->getElement(i),
+            type_tuple->getNameByPosition(i + 1),
+            options,
+            states,
+            schemas,
+            sub_field_ids);
     /// proton: ends
 
     for (size_t i = child_states_begin; i < states.size(); ++i)
@@ -512,8 +539,13 @@ void prepareColumnTuple(
 }
 
 void prepareColumnArray(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const auto * column_array = assert_cast<const ColumnArray *>(column.get());
     ColumnPtr nested_column = column_array->getDataPtr();
@@ -556,7 +588,8 @@ void prepareColumnArray(
     size_t child_states_begin = states.size();
 
     /// Recurse. The Parquet-only "list" group has no Iceberg id; the element is `<name>.element`.
-    prepareColumnRecursive(nested_column, nested_type, "element", options, states, schemas, buildSubFieldIds(column_field_ids, name)); /// proton: updates
+    prepareColumnRecursive(
+        nested_column, nested_type, "element", options, states, schemas, buildSubFieldIds(column_field_ids, name)); /// proton: updates
 
     /// Update repetition+definition levels and fully-qualified column names (x -> myarray.list.x).
     for (size_t i = child_states_begin; i < states.size(); ++i)
@@ -569,8 +602,13 @@ void prepareColumnArray(
 }
 
 void prepareColumnMap(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const auto * column_map = assert_cast<const ColumnMap *>(column.get());
     const auto * column_array = &column_map->getNestedColumn();
@@ -613,14 +651,15 @@ void prepareColumnMap(
     auto child_field_ids = buildSubFieldIds(column_field_ids, name);
     const auto * column_tuple_typed = assert_cast<const ColumnTuple *>(column_tuple.get());
     prepareColumnRecursive(column_tuple_typed->getColumnPtr(0), map_type->getKeyType(), "key", options, states, schemas, child_field_ids);
-    prepareColumnRecursive(column_tuple_typed->getColumnPtr(1), map_type->getValueType(), "value", options, states, schemas, child_field_ids);
+    prepareColumnRecursive(
+        column_tuple_typed->getColumnPtr(1), map_type->getValueType(), "value", options, states, schemas, child_field_ids);
 
     for (size_t i = child_states_begin; i < states.size(); ++i)
     {
         Strings & path = states[i].column_chunk.meta_data.path_in_schema;
         path.insert(path.begin(), "key_value");
         path.insert(path.begin(), name);
-    /// proton: ends
+        /// proton: ends
 
         updateRepDefLevelsForArray(states[i], offsets);
     }
@@ -628,8 +667,7 @@ void prepareColumnMap(
 
 /// proton: starts
 /// Looks up a leaf's field id; a missing name is tolerated like in the composite branches.
-std::optional<Int64> lookupLeafFieldId(
-    const std::optional<std::unordered_map<String, Int64>> & column_field_ids, const String & name)
+std::optional<Int64> lookupLeafFieldId(const std::optional<std::unordered_map<String, Int64>> & column_field_ids, const String & name)
 {
     if (!column_field_ids)
         return std::nullopt;
@@ -640,8 +678,7 @@ std::optional<Int64> lookupLeafFieldId(
 }
 
 /// Every logical field must have an id, or the file would silently disagree with the table schema.
-void validateIcebergFieldIds(
-    const DataTypePtr & type, const String & path, const std::unordered_map<String, Int64> & field_ids)
+void validateIcebergFieldIds(const DataTypePtr & type, const String & path, const std::unordered_map<String, Int64> & field_ids)
 {
     switch (type->getTypeId())
     {
@@ -668,7 +705,8 @@ void validateIcebergFieldIds(
             break;
         }
         case TypeIndex::Array:
-            validateIcebergFieldIds(assert_cast<const DataTypeArray &>(*type).getNestedType(), Nested::concatenateName(path, "element"), field_ids);
+            validateIcebergFieldIds(
+                assert_cast<const DataTypeArray &>(*type).getNestedType(), Nested::concatenateName(path, "element"), field_ids);
             break;
         case TypeIndex::Map:
         {
@@ -684,16 +722,29 @@ void validateIcebergFieldIds(
 /// proton: ends
 
 void prepareColumnRecursive(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     switch (type->getTypeId())
     {
         /// proton: starts
-        case TypeIndex::Nullable: prepareColumnNullable(column, type, name, options, states, schemas, column_field_ids); break;
-        case TypeIndex::Array: prepareColumnArray(column, type, name, options, states, schemas, column_field_ids); break;
-        case TypeIndex::Tuple: prepareColumnTuple(column, type, name, options, states, schemas, column_field_ids); break;
-        case TypeIndex::Map: prepareColumnMap(column, type, name, options, states, schemas, column_field_ids); break;
+        case TypeIndex::Nullable:
+            prepareColumnNullable(column, type, name, options, states, schemas, column_field_ids);
+            break;
+        case TypeIndex::Array:
+            prepareColumnArray(column, type, name, options, states, schemas, column_field_ids);
+            break;
+        case TypeIndex::Tuple:
+            prepareColumnTuple(column, type, name, options, states, schemas, column_field_ids);
+            break;
+        case TypeIndex::Map:
+            prepareColumnMap(column, type, name, options, states, schemas, column_field_ids);
+            break;
         case TypeIndex::LowCardinality:
         {
             auto nested_type = assert_cast<const DataTypeLowCardinality &>(*type).getDictionaryType();
@@ -708,13 +759,16 @@ void prepareColumnRecursive(
         default:
             preparePrimitiveColumn(column, type, name, options, states, schemas, lookupLeafFieldId(column_field_ids, name));
             break;
-        /// proton: ends
+            /// proton: ends
     }
 }
 
 }
 
-SchemaElements convertSchema(const Block & sample, const WriteOptions & options, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+SchemaElements convertSchema(
+    const Block & sample,
+    const WriteOptions & options,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     SchemaElements schema;
     auto & root = schema.emplace_back();
@@ -736,8 +790,13 @@ SchemaElements convertSchema(const Block & sample, const WriteOptions & options,
 }
 
 void prepareColumnForWrite(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates * out_columns_to_write, SchemaElements * out_schema, const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates * out_columns_to_write,
+    SchemaElements * out_schema,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     if (column->empty() && out_columns_to_write != nullptr)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty column passed to Parquet encoder");

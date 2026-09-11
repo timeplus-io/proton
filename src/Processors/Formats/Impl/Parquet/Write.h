@@ -114,11 +114,19 @@ using ColumnChunkWriteStates = std::vector<ColumnChunkWriteState>;
 /// Leaf nodes correspond to physical columns of primitive types. Inner nodes describe logical
 /// groupings of those columns, e.g. tuples or structs.
 /// column_field_ids: Iceberg field ids by dotted path (t.x, arr.element, m.key); Iceberg write path only.
-SchemaElements convertSchema(const Block & sample, const WriteOptions & options, const std::optional<std::unordered_map<String, Int64>> & column_field_ids = std::nullopt); /// proton: updates
+SchemaElements convertSchema(
+    const Block & sample,
+    const WriteOptions & options,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids = std::nullopt); /// proton: updates
 
 void prepareColumnForWrite(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates * out_columns_to_write, SchemaElements * out_schema = nullptr, const std::optional<std::unordered_map<String, Int64>> & column_field_ids = std::nullopt); /// proton: updates
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates * out_columns_to_write,
+    SchemaElements * out_schema = nullptr,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids = std::nullopt); /// proton: updates
 
 void writeFileHeader(WriteBuffer & out);
 

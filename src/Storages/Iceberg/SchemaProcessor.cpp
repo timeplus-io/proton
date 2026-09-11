@@ -489,5 +489,4 @@ std::unordered_map<String, Int64> IcebergSchemaProcessor::traverseSchema(Poco::J
     }
     return result;
 }
-
 }
