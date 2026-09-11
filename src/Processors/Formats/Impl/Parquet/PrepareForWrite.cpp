@@ -16,6 +16,9 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFixedString.h>
+/// proton: starts
+#include <DataTypes/NestedUtils.h>
+/// proton: ends
 
 
 /// This file deals with schema conversion and with repetition and definition levels.
@@ -53,6 +56,9 @@ namespace DB::ErrorCodes
     extern const int TOO_DEEP_RECURSION; // I'm 14 and this is deep
     extern const int UNKNOWN_COMPRESSION_METHOD;
     extern const int LOGICAL_ERROR;
+    /// proton: starts
+    extern const int INCORRECT_DATA;
+    /// proton: ends
 }
 
 namespace DB::Parquet
@@ -221,12 +227,24 @@ parq::CompressionCodec::type compressionMethodToParquet(CompressionMethod c)
 }
 
 /// Depth-first traversal of the schema tree for this column.
+/// column_field_ids: Iceberg field ids by path relative to this node (x, arr.element, m.value); Iceberg write path only.
 void prepareColumnRecursive(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas);
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids); /// proton: updates
 
-void preparePrimitiveColumn(ColumnPtr column, DataTypePtr type, const std::string & name,
-    const WriteOptions & options, ColumnChunkWriteStates & states, SchemaElements & schemas)
+void preparePrimitiveColumn(
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    std::optional<Int64> field_id) /// proton: updates
 {
     /// Add physical column info.
     auto & state = states.emplace_back();
@@ -242,6 +260,10 @@ void preparePrimitiveColumn(ColumnPtr column, DataTypePtr type, const std::strin
     auto & schema = schemas.emplace_back();
     schema.__set_repetition_type(parq::FieldRepetitionType::REQUIRED);
     schema.__set_name(name);
+    /// proton: starts
+    if (field_id)
+        schema.__set_field_id(static_cast<Int32>(*field_id));
+    /// proton: ends
 
     /// Convert the type enums.
 
@@ -404,8 +426,13 @@ void preparePrimitiveColumn(ColumnPtr column, DataTypePtr type, const std::strin
 }
 
 void prepareColumnNullable(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas)
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const ColumnNullable * column_nullable = assert_cast<const ColumnNullable *>(column.get());
     ColumnPtr nested_column = column_nullable->getNestedColumnPtr();
@@ -415,7 +442,7 @@ void prepareColumnNullable(
     size_t child_states_begin = states.size();
     size_t child_schema_idx = schemas.size();
 
-    prepareColumnRecursive(nested_column, nested_type, name, options, states, schemas);
+    prepareColumnRecursive(nested_column, nested_type, name, options, states, schemas, column_field_ids); /// proton: updates
 
     if (schemas[child_schema_idx].repetition_type == parq::FieldRepetitionType::REQUIRED)
     {
@@ -444,9 +471,33 @@ void prepareColumnNullable(
     }
 }
 
+/// proton: starts
+/// Narrows the field-id map to the children of `prefix` (t.x -> x). Ported from ClickHouse.
+std::optional<std::unordered_map<String, Int64>>
+buildSubFieldIds(const std::optional<std::unordered_map<String, Int64>> & column_field_ids, const String & prefix)
+{
+    if (!column_field_ids)
+        return std::nullopt;
+
+    std::unordered_map<String, Int64> result;
+    const String prefix_dot = prefix + ".";
+    for (const auto & [key, value] : *column_field_ids)
+    {
+        if (key.starts_with(prefix_dot))
+            result[key.substr(prefix_dot.size())] = value;
+    }
+    return result.empty() ? std::nullopt : std::make_optional(std::move(result));
+}
+/// proton: ends
+
 void prepareColumnTuple(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas)
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const auto * column_tuple = assert_cast<const ColumnTuple *>(column.get());
     const auto * type_tuple = assert_cast<const DataTypeTuple *>(type.get());
@@ -455,11 +506,29 @@ void prepareColumnTuple(
     tuple_schema.__set_repetition_type(parq::FieldRepetitionType::REQUIRED);
     tuple_schema.__set_name(name);
     tuple_schema.__set_num_children(static_cast<Int32>(type_tuple->getElements().size()));
+    /// proton: starts
+    if (column_field_ids)
+    {
+        auto it = column_field_ids->find(name);
+        if (it != column_field_ids->end())
+            tuple_schema.__set_field_id(static_cast<Int32>(it->second));
+    }
+    /// proton: ends
 
     size_t child_states_begin = states.size();
 
+    /// proton: starts
+    auto sub_field_ids = buildSubFieldIds(column_field_ids, name);
     for (size_t i = 0; i < type_tuple->getElements().size(); ++i)
-        prepareColumnRecursive(column_tuple->getColumnPtr(i), type_tuple->getElement(i), type_tuple->getNameByPosition(i + 1), options, states, schemas);
+        prepareColumnRecursive(
+            column_tuple->getColumnPtr(i),
+            type_tuple->getElement(i),
+            type_tuple->getNameByPosition(i + 1),
+            options,
+            states,
+            schemas,
+            sub_field_ids);
+    /// proton: ends
 
     for (size_t i = child_states_begin; i < states.size(); ++i)
     {
@@ -470,8 +539,13 @@ void prepareColumnTuple(
 }
 
 void prepareColumnArray(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas)
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const auto * column_array = assert_cast<const ColumnArray *>(column.get());
     ColumnPtr nested_column = column_array->getDataPtr();
@@ -497,6 +571,14 @@ void prepareColumnArray(
     list_schema.__set_converted_type(parq::ConvertedType::LIST);
     list_schema.__isset.logicalType = true;
     list_schema.logicalType.__set_LIST({});
+    /// proton: starts
+    if (column_field_ids)
+    {
+        auto it = column_field_ids->find(name);
+        if (it != column_field_ids->end())
+            list_schema.__set_field_id(static_cast<Int32>(it->second));
+    }
+    /// proton: ends
 
     item_schema.__set_repetition_type(parq::FieldRepetitionType::REPEATED);
     item_schema.__set_name("list");
@@ -505,8 +587,9 @@ void prepareColumnArray(
     std::array<std::string, 2> path_prefix = {list_schema.name, item_schema.name};
     size_t child_states_begin = states.size();
 
-    /// Recurse.
-    prepareColumnRecursive(nested_column, nested_type, "element", options, states, schemas);
+    /// Recurse. The Parquet-only "list" group has no Iceberg id; the element is `<name>.element`.
+    prepareColumnRecursive(
+        nested_column, nested_type, "element", options, states, schemas, buildSubFieldIds(column_field_ids, name)); /// proton: updates
 
     /// Update repetition+definition levels and fully-qualified column names (x -> myarray.list.x).
     for (size_t i = child_states_begin; i < states.size(); ++i)
@@ -519,8 +602,13 @@ void prepareColumnArray(
 }
 
 void prepareColumnMap(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas)
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     const auto * column_map = assert_cast<const ColumnMap *>(column.get());
     const auto * column_array = &column_map->getNestedColumn();
@@ -528,7 +616,6 @@ void prepareColumnMap(
     ColumnPtr column_tuple = column_array->getDataPtr();
 
     const auto * map_type = assert_cast<const DataTypeMap *>(type.get());
-    DataTypePtr tuple_type = std::make_shared<DataTypeTuple>(map_type->getKeyValueTypes(), Strings{"key", "value"});
 
     /// Map is an array of tuples
     /// https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#maps
@@ -545,54 +632,143 @@ void prepareColumnMap(
     map_schema.__set_converted_type(parq::ConvertedType::MAP);
     map_schema.__set_logicalType({});
     map_schema.logicalType.__set_MAP({});
+    /// proton: starts
+    if (column_field_ids)
+    {
+        auto it = column_field_ids->find(name);
+        if (it != column_field_ids->end())
+            map_schema.__set_field_id(static_cast<Int32>(it->second));
+    }
 
-    size_t tuple_schema_idx = schemas.size();
+    /// "key_value" has no Iceberg id but key and value do, so they are prepared directly, as in ClickHouse.
+    auto & kv_schema = schemas.emplace_back();
+    kv_schema.__set_repetition_type(parq::FieldRepetitionType::REPEATED);
+    kv_schema.__set_name("key_value");
+    kv_schema.__set_num_children(2);
+    kv_schema.__set_converted_type(parq::ConvertedType::MAP_KEY_VALUE);
+
     size_t child_states_begin = states.size();
-
-    prepareColumnTuple(column_tuple, tuple_type, "key_value", options, states, schemas);
-
-    schemas[tuple_schema_idx].__set_repetition_type(parq::FieldRepetitionType::REPEATED);
-    schemas[tuple_schema_idx].__set_converted_type(parq::ConvertedType::MAP_KEY_VALUE);
+    auto child_field_ids = buildSubFieldIds(column_field_ids, name);
+    const auto * column_tuple_typed = assert_cast<const ColumnTuple *>(column_tuple.get());
+    prepareColumnRecursive(column_tuple_typed->getColumnPtr(0), map_type->getKeyType(), "key", options, states, schemas, child_field_ids);
+    prepareColumnRecursive(
+        column_tuple_typed->getColumnPtr(1), map_type->getValueType(), "value", options, states, schemas, child_field_ids);
 
     for (size_t i = child_states_begin; i < states.size(); ++i)
     {
         Strings & path = states[i].column_chunk.meta_data.path_in_schema;
+        path.insert(path.begin(), "key_value");
         path.insert(path.begin(), name);
+        /// proton: ends
 
         updateRepDefLevelsForArray(states[i], offsets);
     }
 }
 
-void prepareColumnRecursive(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates & states, SchemaElements & schemas)
+/// proton: starts
+/// Looks up a leaf's field id; a missing name is tolerated like in the composite branches.
+std::optional<Int64> lookupLeafFieldId(const std::optional<std::unordered_map<String, Int64>> & column_field_ids, const String & name)
+{
+    if (!column_field_ids)
+        return std::nullopt;
+    auto it = column_field_ids->find(name);
+    if (it == column_field_ids->end())
+        return std::nullopt;
+    return it->second;
+}
+
+/// Every logical field must have an id, or the file would silently disagree with the table schema.
+void validateIcebergFieldIds(const DataTypePtr & type, const String & path, const std::unordered_map<String, Int64> & field_ids)
 {
     switch (type->getTypeId())
     {
-        case TypeIndex::Nullable: prepareColumnNullable(column, type, name, options, states, schemas); break;
-        case TypeIndex::Array: prepareColumnArray(column, type, name, options, states, schemas); break;
-        case TypeIndex::Tuple: prepareColumnTuple(column, type, name, options, states, schemas); break;
-        case TypeIndex::Map: prepareColumnMap(column, type, name, options, states, schemas); break;
+        case TypeIndex::Nullable:
+            validateIcebergFieldIds(assert_cast<const DataTypeNullable &>(*type).getNestedType(), path, field_ids);
+            return;
+        case TypeIndex::LowCardinality:
+            validateIcebergFieldIds(assert_cast<const DataTypeLowCardinality &>(*type).getDictionaryType(), path, field_ids);
+            return;
+        default:
+            break;
+    }
+
+    if (!field_ids.contains(path))
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Column '{}' has no field id in the Iceberg table schema", path);
+
+    switch (type->getTypeId())
+    {
+        case TypeIndex::Tuple:
+        {
+            const auto & tuple = assert_cast<const DataTypeTuple &>(*type);
+            for (size_t i = 0; i < tuple.getElements().size(); ++i)
+                validateIcebergFieldIds(tuple.getElement(i), Nested::concatenateName(path, tuple.getNameByPosition(i + 1)), field_ids);
+            break;
+        }
+        case TypeIndex::Array:
+            validateIcebergFieldIds(
+                assert_cast<const DataTypeArray &>(*type).getNestedType(), Nested::concatenateName(path, "element"), field_ids);
+            break;
+        case TypeIndex::Map:
+        {
+            const auto & map = assert_cast<const DataTypeMap &>(*type);
+            validateIcebergFieldIds(map.getKeyType(), Nested::concatenateName(path, "key"), field_ids);
+            validateIcebergFieldIds(map.getValueType(), Nested::concatenateName(path, "value"), field_ids);
+            break;
+        }
+        default:
+            break;
+    }
+}
+/// proton: ends
+
+void prepareColumnRecursive(
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates & states,
+    SchemaElements & schemas,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
+{
+    switch (type->getTypeId())
+    {
+        /// proton: starts
+        case TypeIndex::Nullable:
+            prepareColumnNullable(column, type, name, options, states, schemas, column_field_ids);
+            break;
+        case TypeIndex::Array:
+            prepareColumnArray(column, type, name, options, states, schemas, column_field_ids);
+            break;
+        case TypeIndex::Tuple:
+            prepareColumnTuple(column, type, name, options, states, schemas, column_field_ids);
+            break;
+        case TypeIndex::Map:
+            prepareColumnMap(column, type, name, options, states, schemas, column_field_ids);
+            break;
         case TypeIndex::LowCardinality:
         {
             auto nested_type = assert_cast<const DataTypeLowCardinality &>(*type).getDictionaryType();
             if (nested_type->isNullable())
                 prepareColumnNullable(
-                    column->convertToFullColumnIfLowCardinality(), nested_type, name, options, states, schemas);
+                    column->convertToFullColumnIfLowCardinality(), nested_type, name, options, states, schemas, column_field_ids);
             else
                 /// Use nested data type, but keep ColumnLowCardinality. The encoder can deal with it.
-                preparePrimitiveColumn(column, nested_type, name, options, states, schemas);
+                preparePrimitiveColumn(column, nested_type, name, options, states, schemas, lookupLeafFieldId(column_field_ids, name));
             break;
         }
         default:
-            preparePrimitiveColumn(column, type, name, options, states, schemas);
+            preparePrimitiveColumn(column, type, name, options, states, schemas, lookupLeafFieldId(column_field_ids, name));
             break;
+            /// proton: ends
     }
 }
 
 }
 
-SchemaElements convertSchema(const Block & sample, const WriteOptions & options)
+SchemaElements convertSchema(
+    const Block & sample,
+    const WriteOptions & options,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     SchemaElements schema;
     auto & root = schema.emplace_back();
@@ -600,21 +776,34 @@ SchemaElements convertSchema(const Block & sample, const WriteOptions & options)
     root.__set_num_children(static_cast<Int32>(sample.columns()));
 
     for (const auto & c : sample)
-        prepareColumnForWrite(c.column, c.type, c.name, options, nullptr, &schema);
+    {
+        /// proton: starts
+        /// Iceberg write path only: validate the whole nested tree before the footer is written.
+        if (column_field_ids)
+            validateIcebergFieldIds(c.type, c.name, *column_field_ids);
+
+        prepareColumnForWrite(c.column, c.type, c.name, options, nullptr, &schema, column_field_ids);
+        /// proton: ends
+    }
 
     return schema;
 }
 
 void prepareColumnForWrite(
-    ColumnPtr column, DataTypePtr type, const std::string & name, const WriteOptions & options,
-    ColumnChunkWriteStates * out_columns_to_write, SchemaElements * out_schema)
+    ColumnPtr column,
+    DataTypePtr type,
+    const std::string & name,
+    const WriteOptions & options,
+    ColumnChunkWriteStates * out_columns_to_write,
+    SchemaElements * out_schema,
+    const std::optional<std::unordered_map<String, Int64>> & column_field_ids) /// proton: updates
 {
     if (column->empty() && out_columns_to_write != nullptr)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty column passed to Parquet encoder");
 
     ColumnChunkWriteStates states;
     SchemaElements schemas;
-    prepareColumnRecursive(column, type, name, options, states, schemas);
+    prepareColumnRecursive(column, type, name, options, states, schemas, column_field_ids); /// proton: updates
 
     if (out_columns_to_write)
         for (auto & s : states)
