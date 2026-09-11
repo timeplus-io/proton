@@ -10,7 +10,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Processors/Formats/Impl/Parquet/Write.h>
-#include <Storages/Iceberg/Schema.h>
+#include <Storages/Iceberg/SchemaProcessor.h>
 
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Parser.h>
@@ -46,11 +46,11 @@ constexpr auto ICEBERG_SCHEMA = R"({
     ]
 })";
 
-Apache::Iceberg::FieldIdsByPath fieldIds()
+std::unordered_map<String, Int64> fieldIds()
 {
     Poco::JSON::Parser parser;
     auto schema = parser.parse(ICEBERG_SCHEMA).extract<Poco::JSON::Object::Ptr>();
-    return Apache::Iceberg::getFieldIdsByPath(*schema);
+    return IcebergSchemaProcessor::traverseSchema(schema->getArray("fields"));
 }
 
 /// The Proton counterpart of ICEBERG_SCHEMA, as the Iceberg sink receives it.
@@ -111,7 +111,7 @@ std::optional<Int32> fieldIdOf(const SchemaIndex & index, const String & path)
 
 TEST(IcebergParquetFieldIds, SchemaJSONToPaths)
 {
-    Apache::Iceberg::FieldIdsByPath expected{
+    std::unordered_map<String, Int64> expected{
         {"id", 1},
         {"name", 2},
         {"tags", 3},

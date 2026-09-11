@@ -280,8 +280,7 @@ struct FormatSettings
         size_t data_page_size = 1024 * 1024;
         size_t write_batch_size = 1024;
         /// proton: starts
-        /// Iceberg field ids keyed by dotted field path (t.x, arr.element, m.key, m.value).
-        /// Set by the Iceberg sink; honoured by the custom encoder only.
+        /// Iceberg field ids by dotted path (t.x, arr.element, m.key); set by the Iceberg sink, custom encoder only.
         std::optional<std::unordered_map<String, Int64>> field_ids;
         /// proton: ends
     } parquet{};

@@ -602,6 +602,9 @@ if (ENABLE_TESTS)
     target_link_libraries(unit_tests_dbms PRIVATE
         ch_contrib::gtest_all
         ch_contrib::avrocpp
+        # proton: starts. gtest_iceberg_parquet_field_ids.cpp includes Parquet/Write.h (thrift-generated parquet types).
+        ch_contrib::parquet
+        # proton: ends
         ch_contrib::gmock_all
         clickhouse_functions
         clickhouse_table_functions
