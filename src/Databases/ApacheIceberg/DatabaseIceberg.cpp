@@ -1,29 +1,25 @@
 #include <Databases/ApacheIceberg/DatabaseIceberg.h>
-#include "Databases/ApacheIceberg/DatabaseIcebergSettings.h"
 
 #if USE_AVRO && USE_AWS_S3
 #include <Core/Settings.h>
-#include <Common/LRUCache.h>
-
 #include <DataTypes/DataTypeString.h>
+#include <Databases/ApacheIceberg/DatabaseIcebergSettings.h>
 #include <Databases/DatabaseFactory.h>
-#include <Storages/Iceberg/RestCatalog.h>
-
-#include <Storages/ConstraintsDescription.h>
-#include <Storages/ExternalStream/StorageExternalStream.h>
-#include <Storages/StorageNull.h>
-
+#include <Formats/FormatFactory.h>
+#include <IO/S3/URI.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/evaluateConstantExpression.h>
-
-#include <Formats/FormatFactory.h>
-
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDataType.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/ConstraintsDescription.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/Iceberg/RestCatalog.h>
+#include <Storages/StorageNull.h>
+#include <Common/LRUCache.h>
 
 
 namespace DB
@@ -230,7 +226,10 @@ Apache::Iceberg::CatalogPtr DatabaseApacheIceberg::getCatalog() const
 
 std::string DatabaseApacheIceberg::getStorageEndpointForTable(const Apache::Iceberg::TableMetadata & table_metadata) const
 {
-    return std::filesystem::path(table_metadata.getLocation(/* path_only */ false)) / "";
+    auto endpoint_from_settings = settings[DatabaseApacheIcebergSetting::storage_endpoint].value;
+    if (endpoint_from_settings.empty())
+        return std::filesystem::path(table_metadata.getLocation(/* path_only */ false)) / "";
+    return endpoint_from_settings;
 }
 
 bool DatabaseApacheIceberg::empty() const
@@ -400,28 +399,9 @@ void DatabaseApacheIceberg::createTable(ContextPtr /*context*/, const String & n
 {
     validateCreate(query);
 
-    auto endpoint = settings[DatabaseApacheIcebergSetting::storage_endpoint].value;
-    auto endpoint_uri = Poco::URI(endpoint);
     /// The table location requires a S3 URI (starts with 's3://')
-    if (endpoint_uri.getScheme().starts_with("http"))
-    {
-        std::vector<String> parts;
-        splitInto<'.'>(parts, endpoint_uri.getHost());
-        if (parts.size() > 2 && (parts[1].starts_with("s3") || parts[1] == "storage"))
-        {
-            /// https://Bucket.s3.Region.amazonaws.com or GCS-style virtual-hosted URL
-            endpoint = "s3://" + parts[0] + endpoint_uri.getPath();
-        }
-        else
-        {
-            /// Path-style URL: http://host:port/bucket/path  (e.g. MinIO)
-            /// Strip leading '/' from path, first segment is bucket name
-            auto path = endpoint_uri.getPath();
-            if (!path.empty() && path[0] == '/')
-                path = path.substr(1);
-            endpoint = "s3://" + path;
-        }
-    }
+    auto endpoint_uri = S3::URI(settings[DatabaseApacheIcebergSetting::storage_endpoint].value);
+    auto location = fmt::format("s3://{}/{}", endpoint_uri.bucket, name);
 
     /// Set in-memory create query to ensure system.tables queries always use the in-memory metadata
     /// rather than falling back to ClickHouse's legacy code path, which could lead to inconsistencies
@@ -433,7 +413,7 @@ void DatabaseApacheIceberg::createTable(ContextPtr /*context*/, const String & n
     getCatalog()->createTable(
         namespace_name,
         table_name,
-        endpoint + (endpoint.ends_with('/') ? "" : "/") + name,
+        location,
         table->getInMemoryMetadata().getColumns().getAllPhysical(),
         std::nullopt,
         std::nullopt,

@@ -52,9 +52,6 @@ namespace ExternalStream
 void Iceberg::prepareS3Configuration(const ContextPtr & context)
 {
     auto storage_endpoint = settings->iceberg_storage_endpoint.value;
-    if (auto table_metadata = tryGetTableMetadata(); !table_metadata.getTableUUID().empty())
-        storage_endpoint = table_metadata.getLocation(/*path_only=*/false);
-
     if (storage_endpoint.empty())
         throw Exception(ErrorCodes::ICEBERG_CATALOG_ERROR, "Storage endpoint was empty");
 
@@ -126,17 +123,6 @@ Apache::Iceberg::TableMetadata Iceberg::getTableMetadata() const
     Apache::Iceberg::TableMetadata metadata;
     metadata.withSchema().withLocation();
     getCatalog()->getTableMetadata(storage_id.database_name, storage_id.table_name, metadata);
-
-    return metadata;
-}
-
-Apache::Iceberg::TableMetadata Iceberg::tryGetTableMetadata() const
-{
-    auto storage_id = getStorageID();
-    /// TODO withCredentials()
-    Apache::Iceberg::TableMetadata metadata;
-    metadata.withSchema().withLocation();
-    getCatalog()->tryGetTableMetadata(storage_id.database_name, storage_id.table_name, metadata);
 
     return metadata;
 }
