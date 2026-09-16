@@ -58,7 +58,6 @@ private:
 
     Apache::Iceberg::CatalogPtr getCatalog() const;
     Apache::Iceberg::TableMetadata getTableMetadata() const;
-    Apache::Iceberg::TableMetadata tryGetTableMetadata() const;
 
     FormatSettings getFormatSettings(const ContextPtr & local_context) const;
 

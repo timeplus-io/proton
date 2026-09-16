@@ -210,4 +210,13 @@ enum class IcebergCatalogType : uint8_t
 DECLARE_SETTING_ENUM(IcebergCatalogType)
 
 DECLARE_SETTING_ENUM(LocalFSReadMethod)
+
+enum class S3UriStyle : uint8_t
+{
+    AUTO,
+    PATH,
+    VIRTUAL_HOSTED,
+};
+
+DECLARE_SETTING_ENUM(S3UriStyle)
 }
