@@ -99,7 +99,7 @@ ParquetBlockOutputFormat::ParquetBlockOutputFormat(WriteBuffer & out_, const Blo
         options.data_page_size = format_settings.parquet.data_page_size;
         options.write_batch_size = format_settings.parquet.write_batch_size;
 
-        schema = convertSchema(header_, options);
+        schema = convertSchema(header_, options, format_settings.parquet.field_ids); /// proton: updates
     }
 }
 

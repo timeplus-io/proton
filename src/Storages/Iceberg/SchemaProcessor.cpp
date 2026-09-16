@@ -20,6 +20,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/NestedUtils.h>
 #include <Formats/FormatFactory.h>
 
 #include <base/scope_guard.h>
@@ -425,4 +426,67 @@ std::shared_ptr<NamesAndTypesList> IcebergSchemaProcessor::getTimeplusTableSchem
     return it->second;
 }
 
+namespace
+{
+
+/// Same as ClickHouse's traverseComplexType; list elements are `element`, map entries `key` and `value`.
+void traverseComplexType(Poco::JSON::Object::Ptr type, std::unordered_map<String, Int64> & result, const String & current_path)
+{
+    auto type_str = type->getValue<String>("type");
+    if (type_str == "map")
+    {
+        auto key_id = type->getValue<Int64>("key-id");
+        auto value_id = type->getValue<Int64>("value-id");
+        auto key_name = Nested::concatenateName(current_path, "key");
+        auto value_name = Nested::concatenateName(current_path, "value");
+        if (type->isObject("key"))
+            traverseComplexType(type->getObject("key"), result, key_name);
+        result[key_name] = key_id;
+
+        if (type->isObject("value"))
+            traverseComplexType(type->getObject("value"), result, value_name);
+        result[value_name] = value_id;
+        return;
+    }
+    if (type_str == "list")
+    {
+        auto element_id = type->getValue<Int64>("element-id");
+        auto element_name = Nested::concatenateName(current_path, "element");
+        if (type->isObject("element"))
+            traverseComplexType(type->getObject("element"), result, element_name);
+        result[element_name] = element_id;
+        return;
+    }
+    if (type_str == "struct")
+    {
+        auto fields = type->getArray("fields");
+        for (UInt32 i = 0; i < fields->size(); ++i)
+        {
+            auto field = fields->getObject(i);
+            auto field_id = field->getValue<Int32>("id");
+            auto child_path = Nested::concatenateName(current_path, field->getValue<String>("name"));
+            if (field->isObject("type"))
+                traverseComplexType(field->getObject("type"), result, child_path);
+            result[child_path] = field_id;
+        }
+        return;
+    }
+}
+
+}
+
+std::unordered_map<String, Int64> IcebergSchemaProcessor::traverseSchema(Poco::JSON::Array::Ptr schema)
+{
+    std::unordered_map<String, Int64> result;
+    for (UInt32 i = 0; i < schema->size(); ++i)
+    {
+        auto current_object = schema->getObject(i);
+        auto field_id = current_object->getValue<Int32>("id");
+        auto cur_name = current_object->getValue<String>("name");
+        if (current_object->isObject("type"))
+            traverseComplexType(current_object->getObject("type"), result, cur_name);
+        result[cur_name] = field_id;
+    }
+    return result;
+}
 }
