@@ -23,7 +23,7 @@ on:
         required: false
         default: "ec2-github-runner-"
   schedule:
-    - cron: '30 */2 * * *'  # Every 2 hours
+    - cron: '30 0-23/2 * * *'  # Every 2 hours
 
 jobs:
   delete_tag:
