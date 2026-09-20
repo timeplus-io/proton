@@ -1,5 +1,6 @@
 tags:
   - prepare
+  - skip # the remote UDF endpoint is retired (returns 403 "This account is suspended")
 
 description: prepare data
 

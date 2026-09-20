@@ -1,5 +1,6 @@
 tags:
 - udf2
+- skip # the remote UDF endpoint is retired (returns 403 "This account is suspended")
 description: SQL - CREATE Remote UDF
 cluster:
 - p1k1

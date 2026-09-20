@@ -1,6 +1,7 @@
 tags:
   - prepare
   - validate
+  - skip # the remote UDF endpoint is retired (returns 403 "This account is suspended")
 
 description: basic tests
 
