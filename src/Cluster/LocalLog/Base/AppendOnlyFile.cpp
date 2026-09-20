@@ -204,9 +204,9 @@ CallResult<size_t> AppendOnlyFile::append(const std::vector<ByteRange> & batch_d
         }
         else
         {
-            if (errno != EINTR)
+            if (auto write_errno = errno; write_errno != EINTR)
                 /// FIXME, map errno to DB::ErrorCodes
-                return CallResult<size_t>{written_bytes, errno};
+                return rollbackTornTail(written_bytes, write_errno);
 
             std::tie(iovec_start, num_vec) = handle_partial_write();
         }
@@ -231,13 +231,25 @@ CallResult<size_t> AppendOnlyFile::append(const char * data, uint64_t bytes_to_w
         }
         else
         {
-            if (errno != EINTR)
+            if (auto write_errno = errno; write_errno != EINTR)
                 /// FIXME, map errno to DB::ErrorCodes
-                return CallResult<size_t>{written_bytes, errno};
+                return rollbackTornTail(written_bytes, write_errno);
         }
     }
 
     return CallResult<size_t>{written_bytes, /*error_code_=*/0};
+}
+
+CallResult<size_t> AppendOnlyFile::rollbackTornTail(size_t partial_bytes, int error_code) const
+{
+    /// If the truncate fails, report the partial bytes as durable so the caller's size stays in sync.
+    if (partial_bytes)
+    {
+        if (auto cur = size(); cur.hasError() || truncate(cur.result - partial_bytes) != 0)
+            return CallResult<size_t>{partial_bytes, error_code};
+    }
+
+    return CallResult<size_t>{0, error_code};
 }
 
 CallResult<size_t> AppendOnlyFile::append(std::span<char> data) const

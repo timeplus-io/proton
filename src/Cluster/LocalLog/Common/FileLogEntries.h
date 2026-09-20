@@ -29,6 +29,8 @@ public:
     CallResult<size_t> append(const std::vector<ByteVector> & batch_data, size_t total_bytes)
     {
         auto written = file->append(batch_data, total_bytes);
+        /// On error result is the bytes left durable after AppendOnlyFile rolls back the torn tail,
+        /// so this stays the net delta whether or not the rollback truncated.
         bytes += written.result;
         return written;
     }

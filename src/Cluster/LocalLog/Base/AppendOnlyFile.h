@@ -133,6 +133,10 @@ private:
     template <typename ByteRange>
     inline CallResult<size_t> append(const std::vector<ByteRange> & batch_data, size_t bytes_to_write) const;
 
+    /// Drop `partial_bytes` left at the tail by a failed append so it stays a clean record boundary.
+    /// Returns the bytes still durable (0 unless the truncate itself failed) with `error_code`.
+    CallResult<size_t> rollbackTornTail(size_t partial_bytes, int error_code) const;
+
     inline struct stat stat() const;
 
 private:
