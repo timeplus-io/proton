@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <Core/Field.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypesBinaryEncoding.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFixedString.h>
@@ -27,6 +28,7 @@ using namespace DB;
 namespace DB::ErrorCodes
 {
 extern const int UNSUPPORTED_METHOD;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
 
@@ -134,4 +136,18 @@ GTEST_TEST(DataTypesBinaryEncoding, EncodeAndDecode)
     check(DataTypeFactory::instance().get("json"));
     check(DataTypeFactory::instance().get("json(max_dynamic_paths=10)"));
     check(DataTypeFactory::instance().get("json(max_dynamic_paths=10, max_dynamic_types=10, a.b.c uint32, SKIP a.c, b.g string, SKIP l.d.f)"));
+}
+
+GTEST_TEST(DataTypeFactory, DateTime32PrecisionError)
+{
+    try
+    {
+        DataTypeFactory::instance().get("datetime32(3)");
+        FAIL() << "Expected datetime32 precision to throw";
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_EQ(e.code(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        EXPECT_NE(std::string(e.what()).find("datetime32 data type does not support precision"), std::string::npos);
+    }
 }

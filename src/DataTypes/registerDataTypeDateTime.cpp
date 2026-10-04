@@ -86,6 +86,11 @@ static DataTypePtr create32(const ASTPtr & arguments, [[maybe_unused]] bool comp
         throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                         "The datetime32 data type can optionally have only one argument - time zone name");
 
+    const auto * argument = arguments->children[0]->as<ASTLiteral>();
+    if (argument && argument->value.getType() == Field::Types::Which::UInt64)
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "The datetime32 data type does not support precision. Use datetime64 for fractional seconds");
+
     const auto timezone = getArgument<String, ArgumentKind::Mandatory>(arguments, 0, "timezone", "datetime32");
 
     return std::make_shared<DataTypeDateTime>(timezone);
