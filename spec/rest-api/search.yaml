@@ -163,13 +163,13 @@ paths:
           in: query
           name: default_format
           description: 'query result output format, like CSV, JSONEachRow, et al. The default value is ''JSONCompact'''
-        - name: x-proton-request-id
+        - name: x-timeplus-request-id
           in: header
           required: false
           description: the unique id to identify a ddl request
           schema:
             type: string
-        - name: x-proton-query-id
+        - name: x-timeplus-query-id
           in: header
           required: false
           description: the unique id to identify a ddl request
@@ -180,7 +180,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-user
+        - name: x-timeplus-user
           in: header
           required: false
           schema:
@@ -190,7 +190,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-key
+        - name: x-timeplus-key
           in: header
           required: false
           schema:
@@ -200,7 +200,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-quota
+        - name: x-timeplus-quota
           in: header
           required: false
           schema:
