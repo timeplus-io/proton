@@ -634,7 +634,7 @@ void StreamShardStore::backgroundPollNativeLog()
         bytes_threshold,
         sequenceRangesToString(missing_sequence_ranges));
 
-    StreamCallbackData stream_commit{this, missing_sequence_ranges};
+    StreamCallbackData stream_commit{this, missing_sequence_ranges, bytes_threshold, rows_threshold, interval_threshold};
 
     StreamingBlockReaderNativeLog block_reader(
         /*sn=*/
