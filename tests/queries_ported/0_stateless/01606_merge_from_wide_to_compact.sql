@@ -7,6 +7,10 @@
 
 DROP STREAM IF EXISTS wide_to_comp;
 
+-- max_bytes_to_merge_at_max_space_in_pool=1 keeps background merges from ever
+-- selecting these parts, so the only merge is the explicit OPTIMIZE FINAL.
+-- Without it, a background merge racing START MERGES would fold some level-0
+-- parts to level 1 first, bumping the final part name's level digit (flaky).
 CREATE STREAM wide_to_comp (a int, b int, c int)
 ENGINE = MergeTree()
 ORDER BY a
@@ -17,9 +21,8 @@ SETTINGS
     min_rows_for_wide_part = 0,
     merge_max_block_size = 8192,
     index_granularity = 8192,
-    index_granularity_bytes = '10Mi';
-
-SYSTEM STOP MERGES wide_to_comp;
+    index_granularity_bytes = '10Mi',
+    max_bytes_to_merge_at_max_space_in_pool = 1;
 
 INSERT INTO wide_to_comp(a, b, c) SELECT number, number, number FROM numbers(100000);
 INSERT INTO wide_to_comp(a, b, c) SELECT number, number, number FROM numbers(100000);
@@ -28,19 +31,16 @@ INSERT INTO wide_to_comp(a, b, c) SELECT number, number, number FROM numbers(100
 SELECT name, part_type FROM system.parts WHERE table = 'wide_to_comp' AND database = current_database() AND active ORDER BY name;
 
 ALTER STREAM wide_to_comp MODIFY SETTING min_rows_for_wide_part = 10000000;
-SYSTEM START MERGES wide_to_comp;
 OPTIMIZE STREAM wide_to_comp FINAL;
 
 SELECT name, part_type FROM system.parts WHERE table = 'wide_to_comp' AND database = current_database() AND active ORDER BY name;
 SELECT count() FROM wide_to_comp WHERE not ignore(*);
 
-SYSTEM STOP MERGES wide_to_comp;
 INSERT INTO wide_to_comp(a, b, c) SELECT number, number, number FROM numbers(100000);
 
 SELECT name, part_type FROM system.parts WHERE table = 'wide_to_comp' AND database = current_database() AND active ORDER BY name;
 
 ALTER STREAM wide_to_comp MODIFY SETTING min_rows_for_wide_part = 10000000;
-SYSTEM START MERGES wide_to_comp;
 OPTIMIZE STREAM wide_to_comp FINAL;
 
 SELECT name, part_type FROM system.parts WHERE table = 'wide_to_comp' AND database = current_database() AND active ORDER BY name;
