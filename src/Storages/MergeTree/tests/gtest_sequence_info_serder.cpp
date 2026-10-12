@@ -486,3 +486,172 @@ TEST(SequenceInfo, MissingSequenceRanges)
         EXPECT_EQ(max_expecting_sn, 9);
     }
 }
+
+/// Torn/rolled-back sequence info (issue #12235): committed_sn straddling a part range or a bogus
+/// part_index/parts must not enqueue inverted ranges nor blow up the missing-parts enumeration.
+TEST(SequenceInfo, MissingSequenceRangesTornRecovery)
+{
+    {
+        /// committed_sn straddles into a partially-present multi-part range: no inverted range,
+        /// only the genuinely-missing sibling parts are reported.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 2, 3},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 15, nullptr);
+        EXPECT_EQ(missing.size(), 2);
+        EXPECT_EQ(missing[0], DB::SequenceRange(10, 20, 0, 3));
+        EXPECT_EQ(missing[1], DB::SequenceRange(10, 20, 1, 3));
+        EXPECT_EQ(next_expecting_sn, 16);
+        EXPECT_EQ(max_expecting_sn, 21);
+    }
+
+    {
+        /// Implausibly large parts count: don't enumerate ~2^21 entries and don't drop the range;
+        /// fall back to re-persisting the whole sn range (parts<0 => downstream persists all).
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 0, 2000000},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 9, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(Int64(10), Int64(20)));
+        EXPECT_EQ(next_expecting_sn, 10);
+        EXPECT_EQ(max_expecting_sn, 21);
+    }
+
+    {
+        /// part_index out of [0, parts): same conservative whole-range recovery, no near-2^31 walk.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 5, 3},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 9, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(Int64(10), Int64(20)));
+        EXPECT_EQ(next_expecting_sn, 10);
+        EXPECT_EQ(max_expecting_sn, 21);
+    }
+
+    {
+        /// Same start_sn but disagreeing `parts` across the group: whole-range recovery.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 0, 3},
+            DB::SequenceRange{10, 20, 1, 5},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 9, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(Int64(10), Int64(20)));
+        EXPECT_EQ(next_expecting_sn, 10);
+        EXPECT_EQ(max_expecting_sn, 21);
+    }
+
+    {
+        /// Siblings disagree on end_sn while distinct count still equals parts: must NOT advance the
+        /// cursor past a range the second sibling does not prove durable; take whole-range recovery.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 0, 2},
+            DB::SequenceRange{10, 10, 1, 2},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 9, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(Int64(10), Int64(20)));
+        EXPECT_EQ(next_expecting_sn, 10);
+    }
+
+    {
+        /// Literal #12235 shape: duplicate single-part entries. Part 0 is present, so the range is
+        /// complete and the cursor advances (distinct count == parts) instead of wrapping or aborting.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 0, 1},
+            DB::SequenceRange{10, 20, 0, 1},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 9, nullptr);
+        EXPECT_TRUE(missing.empty());
+        EXPECT_EQ(next_expecting_sn, 21);
+        EXPECT_EQ(max_expecting_sn, 21);
+    }
+
+    {
+        /// Duplicate part_index whose count coincidentally equals `parts`: the group must still take
+        /// the missing-parts path and report the genuinely-absent part 1, not advance past it.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{10, 20, 0, 2},
+            DB::SequenceRange{10, 20, 0, 2},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 9, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(10, 20, 1, 2));
+        EXPECT_EQ(next_expecting_sn, 10);
+        EXPECT_EQ(max_expecting_sn, 21);
+    }
+}
+
+/// Structural edge cases of the missing-range computation that are not covered above.
+TEST(SequenceInfo, MissingSequenceRangesEdgeCases)
+{
+    {
+        /// Empty input: nothing missing, both sn cursors sit at committed + 1.
+        DB::SequenceRanges sequence_ranges;
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 5, nullptr);
+        EXPECT_TRUE(missing.empty());
+        EXPECT_EQ(next_expecting_sn, 6);
+        EXPECT_EQ(max_expecting_sn, 6);
+    }
+
+    {
+        /// committed_sn straddles a fully-present range: the cursor is NOT advanced (a straddle means
+        /// committed regressed; file-present is not cluster-committed), and no inverted range is enqueued.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{6, 10, 0, 1},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 8, nullptr);
+        EXPECT_TRUE(missing.empty());
+        EXPECT_EQ(next_expecting_sn, 9);
+        EXPECT_EQ(max_expecting_sn, 11);
+    }
+
+    {
+        /// Legacy single-part encoding (part_index == 0, parts == 0): no siblings, nothing missing.
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{4, 4, 0, 0},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 3, nullptr);
+        EXPECT_TRUE(missing.empty());
+        EXPECT_EQ(next_expecting_sn, 4);
+        EXPECT_EQ(max_expecting_sn, 5);
+    }
+
+    {
+        /// Missing part at the beginning of a multi-part range (part 0 absent, part 1 present).
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{4, 4, 1, 2},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 3, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(4, 4, 0, 2));
+        EXPECT_EQ(next_expecting_sn, 4);
+        EXPECT_EQ(max_expecting_sn, 5);
+    }
+
+    {
+        /// Missing part at the end of a multi-part range (part 0 present, part 1 absent).
+        DB::SequenceRanges sequence_ranges = {
+            DB::SequenceRange{4, 4, 0, 2},
+        };
+
+        auto [missing, next_expecting_sn, max_expecting_sn] = DB::missingSequenceRanges(sequence_ranges, 3, nullptr);
+        EXPECT_EQ(missing.size(), 1);
+        EXPECT_EQ(missing[0], DB::SequenceRange(4, 4, 1, 2));
+        EXPECT_EQ(next_expecting_sn, 4);
+        EXPECT_EQ(max_expecting_sn, 5);
+    }
+}

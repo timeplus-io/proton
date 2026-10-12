@@ -16,6 +16,11 @@ struct StreamCallbackData final
 
     void commit(cluster::SchemaRecordPtrs records);
 
+    /// Re-seed the recovery state after a consume retry re-runs committed_sn reconciliation, so
+    /// subsequent commits dedup already-written parts (via ignorePartBlock) instead of re-writing
+    /// them into overlapping same-sn parts. Safe only once in-flight commits have been drained.
+    void resetMissingSequenceRanges(SequenceRanges missing_sequence_ranges_);
+
     /// Wait for the outstanding commits
     void wait() const;
 

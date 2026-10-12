@@ -13,6 +13,12 @@ StreamCallbackData::StreamCallbackData(StreamShardStore * stream_shard_store_, c
     assert(stream_shard_store);
 }
 
+void StreamCallbackData::resetMissingSequenceRanges(SequenceRanges missing_sequence_ranges_)
+{
+    missing_sequence_ranges = std::move(missing_sequence_ranges_);
+    recovery_records.clear();
+}
+
 void StreamCallbackData::wait() const
 {
     while (outstanding_commits.load() != 0)
