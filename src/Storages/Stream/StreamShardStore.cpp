@@ -160,10 +160,10 @@ void StreamShardStore::startup()
     {
         /// No historical consumer to gate on, but appliedSequence() defaults to 0 (no truncation),
         /// so register the log's committed sequence to keep retention reclaiming by policy.
-        Globals::getNode().setAppliedSequenceGetter(
+        Globals::getNativeLog().setAppliedSequenceGetter(
             stream_shard.id_shard,
             [id_shard = stream_shard.id_shard]() -> int64_t {
-                return Globals::getNode().nativeLog().committedSequence(id_shard).value_or(0);
+                return Globals::getNativeLog().committedSequence(id_shard).value_or(0);
             });
     }
 
