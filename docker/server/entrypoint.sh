@@ -46,6 +46,15 @@ PROTON_USER="${PROTON_USER:-default}"
 PROTON_PASSWORD="${PROTON_PASSWORD:-}"
 PROTON_ACCESS_MANAGEMENT="${PROTON_DEFAULT_ACCESS_MANAGEMENT:-0}"
 
+xml_escape() {
+    sed \
+        -e 's/&/\&amp;/g' \
+        -e 's/</\&lt;/g' \
+        -e 's/>/\&gt;/g' \
+        -e 's/"/\&quot;/g' \
+        -e "s/'/\&apos;/g"
+}
+
 for dir in "$PYTHON_SITE_PACKAGE_PATH"
 do
     # check if variable not empty
@@ -61,6 +70,29 @@ do
         exit 1
     fi
 done
+
+if [ -n "$PROTON_PASSWORD" ] || [ "$PROTON_USER" != "default" ] || [ "$PROTON_ACCESS_MANAGEMENT" != "0" ]; then
+    if [[ ! "$PROTON_USER" =~ ^[A-Za-z0-9_][A-Za-z0-9_@.-]*$ ]]; then
+        echo >&2 "Invalid PROTON_USER '$PROTON_USER'. Only letters, digits, '_', '@', '.', and '-' are supported."
+        exit 1
+    fi
+
+    PROTON_USERS_D="$(dirname "$PROTON_CONFIG")/users.d"
+    mkdir -p "$PROTON_USERS_D"
+
+    {
+        echo "<proton>"
+        echo "    <users>"
+        echo "        <$PROTON_USER>"
+        echo "            <password>$(printf '%s' "$PROTON_PASSWORD" | xml_escape)</password>"
+        echo "            <access_management>$(printf '%s' "$PROTON_ACCESS_MANAGEMENT" | xml_escape)</access_management>"
+        echo "            <profile>default</profile>"
+        echo "            <quota>default</quota>"
+        echo "        </$PROTON_USER>"
+        echo "    </users>"
+        echo "</proton>"
+    } > "$PROTON_USERS_D/default-user.xml"
+fi
 
 if [ -n "$STREAM_STORAGE_BROKERS" ]; then
     # Replace `brokers: localhost:9092` in config.yaml with customized one
