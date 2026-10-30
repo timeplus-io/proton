@@ -17,7 +17,7 @@ paths:
             schema:
               $ref: '#/components/schemas/UDF'
       parameters:
-        - name: x-proton-request-id
+        - name: x-timeplus-request-id
           in: header
           required: false
           description: the unique id to identify arequest
@@ -28,7 +28,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-user
+        - name: x-timeplus-user
           in: header
           required: false
           schema:
@@ -38,7 +38,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-key
+        - name: x-timeplus-key
           in: header
           required: false
           schema:
@@ -48,7 +48,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-quota
+        - name: x-timeplus-quota
           in: header
           required: false
           schema:
@@ -63,7 +63,7 @@ paths:
     get:
       summary: List all user defined functions (UDF)
       parameters:
-        - name: x-proton-request-id
+        - name: x-timeplus-request-id
           in: header
           required: false
           description: the unique id to identify a request
@@ -74,7 +74,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-user
+        - name: x-timeplus-user
           in: header
           required: false
           schema:
@@ -84,7 +84,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-key
+        - name: x-timeplus-key
           in: header
           required: false
           schema:
@@ -94,7 +94,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-quota
+        - name: x-timeplus-quota
           in: header
           required: false
           schema:
@@ -123,7 +123,7 @@ paths:
           schema:
             type: string
           description: the UDF function name
-        - name: x-proton-request-id
+        - name: x-timeplus-request-id
           in: header
           required: false
           description: the unique id to identify a request
@@ -134,7 +134,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-user
+        - name: x-timeplus-user
           in: header
           required: false
           schema:
@@ -144,7 +144,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-key
+        - name: x-timeplus-key
           in: header
           required: false
           schema:
@@ -154,7 +154,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-quota
+        - name: x-timeplus-quota
           in: header
           required: false
           schema:
@@ -180,7 +180,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: x-proton-request-id
+        - name: x-timeplus-request-id
           in: header
           required: false
           description: the unique id to identify a request
@@ -191,7 +191,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-user
+        - name: x-timeplus-user
           in: header
           required: false
           schema:
@@ -201,7 +201,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-key
+        - name: x-timeplus-key
           in: header
           required: false
           schema:
@@ -211,7 +211,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: x-proton-quota
+        - name: x-timeplus-quota
           in: header
           required: false
           schema:
