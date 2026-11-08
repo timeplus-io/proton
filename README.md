@@ -43,6 +43,22 @@ Get started in seconds
 curl https://install.timeplus.com/oss | sh
 ```
 
+Then see a streaming query running in under a minute, no Kafka needed:
+
+```shell
+proton server   # terminal 1: config/logs/data go to ./proton-data
+proton client   # terminal 2: opens the SQL shell
+```
+
+```sql
+CREATE RANDOM STREAM devices(
+  device string default 'device'||to_string(rand()%4),
+  temperature float default rand()%1000/10);
+
+-- a streaming query: results keep updating until you press Ctrl+C
+SELECT device, count(*), avg(temperature) FROM devices GROUP BY device;
+```
+
 ## Why Timeplus Proton
 
 - **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Timeplus Proton provides powerful stream processing functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, incremental materialized views maintenance, CDC and data revision processing. In contrast to pure stream processors, it also stores queryable analytical/row based materialized views within Proton itself for use in analytics dashboards and applications.
@@ -54,6 +70,18 @@ curl https://install.timeplus.com/oss | sh
 - **Powered by the fast, resource efficient [ClickHouse](https://github.com/clickhouse/clickhouse).** Timeplus Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Timeplus Proton. Billions of rows are queried in milliseconds.
   
 - **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/).** Query the live data in Kafka or other compatible streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
+
+### How Proton compares
+
+|                         | **Timeplus Proton**                                        | **Apache Flink**                                      | **ksqlDB**                                  |
+| ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------- |
+| **Runtime**             | Single C++ binary, no external dependencies                | JVM cluster (JobManager + TaskManagers)                | JVM servers, requires a Kafka cluster       |
+| **Interface**           | SQL, with thousands of ClickHouse-compatible functions     | Java/Scala/Python APIs and Flink SQL                   | KSQL (SQL dialect)                          |
+| **Data sources**        | Kafka/Redpanda, Pulsar, ClickHouse, and more, all from SQL | Large connector ecosystem                              | Kafka topics                                |
+| **Queryable results**   | Built-in streaming + historical storage, query with SQL    | Results go to an external sink                         | Materialized tables with pull queries       |
+| **Historical + live**   | Same SQL over live (`stream`) and historical (`table(stream)`) data | Separate batch and streaming modes            | Streaming only                              |
+| **Smallest footprint**  | Runs on 1 vCPU / 0.5 GiB                                   | Several JVM processes                                  | JVM server plus Kafka                       |
+| **License**             | Apache 2.0                                                 | Apache 2.0                                             | Confluent Community License                 |
 
 See our [architecture](https://docs.timeplus.com/architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
 
@@ -204,7 +232,7 @@ We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we
 
 ## Contributing
 
-We welcome your contributions! If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
+We welcome your contributions! New to the codebase? Start with issues labeled [`good first issue`](https://github.com/timeplus-io/proton/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) or [`help wanted`](https://github.com/timeplus-io/proton/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22), or share what you built in [GitHub Discussions](https://github.com/timeplus-io/proton/discussions). Adding a new example to the [examples](examples) folder is a great first PR too.
 
 Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Timeplus Proton in different platforms.
 
