@@ -1,6 +1,6 @@
 # Contributing
 
-Proton is an open project, and you can contribute to it in many ways. You can help with ideas, code, or documentation. We appreciate any efforts that help us to make the project better. If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
+Proton is an open project, and you can contribute to it in many ways. You can help with ideas, code, or documentation. We appreciate any efforts that help us to make the project better. If you are looking for issues to work on, start with issues labeled [`good first issue`](https://github.com/timeplus-io/proton/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) or [`help wanted`](https://github.com/timeplus-io/proton/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22), or browse [the full issue list](https://github.com/timeplus-io/proton/issues). Contributions that don't need a C++ build are welcome too: new [examples](examples), UDFs in Python or JavaScript, and fixes to the [docs](https://github.com/timeplus-io/docs).
 
 Thank you!
 
