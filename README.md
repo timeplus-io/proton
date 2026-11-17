@@ -83,6 +83,8 @@ SELECT device, count(*), avg(temperature) FROM devices GROUP BY device;
 | **Smallest footprint**  | Runs on 1 vCPU / 0.5 GiB                                   | Several JVM processes                                  | JVM server plus Kafka                       |
 | **License**             | Apache 2.0                                                 | Apache 2.0                                             | Confluent Community License                 |
 
+For a deeper comparison that also covers RisingWave, Materialize, Arroyo and Feldera, and where each one is the better choice, see [COMPARISON.md](COMPARISON.md).
+
 See our [architecture](https://docs.timeplus.com/architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
 
  ## Use Cases
